@@ -126,8 +126,9 @@ static class Program
     static bool Near(float a, float b) => Math.Abs(a - b) <= Tol;
 
     // Golden values — recorded from the canonical model (200-tick run above).
-    const float GOLDEN_POS_X = 185.6707f, GOLDEN_POS_Y = 26.535412f, GOLDEN_POS_Z = 198.4796f;
-    const float GOLDEN_VEL_X = 22.94421f, GOLDEN_VEL_Y = 16.211195f, GOLDEN_VEL_Z = 24.101692f;
-    const float GOLDEN_ROT_X = 0.015179994f, GOLDEN_ROT_Y = 0.63470286f, GOLDEN_ROT_Z = 0.58198696f, GOLDEN_ROT_W = 0.50814664f;
+    // Updated when FlightModel switched to deterministic MathDet.Sin/Cos.
+    const float GOLDEN_POS_X = 185.67072f, GOLDEN_POS_Y = 26.535467f, GOLDEN_POS_Z = 198.47957f;
+    const float GOLDEN_VEL_X = 22.944212f, GOLDEN_VEL_Y = 16.211218f, GOLDEN_VEL_Z = 24.101677f;
+    const float GOLDEN_ROT_X = 0.015179846f, GOLDEN_ROT_Y = 0.6347031f, GOLDEN_ROT_Z = 0.5819868f, GOLDEN_ROT_W = 0.5081465f;
     const float GOLDEN_ANGVEL_X = 0.3175412f, GOLDEN_ANGVEL_Y = -0.1745934f, GOLDEN_ANGVEL_Z = 0.12249996f;
 }

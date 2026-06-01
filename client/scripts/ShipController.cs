@@ -148,6 +148,8 @@ public partial class ShipController : Node
 	// the prediction lead). Driven by steps-since-spawn so it's reproducible.
 	private ShipInputState AutoInput()
 	{
+		// TEMP(determinism check): sustained hard turn — worst case for rotation drift.
+		return new ShipInputState { Thrust = 1f, Yaw = 0.6f, Pitch = 0.15f };
 		uint phase = ((uint)_stepsSinceSpawn / 80) % 6;  // ~4 s per phase
 		return phase switch
 		{

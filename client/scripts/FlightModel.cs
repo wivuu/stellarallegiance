@@ -20,6 +20,40 @@
 
 namespace StellarAllegiance.Shared
 {
+    // Deterministic trig for CROSS-RUNTIME agreement. The server runs in wasm and
+    // the client in mono/.NET; IEEE-754 +,-,*,/ and sqrt are correctly-rounded and
+    // bit-identical on both, but Math.Sin/Cos go through each runtime's libm and
+    // differ in the last bits — which, integrated every tick, makes the client's
+    // predicted rotation drift from the server's and forces constant reconciliation
+    // (felt as a jerk while turning). These polynomial approximations use only
+    // float +,-,* (Horner form — no FMA, which C# does not auto-emit), so both
+    // runtimes compute bit-identical results. Absolute accuracy matters far less
+    // than the two sides agreeing exactly. (.PLAN/99 transcendental-determinism.)
+    internal static class MathDet
+    {
+        private const float TwoPI = 6.2831853071795864f;
+        private const float InvTwoPI = 0.15915494309189535f;
+        private const float HalfPI = 1.5707963267948966f;
+
+        public static float Sin(float x)
+        {
+            // Range-reduce to [-PI, PI]: x -= round(x / 2PI) * 2PI, using only
+            // float ops + truncating casts (both deterministic across runtimes).
+            float q = x * InvTwoPI;
+            q = q - (float)(long)(q >= 0f ? q + 0.5f : q - 0.5f);
+            x = q * TwoPI;
+
+            // Taylor series to x^11 (Horner). Accurate to ~1e-6 over [-PI, PI];
+            // the half-angles fed in here are tiny, so it's far better in practice.
+            float x2 = x * x;
+            return x * (1f + x2 * (-0.16666667f + x2 * (0.008333334f
+                + x2 * (-0.00019841270f + x2 * (0.0000027557319f
+                + x2 * -0.000000025051883f)))));
+        }
+
+        public static float Cos(float x) => Sin(x + HalfPI);
+    }
+
     public struct Vec3
     {
         public float X, Y, Z;
@@ -66,8 +100,10 @@ namespace StellarAllegiance.Shared
             float angle = r.Length();
             if (angle < 1e-9f) return Identity;
             float half = angle * 0.5f;
-            float s = (float)System.Math.Sin(half) / angle; // sin(half)/angle scales axis = r/angle
-            return new Quat(r.X * s, r.Y * s, r.Z * s, (float)System.Math.Cos(half));
+            // Deterministic sin/cos (see MathDet) so the wasm server and mono client
+            // produce bit-identical rotations and don't drift apart each tick.
+            float s = MathDet.Sin(half) / angle; // sin(half)/angle scales axis = r/angle
+            return new Quat(r.X * s, r.Y * s, r.Z * s, MathDet.Cos(half));
         }
 
         // Rotate a vector by this quaternion: v' = v + 2w(q x v) + 2(q x (q x v)).

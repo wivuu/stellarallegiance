@@ -10,22 +10,23 @@ using StellarAllegiance.Shared;
 // the visual INTERPOLATES between the previous and current predicted states by
 // the within-tick fraction, so motion is uniform at any display rate.
 //
-// On localhost the prediction matches the server (same FlightModel), so with the
-// generous tolerance below reconciliation effectively never fires and the ship
-// renders pure, smooth prediction. Tight, latency-aware reconciliation (and
-// divergence-injection testing) is T5.
+// When a reconcile re-bases the predicted state onto authority, the visible
+// discontinuity in BOTH position and rotation is absorbed into decaying offsets
+// so the rendered transform never snaps. (The rigid chase camera is locked to
+// this transform, so an unsmoothed rotation snap would jerk the whole view —
+// which is exactly what made turning feel jerky before rotation easing existed.)
 public partial class PredictionController : Node3D
 {
 	// With server-tick alignment (ShipController predicts in Match.Tick space and
 	// the server stamps LastInputTick = Match.Tick), predicted[N] and auth[N]
 	// index the SAME integration, so in steady flight they agree to within float
-	// error. Reconciliation should therefore fire only on real divergence
-	// (input-timing transients, network jitter, injected perturbation), so the
-	// tolerance can be tight again. (.PLAN/07, /99)
-	private const float PosTolerance = 1.0f;      // units (above the ~0.6u input-timing transient)
+	// error. Reconciliation fires only on real divergence (transcendental float
+	// drift — worse while turning — input-timing transients, network jitter,
+	// injected perturbation), so the tolerance can be tight. (.PLAN/07, /99)
+	private const float PosTolerance = 1.0f;      // units
 	private const float RotTolerance = 0.05f;     // radians
 	private const int BufferLen = 40;             // ~2s at 20 Hz
-	private const float PosSmoothRate = 12f;      // reconcile position-ease decay (1/s)
+	private const float SmoothRate = 12f;         // reconcile correction-ease decay (1/s)
 
 	private struct Entry
 	{
@@ -34,13 +35,22 @@ public partial class PredictionController : Node3D
 		public ShipState Predicted;
 	}
 
-	private ShipState _state;                     // latest predicted state (tick N)
-	private ShipState _prevState;                 // previous predicted state (tick N-1)
+	private ShipState _state;                          // latest predicted state (tick N)
+	private ShipState _prevState;                      // previous predicted state (tick N-1)
 	private ShipStats _stats;
 	private readonly List<Entry> _buffer = new();
 
-	private double _tickTimer;                    // seconds since last prediction step
-	private Vector3 _posSmooth = Vector3.Zero;    // residual position error after a reconcile, decayed
+	private double _tickTimer;                         // seconds since last prediction step
+
+	// Decaying corrections so a reconcile re-base never snaps the rendered
+	// transform. Kept normalized every frame (the rotation one especially — a
+	// drifting non-unit quaternion is what threw exceptions in the old version).
+	private Vector3 _posSmooth = Vector3.Zero;
+	private Quaternion _rotSmooth = Quaternion.Identity;
+
+	// What we actually rendered last frame (interpolation + corrections).
+	private Vector3 _renderedPos;
+	private Quaternion _renderedRot = Quaternion.Identity;
 
 	// Reconciliation instrumentation (T5).
 	public int ReconcileCount { get; private set; }
@@ -58,6 +68,9 @@ public partial class PredictionController : Node3D
 		_buffer.Clear();
 		_tickTimer = 0;
 		_posSmooth = Vector3.Zero;
+		_rotSmooth = Quaternion.Identity;
+		_renderedPos = ShipMath.ToGodot(_state.Pos);
+		_renderedRot = ShipMath.ToGodot(_state.Rot).Normalized();
 		ApplyVisual(1f);
 	}
 
@@ -74,10 +87,8 @@ public partial class PredictionController : Node3D
 
 	// T5 test hook: artificially diverge the predicted path from authority by
 	// offsetting the current state AND every unacknowledged buffered prediction.
-	// Because the buffer entries (which OnAuthoritative compares against) now
-	// disagree with the incoming authoritative rows, the next update exceeds
-	// tolerance and exercises the full snap + re-simulate recovery path —
-	// standing in for "nudge the server state" without server access.
+	// The next authoritative update then exceeds tolerance and exercises the full
+	// snap + re-simulate recovery path — standing in for "nudge the server state".
 	public void InjectDivergence(Vector3 offset)
 	{
 		Vec3 o = new Vec3(offset.X, offset.Y, offset.Z);
@@ -103,10 +114,8 @@ public partial class PredictionController : Node3D
 		if (idx < 0)
 		{
 			// No prediction for tick N (just spawned, or N older than the buffer):
-			// adopt authority, keeping the visible position continuous.
-			_posSmooth += ShipMath.ToGodot(_state.Pos) - ShipMath.ToGodot(auth.Pos);
-			_state = auth;
-			_prevState = auth;
+			// adopt authority, easing the visible discontinuity.
+			RebaseTo(auth);
 			_buffer.RemoveAll(e => e.Tick <= n);
 			return;
 		}
@@ -121,12 +130,10 @@ public partial class PredictionController : Node3D
 			return;
 		}
 
-		// Diverged: re-base onto authority at N, then replay buffered inputs after
-		// N. Carry the visible position across the snap so it eases in (position
-		// only — the rotation error at this point is tiny and snaps imperceptibly).
+		// Diverged: re-base onto authority at N, then replay buffered inputs after N.
 		ReconcileCount++;
 		LastReconcileError = posErr;
-		Vector3 visiblePos = ShipMath.ToGodot(_state.Pos) + _posSmooth;
+		GD.Print($"[Predict] reconcile #{ReconcileCount} posErr={posErr:0.000} rotErr={rotErr:0.0000}");
 
 		var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
 		_buffer.Clear();
@@ -139,28 +146,49 @@ public partial class PredictionController : Node3D
 			replay[i] = e;
 			_buffer.Add(e);
 		}
-		_state = s;
-		_prevState = s;
-		_posSmooth = visiblePos - ShipMath.ToGodot(_state.Pos);
+		RebaseTo(s);
+	}
+
+	// Move the predicted state to newState while keeping the RENDERED transform
+	// continuous: stash the difference between what we're showing and the new
+	// target as decaying position + rotation offsets.
+	private void RebaseTo(ShipState newState)
+	{
+		Vector3 newPos = ShipMath.ToGodot(newState.Pos);
+		Quaternion newRot = ShipMath.ToGodot(newState.Rot).Normalized();
+
+		_posSmooth = _renderedPos - newPos;
+		_rotSmooth = (_renderedRot * newRot.Inverse()).Normalized();
+
+		_state = newState;
+		_prevState = newState;
+		_tickTimer = 0;
 	}
 
 	public override void _Process(double delta)
 	{
 		_tickTimer += delta;
-		_posSmooth = _posSmooth.Lerp(Vector3.Zero, 1f - Mathf.Exp(-PosSmoothRate * (float)delta));
+
+		// Decay both corrections toward zero, frame-rate independent. The rotation
+		// one is re-normalized after the Slerp so it never drifts off unit length.
+		float k = 1f - Mathf.Exp(-SmoothRate * (float)delta);
+		_posSmooth = _posSmooth.Lerp(Vector3.Zero, k);
+		_rotSmooth = _rotSmooth.Slerp(Quaternion.Identity, k).Normalized();
+
 		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
 	}
 
-	// Render the interpolated predicted transform (plus any decaying position
-	// correction). Quaternions are normalized before Slerp so Godot never sees a
-	// denormalized quaternion.
+	// Render the interpolated predicted transform plus the decaying corrections.
+	// All quaternions are normalized before Slerp / assignment.
 	private void ApplyVisual(float alpha)
 	{
-		Vector3 pos = ShipMath.ToGodot(_prevState.Pos).Lerp(ShipMath.ToGodot(_state.Pos), alpha) + _posSmooth;
 		Quaternion a = ShipMath.ToGodot(_prevState.Rot).Normalized();
 		Quaternion b = ShipMath.ToGodot(_state.Rot).Normalized();
 
-		Position = pos;
-		Quaternion = a.Slerp(b, alpha);
+		_renderedPos = ShipMath.ToGodot(_prevState.Pos).Lerp(ShipMath.ToGodot(_state.Pos), alpha) + _posSmooth;
+		_renderedRot = (_rotSmooth * a.Slerp(b, alpha)).Normalized();
+
+		Position = _renderedPos;
+		Quaternion = _renderedRot;
 	}
 }
