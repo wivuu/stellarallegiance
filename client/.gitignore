@@ -3,6 +3,10 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# godot files
+.godot/
+module_bindings/
+
 # dotenv files
 .env
 
