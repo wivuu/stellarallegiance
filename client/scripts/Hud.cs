@@ -25,7 +25,7 @@ public partial class Hud : CanvasLayer
 	{
 		var ship = _world.LocalShip;
 		_label.Text = ship == null
-			? "Press [1] to spawn a Scout\nWASD thrust/strafe · Space/Shift up/down · Arrows aim · Q/E roll"
+			? "Press [1] to spawn a Scout\nW/S throttle · A/D strafe · E/C up·down · arrows aim · Q/Z roll"
 			: $"Speed: {ship.Speed,5:0.0} u/s   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)   [P] perturb";
 	}
 }

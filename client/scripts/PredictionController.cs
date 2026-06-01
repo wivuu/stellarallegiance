@@ -136,7 +136,6 @@ public partial class PredictionController : Node3D
 		// Diverged: re-base onto authority at N, then replay buffered inputs after N.
 		ReconcileCount++;
 		LastReconcileError = posErr;
-		GD.Print($"[Predict] reconcile #{ReconcileCount} posErr={posErr:0.000} rotErr={rotErr:0.0000}");
 
 		var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
 		_buffer.Clear();

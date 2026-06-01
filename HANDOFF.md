@@ -3,19 +3,20 @@
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at
-the keyboard) and **T5 are complete**. The repo has:
-- A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` now also has `AngVelX/Y/Z`.
-- The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8) and stamps `Ship.LastInputTick = Match.Tick` (the server integration index)
+the keyboard), **T5, and T6 are complete**. The repo has:
+- A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
+- The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
-- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies a Scout with tick-aligned client-side prediction + rollback reconciliation**, a chase camera, and a minimal HUD
-- A **shared, deterministic, fixed-`dt` flight model** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
+- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies a Scout with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a minimal HUD
+- A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
 - `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
-**Next task: T6 — two clients, remote interpolation** (see `.PLAN/08-BUILD-ORDER.md`, `07`).
-Run two clients; implement `RemoteShipInterpolator` so each sees the other's ship move smoothly
-with the ~100 ms interpolation delay (buffer the last two authoritative `(tick, transform)`
-samples, render at `now − 100 ms`, lerp pos / slerp rot). `RemoteShip.cs` is currently a
-snap-only placeholder — replace its `Apply` with buffered interpolation.
+**Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · `1` spawn · `P` (debug) inject divergence.
+
+**Next task: T7 — both ship classes + spawn menu** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `05`).
+Add the Fighter class (stats already in `FlightModel.Fighter`), a distinct mesh, and a HUD
+spawn menu with Scout/Fighter buttons (replacing the press-`1` shortcut). Confirm both classes
+fly with their distinct feel.
 
 ---
 
@@ -190,43 +191,56 @@ the 45-unit base sphere (see-through from within due to back-face culling) and f
 noted in `99`. The chase-cam framing of a small cone seen dead-rear reads as a faceted disc;
 that's correct.
 
-## T5 (DONE): reconciliation correctness
+## T5 (DONE): reconciliation correctness — **true zero divergence**
 
-**The fix — tick alignment.** The server stamps `Ship.LastInputTick = Match.Tick` (its own
-integration index, since `Match.Tick` increments once per `SimTick`). The client predicts in
-that same tick space: `ShipController` anchors `_predTick` to `WorldRenderer.ServerTick` on
-spawn and advances it on a **slewed local clock** — a plain fixed-dt accumulator whose rate is
-nudged (`±MaxSlew`, gain `SlewGain`) to hold a small fixed lead (`TargetLead = 2`) over the
-authoritative tick. So `predicted[N]` and `auth[N]` index the **same integration count**, and
-the local clock tracks the server's real rate without the discrete skip/stall that the T4
-attempt had. Integration stays fixed-dt → determinism preserved; only wall-clock pacing slews.
+Reached in three stacked fixes (each verified to remove a distinct divergence source). The
+order of discovery is in `.PLAN/99`; the final design is:
 
-**Why this matters (measured).** The server actually runs at **~18.7 Hz**, not 20 (the
-scheduled reducer doesn't hit 50 ms exactly). With the old `ClientTick` stamping, the 20 Hz
-client and ~18.7 Hz server drifted in *integration count*, so `predicted[N]` ≠ `auth[N]` by a
-steady **~8.8 u even in straight-line flight** — reconciliation fought it ~1.5 Hz (the jerk).
-Tick alignment removed that: **lead bounded to 2–3 ticks**, steady-state error **~0.5 u**.
+1. **Tick alignment.** Server stamps `Ship.LastInputTick = Match.Tick` (its integration index).
+   The client predicts in that tick space: `ShipController` anchors `_predTick` to
+   `WorldRenderer.ServerTick` on spawn and advances on a **slewed local clock** (fixed-dt
+   accumulator whose *pacing* is nudged, gain `SlewGain`/`±MaxSlew`, to hold `TargetLead = 1`
+   over authority — no discrete skip/stall). So `predicted[N]` and `auth[N]` index the same
+   integration count. This killed the **~8.8 u step-count drift** (the server actually ticks
+   **~18.7 Hz**, not 20, so a free-running 20 Hz client drifted).
+2. **Deterministic trig** (`MathDet.Sin/Cos` in `shared/FlightModel.cs`). IEEE `+,-,*,/,sqrt`
+   are bit-identical across the wasm server and mono client, but `Math.Sin/Cos` (libm) are not —
+   that mismatch drifted the *rotation* integration and was the **turn-only jerk**. A polynomial
+   in plain float ops makes both sides bit-identical (`rotErr → 0`).
+3. **Server per-tick input buffer.** `ShipInput` is now one row per `(ship, tick)` and `SimTick`
+   applies the input **stamped for the current tick** (not "latest"), so the server replays the
+   client's exact input sequence. This removed the last residual — the **latest-input steering
+   transient** (which a wider tolerance only capped, not eliminated).
 
-**Instrumentation + injection (gate).** `PredictionController.ReconcileCount` /
-`LastReconcileError` are shown in the HUD. Divergence injection: press **P** (or the autofly
-self-test) calls `InjectDivergence`, which offsets the predicted state + every buffered
-prediction so the next authoritative update exceeds tolerance and exercises the full
-snap+re-simulate path. Verified: a 25 u injection → **one** correction → immediately back to
-baseline, **no sustained rubber-banding**.
+**Result (measured, `--autofly` @60fps):** with tight tolerance (**1.0 u pos / 0.05 rad rot**),
+~5 min of continuous weaving produced **zero** drift reconciles — only a one-time ~0.5 u
+spawn-anchor alignment and the deliberate injection. `rotErr = 0.0000` throughout.
 
-**Residual = transcendental float drift (the `99` T3 risk, now confirmed).** With tick alignment
-the only remaining divergence is wasm (server) vs mono (client) computing `sin/cos` slightly
-differently — ~0.0125 u/tick. Reconciliation correctly caps it: at the **1.0 u** tolerance it
-fires ~0.25 Hz with a ~1 u smoothed (imperceptible) correction. This is reconciliation doing its
-actual job on genuine, irreducible-for-now divergence — **not** a masked systematic error.
-Tolerance is a frequency/magnitude knob (tighter = more frequent + smaller); 1.0 u is a balance.
+**Gate.** Instrumentation: `ReconcileCount` / `LastReconcileError` in the HUD. Injection: **P**
+key (or autofly self-test) → `InjectDivergence` offsets the predicted state + buffer so the next
+update exceeds tolerance. Verified a 25 u injection recovers in **one** correction, no
+rubber-banding. Reconciliation + the position/rotation **correction smoothing** now only act on
+real perturbation.
 
-**Verified:** `--autofly` capped at 60 fps, ~230 s runs: lead 2–3 ticks; steady/maneuvering
-reconciles are tiny (~1 u) and rare; injection recovers in one correction. `dotnet build` clean.
+**Future (`99`):** `TargetLead = 1` and the input-arrival fallback assume low RTT (localhost);
+revisit lead/fallback under real WAN latency at T10.
 
-**Future (note in `99`):** true cross-runtime determinism would need a shared
-fixed-point/polynomial `sin/cos`; the slewed-clock sync is tuned for localhost and will want
-revisiting under real WAN latency at T10.
+## T6 (DONE): two clients, remote interpolation
+
+`RemoteShip.cs` no longer snaps. It buffers authoritative transforms (with client arrival
+timestamps) and renders at **`now − 100 ms`** (`InterpDelayMs`), finding the two samples that
+bracket the render time and **lerping position / slerping rotation** between them. If render
+time is past the newest sample (updates stopped) it **holds the latest** — no extrapolation
+(`.PLAN/07`). Quaternions normalized before slerp. First sample renders as-is until a pair
+exists. This is the "smoothing" that makes a remote ship glide instead of stepping at ~18.7 Hz.
+
+**Verified:** two headless `--autofly` clients each spawn a ship and render the other's as an
+interpolating remote (auto-team-balanced to 0/1), zero errors over the run. Visual smoothness
+confirmed by the user in a live 2-client session.
+
+**Controls remapped this milestone (Allegiance-style), in `ShipController.ReadInput`:**
+`W/S` throttle · `A/D` strafe L/R · `E/C` strafe up/down · `Q/Z` roll · arrows yaw/pitch.
+(Roll moved off `E` because `E` is now strafe-up.)
 
 ---
 
@@ -267,9 +281,9 @@ module/
 client/
   scripts/ConnectionManager.cs   ← connects, exposes Conn/Identity + Connected event, subscribes
   scripts/WorldRenderer.cs       ← instances base/asteroid/ship nodes; exposes LocalShip (PredictionController)
-  scripts/ShipController.cs      ← 20 Hz input loop → ApplyInput + prediction; spawn key; --autofly flag
-  scripts/PredictionController.cs← local ship: fixed-dt predict, ring buffer, rollback reconcile
-  scripts/RemoteShip.cs          ← other players' ships (snap-only; interpolation is T6)
+  scripts/ShipController.cs      ← server-tick-slaved 20 Hz input loop → ApplyInput + prediction; controls; --autofly flag
+  scripts/PredictionController.cs← local ship: fixed-dt predict in server-tick space, rollback reconcile, pos+rot correction smoothing
+  scripts/RemoteShip.cs          ← other players' ships: 100 ms snapshot interpolation (lerp pos / slerp rot)
   scripts/CameraRig.cs           ← chase camera (Camera3D), overview fallback
   scripts/Hud.cs                 ← spawn prompt + speed readout
   scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling

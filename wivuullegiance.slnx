@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/client/">
+    <Project Path="client/wivuullegiance.csproj" />
+  </Folder>
+  <Folder Name="/module/" />
+  <Folder Name="/module/spacetimedb/">
+    <Project Path="module/spacetimedb/StdbModule.csproj" />
+  </Folder>
+</Solution>

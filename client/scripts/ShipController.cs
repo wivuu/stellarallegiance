@@ -133,12 +133,12 @@ public partial class ShipController : Node
 
 	private static ShipInputState ReadInput() => new ShipInputState
 	{
-		Thrust  = Axis(Key.W, Key.S),
-		StrafeX = Axis(Key.D, Key.A),
-		StrafeY = Axis(Key.Space, Key.Shift),
+		Thrust  = Axis(Key.W, Key.S),       // forward / reverse
+		StrafeX = Axis(Key.D, Key.A),       // strafe right / left
+		StrafeY = Axis(Key.E, Key.C),       // strafe up / down
 		Yaw     = Axis(Key.Left, Key.Right),
 		Pitch   = Axis(Key.Up, Key.Down),
-		Roll    = Axis(Key.Q, Key.E),
+		Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
 		Firing  = false, // weapons arrive in T8
 	};
 
