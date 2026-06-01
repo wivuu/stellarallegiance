@@ -2,13 +2,13 @@
 
 ## Current state
 
-T0 and **T1 are complete and passing**. The repo has:
+T0, T1, and **T2 are complete and passing**. The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids
 - The 20 Hz `SimTick` scheduled reducer is live (stub body — increments `Match.Tick` only; full sim is T4)
-- A Godot 4.6.3 C# client that connects and logs its identity
+- A Godot 4.6.3 C# client that connects, **subscribes to all tables, and renders the static world** (blue/red base spheres + 30 grey asteroid icospheres) via `WorldRenderer.cs`
 - Regenerated `client/module_bindings/`; `dotnet build` succeeds (one harmless generated-code warning)
 
-**Next task: T2 — client subscriptions + rendering** (see `.PLAN/08-BUILD-ORDER.md`). `ConnectionManager.cs` still only connects; it needs to subscribe to the tables and surface rows.
+**Next task: T3 — shared flight model** (see `.PLAN/08-BUILD-ORDER.md` and `.PLAN/06-FLIGHT-MODEL.md`). Implement a pure, fixed-`dt`, deterministic `FlightModel.cs` copied identically into `module/` and `client/`, with a tiny test asserting identical output on both copies.
 
 ---
 
@@ -92,11 +92,33 @@ docker run --rm -v "$(pwd)/.stdb-config":/home/spacetime/.config/spacetime --net
     --server http://localhost:3001
 ```
 
-## Next: T2 — client subscriptions + render
+## T2 (DONE): client subscriptions + render
 
-Per `.PLAN/05`/`07`, `ConnectionManager.cs` should `.SubscribeToAllTables()` (or explicit SQL
-subs) after connect and wire `OnInsert`/`OnUpdate`/`OnDelete` for the tables the client renders.
-The generated `DbConnection` in `SpacetimeDB.Types` now exposes all the new tables/reducers.
+- `ConnectionManager.cs` now exposes `Conn`/`LocalIdentity`, fires a `Connected` event in
+  `OnConnect` (so renderers can attach row callbacks **before** the snapshot), then calls
+  `conn.SubscriptionBuilder()…SubscribeToAllTables()`.
+- `WorldRenderer.cs` (new, `Node3D`) attaches `Base`/`Asteroid` `OnInsert`/`OnDelete` and
+  instances `MeshInstance3D` spheres per row (bases colored by team, asteroids scaled by
+  `Radius`). It also positions the overview `Camera3D` via `LookAt` (a proper chase
+  `CameraRig` comes in T4).
+- `Main.tscn` is now `Node3D` with `ConnectionManager`, `WorldRenderer`, `WorldEnvironment`,
+  `DirectionalLight3D`, and `Camera3D`.
+
+**Verified:** two headless clients run simultaneously, each logs `bases: 2, asteroids: 30,
+ships: 0` with identical base positions `(-500,0,0)`/`(500,0,0)`; a windowed screenshot shows
+the blue/red bases + asteroid field rendering correctly.
+
+**Gotchas learned:** the SDK table-callback signature is `(EventContext ctx, Row row)`. Don't
+hand-author the `Camera3D` `Transform3D` in the `.tscn` (easy to mis-aim — it rendered an
+empty frame); orient it in code with `LookAt`. Removed stale `Person.g.cs.uid` leftovers from
+the template under `module_bindings/{Tables,Types}/`.
+
+## Next: T3 — shared flight model
+
+Per `.PLAN/06`, write `shared/FlightModel.cs`: pure, deterministic, fixed-`dt` integration
+of a ship state given an input. Copy it **byte-identically** into `module/` and `client/`
+(the T3 gate diffs them). Add a standalone test feeding a fixed input sequence for N ticks and
+asserting identical final state (within 1e-5) on both copies. No `delta` anywhere in the path.
 
 ---
 
@@ -131,10 +153,11 @@ module/
   CLAUDE.md               ← 2.x API reference, read this
 
 client/
-  scripts/ConnectionManager.cs   ← T2: add subscriptions after connect
-  module_bindings/               ← GENERATED (now has all 7 tables), do not edit
+  scripts/ConnectionManager.cs   ← connects, exposes Conn/Identity + Connected event, subscribes
+  scripts/WorldRenderer.cs       ← T2: instances base/asteroid meshes from rows; sets camera
+  module_bindings/               ← GENERATED (all 7 tables), do not edit
   wivuullegiance.csproj
-  scenes/Main.tscn
+  scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, env, light, camera
 
 .PLAN/                    ← design docs; read for intent, not for copy-paste syntax
 ACCEPTANCE01.md           ← T0 manual test checklist (already passing)
