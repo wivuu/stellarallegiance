@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Compile the canonical shared model directly. Because the module and
+         client copies are byte-identical to it (verified by diff in the T3
+         gate), a deterministic result here is the result on both sides. -->
+    <Compile Include="../../shared/FlightModel.cs" Link="FlightModel.cs" />
+  </ItemGroup>
+
+</Project>

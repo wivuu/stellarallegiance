@@ -2,13 +2,14 @@
 
 ## Current state
 
-T0, T1, and **T2 are complete and passing**. The repo has:
+T0, T1, T2, and **T3 are complete and passing**. The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids
 - The 20 Hz `SimTick` scheduled reducer is live (stub body — increments `Match.Tick` only; full sim is T4)
 - A Godot 4.6.3 C# client that connects, **subscribes to all tables, and renders the static world** (blue/red base spheres + 30 grey asteroid icospheres) via `WorldRenderer.cs`
-- Regenerated `client/module_bindings/`; `dotnet build` succeeds (one harmless generated-code warning)
+- A **shared, deterministic, fixed-`dt` flight model** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
+- Regenerated `client/module_bindings/`; `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
-**Next task: T3 — shared flight model** (see `.PLAN/08-BUILD-ORDER.md` and `.PLAN/06-FLIGHT-MODEL.md`). Implement a pure, fixed-`dt`, deterministic `FlightModel.cs` copied identically into `module/` and `client/`, with a tiny test asserting identical output on both copies.
+**Next task: T4 — local flight (prediction only, single player)** (see `.PLAN/08-BUILD-ORDER.md`, `04`, `05`, `06`, `07`). Implement `SpawnShip` + `ApplyInput` reducers and the `SimTick` integration step (ships only, no weapons); add `ShipController` + `PredictionController` on the client; spawn a Scout and fly it. The shared `FlightModel.Integrate` is ready to call from both the `SimTick` reducer and the client predictor.
 
 ---
 
@@ -113,12 +114,38 @@ hand-author the `Camera3D` `Transform3D` in the `.tscn` (easy to mis-aim — it 
 empty frame); orient it in code with `LookAt`. Removed stale `Person.g.cs.uid` leftovers from
 the template under `module_bindings/{Tables,Types}/`.
 
-## Next: T3 — shared flight model
+## T3 (DONE): shared flight model
 
-Per `.PLAN/06`, write `shared/FlightModel.cs`: pure, deterministic, fixed-`dt` integration
-of a ship state given an input. Copy it **byte-identically** into `module/` and `client/`
-(the T3 gate diffs them). Add a standalone test feeding a fixed input sequence for N ticks and
-asserting identical final state (within 1e-5) on both copies. No `delta` anywhere in the path.
+- **`shared/FlightModel.cs`** is the canonical, pure, fixed-`dt` (`Dt = 1/20`) integrator.
+  It uses self-contained `Vec3`/`Quat` structs (no Godot / System.Numerics types) in
+  namespace `StellarAllegiance.Shared`, so the copies are engine-independent and truly
+  identical. `StatsFor(byte)` (0=Scout, 1=Fighter) keeps it free of any game enum.
+- **`shared/sync.sh`** copies the canonical file VERBATIM into `module/spacetimedb/FlightModel.cs`
+  and `client/scripts/FlightModel.cs`, then `diff`s to prove all three are byte-identical.
+  **Edit `shared/FlightModel.cs` then run `bash shared/sync.sh` — never edit a copy.**
+- **`tests/FlightModelTest/`** is a standalone net8.0 console test: it integrates a fixed
+  200-tick input sequence, asserts two runs are **bit-identical** (determinism), matches a
+  recorded golden state within **1e-5**, and that terminal speed respects `MaxSpeed`.
+  Run with `cd tests/FlightModelTest && dotnet run -c Release` → `ALL TESTS PASSED`.
+
+**Verified:** `diff shared/FlightModel.cs module/.../FlightModel.cs` and `…client/…` are both
+empty; the test passes; the client `dotnet build` and the module wasm publish both compile the
+file cleanly. Integration path has **no `delta`** — always `FlightModel.Dt`.
+
+**Gotchas learned:** the module/client `ShipClass` enums live in *different* namespaces, so the
+shared file must not reference either — it takes a `byte` class id. Transcendental funcs
+(`sin/cos`) are a theoretical cross-runtime determinism risk (wasm vs mono); fine so far, noted
+in `99` to revisit at T5.
+
+## Next: T4 — local flight (prediction only)
+
+Per `.PLAN/04`/`05`/`06`/`07`: implement `SpawnShip(ShipClass)` + `ApplyInput(...)` reducers and
+fill in the `SimTick` body to integrate ships via `FlightModel.Integrate` (ships only — no
+weapons). On the client add `ShipController` (samples input at 20 Hz, calls `ApplyInput`) and
+`PredictionController` (ring buffer + rollback reconciliation), have `WorldRenderer` attach the
+right controller per ship (`Owner == LocalIdentity` → predict), and add a chase `CameraRig`.
+Tune the `FlightModel` constants until flying feels good (subjective gate). To convert between
+the shared `Quat`/`Vec3` and the `Ship` row's `Rot*/Pos*/Vel*` floats, marshal field-by-field.
 
 ---
 
@@ -144,10 +171,14 @@ asserting identical final state (within 1e-5) on both copies. No `delta` anywher
 
 ```
 .stdb-config/             ← persistent CLI identity/token (gitignored); mount on every auth'd call
+shared/
+  FlightModel.cs          ← CANONICAL deterministic flight model; edit here only
+  sync.sh                 ← copies FlightModel.cs verbatim into module/ + client/, diffs to verify
 module/
   spacetime.json          ← points to spacetimedb/ subdirectory
   spacetimedb/
     Lib.cs                ← full T1 schema + reducers (SimTick body is a T4 stub)
+    FlightModel.cs        ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
     StdbModule.csproj     ← do not touch
     global.json           ← pins net8.0, do not touch
   CLAUDE.md               ← 2.x API reference, read this
@@ -155,9 +186,13 @@ module/
 client/
   scripts/ConnectionManager.cs   ← connects, exposes Conn/Identity + Connected event, subscribes
   scripts/WorldRenderer.cs       ← T2: instances base/asteroid meshes from rows; sets camera
+  scripts/FlightModel.cs         ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
   module_bindings/               ← GENERATED (all 7 tables), do not edit
   wivuullegiance.csproj
   scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, env, light, camera
+
+tests/
+  FlightModelTest/        ← standalone net8.0 console test for FlightModel (dotnet run -c Release)
 
 .PLAN/                    ← design docs; read for intent, not for copy-paste syntax
 ACCEPTANCE01.md           ← T0 manual test checklist (already passing)
