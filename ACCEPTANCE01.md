@@ -68,7 +68,7 @@ dotnet build
 Open Godot and run the Main scene:
 
 ```bash
-godot --path client/
+godot-mono --path client/
 ```
 
 1. In the Godot editor, open the **Main** scene (`scenes/Main.tscn`).
