@@ -41,6 +41,12 @@ namespace SpacetimeDB.Types
         public float RotZ;
         [DataMember(Name = "rot_w")]
         public float RotW;
+        [DataMember(Name = "ang_vel_x")]
+        public float AngVelX;
+        [DataMember(Name = "ang_vel_y")]
+        public float AngVelY;
+        [DataMember(Name = "ang_vel_z")]
+        public float AngVelZ;
         [DataMember(Name = "health")]
         public float Health;
         [DataMember(Name = "last_input_tick")]
@@ -61,6 +67,9 @@ namespace SpacetimeDB.Types
             float RotY,
             float RotZ,
             float RotW,
+            float AngVelX,
+            float AngVelY,
+            float AngVelZ,
             float Health,
             uint LastInputTick
         )
@@ -79,6 +88,9 @@ namespace SpacetimeDB.Types
             this.RotY = RotY;
             this.RotZ = RotZ;
             this.RotW = RotW;
+            this.AngVelX = AngVelX;
+            this.AngVelY = AngVelY;
+            this.AngVelZ = AngVelZ;
             this.Health = Health;
             this.LastInputTick = LastInputTick;
         }

@@ -634,6 +634,10 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.ApplyInput args => Reducers.InvokeApplyInput(eventContext, args),
+                Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
+                Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),
+                Reducer.SpawnShip args => Reducers.InvokeSpawnShip(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };
         }

@@ -11,31 +11,37 @@ public partial class WorldRenderer : Node3D
 
 	private Node3D _bases = null!;
 	private Node3D _asteroids = null!;
+	private Node3D _ships = null!;
 
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
+	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
 
+	private ConnectionManager _cm = null!;
+
+	// The local player's predicted ship, or null when not flying. Read by
+	// ShipController (drives prediction), CameraRig (chase target), and Hud.
+	public PredictionController? LocalShip { get; private set; }
+
 	public override void _Ready()
 	{
 		_bases = new Node3D { Name = "Bases" };
 		_asteroids = new Node3D { Name = "Asteroids" };
+		_ships = new Node3D { Name = "Ships" };
 		AddChild(_bases);
 		AddChild(_asteroids);
+		AddChild(_ships);
 
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
 		_team1Mat = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.3f, 0.25f) };
 
-		var cam = GetNode<Camera3D>("../Camera3D");
-		cam.Position = new Vector3(600f, 750f, 1600f);
-		cam.LookAt(Vector3.Zero, Vector3.Up);
-
-		var cm = GetNode<ConnectionManager>("../ConnectionManager");
-		cm.Connected += OnConnected;
+		_cm = GetNode<ConnectionManager>("../ConnectionManager");
+		_cm.Connected += OnConnected;
 	}
 
 	private void OnConnected(DbConnection conn)
@@ -44,6 +50,9 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Base.OnDelete += OnBaseDelete;
 		conn.Db.Asteroid.OnInsert += OnAsteroidInsert;
 		conn.Db.Asteroid.OnDelete += OnAsteroidDelete;
+		conn.Db.Ship.OnInsert += OnShipInsert;
+		conn.Db.Ship.OnUpdate += OnShipUpdate;
+		conn.Db.Ship.OnDelete += OnShipDelete;
 	}
 
 	// ---- Base -----------------------------------------------------------
@@ -93,5 +102,75 @@ public partial class WorldRenderer : Node3D
 	{
 		if (_asteroidNodes.Remove(row.AsteroidId, out var node))
 			node.QueueFree();
+	}
+
+	// ---- Ship -----------------------------------------------------------
+
+	private bool IsLocal(Ship row) =>
+		_cm.LocalIdentity is { } id && row.Owner == id;
+
+	private void OnShipInsert(EventContext ctx, Ship row)
+	{
+		if (_shipNodes.ContainsKey(row.ShipId))
+			return;
+
+		Node3D node;
+		if (IsLocal(row))
+		{
+			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
+			node = pc;
+			_ships.AddChild(pc);
+			pc.AddChild(BuildShipMesh(row.Team));
+			pc.Initialize(row);
+			LocalShip = pc;
+			GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team})");
+		}
+		else
+		{
+			var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
+			node = rs;
+			_ships.AddChild(rs);
+			rs.AddChild(BuildShipMesh(row.Team));
+			rs.Initialize(row);
+		}
+		_shipNodes[row.ShipId] = node;
+	}
+
+	private void OnShipUpdate(EventContext ctx, Ship oldRow, Ship newRow)
+	{
+		if (!_shipNodes.TryGetValue(newRow.ShipId, out var node))
+			return;
+		switch (node)
+		{
+			case PredictionController pc: pc.OnAuthoritative(newRow); break;
+			case RemoteShip rs: rs.OnAuthoritative(newRow); break;
+		}
+	}
+
+	private void OnShipDelete(EventContext ctx, Ship row)
+	{
+		if (!_shipNodes.Remove(row.ShipId, out var node))
+			return;
+		if (LocalShip == node)
+			LocalShip = null;
+		node.QueueFree();
+	}
+
+	// Scout/Fighter share a cone for now (distinct meshes are T7). The cone is
+	// built pointing local +Z to match the flight model's forward axis.
+	private MeshInstance3D BuildShipMesh(byte team)
+	{
+		return new MeshInstance3D
+		{
+			Mesh = new CylinderMesh
+			{
+				TopRadius = 0f,
+				BottomRadius = 1.4f,
+				Height = 4.5f,
+				RadialSegments = 12,
+			},
+			MaterialOverride = team == 0 ? _team0Mat : _team1Mat,
+			RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
+		};
 	}
 }

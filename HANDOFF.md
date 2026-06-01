@@ -2,14 +2,19 @@
 
 ## Current state
 
-T0, T1, T2, and **T3 are complete and passing**. The repo has:
-- A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids
-- The 20 Hz `SimTick` scheduled reducer is live (stub body — increments `Match.Tick` only; full sim is T4)
-- A Godot 4.6.3 C# client that connects, **subscribes to all tables, and renders the static world** (blue/red base spheres + 30 grey asteroid icospheres) via `WorldRenderer.cs`
+T0–T3 and **T4 are complete** (T4 mechanically verified; subjective flight-feel sign-off
+still needs a human at the keyboard). The repo has:
+- A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` now also has `AngVelX/Y/Z`.
+- The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8)
+- Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
+- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies a Scout with client-side prediction + rollback reconciliation**, a chase camera, and a minimal HUD
 - A **shared, deterministic, fixed-`dt` flight model** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
-- Regenerated `client/module_bindings/`; `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
+- `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
-**Next task: T4 — local flight (prediction only, single player)** (see `.PLAN/08-BUILD-ORDER.md`, `04`, `05`, `06`, `07`). Implement `SpawnShip` + `ApplyInput` reducers and the `SimTick` integration step (ships only, no weapons); add `ShipController` + `PredictionController` on the client; spawn a Scout and fly it. The shared `FlightModel.Integrate` is ready to call from both the `SimTick` reducer and the client predictor.
+**Next task: T5 — reconciliation correctness** (see `.PLAN/08-BUILD-ORDER.md`, `07`). Instrument
+and confirm reconciliation rarely fires under good conditions and recovers cleanly when
+divergence is injected. `PredictionController.ReconcileCount` already exists as the counter to
+build on; also resolve the transcendental-determinism question (`.PLAN/99`) if drift appears.
 
 ---
 
@@ -137,15 +142,39 @@ shared file must not reference either — it takes a `byte` class id. Transcende
 (`sin/cos`) are a theoretical cross-runtime determinism risk (wasm vs mono); fine so far, noted
 in `99` to revisit at T5.
 
-## Next: T4 — local flight (prediction only)
+## T4 (DONE, pending subjective sign-off): local flight + prediction
 
-Per `.PLAN/04`/`05`/`06`/`07`: implement `SpawnShip(ShipClass)` + `ApplyInput(...)` reducers and
-fill in the `SimTick` body to integrate ships via `FlightModel.Integrate` (ships only — no
-weapons). On the client add `ShipController` (samples input at 20 Hz, calls `ApplyInput`) and
-`PredictionController` (ring buffer + rollback reconciliation), have `WorldRenderer` attach the
-right controller per ship (`Owner == LocalIdentity` → predict), and add a chase `CameraRig`.
-Tune the `FlightModel` constants until flying feels good (subjective gate). To convert between
-the shared `Quat`/`Vec3` and the `Ship` row's `Rot*/Pos*/Vel*` floats, marshal field-by-field.
+- **Server** (`module/spacetimedb/Lib.cs`): added `Ship.AngVelX/Y/Z`; reducers `SpawnShip` /
+  `Respawn` (shared `SpawnShipInternal` — spawns at the team base, creates the `ShipInput` row,
+  sets `Player.ShipId`), `ApplyInput` (overwrites the ship's `ShipInput`, no integration), and
+  `SetName`. `SimTick` now marshals each `Ship` row → `ShipState`, calls `FlightModel.Integrate`
+  with its `ShipInput`, and writes back transform + `AngVel` + `LastInputTick = ShipInput.ClientTick`.
+- **Client**: `ShipMath.cs` (row↔FlightModel↔Godot marshaling), `PredictionController.cs`
+  (local ship: fixed-dt prediction, ring buffer, rollback reconciliation @ 0.25u / 0.05rad,
+  velocity-extrapolated rendering, `ReconcileCount`), `RemoteShip.cs` (snap-only for now; T6
+  adds interpolation), `ShipController.cs` (20 Hz input loop → `ApplyInput` + `Step`; spawn on
+  key `1`; `--autofly` dev flag), `CameraRig.cs` (chase cam, overview fallback), `Hud.cs`
+  (spawn prompt + speed). `WorldRenderer` instances the right node per ship and exposes `LocalShip`.
+- **Controls**: WASD thrust/strafe, Space/Shift up-down, arrow keys aim, Q/E roll. Ships fly
+  along local **+Z** (matches the flight model); the cone mesh and chase cam are built around that.
+
+**Verified:** `--autofly` headless run spawns a Scout and flies it — SQL shows the `Ship` row
+moving away from the base with `LastInputTick` advancing (e.g. 131→134→136), proving the full
+`ApplyInput → SimTick integrate → Ship update → LastInputTick echo` loop. A windowed capture
+confirms the cone renders, oriented along travel, with the chase cam behind it and HUD speed
+(~35 u/s terminal). Reconciliations are rare (2–5 over a few seconds on localhost), not
+rubber-banding.
+
+**Not done:** the subjective "is it fun for two minutes" gate needs a human flying with the
+keyboard. Constants are the `.PLAN/03` placeholders (Scout: thrust 45 / maxspeed 70 / drag 1.2;
+angular 3.5 / drag 2.5) — tune to taste in `shared/FlightModel.cs` then `bash shared/sync.sh`.
+
+**Gotchas learned:** headless Godot runs **uncapped**, so `--quit-after <frames>` elapses in a
+fraction of a real second — to observe live state, run with a huge frame cap in the background
+and sample, then stop it (don't expect SQL to catch a short headless run). Ships spawn *inside*
+the 45-unit base sphere (see-through from within due to back-face culling) and fly out — fine,
+noted in `99`. The chase-cam framing of a small cone seen dead-rear reads as a faceted disc;
+that's correct.
 
 ---
 
@@ -177,7 +206,7 @@ shared/
 module/
   spacetime.json          ← points to spacetimedb/ subdirectory
   spacetimedb/
-    Lib.cs                ← full T1 schema + reducers (SimTick body is a T4 stub)
+    Lib.cs                ← schema (Ship has AngVel) + reducers; SimTick integrates ships
     FlightModel.cs        ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
     StdbModule.csproj     ← do not touch
     global.json           ← pins net8.0, do not touch
@@ -185,11 +214,17 @@ module/
 
 client/
   scripts/ConnectionManager.cs   ← connects, exposes Conn/Identity + Connected event, subscribes
-  scripts/WorldRenderer.cs       ← T2: instances base/asteroid meshes from rows; sets camera
+  scripts/WorldRenderer.cs       ← instances base/asteroid/ship nodes; exposes LocalShip (PredictionController)
+  scripts/ShipController.cs      ← 20 Hz input loop → ApplyInput + prediction; spawn key; --autofly flag
+  scripts/PredictionController.cs← local ship: fixed-dt predict, ring buffer, rollback reconcile
+  scripts/RemoteShip.cs          ← other players' ships (snap-only; interpolation is T6)
+  scripts/CameraRig.cs           ← chase camera (Camera3D), overview fallback
+  scripts/Hud.cs                 ← spawn prompt + speed readout
+  scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling
   scripts/FlightModel.cs         ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
-  module_bindings/               ← GENERATED (all 7 tables), do not edit
+  module_bindings/               ← GENERATED (tables + reducers), do not edit
   wivuullegiance.csproj
-  scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, env, light, camera
+  scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, ShipController, env, light, CameraRig, Hud
 
 tests/
   FlightModelTest/        ← standalone net8.0 console test for FlightModel (dotnet run -c Release)

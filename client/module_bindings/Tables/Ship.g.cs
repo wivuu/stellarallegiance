@@ -53,6 +53,9 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Ship, float> RotY { get; }
         public global::SpacetimeDB.Col<Ship, float> RotZ { get; }
         public global::SpacetimeDB.Col<Ship, float> RotW { get; }
+        public global::SpacetimeDB.Col<Ship, float> AngVelX { get; }
+        public global::SpacetimeDB.Col<Ship, float> AngVelY { get; }
+        public global::SpacetimeDB.Col<Ship, float> AngVelZ { get; }
         public global::SpacetimeDB.Col<Ship, float> Health { get; }
         public global::SpacetimeDB.Col<Ship, uint> LastInputTick { get; }
 
@@ -72,6 +75,9 @@ namespace SpacetimeDB.Types
             RotY = new global::SpacetimeDB.Col<Ship, float>(tableName, "rot_y");
             RotZ = new global::SpacetimeDB.Col<Ship, float>(tableName, "rot_z");
             RotW = new global::SpacetimeDB.Col<Ship, float>(tableName, "rot_w");
+            AngVelX = new global::SpacetimeDB.Col<Ship, float>(tableName, "ang_vel_x");
+            AngVelY = new global::SpacetimeDB.Col<Ship, float>(tableName, "ang_vel_y");
+            AngVelZ = new global::SpacetimeDB.Col<Ship, float>(tableName, "ang_vel_z");
             Health = new global::SpacetimeDB.Col<Ship, float>(tableName, "health");
             LastInputTick = new global::SpacetimeDB.Col<Ship, uint>(tableName, "last_input_tick");
         }
