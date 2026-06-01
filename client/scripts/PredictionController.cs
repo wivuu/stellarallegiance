@@ -17,13 +17,16 @@ using StellarAllegiance.Shared;
 // which is exactly what made turning feel jerky before rotation easing existed.)
 public partial class PredictionController : Node3D
 {
-	// With server-tick alignment (ShipController predicts in Match.Tick space and
-	// the server stamps LastInputTick = Match.Tick), predicted[N] and auth[N]
-	// index the SAME integration, so in steady flight they agree to within float
-	// error. Reconciliation fires only on real divergence (transcendental float
-	// drift — worse while turning — input-timing transients, network jitter,
-	// injected perturbation), so the tolerance can be tight. (.PLAN/07, /99)
-	private const float PosTolerance = 1.0f;      // units
+	// With server-tick alignment + deterministic MathDet trig, the client and
+	// server integrate bit-identically, so steady flight agrees exactly. The only
+	// residual is the latest-input server model: while INPUT is changing (active
+	// steering) the server applies it a tick off from what the client predicted,
+	// giving a BOUNDED, self-correcting transient — ~1 tick of rotation (≈0.06 rad
+	// ≈ one tick of motion in position). That's imperceptible and the local player
+	// sees smooth self-consistent prediction, so tolerances sit ABOVE it: fighting
+	// it is what caused the steering jerk. Reconcile only on real divergence
+	// (gross mispredict / injection). (.PLAN/07, /99)
+	private const float PosTolerance = 0.5f;      // units
 	private const float RotTolerance = 0.05f;     // radians
 	private const int BufferLen = 40;             // ~2s at 20 Hz
 	private const float SmoothRate = 12f;         // reconcile correction-ease decay (1/s)

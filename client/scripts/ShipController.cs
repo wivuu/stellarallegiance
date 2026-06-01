@@ -9,7 +9,7 @@ using StellarAllegiance.Shared;
 public partial class ShipController : Node
 {
 	private const int MaxStepsPerFrame = 5;   // spiral-of-death guard
-	private const int TargetLead = 2;         // ticks to stay ahead of authority
+	private const int TargetLead = 1;         // ticks ahead of authority (localhost RTT≈0; smaller lead = smaller input-timing transient)
 	private const float SlewGain = 0.08f;     // how hard the local clock tracks the server
 	private const float MaxSlew = 0.30f;      // cap the clock rate adjustment (±30%)
 
@@ -143,22 +143,17 @@ public partial class ShipController : Node
 	};
 
 	// Deterministic scripted flight for headless verification — representative of
-	// NORMAL play: long straight runs with occasional gentle turns and coasting,
-	// rather than a pinned max-rate turn (which is an adversarial worst case for
-	// the prediction lead). Driven by steps-since-spawn so it's reproducible.
+	// NORMAL play: continuous gentle weaving (smooth, like a human steering),
+	// rather than instant input reversals (an unrealistic worst case) or a pinned
+	// max-rate turn. Driven by steps-since-spawn so it's reproducible.
 	private ShipInputState AutoInput()
 	{
-		// TEMP(determinism check): sustained hard turn — worst case for rotation drift.
-		return new ShipInputState { Thrust = 1f, Yaw = 0.6f, Pitch = 0.15f };
-		uint phase = ((uint)_stepsSinceSpawn / 80) % 6;  // ~4 s per phase
-		return phase switch
+		float t = _stepsSinceSpawn * FlightModel.Dt;   // sim seconds
+		return new ShipInputState
 		{
-			0 => new ShipInputState { Thrust = 1f },                 // straight accel
-			1 => new ShipInputState { Thrust = 1f, Yaw = 0.25f },    // gentle turn
-			2 => new ShipInputState { Thrust = 0f },                 // coast
-			3 => new ShipInputState { Thrust = 1f, Yaw = -0.25f },   // gentle turn back
-			4 => new ShipInputState { Thrust = 1f, Pitch = 0.2f },   // climb
-			_ => new ShipInputState { Thrust = 1f },                 // straight
+			Thrust = 1f,
+			Yaw = 0.4f * Mathf.Sin(t * 0.6f),          // weave, ~10 s period
+			Pitch = 0.2f * Mathf.Sin(t * 0.37f),
 		};
 	}
 }

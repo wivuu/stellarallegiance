@@ -57,11 +57,20 @@ public partial struct Ship
     public uint LastInputTick; // highest sim tick integrated; for reconciliation
 }
 
-[SpacetimeDB.Table(Accessor = "ShipInput", Public = true)]
+// Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
+// input the client predicted with for that tick, rather than "latest" — this makes
+// the server replay the client's input sequence and drives prediction/authority
+// divergence to zero (.PLAN/07, /99). Server-private: clients write it via
+// ApplyInput and never read it, so it isn't synced. Pruned to a short window.
+[SpacetimeDB.Table(Accessor = "ShipInput", Public = false)]
 public partial struct ShipInput
 {
     [PrimaryKey]
-    public ulong ShipId;        // one input row per ship
+    [AutoInc]
+    public ulong InputId;
+    [SpacetimeDB.Index.BTree]
+    public ulong ShipId;
+    public uint Tick;           // the sim tick this input is FOR (client _predTick)
     public float Thrust;        // -1..1 forward/back
     public float StrafeX;       // -1..1 left/right
     public float StrafeY;       // -1..1 up/down
@@ -69,7 +78,6 @@ public partial struct ShipInput
     public float Pitch;         // -1..1
     public float Roll;          // -1..1
     public bool Firing;         // trigger held
-    public uint ClientTick;     // client sim tick when produced
 }
 
 [SpacetimeDB.Table(Accessor = "Base", Public = true)]
@@ -144,6 +152,7 @@ public static partial class Module
     private const uint SimTickHz = 20;
     private const byte NumTeams = 2;
     private const int AsteroidCount = 30;
+    private const uint InputKeep = 64;   // per-tick input buffer window (ticks)
 
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
 
@@ -231,7 +240,7 @@ public static partial class Module
         if (p.ShipId is ulong shipId)
         {
             ctx.Db.Ship.ShipId.Delete(shipId);
-            ctx.Db.ShipInput.ShipId.Delete(shipId);
+            DeleteShipInputs(ctx, shipId);
         }
 
         // Keep the Player row so team balance stays stable for the match.
@@ -267,9 +276,10 @@ public static partial class Module
         SpawnShipInternal(ctx, shipClass);
     }
 
-    // Record the latest input for the sender's ship. Does NOT integrate motion —
-    // that happens only in SimTick so every ship advances on one authoritative
-    // clock. Highest-frequency client call (~20 Hz).
+    // Record the input the client produced FOR sim tick `clientTick`, stored under
+    // that tick so SimTick can apply the exact input the client predicted with.
+    // Does NOT integrate motion — that happens only in SimTick. Highest-frequency
+    // client call (~20 Hz). Overwrites if this (ship, tick) was already recorded.
     [SpacetimeDB.Reducer]
     public static void ApplyInput(
         ReducerContext ctx,
@@ -281,21 +291,31 @@ public static partial class Module
         if (player is null || player.Value.ShipId is not ulong shipId)
             return;
 
-        var existing = ctx.Db.ShipInput.ShipId.Find(shipId);
-        if (existing is null)
-            return;
-
-        ctx.Db.ShipInput.ShipId.Update(existing.Value with
+        ShipInput? existing = null;
+        foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId))
         {
-            Thrust = thrust,
-            StrafeX = strafeX,
-            StrafeY = strafeY,
-            Yaw = yaw,
-            Pitch = pitch,
-            Roll = roll,
-            Firing = firing,
-            ClientTick = clientTick,
-        });
+            if (r.Tick == clientTick) { existing = r; break; }
+        }
+
+        if (existing is ShipInput e)
+        {
+            ctx.Db.ShipInput.InputId.Update(e with
+            {
+                Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing,
+            });
+        }
+        else
+        {
+            ctx.Db.ShipInput.Insert(new ShipInput
+            {
+                InputId = 0,
+                ShipId = shipId,
+                Tick = clientTick,
+                Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing,
+            });
+        }
     }
 
     // ---- Scheduled simulation ----------------------------------------
@@ -315,8 +335,19 @@ public static partial class Module
         // (Projectiles + hit resolution arrive in T8.)
         foreach (var ship in ctx.Db.Ship.Iter().ToList())
         {
-            var inputRow = ctx.Db.ShipInput.ShipId.Find(ship.ShipId);
-            var input = inputRow is null ? default : ToInputState(inputRow.Value);
+            // Apply the input the client stamped FOR this tick; if it hasn't
+            // arrived yet, hold the most recent input with Tick <= this tick.
+            // Matching the client's per-tick input is what makes auth == prediction.
+            ShipInput? exact = null;
+            ShipInput? latest = null;
+            foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+            {
+                if (r.Tick == tick) { exact = r; break; }
+                if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
+                    latest = r;
+            }
+            var src = exact ?? latest;
+            var input = src is ShipInput si ? ToInputState(si) : default;
             var stats = FlightModel.StatsFor((byte)ship.Class);
 
             var state = new ShipState
@@ -342,6 +373,14 @@ public static partial class Module
                 LastInputTick = tick,
             });
         }
+
+        // Prune consumed inputs so the per-tick buffer stays bounded (~InputKeep
+        // ticks). The client predicts only ~1 tick ahead, so old inputs are dead.
+        foreach (var r in ctx.Db.ShipInput.Iter().ToList())
+        {
+            if (r.Tick + InputKeep < tick)
+                ctx.Db.ShipInput.InputId.Delete(r.InputId);
+        }
     }
 
     // ---- Helpers ------------------------------------------------------
@@ -356,6 +395,13 @@ public static partial class Module
         Roll = i.Roll,
         Firing = i.Firing,
     };
+
+    // Delete every buffered input for a ship (ShipId is an index, not the PK now).
+    private static void DeleteShipInputs(ReducerContext ctx, ulong shipId)
+    {
+        foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId).ToList())
+            ctx.Db.ShipInput.InputId.Delete(r.InputId);
+    }
 
     // Shared spawn logic for SpawnShip / Respawn.
     private static void SpawnShipInternal(ReducerContext ctx, ShipClass shipClass)
@@ -413,15 +459,8 @@ public static partial class Module
             LastInputTick = 0,
         });
 
-        ctx.Db.ShipInput.Insert(new ShipInput
-        {
-            ShipId = inserted.ShipId,
-            Thrust = 0f, StrafeX = 0f, StrafeY = 0f,
-            Yaw = 0f, Pitch = 0f, Roll = 0f,
-            Firing = false,
-            ClientTick = 0,
-        });
-
+        // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
+        // SimTick falls back to zero input until then.
         ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
         Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({bx},{by},{bz})");
     }

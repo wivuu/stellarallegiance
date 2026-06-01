@@ -13,8 +13,12 @@ namespace SpacetimeDB.Types
     [DataContract]
     public sealed partial class ShipInput
     {
+        [DataMember(Name = "input_id")]
+        public ulong InputId;
         [DataMember(Name = "ship_id")]
         public ulong ShipId;
+        [DataMember(Name = "tick")]
+        public uint Tick;
         [DataMember(Name = "thrust")]
         public float Thrust;
         [DataMember(Name = "strafe_x")]
@@ -29,22 +33,23 @@ namespace SpacetimeDB.Types
         public float Roll;
         [DataMember(Name = "firing")]
         public bool Firing;
-        [DataMember(Name = "client_tick")]
-        public uint ClientTick;
 
         public ShipInput(
+            ulong InputId,
             ulong ShipId,
+            uint Tick,
             float Thrust,
             float StrafeX,
             float StrafeY,
             float Yaw,
             float Pitch,
             float Roll,
-            bool Firing,
-            uint ClientTick
+            bool Firing
         )
         {
+            this.InputId = InputId;
             this.ShipId = ShipId;
+            this.Tick = Tick;
             this.Thrust = Thrust;
             this.StrafeX = StrafeX;
             this.StrafeY = StrafeY;
@@ -52,7 +57,6 @@ namespace SpacetimeDB.Types
             this.Pitch = Pitch;
             this.Roll = Roll;
             this.Firing = Firing;
-            this.ClientTick = ClientTick;
         }
 
         public ShipInput()

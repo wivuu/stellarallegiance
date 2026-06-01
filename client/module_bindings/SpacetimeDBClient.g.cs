@@ -33,7 +33,6 @@ namespace SpacetimeDB.Types
             AddTable(Player = new(conn));
             AddTable(Projectile = new(conn));
             AddTable(Ship = new(conn));
-            AddTable(ShipInput = new(conn));
             AddTable(SimTickTimer = new(conn));
         }
     }
@@ -537,7 +536,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.Projectile().ToSql(),
             new QueryBuilder().From.Ship().ToSql(),
-            new QueryBuilder().From.ShipInput().ToSql(),
             new QueryBuilder().From.SimTickTimer().ToSql(),
         }
         ;
@@ -551,7 +549,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<Projectile, ProjectileCols, ProjectileIxCols> Projectile() => new("projectile", new ProjectileCols("projectile"), new ProjectileIxCols("projectile"));
         public global::SpacetimeDB.Table<Ship, ShipCols, ShipIxCols> Ship() => new("ship", new ShipCols("ship"), new ShipIxCols("ship"));
-        public global::SpacetimeDB.Table<ShipInput, ShipInputCols, ShipInputIxCols> ShipInput() => new("ship_input", new ShipInputCols("ship_input"), new ShipInputIxCols("ship_input"));
         public global::SpacetimeDB.Table<SimTickTimer, SimTickTimerCols, SimTickTimerIxCols> SimTickTimer() => new("sim_tick_timer", new SimTickTimerCols("sim_tick_timer"), new SimTickTimerIxCols("sim_tick_timer"));
     }
 
