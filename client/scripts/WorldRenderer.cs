@@ -27,6 +27,10 @@ public partial class WorldRenderer : Node3D
 	// ShipController (drives prediction), CameraRig (chase target), and Hud.
 	public PredictionController? LocalShip { get; private set; }
 
+	// Latest authoritative sim tick (Match.Tick). ShipController slaves its
+	// prediction clock to this so client/server ticks index the same integration.
+	public uint ServerTick { get; private set; }
+
 	public override void _Ready()
 	{
 		_bases = new Node3D { Name = "Bases" };
@@ -53,6 +57,8 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Ship.OnInsert += OnShipInsert;
 		conn.Db.Ship.OnUpdate += OnShipUpdate;
 		conn.Db.Ship.OnDelete += OnShipDelete;
+		conn.Db.Match.OnInsert += (_, row) => ServerTick = row.Tick;
+		conn.Db.Match.OnUpdate += (_, _, row) => ServerTick = row.Tick;
 	}
 
 	// ---- Base -----------------------------------------------------------

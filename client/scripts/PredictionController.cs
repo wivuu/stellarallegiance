@@ -16,12 +16,14 @@ using StellarAllegiance.Shared;
 // divergence-injection testing) is T5.
 public partial class PredictionController : Node3D
 {
-	// See the long note in T4/T5 (.PLAN/99): the client legitimately runs a few
-	// ticks ahead of the timer-driven server, so predicted[N] sits a BOUNDED
-	// offset from auth[N] even when correct. Tolerance is set above that lead so
-	// the normal prediction lead is not mistaken for an error.
-	private const float PosTolerance = 8.0f;      // units
-	private const float RotTolerance = 0.3f;      // radians
+	// With server-tick alignment (ShipController predicts in Match.Tick space and
+	// the server stamps LastInputTick = Match.Tick), predicted[N] and auth[N]
+	// index the SAME integration, so in steady flight they agree to within float
+	// error. Reconciliation should therefore fire only on real divergence
+	// (input-timing transients, network jitter, injected perturbation), so the
+	// tolerance can be tight again. (.PLAN/07, /99)
+	private const float PosTolerance = 1.0f;      // units (above the ~0.6u input-timing transient)
+	private const float RotTolerance = 0.05f;     // radians
 	private const int BufferLen = 40;             // ~2s at 20 Hz
 	private const float PosSmoothRate = 12f;      // reconcile position-ease decay (1/s)
 
@@ -40,8 +42,9 @@ public partial class PredictionController : Node3D
 	private double _tickTimer;                    // seconds since last prediction step
 	private Vector3 _posSmooth = Vector3.Zero;    // residual position error after a reconcile, decayed
 
-	// Reconciliation instrumentation (used by T5).
+	// Reconciliation instrumentation (T5).
 	public int ReconcileCount { get; private set; }
+	public float LastReconcileError { get; private set; }   // posErr at the most recent correction
 
 	public ulong ShipId { get; private set; }
 	public float Speed => _state.Vel.Length();
@@ -67,6 +70,26 @@ public partial class PredictionController : Node3D
 		if (_buffer.Count > BufferLen)
 			_buffer.RemoveRange(0, _buffer.Count - BufferLen);
 		_tickTimer = 0;
+	}
+
+	// T5 test hook: artificially diverge the predicted path from authority by
+	// offsetting the current state AND every unacknowledged buffered prediction.
+	// Because the buffer entries (which OnAuthoritative compares against) now
+	// disagree with the incoming authoritative rows, the next update exceeds
+	// tolerance and exercises the full snap + re-simulate recovery path —
+	// standing in for "nudge the server state" without server access.
+	public void InjectDivergence(Vector3 offset)
+	{
+		Vec3 o = new Vec3(offset.X, offset.Y, offset.Z);
+		_state.Pos += o;
+		_prevState.Pos += o;
+		for (int i = 0; i < _buffer.Count; i++)
+		{
+			var e = _buffer[i];
+			e.Predicted.Pos += o;
+			_buffer[i] = e;
+		}
+		GD.Print($"[Predict] injected divergence {offset.Length():0.0}u; expect a reconcile + recovery");
 	}
 
 	// Authoritative Ship row arrived: compare against what we predicted for its
@@ -102,6 +125,7 @@ public partial class PredictionController : Node3D
 		// N. Carry the visible position across the snap so it eases in (position
 		// only — the rotation error at this point is tiny and snaps imperceptibly).
 		ReconcileCount++;
+		LastReconcileError = posErr;
 		Vector3 visiblePos = ShipMath.ToGodot(_state.Pos) + _posSmooth;
 
 		var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));

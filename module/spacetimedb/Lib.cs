@@ -307,7 +307,8 @@ public static partial class Module
         if (match is null)
             return;
 
-        ctx.Db.Match.Id.Update(match.Value with { Tick = match.Value.Tick + 1 });
+        uint tick = match.Value.Tick + 1;
+        ctx.Db.Match.Id.Update(match.Value with { Tick = tick });
 
         // Integrate every ship with the shared, fixed-dt flight model.
         // Snapshot to a list first — we mutate rows while iterating.
@@ -334,7 +335,11 @@ public static partial class Module
                 VelX = state.Vel.X, VelY = state.Vel.Y, VelZ = state.Vel.Z,
                 RotX = state.Rot.X, RotY = state.Rot.Y, RotZ = state.Rot.Z, RotW = state.Rot.W,
                 AngVelX = state.AngVel.X, AngVelY = state.AngVel.Y, AngVelZ = state.AngVel.Z,
-                LastInputTick = inputRow is null ? ship.LastInputTick : inputRow.Value.ClientTick,
+                // Stamp with the SERVER tick (this state's integration index, since
+                // Match.Tick increments once per integration). Gives the client a
+                // shared, drift-free anchor so predicted[N] and auth[N] are the same
+                // step count. The client (ShipController) predicts in this tick space.
+                LastInputTick = tick,
             });
         }
     }
