@@ -147,23 +147,36 @@ in `99` to revisit at T5.
 - **Server** (`module/spacetimedb/Lib.cs`): added `Ship.AngVelX/Y/Z`; reducers `SpawnShip` /
   `Respawn` (shared `SpawnShipInternal` — spawns at the team base, creates the `ShipInput` row,
   sets `Player.ShipId`), `ApplyInput` (overwrites the ship's `ShipInput`, no integration), and
-  `SetName`. `SimTick` now marshals each `Ship` row → `ShipState`, calls `FlightModel.Integrate`
-  with its `ShipInput`, and writes back transform + `AngVel` + `LastInputTick = ShipInput.ClientTick`.
+  `SetName`. `SimTick` marshals each `Ship` row → `ShipState`, calls `FlightModel.Integrate`
+  with its `ShipInput`, writes back transform + `AngVel`, and stamps `LastInputTick = ShipInput.ClientTick`
+  (the input tick the client can match in its prediction buffer).
 - **Client**: `ShipMath.cs` (row↔FlightModel↔Godot marshaling), `PredictionController.cs`
-  (local ship: fixed-dt prediction, ring buffer, rollback reconciliation @ 0.25u / 0.05rad,
-  velocity-extrapolated rendering, `ReconcileCount`), `RemoteShip.cs` (snap-only for now; T6
-  adds interpolation), `ShipController.cs` (20 Hz input loop → `ApplyInput` + `Step`; spawn on
-  key `1`; `--autofly` dev flag), `CameraRig.cs` (chase cam, overview fallback), `Hud.cs`
-  (spawn prompt + speed). `WorldRenderer` instances the right node per ship and exposes `LocalShip`.
+  (local ship: fixed-dt prediction, ring buffer, prev→current **interpolated** rendering —
+  uniform motion, ~1 tick visual latency, quaternions normalized before `Slerp`; reconciliation
+  with a **generous 8 u tolerance** so the normal bounded prediction lead isn't mistaken for an
+  error, plus simple **position-only** easing on the rare real reconcile; `ReconcileCount`),
+  `RemoteShip.cs` (snap-only; T6 adds interpolation), `ShipController.cs` (plain fixed-20 Hz
+  loop → `ApplyInput` + `Step`; spawn on key `1`; `--autofly` dev flag), `CameraRig.cs`
+  (**rigidly locks to the ship transform** so it moves at exactly the ship's rate; overview
+  fallback), `Hud.cs` (spawn prompt + speed). `WorldRenderer` instances the right node per ship
+  and exposes `LocalShip`.
 - **Controls**: WASD thrust/strafe, Space/Shift up-down, arrow keys aim, Q/E roll. Ships fly
   along local **+Z** (matches the flight model); the cone mesh and chase cam are built around that.
 
 **Verified:** `--autofly` headless run spawns a Scout and flies it — SQL shows the `Ship` row
-moving away from the base with `LastInputTick` advancing (e.g. 131→134→136), proving the full
-`ApplyInput → SimTick integrate → Ship update → LastInputTick echo` loop. A windowed capture
-confirms the cone renders, oriented along travel, with the chase cam behind it and HUD speed
-(~35 u/s terminal). Reconciliations are rare (2–5 over a few seconds on localhost), not
-rubber-banding.
+moving away from the base, proving the full `ApplyInput → SimTick integrate → Ship update` loop.
+A windowed capture confirms the cone renders, oriented along travel, with the chase cam behind
+it and HUD speed (~35 u/s terminal). After the rendering was simplified (see below), reconcile
+is ~0.23 Hz over ~116 s of continuous turning (was ~1.5 Hz), all client errors gone.
+
+**Chase-cam smoothness (hard-won, see `99`):** the local ship renders **interpolated** (not
+extrapolated) prediction, the camera is a **rigid** follow (no smoothing lag/beat), and all
+quaternions are normalized before use. The earlier jerk turned out to be a per-frame
+`Quaternion is not normalized` exception from an over-engineered rotation-correction smoother
+that aborted the ship's transform update each frame — **deleted**. Do not re-add server-tick
+stamping, a server-slaved/lead-bounded prediction clock, or rotation-correction smoothing
+without reading the `99` entry first; each was tried and reverted. Real latency-aware
+reconciliation hardening is **T5**.
 
 **Not done:** the subjective "is it fun for two minutes" gate needs a human flying with the
 keyboard. Constants are the `.PLAN/03` placeholders (Scout: thrust 45 / maxspeed 70 / drag 1.2;

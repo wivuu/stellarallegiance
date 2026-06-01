@@ -4,15 +4,26 @@ using SpacetimeDB.Types;
 using StellarAllegiance.Shared;
 
 // Local-ship prediction + rollback reconciliation (.PLAN/07).
-// Attached as the scene node for the player's own ship. Prediction advances at
-// the fixed sim dt (driven by ShipController); rendering interpolates between
-// ticks via short velocity extrapolation so motion is smooth at display rate.
+// Attached as the scene node for the player's own ship.
+//
+// Rendering: prediction advances at the fixed sim dt (driven by ShipController);
+// the visual INTERPOLATES between the previous and current predicted states by
+// the within-tick fraction, so motion is uniform at any display rate.
+//
+// On localhost the prediction matches the server (same FlightModel), so with the
+// generous tolerance below reconciliation effectively never fires and the ship
+// renders pure, smooth prediction. Tight, latency-aware reconciliation (and
+// divergence-injection testing) is T5.
 public partial class PredictionController : Node3D
 {
-	// Reconciliation tolerances (.PLAN/07).
-	private const float PosTolerance = 0.25f;     // units
-	private const float RotTolerance = 0.05f;     // radians
-	private const int BufferLen = 30;             // ~1.5s at 20 Hz
+	// See the long note in T4/T5 (.PLAN/99): the client legitimately runs a few
+	// ticks ahead of the timer-driven server, so predicted[N] sits a BOUNDED
+	// offset from auth[N] even when correct. Tolerance is set above that lead so
+	// the normal prediction lead is not mistaken for an error.
+	private const float PosTolerance = 8.0f;      // units
+	private const float RotTolerance = 0.3f;      // radians
+	private const int BufferLen = 40;             // ~2s at 20 Hz
+	private const float PosSmoothRate = 12f;      // reconcile position-ease decay (1/s)
 
 	private struct Entry
 	{
@@ -21,12 +32,13 @@ public partial class PredictionController : Node3D
 		public ShipState Predicted;
 	}
 
-	private ShipState _state;
+	private ShipState _state;                     // latest predicted state (tick N)
+	private ShipState _prevState;                 // previous predicted state (tick N-1)
 	private ShipStats _stats;
 	private readonly List<Entry> _buffer = new();
 
 	private double _tickTimer;                    // seconds since last prediction step
-	private Vector3 _posSmooth = Vector3.Zero;    // residual visual error, decayed away
+	private Vector3 _posSmooth = Vector3.Zero;    // residual position error after a reconcile, decayed
 
 	// Reconciliation instrumentation (used by T5).
 	public int ReconcileCount { get; private set; }
@@ -39,15 +51,17 @@ public partial class PredictionController : Node3D
 		ShipId = row.ShipId;
 		_stats = FlightModel.StatsFor((byte)row.Class);
 		_state = ShipMath.StateFromRow(row);
+		_prevState = _state;
 		_buffer.Clear();
 		_tickTimer = 0;
 		_posSmooth = Vector3.Zero;
-		ApplyVisual(0);
+		ApplyVisual(1f);
 	}
 
 	// One fixed-dt prediction step for the given input + client tick.
 	public void Step(ShipInputState input, uint clientTick)
 	{
+		_prevState = _state;
 		_state = FlightModel.Integrate(_state, input, _stats);
 		_buffer.Add(new Entry { Tick = clientTick, Input = input, Predicted = _state });
 		if (_buffer.Count > BufferLen)
@@ -56,7 +70,7 @@ public partial class PredictionController : Node3D
 	}
 
 	// Authoritative Ship row arrived: compare against what we predicted for its
-	// LastInputTick and reconcile if we diverged.
+	// LastInputTick and reconcile only if we genuinely diverged.
 	public void OnAuthoritative(Ship row)
 	{
 		uint n = row.LastInputTick;
@@ -65,9 +79,11 @@ public partial class PredictionController : Node3D
 		int idx = _buffer.FindIndex(e => e.Tick == n);
 		if (idx < 0)
 		{
-			// We have no prediction for tick N (just spawned, or N is ahead of
-			// us). Trust authority and drop stale history.
+			// No prediction for tick N (just spawned, or N older than the buffer):
+			// adopt authority, keeping the visible position continuous.
+			_posSmooth += ShipMath.ToGodot(_state.Pos) - ShipMath.ToGodot(auth.Pos);
 			_state = auth;
+			_prevState = auth;
 			_buffer.RemoveAll(e => e.Tick <= n);
 			return;
 		}
@@ -77,48 +93,50 @@ public partial class PredictionController : Node3D
 
 		if (posErr <= PosTolerance && rotErr <= RotTolerance)
 		{
-			// Prediction was good — just retire acknowledged history.
+			// Prediction good — just retire acknowledged history.
 			_buffer.RemoveRange(0, idx + 1);
 			return;
 		}
 
-		// Diverged: snap to authority at N, then replay every input after N.
-		Vector3 visualBefore = ShipMath.ToGodot(_state.Pos) + _posSmooth;
+		// Diverged: re-base onto authority at N, then replay buffered inputs after
+		// N. Carry the visible position across the snap so it eases in (position
+		// only — the rotation error at this point is tiny and snaps imperceptibly).
 		ReconcileCount++;
+		Vector3 visiblePos = ShipMath.ToGodot(_state.Pos) + _posSmooth;
 
-		_state = auth;
 		var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
-		_buffer.RemoveRange(0, idx + 1);
+		_buffer.Clear();
+		var s = auth;
 		for (int i = 0; i < replay.Count; i++)
 		{
-			_state = FlightModel.Integrate(_state, replay[i].Input, _stats);
+			s = FlightModel.Integrate(s, replay[i].Input, _stats);
 			var e = replay[i];
-			e.Predicted = _state;
+			e.Predicted = s;
 			replay[i] = e;
+			_buffer.Add(e);
 		}
-		_buffer.Clear();
-		_buffer.AddRange(replay);
-
-		// Carry the visible position across the snap so the correction eases in
-		// over a few frames instead of popping.
-		_posSmooth = visualBefore - ShipMath.ToGodot(_state.Pos);
+		_state = s;
+		_prevState = s;
+		_posSmooth = visiblePos - ShipMath.ToGodot(_state.Pos);
 	}
 
 	public override void _Process(double delta)
 	{
 		_tickTimer += delta;
-		// Decay the residual visual error toward zero (~3 frames).
-		_posSmooth = _posSmooth.Lerp(Vector3.Zero, Mathf.Min(1f, (float)delta * 20f));
-		ApplyVisual((float)_tickTimer);
+		_posSmooth = _posSmooth.Lerp(Vector3.Zero, 1f - Mathf.Exp(-PosSmoothRate * (float)delta));
+		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
 	}
 
-	// Render at the predicted state, extrapolated by up to one dt of velocity so
-	// 20 Hz prediction looks smooth at 60 Hz. Never feeds back into _state.
-	private void ApplyVisual(float sinceTick)
+	// Render the interpolated predicted transform (plus any decaying position
+	// correction). Quaternions are normalized before Slerp so Godot never sees a
+	// denormalized quaternion.
+	private void ApplyVisual(float alpha)
 	{
-		float ext = Mathf.Min(sinceTick, FlightModel.Dt);
-		Vector3 pos = ShipMath.ToGodot(_state.Pos) + ShipMath.ToGodot(_state.Vel) * ext + _posSmooth;
+		Vector3 pos = ShipMath.ToGodot(_prevState.Pos).Lerp(ShipMath.ToGodot(_state.Pos), alpha) + _posSmooth;
+		Quaternion a = ShipMath.ToGodot(_prevState.Rot).Normalized();
+		Quaternion b = ShipMath.ToGodot(_state.Rot).Normalized();
+
 		Position = pos;
-		Quaternion = ShipMath.ToGodot(_state.Rot);
+		Quaternion = a.Slerp(b, alpha);
 	}
 }

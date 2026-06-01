@@ -4,10 +4,12 @@ using StellarAllegiance.Shared;
 
 // Reads local input, runs the fixed-rate (20 Hz) input/prediction loop, and
 // calls the ApplyInput reducer. Also handles the (temporary) spawn key for T4.
-// Render frames are decoupled: input is sampled each frame but only applied +
-// sent + predicted on the fixed sim cadence so it matches the server clock.
+// Input is sampled every render frame but only applied + sent + predicted on a
+// simple fixed 20 Hz accumulator, so the prediction cadence is regular.
 public partial class ShipController : Node
 {
+	private const int MaxStepsPerFrame = 5;   // spiral-of-death guard
+
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
 
@@ -55,13 +57,20 @@ public partial class ShipController : Node
 			_spawnRetry = 1.0;
 		}
 
-		// Fixed-rate input + prediction.
+		// Simple fixed-rate input + prediction.
+		var pc = _world.LocalShip;
+		if (pc == null)
+		{
+			_acc = 0;
+			return;
+		}
+
 		_acc += delta;
-		while (_acc >= FlightModel.Dt)
+		int budget = MaxStepsPerFrame;
+		while (_acc >= FlightModel.Dt && budget > 0)
 		{
 			_acc -= FlightModel.Dt;
-			var pc = _world.LocalShip;
-			if (pc == null) continue;
+			budget--;
 
 			_clientTick++;
 			_cm.Conn?.Reducers.ApplyInput(

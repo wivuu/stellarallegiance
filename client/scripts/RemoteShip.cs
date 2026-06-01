@@ -19,6 +19,8 @@ public partial class RemoteShip : Node3D
 	private void Apply(Ship row)
 	{
 		Position = new Vector3(row.PosX, row.PosY, row.PosZ);
-		Quaternion = new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW);
+		// Normalize defensively — the synced floats can be a hair off unit length,
+		// and Godot throws if a non-normalized quaternion is assigned.
+		Quaternion = new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW).Normalized();
 	}
 }

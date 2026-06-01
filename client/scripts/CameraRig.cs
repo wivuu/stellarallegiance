@@ -9,7 +9,6 @@ public partial class CameraRig : Camera3D
 	private static readonly Vector3 OverviewPos = new Vector3(600f, 750f, 1600f);
 
 	private WorldRenderer _world = null!;
-	private bool _initialized;
 
 	public override void _Ready()
 	{
@@ -24,18 +23,16 @@ public partial class CameraRig : Camera3D
 		{
 			GlobalPosition = OverviewPos;
 			LookAt(Vector3.Zero, Vector3.Up);
-			_initialized = false;
 			return;
 		}
 
+		// Rigidly attach to the ship's (smoothly interpolated) transform so the
+		// camera moves at EXACTLY the ship's rate — no smoothing lag or beat.
+		// CameraRig processes after the ship's node in tree order, so this reads
+		// the transform the ship rendered this frame.
 		Transform3D t = ship.GlobalTransform;
-		Vector3 desired = t.Origin + t.Basis * ChaseOffset;
+		GlobalPosition = t.Origin + t.Basis * ChaseOffset;
 		Vector3 forward = t.Basis * new Vector3(0f, 0f, 1f); // ship's nose (+Z)
-
-		// Snap on first frame after acquiring the ship, then smooth.
-		float k = _initialized ? Mathf.Min(1f, (float)delta * 8f) : 1f;
-		GlobalPosition = GlobalPosition.Lerp(desired, k);
 		LookAt(t.Origin + forward * 12f, Vector3.Up);
-		_initialized = true;
 	}
 }
