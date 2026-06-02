@@ -21,6 +21,7 @@ public partial class ShipController : Node
 	private bool _hadShip;
 	private int _stepsSinceSpawn;
 	private ShipInputState _input;
+	private ShipClass? _spawnRequest;   // class chosen via HUD menu / 1-2 keys; cleared once flying
 	private bool _spawnPending;
 	private double _spawnRetry;
 	private bool _perturbHeld;          // edge-detect the P debug key
@@ -35,24 +36,48 @@ public partial class ShipController : Node
 	{
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
+		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
+		{
 			if (a == "--autofly") _autoFly = true;
+			if (a == "--fighter") autoClass = ShipClass.Fighter;   // autofly picks Fighter (dev verify)
+		}
 		// Headless runs are otherwise uncapped: _Process spins as fast as possible,
 		// flooding ApplyInput and racing the prediction far ahead of the 20 Hz
 		// server, which inflates the prediction lead. Cap to a realistic display
 		// rate so the autofly's reconcile behaviour matches a real client.
-		if (_autoFly) Engine.MaxFps = 60;
+		if (_autoFly)
+		{
+			Engine.MaxFps = 60;
+			_spawnRequest = autoClass;         // autofly flies Scout, or Fighter with --fighter
+		}
+	}
+
+	// Called by the HUD spawn menu. Picks the class to spawn; the actual reducer
+	// call happens in _Process once the connection is live (with retry).
+	public void RequestSpawn(ShipClass cls)
+	{
+		if (_world.LocalShip == null) _spawnRequest = cls;
 	}
 
 	public override void _Process(double delta)
 	{
 		_input = _autoFly ? AutoInput() : ReadInput();
 
-		// Spawn handling. Only attempt once the connection is live (LocalIdentity
-		// is set on connect); retry after a short delay so an early/lost request
-		// recovers, and clear the pending flag once the ship actually exists.
+		// Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
+		// the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
+		// reducer once the connection is live (LocalIdentity is set on connect),
+		// retry after a short delay so an early/lost request recovers, and clear the
+		// request once the ship actually exists.
 		bool connected = _cm.LocalIdentity is not null && _cm.Conn is not null;
 		bool hasShip = _world.LocalShip != null;
+
+		if (!hasShip)
+		{
+			if (Input.IsPhysicalKeyPressed(Key.Key1)) _spawnRequest = ShipClass.Scout;
+			if (Input.IsPhysicalKeyPressed(Key.Key2)) _spawnRequest = ShipClass.Fighter;
+		}
+
 		if (_spawnPending)
 		{
 			_spawnRetry -= delta;
@@ -61,10 +86,11 @@ public partial class ShipController : Node
 		if (hasShip)
 		{
 			_spawnPending = false;
+			_spawnRequest = null;
 		}
-		else if (connected && !_spawnPending && (_autoFly || Input.IsPhysicalKeyPressed(Key.Key1)))
+		else if (connected && !_spawnPending && _spawnRequest is { } cls)
 		{
-			_cm.Conn!.Reducers.SpawnShip(ShipClass.Scout);
+			_cm.Conn!.Reducers.SpawnShip(cls);
 			_spawnPending = true;
 			_spawnRetry = 1.0;
 		}

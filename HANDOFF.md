@@ -3,20 +3,23 @@
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at
-the keyboard), **T5, and T6 are complete**. The repo has:
+the keyboard), **T5, T6, and T7 are complete** (T7's "do the two classes *feel* distinct"
+sign-off, like T4's fun gate, still needs a human at the keyboard). The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
-- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies a Scout with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a minimal HUD
+- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies either ship class (HUD spawn menu) with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a HUD with a Scout/Fighter spawn menu
 - A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
 - `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
-**Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · `1` spawn · `P` (debug) inject divergence.
+**Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
 
-**Next task: T7 — both ship classes + spawn menu** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `05`).
-Add the Fighter class (stats already in `FlightModel.Fighter`), a distinct mesh, and a HUD
-spawn menu with Scout/Fighter buttons (replacing the press-`1` shortcut). Confirm both classes
-fly with their distinct feel.
+**Next task: T8 — weapons, damage, death** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `04`).
+Implement projectile spawning/advancement/culling + hit resolution in `SimTick`; render
+projectiles; handle ship death (despawn + respawn menu — the `Respawn` reducer already exists,
+and the HUD spawn menu reappears when `LocalShip` is null, so death just needs to despawn the
+ship). Then add ship/asteroid/base collisions (currently deferred — ships pass through). Holding
+fire spawns projectiles; friendly fire must not damage teammates.
 
 ---
 
@@ -242,6 +245,30 @@ confirmed by the user in a live 2-client session.
 `W/S` throttle · `A/D` strafe L/R · `E/C` strafe up/down · `Q/Z` roll · arrows yaw/pitch.
 (Roll moved off `E` because `E` is now strafe-up.)
 
+## T7 (DONE, pending subjective sign-off): both ship classes + spawn menu
+
+Client-only milestone — `SpawnShip(ShipClass)` and `FlightModel.Fighter`/`Scout` stats already
+existed (server unchanged, no republish needed):
+- **`Hud.cs`** now shows a **spawn menu** (Scout/Fighter `Button`s in a `VBoxContainer`) whenever
+  the player has no ship; each button calls `ShipController.RequestSpawn(class)`. While flying it
+  shows the speed/reconcile readout. The `1`/`2` keys are kept as keyboard shortcuts.
+- **`ShipController`** spawn flow refactored to a nullable `_spawnRequest` `ShipClass?`: the menu,
+  the `1`/`2` keys, and `--autofly` all set it; the reducer fires once connected with the existing
+  retry, and it clears once the ship exists. New dev flag **`--fighter`** makes `--autofly` spawn
+  a Fighter (for headless verification).
+- **`WorldRenderer.BuildShipMesh(team, class)`** gives the Fighter a chunky `BoxMesh`
+  (`3.6×1.6×5.5`) vs the Scout's sleek cone, so the two classes read as distinct silhouettes.
+
+**Verified headless:** `--autofly` spawns a Scout (`Class=scout`), `--autofly --fighter` spawns a
+Fighter (`Class=fighter`); both integrate and fly. Sampled cruise speeds: **Scout ~34 u/s vs
+Fighter ~26 u/s**, matching the Scout's higher thrust/maxspeed (45/70 vs 30/50). The subjective
+"do they *feel* distinct" check, like T4's fun gate, needs a human at the keyboard.
+
+> **Headless gotcha (cost ~20 min):** pass `--autofly`/`--fighter` **before** any `--` separator
+> — `OS.GetCmdlineArgs()` only sees engine args; args after `--` go to `GetCmdlineUserArgs()`.
+> Launch: `Godot --headless --path client --autofly --fighter` (godot bin is
+> `/Applications/Godot_mono.app/Contents/MacOS/Godot`; the old `~/.local/bin/godot` is gone).
+
 ---
 
 ## Key facts to avoid repeating past mistakes
@@ -285,7 +312,7 @@ client/
   scripts/PredictionController.cs← local ship: fixed-dt predict in server-tick space, rollback reconcile, pos+rot correction smoothing
   scripts/RemoteShip.cs          ← other players' ships: 100 ms snapshot interpolation (lerp pos / slerp rot)
   scripts/CameraRig.cs           ← chase camera (Camera3D), overview fallback
-  scripts/Hud.cs                 ← spawn prompt + speed readout
+  scripts/Hud.cs                 ← Scout/Fighter spawn menu (shipless) + speed/reconcile readout (flying)
   scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling
   scripts/FlightModel.cs         ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
   module_bindings/               ← GENERATED (tables + reducers), do not edit

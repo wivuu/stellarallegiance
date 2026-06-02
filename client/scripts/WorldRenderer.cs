@@ -126,7 +126,7 @@ public partial class WorldRenderer : Node3D
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team));
+			pc.AddChild(BuildShipMesh(row.Team, row.Class));
 			pc.Initialize(row);
 			LocalShip = pc;
 			GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team})");
@@ -136,7 +136,7 @@ public partial class WorldRenderer : Node3D
 			var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 			node = rs;
 			_ships.AddChild(rs);
-			rs.AddChild(BuildShipMesh(row.Team));
+			rs.AddChild(BuildShipMesh(row.Team, row.Class));
 			rs.Initialize(row);
 		}
 		_shipNodes[row.ShipId] = node;
@@ -162,10 +162,22 @@ public partial class WorldRenderer : Node3D
 		node.QueueFree();
 	}
 
-	// Scout/Fighter share a cone for now (distinct meshes are T7). The cone is
-	// built pointing local +Z to match the flight model's forward axis.
-	private MeshInstance3D BuildShipMesh(byte team)
+	// Distinct silhouettes per class (T7), both built pointing local +Z to match
+	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
+	// chunkier, boxier hull that reads as the heavier ship.
+	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls)
 	{
+		var mat = team == 0 ? _team0Mat : _team1Mat;
+
+		if (cls == ShipClass.Fighter)
+		{
+			return new MeshInstance3D
+			{
+				Mesh = new BoxMesh { Size = new Vector3(3.6f, 1.6f, 5.5f) },
+				MaterialOverride = mat,
+			};
+		}
+
 		return new MeshInstance3D
 		{
 			Mesh = new CylinderMesh
@@ -175,7 +187,7 @@ public partial class WorldRenderer : Node3D
 				Height = 4.5f,
 				RadialSegments = 12,
 			},
-			MaterialOverride = team == 0 ? _team0Mat : _team1Mat,
+			MaterialOverride = mat,
 			RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
 		};
 	}
