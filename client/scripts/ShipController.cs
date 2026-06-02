@@ -24,6 +24,16 @@ public partial class ShipController : Node
 	// means fewer corrections. Override per-connection with STDB_LEAD (clamped 1..15).
 	private int _targetLead = DefaultTargetLead;
 
+	// When STDB_LEAD is NOT set, the lead is derived from the live latency readout
+	// (UpdateAdaptiveLead): an input stamped for tick P must reach the server before
+	// it simulates P, so the budget the lead has to cover is one full round trip plus
+	// a few standard deviations of jitter. At 120 ms RTT the fixed default of 3
+	// (~150 ms) left only ~30 ms of slack, so ordinary jitter pushed inputs past their
+	// tick and forced a reconcile ~every second. Sizing the lead to measured RTT+jitter
+	// makes on-time inputs the norm and drives the reconcile rate down. (No felt cost:
+	// the local ship is still predicted instantly.)
+	private bool _leadFromEnv;
+
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
 
@@ -58,7 +68,10 @@ public partial class ShipController : Node
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 
 		if (int.TryParse(OS.GetEnvironment("STDB_LEAD"), out var lead))
+		{
 			_targetLead = Mathf.Clamp(lead, 1, 15);
+			_leadFromEnv = true;   // pin it; skip the adaptive sizing below
+		}
 
 		// Time ApplyInput round-trips for the latency readout. The reducer callback
 		// fires on the caller when the server commits our call, echoing clientTick.
@@ -146,6 +159,7 @@ public partial class ShipController : Node
 			_hadShip = true;
 		}
 
+		UpdateAdaptiveLead();
 		int lead = (int)_predTick - (int)_world.ServerTick;
 		float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);
 		_acc += delta * (1f + slew);
@@ -179,6 +193,19 @@ public partial class ShipController : Node
 			pc.InjectDivergence(new Vector3(25f, 0f, 0f));
 			_selfTestDone = true;
 		}
+	}
+
+	// Size the prediction lead to the live latency: cover a full round trip plus a
+	// jitter margin so an ApplyInput reliably arrives before its tick is simulated.
+	// Uses the smoothed PingMs/JitterMs, so it tracks the link without thrashing; the
+	// clock slew (in _Process) eases any change in gently. No-op when STDB_LEAD pins it.
+	private void UpdateAdaptiveLead()
+	{
+		if (_leadFromEnv || PingMs <= 0f)
+			return;
+		float budgetMs = PingMs + 2f * JitterMs;                  // RTT + ~2σ jitter
+		int desired = Mathf.CeilToInt(budgetMs / (FlightModel.Dt * 1000f)) + 1;
+		_targetLead = Mathf.Clamp(desired, DefaultTargetLead, 15);
 	}
 
 	// An ApplyInput we sent has been committed by the server: the elapsed wall time

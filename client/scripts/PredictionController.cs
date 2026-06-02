@@ -11,10 +11,14 @@ using StellarAllegiance.Shared;
 // the within-tick fraction, so motion is uniform at any display rate.
 //
 // When a reconcile re-bases the predicted state onto authority, the visible
-// discontinuity in BOTH position and rotation is absorbed into decaying offsets
-// so the rendered transform never snaps. (The rigid chase camera is locked to
-// this transform, so an unsmoothed rotation snap would jerk the whole view —
-// which is exactly what made turning feel jerky before rotation easing existed.)
+// discontinuity in BOTH position and rotation is absorbed into offsets that are
+// eased out by a CRITICALLY-DAMPED SPRING so the rendered transform never snaps.
+// A spring (2nd order) is used rather than a plain exponential decay (1st order)
+// because exponential decay is position-continuous but NOT velocity-continuous:
+// the moment a correction appears its decay velocity jumps to -rate*offset, which
+// — on the rigidly-attached chase camera — reads as a jerk on every reconcile.
+// The spring carries the offset velocity across reconciles, so the rendered
+// motion is C1 (no velocity step) and corrections blend in/out smoothly.
 public partial class PredictionController : Node3D
 {
 	// With server-tick alignment + deterministic MathDet trig, the client and
@@ -29,7 +33,7 @@ public partial class PredictionController : Node3D
 	private const float PosTolerance = 0.5f;      // units
 	private const float RotTolerance = 0.05f;     // radians
 	private const int BufferLen = 40;             // ~2s at 20 Hz
-	private const float SmoothRate = 12f;         // reconcile correction-ease decay (1/s)
+	private const float SmoothFreq = 14f;         // reconcile-ease spring natural frequency (rad/s)
 
 	// Weapon constants for client-side MUZZLE PREDICTION. These MUST mirror the
 	// server's authoritative values in module/spacetimedb/Lib.cs (ProjectileSpeed,
@@ -60,11 +64,16 @@ public partial class PredictionController : Node3D
 
 	private double _tickTimer;                         // seconds since last prediction step
 
-	// Decaying corrections so a reconcile re-base never snaps the rendered
-	// transform. Kept normalized every frame (the rotation one especially — a
-	// drifting non-unit quaternion is what threw exceptions in the old version).
-	private Vector3 _posSmooth = Vector3.Zero;
-	private Quaternion _rotSmooth = Quaternion.Identity;
+	// Spring-eased corrections so a reconcile re-base never snaps the rendered
+	// transform. Each is a visual offset (render = predicted + offset) driven to
+	// zero by a critically-damped spring; the matching *velocity* is carried
+	// across reconciles so the rendered motion stays C1 (no jerk). The rotation
+	// offset is integrated in rotation-vector (axis*angle) space and rebuilt as a
+	// unit quaternion each frame, so it never drifts off unit length.
+	private Vector3 _posErr = Vector3.Zero;       // position offset (units)
+	private Vector3 _posErrVel = Vector3.Zero;    // d/dt of _posErr
+	private Quaternion _rotErr = Quaternion.Identity; // rotation offset
+	private Vector3 _rotErrVel = Vector3.Zero;    // d/dt of the rot offset, rotation-vector space
 
 	// What we actually rendered last frame (interpolation + corrections).
 	private Vector3 _renderedPos;
@@ -96,8 +105,10 @@ public partial class PredictionController : Node3D
 		_prevState = _state;
 		_buffer.Clear();
 		_tickTimer = 0;
-		_posSmooth = Vector3.Zero;
-		_rotSmooth = Quaternion.Identity;
+		_posErr = Vector3.Zero;
+		_posErrVel = Vector3.Zero;
+		_rotErr = Quaternion.Identity;
+		_rotErrVel = Vector3.Zero;
 		_renderedPos = ShipMath.ToGodot(_state.Pos);
 		_renderedRot = ShipMath.ToGodot(_state.Rot).Normalized();
 		ApplyVisual(1f);
@@ -193,15 +204,18 @@ public partial class PredictionController : Node3D
 	}
 
 	// Move the predicted state to newState while keeping the RENDERED transform
-	// continuous: stash the difference between what we're showing and the new
-	// target as decaying position + rotation offsets.
+	// continuous: re-anchor the visual offsets so what we draw THIS frame is
+	// unchanged (C0). The offset *velocities* are deliberately left untouched —
+	// in steady state they are ~0, so the spring eases the new correction in from
+	// rest instead of with an instantaneous velocity step, which is what keeps
+	// the motion C1 and removes the per-reconcile jerk.
 	private void RebaseTo(ShipState newState)
 	{
 		Vector3 newPos = ShipMath.ToGodot(newState.Pos);
 		Quaternion newRot = ShipMath.ToGodot(newState.Rot).Normalized();
 
-		_posSmooth = _renderedPos - newPos;
-		_rotSmooth = (_renderedRot * newRot.Inverse()).Normalized();
+		_posErr = _renderedPos - newPos;
+		_rotErr = (_renderedRot * newRot.Inverse()).Normalized();
 
 		_state = newState;
 		_prevState = newState;
@@ -212,13 +226,46 @@ public partial class PredictionController : Node3D
 	{
 		_tickTimer += delta;
 
-		// Decay both corrections toward zero, frame-rate independent. The rotation
-		// one is re-normalized after the Slerp so it never drifts off unit length.
-		float k = 1f - Mathf.Exp(-SmoothRate * (float)delta);
-		_posSmooth = _posSmooth.Lerp(Vector3.Zero, k);
-		_rotSmooth = _rotSmooth.Slerp(Quaternion.Identity, k).Normalized();
+		// Drive both corrections toward zero with a critically-damped spring. Clamp
+		// dt so a frame hitch can't destabilise the explicit integrator. The rotation
+		// offset is sprung in rotation-vector space and rebuilt as a unit quaternion.
+		float dt = Mathf.Min((float)delta, 0.05f);
+		SpringToZero(ref _posErr, ref _posErrVel, SmoothFreq, dt);
+
+		Vector3 rotVec = QuatToRotVec(_rotErr);
+		SpringToZero(ref rotVec, ref _rotErrVel, SmoothFreq, dt);
+		_rotErr = RotVecToQuat(rotVec);
 
 		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
+	}
+
+	// Semi-implicit critically-damped (ζ=1) spring driving offset x and its
+	// velocity v to zero: a = -2ωv - ω²x. Velocity is updated first, then position,
+	// which keeps it stable for the small ω·dt we use. Starting from rest (v≈0)
+	// there is no velocity step, so the rendered motion stays C1.
+	private static void SpringToZero(ref Vector3 x, ref Vector3 v, float omega, float dt)
+	{
+		v += (v * (-2f * omega) - x * (omega * omega)) * dt;
+		x += v * dt;
+	}
+
+	// Quaternion <-> rotation vector (axis * angle, radians), shortest-arc.
+	private static Vector3 QuatToRotVec(Quaternion q)
+	{
+		q = q.Normalized();
+		if (q.W < 0f) q = new Quaternion(-q.X, -q.Y, -q.Z, -q.W); // shortest arc
+		float s = Mathf.Sqrt(Mathf.Max(0f, 1f - q.W * q.W));      // |sin(θ/2)|
+		if (s < 1e-6f) return Vector3.Zero;
+		float angle = 2f * Mathf.Atan2(s, q.W);
+		return new Vector3(q.X, q.Y, q.Z) * (angle / s);
+	}
+
+	private static Quaternion RotVecToQuat(Vector3 r)
+	{
+		float angle = r.Length();
+		if (angle < 1e-6f) return Quaternion.Identity;
+		float s = Mathf.Sin(angle * 0.5f) / angle;
+		return new Quaternion(r.X * s, r.Y * s, r.Z * s, Mathf.Cos(angle * 0.5f)).Normalized();
 	}
 
 	// Render the interpolated predicted transform plus the decaying corrections.
@@ -228,8 +275,8 @@ public partial class PredictionController : Node3D
 		Quaternion a = ShipMath.ToGodot(_prevState.Rot).Normalized();
 		Quaternion b = ShipMath.ToGodot(_state.Rot).Normalized();
 
-		_renderedPos = ShipMath.ToGodot(_prevState.Pos).Lerp(ShipMath.ToGodot(_state.Pos), alpha) + _posSmooth;
-		_renderedRot = (_rotSmooth * a.Slerp(b, alpha)).Normalized();
+		_renderedPos = ShipMath.ToGodot(_prevState.Pos).Lerp(ShipMath.ToGodot(_state.Pos), alpha) + _posErr;
+		_renderedRot = (_rotErr * a.Slerp(b, alpha)).Normalized();
 
 		Position = _renderedPos;
 		Quaternion = _renderedRot;
