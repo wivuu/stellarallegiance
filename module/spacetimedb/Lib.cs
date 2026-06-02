@@ -214,14 +214,13 @@ public static partial class Module
             });
         }
 
-        // Schedule the recurring simulation tick at 20 Hz.
-        ctx.Db.SimTickTimer.Insert(new SimTickTimer
-        {
-            ScheduledId = 0,
-            ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / SimTickHz)),
-        });
+        // NOTE: SimTick is intentionally NOT scheduled here. The sim loop is
+        // started on the first client connect and stopped when the last client
+        // disconnects (see StartSim/StopSim) so an empty server burns no CPU.
+        // This is a prototype, not a persistent universe — nothing needs to
+        // advance while nobody is watching.
 
-        Log.Info($"[Init] done: 1 match, 2 bases, {AsteroidCount} asteroids, SimTick @ {SimTickHz}Hz");
+        Log.Info($"[Init] done: 1 match, 2 bases, {AsteroidCount} asteroids, SimTick paused until first client");
     }
 
     // A client connected: create or reactivate their Player row.
@@ -248,6 +247,8 @@ public static partial class Module
             Log.Info($"[ClientConnected] new player {ctx.Sender} -> team {team}");
         }
 
+        // Someone is here now — make sure the sim loop is running.
+        StartSim(ctx);
         MaybeStartMatch(ctx);
     }
 
@@ -269,6 +270,11 @@ public static partial class Module
         // Keep the Player row so team balance stays stable for the match.
         ctx.Db.Player.Identity.Update(p with { Online = false, ShipId = null });
         Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
+
+        // If that was the last connected client, pause the sim loop so an
+        // empty server idles at ~0 CPU instead of ticking 20 Hz forever.
+        if (!AnyOnline(ctx))
+            StopSim(ctx);
     }
 
     // ---- Player actions (called by clients) ---------------------------
@@ -754,6 +760,46 @@ public static partial class Module
                 best = t;
         }
         return best;
+    }
+
+    // True if any player connection is currently online.
+    private static bool AnyOnline(ReducerContext ctx)
+    {
+        foreach (var p in ctx.Db.Player.Iter())
+            if (p.Online)
+                return true;
+        return false;
+    }
+
+    // Start (resume) the 20 Hz sim loop if it isn't already scheduled. Idempotent:
+    // multiple connecting clients only ever leave one timer row in place.
+    private static void StartSim(ReducerContext ctx)
+    {
+        if (ctx.Db.SimTickTimer.Count > 0)
+            return;
+
+        // Reset the real-time pacing anchor so the first tick after a pause
+        // integrates a single fixed step instead of trying to "catch up" the
+        // entire idle gap (LastTickMicros == 0 makes SimTick use one DtMicros).
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is Match m)
+            ctx.Db.Match.Id.Update(m with { LastTickMicros = 0, AccumMicros = 0 });
+
+        ctx.Db.SimTickTimer.Insert(new SimTickTimer
+        {
+            ScheduledId = 0,
+            ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / SimTickHz)),
+        });
+        Log.Info($"[Sim] resumed @ {SimTickHz}Hz");
+    }
+
+    // Stop the sim loop by removing the scheduled-timer row(s). With no rows,
+    // SimTick stops firing entirely until a client reconnects and StartSim runs.
+    private static void StopSim(ReducerContext ctx)
+    {
+        foreach (var t in ctx.Db.SimTickTimer.Iter().ToList())
+            ctx.Db.SimTickTimer.ScheduledId.Delete(t.ScheduledId);
+        Log.Info("[Sim] paused (no clients connected)");
     }
 
     // Lobby -> Active once both teams have at least one online player.
