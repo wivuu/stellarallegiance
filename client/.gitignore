@@ -5,7 +5,7 @@
 
 # godot files
 .godot/
-module_bindings/
+*.uid
 
 # dotenv files
 .env

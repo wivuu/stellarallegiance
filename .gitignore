@@ -3,6 +3,8 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+build/
+
 # dotenv files
 .env
 
@@ -480,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local SpacetimeDB CLI identity/token (do not commit). Persistent server data
+# lives in the Docker named volume 'stdb-data' (see scripts/start-db.sh), not here.
+.stdb-config/
