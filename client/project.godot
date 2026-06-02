@@ -17,3 +17,7 @@ config/features=PackedStringArray("4.6", "C#")
 [dotnet]
 
 project/assembly_name="wivuullegiance"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true

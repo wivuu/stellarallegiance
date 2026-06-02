@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# export-clients.sh — export the Godot client for macOS + Windows and package
+# them for tester distribution.
+#
+# macOS gotcha: Godot's built-in macOS signing always enables the *hardened
+# runtime* (codesign flags 0x10002). That's only meaningful once you notarize;
+# on an un-notarized ad-hoc build it makes the kernel SIGKILL the app at launch
+# ("application can't be opened", no crash log). So we export to a .app, strip
+# Godot's signature, and re-sign plain ad-hoc (flags 0x2) — which Apple Silicon
+# still requires to run at all — then zip with `ditto` to preserve the signature
+# and framework symlinks (plain `zip` corrupts them).
+#
+# Testers still need to clear quarantine once on the downloaded zip:
+#   xattr -dr com.apple.quarantine wivuullegiance.app
+#
+# Usage: scripts/export-clients.sh   (run from anywhere; needs godot-mono on PATH)
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLIENT="${REPO_ROOT}/client"
+OUT="${REPO_ROOT}/build"
+GODOT="${GODOT:-godot-mono}"
+
+mkdir -p "${OUT}/mac" "${OUT}/win"
+
+echo "[export] macOS .app ..."
+APP="${OUT}/mac/wivuullegiance.app"
+rm -rf "${APP}"
+"${GODOT}" --headless --path "${CLIENT}" --export-release "macOS" "${APP}"
+
+echo "[export] re-signing macOS app as plain ad-hoc (no hardened runtime) ..."
+codesign --remove-signature "${APP}" 2>/dev/null || true
+codesign --force --deep --sign - "${APP}"
+codesign --verify --deep --strict "${APP}" && echo "[export]   signature valid"
+
+echo "[export] zipping macOS app with ditto ..."
+rm -f "${OUT}/mac/wivuullegiance-macos.zip"
+ditto -c -k --keepParent "${APP}" "${OUT}/mac/wivuullegiance-macos.zip"
+
+echo "[export] Windows .exe ..."
+"${GODOT}" --headless --path "${CLIENT}" --export-release "Windows Desktop" "${OUT}/win/wivuullegiance.exe"
+
+echo "[export] zipping Windows folder (testers need the whole folder) ..."
+rm -f "${OUT}/wivuullegiance-windows.zip"
+( cd "${OUT}/win" && zip -rq "${OUT}/wivuullegiance-windows.zip" . )
+
+echo ""
+echo "[export] done:"
+echo "  macOS:   ${OUT}/mac/wivuullegiance-macos.zip"
+echo "  Windows: ${OUT}/wivuullegiance-windows.zip"

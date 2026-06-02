@@ -30,7 +30,11 @@ public partial class ConnectionManager : Node
 
 	public override void _Ready()
 	{
-		// Precedence: --maincloud flag, then env vars, else the local default.
+		// Exported builds have no local dev server, so they default to Maincloud;
+		// the editor keeps the localhost default for local iteration.
+		if (!OS.HasFeature("editor")) _serverUrl = MaincloudUrl;
+
+		// Precedence: --maincloud flag, then env vars, else the default above.
 		// (The flag is the friendliest knob for a second machine / exported build.)
 		foreach (var a in OS.GetCmdlineArgs())
 			if (a == "--maincloud") _serverUrl = MaincloudUrl;
