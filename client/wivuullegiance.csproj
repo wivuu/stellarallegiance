@@ -4,6 +4,12 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Don't spawn the Roslyn shared compiler (VBCSCompiler) daemon. It can
+         inherit the stdout/stderr pipe of Godot's `dotnet publish` during C#
+         export and keep it open after publish exits, leaving Godot blocked
+         forever on a pipe read ("Running dotnet publish" hang). In-process
+         compilation is marginally slower but never wedges the export. -->
+    <UseSharedCompilation>false</UseSharedCompilation>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SpacetimeDB.ClientSDK" Version="2.3.0" />
