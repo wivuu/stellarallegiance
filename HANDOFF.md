@@ -3,9 +3,11 @@
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at
-the keyboard), **T5, T6, T7, T8, and T9 are complete** (the subjective sign-offs — T4 flight feel,
-T7 class distinctness, T8 combat feel, T9 full-match playthrough — all still want a human at the
-keyboard). The repo has:
+the keyboard), **T5–T9 are complete**, and **T10's deploy half is done** — the module is
+**published to Maincloud** and a real client connects/flies over `wss://`. The remaining sign-offs
+all want a human at the keyboard: T4 flight feel, T7 class distinctness, T8 combat feel, T9
+full-match playthrough, and **T10's two-machine internet playtest** (the prototype's definition of
+done). The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
@@ -16,11 +18,12 @@ keyboard). The repo has:
 **Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · **`Space`/left-mouse fire** · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
 
 **Next task: T10 — Maincloud deployment & two-machine test** (see `.PLAN/08-BUILD-ORDER.md`, `02`).
-Publish the module to Maincloud, point two clients on two machines at it, and play a full match.
-This is the prototype's definition of done. The client server URL/DB name live in
-`client/scripts/ConnectionManager.cs` (`ServerUrl`/`DbName`); Maincloud auth differs from the
-local token flow (use `spacetime login` web flow against maincloud, not the `/v1/identity` mint
-that `start-db.sh` uses for the local server).
+The module **is published to Maincloud** as `stellar-allegiance` and a real client connects over
+`wss://` and flies with working prediction/reconciliation (see the T10 section below). The
+remaining work is **human**: run a client on two separate machines and play a full match to a
+decided result, watching for desync / feel. Launch each machine's client with **`--maincloud`**
+(or `STDB_URI=wss://maincloud.spacetimedb.com`). To republish after a change:
+`scripts/publish-maincloud.sh` (add `--reset` for a clean lobby).
 
 ---
 
@@ -364,6 +367,44 @@ base — tune `Base.Health` in `Init` if a faster match is wanted for the feel g
 correctly on all clients is the remaining sign-off.
 
 ---
+
+## T10 (deploy DONE; two-machine playtest is the human gate): Maincloud
+
+**Published to Maincloud.** Module DB `stellar-allegiance`, identity
+`c2004feb…04919d`, dashboard https://spacetimedb.com/stellar-allegiance. Seeded (1 Match Lobby,
+2 Bases @1000, 30 Asteroids) and the 20 Hz `SimTick` runs server-side (tick climbs).
+
+**How it was published (native CLI can't build the wasm; Docker can):** the native CLI
+(`~/.local/bin/spacetime`, 2.3.0) holds the Maincloud login token but **can't auto-install the
+`wasi-experimental` workload** to build the C# module (needs privileged rights). The
+`clockworklabs/spacetime` Docker image has the toolchain. So: **build the wasm in Docker, publish
+the prebuilt binary with the native CLI** (`spacetime publish --server maincloud -b <wasm>`).
+`scripts/publish-maincloud.sh` does exactly this (build-in-Docker → publish-prebuilt); `--reset`
+adds `--delete-data=always` for a clean lobby. The wasm is at
+`module/spacetimedb/bin/Release/net8.0/wasi-wasm/AppBundle/StdbModule.opt.wasm`.
+
+**Client is now server-configurable** (`client/scripts/ConnectionManager.cs`): defaults to the
+local dev server; override with the **`--maincloud`** launch flag or the `STDB_URI` / `STDB_DB`
+env vars (flag < env precedence; env wins). No code edit needed to switch targets.
+
+**Verified over the internet (headless):** a client launched with `--maincloud` (and with the env
+vars) connects over `wss://`, gets its own identity, the subscription delivers 2 bases + 30
+asteroids, and it spawns + flies a ship; the autofly divergence self-test injected 25u and
+**recovered cleanly with no errors** — i.e. prediction + rollback reconciliation work across real
+latency. On disconnect the ship row is removed (server `ClientDisconnected`).
+
+**Known wrinkle (benign):** `ClientConnected` fires for *any* connection, including the owner's
+dashboard/CLI. So a phantom `Player` row for the publisher identity (`c200d886…`, your `spacetime
+login` identity) can appear `online` with no ship. It can't fight (no ship, never calls
+`SpawnShip`); two real players still split onto opposite teams via `AssignTeam`. Run
+`scripts/publish-maincloud.sh --reset` right before a playtest if you want the cleanest lobby.
+
+**Remaining (human gate, T10 acceptance in `.PLAN/09`):**
+1. Run the client on **two separate machines**, each with `--maincloud`. Easiest is the Godot
+   editor / `Godot --path client --maincloud`; for a true second machine, export a standalone
+   build (env vars/flags still apply, or make `--maincloud` the default before exporting).
+2. Play a full match end-to-end; confirm responsive local flight, smooth remote ships, and **no
+   desync** (both machines agree on positions/health/result), ending with the win banner.
 
 ## Key facts to avoid repeating past mistakes
 
