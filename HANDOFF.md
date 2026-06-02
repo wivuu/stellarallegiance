@@ -418,9 +418,15 @@ login` identity) can appear `online` with no ship. It can't fight (no ship, neve
   spawn; unmatched ghosts (rare mispredict) expire after `GhostTtl` 0.6 s. Verified on Maincloud:
   119 spawned / 118 matched, 0 expired, queue bounded at 1–2. The weapon constants are duplicated
   on the client (`PredictionController`) and **must stay in sync** with `module/.../Lib.cs`.
-- **Still open (minor):** turning has slight residual jerk from occasional rotation reconciles
-  (late inputs over jitter); options are a larger `STDB_LEAD` or gentler rotation easing
-  (`PredictionController.SmoothRate`) — not yet tuned.
+- **Latency readout (HUD).** `ShipController` times each `ApplyInput` against its own reducer
+  callback (`OnApplyInput` echoes `clientTick`) → true RTT, no server/schema change. HUD shows
+  `Ping: N ms (±jitter)` (EWMA) while flying. Maincloud measures **~115–125 ms, ±~25 ms** — higher
+  than raw TCP (~32 ms) because it's the full felt loop (reducer run + commit broadcast + client
+  `FrameTick` poll).
+- **Residual turning jerk — now explained by the numbers.** Lead=3 (150 ms) only just exceeds
+  RTT+jitter (~145 ms), so a jitter spike occasionally lands an input late → one reconcile.
+  Widen the margin with a larger `STDB_LEAD` (4–5) or raise `DefaultTargetLead`; or soften
+  `PredictionController.SmoothRate`. Left as a tuning call now that ping is visible in-HUD.
 
 **Remaining (human gate, T10 acceptance in `.PLAN/09`):**
 1. Run the client on **two separate machines**, each with `--maincloud`. Easiest is the Godot

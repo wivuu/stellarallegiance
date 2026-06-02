@@ -44,6 +44,14 @@ public partial class ShipController : Node
 	private bool _selfTestDone;         // autofly fires one divergence injection
 	private bool _combatTest;           // --combat-test: fly straight + fire (head-on damage check)
 
+	// Round-trip latency, measured by timing each ApplyInput against its own reducer
+	// callback (clientTick is echoed back). This is the true client→server→client
+	// round trip (network + reducer run), independent of the prediction clock. The
+	// HUD reads PingMs/JitterMs. Only sampled while flying (that's when we send input).
+	private readonly System.Collections.Generic.Dictionary<uint, double> _sentAt = new();
+	public float PingMs { get; private set; }
+	public float JitterMs { get; private set; }
+
 	public override void _Ready()
 	{
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
@@ -51,6 +59,11 @@ public partial class ShipController : Node
 
 		if (int.TryParse(OS.GetEnvironment("STDB_LEAD"), out var lead))
 			_targetLead = Mathf.Clamp(lead, 1, 15);
+
+		// Time ApplyInput round-trips for the latency readout. The reducer callback
+		// fires on the caller when the server commits our call, echoing clientTick.
+		_cm.Connected += conn => conn.Reducers.OnApplyInput +=
+			(_, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
 
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
@@ -149,6 +162,7 @@ public partial class ShipController : Node
 				_input.Thrust, _input.StrafeX, _input.StrafeY,
 				_input.Yaw, _input.Pitch, _input.Roll,
 				_input.Firing, _predTick);
+			_sentAt[_predTick] = Time.GetTicksMsec();
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
 				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);
 		}
@@ -165,6 +179,20 @@ public partial class ShipController : Node
 			pc.InjectDivergence(new Vector3(25f, 0f, 0f));
 			_selfTestDone = true;
 		}
+	}
+
+	// An ApplyInput we sent has been committed by the server: the elapsed wall time
+	// is the round-trip latency. Smooth it (EWMA) and track jitter for the HUD.
+	private void OnInputAck(uint clientTick)
+	{
+		if (!_sentAt.Remove(clientTick, out var sent))
+			return;
+		float rtt = (float)(Time.GetTicksMsec() - sent);
+		float dev = Mathf.Abs(rtt - PingMs);
+		PingMs = PingMs <= 0f ? rtt : PingMs * 0.9f + rtt * 0.1f;
+		JitterMs = JitterMs <= 0f ? dev : JitterMs * 0.9f + dev * 0.1f;
+		// Drop stale unacked sends so the map can't grow unbounded.
+		if (_sentAt.Count > 256) _sentAt.Clear();
 	}
 
 	private static float Axis(Key pos, Key neg)
