@@ -162,10 +162,10 @@ public partial class ShipController : Node
 	private static ShipInputState ReadInput() => new ShipInputState
 	{
 		Thrust  = Axis(Key.W, Key.S),       // forward / reverse
-		StrafeX = Axis(Key.D, Key.A),       // strafe right / left
+		StrafeX = Axis(Key.A, Key.D),       // strafe right / left
 		StrafeY = Axis(Key.E, Key.C),       // strafe up / down
 		Yaw     = Axis(Key.Left, Key.Right),
-		Pitch   = Axis(Key.Up, Key.Down),
+		Pitch   = Axis(Key.Down, Key.Up),
 		Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
 		Firing  = Input.IsPhysicalKeyPressed(Key.Space) || Input.IsMouseButtonPressed(MouseButton.Left),
 	};

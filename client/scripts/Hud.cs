@@ -10,6 +10,7 @@ public partial class Hud : CanvasLayer
 	private ShipController _ship = null!;
 	private Label _label = null!;
 	private Control _menu = null!;
+	private Label _banner = null!;
 
 	public override void _Ready()
 	{
@@ -25,6 +26,18 @@ public partial class Hud : CanvasLayer
 		AddChild(_menu);
 		_menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
 		_menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
+
+		// Match-end banner (T9): centered, hidden until the match is decided.
+		_banner = new Label
+		{
+			Visible = false,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			AnchorRight = 1f,
+			AnchorBottom = 1f,
+		};
+		_banner.AddThemeFontSizeOverride("font_size", 48);
+		AddChild(_banner);
 	}
 
 	private Button SpawnButton(string text, ShipClass cls)
@@ -36,6 +49,21 @@ public partial class Hud : CanvasLayer
 
 	public override void _Process(double delta)
 	{
+		// Match over: show the banner and hide the spawn menu (you can't respawn
+		// into a finished match — SpawnShip refuses in the Ended phase).
+		if (_world.Phase == MatchPhase.Ended)
+		{
+			_menu.Visible = false;
+			byte winner = _world.Winner ?? 0;
+			string team = winner == 0 ? "BLUE" : "RED";
+			Color color = winner == 0 ? new Color(0.4f, 0.7f, 1f) : new Color(1f, 0.5f, 0.4f);
+			_banner.Text = $"TEAM {team} WINS";
+			_banner.AddThemeColorOverride("font_color", color);
+			_banner.Visible = true;
+			_label.Text = "Match over.";
+			return;
+		}
+
 		var ship = _world.LocalShip;
 		bool flying = ship != null;
 		_menu.Visible = !flying;

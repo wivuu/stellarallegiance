@@ -417,6 +417,7 @@ public static partial class Module
         var asteroids = ctx.Db.Asteroid.Iter().ToList();
         var bases = ctx.Db.Base.Iter().ToList();
         var damage = new Dictionary<ulong, float>();   // shipId -> hull damage this tick
+        var baseDamage = new Dictionary<ulong, float>(); // baseId -> damage this tick
 
         // --- Pass B: advance projectiles, cull expired, resolve hits.
         foreach (var p in ctx.Db.Projectile.Iter().ToList())
@@ -455,10 +456,49 @@ public static partial class Module
                 }
             }
 
+            // Hit the ENEMY base (your own base is friendly — shots pass through).
+            if (!consumed)
+            {
+                foreach (var b in bases)
+                {
+                    if (b.Team == p.Team) continue;
+                    float rr = BaseRadius + ProjectileRadius;
+                    if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
+                    {
+                        baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
+                        consumed = true;
+                        break;
+                    }
+                }
+            }
+
             if (consumed)
                 ctx.Db.Projectile.ProjectileId.Delete(p.ProjectileId);
             else
                 ctx.Db.Projectile.ProjectileId.Update(p with { PosX = nx, PosY = ny, PosZ = nz });
+        }
+
+        // Apply base damage; a base reaching 0 health ends the match. The winner
+        // is the OTHER team — the side that destroyed the enemy base. Once Ended
+        // we never reopen the match (SpawnShip already refuses in the Ended phase).
+        foreach (var b in bases)
+        {
+            if (!baseDamage.TryGetValue(b.BaseId, out var bd))
+                continue;
+
+            float hp = MathF.Max(0f, b.Health - bd);
+            ctx.Db.Base.BaseId.Update(b with { Health = hp });
+
+            if (hp <= 0f)
+            {
+                var m = ctx.Db.Match.Id.Find(0);
+                if (m is Match mm && mm.Phase != MatchPhase.Ended)
+                {
+                    byte winner = (byte)(b.Team == 0 ? 1 : 0);
+                    ctx.Db.Match.Id.Update(mm with { Phase = MatchPhase.Ended, Winner = winner });
+                    Log.Info($"[Match] base {b.BaseId} (team {b.Team}) destroyed -> team {winner} wins");
+                }
+            }
         }
 
         // --- Pass C: collisions, then apply all damage and kill at <= 0 health.

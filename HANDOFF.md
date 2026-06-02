@@ -3,8 +3,9 @@
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at
-the keyboard), **T5, T6, T7, and T8 are complete** (the subjective sign-offs — T4 flight feel,
-T7 class distinctness, T8 combat feel — all still want a human at the keyboard). The repo has:
+the keyboard), **T5, T6, T7, T8, and T9 are complete** (the subjective sign-offs — T4 flight feel,
+T7 class distinctness, T8 combat feel, T9 full-match playthrough — all still want a human at the
+keyboard). The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
@@ -14,12 +15,12 @@ T7 class distinctness, T8 combat feel — all still want a human at the keyboard
 
 **Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · **`Space`/left-mouse fire** · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
 
-**Next task: T9 — base damage & win condition** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `04`, `05`).
-Make projectiles damage the **enemy base** (in `SimTick` Pass B/C — currently they fly through
-bases); when a `Base.Health <= 0` set `Match.Phase = Ended` + `Match.Winner = otherTeam`. Add a
-HUD match-end banner driven by `Match.Phase == Ended` / `Winner` (the `Match` subscription +
-`WorldRenderer.ServerTick` already track the row; add `Phase`/`Winner` exposure). Confirm a full
-match can be played start to finish.
+**Next task: T10 — Maincloud deployment & two-machine test** (see `.PLAN/08-BUILD-ORDER.md`, `02`).
+Publish the module to Maincloud, point two clients on two machines at it, and play a full match.
+This is the prototype's definition of done. The client server URL/DB name live in
+`client/scripts/ConnectionManager.cs` (`ServerUrl`/`DbName`); Maincloud auth differs from the
+local token flow (use `spacetime login` web flow against maincloud, not the `/v1/identity` mint
+that `start-db.sh` uses for the local server).
 
 ---
 
@@ -326,6 +327,41 @@ dev flag (implies `--autofly`): flies straight + fires (no weave, no divergence 
 
 **Subjective:** "is combat fun / readable" needs a human flying (fire feel, tracer visibility,
 collision bounce). Tune the combat constants in `Lib.cs` if needed (then republish).
+
+---
+
+## T9 (DONE, pending subjective sign-off): base damage & win condition
+
+**No schema change** — `Base.Health` and `Match.Winner` (`byte?`) already existed, so bindings
+were **not** regenerated.
+
+**Server (`module/spacetimedb/Lib.cs`):**
+- **Pass B** now also checks each surviving projectile against the **enemy base** (skip own team,
+  hit sphere `BaseRadius + ProjectileRadius`), accumulating into a `baseDamage` dict and culling
+  the projectile — mirrors the enemy-ship hit, after asteroids and ships.
+- After the projectile loop: apply `baseDamage` (`Health` clamped at 0 via `MathF.Max`). When a
+  base reaches 0, set `Match.Phase = Ended` + `Match.Winner =` the **other** team (the attacker),
+  guarded by `Phase != Ended` so it fires once. Sim keeps running after end; `SpawnShip` already
+  refuses in the `Ended` phase, so no respawns into a finished match.
+
+**Client:**
+- `WorldRenderer` now exposes `Phase` (`MatchPhase`) and `Winner` (`byte?`), set from the `Match`
+  `OnInsert`/`OnUpdate` (folded into the existing `ServerTick` handler via `OnMatch`).
+- `WorldRenderer.OnBaseUpdate` (new — base updates weren't handled before) frees the base node
+  when `Health <= 0`, so the destroyed base disappears from the scene.
+- `Hud` shows a centered **match-end banner** (`TEAM BLUE WINS` / `TEAM RED WINS`, colored to
+  match the team material) when `Phase == Ended`; the spawn menu is hidden and the readout reads
+  "Match over." Team color map: team 0 = blue, team 1 = red (matches base/ship materials).
+
+**Verified end-to-end (headless):** temporarily lowered seed base `Health` to 60, `--reset`
+published, ran one `--fighter --combat-test` client (team 0, spawns at −500 facing center, flies
++Z firing). Within ~10 s the **enemy base (team 1, +500) hit 0 health**, team 0's base stayed at
+60, and `Match` flipped to `Phase = Ended, Winner = 0` (the attacker). Restored seed `Health` to
+**1000** and republished (the committed value; a full real match is a sustained assault on the
+base — tune `Base.Health` in `Init` if a faster match is wanted for the feel gate).
+
+**Subjective:** a complete human-played match from spawn to a decided result + the banner reading
+correctly on all clients is the remaining sign-off.
 
 ---
 

@@ -34,6 +34,10 @@ public partial class WorldRenderer : Node3D
 	// prediction clock to this so client/server ticks index the same integration.
 	public uint ServerTick { get; private set; }
 
+	// Match phase + winning team (T9). Read by Hud to show the match-end banner.
+	public MatchPhase Phase { get; private set; } = MatchPhase.Lobby;
+	public byte? Winner { get; private set; }
+
 	public override void _Ready()
 	{
 		_bases = new Node3D { Name = "Bases" };
@@ -62,6 +66,7 @@ public partial class WorldRenderer : Node3D
 	private void OnConnected(DbConnection conn)
 	{
 		conn.Db.Base.OnInsert += OnBaseInsert;
+		conn.Db.Base.OnUpdate += OnBaseUpdate;
 		conn.Db.Base.OnDelete += OnBaseDelete;
 		conn.Db.Asteroid.OnInsert += OnAsteroidInsert;
 		conn.Db.Asteroid.OnDelete += OnAsteroidDelete;
@@ -71,8 +76,15 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Projectile.OnInsert += OnProjectileInsert;
 		conn.Db.Projectile.OnUpdate += OnProjectileUpdate;
 		conn.Db.Projectile.OnDelete += OnProjectileDelete;
-		conn.Db.Match.OnInsert += (_, row) => ServerTick = row.Tick;
-		conn.Db.Match.OnUpdate += (_, _, row) => ServerTick = row.Tick;
+		conn.Db.Match.OnInsert += (_, row) => OnMatch(row);
+		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
+	}
+
+	private void OnMatch(Match row)
+	{
+		ServerTick = row.Tick;
+		Phase = row.Phase;
+		Winner = row.Winner;
 	}
 
 	// ---- Base -----------------------------------------------------------
@@ -92,6 +104,17 @@ public partial class WorldRenderer : Node3D
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
+	}
+
+	// A destroyed base (Health <= 0, T9) is removed from the scene — the match is
+	// already over, so it won't come back. Otherwise nothing about a base changes.
+	private void OnBaseUpdate(EventContext ctx, Base oldRow, Base newRow)
+	{
+		if (newRow.Health <= 0f && _baseNodes.Remove(newRow.BaseId, out var node))
+		{
+			node.QueueFree();
+			GD.Print($"[WorldRenderer] Base {newRow.BaseId} (team {newRow.Team}) destroyed");
+		}
 	}
 
 	private void OnBaseDelete(EventContext ctx, Base row)
