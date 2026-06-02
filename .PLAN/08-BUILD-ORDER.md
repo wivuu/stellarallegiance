@@ -69,6 +69,7 @@ reasonable assumption.
 **Refs:** `03`, `04`
 - Implement projectile spawning, advancement, culling, and hit resolution in `SimTick`.
 - Render projectiles; handle ship death (despawn + respawn menu).
+- Add collisions between ships, asteroids and bases; collisions also cause damage.
 - **Gate:** `09` T8.
 
 ### Task 9 — Base damage & win condition

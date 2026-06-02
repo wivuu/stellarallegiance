@@ -1,0 +1,23 @@
+<Project Sdk="Godot.NET.Sdk/4.6.3">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Don't spawn the Roslyn shared compiler (VBCSCompiler) daemon. It can
+         inherit the stdout/stderr pipe of Godot's `dotnet publish` during C#
+         export and keep it open after publish exits, leaving Godot blocked
+         forever on a pipe read ("Running dotnet publish" hang). In-process
+         compilation is marginally slower but never wedges the export. -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <!-- .NET SDK 10 enables NuGetAudit by default, which downloads and processes
+         vulnerability databases during every restore. For this small project it
+         adds 70 to 140 seconds of wall time and makes Godot's headless export
+         appear to hang at "Running dotnet publish". Disable it here; run
+         dotnet list package with the vulnerable flag to check for CVEs. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SpacetimeDB.ClientSDK" Version="2.3.0" />
+  </ItemGroup>
+</Project>
