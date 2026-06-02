@@ -28,10 +28,14 @@ mkdir -p "${OUT}/mac" "${OUT}/win"
 # node reuse can leave wedged worker processes (e.g. from a different SDK or the
 # IDE's C# Dev Kit) that the next build connects to and hangs on. Disabling node
 # reuse and clearing any stale servers up front keeps the export from hanging.
+# UseSharedCompilation=false tells MSBuild not to spin up / connect to a Roslyn
+# compiler server (VBCSCompiler), which is the most common cause of dotnet
+# publish hanging inside a Godot headless export.
 export MSBUILDDISABLENODEREUSE=1
 export DOTNET_CLI_USE_MSBUILD_SERVER=0
-dotnet build-server shutdown >/dev/null 2>&1 || true
+pkill -9 -f "VBCSCompiler" >/dev/null 2>&1 || true
 pkill -9 -f "MSBuild.dll" >/dev/null 2>&1 || true
+dotnet build-server shutdown >/dev/null 2>&1 || true
 
 echo "[export] macOS .app ..."
 APP="${OUT}/mac/wivuullegiance.app"
