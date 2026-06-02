@@ -62,9 +62,16 @@ public partial class PredictionController : Node3D
 	public ulong ShipId { get; private set; }
 	public float Speed => _state.Vel.Length();
 
+	// Authoritative hull (T8). Spawn is full health, so the first row also gives
+	// us the class max for a "cur/max" HUD readout.
+	public float Health { get; private set; }
+	public float MaxHealth { get; private set; }
+
 	public void Initialize(Ship row)
 	{
 		ShipId = row.ShipId;
+		Health = row.Health;
+		MaxHealth = row.Health;
 		_stats = FlightModel.StatsFor((byte)row.Class);
 		_state = ShipMath.StateFromRow(row);
 		_prevState = _state;
@@ -110,6 +117,7 @@ public partial class PredictionController : Node3D
 	// LastInputTick and reconcile only if we genuinely diverged.
 	public void OnAuthoritative(Ship row)
 	{
+		Health = row.Health;
 		uint n = row.LastInputTick;
 		var auth = ShipMath.StateFromRow(row);
 

@@ -481,5 +481,6 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Local SpacetimeDB CLI identity/token (do not commit)
+# Local SpacetimeDB CLI identity/token (do not commit). Persistent server data
+# lives in the Docker named volume 'stdb-data' (see scripts/start-db.sh), not here.
 .stdb-config/

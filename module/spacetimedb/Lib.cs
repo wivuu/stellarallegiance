@@ -55,6 +55,7 @@ public partial struct Ship
     public float AngVelZ;
     public float Health;
     public uint LastInputTick; // highest sim tick integrated; for reconciliation
+    public uint LastFireTick;  // sim tick of this ship's most recent shot (fire-rate gate)
 }
 
 // Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
@@ -112,6 +113,7 @@ public partial struct Projectile
     [AutoInc]
     public ulong ProjectileId;
     public byte Team;           // so friendly fire can be ignored
+    public float Damage;        // hull damage dealt on hit (from the firing ship's class)
     public float PosX;
     public float PosY;
     public float PosZ;
@@ -154,7 +156,20 @@ public static partial class Module
     private const int AsteroidCount = 30;
     private const uint InputKeep = 64;   // per-tick input buffer window (ticks)
 
+    // Combat tuning (server-only; clients just render the resulting Projectile rows).
+    private const float ProjectileSpeed = 250f;      // u/s muzzle speed (added to ship velocity)
+    private const uint  ProjectileLifeTicks = 50;    // ~2.5 s lifespan, then culled
+    private const float NoseOffset = 3f;             // spawn this far ahead of ship center
+    private const float ProjectileRadius = 1f;       // projectile hit sphere
+    private const float ShipRadius = 3f;             // ship hit / collision sphere
+    private const float BaseRadius = 45f;            // matches the client's base render radius
+    private const float CollisionRestitution = 0.3f; // bounce factor on impact
+    private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
+    private const float MaxCollisionDamage = 30f;    // cap per collision per tick
+
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
+    private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
+    private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
 
     // ---- Lifecycle ----------------------------------------------------
 
@@ -330,9 +345,10 @@ public static partial class Module
         uint tick = match.Value.Tick + 1;
         ctx.Db.Match.Id.Update(match.Value with { Tick = tick });
 
-        // Integrate every ship with the shared, fixed-dt flight model.
+        float dt = FlightModel.Dt;
+
+        // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
         // Snapshot to a list first — we mutate rows while iterating.
-        // (Projectiles + hit resolution arrive in T8.)
         foreach (var ship in ctx.Db.Ship.Iter().ToList())
         {
             // Apply the input the client stamped FOR this tick; if it hasn't
@@ -360,6 +376,26 @@ public static partial class Module
 
             state = FlightModel.Integrate(state, input, stats);
 
+            // Fire control: spawn a projectile at the nose when held and the
+            // per-class cooldown has elapsed (tracked against Match.Tick).
+            uint lastFire = ship.LastFireTick;
+            if (input.Firing && tick - lastFire >= FireInterval(ship.Class))
+            {
+                Vec3 fwd = state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+                Vec3 mp = state.Pos + fwd * NoseOffset;
+                Vec3 mv = fwd * ProjectileSpeed + state.Vel;
+                ctx.Db.Projectile.Insert(new Projectile
+                {
+                    ProjectileId = 0,
+                    Team = ship.Team,
+                    Damage = WeaponDamage(ship.Class),
+                    PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
+                    VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
+                    ExpiresAtTick = tick + ProjectileLifeTicks,
+                });
+                lastFire = tick;
+            }
+
             ctx.Db.Ship.ShipId.Update(ship with
             {
                 PosX = state.Pos.X, PosY = state.Pos.Y, PosZ = state.Pos.Z,
@@ -371,7 +407,116 @@ public static partial class Module
                 // shared, drift-free anchor so predicted[N] and auth[N] are the same
                 // step count. The client (ShipController) predicts in this tick space.
                 LastInputTick = tick,
+                LastFireTick = lastFire,
             });
+        }
+
+        // Snapshot post-integration ships + static geometry for the hit/collision
+        // passes. Damage is accumulated here and applied once at the end.
+        var ships = ctx.Db.Ship.Iter().ToList();
+        var asteroids = ctx.Db.Asteroid.Iter().ToList();
+        var bases = ctx.Db.Base.Iter().ToList();
+        var damage = new Dictionary<ulong, float>();   // shipId -> hull damage this tick
+
+        // --- Pass B: advance projectiles, cull expired, resolve hits.
+        foreach (var p in ctx.Db.Projectile.Iter().ToList())
+        {
+            if (p.ExpiresAtTick <= tick)
+            {
+                ctx.Db.Projectile.ProjectileId.Delete(p.ProjectileId);
+                continue;
+            }
+
+            float nx = p.PosX + p.VelX * dt;
+            float ny = p.PosY + p.VelY * dt;
+            float nz = p.PosZ + p.VelZ * dt;
+            bool consumed = false;
+
+            // Blocked by asteroids (static; they take no damage).
+            foreach (var a in asteroids)
+            {
+                float rr = a.Radius + ProjectileRadius;
+                if (Dist2(nx, ny, nz, a.PosX, a.PosY, a.PosZ) <= rr * rr) { consumed = true; break; }
+            }
+
+            // Hit an enemy ship (friendly fire ignored).
+            if (!consumed)
+            {
+                foreach (var s in ships)
+                {
+                    if (s.Team == p.Team) continue;
+                    float rr = ShipRadius + ProjectileRadius;
+                    if (Dist2(nx, ny, nz, s.PosX, s.PosY, s.PosZ) <= rr * rr)
+                    {
+                        damage[s.ShipId] = (damage.TryGetValue(s.ShipId, out var d) ? d : 0f) + p.Damage;
+                        consumed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (consumed)
+                ctx.Db.Projectile.ProjectileId.Delete(p.ProjectileId);
+            else
+                ctx.Db.Projectile.ProjectileId.Update(p with { PosX = nx, PosY = ny, PosZ = nz });
+        }
+
+        // --- Pass C: collisions, then apply all damage and kill at <= 0 health.
+        // Enemy ship-vs-ship: mutual damage + separation (pairwise; N is tiny here).
+        for (int i = 0; i < ships.Count; i++)
+        {
+            for (int j = i + 1; j < ships.Count; j++)
+            {
+                var a = ships[i];
+                var b = ships[j];
+                if (a.Team == b.Team) continue;
+
+                float dx = a.PosX - b.PosX, dy = a.PosY - b.PosY, dz = a.PosZ - b.PosZ;
+                float dist2 = dx * dx + dy * dy + dz * dz;
+                float minD = 2f * ShipRadius;
+                if (dist2 >= minD * minD) continue;
+
+                float dist = MathF.Sqrt(dist2);
+                float nx, ny, nz;
+                if (dist > 1e-4f) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
+                else { nx = 0f; ny = 1f; nz = 0f; }
+
+                float relVn = (a.VelX - b.VelX) * nx + (a.VelY - b.VelY) * ny + (a.VelZ - b.VelZ) * nz;
+                if (relVn < 0f)
+                {
+                    float dmg = MathF.Min(-relVn * CollisionDamageScale, MaxCollisionDamage);
+                    damage[a.ShipId] = (damage.TryGetValue(a.ShipId, out var da) ? da : 0f) + dmg;
+                    damage[b.ShipId] = (damage.TryGetValue(b.ShipId, out var db) ? db : 0f) + dmg;
+                    float jimp = (1f + CollisionRestitution) * relVn * 0.5f;
+                    a.VelX -= jimp * nx; a.VelY -= jimp * ny; a.VelZ -= jimp * nz;
+                    b.VelX += jimp * nx; b.VelY += jimp * ny; b.VelZ += jimp * nz;
+                }
+                float push = (minD - dist) * 0.5f;
+                a.PosX += nx * push; a.PosY += ny * push; a.PosZ += nz * push;
+                b.PosX -= nx * push; b.PosY -= ny * push; b.PosZ -= nz * push;
+                ships[i] = a;
+                ships[j] = b;
+            }
+        }
+
+        foreach (var s0 in ships)
+        {
+            var s = s0;
+            if (damage.TryGetValue(s.ShipId, out var d))
+                s.Health -= d;
+
+            // Asteroids (all) and the ENEMY base only — your own base is your dock/
+            // spawn point, so you pass through it.
+            foreach (var a in asteroids)
+                s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
+            foreach (var b in bases)
+                if (b.Team != s.Team)
+                    s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
+
+            if (s.Health <= 0f)
+                KillShip(ctx, s);
+            else
+                ctx.Db.Ship.ShipId.Update(s);
         }
 
         // Prune consumed inputs so the per-tick buffer stays bounded (~InputKeep
@@ -384,6 +529,52 @@ public static partial class Module
     }
 
     // ---- Helpers ------------------------------------------------------
+
+    private static float Dist2(float ax, float ay, float az, float bx, float by, float bz)
+    {
+        float dx = ax - bx, dy = ay - by, dz = az - bz;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    // Resolve a ship overlapping a static sphere (asteroid / base): on inward
+    // impact apply impact-scaled damage and a damped bounce, then push the ship
+    // back to the sphere surface so it can't sink through. No-op when separated.
+    private static Ship ResolveCollision(Ship s, float cx, float cy, float cz, float radius)
+    {
+        float dx = s.PosX - cx, dy = s.PosY - cy, dz = s.PosZ - cz;
+        float dist2 = dx * dx + dy * dy + dz * dz;
+        float minD = radius + ShipRadius;
+        if (dist2 >= minD * minD)
+            return s;
+
+        float dist = MathF.Sqrt(dist2);
+        float nx, ny, nz;
+        if (dist > 1e-4f) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
+        else { nx = 0f; ny = 1f; nz = 0f; }
+
+        float vn = s.VelX * nx + s.VelY * ny + s.VelZ * nz;
+        if (vn < 0f) // moving into the obstacle
+        {
+            float dmg = MathF.Min(-vn * CollisionDamageScale, MaxCollisionDamage);
+            s.Health -= dmg;
+            float jimp = (1f + CollisionRestitution) * vn;
+            s.VelX -= jimp * nx; s.VelY -= jimp * ny; s.VelZ -= jimp * nz;
+        }
+        s.PosX = cx + nx * minD; s.PosY = cy + ny * minD; s.PosZ = cz + nz * minD;
+        return s;
+    }
+
+    // Destroy a ship: remove the row + its input buffer, and clear the owner's
+    // ShipId so the client's spawn menu reappears (Player.ShipId -> null).
+    private static void KillShip(ReducerContext ctx, Ship s)
+    {
+        ctx.Db.Ship.ShipId.Delete(s.ShipId);
+        DeleteShipInputs(ctx, s.ShipId);
+        var owner = ctx.Db.Player.Identity.Find(s.Owner);
+        if (owner is Player p && p.ShipId == s.ShipId)
+            ctx.Db.Player.Identity.Update(p with { ShipId = null });
+        Log.Info($"[SimTick] ship {s.ShipId} destroyed (team {s.Team})");
+    }
 
     private static ShipInputState ToInputState(ShipInput i) => new ShipInputState
     {
@@ -445,6 +636,12 @@ public static partial class Module
             }
         }
 
+        // Face the sector center (the battlefield) so you spawn looking at the
+        // fight rather than down +Z. Yaw about Y so local +Z points base->origin.
+        float yaw = MathF.Atan2(-bx, -bz);
+        float ry = MathF.Sin(yaw * 0.5f);
+        float rw = MathF.Cos(yaw * 0.5f);
+
         var inserted = ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
@@ -453,10 +650,11 @@ public static partial class Module
             Class = shipClass,
             PosX = bx, PosY = by, PosZ = bz,
             VelX = 0f, VelY = 0f, VelZ = 0f,
-            RotX = 0f, RotY = 0f, RotZ = 0f, RotW = 1f,
+            RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
             Health = MaxHull(shipClass),
             LastInputTick = 0,
+            LastFireTick = 0,
         });
 
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;

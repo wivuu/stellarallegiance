@@ -31,6 +31,7 @@ public partial class ShipController : Node
 	// without a human at the keyboard.
 	private bool _autoFly;
 	private bool _selfTestDone;         // autofly fires one divergence injection
+	private bool _combatTest;           // --combat-test: fly straight + fire (head-on damage check)
 
 	public override void _Ready()
 	{
@@ -41,6 +42,7 @@ public partial class ShipController : Node
 		{
 			if (a == "--autofly") _autoFly = true;
 			if (a == "--fighter") autoClass = ShipClass.Fighter;   // autofly picks Fighter (dev verify)
+			if (a == "--combat-test") { _autoFly = true; _combatTest = true; }
 		}
 		// Headless runs are otherwise uncapped: _Process spins as fast as possible,
 		// flooding ApplyInput and racing the prediction far ahead of the 20 Hz
@@ -142,7 +144,7 @@ public partial class ShipController : Node
 			pc.InjectDivergence(new Vector3(25f, 0f, 0f));
 		_perturbHeld = perturb;
 
-		if (_autoFly && !_selfTestDone && _stepsSinceSpawn >= 100)
+		if (_autoFly && !_combatTest && !_selfTestDone && _stepsSinceSpawn >= 100)
 		{
 			pc.InjectDivergence(new Vector3(25f, 0f, 0f));
 			_selfTestDone = true;
@@ -165,7 +167,7 @@ public partial class ShipController : Node
 		Yaw     = Axis(Key.Left, Key.Right),
 		Pitch   = Axis(Key.Up, Key.Down),
 		Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
-		Firing  = false, // weapons arrive in T8
+		Firing  = Input.IsPhysicalKeyPressed(Key.Space) || Input.IsMouseButtonPressed(MouseButton.Left),
 	};
 
 	// Deterministic scripted flight for headless verification — representative of
@@ -174,12 +176,19 @@ public partial class ShipController : Node
 	// max-rate turn. Driven by steps-since-spawn so it's reproducible.
 	private ShipInputState AutoInput()
 	{
+		// Combat test: spawn facing the sector center (server-side), so flying
+		// straight ahead + firing sends two opposing clients head-on for a
+		// deterministic hit/damage/death check.
+		if (_combatTest)
+			return new ShipInputState { Thrust = 1f, Firing = true };
+
 		float t = _stepsSinceSpawn * FlightModel.Dt;   // sim seconds
 		return new ShipInputState
 		{
 			Thrust = 1f,
 			Yaw = 0.4f * Mathf.Sin(t * 0.6f),          // weave, ~10 s period
 			Pitch = 0.2f * Mathf.Sin(t * 0.37f),
+			Firing = true,                             // exercise projectile spawn/cull
 		};
 	}
 }

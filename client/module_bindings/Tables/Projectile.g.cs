@@ -41,6 +41,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<Projectile, ulong> ProjectileId { get; }
         public global::SpacetimeDB.Col<Projectile, byte> Team { get; }
+        public global::SpacetimeDB.Col<Projectile, float> Damage { get; }
         public global::SpacetimeDB.Col<Projectile, float> PosX { get; }
         public global::SpacetimeDB.Col<Projectile, float> PosY { get; }
         public global::SpacetimeDB.Col<Projectile, float> PosZ { get; }
@@ -53,6 +54,7 @@ namespace SpacetimeDB.Types
         {
             ProjectileId = new global::SpacetimeDB.Col<Projectile, ulong>(tableName, "projectile_id");
             Team = new global::SpacetimeDB.Col<Projectile, byte>(tableName, "team");
+            Damage = new global::SpacetimeDB.Col<Projectile, float>(tableName, "damage");
             PosX = new global::SpacetimeDB.Col<Projectile, float>(tableName, "pos_x");
             PosY = new global::SpacetimeDB.Col<Projectile, float>(tableName, "pos_y");
             PosZ = new global::SpacetimeDB.Col<Projectile, float>(tableName, "pos_z");

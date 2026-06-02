@@ -12,14 +12,17 @@ public partial class WorldRenderer : Node3D
 	private Node3D _bases = null!;
 	private Node3D _asteroids = null!;
 	private Node3D _ships = null!;
+	private Node3D _projectiles = null!;
 
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
+	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
 
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
+	private StandardMaterial3D _projectileMat = null!;
 
 	private ConnectionManager _cm = null!;
 
@@ -36,13 +39,21 @@ public partial class WorldRenderer : Node3D
 		_bases = new Node3D { Name = "Bases" };
 		_asteroids = new Node3D { Name = "Asteroids" };
 		_ships = new Node3D { Name = "Ships" };
+		_projectiles = new Node3D { Name = "Projectiles" };
 		AddChild(_bases);
 		AddChild(_asteroids);
 		AddChild(_ships);
+		AddChild(_projectiles);
 
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
 		_team1Mat = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.3f, 0.25f) };
+		// Bright unshaded tracers so shots read clearly against the dark sector.
+		_projectileMat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(1f, 0.9f, 0.4f),
+			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+		};
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
@@ -57,6 +68,9 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Ship.OnInsert += OnShipInsert;
 		conn.Db.Ship.OnUpdate += OnShipUpdate;
 		conn.Db.Ship.OnDelete += OnShipDelete;
+		conn.Db.Projectile.OnInsert += OnProjectileInsert;
+		conn.Db.Projectile.OnUpdate += OnProjectileUpdate;
+		conn.Db.Projectile.OnDelete += OnProjectileDelete;
 		conn.Db.Match.OnInsert += (_, row) => ServerTick = row.Tick;
 		conn.Db.Match.OnUpdate += (_, _, row) => ServerTick = row.Tick;
 	}
@@ -160,6 +174,36 @@ public partial class WorldRenderer : Node3D
 		if (LocalShip == node)
 			LocalShip = null;
 		node.QueueFree();
+	}
+
+	// ---- Projectile -----------------------------------------------------
+
+	private void OnProjectileInsert(EventContext ctx, Projectile row)
+	{
+		if (_projectileNodes.ContainsKey(row.ProjectileId))
+			return;
+
+		var pv = new ProjectileView { Name = $"Projectile_{row.ProjectileId}" };
+		_projectiles.AddChild(pv);
+		pv.AddChild(new MeshInstance3D
+		{
+			Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f, RadialSegments = 8, Rings = 4 },
+			MaterialOverride = _projectileMat,
+		});
+		pv.Initialize(row);
+		_projectileNodes[row.ProjectileId] = pv;
+	}
+
+	private void OnProjectileUpdate(EventContext ctx, Projectile oldRow, Projectile newRow)
+	{
+		if (_projectileNodes.TryGetValue(newRow.ProjectileId, out var pv))
+			pv.OnAuthoritative(newRow);
+	}
+
+	private void OnProjectileDelete(EventContext ctx, Projectile row)
+	{
+		if (_projectileNodes.Remove(row.ProjectileId, out var pv))
+			pv.QueueFree();
 	}
 
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match

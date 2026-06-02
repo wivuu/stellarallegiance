@@ -3,8 +3,8 @@
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at
-the keyboard), **T5, T6, and T7 are complete** (T7's "do the two classes *feel* distinct"
-sign-off, like T4's fun gate, still needs a human at the keyboard). The repo has:
+the keyboard), **T5, T6, T7, and T8 are complete** (the subjective sign-offs — T4 flight feel,
+T7 class distinctness, T8 combat feel — all still want a human at the keyboard). The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
@@ -12,14 +12,14 @@ sign-off, like T4's fun gate, still needs a human at the keyboard). The repo has
 - A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
 - `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
-**Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
+**Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · **`Space`/left-mouse fire** · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
 
-**Next task: T8 — weapons, damage, death** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `04`).
-Implement projectile spawning/advancement/culling + hit resolution in `SimTick`; render
-projectiles; handle ship death (despawn + respawn menu — the `Respawn` reducer already exists,
-and the HUD spawn menu reappears when `LocalShip` is null, so death just needs to despawn the
-ship). Then add ship/asteroid/base collisions (currently deferred — ships pass through). Holding
-fire spawns projectiles; friendly fire must not damage teammates.
+**Next task: T9 — base damage & win condition** (see `.PLAN/08-BUILD-ORDER.md`, `03`, `04`, `05`).
+Make projectiles damage the **enemy base** (in `SimTick` Pass B/C — currently they fly through
+bases); when a `Base.Health <= 0` set `Match.Phase = Ended` + `Match.Winner = otherTeam`. Add a
+HUD match-end banner driven by `Match.Phase == Ended` / `Winner` (the `Match` subscription +
+`WorldRenderer.ServerTick` already track the row; add `Phase`/`Winner` exposure). Confirm a full
+match can be played start to finish.
 
 ---
 
@@ -41,15 +41,30 @@ fire spawns projectiles; friendly fire must not damage teammates.
 > ("Updated database"). **After a server restart**, the server rotates its signing key, so the
 > saved token goes stale (`401 Invalid token`) — refresh it once with the `login` command below.
 
-**Start the server** (do this first; data does NOT persist across container restarts):
+**Start the server + seed the DB (preferred):**
+```bash
+./scripts/start-db.sh          # starts (persistent), waits, populates if needed
+./scripts/start-db.sh --reset  # also force a fresh publish (--delete-data)
+```
+This starts the server with a **persistent Docker named volume `stdb-data`**, so the DB and the
+server's signing keys now **survive container restarts** (data persists; the CLI token stays
+valid across restarts). It's idempotent — re-run any time. `scripts/populate-db.sh` just
+publishes (which runs `Init` → seeds Match/Bases/Asteroids); `start-db.sh` calls it as needed.
+
+> **Why a named volume + `--user root`** (learned the hard way): SpacetimeDB's commitlog calls
+> `fsync`, which macOS Docker Desktop **bind mounts don't support** (gRPC-FUSE/virtiofs) — a
+> host-path data dir panics the server with *"Failed to fsync segment"*. A named volume lives in
+> the Linux VM's ext4 and works; it's root-owned, so the server runs as `--user root` (the image's
+> default `spacetime` user can't write to it). **Local auth:** the local server signs tokens with
+> its own keys, so a maincloud/`.stdb-config` token gives `401 Invalid token: InvalidSignature`.
+> Publishing to a *not-yet-existing* DB works anonymously; if a stale token is present, `start-db.sh`
+> mints a fresh server-issued token from `POST /v1/identity` and stores it via `login --token`.
+> (The old `login --server-issued-login` flag is gone in CLI 2.3; `login --auth-host <local>` does
+> NOT work — it runs the spacetimedb.com web flow and clears your token.)
+
+**Manual start (fallback, ephemeral — data lost on restart):**
 ```bash
 docker run -d --rm -p 3001:3000 --name stdb clockworklabs/spacetime start
-```
-
-**Refresh the CLI token** (run once after every fresh server start):
-```bash
-docker run --rm -v "$(pwd)/.stdb-config":/home/spacetime/.config/spacetime --network host \
-  clockworklabs/spacetime login --server-issued-login http://localhost:3001
 ```
 
 **Publish module** (run from repo root after any change to `module/`):
@@ -269,6 +284,49 @@ Fighter ~26 u/s**, matching the Scout's higher thrust/maxspeed (45/70 vs 30/50).
 > Launch: `Godot --headless --path client --autofly --fighter` (godot bin is
 > `/Applications/Godot_mono.app/Contents/MacOS/Godot`; the old `~/.local/bin/godot` is gone).
 
+## T8 (DONE, pending subjective sign-off): weapons, damage, death, collisions
+
+**Schema:** added `Ship.LastFireTick` (uint) and `Projectile.Damage` (float). Republished
+`--delete-data` + regenerated bindings.
+
+**Server — `SimTick` restructured into three passes** (`module/spacetimedb/Lib.cs`):
+- **Pass A** — integrate every ship (unchanged path), then **fire**: if `Firing` and
+  `tick - LastFireTick >= FireInterval(class)`, insert a `Projectile` at the nose
+  (`pos + forward*3`) with velocity `forward*250 + shipVel`, `Damage = WeaponDamage(class)`,
+  `ExpiresAtTick = tick + 50`; stamp `LastFireTick`.
+- **Pass B** — advance each projectile by `dt`, cull at `ExpiresAtTick`, resolve hits: blocked by
+  asteroids (cull, no damage), damages **enemy** ships (friendly fire skipped by `Team`), damage
+  accumulated into a dict. (Projectile→base is **T9**.)
+- **Pass C** — collisions (enemy ship-vs-ship pairwise; ship-vs-asteroid; ship-vs-**enemy**-base
+  — own base passes through), then apply accumulated damage and `KillShip` at `Health<=0`
+  (`KillShip` deletes the ship row + its input buffer + clears `Player.ShipId`).
+- Combat tuning (`.PLAN/03`): Scout dmg 4 / interval 4 ticks (5 shots/s), Fighter dmg 10 /
+  interval 8. All combat constants are **server-only** — clients just render `Projectile` rows.
+- **Spawn now faces the sector center** (yaw so local +Z points base→origin): a nicer spawn AND
+  it makes the head-on combat test deterministic.
+
+**Client:** `ProjectileView.cs` (new) renders each shot by **velocity-extrapolation** from the
+last authoritative sample (smooth + accurate for straight-line shots; re-anchors each 20 Hz
+update). `WorldRenderer` instances/updates/frees projectile nodes (bright unshaded sphere). HUD
+shows `HP cur/max`. `Firing` wired to **Space / left-mouse** in `ReadInput`. New `--combat-test`
+dev flag (implies `--autofly`): flies straight + fires (no weave, no divergence self-test).
+
+**Verified headless:**
+- `--autofly` (weave + fire): projectiles spawn at the fire rate, advance, and cull in a bounded
+  rolling window (IDs increment, old ones disappear).
+- Two `--combat-test` clients (teams 0/1, spawn at ∓500 facing center): closed head-on and
+  **both ships were destroyed in-sim**; **`Player.ShipId` cleared to null on both** (so the HUD
+  spawn menu reappears); `Match` stayed `Active` (ship death ≠ match end — that's T9).
+- The lone firing ship in the first test stayed at full health → own-team/self projectiles do no
+  damage (the `Team` friendly-fire guard).
+
+> The T8 server changes don't touch the integration/`LastInputTick` path (Pass A is the same
+> integrate + a projectile insert + fire-tick stamp), so T5's zero-divergence prediction parity
+> still holds; spawn-facing-center is just initial state, identical on both sides.
+
+**Subjective:** "is combat fun / readable" needs a human flying (fire feel, tracer visibility,
+collision bounce). Tune the combat constants in `Lib.cs` if needed (then republish).
+
 ---
 
 ## Key facts to avoid repeating past mistakes
@@ -293,6 +351,9 @@ Fighter ~26 u/s**, matching the Scout's higher thrust/maxspeed (45/70 vs 30/50).
 
 ```
 .stdb-config/             ← persistent CLI identity/token (gitignored); mount on every auth'd call
+scripts/
+  start-db.sh             ← start server (persistent named volume) + populate-if-needed; idempotent
+  populate-db.sh          ← publish the module (runs Init -> seeds Match/Bases/Asteroids); --reset wipes
 shared/
   FlightModel.cs          ← CANONICAL deterministic flight model; edit here only
   sync.sh                 ← copies FlightModel.cs verbatim into module/ + client/, diffs to verify
@@ -311,6 +372,7 @@ client/
   scripts/ShipController.cs      ← server-tick-slaved 20 Hz input loop → ApplyInput + prediction; controls; --autofly flag
   scripts/PredictionController.cs← local ship: fixed-dt predict in server-tick space, rollback reconcile, pos+rot correction smoothing
   scripts/RemoteShip.cs          ← other players' ships: 100 ms snapshot interpolation (lerp pos / slerp rot)
+  scripts/ProjectileView.cs      ← projectile render: velocity-extrapolated from last authoritative sample
   scripts/CameraRig.cs           ← chase camera (Camera3D), overview fallback
   scripts/Hud.cs                 ← Scout/Fighter spawn menu (shipless) + speed/reconcile readout (flying)
   scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling

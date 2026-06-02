@@ -40,7 +40,7 @@ public partial class Hud : CanvasLayer
 		bool flying = ship != null;
 		_menu.Visible = !flying;
 		_label.Text = !flying
-			? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · arrows aim · Q/Z roll"
-			: $"Speed: {ship!.Speed,5:0.0} u/s   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)   [P] perturb";
+			? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · arrows aim · Q/Z roll · Space fire"
+			: $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)";
 	}
 }
