@@ -21,18 +21,26 @@ namespace SpacetimeDB.Types
         public MatchPhase Phase;
         [DataMember(Name = "winner")]
         public byte? Winner;
+        [DataMember(Name = "last_tick_micros")]
+        public long LastTickMicros;
+        [DataMember(Name = "accum_micros")]
+        public long AccumMicros;
 
         public Match(
             uint Id,
             uint Tick,
             MatchPhase Phase,
-            byte? Winner
+            byte? Winner,
+            long LastTickMicros,
+            long AccumMicros
         )
         {
             this.Id = Id;
             this.Tick = Tick;
             this.Phase = Phase;
             this.Winner = Winner;
+            this.LastTickMicros = LastTickMicros;
+            this.AccumMicros = AccumMicros;
         }
 
         public Match()

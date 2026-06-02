@@ -43,6 +43,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Match, uint> Tick { get; }
         public global::SpacetimeDB.Col<Match, MatchPhase> Phase { get; }
         public global::SpacetimeDB.Col<Match, byte> Winner { get; }
+        public global::SpacetimeDB.Col<Match, long> LastTickMicros { get; }
+        public global::SpacetimeDB.Col<Match, long> AccumMicros { get; }
 
         public MatchCols(string tableName)
         {
@@ -50,6 +52,8 @@ namespace SpacetimeDB.Types
             Tick = new global::SpacetimeDB.Col<Match, uint>(tableName, "tick");
             Phase = new global::SpacetimeDB.Col<Match, MatchPhase>(tableName, "phase");
             Winner = new global::SpacetimeDB.Col<Match, byte>(tableName, "winner");
+            LastTickMicros = new global::SpacetimeDB.Col<Match, long>(tableName, "last_tick_micros");
+            AccumMicros = new global::SpacetimeDB.Col<Match, long>(tableName, "accum_micros");
         }
     }
 

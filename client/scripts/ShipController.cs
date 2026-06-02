@@ -9,9 +9,20 @@ using StellarAllegiance.Shared;
 public partial class ShipController : Node
 {
 	private const int MaxStepsPerFrame = 5;   // spiral-of-death guard
-	private const int TargetLead = 1;         // ticks ahead of authority (localhost RTT≈0; smaller lead = smaller input-timing transient)
+	private const int DefaultTargetLead = 3;  // ticks the prediction runs ahead of authority
 	private const float SlewGain = 0.08f;     // how hard the local clock tracks the server
 	private const float MaxSlew = 0.30f;      // cap the clock rate adjustment (±30%)
+
+	// How far ahead of authority the prediction clock runs. This is the input-timing
+	// budget: each ApplyInput is stamped with `_predTick`, so it must reach the
+	// server BEFORE that tick is simulated, or the server falls back to a stale
+	// input and diverges — and every miss costs a reconcile that fights your
+	// steering. The lead must cover round-trip + network jitter. localhost (RTT≈0)
+	// is fine at 1; over the internet, jitter around the ~50 ms tick boundary makes
+	// 1 too tight, so the default is 3 (~150 ms margin). A larger lead does NOT add
+	// felt latency — the local ship is predicted/rendered instantly; more lead just
+	// means fewer corrections. Override per-connection with STDB_LEAD (clamped 1..15).
+	private int _targetLead = DefaultTargetLead;
 
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
@@ -37,6 +48,10 @@ public partial class ShipController : Node
 	{
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
+
+		if (int.TryParse(OS.GetEnvironment("STDB_LEAD"), out var lead))
+			_targetLead = Mathf.Clamp(lead, 1, 15);
+
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
 		{
@@ -119,7 +134,7 @@ public partial class ShipController : Node
 		}
 
 		int lead = (int)_predTick - (int)_world.ServerTick;
-		float slew = Mathf.Clamp((TargetLead - lead) * SlewGain, -MaxSlew, MaxSlew);
+		float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);
 		_acc += delta * (1f + slew);
 
 		int budget = MaxStepsPerFrame;

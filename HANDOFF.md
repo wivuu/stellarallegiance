@@ -399,6 +399,20 @@ login` identity) can appear `online` with no ship. It can't fight (no ship, neve
 `SpawnShip`); two real players still split onto opposite teams via `AssignTeam`. Run
 `scripts/publish-maincloud.sh --reset` right before a playtest if you want the cleanest lobby.
 
+**Latency fix (Maincloud felt half-speed / sluggish).** Two issues, both fixed:
+- **Server ran in slow-motion (dominant).** Maincloud schedules `SimTick` at only ~9.5 Hz (local
+  ~19 Hz), but each tick integrated a fixed `dt=1/20 s` → sim at ~0.48× real-time and the client's
+  prediction clock outran authority unboundedly. Fixed by **real-time pacing**: `SimTick` now runs
+  `elapsed/Dt` deterministic fixed-dt sub-steps per call (carry kept in new
+  `Match.LastTickMicros`/`AccumMicros`; per-tick body is now `SimulateTick(ctx,tick)`). Maincloud
+  `Match.Tick` now advances ~21 Hz (real-time); local ~20 Hz. **Schema change → bindings
+  regenerated, both servers republished `--reset`.**
+- **Prediction lead too tight for the internet.** `TargetLead` 1 → **3** (env `STDB_LEAD`, 1..15).
+  A/B over Maincloud after the rate fix: lead=1 = 51 reconciles/30 s, lead=3 = **7**. No felt
+  latency cost (local ship is predicted instantly; more lead just means fewer corrections).
+- **Inherent, not fixed:** your own tracer appears ~1 RTT after firing (projectiles are
+  server-spawned, not client-predicted). Muzzle prediction would be the follow-up if wanted.
+
 **Remaining (human gate, T10 acceptance in `.PLAN/09`):**
 1. Run the client on **two separate machines**, each with `--maincloud`. Easiest is the Godot
    editor / `Godot --path client --maincloud`; for a true second machine, export a standalone

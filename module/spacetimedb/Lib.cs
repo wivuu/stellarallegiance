@@ -131,6 +131,12 @@ public partial struct Match
     public uint Tick;           // authoritative sim tick counter
     public MatchPhase Phase;
     public byte? Winner;        // team id when ended, else null
+    // Real-time pacing so the sim runs at wall-clock speed regardless of how often
+    // the scheduler actually fires SimTick (Maincloud delivers it at ~10 Hz, local
+    // at ~20 Hz). Each call integrates `elapsed / Dt` fixed-dt sub-steps; the carry
+    // is kept here so the rate is exact over time. (Clients ignore these fields.)
+    public long LastTickMicros; // ctx.Timestamp of the previous SimTick (0 = first)
+    public long AccumMicros;    // leftover sub-tick time not yet integrated
 }
 
 // Scheduled-reducer table that drives SimTick at a fixed interval.
@@ -155,6 +161,8 @@ public static partial class Module
     private const byte NumTeams = 2;
     private const int AsteroidCount = 30;
     private const uint InputKeep = 64;   // per-tick input buffer window (ticks)
+    private const long DtMicros = 1_000_000 / SimTickHz;  // 50 ms — one fixed sim step
+    private const int  MaxCatchupSteps = 8;               // cap sub-steps/call (anti-spiral)
 
     // Combat tuning (server-only; clients just render the resulting Projectile rows).
     private const float ProjectileSpeed = 250f;      // u/s muzzle speed (added to ship velocity)
@@ -341,10 +349,35 @@ public static partial class Module
         var match = ctx.Db.Match.Id.Find(0);
         if (match is null)
             return;
+        var m = match.Value;
 
-        uint tick = match.Value.Tick + 1;
-        ctx.Db.Match.Id.Update(match.Value with { Tick = tick });
+        // Pace by REAL elapsed time, not by how often the scheduler fires us. Each
+        // call integrates as many fixed-dt steps as wall-clock time has passed since
+        // the last call, carrying the sub-step remainder so the rate is exact. This
+        // keeps the sim at wall-clock speed on Maincloud (~10 Hz scheduling → 2
+        // steps/call) and locally (~20 Hz → 1 step/call) alike, while every step is
+        // still a deterministic fixed-dt integration the client predicts against.
+        long now = ctx.Timestamp.MicrosecondsSinceUnixEpoch;
+        long elapsed = m.LastTickMicros == 0 ? DtMicros : now - m.LastTickMicros;
+        if (elapsed < 0) elapsed = 0;
+        long accum = m.AccumMicros + elapsed;
+        int steps = (int)(accum / DtMicros);
+        accum -= (long)steps * DtMicros;
+        if (steps > MaxCatchupSteps) { steps = MaxCatchupSteps; accum = 0; }
 
+        uint tick = m.Tick;
+        for (int s = 0; s < steps; s++)
+            SimulateTick(ctx, ++tick);
+
+        // Write the tick counter + timing once. Re-read so we keep any Phase/Winner
+        // change a step made (the win condition writes Match inside SimulateTick).
+        var cur = ctx.Db.Match.Id.Find(0)!.Value;
+        ctx.Db.Match.Id.Update(cur with { Tick = tick, LastTickMicros = now, AccumMicros = accum });
+    }
+
+    // One fixed-dt authoritative step for sim tick `tick`.
+    private static void SimulateTick(ReducerContext ctx, uint tick)
+    {
         float dt = FlightModel.Dt;
 
         // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
