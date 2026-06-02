@@ -14,10 +14,20 @@ public partial class WorldRenderer : Node3D
 	private Node3D _ships = null!;
 	private Node3D _projectiles = null!;
 
+	// How long a predicted ghost shot lives unmatched before it's culled. Covers
+	// prediction lead + round-trip to the authoritative row (~0.2s); a never-matched
+	// ghost (rare mispredicted fire) disappears after this.
+	private const double GhostTtl = 0.6;
+
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
+
+	// Client-side muzzle prediction (own shots): ghosts spawned on fire, in FIFO
+	// fire order, each handed off to the matching authoritative row as it arrives.
+	private readonly List<ProjectileView> _predictedShots = new();
+	private byte? _localTeam;
 
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
@@ -166,6 +176,7 @@ public partial class WorldRenderer : Node3D
 			pc.AddChild(BuildShipMesh(row.Team, row.Class));
 			pc.Initialize(row);
 			LocalShip = pc;
+			_localTeam = row.Team;
 			GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team})");
 		}
 		else
@@ -195,7 +206,13 @@ public partial class WorldRenderer : Node3D
 		if (!_shipNodes.Remove(row.ShipId, out var node))
 			return;
 		if (LocalShip == node)
+		{
 			LocalShip = null;
+			// Drop unmatched ghosts so a respawn's FIFO never adopts a stale one.
+			foreach (var g in _predictedShots)
+				g.QueueFree();
+			_predictedShots.Clear();
+		}
 		node.QueueFree();
 	}
 
@@ -206,15 +223,56 @@ public partial class WorldRenderer : Node3D
 		if (_projectileNodes.ContainsKey(row.ProjectileId))
 			return;
 
+		// Own shots: hand the oldest predicted ghost off to this authoritative row
+		// instead of spawning a second node (the ghost is already in flight).
+		if (_localTeam is byte lt && row.Team == lt && _predictedShots.Count > 0)
+		{
+			var ghost = _predictedShots[0];
+			_predictedShots.RemoveAt(0);
+			ghost.AttachAuthoritative(row.ProjectileId);
+			ghost.Name = $"Projectile_{row.ProjectileId}";
+			_projectileNodes[row.ProjectileId] = ghost;
+			return;
+		}
+
 		var pv = new ProjectileView { Name = $"Projectile_{row.ProjectileId}" };
 		_projectiles.AddChild(pv);
-		pv.AddChild(new MeshInstance3D
-		{
-			Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f, RadialSegments = 8, Rings = 4 },
-			MaterialOverride = _projectileMat,
-		});
+		pv.AddChild(NewProjectileMesh());
 		pv.Initialize(row);
 		_projectileNodes[row.ProjectileId] = pv;
+	}
+
+	// Spawn an immediate ghost for the local player's own shot (muzzle prediction),
+	// rendered identically to an authoritative projectile and queued in fire order.
+	public void SpawnPredictedProjectile(byte team, Vector3 pos, Vector3 vel)
+	{
+		var pv = new ProjectileView { Name = "Projectile_predicted" };
+		_projectiles.AddChild(pv);
+		pv.AddChild(NewProjectileMesh());
+		pv.InitializePredicted(pos, vel);
+		_predictedShots.Add(pv);
+	}
+
+	private MeshInstance3D NewProjectileMesh() => new MeshInstance3D
+	{
+		Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f, RadialSegments = 8, Rings = 4 },
+		MaterialOverride = _projectileMat,
+	};
+
+	// Cull predicted ghosts that were never matched to an authoritative row.
+	public override void _Process(double delta)
+	{
+		if (_predictedShots.Count == 0)
+			return;
+		double now = Time.GetTicksMsec() / 1000.0;
+		for (int i = _predictedShots.Count - 1; i >= 0; i--)
+		{
+			if (_predictedShots[i].GhostExpired(now, GhostTtl))
+			{
+				_predictedShots[i].QueueFree();
+				_predictedShots.RemoveAt(i);
+			}
+		}
 	}
 
 	private void OnProjectileUpdate(EventContext ctx, Projectile oldRow, Projectile newRow)

@@ -149,7 +149,8 @@ public partial class ShipController : Node
 				_input.Thrust, _input.StrafeX, _input.StrafeY,
 				_input.Yaw, _input.Pitch, _input.Roll,
 				_input.Firing, _predTick);
-			pc.Step(_input, _predTick);
+			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
+				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);
 		}
 
 		// T5 divergence injection (debug). Press P to force a misprediction and
@@ -180,7 +181,7 @@ public partial class ShipController : Node
 		StrafeX = Axis(Key.A, Key.D),       // strafe right / left
 		StrafeY = Axis(Key.E, Key.C),       // strafe up / down
 		Yaw     = Axis(Key.Left, Key.Right),
-		Pitch   = Axis(Key.Down, Key.Up),
+		Pitch   = Axis(Key.Up, Key.Down),
 		Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
 		Firing  = Input.IsPhysicalKeyPressed(Key.Space) || Input.IsMouseButtonPressed(MouseButton.Left),
 	};

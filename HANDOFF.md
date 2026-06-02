@@ -410,8 +410,17 @@ login` identity) can appear `online` with no ship. It can't fight (no ship, neve
 - **Prediction lead too tight for the internet.** `TargetLead` 1 → **3** (env `STDB_LEAD`, 1..15).
   A/B over Maincloud after the rate fix: lead=1 = 51 reconciles/30 s, lead=3 = **7**. No felt
   latency cost (local ship is predicted instantly; more lead just means fewer corrections).
-- **Inherent, not fixed:** your own tracer appears ~1 RTT after firing (projectiles are
-  server-spawned, not client-predicted). Muzzle prediction would be the follow-up if wanted.
+- **Own-shot delay — fixed with muzzle prediction.** Firing now spawns an immediate client-side
+  "ghost" projectile (`PredictionController.Step` returns a `PredictedShot` using a fire gate that
+  mirrors the server's exactly — same tick space, `FireInterval`, muzzle math). `WorldRenderer`
+  keeps ghosts in a FIFO and hands each off to the matching authoritative `Projectile` row as it
+  arrives (own-team, fire order is 1:1), so the node simply adopts the row's id with no second
+  spawn; unmatched ghosts (rare mispredict) expire after `GhostTtl` 0.6 s. Verified on Maincloud:
+  119 spawned / 118 matched, 0 expired, queue bounded at 1–2. The weapon constants are duplicated
+  on the client (`PredictionController`) and **must stay in sync** with `module/.../Lib.cs`.
+- **Still open (minor):** turning has slight residual jerk from occasional rotation reconciles
+  (late inputs over jitter); options are a larger `STDB_LEAD` or gentler rotation easing
+  (`PredictionController.SmoothRate`) — not yet tuned.
 
 **Remaining (human gate, T10 acceptance in `.PLAN/09`):**
 1. Run the client on **two separate machines**, each with `--maincloud`. Easiest is the Godot

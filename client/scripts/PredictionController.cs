@@ -31,6 +31,19 @@ public partial class PredictionController : Node3D
 	private const int BufferLen = 40;             // ~2s at 20 Hz
 	private const float SmoothRate = 12f;         // reconcile correction-ease decay (1/s)
 
+	// Weapon constants for client-side MUZZLE PREDICTION. These MUST mirror the
+	// server's authoritative values in module/spacetimedb/Lib.cs (ProjectileSpeed,
+	// NoseOffset, FireInterval) so the predicted ghost shot lines up 1:1 with the
+	// authoritative Projectile row the server later spawns. The server stays the
+	// single source of truth for damage/hits; this only predicts the visual.
+	private const float ProjectileSpeed = 250f;
+	private const float NoseOffset = 3f;
+	private static uint FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+
+	// A shot the prediction step just fired, in Godot space, for the renderer to
+	// spawn an immediate ghost projectile.
+	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; }
+
 	private struct Entry
 	{
 		public uint Tick;
@@ -41,6 +54,8 @@ public partial class PredictionController : Node3D
 	private ShipState _state;                          // latest predicted state (tick N)
 	private ShipState _prevState;                      // previous predicted state (tick N-1)
 	private ShipStats _stats;
+	private ShipClass _class;                          // for the fire-rate gate
+	private uint _lastFireTick;                        // mirrors server Ship.LastFireTick (0 = ready)
 	private readonly List<Entry> _buffer = new();
 
 	private double _tickTimer;                         // seconds since last prediction step
@@ -60,6 +75,7 @@ public partial class PredictionController : Node3D
 	public float LastReconcileError { get; private set; }   // posErr at the most recent correction
 
 	public ulong ShipId { get; private set; }
+	public byte Team { get; private set; }
 	public float Speed => _state.Vel.Length();
 
 	// Authoritative hull (T8). Spawn is full health, so the first row also gives
@@ -70,8 +86,11 @@ public partial class PredictionController : Node3D
 	public void Initialize(Ship row)
 	{
 		ShipId = row.ShipId;
+		Team = row.Team;
 		Health = row.Health;
 		MaxHealth = row.Health;
+		_class = row.Class;
+		_lastFireTick = 0;
 		_stats = FlightModel.StatsFor((byte)row.Class);
 		_state = ShipMath.StateFromRow(row);
 		_prevState = _state;
@@ -84,8 +103,12 @@ public partial class PredictionController : Node3D
 		ApplyVisual(1f);
 	}
 
-	// One fixed-dt prediction step for the given input + client tick.
-	public void Step(ShipInputState input, uint clientTick)
+	// One fixed-dt prediction step for the given input + client tick. Returns a
+	// PredictedShot when the fire gate fires this tick (else null), so the renderer
+	// can spawn an immediate muzzle-predicted projectile. The gate mirrors the
+	// server's exactly (same tick space, FireInterval, muzzle math), so each ghost
+	// corresponds 1:1 to an authoritative Projectile the server later spawns.
+	public PredictedShot? Step(ShipInputState input, uint clientTick)
 	{
 		_prevState = _state;
 		_state = FlightModel.Integrate(_state, input, _stats);
@@ -93,6 +116,16 @@ public partial class PredictionController : Node3D
 		if (_buffer.Count > BufferLen)
 			_buffer.RemoveRange(0, _buffer.Count - BufferLen);
 		_tickTimer = 0;
+
+		if (input.Firing && clientTick - _lastFireTick >= FireInterval(_class))
+		{
+			_lastFireTick = clientTick;
+			Vec3 fwd = _state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+			Vec3 mp = _state.Pos + fwd * NoseOffset;
+			Vec3 mv = fwd * ProjectileSpeed + _state.Vel;
+			return new PredictedShot { Pos = ShipMath.ToGodot(mp), Vel = ShipMath.ToGodot(mv) };
+		}
+		return null;
 	}
 
 	// T5 test hook: artificially diverge the predicted path from authority by
