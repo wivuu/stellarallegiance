@@ -133,14 +133,22 @@ cleanly separated from player logic. A persistent `Pig` table holds one row per
 **slot** (5 per side, the `MaxPigsPerTeam` knob; alternating Scout/Fighter mix with
 identical stats to players) that OUTLIVES the drone: on death the slot's `ShipId`
 goes null and `RespawnAtTick` starts a 30 s cooldown (`PigRespawnTicks`), then the
-slot respawns a fresh drone at its base.
+slot respawns a fresh drone at its base. Spawns are **staggered** — at most one drone
+per team per tick, with simultaneously-ready slots pushed to `PigSpawnStaggerTicks`
+(1.5 s) apart — so a fresh wave (e.g. when the first player spawns and all slots are
+ready at once) trickles in over a few seconds instead of all popping in together.
 
 The brain (`PigThink`, called from Pass A of `SimulateTick` instead of the
 `ShipInput` buffer) is a state machine — **Idle** (no enemy in radar → loiter near
 base), **Seek** (target in radar, out of fire range → close in), **Attack** (in
-range → fire). It acquires the nearest enemy ship within `PigRadarRange` (1200 u,
+range → fire). It picks a target by **threat to its own survival** rather than mere
+proximity (`PigThreatScore`): an enemy that is aiming its nose at the drone, close,
+and hits hard (Fighter > Scout) scores highest. The current target is held out to
+1.25× radar and only abandoned for a contact scoring clearly higher
+(`PigThreatSwitchMargin`, 1.3×) — hysteresis so the drone commits to a fight instead
+of thrashing between similar threats. Detection range is `PigRadarRange` (1200 u,
 must exceed the ~1000 u base separation or drones idle out of range — this was the
-one tuning bug found in testing) with 1.25× hysteresis, solves the same
+one tuning bug found in testing). It solves the same
 constant-velocity lead intercept the player HUD uses (`PigLead`, mirror of
 `TargetMarkers.TryLead` — aims the NOSE at the relative-velocity lead point so the
 velocity-inheriting shot connects), and steers with a proportional yaw/pitch

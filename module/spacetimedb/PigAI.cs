@@ -56,6 +56,14 @@ public static partial class Module
     private const float PigTurnGain = 3.2f;     // proportional steering gain (toward desired heading)
     private const float PigAvoidLookahead = 160f; // asteroid-avoidance forward look distance (u)
     private const float PigAvoidMargin = 14f;     // extra clearance beyond the summed radii (u)
+    private const uint  PigSpawnStaggerTicks = 30; // trickle a fresh wave in ~1.5 s apart, not all at once
+    // Threat-based target priority (defensive): an enemy that is aiming at us AND close
+    // AND hits hard most threatens this drone's survival. We switch to a new contact only
+    // when it scores clearly higher than the current target (hysteresis, no thrashing).
+    private const float PigThreatAimWeight = 1.0f;     // enemy nose pointed at us (about to fire)
+    private const float PigThreatCloseWeight = 0.7f;   // proximity (shorter time-to-impact)
+    private const float PigThreatDmgWeight = 0.4f;     // enemy weapon damage (Fighter > Scout)
+    private const float PigThreatSwitchMargin = 1.3f;  // only switch when new threat ≥ 1.3× current
 
     // Create the drone slots once (idempotent — also covers a hot-swap that didn't
     // re-run Init). Alternating class gives a scout/fighter mix per side.
@@ -118,16 +126,28 @@ public static partial class Module
         }
     }
 
-    // Spawn any slot whose drone is dead and whose respawn cooldown has elapsed.
+    // Bring dead/ready slots online, but TRICKLE them: at most one new drone per team
+    // per tick, and when several are ready at once (e.g. a fresh wave after the player
+    // spawns, where all slots reset to ready) push the rest to staggered future ticks so
+    // they appear ~PigSpawnStaggerTicks apart instead of all popping in on one tick.
     private static void SimulatePigLifecycle(ReducerContext ctx, uint tick)
     {
-        foreach (var slot in ctx.Db.Pig.Iter().ToList())
+        for (byte team = 0; team < NumTeams; team++)
         {
-            if (slot.ShipId is not null)      // drone alive
+            // This team's dead slots whose respawn time has arrived, in stable order.
+            var ready = new List<Pig>();
+            foreach (var slot in ctx.Db.Pig.Iter())
+                if (slot.Team == team && slot.ShipId is null && tick >= slot.RespawnAtTick)
+                    ready.Add(slot);
+            if (ready.Count == 0)
                 continue;
-            if (tick < slot.RespawnAtTick)    // still cooling down
-                continue;
-            SpawnPig(ctx, slot, tick);
+            ready.Sort((a, b) => a.PigId.CompareTo(b.PigId));
+
+            SpawnPig(ctx, ready[0], tick);
+            // Defer the rest so they come online one stagger apart. Once pushed into the
+            // future they're no longer "ready", so they aren't re-deferred each tick.
+            for (int i = 1; i < ready.Count; i++)
+                ctx.Db.Pig.PigId.Update(ready[i] with { RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks });
         }
     }
 
@@ -221,31 +241,35 @@ public static partial class Module
         Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
         Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
 
-        // Acquire the nearest enemy ship within radar range; keep an existing target
-        // until it dies or drifts past 1.25× radar (hysteresis prevents flip-flopping
-        // between equidistant foes). Drones target any enemy ship — players or drones.
-        Ship? nearest = null;
-        float bestD2 = PigRadarRange * PigRadarRange;
+        // Pick a target by THREAT, not just proximity: score every enemy in radar by how
+        // much it endangers THIS drone's survival (aiming at us + close + hits hard), and
+        // engage the most threatening. Drones target any enemy ship — players or drones.
+        // The current target is retained out to 1.25× radar and is only abandoned for a
+        // new contact that scores clearly higher (PigThreatSwitchMargin) — hysteresis so
+        // the drone commits to a fight instead of thrashing between similar threats.
         ulong? keepId = slotOpt?.TargetShipId;
-        Ship? kept = null;
+        float radar2 = PigRadarRange * PigRadarRange;
+        float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
+        Ship? best = null; float bestScore = float.NegativeInfinity;
+        Ship? kept = null; float keptScore = float.NegativeInfinity;
         foreach (var s in ctx.Db.Ship.Iter())
         {
             if (s.Team == me.Team)
                 continue;
             float d2 = Dist2(myPos.X, myPos.Y, myPos.Z, s.PosX, s.PosY, s.PosZ);
-            if (keepId is ulong k && s.ShipId == k)
-                kept = s;
-            if (d2 < bestD2) { bestD2 = d2; nearest = s; }
+            if (d2 > keep2)
+                continue;
+            float score = PigThreatScore(myPos, s);
+            if (keepId is ulong k && s.ShipId == k) { kept = s; keptScore = score; }
+            if (d2 <= radar2 && score > bestScore) { bestScore = score; best = s; }
         }
 
-        Ship? target = nearest;
-        if (kept is Ship keptShip)
-        {
-            float kd2 = Dist2(myPos.X, myPos.Y, myPos.Z, keptShip.PosX, keptShip.PosY, keptShip.PosZ);
-            float keepRange = PigRadarRange * 1.25f;
-            if (kd2 <= keepRange * keepRange)
-                target = keptShip;     // stick with the current target
-        }
+        // Keep the current target unless a fresh contact is clearly more threatening.
+        Ship? target;
+        if (kept is Ship c)
+            target = (best is Ship b && bestScore > keptScore * PigThreatSwitchMargin) ? b : c;
+        else
+            target = best;
 
         // ---- No target: Idle. Loiter near base. ----
         if (target is not Ship tgt)
@@ -406,6 +430,27 @@ public static partial class Module
         if (steer.LengthSquared() < 1e-8f)
             return dir;
         return NormalizeOr(dir + steer * 1.5f, dir);
+    }
+
+    // How much `enemy` threatens a drone at `myPos` right now — a defensive priority
+    // score combining: is the enemy's nose pointed at us (about to shoot), how close it
+    // is (time-to-impact / dodge difficulty), and how hard its weapon hits. Higher =
+    // engage it first. All terms are roughly 0..1 so the weights set their relative pull.
+    private static float PigThreatScore(Vec3 myPos, Ship enemy)
+    {
+        Vec3 ePos = new Vec3(enemy.PosX, enemy.PosY, enemy.PosZ);
+        Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
+        Quat eRot = new Quat(enemy.RotX, enemy.RotY, enemy.RotZ, enemy.RotW);
+        Vec3 eFwd = eRot.Rotate(new Vec3(0f, 0f, 1f));
+
+        float aim = Dot(eFwd, toMe);                 // 1 = enemy aimed straight at us
+        if (aim < 0f) aim = 0f;
+        float dist = (ePos - myPos).Length();
+        float close = 1f - dist / PigRadarRange;     // 1 = right on top of us
+        if (close < 0f) close = 0f;
+        float dmg = WeaponDamage(enemy.Class) / 10f; // Scout 0.4, Fighter 1.0
+
+        return PigThreatAimWeight * aim + PigThreatCloseWeight * close + PigThreatDmgWeight * dmg;
     }
 
     // ---- small server-only math helpers (plain MathF is fine; not synced) ----
