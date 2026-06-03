@@ -57,6 +57,10 @@ The offset is derived from measured one-way latency (≈ half `PingMs`, clamped
 0–250 ms; 0 on localhost) or pinned via `STDB_SHOT_MASK_MS`. Remaining:
 playtest-confirm the masking offset feels right on WAN.
 
+**Enemy target markers** - A small UI marker on the enemy ship when it's on and offscreen would help with tracking. Targets
+should be able to be 'focused' as well (e.g. tab cycles through visible enemies). Once focused and in range of weapons, a lead-indicator circle
+should show where the target will be when the shot arrives.
+
 ---
 
 #### Match lifecycle
