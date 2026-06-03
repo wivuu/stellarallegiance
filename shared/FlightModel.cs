@@ -168,6 +168,77 @@ namespace StellarAllegiance.Shared
         public static ShipStats StatsFor(byte shipClass) =>
             shipClass == ClassFighter ? Fighter : Scout;
 
+        // ---- Weapon spread -------------------------------------------------
+        //
+        // Per-weapon shot scatter as a cone HALF-ANGLE in radians. Tweak these to
+        // taste: 0 is pinpoint, larger is sloppier. Tied to ship class for now (one
+        // weapon per class); the standard Scout cannon is the "default" weapon and is
+        // near-pinpoint, while the Fighter's heavier gun scatters more. Lives here in
+        // the shared model so the authoritative server and the predicting client read
+        // the SAME value (no mirrored-constant drift).
+        public const float ScoutSpread = 0.006f;    // ~0.34° — minimal (default weapon)
+        public const float FighterSpread = 0.035f;  // ~2.0°
+
+        public static float WeaponSpreadRad(byte shipClass) =>
+            shipClass == ClassFighter ? FighterSpread : ScoutSpread;
+
+        // Deterministically scatter a unit fire direction within a cone of the given
+        // half-angle. Keyed by (shipId, fireTick) so the wasm server and the mono
+        // client compute the IDENTICAL scattered vector for a given shot — the player's
+        // predicted tracer then lands exactly where the authoritative projectile goes.
+        // Uses only cross-runtime-deterministic ops: integer hashing, MathDet trig, and
+        // IEEE sqrt (the same primitives the integrator already relies on). A spread of
+        // <= 0 returns fwd unchanged.
+        public static Vec3 SpreadDirection(Vec3 fwd, float spreadRad, ulong shipId, uint fireTick)
+        {
+            if (spreadRad <= 0f)
+                return fwd;
+
+            // Two independent uniforms in [0,1) from a hash of the shot key.
+            uint key = unchecked((uint)shipId * 2654435761u ^ (fireTick * 40503u));
+            float u1 = UnitFloat(Hash(key));
+            float u2 = UnitFloat(Hash(key ^ 0x9e3779b9u));
+
+            // Polar angle within the cone (sqrt → area-uniform over the cap) + azimuth.
+            float theta = spreadRad * (float)System.Math.Sqrt(u2);
+            float phi = 6.2831853071795864f * u1;
+
+            // Orthonormal basis around fwd; pick a reference axis that isn't parallel.
+            Vec3 f = NormalizeVec(fwd);
+            Vec3 reference = (f.Y < 0.99f && f.Y > -0.99f) ? new Vec3(0f, 1f, 0f) : new Vec3(1f, 0f, 0f);
+            Vec3 right = NormalizeVec(Vec3.Cross(reference, f));
+            Vec3 up = Vec3.Cross(f, right);
+
+            float st = MathDet.Sin(theta);
+            float ct = MathDet.Cos(theta);
+            Vec3 radial = right * MathDet.Cos(phi) + up * MathDet.Sin(phi);
+
+            // f·cosθ + radial·sinθ — tilt fwd off-axis by θ around azimuth φ.
+            return NormalizeVec(f * ct + radial * st);
+        }
+
+        private static Vec3 NormalizeVec(Vec3 v)
+        {
+            float n = v.Length();
+            if (n < 1e-12f) return v;
+            float inv = 1f / n;
+            return new Vec3(v.X * inv, v.Y * inv, v.Z * inv);
+        }
+
+        // Integer avalanche hash (lowbias32) — bit-identical on every runtime.
+        private static uint Hash(uint x)
+        {
+            unchecked
+            {
+                x ^= x >> 16; x *= 0x7feb352du;
+                x ^= x >> 15; x *= 0x846ca68bu;
+                x ^= x >> 16; return x;
+            }
+        }
+
+        // Top 24 bits of a hash → a float in [0,1).
+        private static float UnitFloat(uint h) => (h >> 8) * (1f / 16777216f);
+
         // Pure, fixed-dt integration. Implements the math block from .PLAN/06
         // exactly; the order of operations is part of the contract.
         public static ShipState Integrate(ShipState s, ShipInputState i, ShipStats st)

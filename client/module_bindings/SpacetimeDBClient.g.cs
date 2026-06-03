@@ -30,6 +30,7 @@ namespace SpacetimeDB.Types
             AddTable(Asteroid = new(conn));
             AddTable(Base = new(conn));
             AddTable(Match = new(conn));
+            AddTable(Pig = new(conn));
             AddTable(Player = new(conn));
             AddTable(Projectile = new(conn));
             AddTable(Ship = new(conn));
@@ -533,6 +534,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Asteroid().ToSql(),
             new QueryBuilder().From.Base().ToSql(),
             new QueryBuilder().From.Match().ToSql(),
+            new QueryBuilder().From.Pig().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.Projectile().ToSql(),
             new QueryBuilder().From.Ship().ToSql(),
@@ -546,6 +548,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Asteroid, AsteroidCols, AsteroidIxCols> Asteroid() => new("asteroid", new AsteroidCols("asteroid"), new AsteroidIxCols("asteroid"));
         public global::SpacetimeDB.Table<Base, BaseCols, BaseIxCols> Base() => new("base", new BaseCols("base"), new BaseIxCols("base"));
         public global::SpacetimeDB.Table<Match, MatchCols, MatchIxCols> Match() => new("match", new MatchCols("match"), new MatchIxCols("match"));
+        public global::SpacetimeDB.Table<Pig, PigCols, PigIxCols> Pig() => new("pig", new PigCols("pig"), new PigIxCols("pig"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<Projectile, ProjectileCols, ProjectileIxCols> Projectile() => new("projectile", new ProjectileCols("projectile"), new ProjectileIxCols("projectile"));
         public global::SpacetimeDB.Table<Ship, ShipCols, ShipIxCols> Ship() => new("ship", new ShipCols("ship"), new ShipIxCols("ship"));

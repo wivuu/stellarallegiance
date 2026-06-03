@@ -16,6 +16,11 @@ public enum ShipClass : byte { Scout, Fighter }
 [SpacetimeDB.Type]
 public enum MatchPhase : byte { Lobby, Active, Ended }
 
+// AI drone behaviour state (see PigAI.cs). Declaration order fixes the values
+// (Idle=0, Seek=1, Attack=2).
+[SpacetimeDB.Type]
+public enum PigState : byte { Idle, Seek, Attack }
+
 // ---- Tables ----------------------------------------------------------
 
 [SpacetimeDB.Table(Accessor = "Player", Public = true)]
@@ -56,6 +61,11 @@ public partial struct Ship
     public float Health;
     public uint LastInputTick; // highest sim tick integrated; for reconciliation
     public uint LastFireTick;  // sim tick of this ship's most recent shot (fire-rate gate)
+    // True for AI-controlled combat drones (PIGs). Players never set this; it lets the
+    // client highlight drones on the HUD and the server route input through the AI brain
+    // (PigAI.cs) instead of the per-tick ShipInput buffer. PIGs otherwise reuse the exact
+    // same physics, fire control, collision, and rendering path as player ships.
+    public bool IsPig;
 }
 
 // Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
@@ -121,6 +131,9 @@ public partial struct Projectile
     public float VelY;
     public float VelZ;
     public uint ExpiresAtTick;  // sim tick at which it is culled
+    // Fired by an AI drone (PIG). PIG fire damages ships but NOT bases — drones
+    // "leave bases alone", so only players can erode a base (the win condition).
+    public bool FromPig;
 }
 
 [SpacetimeDB.Table(Accessor = "Match", Public = true)]
@@ -386,23 +399,53 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
+        // --- Pass 0: AI drone (PIG) lifecycle. Drones exist ONLY while a human is
+        // actually flying — gated on a live PLAYER ship, not merely a connection — so an
+        // idle/observer/owner-dashboard connection never spins up 20 Hz drone combat (the
+        // expensive part of a tick). When the last player ship leaves (death or
+        // disconnect) all drones despawn and their slots reset to ready, so they respawn
+        // instantly the next time someone flies (no leftover cooldown from idle time).
+        // The bare sim that remains with no ships is cheap. Newly spawned drones land in
+        // the Pass A snapshot below and integrate immediately, like a fresh player ship.
+        bool combatLive = (ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
+                          && AnyPlayerShipAlive(ctx);
+        if (combatLive)
+        {
+            EnsurePigSlots(ctx);
+            SimulatePigLifecycle(ctx, tick);
+        }
+        else
+        {
+            DespawnAllPigs(ctx);
+        }
+
         // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
         // Snapshot to a list first — we mutate rows while iterating.
         foreach (var ship in ctx.Db.Ship.Iter().ToList())
         {
-            // Apply the input the client stamped FOR this tick; if it hasn't
-            // arrived yet, hold the most recent input with Tick <= this tick.
-            // Matching the client's per-tick input is what makes auth == prediction.
-            ShipInput? exact = null;
-            ShipInput? latest = null;
-            foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+            // PIGs are server-driven: the AI brain (PigAI.cs) synthesizes this tick's
+            // input from world state and updates the drone's behaviour row. Player ships
+            // instead replay the EXACT per-tick input the client stamped (or the most
+            // recent one with Tick <= this tick if it hasn't arrived) — matching the
+            // client's input sequence is what makes auth == prediction.
+            ShipInputState input;
+            if (ship.IsPig)
             {
-                if (r.Tick == tick) { exact = r; break; }
-                if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
-                    latest = r;
+                input = PigThink(ctx, ship, tick);
             }
-            var src = exact ?? latest;
-            var input = src is ShipInput si ? ToInputState(si) : default;
+            else
+            {
+                ShipInput? exact = null;
+                ShipInput? latest = null;
+                foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+                {
+                    if (r.Tick == tick) { exact = r; break; }
+                    if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
+                        latest = r;
+                }
+                var src = exact ?? latest;
+                input = src is ShipInput si ? ToInputState(si) : default;
+            }
             var stats = FlightModel.StatsFor((byte)ship.Class);
 
             var state = new ShipState
@@ -420,9 +463,13 @@ public static partial class Module
             uint lastFire = ship.LastFireTick;
             if (input.Firing && tick - lastFire >= FireInterval(ship.Class))
             {
+                // Spawn at the nose (true forward) but launch along a per-weapon
+                // scattered direction. SpreadDirection is deterministic in
+                // (ShipId, tick), so the client predicts the same scatter (.PLAN).
                 Vec3 fwd = state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+                Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)ship.Class), ship.ShipId, tick);
                 Vec3 mp = state.Pos + fwd * NoseOffset;
-                Vec3 mv = fwd * ProjectileSpeed + state.Vel;
+                Vec3 mv = shotDir * ProjectileSpeed + state.Vel;
                 ctx.Db.Projectile.Insert(new Projectile
                 {
                     ProjectileId = 0,
@@ -431,6 +478,7 @@ public static partial class Module
                     PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
                     VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
                     ExpiresAtTick = tick + ProjectileLifeTicks,
+                    FromPig = ship.IsPig,
                 });
                 lastFire = tick;
             }
@@ -504,7 +552,11 @@ public static partial class Module
                     float rr = BaseRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
-                        baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
+                        // PIG fire leaves bases alone: it's absorbed on contact (so it
+                        // doesn't pass through) but deals no base damage. Only player
+                        // shots erode a base, keeping the win condition player-driven.
+                        if (!p.FromPig)
+                            baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
                         consumed = true;
                         break;
                     }
@@ -593,7 +645,14 @@ public static partial class Module
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
 
             if (s.Health <= 0f)
-                KillShip(ctx, s);
+            {
+                // PIGs free their slot and start a respawn cooldown instead of clearing
+                // a player's ShipId (drones have no Player row).
+                if (s.IsPig)
+                    KillPig(ctx, s, tick);
+                else
+                    KillShip(ctx, s);
+            }
             else
                 ctx.Db.Ship.ShipId.Update(s);
         }
@@ -721,25 +780,40 @@ public static partial class Module
         float ry = MathF.Sin(yaw * 0.5f);
         float rw = MathF.Cos(yaw * 0.5f);
 
+        // Launch outward from the base center toward the sector center so the
+        // ship clears the base sphere instead of starting buried inside it.
+        // Offset by base radius + ship radius along the base->center direction
+        // (the same direction the ship faces above).
+        float sx = bx, sy = by, sz = bz;
+        float dirLen = MathF.Sqrt(bx * bx + by * by + bz * bz);
+        if (dirLen > 1e-3f)
+        {
+            float offset = BaseRadius + ShipRadius;
+            sx = bx + (-bx / dirLen) * offset;
+            sy = by + (-by / dirLen) * offset;
+            sz = bz + (-bz / dirLen) * offset;
+        }
+
         var inserted = ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
             Owner = ctx.Sender,
             Team = p.Team,
             Class = shipClass,
-            PosX = bx, PosY = by, PosZ = bz,
+            PosX = sx, PosY = sy, PosZ = sz,
             VelX = 0f, VelY = 0f, VelZ = 0f,
             RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
             Health = MaxHull(shipClass),
             LastInputTick = 0,
             LastFireTick = 0,
+            IsPig = false,
         });
 
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
         // SimTick falls back to zero input until then.
         ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
-        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({bx},{by},{bz})");
+        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({sx},{sy},{sz})");
     }
 
     // Assign the joining player to the team with fewer online players;

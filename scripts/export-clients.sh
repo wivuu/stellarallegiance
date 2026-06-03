@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# export-clients.sh — export the Godot client for macOS + Windows and package
-# them for tester distribution.
+# export-clients.sh — export the Godot client for macOS + Windows + Linux and
+# package them for tester distribution.
 #
 # macOS gotcha: Godot's built-in macOS signing always enables the *hardened
 # runtime* (codesign flags 0x10002). That's only meaningful once you notarize;
@@ -22,7 +22,7 @@ CLIENT="${REPO_ROOT}/client"
 OUT="${REPO_ROOT}/build"
 GODOT="${GODOT:-godot-mono}"
 
-mkdir -p "${OUT}/mac" "${OUT}/win"
+mkdir -p "${OUT}/mac" "${OUT}/win" "${OUT}/linux"
 
 # Godot's export rebuilds the C# project with `dotnet` under the hood. MSBuild
 # node reuse can leave wedged worker processes (e.g. from a different SDK or the
@@ -58,7 +58,16 @@ echo "[export] zipping Windows folder (testers need the whole folder) ..."
 rm -f "${OUT}/wivuullegiance-windows.zip"
 ( cd "${OUT}/win" && zip -rq "${OUT}/wivuullegiance-windows.zip" . )
 
+echo "[export] Linux .x86_64 ..."
+"${GODOT}" --headless --path "${CLIENT}" --export-release "Linux" "${OUT}/linux/wivuullegiance.x86_64"
+chmod +x "${OUT}/linux/wivuullegiance.x86_64"
+
+echo "[export] zipping Linux folder (testers need the whole folder) ..."
+rm -f "${OUT}/wivuullegiance-linux.zip"
+( cd "${OUT}/linux" && zip -rq "${OUT}/wivuullegiance-linux.zip" . )
+
 echo ""
 echo "[export] done:"
 echo "  macOS:   ${OUT}/mac/wivuullegiance-macos.zip"
 echo "  Windows: ${OUT}/wivuullegiance-windows.zip"
+echo "  Linux:   ${OUT}/wivuullegiance-linux.zip"

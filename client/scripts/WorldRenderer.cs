@@ -29,12 +29,25 @@ public partial class WorldRenderer : Node3D
 	private readonly List<ProjectileView> _predictedShots = new();
 	private byte? _localTeam;
 
+	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
+	private readonly List<RemoteShip> _enemyScratch = new();
+
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
+	// AI drones (PIGs): keep the team hue for friend/foe, but darker + metallic with a
+	// faint emissive rim so they read as menacing drones in-world (HUD highlights them too).
+	private StandardMaterial3D _pigTeam0Mat = null!;
+	private StandardMaterial3D _pigTeam1Mat = null!;
 	private StandardMaterial3D _projectileMat = null!;
 
 	private ConnectionManager _cm = null!;
+	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
+
+	// Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
+	// one-way latency); >= 0 = a fixed override in ms, pinned via STDB_SHOT_MASK_MS for
+	// playtest tuning. Parsed once in _Ready.
+	private float _shotMaskMs = -1f;
 
 	// The local player's predicted ship, or null when not flying. Read by
 	// ShipController (drives prediction), CameraRig (chase target), and Hud.
@@ -47,6 +60,24 @@ public partial class WorldRenderer : Node3D
 	// Match phase + winning team (T9). Read by Hud to show the match-end banner.
 	public MatchPhase Phase { get; private set; } = MatchPhase.Lobby;
 	public byte? Winner { get; private set; }
+
+	// The local player's team, set when their ship spawns (null until then). Read by
+	// TargetMarkers to tell friend from foe.
+	public byte? LocalTeam => _localTeam;
+
+	// Live enemy ship nodes (team != local team). Returns a shared scratch list — read
+	// it immediately, don't retain it. Empty until the local team is known.
+	public IReadOnlyList<RemoteShip> EnemyShips()
+	{
+		_enemyScratch.Clear();
+		if (_localTeam is byte lt)
+		{
+			foreach (var node in _shipNodes.Values)
+				if (node is RemoteShip rs && rs.Team != lt)
+					_enemyScratch.Add(rs);
+		}
+		return _enemyScratch;
+	}
 
 	public override void _Ready()
 	{
@@ -62,6 +93,18 @@ public partial class WorldRenderer : Node3D
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
 		_team1Mat = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.3f, 0.25f) };
+		_pigTeam0Mat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(0.12f, 0.22f, 0.4f),
+			Metallic = 0.8f, Roughness = 0.35f,
+			EmissionEnabled = true, Emission = new Color(0.2f, 0.45f, 0.85f), EmissionEnergyMultiplier = 0.4f,
+		};
+		_pigTeam1Mat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(0.4f, 0.14f, 0.12f),
+			Metallic = 0.8f, Roughness = 0.35f,
+			EmissionEnabled = true, Emission = new Color(0.85f, 0.25f, 0.2f), EmissionEnergyMultiplier = 0.4f,
+		};
 		// Bright unshaded tracers so shots read clearly against the dark sector.
 		_projectileMat = new StandardMaterial3D
 		{
@@ -71,6 +114,9 @@ public partial class WorldRenderer : Node3D
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
+
+		if (float.TryParse(OS.GetEnvironment("STDB_SHOT_MASK_MS"), out var ms) && ms >= 0f)
+			_shotMaskMs = ms;
 	}
 
 	private void OnConnected(DbConnection conn)
@@ -84,7 +130,8 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Ship.OnUpdate += OnShipUpdate;
 		conn.Db.Ship.OnDelete += OnShipDelete;
 		conn.Db.Projectile.OnInsert += OnProjectileInsert;
-		conn.Db.Projectile.OnUpdate += OnProjectileUpdate;
+		// No OnUpdate: projectiles are constant-velocity, so the client fire-and-forgets
+		// the spawn line (see ProjectileView). Per-tick position updates are ignored.
 		conn.Db.Projectile.OnDelete += OnProjectileDelete;
 		conn.Db.Match.OnInsert += (_, row) => OnMatch(row);
 		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
@@ -168,12 +215,14 @@ public partial class WorldRenderer : Node3D
 			return;
 
 		Node3D node;
-		if (IsLocal(row))
+		// PIGs are never the local player (defensive: their Owner is the module identity,
+		// so IsLocal is already false) — always render them as interpolated remote ships.
+		if (IsLocal(row) && !row.IsPig)
 		{
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class));
+			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -184,7 +233,7 @@ public partial class WorldRenderer : Node3D
 			var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 			node = rs;
 			_ships.AddChild(rs);
-			rs.AddChild(BuildShipMesh(row.Team, row.Class));
+			rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
 			rs.Initialize(row);
 		}
 		_shipNodes[row.ShipId] = node;
@@ -238,8 +287,21 @@ public partial class WorldRenderer : Node3D
 		var pv = new ProjectileView { Name = $"Projectile_{row.ProjectileId}" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(row);
+		pv.Initialize(row, ShotMaskLeadSec());
 		_projectileNodes[row.ProjectileId] = pv;
+	}
+
+	// How far ahead to render an enemy/remote shot to mask its ~1 RTT-late pop-in
+	// (see ProjectileView._renderLeadSec). Auto mode uses the measured one-way latency
+	// (≈ half RTT); STDB_SHOT_MASK_MS pins a fixed value. Clamped so a bad reading can't
+	// fling shots downrange. Returns 0 on localhost (PingMs unmeasured) — no masking needed.
+	private float ShotMaskLeadSec()
+	{
+		if (_shotMaskMs >= 0f)
+			return Mathf.Min(_shotMaskMs, 400f) / 1000f;
+		_ship ??= GetNodeOrNull<ShipController>("../ShipController");
+		float oneWayMs = (_ship?.PingMs ?? 0f) * 0.5f;
+		return Mathf.Clamp(oneWayMs, 0f, 250f) / 1000f;
 	}
 
 	// Spawn an immediate ghost for the local player's own shot (muzzle prediction),
@@ -275,12 +337,6 @@ public partial class WorldRenderer : Node3D
 		}
 	}
 
-	private void OnProjectileUpdate(EventContext ctx, Projectile oldRow, Projectile newRow)
-	{
-		if (_projectileNodes.TryGetValue(newRow.ProjectileId, out var pv))
-			pv.OnAuthoritative(newRow);
-	}
-
 	private void OnProjectileDelete(EventContext ctx, Projectile row)
 	{
 		if (_projectileNodes.Remove(row.ProjectileId, out var pv))
@@ -290,9 +346,11 @@ public partial class WorldRenderer : Node3D
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
 	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
 	// chunkier, boxier hull that reads as the heavier ship.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls)
+	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig)
 	{
-		var mat = team == 0 ? _team0Mat : _team1Mat;
+		var mat = isPig
+			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
+			: (team == 0 ? _team0Mat : _team1Mat);
 
 		if (cls == ShipClass.Fighter)
 		{

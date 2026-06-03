@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public float VelZ;
         [DataMember(Name = "expires_at_tick")]
         public uint ExpiresAtTick;
+        [DataMember(Name = "from_pig")]
+        public bool FromPig;
 
         public Projectile(
             ulong ProjectileId,
@@ -44,7 +46,8 @@ namespace SpacetimeDB.Types
             float VelX,
             float VelY,
             float VelZ,
-            uint ExpiresAtTick
+            uint ExpiresAtTick,
+            bool FromPig
         )
         {
             this.ProjectileId = ProjectileId;
@@ -57,6 +60,7 @@ namespace SpacetimeDB.Types
             this.VelY = VelY;
             this.VelZ = VelZ;
             this.ExpiresAtTick = ExpiresAtTick;
+            this.FromPig = FromPig;
         }
 
         public Projectile()

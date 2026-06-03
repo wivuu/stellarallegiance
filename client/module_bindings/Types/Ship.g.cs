@@ -53,6 +53,8 @@ namespace SpacetimeDB.Types
         public uint LastInputTick;
         [DataMember(Name = "last_fire_tick")]
         public uint LastFireTick;
+        [DataMember(Name = "is_pig")]
+        public bool IsPig;
 
         public Ship(
             ulong ShipId,
@@ -74,7 +76,8 @@ namespace SpacetimeDB.Types
             float AngVelZ,
             float Health,
             uint LastInputTick,
-            uint LastFireTick
+            uint LastFireTick,
+            bool IsPig
         )
         {
             this.ShipId = ShipId;
@@ -97,6 +100,7 @@ namespace SpacetimeDB.Types
             this.Health = Health;
             this.LastInputTick = LastInputTick;
             this.LastFireTick = LastFireTick;
+            this.IsPig = IsPig;
         }
 
         public Ship()

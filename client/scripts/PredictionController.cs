@@ -87,6 +87,11 @@ public partial class PredictionController : Node3D
 	public byte Team { get; private set; }
 	public float Speed => _state.Vel.Length();
 
+	// Predicted velocity (u/s, Godot space). Read by TargetMarkers so the lead
+	// indicator solves the intercept in the shooter's frame (the muzzle inherits
+	// ship velocity, per Step's mv = fwd*ProjectileSpeed + Vel).
+	public Vector3 Velocity => ShipMath.ToGodot(_state.Vel);
+
 	// Authoritative hull (T8). Spawn is full health, so the first row also gives
 	// us the class max for a "cur/max" HUD readout.
 	public float Health { get; private set; }
@@ -131,9 +136,13 @@ public partial class PredictionController : Node3D
 		if (input.Firing && clientTick - _lastFireTick >= FireInterval(_class))
 		{
 			_lastFireTick = clientTick;
+			// Mirror the server's muzzle math (Lib.cs): spawn at the nose along true
+			// forward, but launch along the same deterministic per-weapon scatter so the
+			// predicted tracer matches the authoritative projectile shot-for-shot.
 			Vec3 fwd = _state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+			Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)_class), ShipId, clientTick);
 			Vec3 mp = _state.Pos + fwd * NoseOffset;
-			Vec3 mv = fwd * ProjectileSpeed + _state.Vel;
+			Vec3 mv = shotDir * ProjectileSpeed + _state.Vel;
 			return new PredictedShot { Pos = ShipMath.ToGodot(mp), Vel = ShipMath.ToGodot(mv) };
 		}
 		return null;
