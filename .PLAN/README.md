@@ -50,7 +50,7 @@ The offset is derived from measured one-way latency (≈ half `PingMs`, clamped
 0–250 ms; 0 on localhost) or pinned via `STDB_SHOT_MASK_MS`. Remaining:
 playtest-confirm the masking offset feels right on WAN.
 
-**Tune prediction lead for WAN** — The prototype measured ~115–125 ms RTT on
+**Tune prediction lead for WAN** — **SKIP FOR NOW** The prototype measured ~115–125 ms RTT on
 Maincloud with ±25 ms jitter. At `TargetLead=3` (150 ms), jitter spikes
 occasionally land an input late and cause a reconcile (visible as turning
 jerk). Bumping to 4–5 would widen the margin. The `STDB_LEAD` env var already
@@ -125,14 +125,17 @@ an explicit `JoinMatch` reducer that real clients call after connecting.
 
 #### Major new features (the Allegiance roadmap)
 
-**Commander / RTS map view** — The defining Allegiance feature. A 2D top-down
-strategic overlay showing the sector (or all sectors), friendly ship positions,
-base status, and resource flow. Could be a second camera mode (toggle key), a
-separate viewport, or a separate scene. The commander would issue waypoints
-and investment orders. Architecturally this is a new subscription scope
-(commander sees everything on their team) and a new set of UI scenes. Biggest
-open question: does the commander control ships directly, or just issue
-suggestions/orders that pilots can ignore?
+**PIGS** - Add Allegiance AI-based opponents. PIGS are simple combat drones that spawn at bases -- configurable max PIGs per side of 5 (default).
+They seek out and destroy opponents but leave bases alone for now. 
+- When a pig dies, it should have a cooldown of 30 seconds before respawning.
+- PIGs are controlled by a simple state machine: Idle (at base), Seek (move toward nearest enemy), Attack (fire at nearest enemy within range).
+- PIGs use the same flight model and visibility rules as players, they have radar and lead prediction for aiming
+- PIGs are visible to players and can be targeted and destroyed
+- PIGs are highlighted differently on the HUD to distinguish them from player ships
+- Keep their code cleanly separated from player logic for maintainability.
+- PIGs can either be scouts or fighers, with the same stats as player ships.
+- Stretch: Attempt to maneuver around obstacles such as asteroids while pursuing targets -- Are there any Godot/.net friendly pathfinding or steering libraries we can leverage for this?
+- Their movement should be smooth and believable, not just direct lines to targets.
 
 **Multiple sectors + alephs** — The current prototype is one sector. Allegiance
 has multiple sectors connected by aleph warp points. This is a significant
@@ -141,6 +144,15 @@ state. Ships warp between sectors (delete from one, insert in another).
 Subscription scoping becomes per-sector (clients only subscribe to the sector
 they're in) for performance. The `Asteroid`, `Base`, and sector geometry
 become per-sector. Needs a `Sector` table and `Aleph` table at minimum.
+
+**Commander / RTS map view** — The defining Allegiance feature. A 2D top-down
+strategic overlay showing the sector (or all sectors), friendly ship positions,
+base status, and resource flow. Could be a second camera mode (toggle key), a
+separate viewport, or a separate scene. The commander would issue waypoints
+and investment orders. Architecturally this is a new subscription scope
+(commander sees everything on their team) and a new set of UI scenes. Biggest
+open question: does the commander control ships directly, or just issue
+suggestions/orders that pilots can ignore?
 
 **Mining economy + constructors** — Resource asteroids that miners harvest,
 bringing ore to a base. Ore funds constructors that build new ships, bases, or
