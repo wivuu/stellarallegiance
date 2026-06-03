@@ -47,6 +47,20 @@ public partial class ShipController : Node
 	private double _spawnRetry;
 	private bool _perturbHeld;          // edge-detect the P debug key
 
+	// Mouse-look aiming (Allegiance style). The flight model already integrates yaw/
+	// pitch as -1..1 rate inputs, so mouse-look is purely an input-sampling change: we
+	// accumulate captured-cursor motion in _Input, then in ReadInput scale the per-frame
+	// pixel delta by sensitivity and clamp to -1..1, feeding the existing axis path. The
+	// cursor is captured while flying (Esc releases, click recaptures); arrow keys still
+	// work as a fallback and sum with the mouse. STDB_MOUSE_SENS tunes feel (px→rate),
+	// STDB_MOUSE_INVERT=1 flips pitch.
+	private const float DefaultMouseSens = 0.08f;
+	private float _mouseSens = DefaultMouseSens;
+	private bool _mouseInvert;
+	private Vector2 _mouseDelta;        // captured-cursor motion accumulated since last sample
+	private bool _escHeld;              // edge-detect Escape (capture toggle)
+	private bool _clickHeld;            // edge-detect left click (recapture)
+
 	// Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
 	// input so the full ApplyInput -> SimTick -> reconcile loop can be checked
 	// without a human at the keyboard.
@@ -72,6 +86,10 @@ public partial class ShipController : Node
 			_targetLead = Mathf.Clamp(lead, 1, 15);
 			_leadFromEnv = true;   // pin it; skip the adaptive sizing below
 		}
+
+		if (float.TryParse(OS.GetEnvironment("STDB_MOUSE_SENS"), out var sens) && sens > 0f)
+			_mouseSens = sens;
+		_mouseInvert = OS.GetEnvironment("STDB_MOUSE_INVERT") is "1" or "true";
 
 		// Time ApplyInput round-trips for the latency readout. The reducer callback
 		// fires on the caller when the server commits our call, echoing clientTick.
@@ -114,6 +132,8 @@ public partial class ShipController : Node
 		// request once the ship actually exists.
 		bool connected = _cm.LocalIdentity is not null && _cm.Conn is not null;
 		bool hasShip = _world.LocalShip != null;
+
+		HandleMouseCapture(hasShip);
 
 		if (!hasShip)
 		{
@@ -222,6 +242,47 @@ public partial class ShipController : Node
 		if (_sentAt.Count > 256) _sentAt.Clear();
 	}
 
+	// Accumulate raw mouse motion only while the cursor is captured; consumed (and
+	// reset) once per frame in ReadInput. Visible-cursor motion is ignored so menu
+	// interaction never steers the ship.
+	public override void _Input(InputEvent @event)
+	{
+		if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
+			_mouseDelta += mm.Relative;
+	}
+
+	// Capture the cursor for mouse-look while flying; release it for the spawn menu.
+	// Esc toggles release (so the OS cursor is reachable mid-flight); a click (or Esc)
+	// recaptures. Edge-detected so a held key/button doesn't thrash the mode. Skipped
+	// under --autofly (headless has no real cursor and must not grab focus).
+	private void HandleMouseCapture(bool flying)
+	{
+		if (_autoFly) return;
+
+		bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
+		bool escPressed = esc && !_escHeld;
+		_escHeld = esc;
+
+		bool click = Input.IsMouseButtonPressed(MouseButton.Left);
+		bool clickPressed = click && !_clickHeld;
+		_clickHeld = click;
+
+		bool captured = Input.MouseMode == Input.MouseModeEnum.Captured;
+		if (!flying)
+		{
+			if (captured) Input.MouseMode = Input.MouseModeEnum.Visible;   // free cursor for the menu
+		}
+		else if (captured)
+		{
+			if (escPressed) Input.MouseMode = Input.MouseModeEnum.Visible;
+		}
+		else if (clickPressed || escPressed)
+		{
+			Input.MouseMode = Input.MouseModeEnum.Captured;
+			_mouseDelta = Vector2.Zero;   // drop any motion from the recapture gesture
+		}
+	}
+
 	private static float Axis(Key pos, Key neg)
 	{
 		float v = 0f;
@@ -230,16 +291,29 @@ public partial class ShipController : Node
 		return v;
 	}
 
-	private static ShipInputState ReadInput() => new ShipInputState
+	private ShipInputState ReadInput()
 	{
-		Thrust  = Axis(Key.W, Key.S),       // forward / reverse
-		StrafeX = Axis(Key.A, Key.D),       // strafe right / left
-		StrafeY = Axis(Key.E, Key.C),       // strafe up / down
-		Yaw     = Axis(Key.Left, Key.Right),
-		Pitch   = Axis(Key.Up, Key.Down),
-		Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
-		Firing  = Input.IsPhysicalKeyPressed(Key.Space) || Input.IsMouseButtonPressed(MouseButton.Left),
-	};
+		// Consume the frame's captured-cursor motion. Mouse-right turns right (matches
+		// the Right arrow → -Yaw convention); mouse-up pitches like the Up arrow unless
+		// inverted. Pixel delta × sensitivity, clamped to the -1..1 rate axis, then
+		// summed with the arrow keys (which still work as a fallback).
+		bool look = Input.MouseMode == Input.MouseModeEnum.Captured;
+		Vector2 m = _mouseDelta;
+		_mouseDelta = Vector2.Zero;
+		float mouseYaw = look ? -m.X * _mouseSens : 0f;
+		float mousePitch = look ? (_mouseInvert ? m.Y : -m.Y) * _mouseSens : 0f;
+
+		return new ShipInputState
+		{
+			Thrust  = Axis(Key.W, Key.S),       // forward / reverse
+			StrafeX = Axis(Key.A, Key.D),       // strafe right / left
+			StrafeY = Axis(Key.E, Key.C),       // strafe up / down
+			Yaw     = Mathf.Clamp(Axis(Key.Left, Key.Right) + mouseYaw, -1f, 1f),
+			Pitch   = Mathf.Clamp(Axis(Key.Up, Key.Down) + mousePitch, -1f, 1f),
+			Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
+			Firing  = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
+		};
+	}
 
 	// Deterministic scripted flight for headless verification — representative of
 	// NORMAL play: continuous gentle weaving (smooth, like a human steering),

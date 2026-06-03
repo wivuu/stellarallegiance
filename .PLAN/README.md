@@ -23,12 +23,14 @@ Below are all ideas discussed so far, grouped roughly by effort and risk.
 These require no schema/architecture changes and directly improve the feel of
 what already exists.
 
-**Mouse-look aiming** — Replace arrow-key yaw/pitch with mouse-relative
-aiming (true Allegiance style). The flight model already integrates yaw/pitch
-as -1..1 floats, so the change is purely in `ShipController` input sampling:
-read mouse delta, scale to -1..1, feed into the existing path. Needs a
-captured-cursor mode toggle and sensitivity tuning. This is probably the
-single highest-impact feel improvement.
+**Mouse-look aiming** — ✅ **DONE.** Mouse-relative aiming (true Allegiance
+style) added in `ShipController`: captured-cursor motion is accumulated in
+`_Input`, scaled by sensitivity and clamped to the existing -1..1 yaw/pitch
+axes (summed with the arrow keys, which still work as a fallback). The cursor
+is captured while flying — Esc frees it, a click recaptures — and released for
+the spawn menu. Sensitivity tunes via `STDB_MOUSE_SENS` (default 0.08),
+`STDB_MOUSE_INVERT=1` flips pitch. Left mouse fires while captured. Remaining:
+playtest-tune the default sensitivity to taste.
 
 **Tune prediction lead for WAN** — The prototype measured ~115–125 ms RTT on
 Maincloud with ±25 ms jitter. At `TargetLead=3` (150 ms), jitter spikes
