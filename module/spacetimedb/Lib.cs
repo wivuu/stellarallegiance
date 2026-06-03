@@ -420,9 +420,13 @@ public static partial class Module
             uint lastFire = ship.LastFireTick;
             if (input.Firing && tick - lastFire >= FireInterval(ship.Class))
             {
+                // Spawn at the nose (true forward) but launch along a per-weapon
+                // scattered direction. SpreadDirection is deterministic in
+                // (ShipId, tick), so the client predicts the same scatter (.PLAN).
                 Vec3 fwd = state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+                Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)ship.Class), ship.ShipId, tick);
                 Vec3 mp = state.Pos + fwd * NoseOffset;
-                Vec3 mv = fwd * ProjectileSpeed + state.Vel;
+                Vec3 mv = shotDir * ProjectileSpeed + state.Vel;
                 ctx.Db.Projectile.Insert(new Projectile
                 {
                     ProjectileId = 0,

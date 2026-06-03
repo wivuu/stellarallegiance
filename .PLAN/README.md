@@ -83,6 +83,20 @@ under a CanvasLayer doesn't reliably resolve — that misplaced the off-screen e
 arrows). The overlay is pure render — it never touches authoritative state.
 Remaining: playtest-tune marker sizes / lead feel.
 
+**Weapon spread** — ✅ **DONE.** Each weapon now scatters its shots within a cone
+whose HALF-ANGLE is a tweakable per-weapon value in `shared/FlightModel.cs`
+(`ScoutSpread` ≈ 0.34°, the near-pinpoint default; `FighterSpread` ≈ 2.0°; both via
+`WeaponSpreadRad`). On fire, the projectile spawns at the nose along true forward but
+launches along `FlightModel.SpreadDirection(fwd, spread, shipId, fireTick)`, which
+perturbs the direction inside the cone. The scatter is fully DETERMINISTIC — keyed by
+`(ShipId, fireTick)` and built from integer hashing + `MathDet` trig + IEEE sqrt — so
+the wasm server (authoritative) and the mono client (muzzle prediction) compute the
+identical vector and the player's own tracer matches the real projectile shot-for-shot
+(same shared-determinism contract as the flight integrator). Lives in `FlightModel`
+(not mirrored constants) so the value has a single source of truth. The aim reticle /
+lead circle still mark the cone center, i.e. the mean point of impact. Remaining:
+playtest-tune the per-weapon spread values.
+
 ---
 
 #### Match lifecycle
