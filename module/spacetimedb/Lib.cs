@@ -131,6 +131,9 @@ public partial struct Projectile
     public float VelY;
     public float VelZ;
     public uint ExpiresAtTick;  // sim tick at which it is culled
+    // Fired by an AI drone (PIG). PIG fire damages ships but NOT bases — drones
+    // "leave bases alone", so only players can erode a base (the win condition).
+    public bool FromPig;
 }
 
 [SpacetimeDB.Table(Accessor = "Match", Public = true)]
@@ -396,16 +399,24 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
-        // --- Pass 0: AI drone (PIG) lifecycle — create slots once, then spawn any
-        // dead/cooled-down drones at their base. Their input is synthesized in Pass A
-        // by the brain (PigAI.cs). Gated to a live match so an Ended/empty sector is
-        // quiet. Newly spawned drones land in the Pass A snapshot below and integrate
-        // immediately, just like a freshly spawned player ship.
-        var phase = ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby;
-        if (phase != MatchPhase.Ended)
+        // --- Pass 0: AI drone (PIG) lifecycle. Drones exist ONLY while a human is
+        // actually flying — gated on a live PLAYER ship, not merely a connection — so an
+        // idle/observer/owner-dashboard connection never spins up 20 Hz drone combat (the
+        // expensive part of a tick). When the last player ship leaves (death or
+        // disconnect) all drones despawn and their slots reset to ready, so they respawn
+        // instantly the next time someone flies (no leftover cooldown from idle time).
+        // The bare sim that remains with no ships is cheap. Newly spawned drones land in
+        // the Pass A snapshot below and integrate immediately, like a fresh player ship.
+        bool combatLive = (ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
+                          && AnyPlayerShipAlive(ctx);
+        if (combatLive)
         {
             EnsurePigSlots(ctx);
             SimulatePigLifecycle(ctx, tick);
+        }
+        else
+        {
+            DespawnAllPigs(ctx);
         }
 
         // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
@@ -467,6 +478,7 @@ public static partial class Module
                     PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
                     VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
                     ExpiresAtTick = tick + ProjectileLifeTicks,
+                    FromPig = ship.IsPig,
                 });
                 lastFire = tick;
             }
@@ -540,7 +552,11 @@ public static partial class Module
                     float rr = BaseRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
-                        baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
+                        // PIG fire leaves bases alone: it's absorbed on contact (so it
+                        // doesn't pass through) but deals no base damage. Only player
+                        // shots erode a base, keeping the win condition player-driven.
+                        if (!p.FromPig)
+                            baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
                         consumed = true;
                         break;
                     }

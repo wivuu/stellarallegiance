@@ -153,17 +153,32 @@ PREDICT drones (they render them as interpolated remote ships), the AI needs no
 cross-runtime determinism — it runs only on the authoritative server, so plain
 `MathF` is fine (unlike `FlightModel`).
 
+**Activation / compute:** drones exist ONLY while ≥1 live PLAYER ship is in the
+sector (`AnyPlayerShipAlive` gates Pass 0 of `SimulateTick`), so an idle, observer,
+CLI, or owner-dashboard connection never spins up 20 Hz drone combat — the expensive
+part of a tick. When the last player ship leaves (death or disconnect) all drones
+despawn (`DespawnAllPigs`) and their slots reset to ready, so they respawn instantly
+the next time someone flies (idle time banks no respawn penalty); `DespawnAllPigs`
+is a no-op once dormant, so an empty sector costs nothing per tick. This sits on top
+of the existing sim pause (`StartSim`/`StopSim` halt the whole loop when no client is
+connected at all). Verified: observer-only connection → 0 drones; headless
+`--autofly` player → 10 drones engaging; player leaves → drones despawn while the
+sim still runs.
+
 Drones are server-owned (`Owner` = module identity, so `IsLocal` is false and the
-client renders them remotely) and leave bases alone (they only target ships).
+client renders them remotely) and **leave bases alone**: they only target ships, AND
+their projectiles carry a `Projectile.FromPig` flag so PIG fire deals zero base
+damage (it's absorbed on contact but harmless). Only player shots erode a base, so
+the win condition stays player-driven. (Without this, drones spawning at the base
+edge shoot enemy drones clustered at the enemy base and the stray/lead rounds
+destroyed both bases within minutes — observed and fixed.)
 On the HUD (`TargetMarkers`) they get a distinct magenta marker + a "PIG" tag to
 tell them apart from enemy players; in-world they use a darker, metallic,
 team-tinted material (`WorldRenderer`). Verified end-to-end against the live local
 server: 5 drones/side spawn, seek, lead-fire, take damage, die, and respawn after
 the 30 s cooldown. Remaining: playtest-tune the AI constants (radar/fire range,
 standoff, turn gain, aim tolerance) and the avoidance feel; optionally make
-`MaxPigsPerTeam` a runtime table/reducer instead of a recompile constant, and
-suppress incidental PIG-projectile damage to bases (rare — combat happens
-mid-sector, far from the ±500 bases — but possible on a stray shot).
+`MaxPigsPerTeam` a runtime table/reducer instead of a recompile constant.
 
 **Multiple sectors + alephs** — The current prototype is one sector. Allegiance
 has multiple sectors connected by aleph warp points. This is a significant

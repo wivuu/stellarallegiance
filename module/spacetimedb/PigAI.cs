@@ -83,6 +83,41 @@ public static partial class Module
         Log.Info($"[Pig] created {MaxPigsPerTeam} drone slots per team");
     }
 
+    // True if at least one live PLAYER ship (non-drone) exists. Drones only spawn /
+    // think while this holds, so an idle or observer-only connection never drives
+    // drone combat. Cheap: the Ship table is tiny.
+    private static bool AnyPlayerShipAlive(ReducerContext ctx)
+    {
+        foreach (var s in ctx.Db.Ship.Iter())
+            if (!s.IsPig)
+                return true;
+        return false;
+    }
+
+    // Tear down all drones (no player is flying / match ended): delete their ships and
+    // reset every slot to ready (ShipId null, cooldown cleared) so they respawn
+    // immediately when a player returns — idle time shouldn't bank a respawn penalty.
+    // A no-op once everything is already dormant, so it costs nothing per idle tick.
+    private static void DespawnAllPigs(ReducerContext ctx)
+    {
+        foreach (var slot in ctx.Db.Pig.Iter().ToList())
+        {
+            bool dormant = slot.ShipId is null && slot.RespawnAtTick == 0
+                           && slot.State == PigState.Idle && slot.TargetShipId is null;
+            if (dormant)
+                continue;
+            if (slot.ShipId is ulong sid)
+                ctx.Db.Ship.ShipId.Delete(sid);
+            ctx.Db.Pig.PigId.Update(slot with
+            {
+                ShipId = null,
+                RespawnAtTick = 0,
+                State = PigState.Idle,
+                TargetShipId = null,
+            });
+        }
+    }
+
     // Spawn any slot whose drone is dead and whose respawn cooldown has elapsed.
     private static void SimulatePigLifecycle(ReducerContext ctx, uint tick)
     {
