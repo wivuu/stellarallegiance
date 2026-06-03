@@ -32,14 +32,7 @@ the spawn menu. Sensitivity tunes via `STDB_MOUSE_SENS` (default 0.08),
 `STDB_MOUSE_INVERT=1` flips pitch. Left mouse fires while captured. Remaining:
 playtest-tune the default sensitivity to taste.
 
-**Tune prediction lead for WAN** — The prototype measured ~115–125 ms RTT on
-Maincloud with ±25 ms jitter. At `TargetLead=3` (150 ms), jitter spikes
-occasionally land an input late and cause a reconcile (visible as turning
-jerk). Bumping to 4–5 would widen the margin. The `STDB_LEAD` env var already
-exists; this is a playtest-and-commit task. May also want adaptive lead based
-on measured RTT.
-
-**Spawn offset** — Ships currently spawn at the exact base center, inside the
+**Spawn offset** — ✅ **DONE.** Ships currently spawn at the exact base center, inside the
 45-unit base sphere. A small launch vector outward (e.g. base radius + ship
 radius along the base→center direction) would look and feel better.
 
@@ -56,6 +49,13 @@ and would pop in at the stale muzzle) get a one-time forward spawn offset
 The offset is derived from measured one-way latency (≈ half `PingMs`, clamped
 0–250 ms; 0 on localhost) or pinned via `STDB_SHOT_MASK_MS`. Remaining:
 playtest-confirm the masking offset feels right on WAN.
+
+**Tune prediction lead for WAN** — The prototype measured ~115–125 ms RTT on
+Maincloud with ±25 ms jitter. At `TargetLead=3` (150 ms), jitter spikes
+occasionally land an input late and cause a reconcile (visible as turning
+jerk). Bumping to 4–5 would widen the margin. The `STDB_LEAD` env var already
+exists; this is a playtest-and-commit task. May also want adaptive lead based
+on measured RTT.
 
 **Enemy target markers** - A small UI marker on the enemy ship when it's on and offscreen would help with tracking. Targets
 should be able to be 'focused' as well (e.g. tab cycles through visible enemies). Once focused and in range of weapons, a lead-indicator circle
