@@ -721,13 +721,27 @@ public static partial class Module
         float ry = MathF.Sin(yaw * 0.5f);
         float rw = MathF.Cos(yaw * 0.5f);
 
+        // Launch outward from the base center toward the sector center so the
+        // ship clears the base sphere instead of starting buried inside it.
+        // Offset by base radius + ship radius along the base->center direction
+        // (the same direction the ship faces above).
+        float sx = bx, sy = by, sz = bz;
+        float dirLen = MathF.Sqrt(bx * bx + by * by + bz * bz);
+        if (dirLen > 1e-3f)
+        {
+            float offset = BaseRadius + ShipRadius;
+            sx = bx + (-bx / dirLen) * offset;
+            sy = by + (-by / dirLen) * offset;
+            sz = bz + (-bz / dirLen) * offset;
+        }
+
         var inserted = ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
             Owner = ctx.Sender,
             Team = p.Team,
             Class = shipClass,
-            PosX = bx, PosY = by, PosZ = bz,
+            PosX = sx, PosY = sy, PosZ = sz,
             VelX = 0f, VelY = 0f, VelZ = 0f,
             RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
@@ -739,7 +753,7 @@ public static partial class Module
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
         // SimTick falls back to zero input until then.
         ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
-        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({bx},{by},{bz})");
+        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({sx},{sy},{sz})");
     }
 
     // Assign the joining player to the team with fewer online players;
