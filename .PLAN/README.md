@@ -67,11 +67,15 @@ stable ShipId order (wrapping past the last back to none); the focused target is
 drawn larger/brighter. Because the chase camera sits above/behind the ship, screen
 center is NOT where shots go, so a blue **aim reticle** is drawn on the real muzzle
 firing line (ship forward +Z from the nose). When a target is focused, a
-constant-velocity intercept is solved in the shooter's frame (so the muzzle's
-inherited ship velocity cancels); if a forward solution exists within weapon range
-(`MaxLeadTime` = projectile lifespan, 2.5 s) a green lead circle marks where the
-target will be when a shot fired now would arrive, and the aim reticle is ranged to
-that intercept — so overlaying the reticle on the lead circle is a hit. Velocities
+constant-velocity intercept is solved in the shooter's frame; if a forward solution
+exists within weapon range (`MaxLeadTime` = projectile lifespan, 2.5 s) a green lead
+circle marks the point to aim the NOSE at. Crucially the lead uses the RELATIVE
+velocity (`targetVel - shooterVel`), not the target's absolute velocity: projectiles
+inherit the firing ship's velocity (`mv = shotDir·ProjectileSpeed + shipVel`), so the
+point you aim at is the target led by relative velocity — the shot's inherited drift
+then carries it onto the target. (Aiming at the absolute meeting point would miss
+whenever the shooter has lateral velocity.) The aim reticle is ranged to match
+(`ProjectileSpeed·t`), so overlaying the reticle on the lead circle is a hit. Velocities
 come from `PredictionController.Velocity` (local, predicted) and the authoritative
 `Ship.Vel` carried on `RemoteShip.Velocity` (enemies) — read straight from the row
 rather than finite-differenced from snapshots, which was noisy enough to make the

@@ -126,27 +126,28 @@ public partial class TargetMarkers : Control
 		Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
 		Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
 
-		// Lead indicator for the focused target, when a forward firing solution exists
-		// within weapon range and the intercept point is in front of the camera. The aim
-		// reticle is then ranged to the intercept so that overlaying it on the lead circle
-		// is a hit; with no target it sits at a default range just to show the aim line.
+		// Lead indicator for the focused target: TryLead returns the world point to aim
+		// the nose at (the target's position led by the RELATIVE velocity, so the shot's
+		// inherited ship velocity carries it onto the target). The aim reticle is ranged to
+		// match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
+		// with no target it sits at a default range just to show the aim line.
 		float aimRange = DefaultAimRange;
 		if (focusedShip != null &&
-			TryLead(muzzle, local.Velocity, focusedShip.GlobalPosition, focusedShip.Velocity, out Vector3 intercept, out float t))
+			TryLead(muzzle, local.Velocity, focusedShip.GlobalPosition, focusedShip.Velocity, out Vector3 aimPoint, out float t))
 		{
 			aimRange = ProjectileSpeed * t;
-			if (!_camera.IsPositionBehind(intercept))
+			if (!_camera.IsPositionBehind(aimPoint))
 			{
-				Vector2 lp = _camera.UnprojectPosition(intercept);
+				Vector2 lp = _camera.UnprojectPosition(aimPoint);
 				DrawArc(lp, LeadRadius, 0f, Mathf.Tau, 28, LeadColor, 2f, true);
 				DrawLine(lp + new Vector2(-LeadRadius - 4f, 0f), lp + new Vector2(LeadRadius + 4f, 0f), LeadColor, 1f, true);
 				DrawLine(lp + new Vector2(0f, -LeadRadius - 4f), lp + new Vector2(0f, LeadRadius + 4f), LeadColor, 1f, true);
 			}
 		}
 
-		Vector3 aimPoint = muzzle + fwd * aimRange;
-		if (!_camera.IsPositionBehind(aimPoint))
-			DrawAimReticle(_camera.UnprojectPosition(aimPoint));
+		Vector3 reticlePoint = muzzle + fwd * aimRange;
+		if (!_camera.IsPositionBehind(reticlePoint))
+			DrawAimReticle(_camera.UnprojectPosition(reticlePoint));
 	}
 
 	// Draw one enemy marker: a corner-bracket reticle when on screen, an edge arrow
@@ -229,14 +230,19 @@ public partial class TargetMarkers : Control
 		DrawColoredPolygon(pts, color);
 	}
 
-	// Solve the constant-velocity intercept: find the earliest t > 0 at which a shot
-	// fired now (muzzle speed ProjectileSpeed along the chosen aim, inheriting shooter
-	// velocity) meets the target, then return the world point the target reaches at t.
-	// Works in the shooter's frame via the relative velocity, so the inherited muzzle
-	// velocity cancels out. Returns false if there's no forward solution within range.
-	private static bool TryLead(Vector3 shooterPos, Vector3 shooterVel, Vector3 targetPos, Vector3 targetVel, out Vector3 intercept, out float t)
+	// Solve the constant-velocity intercept in the SHOOTER's frame and return the world
+	// point the player must aim the nose at to hit. Everything is relative to the
+	// shooter: the projectile leaves at ProjectileSpeed along the chosen aim AND inherits
+	// the shooter's velocity, so relative to the shooter it travels at ProjectileSpeed in
+	// the aim direction while the target drifts at vrel = targetVel - shooterVel. Find the
+	// earliest t > 0 where a ProjectileSpeed·t sphere reaches the target's relative path,
+	// then the aim point is targetPos + vrel·t. Note this is NOT the absolute meeting
+	// point (targetPos + targetVel·t): because the shot carries the shooter's velocity,
+	// you point the nose at the relative-lead point and the shot's inherited drift carries
+	// it onto the target. Returns false if there's no forward solution within range.
+	private static bool TryLead(Vector3 shooterPos, Vector3 shooterVel, Vector3 targetPos, Vector3 targetVel, out Vector3 aimPoint, out float t)
 	{
-		intercept = default;
+		aimPoint = default;
 		t = 0f;
 		Vector3 d = targetPos - shooterPos;
 		Vector3 vrel = targetVel - shooterVel;
@@ -267,7 +273,7 @@ public partial class TargetMarkers : Control
 
 		if (t <= 0f || t > MaxLeadTime)
 			return false;
-		intercept = targetPos + targetVel * t;
+		aimPoint = targetPos + vrel * t;
 		return true;
 	}
 
