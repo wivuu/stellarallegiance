@@ -24,7 +24,7 @@ jobs:
         include:
           - name: Linux
             os: ubuntu-latest
-            preset: Linux/BSD
+            preset: Linux
             artifact_name: wivuullegiance-linux
             artifact_path: build/linux
             output_path: build/linux/wivuullegiance.x86_64
@@ -69,10 +69,10 @@ jobs:
         run: godot --headless --path client --build-solutions --quit
 
       - name: Create export directory
-        run: mkdir -p "$(dirname "${{ matrix.output_path }}")"
+        run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"
 
       - name: Export ${{ matrix.name }} client
-        run: godot --headless --path client --export-release "${{ matrix.preset }}" "${{ matrix.output_path }}"
+        run: godot --headless --path client --export-release "${{ matrix.preset }}" "$GITHUB_WORKSPACE/${{ matrix.output_path }}"
 
       - name: Upload ${{ matrix.name }} artifact
         uses: actions/upload-artifact@v4
