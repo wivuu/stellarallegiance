@@ -39,12 +39,6 @@ jerk). Bumping to 4–5 would widen the margin. The `STDB_LEAD` env var already
 exists; this is a playtest-and-commit task. May also want adaptive lead based
 on measured RTT.
 
-**Asteroid collisions** — Ships currently pass through asteroids (explicitly
-deferred at T4/T8). The collision infrastructure exists for ship-ship and
-ship-base (inward-impact model with damped bounce). Extending it to
-ship-asteroid is straightforward: same sphere-sphere test in SimTick Pass C.
-Adds tactical terrain to the sector.
-
 **Spawn offset** — Ships currently spawn at the exact base center, inside the
 45-unit base sphere. A small launch vector outward (e.g. base radius + ship
 radius along the base→center direction) would look and feel better.
