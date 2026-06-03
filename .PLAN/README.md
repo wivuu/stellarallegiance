@@ -57,9 +57,31 @@ jerk). Bumping to 4–5 would widen the margin. The `STDB_LEAD` env var already
 exists; this is a playtest-and-commit task. May also want adaptive lead based
 on measured RTT.
 
-**Enemy target markers** - A small UI marker on the enemy ship when it's on and offscreen would help with tracking. Targets
-should be able to be 'focused' as well (e.g. tab cycles through visible enemies). Once focused and in range of weapons, a lead-indicator circle
-should show where the target will be when the shot arrives.
+**Enemy target markers** — ✅ **DONE.** A new `TargetMarkers` overlay (a
+full-rect `Control` created and wired by the `Hud`) draws, while flying, a marker
+for every enemy ship: a corner-bracket reticle when it's on screen and an
+edge-clamped arrow pointing toward it when it's off screen — including behind the
+camera, where the unprojected point is mirrored about center so the arrow points
+to the correct side. Tab cycles FOCUS through the visible (in-front) enemies in
+stable ShipId order (wrapping past the last back to none); the focused target is
+drawn larger/brighter. Because the chase camera sits above/behind the ship, screen
+center is NOT where shots go, so a blue **aim reticle** is drawn on the real muzzle
+firing line (ship forward +Z from the nose). When a target is focused, a
+constant-velocity intercept is solved in the shooter's frame (so the muzzle's
+inherited ship velocity cancels); if a forward solution exists within weapon range
+(`MaxLeadTime` = projectile lifespan, 2.5 s) a green lead circle marks where the
+target will be when a shot fired now would arrive, and the aim reticle is ranged to
+that intercept — so overlaying the reticle on the lead circle is a hit. Velocities
+come from `PredictionController.Velocity` (local, predicted) and the authoritative
+`Ship.Vel` carried on `RemoteShip.Velocity` (enemies) — read straight from the row
+rather than finite-differenced from snapshots, which was noisy enough to make the
+lead reticle jitter even in straight-line flight. The row velocity still arrives in
+~18.7 Hz steps, so `RemoteShip` eases its exposed `Velocity` toward the latest row
+value each frame (exponential, ~60 ms time constant) to tween out the steps. Screen projection uses
+`GetViewportRect().Size` (not the Control's own `Size`, which a code-created Control
+under a CanvasLayer doesn't reliably resolve — that misplaced the off-screen edge
+arrows). The overlay is pure render — it never touches authoritative state.
+Remaining: playtest-tune marker sizes / lead feel.
 
 ---
 

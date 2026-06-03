@@ -87,6 +87,11 @@ public partial class PredictionController : Node3D
 	public byte Team { get; private set; }
 	public float Speed => _state.Vel.Length();
 
+	// Predicted velocity (u/s, Godot space). Read by TargetMarkers so the lead
+	// indicator solves the intercept in the shooter's frame (the muzzle inherits
+	// ship velocity, per Step's mv = fwd*ProjectileSpeed + Vel).
+	public Vector3 Velocity => ShipMath.ToGodot(_state.Vel);
+
 	// Authoritative hull (T8). Spawn is full health, so the first row also gives
 	// us the class max for a "cur/max" HUD readout.
 	public float Health { get; private set; }

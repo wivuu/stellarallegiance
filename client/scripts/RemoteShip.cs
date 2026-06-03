@@ -21,13 +21,30 @@ public partial class RemoteShip : Node3D
 		public Quaternion Rot;
 	}
 
+	// How fast the smoothed Velocity eases toward the latest authoritative value, as
+	// an exponential rate (1/s). ~16 → ~60 ms time constant: fast enough to feel
+	// responsive, slow enough to bridge the gaps between snapshots smoothly.
+	private const float VelSmoothRate = 16f;
+
 	private readonly List<Sample> _samples = new();   // chronological
 
 	public ulong ShipId { get; private set; }
+	public byte Team { get; private set; }
+
+	// Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
+	// (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
+	// than being finite-differenced from positions — differencing 20 Hz snapshots over
+	// their jittery arrival-time delta was noisy enough to make the lead reticle jump
+	// even in straight-line flight. The row velocity is exact but still arrives in
+	// ~18.7 Hz steps at irregular times, so _Process eases Velocity toward the latest
+	// row value (_velTarget) each frame to tween out the steps.
+	public Vector3 Velocity { get; private set; }
+	private Vector3 _velTarget;
 
 	public void Initialize(Ship row)
 	{
 		ShipId = row.ShipId;
+		Team = row.Team;
 		Push(row);
 	}
 
@@ -42,20 +59,28 @@ public partial class RemoteShip : Node3D
 			// Normalize defensively — synced floats can be a hair off unit length.
 			Rot = new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW).Normalized(),
 		};
+		_velTarget = new Vector3(row.VelX, row.VelY, row.VelZ);
+
 		_samples.Add(s);
 		if (_samples.Count > MaxSamples)
 			_samples.RemoveRange(0, _samples.Count - MaxSamples);
 
 		if (_samples.Count == 1)
 		{
-			// First sample: render at it until we have a pair to interpolate.
+			// First sample: render at it until we have a pair to interpolate, and seed
+			// the velocity so it eases from the real value rather than ramping from zero.
 			Position = s.Pos;
 			Quaternion = s.Rot;
+			Velocity = _velTarget;
 		}
 	}
 
 	public override void _Process(double delta)
 	{
+		// Ease the smoothed velocity toward the latest authoritative value (frame-rate
+		// independent), tweening out the snapshot-rate steps the lead reticle reads.
+		Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
+
 		int n = _samples.Count;
 		if (n == 0)
 			return;

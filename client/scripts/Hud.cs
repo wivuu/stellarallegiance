@@ -17,6 +17,11 @@ public partial class Hud : CanvasLayer
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 		_ship = GetNode<ShipController>("../ShipController");
 
+		// Enemy target markers (added first so the HUD text/menu draw on top of it).
+		var markers = new TargetMarkers { Name = "TargetMarkers" };
+		AddChild(markers);
+		markers.Init(_world, GetNode<Camera3D>("../Camera3D"));
+
 		_label = new Label { Position = new Vector2(16, 12) };
 		_label.AddThemeFontSizeOverride("font_size", 18);
 		AddChild(_label);
@@ -68,7 +73,7 @@ public partial class Hud : CanvasLayer
 		bool flying = ship != null;
 		_menu.Visible = !flying;
 		_label.Text = !flying
-			? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire"
+			? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
 			: $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)";
 	}
 }

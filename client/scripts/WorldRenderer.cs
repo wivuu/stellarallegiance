@@ -29,6 +29,9 @@ public partial class WorldRenderer : Node3D
 	private readonly List<ProjectileView> _predictedShots = new();
 	private byte? _localTeam;
 
+	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
+	private readonly List<RemoteShip> _enemyScratch = new();
+
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
@@ -53,6 +56,24 @@ public partial class WorldRenderer : Node3D
 	// Match phase + winning team (T9). Read by Hud to show the match-end banner.
 	public MatchPhase Phase { get; private set; } = MatchPhase.Lobby;
 	public byte? Winner { get; private set; }
+
+	// The local player's team, set when their ship spawns (null until then). Read by
+	// TargetMarkers to tell friend from foe.
+	public byte? LocalTeam => _localTeam;
+
+	// Live enemy ship nodes (team != local team). Returns a shared scratch list — read
+	// it immediately, don't retain it. Empty until the local team is known.
+	public IReadOnlyList<RemoteShip> EnemyShips()
+	{
+		_enemyScratch.Clear();
+		if (_localTeam is byte lt)
+		{
+			foreach (var node in _shipNodes.Values)
+				if (node is RemoteShip rs && rs.Team != lt)
+					_enemyScratch.Add(rs);
+		}
+		return _enemyScratch;
+	}
 
 	public override void _Ready()
 	{
