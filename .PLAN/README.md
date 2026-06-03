@@ -125,17 +125,45 @@ an explicit `JoinMatch` reducer that real clients call after connecting.
 
 #### Major new features (the Allegiance roadmap)
 
-**PIGS** - Add Allegiance AI-based opponents. PIGS are simple combat drones that spawn at bases -- configurable max PIGs per side of 5 (default).
-They seek out and destroy opponents but leave bases alone for now. 
-- When a pig dies, it should have a cooldown of 30 seconds before respawning.
-- PIGs are controlled by a simple state machine: Idle (at base), Seek (move toward nearest enemy), Attack (fire at nearest enemy within range).
-- PIGs use the same flight model and visibility rules as players, they have radar and lead prediction for aiming
-- PIGs are visible to players and can be targeted and destroyed
-- PIGs are highlighted differently on the HUD to distinguish them from player ships
-- Keep their code cleanly separated from player logic for maintainability.
-- PIGs can either be scouts or fighers, with the same stats as player ships.
-- Stretch: Attempt to maneuver around obstacles such as asteroids while pursuing targets -- Are there any Godot/.net friendly pathfinding or steering libraries we can leverage for this?
-- Their movement should be smooth and believable, not just direct lines to targets.
+**PIGS** — ✅ **DONE.** Allegiance-style AI combat drones. They reuse the player
+ship path wholesale: same `Ship` table, `FlightModel` integrator, fire control,
+projectile, collision, and client rendering. A drone is just a `Ship` with a new
+`IsPig` flag; all AI lives in `module/spacetimedb/PigAI.cs` (a `partial Module`),
+cleanly separated from player logic. A persistent `Pig` table holds one row per
+**slot** (5 per side, the `MaxPigsPerTeam` knob; alternating Scout/Fighter mix with
+identical stats to players) that OUTLIVES the drone: on death the slot's `ShipId`
+goes null and `RespawnAtTick` starts a 30 s cooldown (`PigRespawnTicks`), then the
+slot respawns a fresh drone at its base.
+
+The brain (`PigThink`, called from Pass A of `SimulateTick` instead of the
+`ShipInput` buffer) is a state machine — **Idle** (no enemy in radar → loiter near
+base), **Seek** (target in radar, out of fire range → close in), **Attack** (in
+range → fire). It acquires the nearest enemy ship within `PigRadarRange` (1200 u,
+must exceed the ~1000 u base separation or drones idle out of range — this was the
+one tuning bug found in testing) with 1.25× hysteresis, solves the same
+constant-velocity lead intercept the player HUD uses (`PigLead`, mirror of
+`TargetMarkers.TryLead` — aims the NOSE at the relative-velocity lead point so the
+velocity-inheriting shot connects), and steers with a proportional yaw/pitch
+controller (desired world dir → ship-local via quaternion conjugate). Movement is
+smooth — drag-damped proportional steering with a standoff band, not snap-to-target.
+Basic asteroid avoidance (`PigAvoidAsteroids`) bends the heading away from anything
+in the forward path (hand-rolled potential-style steering; no external lib needed,
+and none is wanted here since it must run server-side). Because clients never
+PREDICT drones (they render them as interpolated remote ships), the AI needs no
+cross-runtime determinism — it runs only on the authoritative server, so plain
+`MathF` is fine (unlike `FlightModel`).
+
+Drones are server-owned (`Owner` = module identity, so `IsLocal` is false and the
+client renders them remotely) and leave bases alone (they only target ships).
+On the HUD (`TargetMarkers`) they get a distinct magenta marker + a "PIG" tag to
+tell them apart from enemy players; in-world they use a darker, metallic,
+team-tinted material (`WorldRenderer`). Verified end-to-end against the live local
+server: 5 drones/side spawn, seek, lead-fire, take damage, die, and respawn after
+the 30 s cooldown. Remaining: playtest-tune the AI constants (radar/fire range,
+standoff, turn gain, aim tolerance) and the avoidance feel; optionally make
+`MaxPigsPerTeam` a runtime table/reducer instead of a recompile constant, and
+suppress incidental PIG-projectile damage to bases (rare — combat happens
+mid-sector, far from the ±500 bases — but possible on a stray shot).
 
 **Multiple sectors + alephs** — The current prototype is one sector. Allegiance
 has multiple sectors connected by aleph warp points. This is a significant

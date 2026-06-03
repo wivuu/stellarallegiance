@@ -16,6 +16,11 @@ public enum ShipClass : byte { Scout, Fighter }
 [SpacetimeDB.Type]
 public enum MatchPhase : byte { Lobby, Active, Ended }
 
+// AI drone behaviour state (see PigAI.cs). Declaration order fixes the values
+// (Idle=0, Seek=1, Attack=2).
+[SpacetimeDB.Type]
+public enum PigState : byte { Idle, Seek, Attack }
+
 // ---- Tables ----------------------------------------------------------
 
 [SpacetimeDB.Table(Accessor = "Player", Public = true)]
@@ -56,6 +61,11 @@ public partial struct Ship
     public float Health;
     public uint LastInputTick; // highest sim tick integrated; for reconciliation
     public uint LastFireTick;  // sim tick of this ship's most recent shot (fire-rate gate)
+    // True for AI-controlled combat drones (PIGs). Players never set this; it lets the
+    // client highlight drones on the HUD and the server route input through the AI brain
+    // (PigAI.cs) instead of the per-tick ShipInput buffer. PIGs otherwise reuse the exact
+    // same physics, fire control, collision, and rendering path as player ships.
+    public bool IsPig;
 }
 
 // Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
@@ -386,23 +396,45 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
+        // --- Pass 0: AI drone (PIG) lifecycle — create slots once, then spawn any
+        // dead/cooled-down drones at their base. Their input is synthesized in Pass A
+        // by the brain (PigAI.cs). Gated to a live match so an Ended/empty sector is
+        // quiet. Newly spawned drones land in the Pass A snapshot below and integrate
+        // immediately, just like a freshly spawned player ship.
+        var phase = ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby;
+        if (phase != MatchPhase.Ended)
+        {
+            EnsurePigSlots(ctx);
+            SimulatePigLifecycle(ctx, tick);
+        }
+
         // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
         // Snapshot to a list first — we mutate rows while iterating.
         foreach (var ship in ctx.Db.Ship.Iter().ToList())
         {
-            // Apply the input the client stamped FOR this tick; if it hasn't
-            // arrived yet, hold the most recent input with Tick <= this tick.
-            // Matching the client's per-tick input is what makes auth == prediction.
-            ShipInput? exact = null;
-            ShipInput? latest = null;
-            foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+            // PIGs are server-driven: the AI brain (PigAI.cs) synthesizes this tick's
+            // input from world state and updates the drone's behaviour row. Player ships
+            // instead replay the EXACT per-tick input the client stamped (or the most
+            // recent one with Tick <= this tick if it hasn't arrived) — matching the
+            // client's input sequence is what makes auth == prediction.
+            ShipInputState input;
+            if (ship.IsPig)
             {
-                if (r.Tick == tick) { exact = r; break; }
-                if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
-                    latest = r;
+                input = PigThink(ctx, ship, tick);
             }
-            var src = exact ?? latest;
-            var input = src is ShipInput si ? ToInputState(si) : default;
+            else
+            {
+                ShipInput? exact = null;
+                ShipInput? latest = null;
+                foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+                {
+                    if (r.Tick == tick) { exact = r; break; }
+                    if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
+                        latest = r;
+                }
+                var src = exact ?? latest;
+                input = src is ShipInput si ? ToInputState(si) : default;
+            }
             var stats = FlightModel.StatsFor((byte)ship.Class);
 
             var state = new ShipState
@@ -597,7 +629,14 @@ public static partial class Module
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
 
             if (s.Health <= 0f)
-                KillShip(ctx, s);
+            {
+                // PIGs free their slot and start a respawn cooldown instead of clearing
+                // a player's ShipId (drones have no Player row).
+                if (s.IsPig)
+                    KillPig(ctx, s, tick);
+                else
+                    KillShip(ctx, s);
+            }
             else
                 ctx.Db.Ship.ShipId.Update(s);
         }
@@ -752,6 +791,7 @@ public static partial class Module
             Health = MaxHull(shipClass),
             LastInputTick = 0,
             LastFireTick = 0,
+            IsPig = false,
         });
 
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;

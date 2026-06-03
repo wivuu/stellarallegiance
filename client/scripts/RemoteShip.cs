@@ -31,6 +31,10 @@ public partial class RemoteShip : Node3D
 	public ulong ShipId { get; private set; }
 	public byte Team { get; private set; }
 
+	// AI combat drone (PIG) rather than a player ship — read straight off the row.
+	// TargetMarkers uses it to highlight drones distinctly on the HUD.
+	public bool IsPig { get; private set; }
+
 	// Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
 	// (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
 	// than being finite-differenced from positions — differencing 20 Hz snapshots over
@@ -45,6 +49,7 @@ public partial class RemoteShip : Node3D
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
+		IsPig = row.IsPig;
 		Push(row);
 	}
 

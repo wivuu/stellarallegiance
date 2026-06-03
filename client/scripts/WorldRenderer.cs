@@ -35,6 +35,10 @@ public partial class WorldRenderer : Node3D
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
+	// AI drones (PIGs): keep the team hue for friend/foe, but darker + metallic with a
+	// faint emissive rim so they read as menacing drones in-world (HUD highlights them too).
+	private StandardMaterial3D _pigTeam0Mat = null!;
+	private StandardMaterial3D _pigTeam1Mat = null!;
 	private StandardMaterial3D _projectileMat = null!;
 
 	private ConnectionManager _cm = null!;
@@ -89,6 +93,18 @@ public partial class WorldRenderer : Node3D
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
 		_team1Mat = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.3f, 0.25f) };
+		_pigTeam0Mat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(0.12f, 0.22f, 0.4f),
+			Metallic = 0.8f, Roughness = 0.35f,
+			EmissionEnabled = true, Emission = new Color(0.2f, 0.45f, 0.85f), EmissionEnergyMultiplier = 0.4f,
+		};
+		_pigTeam1Mat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(0.4f, 0.14f, 0.12f),
+			Metallic = 0.8f, Roughness = 0.35f,
+			EmissionEnabled = true, Emission = new Color(0.85f, 0.25f, 0.2f), EmissionEnergyMultiplier = 0.4f,
+		};
 		// Bright unshaded tracers so shots read clearly against the dark sector.
 		_projectileMat = new StandardMaterial3D
 		{
@@ -199,12 +215,14 @@ public partial class WorldRenderer : Node3D
 			return;
 
 		Node3D node;
-		if (IsLocal(row))
+		// PIGs are never the local player (defensive: their Owner is the module identity,
+		// so IsLocal is already false) — always render them as interpolated remote ships.
+		if (IsLocal(row) && !row.IsPig)
 		{
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class));
+			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -215,7 +233,7 @@ public partial class WorldRenderer : Node3D
 			var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 			node = rs;
 			_ships.AddChild(rs);
-			rs.AddChild(BuildShipMesh(row.Team, row.Class));
+			rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
 			rs.Initialize(row);
 		}
 		_shipNodes[row.ShipId] = node;
@@ -328,9 +346,11 @@ public partial class WorldRenderer : Node3D
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
 	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
 	// chunkier, boxier hull that reads as the heavier ship.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls)
+	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig)
 	{
-		var mat = team == 0 ? _team0Mat : _team1Mat;
+		var mat = isPig
+			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
+			: (team == 0 ? _team0Mat : _team1Mat);
 
 		if (cls == ShipClass.Fighter)
 		{

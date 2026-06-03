@@ -36,6 +36,9 @@ public partial class TargetMarkers : Control
 	private static readonly Color FocusColor = new(1f, 0.92f, 0.45f);
 	private static readonly Color LeadColor = new(0.5f, 1f, 0.65f);
 	private static readonly Color AimColor = new(0.6f, 0.85f, 1f);
+	// AI drones (PIGs) get their own marker color + a "PIG" tag so they read as
+	// distinct from enemy PLAYER ships (which stay EnemyColor / FocusColor).
+	private static readonly Color PigColor = new(0.95f, 0.4f, 1f);   // magenta
 
 	private WorldRenderer _world = null!;
 	private Camera3D _camera = null!;
@@ -116,7 +119,7 @@ public partial class TargetMarkers : Control
 			bool focused = _focused is ulong f && f == e.ShipId;
 			if (focused)
 				focusedShip = e;
-			DrawMarker(view, e.GlobalPosition, focused);
+			DrawMarker(view, e.GlobalPosition, focused, e.IsPig);
 		}
 
 		// The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
@@ -151,11 +154,12 @@ public partial class TargetMarkers : Control
 	}
 
 	// Draw one enemy marker: a corner-bracket reticle when on screen, an edge arrow
-	// pointing toward it when off screen or behind the camera.
-	private void DrawMarker(Vector2 size, Vector3 worldPos, bool focused)
+	// pointing toward it when off screen or behind the camera. AI drones (isPig) get a
+	// distinct color and a small "PIG" tag so they're obvious among enemy players.
+	private void DrawMarker(Vector2 size, Vector3 worldPos, bool focused, bool isPig)
 	{
 		Vector2 center = size * 0.5f;
-		Color color = focused ? FocusColor : EnemyColor;
+		Color color = focused ? FocusColor : (isPig ? PigColor : EnemyColor);
 
 		bool behind = _camera.IsPositionBehind(worldPos);
 		Vector2 sp = _camera.UnprojectPosition(worldPos);
@@ -169,7 +173,15 @@ public partial class TargetMarkers : Control
 
 		if (onScreen)
 		{
-			DrawBracket(sp, focused ? FocusHalf : MarkerHalf, color, focused ? 2.5f : 1.5f);
+			float h = focused ? FocusHalf : MarkerHalf;
+			DrawBracket(sp, h, color, focused ? 2.5f : 1.5f);
+			if (isPig)
+			{
+				// Small tag below the bracket so drones are unmistakable up close.
+				var font = GetThemeDefaultFont();
+				DrawString(font, sp + new Vector2(-9f, h + 12f), "PIG",
+					HorizontalAlignment.Left, -1f, 12, color);
+			}
 			return;
 		}
 
