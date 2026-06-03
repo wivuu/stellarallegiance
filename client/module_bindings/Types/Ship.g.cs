@@ -19,6 +19,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Owner;
         [DataMember(Name = "team")]
         public byte Team;
+        [DataMember(Name = "sector_id")]
+        public uint SectorId;
         [DataMember(Name = "class")]
         public ShipClass Class;
         [DataMember(Name = "pos_x")]
@@ -60,6 +62,7 @@ namespace SpacetimeDB.Types
             ulong ShipId,
             SpacetimeDB.Identity Owner,
             byte Team,
+            uint SectorId,
             ShipClass Class,
             float PosX,
             float PosY,
@@ -83,6 +86,7 @@ namespace SpacetimeDB.Types
             this.ShipId = ShipId;
             this.Owner = Owner;
             this.Team = Team;
+            this.SectorId = SectorId;
             this.Class = Class;
             this.PosX = PosX;
             this.PosY = PosY;

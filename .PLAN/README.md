@@ -18,6 +18,20 @@ Archives:
 The game world becomes a **network of sectors** connected by **alephs** (warp
 points). A "map" is a graph: nodes are sectors, edges are aleph pairs.
 
+**Status — core mechanics IMPLEMENTED (June 2026):**
+- `Sector` + `Aleph` tables; `SectorId` on `Ship` / `Base` / `Asteroid` /
+  `Projectile`. Init seeds two sectors (Core + Verge) and one linked aleph pair.
+- Alephs render as **spinning funnels** (`AlephView`); flying into one warps the
+  ship to the partner sector (server-authoritative, in `SimTick`), re-emerging
+  just past the partner aleph. Prediction hard-snaps across the warp.
+- **Sector boundaries**: a ship beyond its sector radius takes mounting hull
+  damage until it returns or explodes; the HUD shows an out-of-bounds warning.
+- SimTick passes (projectile hits, ship/asteroid/base collisions) are
+  sector-scoped; the client shows only the local sector's objects.
+- Still TODO for this item: the **minimap** below, sector-scoped *subscriptions*
+  (clients currently subscribe to all sectors and filter on render), and a
+  proper `WarpShip` reducer if contact-warp ever needs a manual trigger.
+
 **Server / schema:**
 - `Sector` table — id, name, geometry seed, list of asteroid/base refs.
 - `Aleph` table — id, sector A, sector B, position in each sector. Alephs

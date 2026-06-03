@@ -11,39 +11,43 @@ namespace SpacetimeDB.Types
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class Asteroid
+    public sealed partial class Aleph
     {
-        [DataMember(Name = "asteroid_id")]
-        public ulong AsteroidId;
+        [DataMember(Name = "aleph_id")]
+        public ulong AlephId;
         [DataMember(Name = "sector_id")]
         public uint SectorId;
+        [DataMember(Name = "partner_id")]
+        public ulong PartnerId;
+        [DataMember(Name = "dest_sector_id")]
+        public uint DestSectorId;
         [DataMember(Name = "pos_x")]
         public float PosX;
         [DataMember(Name = "pos_y")]
         public float PosY;
         [DataMember(Name = "pos_z")]
         public float PosZ;
-        [DataMember(Name = "radius")]
-        public float Radius;
 
-        public Asteroid(
-            ulong AsteroidId,
+        public Aleph(
+            ulong AlephId,
             uint SectorId,
+            ulong PartnerId,
+            uint DestSectorId,
             float PosX,
             float PosY,
-            float PosZ,
-            float Radius
+            float PosZ
         )
         {
-            this.AsteroidId = AsteroidId;
+            this.AlephId = AlephId;
             this.SectorId = SectorId;
+            this.PartnerId = PartnerId;
+            this.DestSectorId = DestSectorId;
             this.PosX = PosX;
             this.PosY = PosY;
             this.PosZ = PosZ;
-            this.Radius = Radius;
         }
 
-        public Asteroid()
+        public Aleph()
         {
         }
     }

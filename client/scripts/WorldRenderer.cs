@@ -13,6 +13,7 @@ public partial class WorldRenderer : Node3D
 	private Node3D _asteroids = null!;
 	private Node3D _ships = null!;
 	private Node3D _projectiles = null!;
+	private Node3D _alephs = null!;
 
 	// How long a predicted ghost shot lives unmatched before it's culled. Covers
 	// prediction lead + round-trip to the authoritative row (~0.2s); a never-matched
@@ -23,6 +24,23 @@ public partial class WorldRenderer : Node3D
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
+	private readonly Dictionary<ulong, Node3D> _alephNodes = new();
+
+	// Sector partitioning. The world is split into sectors (see module Sector/Aleph
+	// tables); the client subscribes to everything but only SHOWS objects in the
+	// player's current sector, toggled by node visibility (each node stashes its
+	// sector id in metadata). _localSector follows the local ship as it warps; it
+	// defaults to the home/battlefield sector so the pre-spawn overview shows it.
+	private const uint HomeSector = 0;
+	private uint _localSector = HomeSector;
+	private readonly Dictionary<uint, Sector> _sectors = new();
+
+	// Local sector boundary, read by the HUD for the out-of-bounds warning. Radius 0
+	// (sector not yet known) disables the warning.
+	public uint LocalSector => _localSector;
+	public float LocalSectorRadius => _sectors.TryGetValue(_localSector, out var s) ? s.Radius : 0f;
+	public Vector3 LocalSectorCenter =>
+		_sectors.TryGetValue(_localSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
 
 	// Client-side muzzle prediction (own shots): ghosts spawned on fire, in FIFO
 	// fire order, each handed off to the matching authoritative row as it arrives.
@@ -73,7 +91,7 @@ public partial class WorldRenderer : Node3D
 		if (_localTeam is byte lt)
 		{
 			foreach (var node in _shipNodes.Values)
-				if (node is RemoteShip rs && rs.Team != lt)
+				if (node is RemoteShip rs && rs.Team != lt && rs.Visible)
 					_enemyScratch.Add(rs);
 		}
 		return _enemyScratch;
@@ -85,10 +103,12 @@ public partial class WorldRenderer : Node3D
 		_asteroids = new Node3D { Name = "Asteroids" };
 		_ships = new Node3D { Name = "Ships" };
 		_projectiles = new Node3D { Name = "Projectiles" };
+		_alephs = new Node3D { Name = "Alephs" };
 		AddChild(_bases);
 		AddChild(_asteroids);
 		AddChild(_ships);
 		AddChild(_projectiles);
+		AddChild(_alephs);
 
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
@@ -135,6 +155,12 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Projectile.OnDelete += OnProjectileDelete;
 		conn.Db.Match.OnInsert += (_, row) => OnMatch(row);
 		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
+		// Sectors define the boundary radius; alephs are the warp funnels. Both are
+		// seeded once at Init and effectively static, but we still listen for updates.
+		conn.Db.Sector.OnInsert += (_, row) => _sectors[row.SectorId] = row;
+		conn.Db.Sector.OnUpdate += (_, _, row) => _sectors[row.SectorId] = row;
+		conn.Db.Aleph.OnInsert += OnAlephInsert;
+		conn.Db.Aleph.OnDelete += OnAlephDelete;
 	}
 
 	private void OnMatch(Match row)
@@ -142,6 +168,48 @@ public partial class WorldRenderer : Node3D
 		ServerTick = row.Tick;
 		Phase = row.Phase;
 		Winner = row.Winner;
+	}
+
+	// ---- Sector visibility ---------------------------------------------
+	// Each world node stashes its sector id in metadata; only nodes in the local
+	// sector are shown. Stored as int (Godot Variant) and compared to _localSector.
+
+	private void SetNodeSector(Node3D n, uint sector)
+	{
+		n.SetMeta("sector", (int)sector);
+		n.Visible = sector == _localSector;
+	}
+
+	// Re-evaluate every world node's visibility against the current local sector —
+	// called when the local ship warps to a new sector.
+	private void RefreshSectorVisibility()
+	{
+		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs })
+			foreach (var child in group.GetChildren())
+				if (child is Node3D n && n.HasMeta("sector"))
+					n.Visible = (int)n.GetMeta("sector") == (int)_localSector;
+	}
+
+	// ---- Aleph (warp funnel) -------------------------------------------
+
+	private void OnAlephInsert(EventContext ctx, Aleph row)
+	{
+		if (_alephNodes.ContainsKey(row.AlephId))
+			return;
+		var av = new AlephView
+		{
+			Name = $"Aleph_{row.AlephId}",
+			Position = new Vector3(row.PosX, row.PosY, row.PosZ),
+		};
+		_alephs.AddChild(av);
+		_alephNodes[row.AlephId] = av;
+		SetNodeSector(av, row.SectorId);
+	}
+
+	private void OnAlephDelete(EventContext ctx, Aleph row)
+	{
+		if (_alephNodes.Remove(row.AlephId, out var node))
+			node.QueueFree();
 	}
 
 	// ---- Base -----------------------------------------------------------
@@ -160,6 +228,7 @@ public partial class WorldRenderer : Node3D
 		};
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
+		SetNodeSector(node, row.SectorId);
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
 	}
 
@@ -196,6 +265,7 @@ public partial class WorldRenderer : Node3D
 		};
 		_asteroids.AddChild(node);
 		_asteroidNodes[row.AsteroidId] = node;
+		SetNodeSector(node, row.SectorId);
 	}
 
 	private void OnAsteroidDelete(EventContext ctx, Asteroid row)
@@ -226,17 +296,22 @@ public partial class WorldRenderer : Node3D
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
-			GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team})");
+			// Follow the local ship's sector and re-show that sector's world.
+			_localSector = row.SectorId;
+			_shipNodes[row.ShipId] = node;
+			SetNodeSector(node, row.SectorId);
+			RefreshSectorVisibility();
+			GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team}, sector {row.SectorId})");
+			return;
 		}
-		else
-		{
-			var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
-			node = rs;
-			_ships.AddChild(rs);
-			rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
-			rs.Initialize(row);
-		}
+
+		var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
+		node = rs;
+		_ships.AddChild(rs);
+		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
+		rs.Initialize(row);
 		_shipNodes[row.ShipId] = node;
+		SetNodeSector(node, row.SectorId);
 	}
 
 	private void OnShipUpdate(EventContext ctx, Ship oldRow, Ship newRow)
@@ -245,8 +320,23 @@ public partial class WorldRenderer : Node3D
 			return;
 		switch (node)
 		{
-			case PredictionController pc: pc.OnAuthoritative(newRow); break;
-			case RemoteShip rs: rs.OnAuthoritative(newRow); break;
+			case PredictionController pc:
+				// A sector change on the LOCAL ship is a warp: hard-snap prediction to the
+				// new position (no spring easing across the discontinuity) and switch the
+				// rendered world to the destination sector.
+				bool warped = newRow.SectorId != _localSector;
+				pc.OnAuthoritative(newRow, warped);
+				pc.SetMeta("sector", (int)newRow.SectorId);
+				if (warped)
+				{
+					_localSector = newRow.SectorId;
+					RefreshSectorVisibility();
+				}
+				break;
+			case RemoteShip rs:
+				rs.OnAuthoritative(newRow);
+				SetNodeSector(rs, newRow.SectorId);   // a remote ship may have warped in/out
+				break;
 		}
 	}
 
@@ -261,6 +351,12 @@ public partial class WorldRenderer : Node3D
 			foreach (var g in _predictedShots)
 				g.QueueFree();
 			_predictedShots.Clear();
+			// Back to the overview of the home battlefield (respawn is at the team base).
+			if (_localSector != HomeSector)
+			{
+				_localSector = HomeSector;
+				RefreshSectorVisibility();
+			}
 		}
 		node.QueueFree();
 	}
@@ -280,6 +376,7 @@ public partial class WorldRenderer : Node3D
 			_predictedShots.RemoveAt(0);
 			ghost.AttachAuthoritative(row.ProjectileId);
 			ghost.Name = $"Projectile_{row.ProjectileId}";
+			SetNodeSector(ghost, row.SectorId);
 			_projectileNodes[row.ProjectileId] = ghost;
 			return;
 		}
@@ -288,6 +385,7 @@ public partial class WorldRenderer : Node3D
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
 		pv.Initialize(row, ShotMaskLeadSec());
+		SetNodeSector(pv, row.SectorId);
 		_projectileNodes[row.ProjectileId] = pv;
 	}
 
@@ -312,6 +410,7 @@ public partial class WorldRenderer : Node3D
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
 		pv.InitializePredicted(pos, vel);
+		SetNodeSector(pv, _localSector);   // own shot is in our sector; hidden if we warp away
 		_predictedShots.Add(pv);
 	}
 

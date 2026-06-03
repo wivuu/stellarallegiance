@@ -42,6 +42,7 @@ public partial struct Ship
     public ulong ShipId;
     public Identity Owner;
     public byte Team;           // denormalized from Player for fast sim checks
+    public uint SectorId;       // which sector this ship is flying in (partitions the world)
     public ShipClass Class;
     public float PosX;
     public float PosY;
@@ -98,6 +99,7 @@ public partial struct Base
     [AutoInc]
     public ulong BaseId;
     public byte Team;
+    public uint SectorId;       // which sector this base sits in
     public float PosX;
     public float PosY;
     public float PosZ;
@@ -110,10 +112,48 @@ public partial struct Asteroid
     [PrimaryKey]
     [AutoInc]
     public ulong AsteroidId;
+    public uint SectorId;       // which sector this asteroid belongs to
     public float PosX;
     public float PosY;
     public float PosZ;
     public float Radius;        // collision + render scale
+}
+
+// A sector is one self-contained slice of the world. All sectors share the same
+// coordinate origin (objects are partitioned by SectorId, not by world region), so
+// CenterX/Y/Z are the boundary origin — currently (0,0,0) for every sector. A ship
+// whose distance from its sector center exceeds Radius is outside the playable area
+// and takes mounting hull damage until it returns or is destroyed (the "invisible
+// boundary"). Sectors are linked by Aleph pairs.
+[SpacetimeDB.Table(Accessor = "Sector", Public = true)]
+public partial struct Sector
+{
+    [PrimaryKey]
+    public uint SectorId;
+    public string Name;
+    public float CenterX;
+    public float CenterY;
+    public float CenterZ;
+    public float Radius;        // soft play-area radius; beyond it the hull is eroded
+}
+
+// An aleph is a warp gate rendered as a spinning funnel. Alephs come in LINKED
+// PAIRS: one row per sector, each pointing at its partner. A ship that touches an
+// aleph is moved to the partner's sector and repositioned just past the partner
+// aleph (so it doesn't immediately warp back). PartnerId/DestSectorId are wired up
+// after both rows of a pair are inserted (AlephId is autoinc).
+[SpacetimeDB.Table(Accessor = "Aleph", Public = true)]
+public partial struct Aleph
+{
+    [PrimaryKey]
+    [AutoInc]
+    public ulong AlephId;
+    public uint SectorId;       // the sector this funnel lives in
+    public ulong PartnerId;     // the aleph in the destination sector
+    public uint DestSectorId;   // partner's sector (denormalized for the warp)
+    public float PosX;
+    public float PosY;
+    public float PosZ;
 }
 
 [SpacetimeDB.Table(Accessor = "Projectile", Public = true)]
@@ -123,6 +163,7 @@ public partial struct Projectile
     [AutoInc]
     public ulong ProjectileId;
     public byte Team;           // so friendly fire can be ignored
+    public uint SectorId;       // sector it travels in (inherited from the firing ship)
     public float Damage;        // hull damage dealt on hit (from the firing ship's class)
     public float PosX;
     public float PosY;
@@ -188,9 +229,78 @@ public static partial class Module
     private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
     private const float MaxCollisionDamage = 30f;    // cap per collision per tick
 
+    // ---- Sectors & alephs ---------------------------------------------
+    private const uint  HomeSector = 0;              // bases + spawn live here (the battlefield)
+    private const uint  VergeSector = 1;             // the linked outpost sector across the aleph
+    private const float CoreRadius = 1100f;          // sector 0 boundary (contains bases ±500, field ±800)
+    private const float VergeRadius = 700f;          // sector 1 boundary (a tighter outpost)
+    private const int   VergeAsteroidCount = 14;     // smaller asteroid field in the Verge
+    private const float VergeBeltRadius = 380f;       // ring radius of the Verge's asteroid belt
+    private const float AlephTriggerRadius = 18f;    // touch this close to a funnel to warp through
+    private const float WarpExitOffset = 60f;        // placed this far past the dest aleph (no instant re-warp)
+    // Out-of-bounds hull erosion: a flat base rate plus a ramp with how far past the
+    // edge you are, capped — so skimming the edge is survivable but straying deep is
+    // quickly fatal. Applied per-second (scaled by dt) while a ship is outside.
+    private const float BoundaryBaseDps = 8f;
+    private const float BoundaryRampDps = 0.12f;     // extra dps per unit beyond the edge
+    private const float BoundaryMaxDps = 60f;
+
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
     private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
     private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+
+    // ---- World seeding (Init) -----------------------------------------
+
+    // Core pattern: a diffuse cloud scattered across a wide box.
+    private static void SeedAsteroidField(ReducerContext ctx, uint sector, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            ctx.Db.Asteroid.Insert(new Asteroid
+            {
+                AsteroidId = 0,
+                SectorId = sector,
+                PosX = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
+                PosY = (float)(ctx.Rng.NextDouble() * 400.0 - 200.0),
+                PosZ = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
+                Radius = (float)(ctx.Rng.NextDouble() * 30.0 + 10.0),
+            });
+        }
+    }
+
+    // Verge pattern: a flattened belt ringing the sector center. Asteroids sit near
+    // VergeBeltRadius in the XZ plane (with radial + vertical jitter) so the field reads
+    // as a band you thread, distinct from the Core's open cloud.
+    private static void SeedAsteroidBelt(ReducerContext ctx, uint sector, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
+            double r = VergeBeltRadius + (ctx.Rng.NextDouble() - 0.5) * 160.0;  // ±80 radial jitter
+            ctx.Db.Asteroid.Insert(new Asteroid
+            {
+                AsteroidId = 0,
+                SectorId = sector,
+                PosX = (float)(Math.Cos(ang) * r),
+                PosY = (float)((ctx.Rng.NextDouble() - 0.5) * 90.0),           // thin vertical band
+                PosZ = (float)(Math.Sin(ang) * r),
+                Radius = (float)(ctx.Rng.NextDouble() * 18.0 + 8.0),
+            });
+        }
+    }
+
+    // A random position biased toward the OUTER part of a sector: a random azimuth at a
+    // radius in ~[0.6, 0.9] of the sector radius (sqrt-weighted so it leans outward),
+    // with modest vertical spread. Kept inside the boundary so a funnel never sits in
+    // the out-of-bounds zone.
+    private static (float, float, float) RandomOuterPos(ReducerContext ctx, float sectorRadius)
+    {
+        double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
+        double frac = 0.6 + 0.3 * Math.Sqrt(ctx.Rng.NextDouble());   // weighted toward 0.9
+        float r = (float)(sectorRadius * frac);
+        float y = (float)((ctx.Rng.NextDouble() - 0.5) * sectorRadius * 0.2);
+        return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
+    }
 
     // ---- Lifecycle ----------------------------------------------------
 
@@ -209,23 +319,42 @@ public static partial class Module
             Winner = null,
         });
 
-        // Two bases at opposite ends of the sector.
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, PosX = -500f, PosY = 0f, PosZ = 0f, Health = 1000f });
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, PosX = 500f, PosY = 0f, PosZ = 0f, Health = 1000f });
+        // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
+        // and the Verge outpost across the aleph. CenterX/Y/Z are 0 — boundary is a
+        // radius from the origin.
+        ctx.Db.Sector.Insert(new Sector { SectorId = HomeSector, Name = "Core Sector", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = CoreRadius });
+        ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
 
-        // Static asteroid field. ctx.Rng is deterministic per reducer call,
-        // so the published seed is reproducible.
-        for (int i = 0; i < AsteroidCount; i++)
+        // Two bases at opposite ends of the Core sector.
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = 1000f });
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = 1000f });
+
+        // Each sector gets a DIFFERENT asteroid pattern so they read as distinct places.
+        // ctx.Rng is deterministic per reducer call, so the published seed is reproducible.
+        //   • Core  — a diffuse 3D field scattered across a wide box (the open battlefield).
+        SeedAsteroidField(ctx, HomeSector, AsteroidCount);
+        //   • Verge — a flattened belt: asteroids ring the sector center in the XZ plane
+        //     with only slight vertical spread, so flying it feels like threading a band.
+        SeedAsteroidBelt(ctx, VergeSector, VergeAsteroidCount);
+
+        // One linked aleph pair joining Core <-> Verge. Each funnel is placed at a random
+        // spot biased toward the OUTER reaches of its sector (so warps sit out near the
+        // frontier, not on top of the bases). Insert both, then wire each to its partner
+        // (AlephId is autoinc, so the ids aren't known until after insert).
+        var (cx, cy, cz) = RandomOuterPos(ctx, CoreRadius);
+        var (vx, vy, vz) = RandomOuterPos(ctx, VergeRadius);
+        var alephCore = ctx.Db.Aleph.Insert(new Aleph
         {
-            ctx.Db.Asteroid.Insert(new Asteroid
-            {
-                AsteroidId = 0,
-                PosX = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                PosY = (float)(ctx.Rng.NextDouble() * 400.0 - 200.0),
-                PosZ = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                Radius = (float)(ctx.Rng.NextDouble() * 30.0 + 10.0),
-            });
-        }
+            AlephId = 0, SectorId = HomeSector, PartnerId = 0, DestSectorId = VergeSector,
+            PosX = cx, PosY = cy, PosZ = cz,
+        });
+        var alephVerge = ctx.Db.Aleph.Insert(new Aleph
+        {
+            AlephId = 0, SectorId = VergeSector, PartnerId = 0, DestSectorId = HomeSector,
+            PosX = vx, PosY = vy, PosZ = vz,
+        });
+        ctx.Db.Aleph.AlephId.Update(alephCore with { PartnerId = alephVerge.AlephId });
+        ctx.Db.Aleph.AlephId.Update(alephVerge with { PartnerId = alephCore.AlephId });
 
         // NOTE: SimTick is intentionally NOT scheduled here. The sim loop is
         // started on the first client connect and stopped when the last client
@@ -233,7 +362,7 @@ public static partial class Module
         // This is a prototype, not a persistent universe — nothing needs to
         // advance while nobody is watching.
 
-        Log.Info($"[Init] done: 1 match, 2 bases, {AsteroidCount} asteroids, SimTick paused until first client");
+        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, SimTick paused until first client");
     }
 
     // A client connected: create or reactivate their Player row.
@@ -474,6 +603,7 @@ public static partial class Module
                 {
                     ProjectileId = 0,
                     Team = ship.Team,
+                    SectorId = ship.SectorId,
                     Damage = WeaponDamage(ship.Class),
                     PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
                     VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
@@ -498,6 +628,53 @@ public static partial class Module
             });
         }
 
+        // --- Pass A.5: aleph warp. A ship that has flown into an aleph in its sector is
+        // moved THROUGH it: same velocity/orientation (momentum carries through the
+        // funnel), but its SectorId becomes the partner's and it re-emerges just past the
+        // partner aleph so it doesn't immediately warp back. Runs on freshly-integrated
+        // positions, before the collision/boundary passes use them.
+        foreach (var ship in ctx.Db.Ship.Iter().ToList())
+        {
+            foreach (var al in ctx.Db.Aleph.Iter())
+            {
+                if (al.SectorId != ship.SectorId)
+                    continue;
+                float rr = AlephTriggerRadius + ShipRadius;
+                if (Dist2(ship.PosX, ship.PosY, ship.PosZ, al.PosX, al.PosY, al.PosZ) > rr * rr)
+                    continue;
+                if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
+                    break;
+
+                // Emerge INWARD — offset from the partner aleph toward the destination
+                // sector center. The funnel sits out near the frontier, so exiting inward
+                // both clears the partner's trigger sphere (no instant re-warp) and keeps
+                // the ship safely inside the boundary (an outward exit could spawn it in
+                // the out-of-bounds zone). Velocity/orientation are preserved (momentum
+                // carries through the funnel).
+                var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
+                float ccx = destSec?.CenterX ?? 0f, ccy = destSec?.CenterY ?? 0f, ccz = destSec?.CenterZ ?? 0f;
+                float ix = ccx - partner.PosX, iy = ccy - partner.PosY, iz = ccz - partner.PosZ;
+                float ilen = MathF.Sqrt(ix * ix + iy * iy + iz * iz);
+                float ox, oy, oz;
+                if (ilen > 1e-3f) { ox = ix / ilen; oy = iy / ilen; oz = iz / ilen; }
+                else
+                {
+                    Vec3 fwd = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW).Rotate(new Vec3(0f, 0f, 1f));
+                    ox = fwd.X; oy = fwd.Y; oz = fwd.Z;
+                }
+                float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
+                ctx.Db.Ship.ShipId.Update(ship with
+                {
+                    SectorId = al.DestSectorId,
+                    PosX = partner.PosX + ox * exit,
+                    PosY = partner.PosY + oy * exit,
+                    PosZ = partner.PosZ + oz * exit,
+                });
+                Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
+                break;
+            }
+        }
+
         // Snapshot post-integration ships + static geometry for the hit/collision
         // passes. Damage is accumulated here and applied once at the end.
         var ships = ctx.Db.Ship.Iter().ToList();
@@ -520,19 +697,20 @@ public static partial class Module
             float nz = p.PosZ + p.VelZ * dt;
             bool consumed = false;
 
-            // Blocked by asteroids (static; they take no damage).
+            // Blocked by asteroids in the SAME sector (static; they take no damage).
             foreach (var a in asteroids)
             {
+                if (a.SectorId != p.SectorId) continue;
                 float rr = a.Radius + ProjectileRadius;
                 if (Dist2(nx, ny, nz, a.PosX, a.PosY, a.PosZ) <= rr * rr) { consumed = true; break; }
             }
 
-            // Hit an enemy ship (friendly fire ignored).
+            // Hit an enemy ship in the same sector (friendly fire ignored).
             if (!consumed)
             {
                 foreach (var s in ships)
                 {
-                    if (s.Team == p.Team) continue;
+                    if (s.Team == p.Team || s.SectorId != p.SectorId) continue;
                     float rr = ShipRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, s.PosX, s.PosY, s.PosZ) <= rr * rr)
                     {
@@ -548,7 +726,7 @@ public static partial class Module
             {
                 foreach (var b in bases)
                 {
-                    if (b.Team == p.Team) continue;
+                    if (b.Team == p.Team || b.SectorId != p.SectorId) continue;
                     float rr = BaseRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
@@ -600,7 +778,7 @@ public static partial class Module
             {
                 var a = ships[i];
                 var b = ships[j];
-                if (a.Team == b.Team) continue;
+                if (a.Team == b.Team || a.SectorId != b.SectorId) continue;
 
                 float dx = a.PosX - b.PosX, dy = a.PosY - b.PosY, dz = a.PosZ - b.PosZ;
                 float dist2 = dx * dx + dy * dy + dz * dz;
@@ -630,18 +808,37 @@ public static partial class Module
             }
         }
 
+        // Sector lookup for the out-of-bounds check (table is tiny — a couple of rows).
+        var sectors = ctx.Db.Sector.Iter().ToList();
+
         foreach (var s0 in ships)
         {
             var s = s0;
             if (damage.TryGetValue(s.ShipId, out var d))
                 s.Health -= d;
 
-            // Asteroids (all) and the ENEMY base only — your own base is your dock/
-            // spawn point, so you pass through it.
+            // Sector boundary: a ship beyond its sector radius takes mounting hull
+            // damage (the "invisible boundary") until it returns to bounds or dies.
+            foreach (var sec in sectors)
+            {
+                if (sec.SectorId != s.SectorId) continue;
+                float ddx = s.PosX - sec.CenterX, ddy = s.PosY - sec.CenterY, ddz = s.PosZ - sec.CenterZ;
+                float over = MathF.Sqrt(ddx * ddx + ddy * ddy + ddz * ddz) - sec.Radius;
+                if (over > 0f)
+                {
+                    float dps = MathF.Min(BoundaryBaseDps + over * BoundaryRampDps, BoundaryMaxDps);
+                    s.Health -= dps * dt;
+                }
+                break;
+            }
+
+            // Asteroids + the ENEMY base in this SHIP's sector only — your own base is
+            // your dock/spawn point, so you pass through it.
             foreach (var a in asteroids)
-                s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
+                if (a.SectorId == s.SectorId)
+                    s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
             foreach (var b in bases)
-                if (b.Team != s.Team)
+                if (b.Team != s.Team && b.SectorId == s.SectorId)
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
 
             if (s.Health <= 0f)
@@ -799,6 +996,7 @@ public static partial class Module
             ShipId = 0,
             Owner = ctx.Sender,
             Team = p.Team,
+            SectorId = HomeSector,
             Class = shipClass,
             PosX = sx, PosY = sy, PosZ = sz,
             VelX = 0f, VelY = 0f, VelZ = 0f,

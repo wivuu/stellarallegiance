@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public ulong BaseId;
         [DataMember(Name = "team")]
         public byte Team;
+        [DataMember(Name = "sector_id")]
+        public uint SectorId;
         [DataMember(Name = "pos_x")]
         public float PosX;
         [DataMember(Name = "pos_y")]
@@ -29,6 +31,7 @@ namespace SpacetimeDB.Types
         public Base(
             ulong BaseId,
             byte Team,
+            uint SectorId,
             float PosX,
             float PosY,
             float PosZ,
@@ -37,6 +40,7 @@ namespace SpacetimeDB.Types
         {
             this.BaseId = BaseId;
             this.Team = Team;
+            this.SectorId = SectorId;
             this.PosX = PosX;
             this.PosY = PosY;
             this.PosZ = PosZ;
