@@ -1,0 +1,82 @@
+name: Build Godot Client
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.6.3
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_CLI_USE_MSBUILD_SERVER: 0
+  MSBUILDDISABLENODEREUSE: 1
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            preset: Linux/BSD
+            artifact_name: wivuullegiance-linux
+            artifact_path: build/linux
+            output_path: build/linux/wivuullegiance.x86_64
+          - name: macOS
+            os: macos-latest
+            preset: macOS
+            artifact_name: wivuullegiance-macos
+            artifact_path: build/mac
+            output_path: build/mac/wivuullegiance.zip
+          - name: Windows
+            os: windows-latest
+            preset: Windows Desktop
+            artifact_name: wivuullegiance-windows
+            artifact_path: build/win
+            output_path: build/win/wivuullegiance.exe
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: true
+          include-templates: true
+          cache: true
+
+      - name: Restore client dependencies
+        run: dotnet restore client/wivuullegiance.csproj
+
+      - name: Generate Godot C# solution
+        run: godot --headless --path client --build-solutions --quit
+
+      - name: Create export directory
+        run: mkdir -p "$(dirname "${{ matrix.output_path }}")"
+
+      - name: Export ${{ matrix.name }} client
+        run: godot --headless --path client --export-release "${{ matrix.preset }}" "${{ matrix.output_path }}"
+
+      - name: Upload ${{ matrix.name }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
