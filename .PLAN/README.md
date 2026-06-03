@@ -43,10 +43,19 @@ on measured RTT.
 45-unit base sphere. A small launch vector outward (e.g. base radius + ship
 radius along the base→center direction) would look and feel better.
 
-**Enemy shot masking** — Own muzzle flashes are already client-predicted, but
-enemy shots pop in ~1 RTT late. A short forward-extrapolation on spawn (place
-the projectile where it would be now given its velocity and the interpolation
-delay) would mask the pop without full prediction.
+**Enemy shot masking** — ✅ **DONE.** Projectiles are now pure fire-and-forget:
+since they're constant-velocity, the client extrapolates the single spawn line
+for the projectile's whole life and ignores the server's per-tick position
+updates entirely (`Projectile.OnUpdate` is no longer subscribed). This is both
+smoother — re-anchoring on each 20 Hz sample multiplied arrival jitter by
+projectile speed into a visible snap (~6 u at 250 u/s, ±25 ms) — and simpler.
+Exact position is not corrected; the server stays authoritative for hits via
+the row delete. On top of that, enemy/remote shots (which arrive ~1 RTT late
+and would pop in at the stale muzzle) get a one-time forward spawn offset
+(`ProjectileView._renderLeadSec`) so the bolt appears where it really is now.
+The offset is derived from measured one-way latency (≈ half `PingMs`, clamped
+0–250 ms; 0 on localhost) or pinned via `STDB_SHOT_MASK_MS`. Remaining:
+playtest-confirm the masking offset feels right on WAN.
 
 ---
 

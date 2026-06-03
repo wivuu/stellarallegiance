@@ -35,6 +35,12 @@ public partial class WorldRenderer : Node3D
 	private StandardMaterial3D _projectileMat = null!;
 
 	private ConnectionManager _cm = null!;
+	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
+
+	// Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
+	// one-way latency); >= 0 = a fixed override in ms, pinned via STDB_SHOT_MASK_MS for
+	// playtest tuning. Parsed once in _Ready.
+	private float _shotMaskMs = -1f;
 
 	// The local player's predicted ship, or null when not flying. Read by
 	// ShipController (drives prediction), CameraRig (chase target), and Hud.
@@ -71,6 +77,9 @@ public partial class WorldRenderer : Node3D
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
+
+		if (float.TryParse(OS.GetEnvironment("STDB_SHOT_MASK_MS"), out var ms) && ms >= 0f)
+			_shotMaskMs = ms;
 	}
 
 	private void OnConnected(DbConnection conn)
@@ -84,7 +93,8 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Ship.OnUpdate += OnShipUpdate;
 		conn.Db.Ship.OnDelete += OnShipDelete;
 		conn.Db.Projectile.OnInsert += OnProjectileInsert;
-		conn.Db.Projectile.OnUpdate += OnProjectileUpdate;
+		// No OnUpdate: projectiles are constant-velocity, so the client fire-and-forgets
+		// the spawn line (see ProjectileView). Per-tick position updates are ignored.
 		conn.Db.Projectile.OnDelete += OnProjectileDelete;
 		conn.Db.Match.OnInsert += (_, row) => OnMatch(row);
 		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
@@ -238,8 +248,21 @@ public partial class WorldRenderer : Node3D
 		var pv = new ProjectileView { Name = $"Projectile_{row.ProjectileId}" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(row);
+		pv.Initialize(row, ShotMaskLeadSec());
 		_projectileNodes[row.ProjectileId] = pv;
+	}
+
+	// How far ahead to render an enemy/remote shot to mask its ~1 RTT-late pop-in
+	// (see ProjectileView._renderLeadSec). Auto mode uses the measured one-way latency
+	// (≈ half RTT); STDB_SHOT_MASK_MS pins a fixed value. Clamped so a bad reading can't
+	// fling shots downrange. Returns 0 on localhost (PingMs unmeasured) — no masking needed.
+	private float ShotMaskLeadSec()
+	{
+		if (_shotMaskMs >= 0f)
+			return Mathf.Min(_shotMaskMs, 400f) / 1000f;
+		_ship ??= GetNodeOrNull<ShipController>("../ShipController");
+		float oneWayMs = (_ship?.PingMs ?? 0f) * 0.5f;
+		return Mathf.Clamp(oneWayMs, 0f, 250f) / 1000f;
 	}
 
 	// Spawn an immediate ghost for the local player's own shot (muzzle prediction),
@@ -273,12 +296,6 @@ public partial class WorldRenderer : Node3D
 				_predictedShots.RemoveAt(i);
 			}
 		}
-	}
-
-	private void OnProjectileUpdate(EventContext ctx, Projectile oldRow, Projectile newRow)
-	{
-		if (_projectileNodes.TryGetValue(newRow.ProjectileId, out var pv))
-			pv.OnAuthoritative(newRow);
 	}
 
 	private void OnProjectileDelete(EventContext ctx, Projectile row)
