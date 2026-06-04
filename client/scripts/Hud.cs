@@ -23,6 +23,11 @@ public partial class Hud : CanvasLayer
 		AddChild(markers);
 		markers.Init(_world, GetNode<Camera3D>("../Camera3D"));
 
+		// Always-on sector minimap, bottom-left.
+		var minimap = new Minimap { Name = "Minimap" };
+		AddChild(minimap);
+		minimap.Init(GetNode<ConnectionManager>("../ConnectionManager"), _world);
+
 		_label = new Label { Position = new Vector2(16, 12) };
 		_label.AddThemeFontSizeOverride("font_size", 18);
 		AddChild(_label);
