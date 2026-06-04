@@ -1,20 +1,25 @@
-"""Assemble a Godot-ready GLB from the shape field + a baked normal map.
+"""Assemble a Godot-ready GLB from the shape field + baked PBR textures.
 
 The low-poly mesh carries:
   * POSITION   : displaced surface points (lumpy silhouette)
   * NORMAL     : the *sphere* direction (smooth carrier) so the tangent-space
                  normal map reconstructs the true detailed normal
-  * TEXCOORD_0 : equirectangular UVs matching bake_normals.py
+  * TEXCOORD_0 : equirectangular UVs matching bake.py
   * TANGENT    : d u / d lon (+ handedness w) so cross(N, T)*w = d u / d lat
 
-The baked normal map is embedded as a PNG and bound to the material's normalTexture,
-so importing the .glb into Godot "just works" with a StandardMaterial3D.
+Three textures are embedded as PNGs and bound to a standard glTF metallic-roughness
+material, so importing the .glb into Godot "just works":
+  * normalTexture          <- normal map (high res)
+  * baseColorTexture       <- albedo (sRGB)
+  * metallicRoughnessTexture / occlusionTexture <- the ORM map (R=AO, G=roughness, B=metal)
+
+The height map is NOT embedded (glTF has no standard displacement slot); it is emitted as
+a sidecar PNG for optional parallax/displacement wiring in Godot.
 """
 
 from __future__ import annotations
 
 import io
-import struct
 
 import numpy as np
 import pygltflib
@@ -28,7 +33,8 @@ ARRAY_BUFFER = pygltflib.ARRAY_BUFFER
 ELEMENT_ARRAY_BUFFER = pygltflib.ELEMENT_ARRAY_BUFFER
 
 
-def build_glb(params: dict, normal_png: Image.Image, nlat: int, nlon: int) -> bytes:
+def build_glb(params: dict, normal_png: Image.Image, albedo_png: Image.Image,
+              orm_png: Image.Image, nlat: int, nlon: int) -> bytes:
     """Return GLB bytes for the asteroid described by ``params``."""
     grid = shapefield.lonlat_grid(nlat, nlon)
     dirs = grid["dirs"]                                  # (N,3) sphere normals
@@ -58,9 +64,14 @@ def build_glb(params: dict, normal_png: Image.Image, nlat: int, nlon: int) -> by
     v_tan = add(tan.tobytes(), ARRAY_BUFFER)
     v_idx = add(indices.tobytes(), ELEMENT_ARRAY_BUFFER)
 
-    png_buf = io.BytesIO()
-    normal_png.save(png_buf, format="PNG")
-    v_img = add(png_buf.getvalue(), None)
+    def add_png(img):
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", compress_level=9)
+        return add(buf.getvalue(), None)
+
+    v_normal = add_png(normal_png)
+    v_albedo = add_png(albedo_png)
+    v_orm = add_png(orm_png)
 
     # --- accessors ---
     accessors = [
@@ -83,14 +94,19 @@ def build_glb(params: dict, normal_png: Image.Image, nlat: int, nlon: int) -> by
         for (o, l, t) in views
     ]
 
+    # textures: 0=normal, 1=albedo(sRGB), 2=ORM(linear)
+    T_NORMAL, T_ALBEDO, T_ORM = 0, 1, 2
     material = pygltflib.Material(
-        name="asteroid",
+        name=f"asteroid_{params['kind']}",
         pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
-            baseColorFactor=[0.45, 0.42, 0.38, 1.0],
-            metallicFactor=0.0,
-            roughnessFactor=0.95,
+            baseColorFactor=[1.0, 1.0, 1.0, 1.0],
+            baseColorTexture=pygltflib.TextureInfo(index=T_ALBEDO),
+            metallicFactor=1.0,
+            roughnessFactor=1.0,
+            metallicRoughnessTexture=pygltflib.TextureInfo(index=T_ORM),
         ),
-        normalTexture=pygltflib.NormalMaterialTexture(index=0),
+        normalTexture=pygltflib.NormalMaterialTexture(index=T_NORMAL),
+        occlusionTexture=pygltflib.OcclusionTextureInfo(index=T_ORM),
     )
 
     gltf = pygltflib.GLTF2(
@@ -104,9 +120,17 @@ def build_glb(params: dict, normal_png: Image.Image, nlat: int, nlon: int) -> by
             material=0,
         )])],
         materials=[material],
-        textures=[pygltflib.Texture(source=0, sampler=0)],
+        textures=[
+            pygltflib.Texture(source=0, sampler=0),
+            pygltflib.Texture(source=1, sampler=0),
+            pygltflib.Texture(source=2, sampler=0),
+        ],
         samplers=[pygltflib.Sampler(wrapS=pygltflib.REPEAT, wrapT=pygltflib.CLAMP_TO_EDGE)],
-        images=[pygltflib.Image(bufferView=v_img, mimeType="image/png")],
+        images=[
+            pygltflib.Image(bufferView=v_normal, mimeType="image/png"),
+            pygltflib.Image(bufferView=v_albedo, mimeType="image/png"),
+            pygltflib.Image(bufferView=v_orm, mimeType="image/png"),
+        ],
         accessors=accessors,
         bufferViews=buffer_views,
         buffers=[pygltflib.Buffer(byteLength=len(blob))],
