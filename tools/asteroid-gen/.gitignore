@@ -1,0 +1,6 @@
+# Generated artifacts (meshes, normal maps, manifests) — never committed.
+build/
+
+# Local Python env (uv). uv.lock IS committed for reproducible builds.
+.venv/
+__pycache__/

@@ -1,0 +1,7 @@
+[
+  { "name": "asteroid-flint",   "seed": 1001 },
+  { "name": "asteroid-boulder", "seed": 1002, "radius": 32, "lobes": 5, "lumpiness": 0.45 },
+  { "name": "asteroid-shard",   "seed": 1003, "radius": 14, "lobes": 9, "lumpiness": 0.28, "detail": 0.16 },
+  { "name": "asteroid-potato",  "seed": 1004, "radius": 24, "lobes": 4, "lumpiness": 0.55, "detail": 0.08 },
+  { "name": "asteroid-gravel",  "seed": 1005, "radius": 18, "detail": 0.18 }
+]
