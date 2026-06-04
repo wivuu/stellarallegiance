@@ -138,3 +138,5 @@ integration tests.
 
 **Matchmaking / accounts / persistence** — Player identities, ELO, match
 history.
+
+**Improve asteroid texture mapping** - Minimize stretching and distortion on asteroids by adjusting UV coordinates or using tri-planar mapping techniques to ensure textures wrap more naturally around the irregular shapes of the asteroids. If using tri-planar mapping, explore blending and baking the textures for better visual quality. Implement parallax/height maps in-engine for added surface detail without increasing polygon count, enhancing the visual richness of the asteroids.
