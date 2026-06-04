@@ -51,11 +51,13 @@ public partial class Lobby : Control
 		bg.MouseFilter = MouseFilterEnum.Ignore;
 		AddChild(bg);
 
-		// Centered panel column.
+		// Panel column anchored to top-left so it stays visible on small windows.
 		var panel = new PanelContainer();
-		panel.SetAnchorsPreset(LayoutPreset.Center);
-		panel.GrowHorizontal = GrowDirection.Both;
-		panel.GrowVertical = GrowDirection.Both;
+		panel.SetAnchorsPreset(LayoutPreset.TopLeft);
+		panel.GrowHorizontal = GrowDirection.End;
+		panel.GrowVertical = GrowDirection.End;
+		panel.OffsetLeft = 20;
+		panel.OffsetTop = 20;
 		AddChild(panel);
 
 		var col = new VBoxContainer { CustomMinimumSize = new Vector2(440, 0) };
