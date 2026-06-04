@@ -1,7 +1,7 @@
 [
   { "name": "asteroid-flint",     "seed": 1001, "kind": "carbonaceous" },
   { "name": "asteroid-boulder",   "seed": 1002, "kind": "carbonaceous", "radius": 32, "lobes": 5, "lumpiness": 0.45 },
-  { "name": "asteroid-quartz",    "seed": 1003, "kind": "stony", "radius": 18, "facets": 8, "gouges": 2, "relief": 0.12, "value": 1.7, "tint": [0.06, 0.06, 0.07] },
+  { "name": "asteroid-quartz",    "seed": 1003, "kind": "stony", "radius": 18, "facets": 11, "gouges": 2, "relief": 0.12, "value": 1.7, "tint": [0.06, 0.06, 0.07] },
   { "name": "asteroid-geode",     "seed": 1007, "kind": "stony", "radius": 24, "facets": 15, "gouges": 6, "relief": 0.20, "value": 0.9, "tint": [0.03, 0.01, 0.05] },
   { "name": "asteroid-shard",     "seed": 1004, "kind": "stony", "radius": 16, "facets": 11, "gouges": 5, "tint": [0.04, 0.0, -0.03] },
   { "name": "asteroid-gravel",    "seed": 1005, "kind": "stony", "radius": 22, "rocks": 480, "rock_amp": 0.07 },
@@ -20,7 +20,7 @@
 
   { "name": "asteroid-chunk",     "seed": 4001, "kind": "stony", "radius": 18, "facets": 9, "gouges": 3 },
   { "name": "asteroid-rubble",    "seed": 4002, "kind": "stony", "radius": 26, "facets": 14, "gouges": 6, "tint": [0.05, 0.0, -0.04] },
-  { "name": "asteroid-scree",     "seed": 4003, "kind": "stony", "radius": 12, "facets": 8, "gouges": 2 },
+  { "name": "asteroid-scree",     "seed": 4003, "kind": "stony", "radius": 12, "facets": 9, "gouges": 2 },
   { "name": "asteroid-slag",      "seed": 4004, "kind": "stony", "radius": 20, "rocks": 600, "rock_amp": 0.09, "tint": [0.0, 0.0, 0.03] },
   { "name": "asteroid-crag",      "seed": 4005, "kind": "stony", "radius": 34, "facets": 16, "gouges": 7 },
 

@@ -644,6 +644,7 @@ namespace SpacetimeDB.Types
                 Reducer.JoinTeam args => Reducers.InvokeJoinTeam(eventContext, args),
                 Reducer.LeaveTeam args => Reducers.InvokeLeaveTeam(eventContext, args),
                 Reducer.QuickJoin args => Reducers.InvokeQuickJoin(eventContext, args),
+                Reducer.RegenerateWorld args => Reducers.InvokeRegenerateWorld(eventContext, args),
                 Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
                 Reducer.RestartMatch args => Reducers.InvokeRestartMatch(eventContext, args),
                 Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),

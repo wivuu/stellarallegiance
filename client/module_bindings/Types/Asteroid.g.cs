@@ -25,6 +25,14 @@ namespace SpacetimeDB.Types
         public float PosZ;
         [DataMember(Name = "radius")]
         public float Radius;
+        [DataMember(Name = "variant")]
+        public string Variant;
+        [DataMember(Name = "rot_x")]
+        public float RotX;
+        [DataMember(Name = "rot_y")]
+        public float RotY;
+        [DataMember(Name = "rot_z")]
+        public float RotZ;
 
         public Asteroid(
             ulong AsteroidId,
@@ -32,7 +40,11 @@ namespace SpacetimeDB.Types
             float PosX,
             float PosY,
             float PosZ,
-            float Radius
+            float Radius,
+            string Variant,
+            float RotX,
+            float RotY,
+            float RotZ
         )
         {
             this.AsteroidId = AsteroidId;
@@ -41,10 +53,15 @@ namespace SpacetimeDB.Types
             this.PosY = PosY;
             this.PosZ = PosZ;
             this.Radius = Radius;
+            this.Variant = Variant;
+            this.RotX = RotX;
+            this.RotY = RotY;
+            this.RotZ = RotZ;
         }
 
         public Asteroid()
         {
+            this.Variant = "";
         }
     }
 }
