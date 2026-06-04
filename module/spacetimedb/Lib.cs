@@ -28,7 +28,8 @@ public partial struct Player
 {
     [PrimaryKey]
     public Identity Identity;   // provided by SpacetimeDB on connect
-    public byte Team;           // 0 or 1
+    public byte? Team;          // 0 or 1; null means "in the lobby, no team yet"
+    public bool Ready;          // readied up in the lobby; consumed when the match starts
     public ulong? ShipId;       // controlled ship; null when docked/dead
     public bool Online;         // false on disconnect; row retained for match
     public string Name;         // cosmetic
@@ -225,6 +226,7 @@ public static partial class Module
     private const float ProjectileRadius = 1f;       // projectile hit sphere
     private const float ShipRadius = 3f;             // ship hit / collision sphere
     private const float BaseRadius = 45f;            // matches the client's base render radius
+    private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
     private const float MaxCollisionDamage = 30f;    // cap per collision per tick
@@ -326,8 +328,8 @@ public static partial class Module
         ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
 
         // Two bases at opposite ends of the Core sector.
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = 1000f });
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = 1000f });
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
 
         // Each sector gets a DIFFERENT asteroid pattern so they read as distinct places.
         // ctx.Rng is deterministic per reducer call, so the published seed is reproducible.
@@ -377,21 +379,25 @@ public static partial class Module
         }
         else
         {
-            byte team = AssignTeam(ctx);
+            // New connections land in the LOBBY with no team (Team = null). They pick a
+            // side and ready up via JoinTeam/SetReady (or QuickJoin). We don't auto-assign
+            // a team here so a connection that never commits — a CLI subscriber, the owner
+            // dashboard — stays teamless and is pruned on disconnect rather than lingering
+            // as a phantom roster entry.
             ctx.Db.Player.Insert(new Player
             {
                 Identity = ctx.Sender,
-                Team = team,
+                Team = null,
+                Ready = false,
                 ShipId = null,
                 Online = true,
                 Name = "",
             });
-            Log.Info($"[ClientConnected] new player {ctx.Sender} -> team {team}");
+            Log.Info($"[ClientConnected] new player {ctx.Sender} -> lobby");
         }
 
         // Someone is here now — make sure the sim loop is running.
         StartSim(ctx);
-        MaybeStartMatch(ctx);
     }
 
     // A client disconnected: mark offline and remove their live ship.
@@ -409,9 +415,21 @@ public static partial class Module
             DeleteShipInputs(ctx, shipId);
         }
 
-        // Keep the Player row so team balance stays stable for the match.
-        ctx.Db.Player.Identity.Update(p with { Online = false, ShipId = null });
-        Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
+        if (p.Team is null)
+        {
+            // Never committed to a side (still in the lobby, or a non-game connection like
+            // a CLI subscriber / the owner dashboard): drop the row entirely so it doesn't
+            // haunt the lobby roster.
+            ctx.Db.Player.Identity.Delete(ctx.Sender);
+            Log.Info($"[ClientDisconnected] {ctx.Sender} left the lobby (row pruned)");
+        }
+        else
+        {
+            // A teamed player: keep the row (marked offline) so their slot survives a
+            // brief reconnect during a match. RestartMatch prunes any still-offline rows.
+            ctx.Db.Player.Identity.Update(p with { Online = false, ShipId = null });
+            Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
+        }
 
         // If that was the last connected client, pause the sim loop so an
         // empty server idles at ~0 CPU instead of ticking 20 Hz forever.
@@ -445,6 +463,125 @@ public static partial class Module
     public static void Respawn(ReducerContext ctx, ShipClass shipClass)
     {
         SpawnShipInternal(ctx, shipClass);
+    }
+
+    // ---- Lobby actions ------------------------------------------------
+
+    // Pick a side in the lobby. Rejected (logged, not thrown) while a match is Active
+    // (no switching teams mid-game) or when the chosen side would unbalance the rosters
+    // past the cap. Changing teams clears the ready flag — you re-ready on your new side.
+    [SpacetimeDB.Reducer]
+    public static void JoinTeam(ReducerContext ctx, byte team)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (!p.Online || team >= NumTeams)
+            return;
+
+        var phase = ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby;
+        if (phase == MatchPhase.Active)
+        {
+            Log.Info("[JoinTeam] cannot switch teams during an active match");
+            return;
+        }
+        if (!CanJoinTeam(ctx, team, ctx.Sender))
+        {
+            Log.Info($"[JoinTeam] team {team} is full (balance cap)");
+            return;
+        }
+
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false });
+        Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
+    }
+
+    // Drop back to the lobby with no team (and despawn any ship). Clears ready.
+    [SpacetimeDB.Reducer]
+    public static void LeaveTeam(ReducerContext ctx)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (p.ShipId is ulong sid)
+        {
+            ctx.Db.Ship.ShipId.Delete(sid);
+            DeleteShipInputs(ctx, sid);
+        }
+        ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null });
+        Log.Info($"[LeaveTeam] {ctx.Sender} -> lobby");
+    }
+
+    // Toggle the lobby ready flag. Requires a team. Starting the match is checked
+    // immediately so the last pilot to ready up kicks it off.
+    [SpacetimeDB.Reducer]
+    public static void SetReady(ReducerContext ctx, bool ready)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (p.Team is null)
+        {
+            Log.Info("[SetReady] pick a team first");
+            return;
+        }
+        ctx.Db.Player.Identity.Update(p with { Ready = ready });
+        MaybeStartMatch(ctx);
+    }
+
+    // One-tap "quick play": drop onto the smaller side and ready up. Used by the
+    // headless autofly client and offered as a lobby shortcut.
+    [SpacetimeDB.Reducer]
+    public static void QuickJoin(ReducerContext ctx)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (!p.Online)
+            return;
+        if ((ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby) == MatchPhase.Active)
+            return;
+
+        byte team = SmallestOnlineTeam(ctx, ctx.Sender);
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true });
+        Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
+        MaybeStartMatch(ctx);
+    }
+
+    // After a match ends, wipe the battlefield and return everyone to the lobby. Only
+    // valid from the Ended phase (the post-match screen's "Return to Lobby" button).
+    [SpacetimeDB.Reducer]
+    public static void RestartMatch(ReducerContext ctx)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is null)
+            return;
+        var m = match.Value;
+        if (m.Phase != MatchPhase.Ended)
+        {
+            Log.Info("[RestartMatch] only valid once the match has ended");
+            return;
+        }
+
+        ResetWorld(ctx);
+
+        // Prune players who left while the match was running; un-ready the rest but keep
+        // their team so a rematch is one click away.
+        foreach (var pl in ctx.Db.Player.Iter().ToList())
+        {
+            if (!pl.Online)
+            {
+                ctx.Db.Player.Identity.Delete(pl.Identity);
+                continue;
+            }
+            ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
+        }
+
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null });
+        Log.Info("[RestartMatch] world reset -> Lobby");
     }
 
     // Record the input the client produced FOR sim tick `clientTick`, stored under
@@ -950,13 +1087,18 @@ public static partial class Module
             Log.Info("[SpawnShip] player already controls a ship");
             return;
         }
+        if (p.Team is not byte team)
+        {
+            Log.Info("[SpawnShip] no team — still in the lobby");
+            return;
+        }
 
         var match = ctx.Db.Match.Id.Find(0);
-        // Allow spawning in Lobby or Active so a single player can fly solo
-        // (T4); only a finished match blocks spawning. (Decision in .PLAN/99.)
-        if (match is null || match.Value.Phase == MatchPhase.Ended)
+        // You only fly once the match is Active. Lobby/Ended players sit in the lobby
+        // UI; spawning is gated until the lobby readies everyone in (MaybeStartMatch).
+        if (match is null || match.Value.Phase != MatchPhase.Active)
         {
-            Log.Info("[SpawnShip] match not joinable");
+            Log.Info("[SpawnShip] match not active");
             return;
         }
 
@@ -964,7 +1106,7 @@ public static partial class Module
         float bx = 0f, by = 0f, bz = 0f;
         foreach (var b in ctx.Db.Base.Iter())
         {
-            if (b.Team == p.Team)
+            if (b.Team == team)
             {
                 bx = b.PosX; by = b.PosY; bz = b.PosZ;
                 break;
@@ -995,7 +1137,7 @@ public static partial class Module
         {
             ShipId = 0,
             Owner = ctx.Sender,
-            Team = p.Team,
+            Team = team,
             SectorId = HomeSector,
             Class = shipClass,
             PosX = sx, PosY = sy, PosZ = sz,
@@ -1011,27 +1153,60 @@ public static partial class Module
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
         // SimTick falls back to zero input until then.
         ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
-        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({sx},{sy},{sz})");
+        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {team} @ ({sx},{sy},{sz})");
     }
 
-    // Assign the joining player to the team with fewer online players;
-    // ties go to team 0.
-    private static byte AssignTeam(ReducerContext ctx)
+    // Count online, teamed players per side, optionally excluding one identity (so a
+    // player switching teams isn't counted on their old side).
+    private static int[] OnlineTeamCounts(ReducerContext ctx, Identity? exclude)
     {
         var counts = new int[NumTeams];
         foreach (var p in ctx.Db.Player.Iter())
         {
-            if (p.Online && p.Team < NumTeams)
-                counts[p.Team]++;
+            if (!p.Online || (exclude is Identity ex && p.Identity == ex))
+                continue;
+            if (p.Team is byte t && t < NumTeams)
+                counts[t]++;
         }
+        return counts;
+    }
 
+    // Balance cap: a player may only join a side that isn't already larger than another
+    // side (so rosters never differ by more than one). `self` is excluded from the count.
+    private static bool CanJoinTeam(ReducerContext ctx, byte team, Identity self)
+    {
+        var counts = OnlineTeamCounts(ctx, self);
+        int min = counts[0];
+        for (byte t = 1; t < NumTeams; t++)
+            if (counts[t] < min) min = counts[t];
+        return counts[team] <= min;
+    }
+
+    // The side with the fewest online players (ties -> team 0). Used by QuickJoin.
+    private static byte SmallestOnlineTeam(ReducerContext ctx, Identity self)
+    {
+        var counts = OnlineTeamCounts(ctx, self);
         byte best = 0;
         for (byte t = 1; t < NumTeams; t++)
-        {
-            if (counts[t] < counts[best])
-                best = t;
-        }
+            if (counts[t] < counts[best]) best = t;
         return best;
+    }
+
+    // Tear the battlefield down to a fresh state: despawn all ships (player + drone)
+    // and their inputs, clear projectiles, reset every base to full hull. Used when a
+    // match starts and when one restarts. Players' ShipId is cleared by the caller.
+    private static void ResetWorld(ReducerContext ctx)
+    {
+        DespawnAllPigs(ctx);   // deletes drone ships and resets their slots to dormant
+        foreach (var s in ctx.Db.Ship.Iter().ToList())
+        {
+            DeleteShipInputs(ctx, s.ShipId);
+            ctx.Db.Ship.ShipId.Delete(s.ShipId);
+        }
+        foreach (var pr in ctx.Db.Projectile.Iter().ToList())
+            ctx.Db.Projectile.ProjectileId.Delete(pr.ProjectileId);
+        foreach (var b in ctx.Db.Base.Iter().ToList())
+            ctx.Db.Base.BaseId.Update(b with { Health = BaseMaxHealth });
     }
 
     // True if any player connection is currently online.
@@ -1074,28 +1249,34 @@ public static partial class Module
         Log.Info("[Sim] paused (no clients connected)");
     }
 
-    // Lobby -> Active once both teams have at least one online player.
+    // Lobby -> Active once everyone who has joined a side is readied up. Solo is
+    // allowed: the AI drones (PIGs) provide opposition, so one readied pilot can launch.
     private static void MaybeStartMatch(ReducerContext ctx)
     {
         var match = ctx.Db.Match.Id.Find(0);
         if (match is null || match.Value.Phase != MatchPhase.Lobby)
             return;
 
-        var hasPlayers = new bool[NumTeams];
+        int teamed = 0, readied = 0;
         foreach (var p in ctx.Db.Player.Iter())
         {
-            if (p.Online && p.Team < NumTeams)
-                hasPlayers[p.Team] = true;
+            if (!p.Online || p.Team is null)
+                continue;
+            teamed++;
+            if (p.Ready) readied++;
         }
 
-        bool allTeamsReady = true;
-        foreach (var ready in hasPlayers)
-            allTeamsReady &= ready;
+        // Need at least one readied pilot and NO teamed player still un-ready.
+        if (teamed == 0 || readied == 0 || readied != teamed)
+            return;
 
-        if (allTeamsReady)
-        {
-            ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active });
-            Log.Info("[Match] all teams ready -> Active");
-        }
+        // Fresh battlefield, and consume the ready flags so the next lobby starts clean.
+        ResetWorld(ctx);
+        foreach (var p in ctx.Db.Player.Iter().ToList())
+            if (p.Ready)
+                ctx.Db.Player.Identity.Update(p with { Ready = false });
+
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null });
+        Log.Info($"[Match] {readied} pilot(s) ready -> Active");
     }
 }

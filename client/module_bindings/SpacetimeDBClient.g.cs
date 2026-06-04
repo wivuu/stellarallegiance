@@ -641,8 +641,13 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.ApplyInput args => Reducers.InvokeApplyInput(eventContext, args),
+                Reducer.JoinTeam args => Reducers.InvokeJoinTeam(eventContext, args),
+                Reducer.LeaveTeam args => Reducers.InvokeLeaveTeam(eventContext, args),
+                Reducer.QuickJoin args => Reducers.InvokeQuickJoin(eventContext, args),
                 Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
+                Reducer.RestartMatch args => Reducers.InvokeRestartMatch(eventContext, args),
                 Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),
+                Reducer.SetReady args => Reducers.InvokeSetReady(eventContext, args),
                 Reducer.SpawnShip args => Reducers.InvokeSpawnShip(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };

@@ -65,6 +65,7 @@ public partial class ShipController : Node
 	// input so the full ApplyInput -> SimTick -> reconcile loop can be checked
 	// without a human at the keyboard.
 	private bool _autoFly;
+	private bool _autoJoined;            // autofly QuickJoins (team + ready) once on connect
 	private bool _selfTestDone;         // autofly fires one divergence injection
 	private bool _combatTest;           // --combat-test: fly straight + fire (head-on damage check)
 
@@ -132,6 +133,15 @@ public partial class ShipController : Node
 		// request once the ship actually exists.
 		bool connected = _cm.LocalIdentity is not null && _cm.Conn is not null;
 		bool hasShip = _world.LocalShip != null;
+
+		// Headless autofly: the lobby now gates spawning, so QuickJoin once on connect
+		// (smallest side + ready) to drive the match to Active before requesting a ship.
+		// Two --combat-test clients split onto opposing sides server-side.
+		if (_autoFly && connected && !_autoJoined)
+		{
+			_cm.Conn!.Reducers.QuickJoin();
+			_autoJoined = true;
+		}
 
 		HandleMouseCapture(hasShip);
 

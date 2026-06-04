@@ -232,14 +232,22 @@ public partial class WorldRenderer : Node3D
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
 	}
 
-	// A destroyed base (Health <= 0, T9) is removed from the scene — the match is
-	// already over, so it won't come back. Otherwise nothing about a base changes.
+	// A destroyed base (Health <= 0, T9) is removed from the scene. A base that comes
+	// back to full health (RestartMatch heals every base) is re-created if it had been
+	// removed — so the battlefield is whole again for the next match.
 	private void OnBaseUpdate(EventContext ctx, Base oldRow, Base newRow)
 	{
-		if (newRow.Health <= 0f && _baseNodes.Remove(newRow.BaseId, out var node))
+		if (newRow.Health <= 0f)
 		{
-			node.QueueFree();
-			GD.Print($"[WorldRenderer] Base {newRow.BaseId} (team {newRow.Team}) destroyed");
+			if (_baseNodes.Remove(newRow.BaseId, out var node))
+			{
+				node.QueueFree();
+				GD.Print($"[WorldRenderer] Base {newRow.BaseId} (team {newRow.Team}) destroyed");
+			}
+		}
+		else if (!_baseNodes.ContainsKey(newRow.BaseId))
+		{
+			OnBaseInsert(ctx, newRow);   // restored after a restart
 		}
 	}
 
