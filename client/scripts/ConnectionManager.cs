@@ -18,8 +18,18 @@ public partial class ConnectionManager : Node
 	private string _serverUrl = DefaultServerUrl;
 	private string _dbName     = DefaultDbName;
 
+	// Connection lifecycle, surfaced so the UI can show a status overlay instead of a
+	// misleading empty lobby. `Conn` is non-null the moment the builder runs — well
+	// before the socket actually connects, and it stays non-null after a fault — so
+	// `Conn != null` is NOT "connected". Read `State` for that.
+	public enum ConnState { Connecting, Connected, Failed, Disconnected }
+	public ConnState State { get; private set; } = ConnState.Connecting;
+
 	public DbConnection? Conn { get; private set; }
 	public Identity? LocalIdentity { get; private set; }
+
+	// The server we're targeting, for the status overlay's message.
+	public string ServerUrl => _serverUrl;
 
 	// Fired once the websocket connects, BEFORE the subscription is registered,
 	// so listeners can attach OnInsert/OnDelete handlers in time for the
@@ -43,6 +53,14 @@ public partial class ConnectionManager : Node
 		var db  = OS.GetEnvironment("STDB_DB");
 		if (!string.IsNullOrEmpty(uri)) _serverUrl = uri;
 		if (!string.IsNullOrEmpty(db))  _dbName = db;
+		Connect();
+	}
+
+	// Build (or rebuild) the connection. Split out so the status overlay's Retry button
+	// can re-attempt after a failed/lost connection without restarting the client.
+	public void Connect()
+	{
+		State = ConnState.Connecting;
 		GD.Print($"[ConnectionManager] Connecting to {_serverUrl} / {_dbName}");
 
 		Conn = DbConnection.Builder()
@@ -61,6 +79,7 @@ public partial class ConnectionManager : Node
 
 	private void OnConnect(DbConnection conn, Identity identity, string token)
 	{
+		State = ConnState.Connected;
 		LocalIdentity = identity;
 		GD.Print($"[ConnectionManager] Connected — identity: {identity}");
 
@@ -76,11 +95,16 @@ public partial class ConnectionManager : Node
 
 	private void OnConnectError(Exception e)
 	{
+		State = ConnState.Failed;
 		GD.PrintErr($"[ConnectionManager] Connection error: {e.Message}");
 	}
 
 	private void OnDisconnect(DbConnection conn, Exception? e)
 	{
-		GD.Print("[ConnectionManager] Disconnected");
+		// Distinguish "never got in" from "lost a live link": if we'd connected, this is
+		// a drop; otherwise it's part of a failed attempt and Failed already covers it.
+		State = State == ConnState.Connected ? ConnState.Disconnected : ConnState.Failed;
+		LocalIdentity = null;
+		GD.Print($"[ConnectionManager] Disconnected ({(e is null ? "clean" : e.Message)})");
 	}
 }
