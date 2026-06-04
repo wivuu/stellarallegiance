@@ -45,6 +45,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Asteroid, float> PosY { get; }
         public global::SpacetimeDB.Col<Asteroid, float> PosZ { get; }
         public global::SpacetimeDB.Col<Asteroid, float> Radius { get; }
+        public global::SpacetimeDB.Col<Asteroid, string> Variant { get; }
+        public global::SpacetimeDB.Col<Asteroid, float> RotX { get; }
+        public global::SpacetimeDB.Col<Asteroid, float> RotY { get; }
+        public global::SpacetimeDB.Col<Asteroid, float> RotZ { get; }
 
         public AsteroidCols(string tableName)
         {
@@ -54,6 +58,10 @@ namespace SpacetimeDB.Types
             PosY = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "pos_y");
             PosZ = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "pos_z");
             Radius = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "radius");
+            Variant = new global::SpacetimeDB.Col<Asteroid, string>(tableName, "variant");
+            RotX = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "rot_x");
+            RotY = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "rot_y");
+            RotZ = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "rot_z");
         }
     }
 

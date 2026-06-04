@@ -23,6 +23,8 @@ namespace SpacetimeDB.Types
         public byte? Winner;
         [DataMember(Name = "engaged_teams")]
         public byte EngagedTeams;
+        [DataMember(Name = "seed")]
+        public ulong Seed;
         [DataMember(Name = "last_tick_micros")]
         public long LastTickMicros;
         [DataMember(Name = "accum_micros")]
@@ -34,6 +36,7 @@ namespace SpacetimeDB.Types
             MatchPhase Phase,
             byte? Winner,
             byte EngagedTeams,
+            ulong Seed,
             long LastTickMicros,
             long AccumMicros
         )
@@ -43,6 +46,7 @@ namespace SpacetimeDB.Types
             this.Phase = Phase;
             this.Winner = Winner;
             this.EngagedTeams = EngagedTeams;
+            this.Seed = Seed;
             this.LastTickMicros = LastTickMicros;
             this.AccumMicros = AccumMicros;
         }

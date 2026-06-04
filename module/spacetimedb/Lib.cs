@@ -118,6 +118,14 @@ public partial struct Asteroid
     public float PosY;
     public float PosZ;
     public float Radius;        // collision + render scale
+    // Which generated mesh the client renders (GLB stem, e.g. "asteroid-flint"); the
+    // sim treats every asteroid as a sphere of Radius regardless. Empty => client falls
+    // back to a plain sphere.
+    public string Variant;
+    // Fixed orientation (radians) so identical variants don't all face the same way.
+    public float RotX;
+    public float RotY;
+    public float RotZ;
 }
 
 // A sector is one self-contained slice of the world. All sectors share the same
@@ -191,6 +199,10 @@ public partial struct Match
     // Lets us tell "a side that had pilots is now empty → end the match" from "a side that
     // was empty from the start" (solo play vs the AI drones). Reset to 0 in the lobby.
     public byte EngagedTeams;
+    // Seed that generated the current map (asteroid field + aleph placement). Stored so
+    // a map is reproducible: GenerateMap(seed) always yields the same world, and
+    // RegenerateWorld(seed) rebuilds it. Init picks a random seed; clients ignore this.
+    public ulong Seed;
     // Real-time pacing so the sim runs at wall-clock speed regardless of how often
     // the scheduler actually fires SimTick (Maincloud delivers it at ~10 Hz, local
     // at ~20 Hz). Each call integrates `elapsed / Dt` fixed-dt sub-steps; the carry
@@ -258,19 +270,75 @@ public static partial class Module
 
     // ---- World seeding (Init) -----------------------------------------
 
+    // Deterministic PRNG (splitmix64) for MAP generation. ctx.Rng is deterministic but
+    // its seed isn't ours to set or read, so a map it builds can't be reproduced on
+    // demand. DetRng is seeded from an explicit value we store on Match.Seed, so the
+    // same seed always yields the same world. Mutable struct — pass by ref so draws
+    // advance one shared stream.
+    private struct DetRng
+    {
+        private ulong _state;
+        public DetRng(ulong seed) { _state = seed; }
+
+        public ulong NextULong()
+        {
+            _state += 0x9E3779B97F4A7C15UL;
+            ulong z = _state;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            return z ^ (z >> 31);
+        }
+
+        // [0, 1)
+        public double NextDouble() => (NextULong() >> 11) * (1.0 / (1UL << 53));
+        // [lo, hi)
+        public double NextRange(double lo, double hi) => lo + (hi - lo) * NextDouble();
+        // [0, n)
+        public int NextInt(int n) => (int)(NextDouble() * n);
+    }
+
+    // The generated asteroid meshes the client can render (GLB stems under
+    // client/assets/asteroids/). KEEP IN SYNC with tools/asteroid-gen/asteroids.json —
+    // a name here with no matching GLB just falls back to a sphere client-side.
+    private static readonly string[] AsteroidVariants =
+    {
+        "asteroid-flint", "asteroid-boulder", "asteroid-quartz", "asteroid-geode",
+        "asteroid-shard", "asteroid-gravel", "asteroid-pebble", "asteroid-hunk",
+        "asteroid-blob", "asteroid-gourd", "asteroid-nodule", "asteroid-prism",
+        "asteroid-facet", "asteroid-gem", "asteroid-opal", "asteroid-beryl",
+        "asteroid-chunk", "asteroid-rubble", "asteroid-scree", "asteroid-slag",
+        "asteroid-crag", "asteroid-marble", "asteroid-lump", "asteroid-spire",
+        "asteroid-flake", "asteroid-monolith", "asteroid-debris", "asteroid-cobble",
+        "asteroid-slab", "asteroid-ore", "asteroid-knob",
+    };
+
+    // Pick a uniformly-random variant + a random fixed orientation for one asteroid.
+    private static (string variant, float rx, float ry, float rz) NextAsteroidShape(ref DetRng rng)
+    {
+        string variant = AsteroidVariants[rng.NextInt(AsteroidVariants.Length)];
+        float rx = (float)rng.NextRange(0, Math.PI * 2.0);
+        float ry = (float)rng.NextRange(0, Math.PI * 2.0);
+        float rz = (float)rng.NextRange(0, Math.PI * 2.0);
+        return (variant, rx, ry, rz);
+    }
+
     // Core pattern: a diffuse cloud scattered across a wide box.
-    private static void SeedAsteroidField(ReducerContext ctx, uint sector, int count)
+    private static void SeedAsteroidField(ReducerContext ctx, ref DetRng rng, uint sector, int count)
     {
         for (int i = 0; i < count; i++)
         {
+            float px = (float)(rng.NextDouble() * 1600.0 - 800.0);
+            float py = (float)(rng.NextDouble() * 400.0 - 200.0);
+            float pz = (float)(rng.NextDouble() * 1600.0 - 800.0);
+            float radius = (float)(rng.NextDouble() * 30.0 + 10.0);
+            var (variant, rx, ry, rz) = NextAsteroidShape(ref rng);
             ctx.Db.Asteroid.Insert(new Asteroid
             {
                 AsteroidId = 0,
                 SectorId = sector,
-                PosX = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                PosY = (float)(ctx.Rng.NextDouble() * 400.0 - 200.0),
-                PosZ = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                Radius = (float)(ctx.Rng.NextDouble() * 30.0 + 10.0),
+                PosX = px, PosY = py, PosZ = pz,
+                Radius = radius,
+                Variant = variant, RotX = rx, RotY = ry, RotZ = rz,
             });
         }
     }
@@ -278,20 +346,24 @@ public static partial class Module
     // Verge pattern: a flattened belt ringing the sector center. Asteroids sit near
     // VergeBeltRadius in the XZ plane (with radial + vertical jitter) so the field reads
     // as a band you thread, distinct from the Core's open cloud.
-    private static void SeedAsteroidBelt(ReducerContext ctx, uint sector, int count)
+    private static void SeedAsteroidBelt(ReducerContext ctx, ref DetRng rng, uint sector, int count)
     {
         for (int i = 0; i < count; i++)
         {
-            double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
-            double r = VergeBeltRadius + (ctx.Rng.NextDouble() - 0.5) * 160.0;  // ±80 radial jitter
+            double ang = rng.NextDouble() * Math.PI * 2.0;
+            double r = VergeBeltRadius + (rng.NextDouble() - 0.5) * 160.0;  // ±80 radial jitter
+            float px = (float)(Math.Cos(ang) * r);
+            float py = (float)((rng.NextDouble() - 0.5) * 90.0);           // thin vertical band
+            float pz = (float)(Math.Sin(ang) * r);
+            float radius = (float)(rng.NextDouble() * 18.0 + 8.0);
+            var (variant, rx, ry, rz) = NextAsteroidShape(ref rng);
             ctx.Db.Asteroid.Insert(new Asteroid
             {
                 AsteroidId = 0,
                 SectorId = sector,
-                PosX = (float)(Math.Cos(ang) * r),
-                PosY = (float)((ctx.Rng.NextDouble() - 0.5) * 90.0),           // thin vertical band
-                PosZ = (float)(Math.Sin(ang) * r),
-                Radius = (float)(ctx.Rng.NextDouble() * 18.0 + 8.0),
+                PosX = px, PosY = py, PosZ = pz,
+                Radius = radius,
+                Variant = variant, RotX = rx, RotY = ry, RotZ = rz,
             });
         }
     }
@@ -300,57 +372,41 @@ public static partial class Module
     // radius in ~[0.6, 0.9] of the sector radius (sqrt-weighted so it leans outward),
     // with modest vertical spread. Kept inside the boundary so a funnel never sits in
     // the out-of-bounds zone.
-    private static (float, float, float) RandomOuterPos(ReducerContext ctx, float sectorRadius)
+    private static (float, float, float) RandomOuterPos(ref DetRng rng, float sectorRadius)
     {
-        double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
-        double frac = 0.6 + 0.3 * Math.Sqrt(ctx.Rng.NextDouble());   // weighted toward 0.9
+        double ang = rng.NextDouble() * Math.PI * 2.0;
+        double frac = 0.6 + 0.3 * Math.Sqrt(rng.NextDouble());   // weighted toward 0.9
         float r = (float)(sectorRadius * frac);
-        float y = (float)((ctx.Rng.NextDouble() - 0.5) * sectorRadius * 0.2);
+        float y = (float)((rng.NextDouble() - 0.5) * sectorRadius * 0.2);
         return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 
-    // ---- Lifecycle ----------------------------------------------------
-
-    // Runs once when the module is first published.
-    [SpacetimeDB.Reducer(ReducerKind.Init)]
-    public static void Init(ReducerContext ctx)
+    // Build the whole map (asteroid fields + the Core<->Verge aleph pair) deterministically
+    // from one seed: clears any existing asteroids/alephs, then re-creates them off a single
+    // DetRng stream. Same seed => byte-identical map. Sectors and bases are fixed and not
+    // touched here. Used by Init and RegenerateWorld.
+    private static void GenerateMap(ReducerContext ctx, ulong seed)
     {
-        Log.Info("[Init] seeding match state");
+        foreach (var a in ctx.Db.Asteroid.Iter().ToList())
+            ctx.Db.Asteroid.AsteroidId.Delete(a.AsteroidId);
+        foreach (var al in ctx.Db.Aleph.Iter().ToList())
+            ctx.Db.Aleph.AlephId.Delete(al.AlephId);
 
-        // Singleton match row.
-        ctx.Db.Match.Insert(new Match
-        {
-            Id = 0,
-            Tick = 0,
-            Phase = MatchPhase.Lobby,
-            Winner = null,
-            EngagedTeams = 0,
-        });
-
-        // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
-        // and the Verge outpost across the aleph. CenterX/Y/Z are 0 — boundary is a
-        // radius from the origin.
-        ctx.Db.Sector.Insert(new Sector { SectorId = HomeSector, Name = "Core Sector", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = CoreRadius });
-        ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
-
-        // Two bases at opposite ends of the Core sector.
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+        var rng = new DetRng(seed);
 
         // Each sector gets a DIFFERENT asteroid pattern so they read as distinct places.
-        // ctx.Rng is deterministic per reducer call, so the published seed is reproducible.
         //   • Core  — a diffuse 3D field scattered across a wide box (the open battlefield).
-        SeedAsteroidField(ctx, HomeSector, AsteroidCount);
+        SeedAsteroidField(ctx, ref rng, HomeSector, AsteroidCount);
         //   • Verge — a flattened belt: asteroids ring the sector center in the XZ plane
         //     with only slight vertical spread, so flying it feels like threading a band.
-        SeedAsteroidBelt(ctx, VergeSector, VergeAsteroidCount);
+        SeedAsteroidBelt(ctx, ref rng, VergeSector, VergeAsteroidCount);
 
         // One linked aleph pair joining Core <-> Verge. Each funnel is placed at a random
         // spot biased toward the OUTER reaches of its sector (so warps sit out near the
         // frontier, not on top of the bases). Insert both, then wire each to its partner
         // (AlephId is autoinc, so the ids aren't known until after insert).
-        var (cx, cy, cz) = RandomOuterPos(ctx, CoreRadius);
-        var (vx, vy, vz) = RandomOuterPos(ctx, VergeRadius);
+        var (cx, cy, cz) = RandomOuterPos(ref rng, CoreRadius);
+        var (vx, vy, vz) = RandomOuterPos(ref rng, VergeRadius);
         var alephCore = ctx.Db.Aleph.Insert(new Aleph
         {
             AlephId = 0, SectorId = HomeSector, PartnerId = 0, DestSectorId = VergeSector,
@@ -363,6 +419,43 @@ public static partial class Module
         });
         ctx.Db.Aleph.AlephId.Update(alephCore with { PartnerId = alephVerge.AlephId });
         ctx.Db.Aleph.AlephId.Update(alephVerge with { PartnerId = alephCore.AlephId });
+    }
+
+    // ---- Lifecycle ----------------------------------------------------
+
+    // Runs once when the module is first published.
+    [SpacetimeDB.Reducer(ReducerKind.Init)]
+    public static void Init(ReducerContext ctx)
+    {
+        // Pick the map seed once, off ctx.Rng (deterministic but not ours to reproduce),
+        // so a fresh DB gets a fresh-but-recorded map. Everything random about the map
+        // then derives from this stored value — RegenerateWorld(seed) reproduces it.
+        ulong seed = ((ulong)(uint)ctx.Rng.Next() << 32) | (uint)ctx.Rng.Next();
+        Log.Info($"[Init] seeding match state (map seed {seed})");
+
+        // Singleton match row.
+        ctx.Db.Match.Insert(new Match
+        {
+            Id = 0,
+            Tick = 0,
+            Phase = MatchPhase.Lobby,
+            Winner = null,
+            EngagedTeams = 0,
+            Seed = seed,
+        });
+
+        // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
+        // and the Verge outpost across the aleph. CenterX/Y/Z are 0 — boundary is a
+        // radius from the origin.
+        ctx.Db.Sector.Insert(new Sector { SectorId = HomeSector, Name = "Core Sector", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = CoreRadius });
+        ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
+
+        // Two bases at opposite ends of the Core sector.
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+
+        // Asteroid fields + the Core<->Verge aleph pair, all derived from the seed above.
+        GenerateMap(ctx, seed);
 
         // NOTE: SimTick is intentionally NOT scheduled here. The sim loop is
         // started on the first client connect and stopped when the last client
@@ -371,6 +464,29 @@ public static partial class Module
         // advance while nobody is watching.
 
         Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, SimTick paused until first client");
+    }
+
+    // Rebuild the asteroid field + aleph pair from an explicit seed, and record it on the
+    // Match. Same seed => the same map every time. Gated to the Lobby phase: regenerating
+    // mid-match would re-place the alephs out from under flying ships. Sectors/bases are
+    // untouched.
+    [SpacetimeDB.Reducer]
+    public static void RegenerateWorld(ReducerContext ctx, ulong seed)
+    {
+        var m = ctx.Db.Match.Id.Find(0);
+        if (m is null)
+        {
+            Log.Info("[RegenerateWorld] no match row");
+            return;
+        }
+        if (m.Value.Phase != MatchPhase.Lobby)
+        {
+            Log.Info("[RegenerateWorld] refused: only in the lobby");
+            return;
+        }
+        GenerateMap(ctx, seed);
+        ctx.Db.Match.Id.Update(m.Value with { Seed = seed });
+        Log.Info($"[RegenerateWorld] map regenerated from seed {seed}");
     }
 
     // A client connected: create or reactivate their Player row.

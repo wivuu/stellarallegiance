@@ -259,18 +259,79 @@ public partial class WorldRenderer : Node3D
 
 	// ---- Asteroid -------------------------------------------------------
 
+	// Loaded asteroid meshes keyed by variant name (GLB stem). The generated .glb carries
+	// its PBR material on the mesh surface, so reusing one Mesh across instances keeps the
+	// colour/normal/ORM maps. AuthoredRadius is the mesh's bounding radius at author scale,
+	// used to scale each instance to its row's collision Radius. A null Mesh marks a variant
+	// that failed to load (e.g. asset missing) so we don't retry and fall back to a sphere.
+	private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius)> _asteroidMeshes = new();
+
+	// Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
+	private (Mesh? Mesh, float AuthoredRadius) AsteroidMesh(string variant)
+	{
+		if (_asteroidMeshes.TryGetValue(variant, out var cached))
+			return cached;
+
+		(Mesh? Mesh, float AuthoredRadius) result = (null, 0f);
+		var scene = GD.Load<PackedScene>($"res://assets/asteroids/{variant}.glb");
+		if (scene?.Instantiate() is Node root)
+		{
+			if (FindMeshInstance(root) is MeshInstance3D mi && mi.Mesh is Mesh mesh)
+			{
+				var aabb = mesh.GetAabb();
+				// Bounding radius from the AABB half-extents (meshes are authored centred on
+				// the origin), so scaling to row.Radius keeps the silhouette ~= collision sphere.
+				float authored = aabb.Size.Length() * 0.5f;
+				if (authored > 0.001f)
+					result = (mesh, authored);
+			}
+			root.QueueFree();
+		}
+		if (result.Mesh is null)
+			GD.PushWarning($"[WorldRenderer] asteroid variant '{variant}' unavailable — using sphere fallback");
+		_asteroidMeshes[variant] = result;
+		return result;
+	}
+
+	private static MeshInstance3D? FindMeshInstance(Node node)
+	{
+		if (node is MeshInstance3D mi)
+			return mi;
+		foreach (var child in node.GetChildren())
+			if (FindMeshInstance(child) is MeshInstance3D found)
+				return found;
+		return null;
+	}
+
 	private void OnAsteroidInsert(EventContext ctx, Asteroid row)
 	{
 		if (_asteroidNodes.ContainsKey(row.AsteroidId))
 			return;
 
-		var node = new MeshInstance3D
+		MeshInstance3D node;
+		var (mesh, authored) = string.IsNullOrEmpty(row.Variant) ? (null, 0f) : AsteroidMesh(row.Variant);
+		if (mesh is not null)
 		{
-			Name = $"Asteroid_{row.AsteroidId}",
-			Mesh = new SphereMesh { Radius = row.Radius, Height = row.Radius * 2f, RadialSegments = 12, Rings = 6 },
-			MaterialOverride = _asteroidMat,
-			Position = new Vector3(row.PosX, row.PosY, row.PosZ),
-		};
+			node = new MeshInstance3D
+			{
+				Name = $"Asteroid_{row.AsteroidId}",
+				Mesh = mesh,
+				Position = new Vector3(row.PosX, row.PosY, row.PosZ),
+				Rotation = new Vector3(row.RotX, row.RotY, row.RotZ),
+				Scale = Vector3.One * (row.Radius / authored),
+			};
+		}
+		else
+		{
+			// Fallback: missing/failed variant renders as the old grey sphere.
+			node = new MeshInstance3D
+			{
+				Name = $"Asteroid_{row.AsteroidId}",
+				Mesh = new SphereMesh { Radius = row.Radius, Height = row.Radius * 2f, RadialSegments = 12, Rings = 6 },
+				MaterialOverride = _asteroidMat,
+				Position = new Vector3(row.PosX, row.PosY, row.PosZ),
+			};
+		}
 		_asteroids.AddChild(node);
 		_asteroidNodes[row.AsteroidId] = node;
 		SetNodeSector(node, row.SectorId);
