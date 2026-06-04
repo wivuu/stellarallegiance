@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://main"]
+[gd_scene load_steps=8 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/WorldRenderer.cs" id="2"]
 [ext_resource type="Script" path="res://scripts/ShipController.cs" id="3"]
 [ext_resource type="Script" path="res://scripts/CameraRig.cs" id="4"]
 [ext_resource type="Script" path="res://scripts/Hud.cs" id="5"]
+[ext_resource type="Script" path="res://scripts/Sun.cs" id="6"]
 
 [sub_resource type="Environment" id="Env"]
 background_mode = 1
@@ -51,6 +52,9 @@ shadow_normal_bias = 1.5
 shadow_blur = 0.4
 directional_shadow_mode = 2
 directional_shadow_max_distance = 1500.0
+
+[node name="Sun" type="MeshInstance3D" parent="."]
+script = ExtResource("6")
 
 [node name="Camera3D" type="Camera3D" parent="."]
 current = true
