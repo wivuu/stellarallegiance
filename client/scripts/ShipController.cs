@@ -311,7 +311,7 @@ public partial class ShipController : Node
 		Vector2 m = _mouseDelta;
 		_mouseDelta = Vector2.Zero;
 		float mouseYaw = look ? -m.X * _mouseSens : 0f;
-		float mousePitch = look ? (_mouseInvert ? m.Y : -m.Y) * _mouseSens : 0f;
+		float mousePitch = look ? (_mouseInvert ? -m.Y : m.Y) * _mouseSens : 0f;
 
 		return new ShipInputState
 		{

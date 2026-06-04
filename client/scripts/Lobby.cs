@@ -19,7 +19,7 @@ public partial class Lobby : Control
 	private static readonly Color Team0 = new(0.30f, 0.55f, 1.00f);
 	private static readonly Color Team1 = new(1.00f, 0.40f, 0.34f);
 	private static readonly Color Dim = new(0.92f, 0.96f, 1.00f);
-	private static readonly Color Ready = new(0.45f, 0.90f, 0.50f);
+	private static new readonly Color Ready = new(0.45f, 0.90f, 0.50f);
 
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
