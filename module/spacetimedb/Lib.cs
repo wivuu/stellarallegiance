@@ -28,7 +28,8 @@ public partial struct Player
 {
     [PrimaryKey]
     public Identity Identity;   // provided by SpacetimeDB on connect
-    public byte Team;           // 0 or 1
+    public byte? Team;          // 0 or 1; null means "in the lobby, no team yet"
+    public bool Ready;          // readied up in the lobby; consumed when the match starts
     public ulong? ShipId;       // controlled ship; null when docked/dead
     public bool Online;         // false on disconnect; row retained for match
     public string Name;         // cosmetic
@@ -42,6 +43,7 @@ public partial struct Ship
     public ulong ShipId;
     public Identity Owner;
     public byte Team;           // denormalized from Player for fast sim checks
+    public uint SectorId;       // which sector this ship is flying in (partitions the world)
     public ShipClass Class;
     public float PosX;
     public float PosY;
@@ -98,6 +100,7 @@ public partial struct Base
     [AutoInc]
     public ulong BaseId;
     public byte Team;
+    public uint SectorId;       // which sector this base sits in
     public float PosX;
     public float PosY;
     public float PosZ;
@@ -110,10 +113,48 @@ public partial struct Asteroid
     [PrimaryKey]
     [AutoInc]
     public ulong AsteroidId;
+    public uint SectorId;       // which sector this asteroid belongs to
     public float PosX;
     public float PosY;
     public float PosZ;
     public float Radius;        // collision + render scale
+}
+
+// A sector is one self-contained slice of the world. All sectors share the same
+// coordinate origin (objects are partitioned by SectorId, not by world region), so
+// CenterX/Y/Z are the boundary origin — currently (0,0,0) for every sector. A ship
+// whose distance from its sector center exceeds Radius is outside the playable area
+// and takes mounting hull damage until it returns or is destroyed (the "invisible
+// boundary"). Sectors are linked by Aleph pairs.
+[SpacetimeDB.Table(Accessor = "Sector", Public = true)]
+public partial struct Sector
+{
+    [PrimaryKey]
+    public uint SectorId;
+    public string Name;
+    public float CenterX;
+    public float CenterY;
+    public float CenterZ;
+    public float Radius;        // soft play-area radius; beyond it the hull is eroded
+}
+
+// An aleph is a warp gate rendered as a spinning funnel. Alephs come in LINKED
+// PAIRS: one row per sector, each pointing at its partner. A ship that touches an
+// aleph is moved to the partner's sector and repositioned just past the partner
+// aleph (so it doesn't immediately warp back). PartnerId/DestSectorId are wired up
+// after both rows of a pair are inserted (AlephId is autoinc).
+[SpacetimeDB.Table(Accessor = "Aleph", Public = true)]
+public partial struct Aleph
+{
+    [PrimaryKey]
+    [AutoInc]
+    public ulong AlephId;
+    public uint SectorId;       // the sector this funnel lives in
+    public ulong PartnerId;     // the aleph in the destination sector
+    public uint DestSectorId;   // partner's sector (denormalized for the warp)
+    public float PosX;
+    public float PosY;
+    public float PosZ;
 }
 
 [SpacetimeDB.Table(Accessor = "Projectile", Public = true)]
@@ -123,6 +164,7 @@ public partial struct Projectile
     [AutoInc]
     public ulong ProjectileId;
     public byte Team;           // so friendly fire can be ignored
+    public uint SectorId;       // sector it travels in (inherited from the firing ship)
     public float Damage;        // hull damage dealt on hit (from the firing ship's class)
     public float PosX;
     public float PosY;
@@ -144,6 +186,11 @@ public partial struct Match
     public uint Tick;           // authoritative sim tick counter
     public MatchPhase Phase;
     public byte? Winner;        // team id when ended, else null
+    // Bitmask of sides that have fielded a human pilot this match (bit t = team t). Set
+    // when the match starts (every side that readied in) and when a player joins mid-game.
+    // Lets us tell "a side that had pilots is now empty → end the match" from "a side that
+    // was empty from the start" (solo play vs the AI drones). Reset to 0 in the lobby.
+    public byte EngagedTeams;
     // Real-time pacing so the sim runs at wall-clock speed regardless of how often
     // the scheduler actually fires SimTick (Maincloud delivers it at ~10 Hz, local
     // at ~20 Hz). Each call integrates `elapsed / Dt` fixed-dt sub-steps; the carry
@@ -184,13 +231,83 @@ public static partial class Module
     private const float ProjectileRadius = 1f;       // projectile hit sphere
     private const float ShipRadius = 3f;             // ship hit / collision sphere
     private const float BaseRadius = 45f;            // matches the client's base render radius
+    private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
     private const float MaxCollisionDamage = 30f;    // cap per collision per tick
 
+    // ---- Sectors & alephs ---------------------------------------------
+    private const uint  HomeSector = 0;              // bases + spawn live here (the battlefield)
+    private const uint  VergeSector = 1;             // the linked outpost sector across the aleph
+    private const float CoreRadius = 1100f;          // sector 0 boundary (contains bases ±500, field ±800)
+    private const float VergeRadius = 700f;          // sector 1 boundary (a tighter outpost)
+    private const int   VergeAsteroidCount = 14;     // smaller asteroid field in the Verge
+    private const float VergeBeltRadius = 380f;       // ring radius of the Verge's asteroid belt
+    private const float AlephTriggerRadius = 18f;    // touch this close to a funnel to warp through
+    private const float WarpExitOffset = 60f;        // placed this far past the dest aleph (no instant re-warp)
+    // Out-of-bounds hull erosion: a flat base rate plus a ramp with how far past the
+    // edge you are, capped — so skimming the edge is survivable but straying deep is
+    // quickly fatal. Applied per-second (scaled by dt) while a ship is outside.
+    private const float BoundaryBaseDps = 8f;
+    private const float BoundaryRampDps = 0.12f;     // extra dps per unit beyond the edge
+    private const float BoundaryMaxDps = 60f;
+
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
     private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
     private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+
+    // ---- World seeding (Init) -----------------------------------------
+
+    // Core pattern: a diffuse cloud scattered across a wide box.
+    private static void SeedAsteroidField(ReducerContext ctx, uint sector, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            ctx.Db.Asteroid.Insert(new Asteroid
+            {
+                AsteroidId = 0,
+                SectorId = sector,
+                PosX = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
+                PosY = (float)(ctx.Rng.NextDouble() * 400.0 - 200.0),
+                PosZ = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
+                Radius = (float)(ctx.Rng.NextDouble() * 30.0 + 10.0),
+            });
+        }
+    }
+
+    // Verge pattern: a flattened belt ringing the sector center. Asteroids sit near
+    // VergeBeltRadius in the XZ plane (with radial + vertical jitter) so the field reads
+    // as a band you thread, distinct from the Core's open cloud.
+    private static void SeedAsteroidBelt(ReducerContext ctx, uint sector, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
+            double r = VergeBeltRadius + (ctx.Rng.NextDouble() - 0.5) * 160.0;  // ±80 radial jitter
+            ctx.Db.Asteroid.Insert(new Asteroid
+            {
+                AsteroidId = 0,
+                SectorId = sector,
+                PosX = (float)(Math.Cos(ang) * r),
+                PosY = (float)((ctx.Rng.NextDouble() - 0.5) * 90.0),           // thin vertical band
+                PosZ = (float)(Math.Sin(ang) * r),
+                Radius = (float)(ctx.Rng.NextDouble() * 18.0 + 8.0),
+            });
+        }
+    }
+
+    // A random position biased toward the OUTER part of a sector: a random azimuth at a
+    // radius in ~[0.6, 0.9] of the sector radius (sqrt-weighted so it leans outward),
+    // with modest vertical spread. Kept inside the boundary so a funnel never sits in
+    // the out-of-bounds zone.
+    private static (float, float, float) RandomOuterPos(ReducerContext ctx, float sectorRadius)
+    {
+        double ang = ctx.Rng.NextDouble() * Math.PI * 2.0;
+        double frac = 0.6 + 0.3 * Math.Sqrt(ctx.Rng.NextDouble());   // weighted toward 0.9
+        float r = (float)(sectorRadius * frac);
+        float y = (float)((ctx.Rng.NextDouble() - 0.5) * sectorRadius * 0.2);
+        return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
+    }
 
     // ---- Lifecycle ----------------------------------------------------
 
@@ -207,25 +324,45 @@ public static partial class Module
             Tick = 0,
             Phase = MatchPhase.Lobby,
             Winner = null,
+            EngagedTeams = 0,
         });
 
-        // Two bases at opposite ends of the sector.
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, PosX = -500f, PosY = 0f, PosZ = 0f, Health = 1000f });
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, PosX = 500f, PosY = 0f, PosZ = 0f, Health = 1000f });
+        // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
+        // and the Verge outpost across the aleph. CenterX/Y/Z are 0 — boundary is a
+        // radius from the origin.
+        ctx.Db.Sector.Insert(new Sector { SectorId = HomeSector, Name = "Core Sector", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = CoreRadius });
+        ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
 
-        // Static asteroid field. ctx.Rng is deterministic per reducer call,
-        // so the published seed is reproducible.
-        for (int i = 0; i < AsteroidCount; i++)
+        // Two bases at opposite ends of the Core sector.
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+
+        // Each sector gets a DIFFERENT asteroid pattern so they read as distinct places.
+        // ctx.Rng is deterministic per reducer call, so the published seed is reproducible.
+        //   • Core  — a diffuse 3D field scattered across a wide box (the open battlefield).
+        SeedAsteroidField(ctx, HomeSector, AsteroidCount);
+        //   • Verge — a flattened belt: asteroids ring the sector center in the XZ plane
+        //     with only slight vertical spread, so flying it feels like threading a band.
+        SeedAsteroidBelt(ctx, VergeSector, VergeAsteroidCount);
+
+        // One linked aleph pair joining Core <-> Verge. Each funnel is placed at a random
+        // spot biased toward the OUTER reaches of its sector (so warps sit out near the
+        // frontier, not on top of the bases). Insert both, then wire each to its partner
+        // (AlephId is autoinc, so the ids aren't known until after insert).
+        var (cx, cy, cz) = RandomOuterPos(ctx, CoreRadius);
+        var (vx, vy, vz) = RandomOuterPos(ctx, VergeRadius);
+        var alephCore = ctx.Db.Aleph.Insert(new Aleph
         {
-            ctx.Db.Asteroid.Insert(new Asteroid
-            {
-                AsteroidId = 0,
-                PosX = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                PosY = (float)(ctx.Rng.NextDouble() * 400.0 - 200.0),
-                PosZ = (float)(ctx.Rng.NextDouble() * 1600.0 - 800.0),
-                Radius = (float)(ctx.Rng.NextDouble() * 30.0 + 10.0),
-            });
-        }
+            AlephId = 0, SectorId = HomeSector, PartnerId = 0, DestSectorId = VergeSector,
+            PosX = cx, PosY = cy, PosZ = cz,
+        });
+        var alephVerge = ctx.Db.Aleph.Insert(new Aleph
+        {
+            AlephId = 0, SectorId = VergeSector, PartnerId = 0, DestSectorId = HomeSector,
+            PosX = vx, PosY = vy, PosZ = vz,
+        });
+        ctx.Db.Aleph.AlephId.Update(alephCore with { PartnerId = alephVerge.AlephId });
+        ctx.Db.Aleph.AlephId.Update(alephVerge with { PartnerId = alephCore.AlephId });
 
         // NOTE: SimTick is intentionally NOT scheduled here. The sim loop is
         // started on the first client connect and stopped when the last client
@@ -233,7 +370,7 @@ public static partial class Module
         // This is a prototype, not a persistent universe — nothing needs to
         // advance while nobody is watching.
 
-        Log.Info($"[Init] done: 1 match, 2 bases, {AsteroidCount} asteroids, SimTick paused until first client");
+        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, SimTick paused until first client");
     }
 
     // A client connected: create or reactivate their Player row.
@@ -248,21 +385,25 @@ public static partial class Module
         }
         else
         {
-            byte team = AssignTeam(ctx);
+            // New connections land in the LOBBY with no team (Team = null). They pick a
+            // side and ready up via JoinTeam/SetReady (or QuickJoin). We don't auto-assign
+            // a team here so a connection that never commits — a CLI subscriber, the owner
+            // dashboard — stays teamless and is pruned on disconnect rather than lingering
+            // as a phantom roster entry.
             ctx.Db.Player.Insert(new Player
             {
                 Identity = ctx.Sender,
-                Team = team,
+                Team = null,
+                Ready = false,
                 ShipId = null,
                 Online = true,
                 Name = "",
             });
-            Log.Info($"[ClientConnected] new player {ctx.Sender} -> team {team}");
+            Log.Info($"[ClientConnected] new player {ctx.Sender} -> lobby");
         }
 
         // Someone is here now — make sure the sim loop is running.
         StartSim(ctx);
-        MaybeStartMatch(ctx);
     }
 
     // A client disconnected: mark offline and remove their live ship.
@@ -280,9 +421,24 @@ public static partial class Module
             DeleteShipInputs(ctx, shipId);
         }
 
-        // Keep the Player row so team balance stays stable for the match.
-        ctx.Db.Player.Identity.Update(p with { Online = false, ShipId = null });
-        Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
+        if (p.Team is null)
+        {
+            // Never committed to a side (still in the lobby, or a non-game connection like
+            // a CLI subscriber / the owner dashboard): drop the row entirely so it doesn't
+            // haunt the lobby roster.
+            ctx.Db.Player.Identity.Delete(ctx.Sender);
+            Log.Info($"[ClientDisconnected] {ctx.Sender} left the lobby (row pruned)");
+        }
+        else
+        {
+            // A teamed player: keep the row (marked offline) so their slot survives a
+            // brief reconnect during a match. RestartMatch prunes any still-offline rows.
+            ctx.Db.Player.Identity.Update(p with { Online = false, ShipId = null });
+            Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
+        }
+
+        // If a whole side just emptied out, the match is over.
+        EndMatchIfSideAbandoned(ctx);
 
         // If that was the last connected client, pause the sim loop so an
         // empty server idles at ~0 CPU instead of ticking 20 Hz forever.
@@ -316,6 +472,129 @@ public static partial class Module
     public static void Respawn(ReducerContext ctx, ShipClass shipClass)
     {
         SpawnShipInternal(ctx, shipClass);
+    }
+
+    // ---- Lobby actions ------------------------------------------------
+
+    // Pick a side — in the lobby, or to jump into an already-running match. Rejected
+    // (logged, not thrown) when the chosen side would unbalance the rosters past the cap.
+    // Changing teams clears the ready flag; joining a live match marks that side engaged
+    // so its later abandonment ends the match.
+    [SpacetimeDB.Reducer]
+    public static void JoinTeam(ReducerContext ctx, byte team)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (!p.Online || team >= NumTeams)
+            return;
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Ended)
+        {
+            // The post-match screen routes through RestartMatch, not a direct join.
+            Log.Info("[JoinTeam] match has ended; return to the lobby first");
+            return;
+        }
+        if (!CanJoinTeam(ctx, team, ctx.Sender))
+        {
+            Log.Info($"[JoinTeam] team {team} is full (balance cap)");
+            return;
+        }
+
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false });
+        MarkEngagedIfActive(ctx, team);
+        Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
+    }
+
+    // Drop back to the lobby with no team (and despawn any ship). Clears ready. If this
+    // empties a side during a live match, the match ends.
+    [SpacetimeDB.Reducer]
+    public static void LeaveTeam(ReducerContext ctx)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (p.ShipId is ulong sid)
+        {
+            ctx.Db.Ship.ShipId.Delete(sid);
+            DeleteShipInputs(ctx, sid);
+        }
+        ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null });
+        Log.Info($"[LeaveTeam] {ctx.Sender} -> lobby");
+        EndMatchIfSideAbandoned(ctx);
+    }
+
+    // Toggle the lobby ready flag. Requires a team. Starting the match is checked
+    // immediately so the last pilot to ready up kicks it off.
+    [SpacetimeDB.Reducer]
+    public static void SetReady(ReducerContext ctx, bool ready)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (p.Team is null)
+        {
+            Log.Info("[SetReady] pick a team first");
+            return;
+        }
+        ctx.Db.Player.Identity.Update(p with { Ready = ready });
+        MaybeStartMatch(ctx);
+    }
+
+    // One-tap "quick play": drop onto the smaller side and ready up. Used by the
+    // headless autofly client and offered as a lobby shortcut.
+    [SpacetimeDB.Reducer]
+    public static void QuickJoin(ReducerContext ctx)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null)
+            return;
+        var p = player.Value;
+        if (!p.Online)
+            return;
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Ended)
+            return;   // post-match: go through RestartMatch, not a direct join
+
+        byte team = SmallestOnlineTeam(ctx, ctx.Sender);
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true });
+        MarkEngagedIfActive(ctx, team);
+        Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
+        MaybeStartMatch(ctx);
+    }
+
+    // After a match ends, wipe the battlefield and return everyone to the lobby. Only
+    // valid from the Ended phase (the post-match screen's "Return to Lobby" button).
+    [SpacetimeDB.Reducer]
+    public static void RestartMatch(ReducerContext ctx)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is null)
+            return;
+        var m = match.Value;
+        if (m.Phase != MatchPhase.Ended)
+        {
+            Log.Info("[RestartMatch] only valid once the match has ended");
+            return;
+        }
+
+        ResetWorld(ctx);
+
+        // Prune players who left while the match was running; un-ready the rest but keep
+        // their team so a rematch is one click away.
+        foreach (var pl in ctx.Db.Player.Iter().ToList())
+        {
+            if (!pl.Online)
+            {
+                ctx.Db.Player.Identity.Delete(pl.Identity);
+                continue;
+            }
+            ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
+        }
+
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0 });
+        Log.Info("[RestartMatch] world reset -> Lobby");
     }
 
     // Record the input the client produced FOR sim tick `clientTick`, stored under
@@ -474,6 +753,7 @@ public static partial class Module
                 {
                     ProjectileId = 0,
                     Team = ship.Team,
+                    SectorId = ship.SectorId,
                     Damage = WeaponDamage(ship.Class),
                     PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
                     VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
@@ -498,6 +778,53 @@ public static partial class Module
             });
         }
 
+        // --- Pass A.5: aleph warp. A ship that has flown into an aleph in its sector is
+        // moved THROUGH it: same velocity/orientation (momentum carries through the
+        // funnel), but its SectorId becomes the partner's and it re-emerges just past the
+        // partner aleph so it doesn't immediately warp back. Runs on freshly-integrated
+        // positions, before the collision/boundary passes use them.
+        foreach (var ship in ctx.Db.Ship.Iter().ToList())
+        {
+            foreach (var al in ctx.Db.Aleph.Iter())
+            {
+                if (al.SectorId != ship.SectorId)
+                    continue;
+                float rr = AlephTriggerRadius + ShipRadius;
+                if (Dist2(ship.PosX, ship.PosY, ship.PosZ, al.PosX, al.PosY, al.PosZ) > rr * rr)
+                    continue;
+                if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
+                    break;
+
+                // Emerge INWARD — offset from the partner aleph toward the destination
+                // sector center. The funnel sits out near the frontier, so exiting inward
+                // both clears the partner's trigger sphere (no instant re-warp) and keeps
+                // the ship safely inside the boundary (an outward exit could spawn it in
+                // the out-of-bounds zone). Velocity/orientation are preserved (momentum
+                // carries through the funnel).
+                var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
+                float ccx = destSec?.CenterX ?? 0f, ccy = destSec?.CenterY ?? 0f, ccz = destSec?.CenterZ ?? 0f;
+                float ix = ccx - partner.PosX, iy = ccy - partner.PosY, iz = ccz - partner.PosZ;
+                float ilen = MathF.Sqrt(ix * ix + iy * iy + iz * iz);
+                float ox, oy, oz;
+                if (ilen > 1e-3f) { ox = ix / ilen; oy = iy / ilen; oz = iz / ilen; }
+                else
+                {
+                    Vec3 fwd = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW).Rotate(new Vec3(0f, 0f, 1f));
+                    ox = fwd.X; oy = fwd.Y; oz = fwd.Z;
+                }
+                float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
+                ctx.Db.Ship.ShipId.Update(ship with
+                {
+                    SectorId = al.DestSectorId,
+                    PosX = partner.PosX + ox * exit,
+                    PosY = partner.PosY + oy * exit,
+                    PosZ = partner.PosZ + oz * exit,
+                });
+                Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
+                break;
+            }
+        }
+
         // Snapshot post-integration ships + static geometry for the hit/collision
         // passes. Damage is accumulated here and applied once at the end.
         var ships = ctx.Db.Ship.Iter().ToList();
@@ -520,19 +847,20 @@ public static partial class Module
             float nz = p.PosZ + p.VelZ * dt;
             bool consumed = false;
 
-            // Blocked by asteroids (static; they take no damage).
+            // Blocked by asteroids in the SAME sector (static; they take no damage).
             foreach (var a in asteroids)
             {
+                if (a.SectorId != p.SectorId) continue;
                 float rr = a.Radius + ProjectileRadius;
                 if (Dist2(nx, ny, nz, a.PosX, a.PosY, a.PosZ) <= rr * rr) { consumed = true; break; }
             }
 
-            // Hit an enemy ship (friendly fire ignored).
+            // Hit an enemy ship in the same sector (friendly fire ignored).
             if (!consumed)
             {
                 foreach (var s in ships)
                 {
-                    if (s.Team == p.Team) continue;
+                    if (s.Team == p.Team || s.SectorId != p.SectorId) continue;
                     float rr = ShipRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, s.PosX, s.PosY, s.PosZ) <= rr * rr)
                     {
@@ -548,7 +876,7 @@ public static partial class Module
             {
                 foreach (var b in bases)
                 {
-                    if (b.Team == p.Team) continue;
+                    if (b.Team == p.Team || b.SectorId != p.SectorId) continue;
                     float rr = BaseRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
@@ -600,7 +928,7 @@ public static partial class Module
             {
                 var a = ships[i];
                 var b = ships[j];
-                if (a.Team == b.Team) continue;
+                if (a.Team == b.Team || a.SectorId != b.SectorId) continue;
 
                 float dx = a.PosX - b.PosX, dy = a.PosY - b.PosY, dz = a.PosZ - b.PosZ;
                 float dist2 = dx * dx + dy * dy + dz * dz;
@@ -630,18 +958,37 @@ public static partial class Module
             }
         }
 
+        // Sector lookup for the out-of-bounds check (table is tiny — a couple of rows).
+        var sectors = ctx.Db.Sector.Iter().ToList();
+
         foreach (var s0 in ships)
         {
             var s = s0;
             if (damage.TryGetValue(s.ShipId, out var d))
                 s.Health -= d;
 
-            // Asteroids (all) and the ENEMY base only — your own base is your dock/
-            // spawn point, so you pass through it.
+            // Sector boundary: a ship beyond its sector radius takes mounting hull
+            // damage (the "invisible boundary") until it returns to bounds or dies.
+            foreach (var sec in sectors)
+            {
+                if (sec.SectorId != s.SectorId) continue;
+                float ddx = s.PosX - sec.CenterX, ddy = s.PosY - sec.CenterY, ddz = s.PosZ - sec.CenterZ;
+                float over = MathF.Sqrt(ddx * ddx + ddy * ddy + ddz * ddz) - sec.Radius;
+                if (over > 0f)
+                {
+                    float dps = MathF.Min(BoundaryBaseDps + over * BoundaryRampDps, BoundaryMaxDps);
+                    s.Health -= dps * dt;
+                }
+                break;
+            }
+
+            // Asteroids + the ENEMY base in this SHIP's sector only — your own base is
+            // your dock/spawn point, so you pass through it.
             foreach (var a in asteroids)
-                s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
+                if (a.SectorId == s.SectorId)
+                    s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
             foreach (var b in bases)
-                if (b.Team != s.Team)
+                if (b.Team != s.Team && b.SectorId == s.SectorId)
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
 
             if (s.Health <= 0f)
@@ -753,13 +1100,18 @@ public static partial class Module
             Log.Info("[SpawnShip] player already controls a ship");
             return;
         }
+        if (p.Team is not byte team)
+        {
+            Log.Info("[SpawnShip] no team — still in the lobby");
+            return;
+        }
 
         var match = ctx.Db.Match.Id.Find(0);
-        // Allow spawning in Lobby or Active so a single player can fly solo
-        // (T4); only a finished match blocks spawning. (Decision in .PLAN/99.)
-        if (match is null || match.Value.Phase == MatchPhase.Ended)
+        // You only fly once the match is Active. Lobby/Ended players sit in the lobby
+        // UI; spawning is gated until the lobby readies everyone in (MaybeStartMatch).
+        if (match is null || match.Value.Phase != MatchPhase.Active)
         {
-            Log.Info("[SpawnShip] match not joinable");
+            Log.Info("[SpawnShip] match not active");
             return;
         }
 
@@ -767,7 +1119,7 @@ public static partial class Module
         float bx = 0f, by = 0f, bz = 0f;
         foreach (var b in ctx.Db.Base.Iter())
         {
-            if (b.Team == p.Team)
+            if (b.Team == team)
             {
                 bx = b.PosX; by = b.PosY; bz = b.PosZ;
                 break;
@@ -798,7 +1150,8 @@ public static partial class Module
         {
             ShipId = 0,
             Owner = ctx.Sender,
-            Team = p.Team,
+            Team = team,
+            SectorId = HomeSector,
             Class = shipClass,
             PosX = sx, PosY = sy, PosZ = sz,
             VelX = 0f, VelY = 0f, VelZ = 0f,
@@ -813,27 +1166,60 @@ public static partial class Module
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
         // SimTick falls back to zero input until then.
         ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
-        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {p.Team} @ ({sx},{sy},{sz})");
+        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {team} @ ({sx},{sy},{sz})");
     }
 
-    // Assign the joining player to the team with fewer online players;
-    // ties go to team 0.
-    private static byte AssignTeam(ReducerContext ctx)
+    // Count online, teamed players per side, optionally excluding one identity (so a
+    // player switching teams isn't counted on their old side).
+    private static int[] OnlineTeamCounts(ReducerContext ctx, Identity? exclude)
     {
         var counts = new int[NumTeams];
         foreach (var p in ctx.Db.Player.Iter())
         {
-            if (p.Online && p.Team < NumTeams)
-                counts[p.Team]++;
+            if (!p.Online || (exclude is Identity ex && p.Identity == ex))
+                continue;
+            if (p.Team is byte t && t < NumTeams)
+                counts[t]++;
         }
+        return counts;
+    }
 
+    // Balance cap: a player may only join a side that isn't already larger than another
+    // side (so rosters never differ by more than one). `self` is excluded from the count.
+    private static bool CanJoinTeam(ReducerContext ctx, byte team, Identity self)
+    {
+        var counts = OnlineTeamCounts(ctx, self);
+        int min = counts[0];
+        for (byte t = 1; t < NumTeams; t++)
+            if (counts[t] < min) min = counts[t];
+        return counts[team] <= min;
+    }
+
+    // The side with the fewest online players (ties -> team 0). Used by QuickJoin.
+    private static byte SmallestOnlineTeam(ReducerContext ctx, Identity self)
+    {
+        var counts = OnlineTeamCounts(ctx, self);
         byte best = 0;
         for (byte t = 1; t < NumTeams; t++)
-        {
-            if (counts[t] < counts[best])
-                best = t;
-        }
+            if (counts[t] < counts[best]) best = t;
         return best;
+    }
+
+    // Tear the battlefield down to a fresh state: despawn all ships (player + drone)
+    // and their inputs, clear projectiles, reset every base to full hull. Used when a
+    // match starts and when one restarts. Players' ShipId is cleared by the caller.
+    private static void ResetWorld(ReducerContext ctx)
+    {
+        DespawnAllPigs(ctx);   // deletes drone ships and resets their slots to dormant
+        foreach (var s in ctx.Db.Ship.Iter().ToList())
+        {
+            DeleteShipInputs(ctx, s.ShipId);
+            ctx.Db.Ship.ShipId.Delete(s.ShipId);
+        }
+        foreach (var pr in ctx.Db.Projectile.Iter().ToList())
+            ctx.Db.Projectile.ProjectileId.Delete(pr.ProjectileId);
+        foreach (var b in ctx.Db.Base.Iter().ToList())
+            ctx.Db.Base.BaseId.Update(b with { Health = BaseMaxHealth });
     }
 
     // True if any player connection is currently online.
@@ -876,28 +1262,96 @@ public static partial class Module
         Log.Info("[Sim] paused (no clients connected)");
     }
 
-    // Lobby -> Active once both teams have at least one online player.
+    // Mark a side as having fielded a human this match, but only while one is running —
+    // so a player who jumps into a live match makes that side's later abandonment count.
+    private static void MarkEngagedIfActive(ReducerContext ctx, byte team)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is Match m && m.Phase == MatchPhase.Active && team < NumTeams)
+        {
+            byte engaged = (byte)(m.EngagedTeams | (1 << team));
+            if (engaged != m.EngagedTeams)
+                ctx.Db.Match.Id.Update(m with { EngagedTeams = engaged });
+        }
+    }
+
+    // During a live match, end it if every pilot on an ENGAGED side has left (disconnect
+    // or back to the lobby). If anyone is still flying, their side wins by forfeit; if the
+    // server emptied out entirely, quietly reset to the lobby (no audience for a result).
+    // A no-op unless a match is actually Active and an engaged side just hit zero.
+    private static void EndMatchIfSideAbandoned(ReducerContext ctx)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is null || match.Value.Phase != MatchPhase.Active)
+            return;
+        var m = match.Value;
+
+        var counts = OnlineTeamCounts(ctx, null);
+        int total = 0;
+        for (byte t = 0; t < NumTeams; t++) total += counts[t];
+
+        bool abandoned = false;
+        for (byte t = 0; t < NumTeams; t++)
+            if ((m.EngagedTeams & (1 << t)) != 0 && counts[t] == 0)
+                abandoned = true;
+        if (!abandoned)
+            return;
+
+        if (total == 0)
+        {
+            // Everyone left — wipe the battlefield and drop back to an empty lobby. Prune
+            // the now-orphaned offline rows so the next session starts clean.
+            ResetWorld(ctx);
+            foreach (var pl in ctx.Db.Player.Iter().ToList())
+            {
+                if (!pl.Online)
+                    ctx.Db.Player.Identity.Delete(pl.Identity);
+                else
+                    ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
+            }
+            ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0 });
+            Log.Info("[Match] all pilots left -> Lobby");
+            return;
+        }
+
+        // A side was abandoned but the other is still fighting — award them the win.
+        byte winner = 0;
+        for (byte t = 0; t < NumTeams; t++)
+            if (counts[t] > 0) { winner = t; break; }
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Ended, Winner = winner });
+        Log.Info($"[Match] team {winner} wins by forfeit (enemy side left)");
+    }
+
+    // Lobby -> Active once everyone who has joined a side is readied up. Solo is
+    // allowed: the AI drones (PIGs) provide opposition, so one readied pilot can launch.
     private static void MaybeStartMatch(ReducerContext ctx)
     {
         var match = ctx.Db.Match.Id.Find(0);
         if (match is null || match.Value.Phase != MatchPhase.Lobby)
             return;
 
-        var hasPlayers = new bool[NumTeams];
+        int teamed = 0, readied = 0;
+        byte engaged = 0;
         foreach (var p in ctx.Db.Player.Iter())
         {
-            if (p.Online && p.Team < NumTeams)
-                hasPlayers[p.Team] = true;
+            if (!p.Online || p.Team is not byte t)
+                continue;
+            teamed++;
+            if (p.Ready) readied++;
+            engaged |= (byte)(1 << t);
         }
 
-        bool allTeamsReady = true;
-        foreach (var ready in hasPlayers)
-            allTeamsReady &= ready;
+        // Need at least one readied pilot and NO teamed player still un-ready.
+        if (teamed == 0 || readied == 0 || readied != teamed)
+            return;
 
-        if (allTeamsReady)
-        {
-            ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active });
-            Log.Info("[Match] all teams ready -> Active");
-        }
+        // Fresh battlefield, and consume the ready flags so the next lobby starts clean.
+        ResetWorld(ctx);
+        foreach (var p in ctx.Db.Player.Iter().ToList())
+            if (p.Ready)
+                ctx.Db.Player.Identity.Update(p with { Ready = false });
+
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
+        Log.Info($"[Match] {readied} pilot(s) ready -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");
     }
 }

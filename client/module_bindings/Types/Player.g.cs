@@ -16,7 +16,9 @@ namespace SpacetimeDB.Types
         [DataMember(Name = "identity")]
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "team")]
-        public byte Team;
+        public byte? Team;
+        [DataMember(Name = "ready")]
+        public bool Ready;
         [DataMember(Name = "ship_id")]
         public ulong? ShipId;
         [DataMember(Name = "online")]
@@ -26,7 +28,8 @@ namespace SpacetimeDB.Types
 
         public Player(
             SpacetimeDB.Identity Identity,
-            byte Team,
+            byte? Team,
+            bool Ready,
             ulong? ShipId,
             bool Online,
             string Name
@@ -34,6 +37,7 @@ namespace SpacetimeDB.Types
         {
             this.Identity = Identity;
             this.Team = Team;
+            this.Ready = Ready;
             this.ShipId = ShipId;
             this.Online = Online;
             this.Name = Name;

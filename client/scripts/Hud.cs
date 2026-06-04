@@ -1,19 +1,23 @@
 using Godot;
+using SpacetimeDB;
 using SpacetimeDB.Types;
 
-// Heads-up display. When the player has no ship it shows the spawn menu (Scout /
-// Fighter buttons, per T7); while flying it shows a speed + reconcile readout.
-// The 1/2 keyboard shortcuts in ShipController do the same thing as the buttons.
+// Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
+// UI; the Hud's own spawn menu only appears once you're teamed in an active match and
+// not currently flying, and while flying it shows a speed + reconcile readout.
+// The 1/2 keyboard shortcuts in ShipController do the same thing as the spawn buttons.
 public partial class Hud : CanvasLayer
 {
+	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
 	private ShipController _ship = null!;
 	private Label _label = null!;
 	private Control _menu = null!;
-	private Label _banner = null!;
+	private Label _warning = null!;
 
 	public override void _Ready()
 	{
+		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 		_ship = GetNode<ShipController>("../ShipController");
 
@@ -21,6 +25,11 @@ public partial class Hud : CanvasLayer
 		var markers = new TargetMarkers { Name = "TargetMarkers" };
 		AddChild(markers);
 		markers.Init(_world, GetNode<Camera3D>("../Camera3D"));
+
+		// Always-on sector minimap, bottom-left.
+		var minimap = new Minimap { Name = "Minimap" };
+		AddChild(minimap);
+		minimap.Init(_cm, _world);
 
 		_label = new Label { Position = new Vector2(16, 12) };
 		_label.AddThemeFontSizeOverride("font_size", 18);
@@ -32,17 +41,32 @@ public partial class Hud : CanvasLayer
 		_menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
 		_menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
 
-		// Match-end banner (T9): centered, hidden until the match is decided.
-		_banner = new Label
+		// Out-of-bounds warning (sector boundary): centered in the upper third, hidden
+		// until the local ship strays past its sector radius and starts taking damage.
+		_warning = new Label
 		{
 			Visible = false,
 			HorizontalAlignment = HorizontalAlignment.Center,
-			VerticalAlignment = VerticalAlignment.Center,
 			AnchorRight = 1f,
-			AnchorBottom = 1f,
+			OffsetTop = 90f,
 		};
-		_banner.AddThemeFontSizeOverride("font_size", 48);
-		AddChild(_banner);
+		_warning.AddThemeFontSizeOverride("font_size", 30);
+		_warning.AddThemeColorOverride("font_color", new Color(1f, 0.35f, 0.3f));
+		AddChild(_warning);
+
+		// Lobby / pre-match / post-match overlay (added last so it draws on top of the
+		// rest of the HUD when visible). Owns the team picker, ready-up, and end screen.
+		var lobby = new Lobby { Name = "Lobby" };
+		AddChild(lobby);
+		lobby.Init(_cm, _world);
+	}
+
+	private Player? LocalPlayer()
+	{
+		var conn = _cm.Conn;
+		if (conn is null || _cm.LocalIdentity is not Identity id)
+			return null;
+		return conn.Db.Player.Identity.Find(id);
 	}
 
 	private Button SpawnButton(string text, ShipClass cls)
@@ -54,26 +78,42 @@ public partial class Hud : CanvasLayer
 
 	public override void _Process(double delta)
 	{
-		// Match over: show the banner and hide the spawn menu (you can't respawn
-		// into a finished match — SpawnShip refuses in the Ended phase).
-		if (_world.Phase == MatchPhase.Ended)
-		{
-			_menu.Visible = false;
-			byte winner = _world.Winner ?? 0;
-			string team = winner == 0 ? "BLUE" : "RED";
-			Color color = winner == 0 ? new Color(0.4f, 0.7f, 1f) : new Color(1f, 0.5f, 0.4f);
-			_banner.Text = $"TEAM {team} WINS";
-			_banner.AddThemeColorOverride("font_color", color);
-			_banner.Visible = true;
-			_label.Text = "Match over.";
-			return;
-		}
-
 		var ship = _world.LocalShip;
 		bool flying = ship != null;
-		_menu.Visible = !flying;
-		_label.Text = !flying
-			? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
-			: $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)";
+
+		// The Lobby overlay owns everything outside a live match. The spawn menu only
+		// appears once you're teamed in an active match and not currently flying.
+		bool teamedInMatch = _world.Phase == MatchPhase.Active
+			&& LocalPlayer() is Player p && p.Team is not null;
+		_menu.Visible = teamedInMatch && !flying;
+
+		// Sector boundary: warn (and pulse) once the ship is past the radius, where the
+		// server is eroding the hull. Distance is measured from the local sector center.
+		float radius = _world.LocalSectorRadius;
+		if (flying && radius > 0f)
+		{
+			float dist = (ship!.Position - _world.LocalSectorCenter).Length();
+			if (dist > radius)
+			{
+				float over = dist - radius;
+				_warning.Text = $"⚠  LEAVING SECTOR — HULL FAILING  ⚠\nreturn to bounds ({over:0} u out)";
+				_warning.Visible = true;
+			}
+			else
+			{
+				_warning.Visible = false;
+			}
+		}
+		else
+		{
+			_warning.Visible = false;
+		}
+		// Top-left readout: the controls hint while choosing a ship (teamed, pre-spawn),
+		// the live flight stats while flying, and nothing while the lobby overlay is up.
+		_label.Text = flying
+			? $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
+			: teamedInMatch
+				? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
+				: "";
 	}
 }

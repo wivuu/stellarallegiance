@@ -40,6 +40,7 @@ namespace SpacetimeDB.Types
     public sealed class AsteroidCols
     {
         public global::SpacetimeDB.Col<Asteroid, ulong> AsteroidId { get; }
+        public global::SpacetimeDB.Col<Asteroid, uint> SectorId { get; }
         public global::SpacetimeDB.Col<Asteroid, float> PosX { get; }
         public global::SpacetimeDB.Col<Asteroid, float> PosY { get; }
         public global::SpacetimeDB.Col<Asteroid, float> PosZ { get; }
@@ -48,6 +49,7 @@ namespace SpacetimeDB.Types
         public AsteroidCols(string tableName)
         {
             AsteroidId = new global::SpacetimeDB.Col<Asteroid, ulong>(tableName, "asteroid_id");
+            SectorId = new global::SpacetimeDB.Col<Asteroid, uint>(tableName, "sector_id");
             PosX = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "pos_x");
             PosY = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "pos_y");
             PosZ = new global::SpacetimeDB.Col<Asteroid, float>(tableName, "pos_z");

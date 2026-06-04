@@ -167,9 +167,17 @@ public partial class PredictionController : Node3D
 	}
 
 	// Authoritative Ship row arrived: compare against what we predicted for its
-	// LastInputTick and reconcile only if we genuinely diverged.
-	public void OnAuthoritative(Ship row)
+	// LastInputTick and reconcile only if we genuinely diverged. `warped` forces a
+	// hard relocation (aleph warp) — the position discontinuity is intentional, so we
+	// snap instantly instead of easing it in like an ordinary reconcile.
+	public void OnAuthoritative(Ship row, bool warped = false)
 	{
+		if (warped)
+		{
+			HardSnapTo(row);
+			return;
+		}
+
 		Health = row.Health;
 		uint n = row.LastInputTick;
 		var auth = ShipMath.StateFromRow(row);
@@ -210,6 +218,27 @@ public partial class PredictionController : Node3D
 			_buffer.Add(e);
 		}
 		RebaseTo(s);
+	}
+
+	// Warp: teleport the predicted state to authority with NO visual easing. Clears the
+	// input buffer and zeroes the reconcile springs so the ship (and the chase camera
+	// rigidly attached to it) appears instantly at the destination instead of streaking
+	// across the warp gap. Mirrors Initialize, minus the identity/stats setup.
+	private void HardSnapTo(Ship row)
+	{
+		Health = row.Health;
+		_state = ShipMath.StateFromRow(row);
+		_prevState = _state;
+		_lastFireTick = row.LastFireTick;
+		_buffer.Clear();
+		_tickTimer = 0;
+		_posErr = Vector3.Zero;
+		_posErrVel = Vector3.Zero;
+		_rotErr = Quaternion.Identity;
+		_rotErrVel = Vector3.Zero;
+		_renderedPos = ShipMath.ToGodot(_state.Pos);
+		_renderedRot = ShipMath.ToGodot(_state.Rot).Normalized();
+		ApplyVisual(1f);
 	}
 
 	// Move the predicted state to newState while keeping the RENDERED transform

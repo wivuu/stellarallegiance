@@ -42,6 +42,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Ship, ulong> ShipId { get; }
         public global::SpacetimeDB.Col<Ship, SpacetimeDB.Identity> Owner { get; }
         public global::SpacetimeDB.Col<Ship, byte> Team { get; }
+        public global::SpacetimeDB.Col<Ship, uint> SectorId { get; }
         public global::SpacetimeDB.Col<Ship, ShipClass> Class { get; }
         public global::SpacetimeDB.Col<Ship, float> PosX { get; }
         public global::SpacetimeDB.Col<Ship, float> PosY { get; }
@@ -66,6 +67,7 @@ namespace SpacetimeDB.Types
             ShipId = new global::SpacetimeDB.Col<Ship, ulong>(tableName, "ship_id");
             Owner = new global::SpacetimeDB.Col<Ship, SpacetimeDB.Identity>(tableName, "owner");
             Team = new global::SpacetimeDB.Col<Ship, byte>(tableName, "team");
+            SectorId = new global::SpacetimeDB.Col<Ship, uint>(tableName, "sector_id");
             Class = new global::SpacetimeDB.Col<Ship, ShipClass>(tableName, "class");
             PosX = new global::SpacetimeDB.Col<Ship, float>(tableName, "pos_x");
             PosY = new global::SpacetimeDB.Col<Ship, float>(tableName, "pos_y");

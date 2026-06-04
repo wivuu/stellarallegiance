@@ -27,12 +27,14 @@ namespace SpacetimeDB.Types
     {
         public RemoteTables(DbConnection conn)
         {
+            AddTable(Aleph = new(conn));
             AddTable(Asteroid = new(conn));
             AddTable(Base = new(conn));
             AddTable(Match = new(conn));
             AddTable(Pig = new(conn));
             AddTable(Player = new(conn));
             AddTable(Projectile = new(conn));
+            AddTable(Sector = new(conn));
             AddTable(Ship = new(conn));
             AddTable(SimTickTimer = new(conn));
         }
@@ -531,12 +533,14 @@ namespace SpacetimeDB.Types
 
         internal static string[] AllTablesSqlQueries() => new string[]
         {
+            new QueryBuilder().From.Aleph().ToSql(),
             new QueryBuilder().From.Asteroid().ToSql(),
             new QueryBuilder().From.Base().ToSql(),
             new QueryBuilder().From.Match().ToSql(),
             new QueryBuilder().From.Pig().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.Projectile().ToSql(),
+            new QueryBuilder().From.Sector().ToSql(),
             new QueryBuilder().From.Ship().ToSql(),
             new QueryBuilder().From.SimTickTimer().ToSql(),
         }
@@ -545,12 +549,14 @@ namespace SpacetimeDB.Types
 
     public sealed class From
     {
+        public global::SpacetimeDB.Table<Aleph, AlephCols, AlephIxCols> Aleph() => new("aleph", new AlephCols("aleph"), new AlephIxCols("aleph"));
         public global::SpacetimeDB.Table<Asteroid, AsteroidCols, AsteroidIxCols> Asteroid() => new("asteroid", new AsteroidCols("asteroid"), new AsteroidIxCols("asteroid"));
         public global::SpacetimeDB.Table<Base, BaseCols, BaseIxCols> Base() => new("base", new BaseCols("base"), new BaseIxCols("base"));
         public global::SpacetimeDB.Table<Match, MatchCols, MatchIxCols> Match() => new("match", new MatchCols("match"), new MatchIxCols("match"));
         public global::SpacetimeDB.Table<Pig, PigCols, PigIxCols> Pig() => new("pig", new PigCols("pig"), new PigIxCols("pig"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<Projectile, ProjectileCols, ProjectileIxCols> Projectile() => new("projectile", new ProjectileCols("projectile"), new ProjectileIxCols("projectile"));
+        public global::SpacetimeDB.Table<Sector, SectorCols, SectorIxCols> Sector() => new("sector", new SectorCols("sector"), new SectorIxCols("sector"));
         public global::SpacetimeDB.Table<Ship, ShipCols, ShipIxCols> Ship() => new("ship", new ShipCols("ship"), new ShipIxCols("ship"));
         public global::SpacetimeDB.Table<SimTickTimer, SimTickTimerCols, SimTickTimerIxCols> SimTickTimer() => new("sim_tick_timer", new SimTickTimerCols("sim_tick_timer"), new SimTickTimerIxCols("sim_tick_timer"));
     }
@@ -635,8 +641,13 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.ApplyInput args => Reducers.InvokeApplyInput(eventContext, args),
+                Reducer.JoinTeam args => Reducers.InvokeJoinTeam(eventContext, args),
+                Reducer.LeaveTeam args => Reducers.InvokeLeaveTeam(eventContext, args),
+                Reducer.QuickJoin args => Reducers.InvokeQuickJoin(eventContext, args),
                 Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
+                Reducer.RestartMatch args => Reducers.InvokeRestartMatch(eventContext, args),
                 Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),
+                Reducer.SetReady args => Reducers.InvokeSetReady(eventContext, args),
                 Reducer.SpawnShip args => Reducers.InvokeSpawnShip(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };

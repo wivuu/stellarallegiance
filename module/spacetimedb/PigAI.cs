@@ -134,6 +134,17 @@ public static partial class Module
     {
         for (byte team = 0; team < NumTeams; team++)
         {
+            // PIGs defend their base's sector: a team only fields drones while an ENEMY
+            // ship (a player OR a hostile drone) is actually present in that sector. A team
+            // with no base, or whose home sector has no incursion, spawns nothing — drones
+            // appear in response to a threat rather than the moment any player is alive.
+            // (Already-flying drones are left alone here; the outer no-players-left gate in
+            // SimulateTick despawns everything when the field empties.)
+            if (TeamBaseSector(ctx, team) is not uint baseSector)
+                continue;
+            if (!EnemyInSector(ctx, team, baseSector))
+                continue;
+
             // This team's dead slots whose respawn time has arrived, in stable order.
             var ready = new List<Pig>();
             foreach (var slot in ctx.Db.Pig.Iter())
@@ -157,9 +168,10 @@ public static partial class Module
     private static void SpawnPig(ReducerContext ctx, Pig slot, uint tick)
     {
         float bx = 0f, by = 0f, bz = 0f;
+        uint sector = HomeSector;
         foreach (var b in ctx.Db.Base.Iter())
         {
-            if (b.Team == slot.Team) { bx = b.PosX; by = b.PosY; bz = b.PosZ; break; }
+            if (b.Team == slot.Team) { bx = b.PosX; by = b.PosY; bz = b.PosZ; sector = b.SectorId; break; }
         }
 
         float yaw = MathF.Atan2(-bx, -bz);
@@ -184,6 +196,7 @@ public static partial class Module
             // as a remote ship (and KillShip's player path never touches it).
             Owner = ctx.Sender,
             Team = slot.Team,
+            SectorId = sector,
             Class = slot.Class,
             PosX = sx, PosY = sy, PosZ = sz,
             VelX = 0f, VelY = 0f, VelZ = 0f,
@@ -248,13 +261,34 @@ public static partial class Module
         // new contact that scores clearly higher (PigThreatSwitchMargin) — hysteresis so
         // the drone commits to a fight instead of thrashing between similar threats.
         ulong? keepId = slotOpt?.TargetShipId;
+
+        // Our locked target may have warped to another sector. If so, give chase THROUGH
+        // the aleph: keep the lock and run down the funnel that leads to its sector — the
+        // warp pass carries us across when we touch it. A committed drone can't be shaken
+        // by ducking through a gate.
+        if (keepId is ulong lockId
+            && ctx.Db.Ship.ShipId.Find(lockId) is Ship locked
+            && locked.Team != me.Team && locked.SectorId != me.SectorId)
+        {
+            if (AlephTo(ctx, me.SectorId, locked.SectorId) is Aleph gate)
+            {
+                if (slotOpt is Pig spp)
+                    ctx.Db.Pig.PigId.Update(spp with { State = PigState.Seek, TargetShipId = locked.ShipId });
+                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f);
+            }
+            keepId = null;   // no path to that sector — drop the lock and re-acquire below
+        }
+
+        // Acquire/keep a target among enemies in THIS sector only. Cross-sector contacts
+        // are ignored for acquisition (projectiles are sector-scoped, so they can't be hit
+        // anyway) — pursuit across sectors only continues an EXISTING lock, handled above.
         float radar2 = PigRadarRange * PigRadarRange;
         float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
         Ship? best = null; float bestScore = float.NegativeInfinity;
         Ship? kept = null; float keptScore = float.NegativeInfinity;
         foreach (var s in ctx.Db.Ship.Iter())
         {
-            if (s.Team == me.Team)
+            if (s.Team == me.Team || s.SectorId != me.SectorId)
                 continue;
             float d2 = Dist2(myPos.X, myPos.Y, myPos.Z, s.PosX, s.PosY, s.PosZ);
             if (d2 > keep2)
@@ -271,11 +305,16 @@ public static partial class Module
         else
             target = best;
 
-        // ---- No target: Idle. Loiter near base. ----
+        // ---- No target: route home, else loiter. ----
         if (target is not Ship tgt)
         {
             if (slotOpt is Pig sp)
                 ctx.Db.Pig.PigId.Update(sp with { State = PigState.Idle, TargetShipId = null });
+            // Chased a target into a foreign sector and lost it? Head back to our base
+            // sector through the aleph rather than milling about an outpost.
+            if (TeamBaseSector(ctx, me.Team) is uint home && home != me.SectorId
+                && AlephTo(ctx, me.SectorId, home) is Aleph homeGate)
+                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(homeGate.PosX, homeGate.PosY, homeGate.PosZ), 1f);
             return PigIdleInput(ctx, me, myPos, myRot);
         }
 
@@ -451,6 +490,50 @@ public static partial class Module
         float dmg = WeaponDamage(enemy.Class) / 10f; // Scout 0.4, Fighter 1.0
 
         return PigThreatAimWeight * aim + PigThreatCloseWeight * close + PigThreatDmgWeight * dmg;
+    }
+
+    // The sector containing this team's base (first found), or null if the team has none.
+    private static uint? TeamBaseSector(ReducerContext ctx, byte team)
+    {
+        foreach (var b in ctx.Db.Base.Iter())
+            if (b.Team == team)
+                return b.SectorId;
+        return null;
+    }
+
+    // True if any ENEMY ship (different team) is currently flying in the given sector.
+    private static bool EnemyInSector(ReducerContext ctx, byte team, uint sector)
+    {
+        foreach (var s in ctx.Db.Ship.Iter())
+            if (s.Team != team && s.SectorId == sector)
+                return true;
+        return false;
+    }
+
+    // The aleph in `fromSector` whose far end is `destSector` (the funnel to take to get
+    // there), or null if the two sectors aren't directly linked.
+    private static Aleph? AlephTo(ReducerContext ctx, uint fromSector, uint destSector)
+    {
+        foreach (var a in ctx.Db.Aleph.Iter())
+            if (a.SectorId == fromSector && a.DestSectorId == destSector)
+                return a;
+        return null;
+    }
+
+    // Steer toward a world point: turn the nose onto it (hard turn if it's behind), thrust
+    // forward once roughly aligned, and bend around asteroids in the way. Used to run down
+    // an aleph — chasing a locked target across sectors, or routing back home.
+    private static ShipInputState PigSteerTo(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing)
+    {
+        Vec3 to = point - myPos;
+        float d = to.Length();
+        Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
+        desired = PigAvoidAsteroids(ctx, myPos, desired);
+        Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
+        float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
+        float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
+        float thrust = local.Z > 0.3f ? thrustWhenFacing : 0.2f;
+        return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch };
     }
 
     // ---- small server-only math helpers (plain MathF is fine; not synced) ----

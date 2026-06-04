@@ -41,6 +41,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<Base, ulong> BaseId { get; }
         public global::SpacetimeDB.Col<Base, byte> Team { get; }
+        public global::SpacetimeDB.Col<Base, uint> SectorId { get; }
         public global::SpacetimeDB.Col<Base, float> PosX { get; }
         public global::SpacetimeDB.Col<Base, float> PosY { get; }
         public global::SpacetimeDB.Col<Base, float> PosZ { get; }
@@ -50,6 +51,7 @@ namespace SpacetimeDB.Types
         {
             BaseId = new global::SpacetimeDB.Col<Base, ulong>(tableName, "base_id");
             Team = new global::SpacetimeDB.Col<Base, byte>(tableName, "team");
+            SectorId = new global::SpacetimeDB.Col<Base, uint>(tableName, "sector_id");
             PosX = new global::SpacetimeDB.Col<Base, float>(tableName, "pos_x");
             PosY = new global::SpacetimeDB.Col<Base, float>(tableName, "pos_y");
             PosZ = new global::SpacetimeDB.Col<Base, float>(tableName, "pos_z");
