@@ -117,19 +117,23 @@ public partial class WorldRenderer : Node3D
 		{
 			AlbedoColor = new Color(0.12f, 0.22f, 0.4f),
 			Metallic = 0.8f, Roughness = 0.35f,
-			EmissionEnabled = true, Emission = new Color(0.2f, 0.45f, 0.85f), EmissionEnergyMultiplier = 0.4f,
+			EmissionEnabled = true, Emission = new Color(0.2f, 0.45f, 0.85f), EmissionEnergyMultiplier = 1.0f,
 		};
 		_pigTeam1Mat = new StandardMaterial3D
 		{
 			AlbedoColor = new Color(0.4f, 0.14f, 0.12f),
 			Metallic = 0.8f, Roughness = 0.35f,
-			EmissionEnabled = true, Emission = new Color(0.85f, 0.25f, 0.2f), EmissionEnergyMultiplier = 0.4f,
+			EmissionEnabled = true, Emission = new Color(0.85f, 0.25f, 0.2f), EmissionEnergyMultiplier = 1.0f,
 		};
 		// Bright unshaded tracers so shots read clearly against the dark sector.
+		// HDR emission (energy > 1) pushes them past the glow threshold so they bloom.
 		_projectileMat = new StandardMaterial3D
 		{
 			AlbedoColor = new Color(1f, 0.9f, 0.4f),
 			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+			EmissionEnabled = true,
+			Emission = new Color(1f, 0.85f, 0.35f),
+			EmissionEnergyMultiplier = 2.5f,
 		};
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
@@ -487,6 +491,8 @@ public partial class WorldRenderer : Node3D
 	{
 		Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f, RadialSegments = 8, Rings = 4 },
 		MaterialOverride = _projectileMat,
+		// Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
+		CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 	};
 
 	// Cull predicted ghosts that were never matched to an authoritative row.

@@ -47,6 +47,8 @@ public partial class AlephView : Node3D
 					Mesh = cube,
 					MaterialOverride = mat,
 					Position = new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r),
+					// Self-lit warp motes: no shadow casting (cheap + correct look).
+					CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 				});
 			}
 		}
