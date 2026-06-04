@@ -3,10 +3,10 @@ name: asteroids
 # Generates the asteroid mesh + normal-map catalog in a headless container and
 # uploads the artifacts. Meshes/maps are build outputs and are never committed.
 on:
-  push:
-    paths:
-      - "tools/asteroid-gen/**"
-      - ".github/workflows/asteroids.yml"
+  # push:
+  #   paths:
+  #     - "tools/asteroid-gen/**"
+  #     - ".github/workflows/asteroids.yml"
   workflow_dispatch:
 
 jobs:
