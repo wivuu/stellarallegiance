@@ -186,6 +186,11 @@ public partial struct Match
     public uint Tick;           // authoritative sim tick counter
     public MatchPhase Phase;
     public byte? Winner;        // team id when ended, else null
+    // Bitmask of sides that have fielded a human pilot this match (bit t = team t). Set
+    // when the match starts (every side that readied in) and when a player joins mid-game.
+    // Lets us tell "a side that had pilots is now empty → end the match" from "a side that
+    // was empty from the start" (solo play vs the AI drones). Reset to 0 in the lobby.
+    public byte EngagedTeams;
     // Real-time pacing so the sim runs at wall-clock speed regardless of how often
     // the scheduler actually fires SimTick (Maincloud delivers it at ~10 Hz, local
     // at ~20 Hz). Each call integrates `elapsed / Dt` fixed-dt sub-steps; the carry
@@ -319,6 +324,7 @@ public static partial class Module
             Tick = 0,
             Phase = MatchPhase.Lobby,
             Winner = null,
+            EngagedTeams = 0,
         });
 
         // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
@@ -431,6 +437,9 @@ public static partial class Module
             Log.Info($"[ClientDisconnected] {ctx.Sender} offline");
         }
 
+        // If a whole side just emptied out, the match is over.
+        EndMatchIfSideAbandoned(ctx);
+
         // If that was the last connected client, pause the sim loop so an
         // empty server idles at ~0 CPU instead of ticking 20 Hz forever.
         if (!AnyOnline(ctx))
@@ -467,9 +476,10 @@ public static partial class Module
 
     // ---- Lobby actions ------------------------------------------------
 
-    // Pick a side in the lobby. Rejected (logged, not thrown) while a match is Active
-    // (no switching teams mid-game) or when the chosen side would unbalance the rosters
-    // past the cap. Changing teams clears the ready flag — you re-ready on your new side.
+    // Pick a side — in the lobby, or to jump into an already-running match. Rejected
+    // (logged, not thrown) when the chosen side would unbalance the rosters past the cap.
+    // Changing teams clears the ready flag; joining a live match marks that side engaged
+    // so its later abandonment ends the match.
     [SpacetimeDB.Reducer]
     public static void JoinTeam(ReducerContext ctx, byte team)
     {
@@ -479,11 +489,10 @@ public static partial class Module
         var p = player.Value;
         if (!p.Online || team >= NumTeams)
             return;
-
-        var phase = ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby;
-        if (phase == MatchPhase.Active)
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Ended)
         {
-            Log.Info("[JoinTeam] cannot switch teams during an active match");
+            // The post-match screen routes through RestartMatch, not a direct join.
+            Log.Info("[JoinTeam] match has ended; return to the lobby first");
             return;
         }
         if (!CanJoinTeam(ctx, team, ctx.Sender))
@@ -493,10 +502,12 @@ public static partial class Module
         }
 
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false });
+        MarkEngagedIfActive(ctx, team);
         Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
     }
 
-    // Drop back to the lobby with no team (and despawn any ship). Clears ready.
+    // Drop back to the lobby with no team (and despawn any ship). Clears ready. If this
+    // empties a side during a live match, the match ends.
     [SpacetimeDB.Reducer]
     public static void LeaveTeam(ReducerContext ctx)
     {
@@ -511,6 +522,7 @@ public static partial class Module
         }
         ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null });
         Log.Info($"[LeaveTeam] {ctx.Sender} -> lobby");
+        EndMatchIfSideAbandoned(ctx);
     }
 
     // Toggle the lobby ready flag. Requires a team. Starting the match is checked
@@ -542,11 +554,12 @@ public static partial class Module
         var p = player.Value;
         if (!p.Online)
             return;
-        if ((ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby) == MatchPhase.Active)
-            return;
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Ended)
+            return;   // post-match: go through RestartMatch, not a direct join
 
         byte team = SmallestOnlineTeam(ctx, ctx.Sender);
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true });
+        MarkEngagedIfActive(ctx, team);
         Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
         MaybeStartMatch(ctx);
     }
@@ -580,7 +593,7 @@ public static partial class Module
             ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
         }
 
-        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null });
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0 });
         Log.Info("[RestartMatch] world reset -> Lobby");
     }
 
@@ -1249,6 +1262,66 @@ public static partial class Module
         Log.Info("[Sim] paused (no clients connected)");
     }
 
+    // Mark a side as having fielded a human this match, but only while one is running —
+    // so a player who jumps into a live match makes that side's later abandonment count.
+    private static void MarkEngagedIfActive(ReducerContext ctx, byte team)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is Match m && m.Phase == MatchPhase.Active && team < NumTeams)
+        {
+            byte engaged = (byte)(m.EngagedTeams | (1 << team));
+            if (engaged != m.EngagedTeams)
+                ctx.Db.Match.Id.Update(m with { EngagedTeams = engaged });
+        }
+    }
+
+    // During a live match, end it if every pilot on an ENGAGED side has left (disconnect
+    // or back to the lobby). If anyone is still flying, their side wins by forfeit; if the
+    // server emptied out entirely, quietly reset to the lobby (no audience for a result).
+    // A no-op unless a match is actually Active and an engaged side just hit zero.
+    private static void EndMatchIfSideAbandoned(ReducerContext ctx)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is null || match.Value.Phase != MatchPhase.Active)
+            return;
+        var m = match.Value;
+
+        var counts = OnlineTeamCounts(ctx, null);
+        int total = 0;
+        for (byte t = 0; t < NumTeams; t++) total += counts[t];
+
+        bool abandoned = false;
+        for (byte t = 0; t < NumTeams; t++)
+            if ((m.EngagedTeams & (1 << t)) != 0 && counts[t] == 0)
+                abandoned = true;
+        if (!abandoned)
+            return;
+
+        if (total == 0)
+        {
+            // Everyone left — wipe the battlefield and drop back to an empty lobby. Prune
+            // the now-orphaned offline rows so the next session starts clean.
+            ResetWorld(ctx);
+            foreach (var pl in ctx.Db.Player.Iter().ToList())
+            {
+                if (!pl.Online)
+                    ctx.Db.Player.Identity.Delete(pl.Identity);
+                else
+                    ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
+            }
+            ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0 });
+            Log.Info("[Match] all pilots left -> Lobby");
+            return;
+        }
+
+        // A side was abandoned but the other is still fighting — award them the win.
+        byte winner = 0;
+        for (byte t = 0; t < NumTeams; t++)
+            if (counts[t] > 0) { winner = t; break; }
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Ended, Winner = winner });
+        Log.Info($"[Match] team {winner} wins by forfeit (enemy side left)");
+    }
+
     // Lobby -> Active once everyone who has joined a side is readied up. Solo is
     // allowed: the AI drones (PIGs) provide opposition, so one readied pilot can launch.
     private static void MaybeStartMatch(ReducerContext ctx)
@@ -1258,12 +1331,14 @@ public static partial class Module
             return;
 
         int teamed = 0, readied = 0;
+        byte engaged = 0;
         foreach (var p in ctx.Db.Player.Iter())
         {
-            if (!p.Online || p.Team is null)
+            if (!p.Online || p.Team is not byte t)
                 continue;
             teamed++;
             if (p.Ready) readied++;
+            engaged |= (byte)(1 << t);
         }
 
         // Need at least one readied pilot and NO teamed player still un-ready.
@@ -1276,7 +1351,7 @@ public static partial class Module
             if (p.Ready)
                 ctx.Db.Player.Identity.Update(p with { Ready = false });
 
-        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null });
-        Log.Info($"[Match] {readied} pilot(s) ready -> Active");
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
+        Log.Info($"[Match] {readied} pilot(s) ready -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");
     }
 }

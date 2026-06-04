@@ -88,10 +88,20 @@ when the match has **ended** or is **not yet in play**.
   bases to full), prunes offline players, un-readies the rest (keeping their
   team), and returns `Match.Phase` to `Lobby`.
 - `SpawnShip` now requires `Phase == Active` and a team (the lobby gates flying).
+- **Join mid-game:** `JoinTeam` / `QuickJoin` work during `Active` too — a teamless
+  player picks a side from the lobby overlay and spawns straight into the running
+  match (still balance-capped; refused only in `Ended`, which routes through
+  `RestartMatch`).
+- **End on side abandonment:** `Match.EngagedTeams` (bitmask) records which sides
+  have fielded a human this match (set at start and on mid-game join). When an
+  engaged side drops to zero online pilots (`EndMatchIfSideAbandoned`, run on
+  disconnect / `LeaveTeam`), the match ends: the other side wins by forfeit, or —
+  if everyone left — it quietly resets to the lobby. Solo-vs-PIGs still works
+  because an un-engaged empty side never triggers it.
 - Disconnect cleanup: teamless connections (CLI subscriber, owner dashboard, a
   player who never picked a side) are **deleted** on disconnect so they don't
   haunt the roster; teamed players are kept offline for reconnect and pruned by
-  the next `RestartMatch`.
+  the next `RestartMatch` / all-leave reset.
 - Client `Lobby` overlay (`client/scripts/Lobby.cs`, created by the Hud): roster
   with team/ready, team picker with live balance counts, ready/quick-join/leave,
   the "match in progress" notice for latecomers, and the winner + "Return to

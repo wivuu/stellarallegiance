@@ -205,7 +205,7 @@ public partial class Lobby : Control
 
 		// Status line.
 		if (active && !teamed)
-			_status.Text = "Match in progress — you'll be able to join the next round.";
+			_status.Text = "Match in progress — pick a side to jump straight in.";
 		else if (ended)
 			_status.Text = "Return to the lobby to play again.";
 		else if (!teamed)
@@ -215,15 +215,17 @@ public partial class Lobby : Control
 		else
 			_status.Text = "Ready up to launch the match.";
 
-		// Controls. During an active match (latecomer) everything but the roster is hidden.
-		bool lobbyControls = !active;   // Lobby or Ended
-		_teamRow.Visible = lobbyControls;
-		_quick.Visible = lobbyControls && !teamed;
-		_ready.Visible = lobbyControls && teamed;
-		_leave.Visible = lobbyControls && teamed;
+		// Controls. You can pick a side in the lobby OR jump into a live match while
+		// teamless (the lobby overlay hides the moment you're teamed in an active match).
+		bool lobbyPhase = !active && !ended;
+		bool joinable = lobbyPhase || (active && !teamed);
+		_teamRow.Visible = joinable;
+		_quick.Visible = joinable && !teamed;
+		_ready.Visible = lobbyPhase && teamed;       // readying only matters pre-match
+		_leave.Visible = lobbyPhase && teamed;
 		_restart.Visible = ended;
 
-		if (lobbyControls)
+		if (joinable)
 		{
 			// Balance cap mirrors the server: you may only join a side that isn't already
 			// larger than the other. Counts exclude yourself so switching is judged fairly.
@@ -241,6 +243,6 @@ public partial class Lobby : Control
 	private static string ShortId(Identity id)
 	{
 		string s = id.ToString();
-		return "Pilot " + (s.Length > 6 ? s.Substring(0, 6) : s);
+		return "Pilot " + (s.Length > 6 ? s[..6] : s);
 	}
 }

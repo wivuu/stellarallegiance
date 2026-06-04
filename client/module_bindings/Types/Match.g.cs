@@ -21,6 +21,8 @@ namespace SpacetimeDB.Types
         public MatchPhase Phase;
         [DataMember(Name = "winner")]
         public byte? Winner;
+        [DataMember(Name = "engaged_teams")]
+        public byte EngagedTeams;
         [DataMember(Name = "last_tick_micros")]
         public long LastTickMicros;
         [DataMember(Name = "accum_micros")]
@@ -31,6 +33,7 @@ namespace SpacetimeDB.Types
             uint Tick,
             MatchPhase Phase,
             byte? Winner,
+            byte EngagedTeams,
             long LastTickMicros,
             long AccumMicros
         )
@@ -39,6 +42,7 @@ namespace SpacetimeDB.Types
             this.Tick = Tick;
             this.Phase = Phase;
             this.Winner = Winner;
+            this.EngagedTeams = EngagedTeams;
             this.LastTickMicros = LastTickMicros;
             this.AccumMicros = AccumMicros;
         }
