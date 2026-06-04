@@ -15,23 +15,34 @@ build environment (the pinned Docker image — what CI uses); across CPU archite
 (`sin`/`cos`/`exp` aren't bit-identical across arches). Treat the Docker image as the
 canonical producer.
 
+## Kinds (asteroid types)
+
+The base silhouette is selected by `kind`; all kinds share the high-frequency detail layer:
+
+| kind | look | base field |
+|------|------|------------|
+| `bulbous`     | rounded, lumpy | sum of smooth Gaussian lobes |
+| `crystalline` | sharp flat facets (gem/quartz) | convex support `min_i dᵢ/max(u·Nᵢ, ε)` |
+| `angular`     | faceted + fractured | crystalline base minus concave gouges |
+
 ## Why it's consistent (no cross-language RNG)
 
 A normal map only aligns with a mesh if both come from the *same* shape definition.
 **All randomness lives in `shapefield.py`** (`numpy.random.default_rng(seed)`), which turns a
-seed into an explicit, closed-form radial field `r(direction)` — a *star-shaped* asteroid
-(radius as a function of direction, so no overhangs/caves):
+seed into an explicit, closed-form *star-shaped* radial field `r(direction)` (radius as a
+function of direction — no overhangs/caves) in two layers:
 
 ```
-r(u) = R0 * ( 1 + Σ aᵢ·exp(sᵢ·(u·Lᵢ − 1))     # low-frequency lobes  (lumpy silhouette)
-                + Σ bⱼ·sin(Fⱼ·u + pⱼ) )         # high-frequency detail (craters/roughness)
+r(u) = base(u)            # silhouette by kind (lobes / facets) — drives the MESH
+     + detail(u)          # high-freq roughness + scattered rocks — normal map ONLY
 ```
 
-OpenSCAD (`asteroid.scad`) evaluates that field with the given params to build the mesh, and
-the baker evaluates the **same** field analytically for the normal map. No RNG runs in two
-languages, so nothing can drift. Because the field is closed-form, the surface normal is
-computed analytically — the map captures full-resolution detail regardless of mesh density,
-so we need no separate high-poly mesh and no ray-casting.
+OpenSCAD (`asteroid.scad`) evaluates the **base** to build the mesh; the baker evaluates
+**base + detail** analytically for the normal map. Only the base is mirrored in OpenSCAD —
+the rock/roughness detail is map-only, so the low-poly silhouette stays clean while the
+surface reads as rocky. No RNG runs in two languages, so nothing can drift, and because the
+field is closed-form the surface normal is analytic (no separate high-poly mesh, no
+ray-casting) and captures full-resolution detail at any mesh density.
 
 ## Usage
 
@@ -45,8 +56,8 @@ Everything runs in Docker (no host deps beyond Docker):
 Or directly with [uv](https://docs.astral.sh/uv/) + a local OpenSCAD:
 
 ```bash
-uv run generate.py all                       # render asteroids.json into ./build
-uv run generate.py one --seed 1234 --radius 20 --grid 96 --map-size 1024
+uv run generate.py all                                        # render asteroids.json into ./build
+uv run generate.py one --seed 1234 --kind crystalline --radius 20 --grid 128 --map-size 2048
 ```
 
 ### Outputs (in `build/`, gitignored)
@@ -65,19 +76,25 @@ A small committed list; only `name` + `seed` are required, the rest default:
 
 ```json
 [
-  { "name": "asteroid-flint",  "seed": 1001 },
-  { "name": "asteroid-shard",  "seed": 1003, "radius": 14, "lobes": 9, "detail": 0.16 }
+  { "name": "asteroid-flint",  "seed": 1001, "kind": "bulbous" },
+  { "name": "asteroid-quartz", "seed": 1003, "kind": "crystalline", "radius": 18, "facets": 9 },
+  { "name": "asteroid-gravel", "seed": 1005, "kind": "angular", "rocks": 480, "rock_amp": 0.07 }
 ]
 ```
 
 | field | default | meaning |
 |-------|---------|---------|
+| `kind`      | `bulbous` | base silhouette: `bulbous` / `crystalline` / `angular` |
 | `radius`    | 20    | overall size (world units) |
-| `lobes`     | 7     | number of low-frequency lumps |
-| `lumpiness` | 0.35  | lobe amplitude (silhouette irregularity) |
-| `detail`    | 0.12  | high-frequency surface detail amplitude (normal-map relief) |
-| `grid`      | 96    | mesh longitude segments (latitude = grid/2); STL + GLB density |
-| `map_size`  | 1024  | normal-map width (height = width/2) |
+| `lobes`     | 7     | bulbous: number of low-frequency lumps |
+| `lumpiness` | 0.35  | bulbous: lobe amplitude (silhouette irregularity) |
+| `facets`    | 11    | crystalline/angular: number of random facet planes (+6 axis planes) |
+| `gouges`    | 4     | angular: number of concave gouges carved into the faceted base |
+| `roughness` | 0.05  | high-frequency surface roughness amplitude (normal-map only) |
+| `rocks`     | 320   | number of scattered rocks/pits (normal-map only) |
+| `rock_amp`  | 0.05  | rock bump amplitude (normal-map only) |
+| `grid`      | 128   | mesh longitude segments (latitude = grid/2); STL + GLB density |
+| `map_size`  | 2048  | normal-map width (height = width/2) |
 
 ## Godot integration
 

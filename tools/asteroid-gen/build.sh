@@ -8,6 +8,9 @@ cd "$(dirname "$0")"
 IMAGE="${IMAGE:-asteroid-gen}"
 OUT="${OUT:-$PWD/build}"
 
+# Clean out the old build artifacts, if any.
+rm -rf "$OUT"
+
 docker build -t "$IMAGE" .
 mkdir -p "$OUT"
 

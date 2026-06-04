@@ -1,26 +1,32 @@
 """Deterministic asteroid shape field — the single source of randomness.
 
-A star-shaped asteroid is defined by a radial field ``r(u)`` over unit
-directions ``u`` (radius as a function of direction, so there are no overhangs):
+A star-shaped asteroid is a radial field ``r(u)`` over unit directions ``u`` (radius
+as a function of direction, so there are no overhangs). The field has two layers:
 
-    r(u) = R0 * ( 1
-                  + sum_i  a_i * exp(s_i * (u·L_i - 1))     # low-freq lobes (lumps)
-                  + sum_j  b_j * sin(F_j · u + p_j) )       # high-freq detail (craters)
+  * BASE  — the overall silhouette, one of several distinguishable *kinds*. This drives
+            the low-poly mesh (OpenSCAD mirrors it) and the normal map's low frequencies.
+  * DETAIL — high-frequency roughness + scattered "rocks" (tight bumps). This feeds ONLY
+            the normal map, so the mesh silhouette stays clean while the surface looks rocky.
 
-The surface point is ``P(u) = radius * r(u) * u``.
+Kinds (base shape):
+  * "bulbous"     — smooth Gaussian lobes (rounded, lumpy).
+  * "crystalline" — convex faceted gem: r(u) = min_i d_i / max(u·N_i, eps). Flat faces, sharp edges.
+  * "angular"     — faceted base with concave gouges subtracted (chunky, fractured rock).
 
-ALL randomness lives in :func:`params_from_seed`. OpenSCAD (``asteroid.scad``) and
-the normal-map baker (``bake_normals.py``) both consume the *same* explicit params,
-so the mesh and the normal map are mathematically guaranteed to align — no RNG runs
-in two languages, so nothing can drift.
+ALL randomness lives in :func:`params_from_seed`. OpenSCAD (``asteroid.scad``) and the
+baker both consume the *same* explicit params; only the BASE needs mirroring in OpenSCAD
+(the detail layer is map-only), so the mesh and map cannot drift.
 
-Everything is closed-form, so the surface normal is computed analytically (not from
-triangle faces): the map captures the full-resolution shape regardless of mesh density.
+Everything is closed-form, so the surface normal is analytic (computed from the implicit
+surface ``G(x) = |x| - r(x̂) = 0``), capturing full-resolution detail at any mesh density.
 """
 
 from __future__ import annotations
 
 import numpy as np
+
+EPS = 1e-3
+KINDS = ("bulbous", "crystalline", "angular")
 
 
 # ---------------------------------------------------------------------------
@@ -30,103 +36,163 @@ import numpy as np
 def params_from_seed(
     seed: int,
     *,
-    radius: float = 1.0,
+    kind: str = "bulbous",
+    radius: float = 20.0,
+    # base silhouette
     lobes: int = 7,
     lumpiness: float = 0.35,
-    detail: float = 0.12,
-    detail_terms: int = 28,
-    detail_freq: tuple[float, float] = (3.0, 11.0),
+    facets: int = 11,
+    gouges: int = 4,
+    # detail layer (normal map only)
+    roughness: float = 0.05,
+    roughness_terms: int = 56,
+    roughness_freq: tuple[float, float] = (8.0, 70.0),
+    rocks: int = 320,
+    rock_amp: float = 0.05,
+    rock_sharp: tuple[float, float] = (120.0, 600.0),
 ) -> dict:
     """Derive a fully-explicit shape description from an integer seed.
 
-    The returned dict is JSON-serialisable (after :func:`params_to_jsonable`) and is
-    the only thing the OpenSCAD lib and the baker need — given identical params they
-    produce identical geometry.
-
-    Parameters
-    ----------
-    radius      : overall scale (world units) applied to the unit field.
-    lobes       : number of low-frequency bumps (overall lumpy silhouette).
-    lumpiness   : amplitude of the lobes (fraction of radius).
-    detail      : amplitude of the high-frequency surface detail.
-    detail_terms: number of band-limited plane-wave terms for fine detail.
-    detail_freq : (min, max) spatial frequency range for the detail terms.
+    ``kind`` selects the base silhouette. Detail params (roughness/rocks) apply to all
+    kinds and control how busy the normal map's small-scale relief is.
     """
+    if kind not in KINDS:
+        raise ValueError(f"unknown kind {kind!r}; expected one of {KINDS}")
     rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
 
-    # --- low-frequency lobes: random directions, amplitudes, sharpness ---
-    L = _random_unit_vectors(rng, lobes)
-    lobe_amp = lumpiness * rng.uniform(0.4, 1.0, lobes)
-    lobe_sharp = rng.uniform(1.5, 6.0, lobes)
+    base = _base_params(rng, kind, lobes, lumpiness, facets, gouges)
 
-    # --- high-frequency detail: plane waves with pink-ish amplitude falloff ---
-    fmin, fmax = detail_freq
-    freq_dirs = _random_unit_vectors(rng, detail_terms)
-    freq_mag = rng.uniform(fmin, fmax, detail_terms)
-    F = freq_dirs * freq_mag[:, None]
-    phase = rng.uniform(0.0, 2.0 * np.pi, detail_terms)
-    # amplitude ~ 1/frequency keeps higher octaves subtle and the surface bounded
-    det_amp = detail * rng.uniform(0.3, 1.0, detail_terms) * (fmin / freq_mag)
+    # --- detail: high-frequency roughness (band-limited plane waves) ---
+    fmin, fmax = roughness_freq
+    fdir = _random_unit_vectors(rng, roughness_terms)
+    fmag = rng.uniform(fmin, fmax, roughness_terms)
+    F = fdir * fmag[:, None]
+    rough = {
+        "F": F,
+        "phase": rng.uniform(0.0, 2.0 * np.pi, roughness_terms),
+        # amplitude ~ 1/frequency keeps the surface bounded (pink-ish spectrum)
+        "amp": roughness * rng.uniform(0.3, 1.0, roughness_terms) * (fmin / fmag),
+    }
+
+    # --- detail: scattered rocks/pits (tight Gaussian bumps) ---
+    rsign = np.where(rng.uniform(size=rocks) < 0.8, 1.0, -0.6)  # mostly bumps, some pits
+    rock = {
+        "C": _random_unit_vectors(rng, rocks),
+        "sharp": rng.uniform(rock_sharp[0], rock_sharp[1], rocks),
+        "amp": rock_amp * rng.uniform(0.4, 1.0, rocks) * rsign,
+    }
 
     return {
         "seed": int(seed),
+        "kind": kind,
         "radius": float(radius),
         "R0": 1.0,
-        "lobes": {"L": L, "amp": lobe_amp, "sharp": lobe_sharp},
-        "detail": {"F": F, "phase": phase, "amp": det_amp},
+        "base": base,
+        "detail": {"roughness": rough, "rocks": rock},
     }
 
 
+def _base_params(rng, kind, lobes, lumpiness, facets, gouges) -> dict:
+    if kind == "bulbous":
+        return {
+            "L": _random_unit_vectors(rng, lobes),
+            "amp": lumpiness * rng.uniform(0.4, 1.0, lobes),
+            "sharp": rng.uniform(1.5, 6.0, lobes),
+        }
+    # faceted kinds: random planes + 6 axis planes (guarantee directional coverage so
+    # the convex support is bounded in every direction).
+    axes = np.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], float)
+    rand = _random_unit_vectors(rng, facets)
+    N = np.concatenate([axes, rand], axis=0)
+    d = rng.uniform(0.78, 1.12, len(N))
+    out = {"N": N, "d": d}
+    if kind == "angular":
+        out["gouge"] = {
+            "C": _random_unit_vectors(rng, gouges),
+            "amp": rng.uniform(0.10, 0.22, gouges),
+            "sharp": rng.uniform(8.0, 22.0, gouges),
+        }
+    return out
+
+
 # ---------------------------------------------------------------------------
-# Field evaluation (radius, gradient, analytic surface normal)
+# Field evaluation
 # ---------------------------------------------------------------------------
 
-def _eval(u: np.ndarray, p: dict) -> tuple[np.ndarray, np.ndarray]:
-    """Return (r, grad_r) for an array of directions ``u`` of shape (..., 3).
+def _bumps(u, C, amp, sharp):
+    """Sum of Gaussian bumps and its gradient: a*exp(s*(u·C - 1))."""
+    e = amp * np.exp(sharp * (u @ C.T - 1.0))         # (..., n)
+    r = e.sum(-1)
+    grad = ((e * sharp)[..., None] * C).sum(-2)
+    return r, grad
 
-    ``grad_r`` is the gradient of ``r`` treated as a function of the raw vector
-    components — used to derive the analytic surface normal.
+
+def _crystal(u, N, d):
+    """Convex faceted support r = min_i d_i/max(u·N_i, eps), and its gradient.
+
+    The implicit-surface normal of this radial field recovers the active facet normal.
     """
-    u = np.asarray(u, dtype=float)
-    lob, det, R0 = p["lobes"], p["detail"], p["R0"]
+    udotN = u @ N.T                                    # (..., M)
+    denom = np.maximum(udotN, EPS)
+    t = d / denom
+    idx = np.argmin(t, axis=-1)                        # (...)
+    r = np.take_along_axis(t, idx[..., None], -1)[..., 0]
+    Nsel = N[idx]                                      # (..., 3)
+    denom_sel = np.take_along_axis(denom, idx[..., None], -1)[..., 0]
+    grad = -(r / denom_sel)[..., None] * Nsel
+    return r, grad
 
-    # lobes: a * exp(s * (u·L - 1)); d/du = a*s*exp(...) * L
-    dotL = u @ lob["L"].T                              # (..., nlobe)
-    e = np.exp(lob["sharp"] * (dotL - 1.0))            # (..., nlobe)
-    r = 1.0 + (lob["amp"] * e).sum(-1)
-    grad = ((lob["amp"] * lob["sharp"] * e)[..., None] * lob["L"]).sum(-2)
 
-    # detail: b * sin(F·u + p); d/du = b*cos(F·u + p) * F
-    arg = u @ det["F"].T + det["phase"]                # (..., nterm)
-    r = r + (det["amp"] * np.sin(arg)).sum(-1)
-    grad = grad + ((det["amp"] * np.cos(arg))[..., None] * det["F"]).sum(-2)
+def eval_base(u: np.ndarray, p: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Base radial field value + gradient (mirrored in OpenSCAD)."""
+    u = np.asarray(u, float)
+    b, R0, kind = p["base"], p["R0"], p["kind"]
+    if kind == "bulbous":
+        rb, gb = _bumps(u, b["L"], b["amp"], b["sharp"])
+        return R0 * (1.0 + rb), R0 * gb
+    r, grad = _crystal(u, b["N"], b["d"])
+    if kind == "angular":
+        rg, gg = _bumps(u, b["gouge"]["C"], b["gouge"]["amp"], b["gouge"]["sharp"])
+        r = r - rg
+        grad = grad - gg
+    return r, grad
 
-    return R0 * r, R0 * grad
+
+def eval_detail(u: np.ndarray, p: dict) -> tuple[np.ndarray, np.ndarray]:
+    """High-frequency detail value + gradient (normal map only)."""
+    u = np.asarray(u, float)
+    rough, rock = p["detail"]["roughness"], p["detail"]["rocks"]
+    arg = u @ rough["F"].T + rough["phase"]
+    r = (rough["amp"] * np.sin(arg)).sum(-1)
+    grad = ((rough["amp"] * np.cos(arg))[..., None] * rough["F"]).sum(-2)
+    rr, gr = _bumps(u, rock["C"], rock["amp"], rock["sharp"])
+    return r + rr, grad + gr
 
 
 def radius(u: np.ndarray, p: dict) -> np.ndarray:
-    """Unit-field radius for directions ``u`` (does NOT include ``p['radius']``)."""
-    return _eval(u, p)[0]
+    """Unit-field BASE radius (mesh silhouette); excludes detail. No ``p['radius']``."""
+    return eval_base(_normalize(np.asarray(u, float)), p)[0]
 
 
 def points(u: np.ndarray, p: dict) -> np.ndarray:
-    """Surface points ``radius * r(u) * u`` in world units."""
-    u = _normalize(np.asarray(u, dtype=float))
-    r = radius(u, p)
-    return (p["radius"] * r)[..., None] * u
+    """Surface points ``radius * r_base(u) * u`` in world units (mesh geometry)."""
+    u = _normalize(np.asarray(u, float))
+    return (p["radius"] * radius(u, p))[..., None] * u
 
 
 def surface_normal(u: np.ndarray, p: dict) -> np.ndarray:
-    """Analytic outward unit normal of the radial surface at directions ``u``.
+    """Analytic outward unit normal of the full (base + detail) surface at ``u``.
 
-    Uses the implicit surface ``G(x) = |x| - r(x̂) = 0``, whose gradient on the
-    surface is ``x̂ - (1/r) * grad_tangential(r)``.
+    Uses ``G(x) = |x| - r(x̂)``; on the surface the normal is
+    ``x̂ - (1/r) * grad_tangential(r)``.
     """
-    u = _normalize(np.asarray(u, dtype=float))
-    r, grad = _eval(u, p)
+    u = _normalize(np.asarray(u, float))
+    rb, gb = eval_base(u, p)
+    rd, gd = eval_detail(u, p)
+    r = rb + rd
+    grad = gb + gd
     grad_tan = grad - np.sum(grad * u, -1, keepdims=True) * u
-    n = u - grad_tan / r[..., None]
-    return _normalize(n)
+    return _normalize(u - grad_tan / r[..., None])
 
 
 # ---------------------------------------------------------------------------
@@ -136,38 +202,26 @@ def surface_normal(u: np.ndarray, p: dict) -> np.ndarray:
 def lonlat_grid(nlat: int, nlon: int) -> dict:
     """A UV-sphere direction grid with a duplicated seam column for clean UVs.
 
-    Returns directions (M,3), texture UVs (M,2, origin top-left), and triangle
-    indices (K,3). Poles are included as degenerate rows; vertex attributes are
-    computed analytically so the degenerate triangles never produce NaNs.
-
-    y-up convention (matches Godot):
+    Returns directions (M,3), texture UVs (M,2, origin top-left, north pole at top),
+    and triangle indices (K,3). y-up (matches Godot):
         u = (cos(lat)cos(lon), sin(lat), cos(lat)sin(lon))
     """
     lats = np.linspace(-np.pi / 2, np.pi / 2, nlat + 1)        # south -> north
     lons = np.linspace(0.0, 2.0 * np.pi, nlon + 1)             # seam duplicated
-    lat, lon = np.meshgrid(lats, lons, indexing="ij")          # (nlat+1, nlon+1)
+    lat, lon = np.meshgrid(lats, lons, indexing="ij")
 
     cl = np.cos(lat)
-    dirs = np.stack([cl * np.cos(lon), np.sin(lat), cl * np.sin(lon)], axis=-1)
-    dirs = dirs.reshape(-1, 3)
-
-    u_tex = lon / (2.0 * np.pi)
-    v_tex = 1.0 - (lat + np.pi / 2) / np.pi                     # north pole at top
-    uv = np.stack([u_tex, v_tex], axis=-1).reshape(-1, 2)
+    dirs = np.stack([cl * np.cos(lon), np.sin(lat), cl * np.sin(lon)], axis=-1).reshape(-1, 3)
+    uv = np.stack([lon / (2.0 * np.pi), 1.0 - (lat + np.pi / 2) / np.pi], axis=-1).reshape(-1, 2)
 
     cols = nlon + 1
     faces = []
     for i in range(nlat):
         for j in range(nlon):
             a = i * cols + j
-            b = a + 1
-            c = a + cols
-            d = c + 1
-            faces.append((a, c, b))
-            faces.append((b, c, d))
-    faces = np.asarray(faces, dtype=np.uint32)
-
-    return {"dirs": dirs, "uv": uv, "faces": faces}
+            faces.append((a, a + cols, a + 1))
+            faces.append((a + 1, a + cols, a + cols + 1))
+    return {"dirs": dirs, "uv": uv, "faces": np.asarray(faces, dtype=np.uint32)}
 
 
 # ---------------------------------------------------------------------------
@@ -175,14 +229,13 @@ def lonlat_grid(nlat: int, nlon: int) -> dict:
 # ---------------------------------------------------------------------------
 
 def params_to_jsonable(p: dict) -> dict:
-    """Convert numpy arrays in a params dict to plain lists for JSON / manifests."""
-    return {
-        "seed": p["seed"],
-        "radius": p["radius"],
-        "R0": p["R0"],
-        "lobes": {k: np.asarray(v).tolist() for k, v in p["lobes"].items()},
-        "detail": {k: np.asarray(v).tolist() for k, v in p["detail"].items()},
-    }
+    def conv(x):
+        if isinstance(x, dict):
+            return {k: conv(v) for k, v in x.items()}
+        if isinstance(x, np.ndarray):
+            return x.tolist()
+        return x
+    return {k: conv(v) for k, v in p.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +248,4 @@ def _normalize(v: np.ndarray) -> np.ndarray:
 
 
 def _random_unit_vectors(rng: np.random.Generator, n: int) -> np.ndarray:
-    """``n`` uniformly-distributed directions on the unit sphere."""
-    v = rng.standard_normal((n, 3))
-    return _normalize(v)
+    return _normalize(rng.standard_normal((n, 3)))
