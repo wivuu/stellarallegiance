@@ -108,10 +108,15 @@ A small committed list; only `name`, `seed`, `kind` are needed, the rest default
 ```json
 [
   { "name": "asteroid-flint",  "seed": 1001, "kind": "carbonaceous" },
-  { "name": "asteroid-gem",    "seed": 3003, "kind": "metallic", "radius": 30, "facets": 18 },
-  { "name": "asteroid-gravel", "seed": 1005, "kind": "stony", "rocks": 480, "rock_amp": 0.07 }
+  { "name": "asteroid-gem",    "seed": 3003, "kind": "metallic", "radius": 30, "facets": 18, "tint": [0.04, 0.02, -0.03] },
+  { "name": "asteroid-quartz", "seed": 1003, "kind": "stony", "facets": 8, "value": 1.7, "tint": [0.06, 0.06, 0.07] }
 ]
 ```
+
+Each seed already gets a small automatic colour shift (brightness + a subtle warm/cool/green
+lean) so two asteroids of the same type don't read identically. `value`/`tint` are optional
+**deliberate** nudges on top of that — used here to pale a stony block into a "quartz" or to
+lean a metallic warm — without adding a fourth material. Keep them subtle.
 
 | field | default | meaning |
 |-------|---------|---------|
@@ -126,6 +131,8 @@ A small committed list; only `name`, `seed`, `kind` are needed, the rest default
 | `roughness` | 0.05  | fine grit amplitude (textures only) |
 | `rocks` / `craters` | 240 / 16 | fine pebble / crater counts (textures only) |
 | `rock_amp`  | 0.05  | fine pebble bump amplitude (textures only) |
+| `value`     | 1.0   | per-entry brightness multiplier (e.g. `1.7` to pale-out a stony "quartz") |
+| `tint`      | `[0,0,0]` | per-entry additive RGB nudge (keep small, ~±0.05) for a deliberate warm/cool/coloured lean |
 | `grid`      | 256   | mesh longitude segments (latitude = grid/2); ~33k verts |
 | `map_size`  | 4096  | normal-map width (height = width/2) — "high res" |
 | `tex_size`  | 2048  | albedo / ORM / height width (height = width/2) — "mid res" |

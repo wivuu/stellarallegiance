@@ -65,6 +65,9 @@ def params_from_seed(
     rocks: int = 240,
     craters: int = 16,
     rock_amp: float = 0.05,
+    # optional per-entry colour nudges (on top of the per-seed variation)
+    tint: tuple[float, float, float] | None = None,
+    value: float | None = None,
 ) -> dict:
     """Derive a fully-explicit shape description from an integer seed."""
     if kind not in KINDS:
@@ -80,7 +83,7 @@ def params_from_seed(
         "base": _base_params(rng, _SHAPE[kind], lobes, lumpiness, facets, gouges, boulders, relief),
         "detail": _detail_params(rng, roughness, roughness_terms, roughness_freq,
                                  rocks, craters, rock_amp),
-        "colour": _colour_params(rng, kind),
+        "colour": _colour_params(rng, kind, tint=tint, value=value),
     }
     return _to_f32(p)
 
@@ -156,14 +159,28 @@ def _detail_params(rng, roughness, rough_terms, rough_freq, rocks, craters, rock
     return {"roughness": rough, "bumps": {"C": C, "amp": amp, "sharp": sharp, "rho": rho, "lat": lat}}
 
 
-def _colour_params(rng, kind) -> dict:
+def _colour_params(rng, kind, *, tint=None, value=None) -> dict:
     tone_a, tone_b, rough_base, metal = _MATERIAL[kind]
-    # coherent variation: overall brightness scale + a small warm/cool shift (avoids hue flips)
-    bright = rng.uniform(0.85, 1.15)
-    warm = rng.uniform(-0.012, 0.022)
-    tint = np.array([warm, 0.0, -warm])
-    tone_a = np.array(tone_a) * bright + tint
-    tone_b = np.array(tone_b) * bright + tint
+    tone_a = np.array(tone_a, float)
+    tone_b = np.array(tone_b, float)
+
+    # per-seed variation so two asteroids of the same type don't read identically. Brightness
+    # alone just reads as "different lighting", so the variety comes from a coherent per-seed
+    # *hue* lean: a warm<->cool axis (red up / blue down) plus a green<->magenta axis. The warm
+    # axis is anti-correlated across R/B so luminance stays put and the rock genuinely changes
+    # colour rather than just value. Amplitudes are proportional (multiplicative), tuned to be
+    # clearly visible but still mineral (brass / steel / cool-grey / olive), not neon.
+    bright = rng.uniform(0.78, 1.22)
+    warm = rng.uniform(-0.14, 0.18)        # + warm (brassy), - cool (steely blue)
+    grn = rng.uniform(-0.09, 0.09)         # + green/olive, - magenta
+    hue = 1.0 + np.array([warm, grn, -warm])
+    # deliberate per-entry nudges from the catalog (default: none)
+    if value is not None:
+        bright *= float(value)
+    add = np.zeros(3) if tint is None else np.asarray(tint, float)
+
+    tone_a = tone_a * bright * hue + add
+    tone_b = tone_b * bright * hue + add
 
     def lowfreq(terms, flo, fhi):
         d = _random_unit_vectors(rng, terms)

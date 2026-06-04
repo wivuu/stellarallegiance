@@ -54,7 +54,7 @@ DEF_RADIUS = 20.0
 # entry keys forwarded to shapefield.params_from_seed
 PARAM_KEYS = ("kind", "radius", "lobes", "lumpiness", "facets", "gouges",
               "boulders", "relief", "roughness", "roughness_terms", "roughness_freq",
-              "rocks", "craters", "rock_amp")
+              "rocks", "craters", "rock_amp", "tint", "value")
 
 
 # ---------------------------------------------------------------------------
