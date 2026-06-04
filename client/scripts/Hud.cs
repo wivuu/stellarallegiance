@@ -54,11 +54,17 @@ public partial class Hud : CanvasLayer
 		_warning.AddThemeColorOverride("font_color", new Color(1f, 0.35f, 0.3f));
 		AddChild(_warning);
 
-		// Lobby / pre-match / post-match overlay (added last so it draws on top of the
-		// rest of the HUD when visible). Owns the team picker, ready-up, and end screen.
+		// Lobby / pre-match / post-match overlay. Owns the team picker, ready-up, and
+		// end screen. Only shows once actually connected (see Lobby._Process).
 		var lobby = new Lobby { Name = "Lobby" };
 		AddChild(lobby);
 		lobby.Init(_cm, _world);
+
+		// Connection-status overlay (added last so it draws on top of everything,
+		// including the lobby). Shows "Server offline" / "Connecting…" until we're live.
+		var conn = new ConnectionOverlay { Name = "ConnectionOverlay" };
+		AddChild(conn);
+		conn.Init(_cm);
 	}
 
 	private Player? LocalPlayer()

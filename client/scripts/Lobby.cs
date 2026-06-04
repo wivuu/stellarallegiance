@@ -142,8 +142,10 @@ public partial class Lobby : Control
 
 	public override void _Process(double delta)
 	{
+		// Only drive the lobby once we're truly connected. Until then `Conn` is non-null
+		// but dead, so the ConnectionOverlay owns the screen — don't show a phantom lobby.
 		var conn = _cm.Conn;
-		if (conn is null)
+		if (conn is null || _cm.State != ConnectionManager.ConnState.Connected)
 		{
 			Visible = false;
 			return;
