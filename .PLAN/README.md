@@ -26,7 +26,6 @@ Make the existing two-team dogfighting richer on the systems already shipped
 (ships, guns, health/damage, boost, AI drones).
 
 NOTES:
-- You should always leave the mouth of the aleph, preserve only the raw speed and vary the exit vector only slightly (randomly) out of the mouth.
 - Add explosion effect on ship death, and a small flash on gun hits.
 - Fix hitboxes for asteroids -- they're too big and are inaccurate
 - Add concept of ship weight, instead of just tuning fake heaviness. This will matter when it comes to collisions
@@ -53,6 +52,7 @@ are config, not code. Unblocks variety in later phases.
 - **Data-driven ship classes & loadouts** — Lift weapon/tuning constants out of
   `Lib.cs` into configurable class + loadout definitions (weapon systems,
   hardpoint slotting).
+  - Break 'Lib.cs' into more focused modules, e.g. 'Weapons.cs', 'Ships.cs', 'Bases.cs'.
 - **Ship meshes & hardpoints** — Loader for ship models carrying hardpoints for
   weapons, thrusters, main engine + booster, and turrets.
 - **Base meshes & hardpoints** — Loader for base models carrying hardpoints for

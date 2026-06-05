@@ -258,6 +258,7 @@ public static partial class Module
     private const float VergeBeltRadius = 380f;       // ring radius of the Verge's asteroid belt
     private const float AlephTriggerRadius = 18f;    // touch this close to a funnel to warp through
     private const float WarpExitOffset = 60f;        // placed this far past the dest aleph (no instant re-warp)
+    private const float WarpExitJitter = 0.12f;      // random spread (per-axis) on the exit vector out of the mouth
     // Out-of-bounds hull erosion: a flat base rate plus a ramp with how far past the
     // edge you are, capped — so skimming the edge is survivable but straying deep is
     // quickly fatal. Applied per-second (scaled by dt) while a ship is outside.
@@ -912,30 +913,37 @@ public static partial class Module
                 if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
                     break;
 
-                // Emerge INWARD — offset from the partner aleph toward the destination
-                // sector center. The funnel sits out near the frontier, so exiting inward
-                // both clears the partner's trigger sphere (no instant re-warp) and keeps
-                // the ship safely inside the boundary (an outward exit could spawn it in
-                // the out-of-bounds zone). Velocity/orientation are preserved (momentum
-                // carries through the funnel).
-                var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
-                float ccx = destSec?.CenterX ?? 0f, ccy = destSec?.CenterY ?? 0f, ccz = destSec?.CenterZ ?? 0f;
-                float ix = ccx - partner.PosX, iy = ccy - partner.PosY, iz = ccz - partner.PosZ;
-                float ilen = MathF.Sqrt(ix * ix + iy * iy + iz * iz);
-                float ox, oy, oz;
-                if (ilen > 1e-3f) { ox = ix / ilen; oy = iy / ilen; oz = iz / ilen; }
-                else
-                {
-                    Vec3 fwd = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW).Rotate(new Vec3(0f, 0f, 1f));
-                    ox = fwd.X; oy = fwd.Y; oz = fwd.Z;
-                }
+                // Emerge OUT THE MOUTH. The funnel (AlephView) renders as a cone that
+                // opens along world +Y and is never reoriented, so every aleph's mouth
+                // faces straight up. The ship pops out of the partner's mouth: pushed out
+                // along +Y (alephs sit in the horizontal frontier ring with little Y, so
+                // +Y stays well inside the boundary) far enough to clear the partner's
+                // trigger sphere (no instant re-warp), and flying up and out.
+                //
+                // The funnel discards the ship's heading: only the RAW SPEED carries
+                // through. The exit vector is the mouth axis (+Y), jittered by a small
+                // random cone so successive ships fan out instead of stacking in a line.
+                // Position and velocity share the one jittered direction so the ship
+                // travels along the axis it emerged on. Warp is server-authoritative, so
+                // this RNG never has to be reproduced by client prediction.
+                // Orientation/angular momentum are left untouched.
+                float speed = MathF.Sqrt(ship.VelX * ship.VelX + ship.VelY * ship.VelY + ship.VelZ * ship.VelZ);
+                float ex = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+                float ey = 1f;
+                float ez = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+                float elen = MathF.Sqrt(ex * ex + ey * ey + ez * ez);
+                ex /= elen; ey /= elen; ez /= elen;
+
                 float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
                 ctx.Db.Ship.ShipId.Update(ship with
                 {
                     SectorId = al.DestSectorId,
-                    PosX = partner.PosX + ox * exit,
-                    PosY = partner.PosY + oy * exit,
-                    PosZ = partner.PosZ + oz * exit,
+                    PosX = partner.PosX + ex * exit,
+                    PosY = partner.PosY + ey * exit,
+                    PosZ = partner.PosZ + ez * exit,
+                    VelX = ex * speed,
+                    VelY = ey * speed,
+                    VelZ = ez * speed,
                 });
                 Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
                 break;
