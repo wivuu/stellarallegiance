@@ -106,3 +106,4 @@ Not phase-bound — done when convenient or when a phase needs them.
 
 - **Replay system** — Tick log or time-travel query playback.
 - **.NET 10 upgrade** — Upgrade from .NET 8 to 10 for perf
+- Fireteam support - Sub-teams of 2-6 players that can privately chat. Commanders can assign players to fireteams and can issue orders to specific fireteams.
