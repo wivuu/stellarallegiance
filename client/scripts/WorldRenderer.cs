@@ -61,6 +61,7 @@ public partial class WorldRenderer : Node3D
 
 	private ConnectionManager _cm = null!;
 	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
+	private Starscape? _starscape;   // sibling; repaints the backdrop as the local sector changes
 
 	// Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
 	// one-way latency); >= 0 = a fixed override in ms, pinned via STDB_SHOT_MASK_MS for
@@ -138,6 +139,7 @@ public partial class WorldRenderer : Node3D
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
+		_starscape = GetNodeOrNull<Starscape>("../Starscape");
 
 		if (float.TryParse(OS.GetEnvironment("STDB_SHOT_MASK_MS"), out var ms) && ms >= 0f)
 			_shotMaskMs = ms;
@@ -371,6 +373,7 @@ public partial class WorldRenderer : Node3D
 			_localTeam = row.Team;
 			// Follow the local ship's sector and re-show that sector's world.
 			_localSector = row.SectorId;
+			_starscape?.SetSector(row.SectorId);
 			_shipNodes[row.ShipId] = node;
 			SetNodeSector(node, row.SectorId);
 			RefreshSectorVisibility();
@@ -403,6 +406,7 @@ public partial class WorldRenderer : Node3D
 				if (warped)
 				{
 					_localSector = newRow.SectorId;
+					_starscape?.SetSector(newRow.SectorId);
 					RefreshSectorVisibility();
 				}
 				break;
@@ -428,6 +432,7 @@ public partial class WorldRenderer : Node3D
 			if (_localSector != HomeSector)
 			{
 				_localSector = HomeSector;
+				_starscape?.SetSector(HomeSector);
 				RefreshSectorVisibility();
 			}
 		}
