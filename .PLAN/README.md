@@ -57,6 +57,10 @@ integration tests.
 history.
 
 ## Visual polish
+**Ship meshes and hardpoints** - Create mechanism to load ship models which contain hardpoints for weapons, thrusters, main engine+booster, turrets (if any)
+
+**Base meshes and hardpoints** - Create mechanism to load base models which contain hardpoints for docking (entrance), lighting (blinking), exit point(s).
+
 **Engine glow** - Add dynamic glow effects to ship engines that intensify with throttle and boost usage, enhancing the visual feedback of movement and combat. Use particle systems and shader effects to create a vibrant, immersive experience that reflects the power and agility of the ships.
 
 **Improve asteroid texture mapping** - Minimize stretching and distortion on asteroids by adjusting UV coordinates or using tri-planar mapping techniques to ensure textures wrap more naturally around the irregular shapes of the asteroids. If using tri-planar mapping, explore blending and baking the textures for better visual quality. Implement parallax/height maps in-engine for added surface detail without increasing polygon count, enhancing the visual richness of the asteroids.
