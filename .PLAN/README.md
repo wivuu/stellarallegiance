@@ -15,64 +15,87 @@ Archives:
 
 ---
 
-## Backlog (not yet prioritized)
+## Roadmap (prioritized)
 
-Items below are future directions discussed but not scoped for this milestone.
+Themed and ordered top-to-bottom. Infra (host-server image, CI) is pulled in
+as-needed per phase rather than done up front.
 
-- in-game chat, lobby and in-game
+### Phase 1 — Combat feel & depth
 
-- shield and damage systems
+Make the existing two-team dogfighting richer on the systems already shipped
+(ships, guns, health/damage, boost, AI drones).
 
-- Custom host game server docker image, clients should be able to target that server on launch with an arg for now
-    - Eventually a single server should be able to be used as a central aggregator, but that might just be a web server
+- **Shields & damage systems** — Layer regenerating shields over the existing
+  raw-health model; damage-type interactions.
+- **Missiles** — Launchers, lock-on, and chaff/flare countermeasures.
+- **Mines & fields** — Deployable mines and minefields.
+- **Boost recharge & ship-class feel** — Boost limit + recharge mechanic;
+  some classes recharge, some don't, to differentiate combat roles. Pair with
+  booster/smoke-trail particle FX that react to speed, maneuver, and damage.
+- **Ship salvage & pickups** — Destroyed ships drop random ammo / guns /
+  missiles / mines that must be flown over to collect.
+- **Escape pods** — Eject on ship death.
+- **Improved in-game UI** — Health/shield bars, ship status indicators,
+  team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.)
 
-- Ship salvage when destroyed get ammo guns and missiles mines randomly, most be picked up
+### Phase 2 — Configurability & maintainability refactor
 
-- Add mines/fields
+Move hard-coded tuning and content into data so new ships, weapons, and bases
+are config, not code. Unblocks variety in later phases.
 
-- Add missiles, lock on, chaff
+- **Data-driven ship classes & loadouts** — Lift weapon/tuning constants out of
+  `Lib.cs` into configurable class + loadout definitions (weapon systems,
+  hardpoint slotting).
+- **Ship meshes & hardpoints** — Loader for ship models carrying hardpoints for
+  weapons, thrusters, main engine + booster, and turrets.
+- **Base meshes & hardpoints** — Loader for base models carrying hardpoints for
+  docking (entrance), lighting (blinking), and exit point(s).
 
-**Improved In-game UI** — Health bars, shields (if present) minimap, ship status indicators, team scores.
+### Phase 3 — Hosting at scale
 
-- per-player in-match and post-match scores/kills/deaths, overall point system and player ranks
+Stand up many independent game servers and let players find and join them.
 
-**Tune prediction lead for WAN** — `STDB_LEAD` env var exists; playtest and
-commit. May want adaptive lead based on measured RTT.
+- **Custom host game-server Docker image** — Self-contained SpacetimeDB game
+  server; clients target it via a launch arg.
+- **Multi-server / central aggregator** — Run multiple *independent*
+  SpacetimeDB instances (up to ~200 players each); a central aggregator
+  (likely a web server) lists available servers / acts as a browser.
+- **Tune prediction lead for WAN** — `STDB_LEAD` exists; playtest and commit a
+  good default, ideally adaptive on measured RTT.
+- **Chat** — Lobby and in-game text chat.
+- **Scores, kills/deaths & ranks** — Per-player in-match and post-match stats,
+  an overall point system, and player ranks.
+- **Spectator mode** — Follow players with Tab (camera orbits target); pick
+  sectors to watch from the lobby.
+- **Matchmaking, accounts & persistence** — Player identities, ELO, match
+  history.
 
-**Commander / RTS map view** — 2D strategic overlay for all sectors; commander
-issues waypoints and investment orders. Depends on sectors existing first. Promote commander done by commander, or first player to join a team.
+### Phase 4 — Strategy layer (Allegiance core)
 
-**Mining + economy + paychecks** — Resource asteroids, miners, ore flow,
-build queues. The economic engine that makes Allegiance a strategy game.
+The economic + RTS loop that turns the shooter into a strategy game. Largely
+sequential — each item depends on the one before.
 
-**Base building + constructors** — Deployable structures for resource processing, ships land and repair at bases
+- **Mining + economy + paychecks** — Resource asteroids, miners, ore flow,
+  build queues.
+- **Base building + constructors** — Deployable structures for resource
+  processing; ships land, repair, and rearm at bases.
+- **Tech paths** — Team investment tree unlocking ship upgrades, new classes,
+  and base defenses. Depends on the mining economy and bases.
+- **Commander / RTS map view** — 2D strategic overlay across all sectors;
+  commander issues waypoints and investment orders. Sectors already exist.
+  Commander role goes to the first player to join a team (or is promoted).
+- **Factions** — Distinct factions with unique ship classes, tech trees, and
+  visual styles for asymmetric play.
 
-- escape pods
+### Cross-cutting / opportunistic
 
-**Tech paths** — Team investment tree unlocking ship upgrades, new classes,
-base defenses. Depends on mining economy and building bases that unlock tech.
+Not phase-bound — done when convenient or when a phase needs them.
 
-- ship classes and loadouts
-    - weapon systems
-
-**Factions** - Distinct factions with unique ship classes, tech trees, and visual styles. Adds variety and strategic depth to the game by encouraging different playstyles and team compositions based on faction strengths and weaknesses.
-
-**Spectator mode** — Follow other players with tab key (camera spins around player), click on different sectors from lobby.
-
-**CI / automated testing** — Docker-based module build + headless client
-integration tests.
-
-**Matchmaking / accounts / persistence** — Player identities, ELO, match
-history.
-
-## Visual polish
-**Ship meshes and hardpoints** - Create mechanism to load ship models which contain hardpoints for weapons, thrusters, main engine+booster, turrets (if any)
-
-**Base meshes and hardpoints** - Create mechanism to load base models which contain hardpoints for docking (entrance), lighting (blinking), exit point(s).
-
-**Improve asteroid texture mapping** - Minimize stretching and distortion on asteroids by adjusting UV coordinates or using tri-planar mapping techniques to ensure textures wrap more naturally around the irregular shapes of the asteroids. If using tri-planar mapping, explore blending and baking the textures for better visual quality. Implement parallax/height maps in-engine for added surface detail without increasing polygon count, enhancing the visual richness of the asteroids.
-
-**Implement 'booster' and smoke trail particle effects** - Design and integrate particle systems for ship boosters and smoke trails to enhance the visual feedback of movement and combat. Use a combination of sprite-based particles and shader effects to create dynamic, visually appealing trails that react to ship speed and maneuvers. Consider adding variations in color and intensity based on ship type or damage level for added visual interest. Boosters should have a limit and a recharge mechanic, allow some ships to recharge and some without recharge to create more interesting ship classes and combat dynamics.
+- **CI / automated testing** — Docker-based module build + headless client
+  integration tests. (Pulled in as-needed, esp. before Phase 3 hosting.)
+- **Improve asteroid texture mapping** — Reduce stretching via better UVs or
+  tri-planar mapping; explore baking and in-engine parallax/height maps.
 
 ## Deep backlog
+
 - **Replay system** — Tick log or time-travel query playback.
