@@ -26,7 +26,6 @@ Make the existing two-team dogfighting richer on the systems already shipped
 (ships, guns, health/damage, boost, AI drones).
 
 NOTES:
-- Add explosion effect on ship death, and a small flash on gun hits.
 - Fix hitboxes for asteroids -- they're too big and are inaccurate
 - Add concept of ship weight, instead of just tuning fake heaviness. This will matter when it comes to collisions
 - Add collisions between ships and bases
