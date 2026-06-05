@@ -11,7 +11,7 @@
 #   scripts/populate-db.sh            # publish (seed only if DB is empty/new)
 #   scripts/populate-db.sh --reset    # wipe existing data first (--delete-data)
 #
-# Requires: the server running and the CLI logged in. Use start-db.sh, which
+# Requires: the server running and the CLI logged in. Use publish-local.sh, which
 # starts the server (persistent) and calls this only when needed.
 #
 # NOTE: this does NOT regenerate client bindings. After a *schema* change run:

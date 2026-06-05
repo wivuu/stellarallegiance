@@ -18,7 +18,7 @@ Archives:
 ## Roadmap (prioritized)
 
 Themed and ordered top-to-bottom. Infra (host-server image, CI) is pulled in
-as-needed per phase rather than done up front.
+as-needed pe1r phase rather than done up front.
 
 ### Phase 1 — Combat feel & depth
 

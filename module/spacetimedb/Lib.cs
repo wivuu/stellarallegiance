@@ -244,6 +244,11 @@ public static partial class Module
     private const float ProjectileRadius = 1f;       // projectile hit sphere
     private const float ShipRadius = 3f;             // ship hit / collision sphere
     private const float BaseRadius = 45f;            // matches the client's base render radius
+    // Asteroid.Radius is the silhouette's *circumscribing* radius (the client scales the mesh
+    // so its farthest spike sits exactly on it). Collisions use a fraction of that so the hit
+    // sphere tracks the rock's solid body rather than its outermost spikes, instead of bounding
+    // empty space between them. Render scale is unchanged — this only tightens the sim.
+    private const float AsteroidCollisionScale = 0.82f;
     private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
@@ -976,7 +981,7 @@ public static partial class Module
             foreach (var a in asteroids)
             {
                 if (a.SectorId != p.SectorId) continue;
-                float rr = a.Radius + ProjectileRadius;
+                float rr = a.Radius * AsteroidCollisionScale + ProjectileRadius;
                 if (Dist2(nx, ny, nz, a.PosX, a.PosY, a.PosZ) <= rr * rr) { consumed = true; break; }
             }
 
@@ -1111,7 +1116,7 @@ public static partial class Module
             // your dock/spawn point, so you pass through it.
             foreach (var a in asteroids)
                 if (a.SectorId == s.SectorId)
-                    s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius);
+                    s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
             foreach (var b in bases)
                 if (b.Team != s.Team && b.SectorId == s.SectorId)
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);

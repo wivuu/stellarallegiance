@@ -297,10 +297,12 @@ public partial class WorldRenderer : Node3D
 		{
 			if (FindMeshInstance(root) is MeshInstance3D mi && mi.Mesh is Mesh mesh)
 			{
-				var aabb = mesh.GetAabb();
-				// Bounding radius from the AABB half-extents (meshes are authored centred on
-				// the origin), so scaling to row.Radius keeps the silhouette ~= collision sphere.
-				float authored = aabb.Size.Length() * 0.5f;
+				// True bounding radius = farthest vertex from the mesh origin (meshes are
+				// authored as radial star-fields centred on the origin). Scaling each instance
+				// by row.Radius / authored then makes the collision sphere tightly circumscribe
+				// the silhouette. Using the AABB's half-diagonal here instead would overestimate
+				// the radius by up to sqrt(3), shrinking the rock well inside its hitbox.
+				float authored = MeshBoundingRadius(mesh);
 				if (authored > 0.001f)
 					result = (mesh, authored);
 			}
@@ -320,6 +322,23 @@ public partial class WorldRenderer : Node3D
 			if (FindMeshInstance(child) is MeshInstance3D found)
 				return found;
 		return null;
+	}
+
+	// Farthest vertex distance from the mesh origin, across all surfaces. This is the tight
+	// bounding-sphere radius for an origin-centred mesh; falls back to the AABB half-diagonal
+	// if a surface exposes no vertex array.
+	private static float MeshBoundingRadius(Mesh mesh)
+	{
+		float maxSq = 0f;
+		for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+		{
+			var arrays = mesh.SurfaceGetArrays(s);
+			if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
+				continue;
+			foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+				maxSq = Mathf.Max(maxSq, v.LengthSquared());
+		}
+		return maxSq > 0f ? Mathf.Sqrt(maxSq) : mesh.GetAabb().Size.Length() * 0.5f;
 	}
 
 	private void OnAsteroidInsert(EventContext ctx, Asteroid row)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# start-db.sh — start the local SpacetimeDB server and populate it as needed.
+# publish-local.sh — start the local SpacetimeDB server and populate it as needed.
 #
 # Unlike the throwaway `docker run --rm ... start` in HANDOFF.md, this starts the
 # server with a PERSISTENT Docker named volume (stdb-data -> container /data), so
@@ -23,8 +23,8 @@
 # wiped), this mints a server-issued token from POST /v1/identity and stores it.
 #
 # Usage:
-#   scripts/start-db.sh             # start + populate-if-needed
-#   scripts/start-db.sh --reset     # force a fresh publish; if the local DB was
+#   scripts/publish-local.sh             # start + populate-if-needed
+#   scripts/publish-local.sh --reset     # force a fresh publish; if the local DB was
 #                                   # seeded under a different identity (so the
 #                                   # server refuses "reset database"), wipe the
 #                                   # data volume and reseed as the current owner

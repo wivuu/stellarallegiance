@@ -484,5 +484,5 @@ $RECYCLE.BIN/
 *.swp
 
 # Local SpacetimeDB CLI identity/token (do not commit). Persistent server data
-# lives in the Docker named volume 'stdb-data' (see scripts/start-db.sh), not here.
+# lives in the Docker named volume 'stdb-data' (see scripts/publish-local.sh), not here.
 .stdb-config/

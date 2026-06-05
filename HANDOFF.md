@@ -47,13 +47,13 @@ decided result, watching for desync / feel. Launch each machine's client with **
 
 **Start the server + seed the DB (preferred):**
 ```bash
-./scripts/start-db.sh          # starts (persistent), waits, populates if needed
-./scripts/start-db.sh --reset  # also force a fresh publish (--delete-data)
+./scripts/publish-local.sh          # starts (persistent), waits, populates if needed
+./scripts/publish-local.sh --reset  # also force a fresh publish (--delete-data)
 ```
 This starts the server with a **persistent Docker named volume `stdb-data`**, so the DB and the
 server's signing keys now **survive container restarts** (data persists; the CLI token stays
 valid across restarts). It's idempotent — re-run any time. `scripts/populate-db.sh` just
-publishes (which runs `Init` → seeds Match/Bases/Asteroids); `start-db.sh` calls it as needed.
+publishes (which runs `Init` → seeds Match/Bases/Asteroids); `publish-local.sh` calls it as needed.
 
 > **Why a named volume + `--user root`** (learned the hard way): SpacetimeDB's commitlog calls
 > `fsync`, which macOS Docker Desktop **bind mounts don't support** (gRPC-FUSE/virtiofs) — a
@@ -61,7 +61,7 @@ publishes (which runs `Init` → seeds Match/Bases/Asteroids); `start-db.sh` cal
 > the Linux VM's ext4 and works; it's root-owned, so the server runs as `--user root` (the image's
 > default `spacetime` user can't write to it). **Local auth:** the local server signs tokens with
 > its own keys, so a maincloud/`.stdb-config` token gives `401 Invalid token: InvalidSignature`.
-> Publishing to a *not-yet-existing* DB works anonymously; if a stale token is present, `start-db.sh`
+> Publishing to a *not-yet-existing* DB works anonymously; if a stale token is present, `publish-local.sh`
 > mints a fresh server-issued token from `POST /v1/identity` and stores it via `login --token`.
 > (The old `login --server-issued-login` flag is gone in CLI 2.3; `login --auth-host <local>` does
 > NOT work — it runs the spacetimedb.com web flow and clears your token.)
@@ -458,7 +458,7 @@ login` identity) can appear `online` with no ship. It can't fight (no ship, neve
 ```
 .stdb-config/             ← persistent CLI identity/token (gitignored); mount on every auth'd call
 scripts/
-  start-db.sh             ← start server (persistent named volume) + populate-if-needed; idempotent
+  publish-local.sh             ← start server (persistent named volume) + populate-if-needed; idempotent
   populate-db.sh          ← publish the module (runs Init -> seeds Match/Bases/Asteroids); --reset wipes
 shared/
   FlightModel.cs          ← deterministic flight model; the ONLY copy, edit here

@@ -96,7 +96,7 @@ public partial class ConnectionOverlay : Control
                 _title.Text = "⚠  Server offline";
                 _title.AddThemeColorOverride("font_color", Offline);
                 _detail.Text = $"Couldn't reach {_cm.ServerUrl}.\n"
-                    + "Start the local server (scripts/start-db.sh), or relaunch with --maincloud.";
+                    + "Start the local server (scripts/publish-local.sh), or relaunch with --maincloud.";
                 _retry.Visible = true;
                 break;
         }
