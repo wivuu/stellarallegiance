@@ -368,6 +368,7 @@ public partial class WorldRenderer : Node3D
 			node = pc;
 			_ships.AddChild(pc);
 			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
+			AttachEngineGlow(pc, row.Class, row.Team);
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -385,6 +386,7 @@ public partial class WorldRenderer : Node3D
 		node = rs;
 		_ships.AddChild(rs);
 		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
+		AttachEngineGlow(rs, row.Class, row.Team);
 		rs.Initialize(row);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
@@ -552,5 +554,42 @@ public partial class WorldRenderer : Node3D
 			MaterialOverride = mat,
 			RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
 		};
+	}
+
+	// Build and attach the dynamic engine glow (see EngineGlow) to a freshly
+	// spawned ship, then hand the node its reference so it can drive throttle each
+	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
+	// Scout's single central thruster vs a Fighter's heavier twin engines.
+	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team)
+	{
+		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
+		Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
+
+		EngineGlow glow = cls == ShipClass.Fighter
+			? new EngineGlow
+			{
+				Name = "EngineGlow",
+				Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
+				NozzleRadius = 0.6f,
+				PlumeLength = 6f,
+				LightRange = 18f,
+				CoreColor = hot,
+			}
+			: new EngineGlow
+			{
+				Name = "EngineGlow",
+				Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
+				NozzleRadius = 0.85f,
+				PlumeLength = 5.5f,
+				LightRange = 15f,
+				CoreColor = hot,
+			};
+
+		shipNode.AddChild(glow);
+		switch (shipNode)
+		{
+			case PredictionController pc: pc.AttachEngine(glow); break;
+			case RemoteShip rs: rs.AttachEngine(glow); break;
+		}
 	}
 }
