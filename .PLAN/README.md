@@ -23,6 +23,15 @@ Items below are future directions discussed but not scoped for this milestone.
 
 - shield and damage systems
 
+- Custom host game server docker image, clients should be able to target that server on launch with an arg for now
+    - Eventually a single server should be able to be used as a central aggregator, but that might just be a web server
+
+- Ship salvage when destroyed get ammo guns and missiles mines randomly, most be picked up
+
+- Add mines/fields
+
+- Add missiles, lock on, chaff
+
 **Improved In-game UI** — Health bars, shields (if present) minimap, ship status indicators, team scores.
 
 - per-player in-match and post-match scores/kills/deaths, overall point system and player ranks
