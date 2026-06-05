@@ -124,7 +124,8 @@ public partial class ShipController : Node
 
 	public override void _Process(double delta)
 	{
-		_input = _autoFly ? AutoInput() : ReadInput();
+		// Neutral input while the chat box is open so typing never steers or fires.
+		_input = _autoFly ? AutoInput() : (Chat.Capturing ? new ShipInputState() : ReadInput());
 
 		// Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
 		// the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
@@ -145,7 +146,7 @@ public partial class ShipController : Node
 
 		HandleMouseCapture(hasShip);
 
-		if (!hasShip)
+		if (!hasShip && !Chat.Capturing)
 		{
 			if (Input.IsPhysicalKeyPressed(Key.Key1)) _spawnRequest = ShipClass.Scout;
 			if (Input.IsPhysicalKeyPressed(Key.Key2)) _spawnRequest = ShipClass.Fighter;
@@ -194,7 +195,7 @@ public partial class ShipController : Node
 		// ShipInput so the server integrates the same boost the client predicted (no
 		// reconcile storm), and still drives the engine glow. Autofly pins it on so
 		// headless runs exercise the boost + exhaust path.
-		bool boost = _autoFly || Input.IsPhysicalKeyPressed(Key.Shift);
+		bool boost = _autoFly || (!Chat.Capturing && Input.IsPhysicalKeyPressed(Key.Shift));
 		_input.Boost = boost;
 		pc.SetAfterburner(boost ? 1f : 0f);
 
@@ -222,7 +223,7 @@ public partial class ShipController : Node
 
 		// T5 divergence injection (debug). Press P to force a misprediction and
 		// watch reconciliation snap + re-sim back; autofly fires one self-test.
-		bool perturb = Input.IsPhysicalKeyPressed(Key.P);
+		bool perturb = !Chat.Capturing && Input.IsPhysicalKeyPressed(Key.P);
 		if (perturb && !_perturbHeld)
 			pc.InjectDivergence(new Vector3(25f, 0f, 0f));
 		_perturbHeld = perturb;
@@ -276,7 +277,8 @@ public partial class ShipController : Node
 	// under --autofly (headless has no real cursor and must not grab focus).
 	private void HandleMouseCapture(bool flying)
 	{
-		if (_autoFly) return;
+		// Chat owns the cursor while you're typing; don't fight it.
+		if (_autoFly || Chat.Capturing) return;
 
 		bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
 		bool escPressed = esc && !_escHeld;

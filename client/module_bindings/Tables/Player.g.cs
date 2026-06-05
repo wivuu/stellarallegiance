@@ -45,6 +45,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Player, ulong> ShipId { get; }
         public global::SpacetimeDB.Col<Player, bool> Online { get; }
         public global::SpacetimeDB.Col<Player, string> Name { get; }
+        public global::SpacetimeDB.Col<Player, byte> ChatTeam { get; }
 
         public PlayerCols(string tableName)
         {
@@ -54,6 +55,7 @@ namespace SpacetimeDB.Types
             ShipId = new global::SpacetimeDB.Col<Player, ulong>(tableName, "ship_id");
             Online = new global::SpacetimeDB.Col<Player, bool>(tableName, "online");
             Name = new global::SpacetimeDB.Col<Player, string>(tableName, "name");
+            ChatTeam = new global::SpacetimeDB.Col<Player, byte>(tableName, "chat_team");
         }
     }
 

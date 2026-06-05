@@ -29,6 +29,8 @@ namespace SpacetimeDB.Types
         public long LastTickMicros;
         [DataMember(Name = "accum_micros")]
         public long AccumMicros;
+        [DataMember(Name = "pigs_enabled")]
+        public bool PigsEnabled;
 
         public Match(
             uint Id,
@@ -38,7 +40,8 @@ namespace SpacetimeDB.Types
             byte EngagedTeams,
             ulong Seed,
             long LastTickMicros,
-            long AccumMicros
+            long AccumMicros,
+            bool PigsEnabled
         )
         {
             this.Id = Id;
@@ -49,6 +52,7 @@ namespace SpacetimeDB.Types
             this.Seed = Seed;
             this.LastTickMicros = LastTickMicros;
             this.AccumMicros = AccumMicros;
+            this.PigsEnabled = PigsEnabled;
         }
 
         public Match()

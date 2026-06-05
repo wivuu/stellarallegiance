@@ -47,6 +47,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Match, ulong> Seed { get; }
         public global::SpacetimeDB.Col<Match, long> LastTickMicros { get; }
         public global::SpacetimeDB.Col<Match, long> AccumMicros { get; }
+        public global::SpacetimeDB.Col<Match, bool> PigsEnabled { get; }
 
         public MatchCols(string tableName)
         {
@@ -58,6 +59,7 @@ namespace SpacetimeDB.Types
             Seed = new global::SpacetimeDB.Col<Match, ulong>(tableName, "seed");
             LastTickMicros = new global::SpacetimeDB.Col<Match, long>(tableName, "last_tick_micros");
             AccumMicros = new global::SpacetimeDB.Col<Match, long>(tableName, "accum_micros");
+            PigsEnabled = new global::SpacetimeDB.Col<Match, bool>(tableName, "pigs_enabled");
         }
     }
 
