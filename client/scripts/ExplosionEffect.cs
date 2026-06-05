@@ -18,10 +18,10 @@ public partial class ExplosionEffect : Node3D
 	private static readonly GradientTexture2D Dot = RadialDot();
 	private static readonly CurveTexture ScaleTex = BurstScaleCurve();
 
-	private const double FlashLife = 0.16;
+	private const double FlashLife = 0.22;
 	private const double RingLife = 0.42;
-	private const float FlashEnergy = 7f;
-	private const float RingEnergy = 5f;
+	private const float FlashEnergy = 14f;
+	private const float RingEnergy = 2.6f;
 
 	private MeshInstance3D? _flash;
 	private StandardMaterial3D _flashMat = null!;
@@ -43,45 +43,53 @@ public partial class ExplosionEffect : Node3D
 		float s = _classScale;
 		bool big = s > 1f;
 		_ringMax = 11f * s;
-		_totalLife = (big ? 1.1 : 0.9) + 0.15;   // outlive the debris particles, then free
+		_totalLife = (big ? 0.85 : 0.7) + 0.15;   // outlive the debris particles, then free
 
-		// --- Debris fireball: embers shot outward that decelerate and burn down. ---
+		// --- Debris fireball: a DENSE, churning ball of fire that puffs up and burns down in
+		// place rather than flinging sprites outward (which reads as a firework, not a blast).
+		// Low outward velocity keeps the puffs overlapping into a volume; turbulence + strong
+		// drag give it roil; big overlapping sprites blend the individual motes away. ---
 		var proc = new ParticleProcessMaterial
 		{
 			EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
-			EmissionSphereRadius = 0.5f * s,
+			EmissionSphereRadius = 2.0f * s,     // born across a wider volume, not a point
 			Direction = new Vector3(0f, 1f, 0f),
 			Spread = 180f,
-			InitialVelocityMin = 14f * (big ? 1.4f : 1f),
-			InitialVelocityMax = 40f * (big ? 1.4f : 1f),
+			InitialVelocityMin = 2f * s,         // mostly slow: the ball expands a little, not a lot
+			InitialVelocityMax = 12f * s,
 			Gravity = Vector3.Zero,
-			DampingMin = 14f,                    // strong drag: embers fling out then hang & fade
-			DampingMax = 22f,
-			ScaleMin = 0.8f * s,
-			ScaleMax = 2.0f * s,
+			DampingMin = 10f,                    // brake quickly so nothing streaks off
+			DampingMax = 18f,
+			TurbulenceEnabled = true,            // organic churn instead of clean radial lines
+			TurbulenceNoiseStrength = 6f * s,
+			TurbulenceNoiseScale = 1.3f,
+			TurbulenceInfluenceMin = 0.4f,
+			TurbulenceInfluenceMax = 1.0f,
+			ScaleMin = 4.5f * s,                 // big, heavily overlapping puffs
+			ScaleMax = 8.0f * s,
 			ScaleCurve = ScaleTex,
 			Color = Colors.White,
 			ColorRamp = FireRamp(_team),
 		};
 		var particles = new GpuParticles3D
 		{
-			Amount = big ? 90 : 54,
-			Lifetime = big ? 1.1 : 0.9,
+			Amount = big ? 140 : 90,             // dense enough to read as a solid fireball
+			Lifetime = big ? 0.85 : 0.7,         // punchy: flares up and is gone
 			OneShot = true,
 			Explosiveness = 1.0f,                // all motes at t=0 — a burst, not a trickle
-			LocalCoords = true,                  // node is stationary; embers fly out from it
+			LocalCoords = true,                  // node is stationary; the ball churns in place
 			ProcessMaterial = proc,
-			DrawPass1 = new QuadMesh { Size = new Vector2(1.5f * s, 1.5f * s) },
+			DrawPass1 = new QuadMesh { Size = new Vector2(1.4f * s, 1.4f * s) },
 			MaterialOverride = BurstDrawMaterial(),
 			Emitting = true,                     // set last, after Amount/ProcessMaterial
 		};
 		AddChild(particles);
 
 		// --- Core flash: a bright billboarded pop at the instant of death. ---
-		_flashMat = FlashMaterial(new Color(1f, 0.95f, 0.75f), FlashEnergy);
+		_flashMat = FlashMaterial(new Color(1f, 0.97f, 0.82f), FlashEnergy);
 		_flash = new MeshInstance3D
 		{
-			Mesh = new QuadMesh { Size = new Vector2(2.4f * s, 2.4f * s) },
+			Mesh = new QuadMesh { Size = new Vector2(4.0f * s, 4.0f * s) },
 			MaterialOverride = _flashMat,
 			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 		};
@@ -96,16 +104,16 @@ public partial class ExplosionEffect : Node3D
 			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
 			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
 			BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-			AlbedoColor = new Color(1f, 0.85f, 0.55f, 1f),
+			AlbedoColor = new Color(0.95f, 0.82f, 0.55f, 0.7f),
 			EmissionEnabled = true,
-			Emission = new Color(1f, 0.8f, 0.45f),
+			Emission = new Color(0.95f, 0.78f, 0.45f),
 			EmissionEnergyMultiplier = RingEnergy,
 			CullMode = BaseMaterial3D.CullModeEnum.Disabled,   // visible from both faces
 		};
 		_ring = new MeshInstance3D
 		{
 			// Thin ring of unit radius; the node Scale drives the actual expansion below.
-			Mesh = new TorusMesh { InnerRadius = 0.86f, OuterRadius = 1.0f, Rings = 48, RingSegments = 8 },
+			Mesh = new TorusMesh { InnerRadius = 0.93f, OuterRadius = 1.0f, Rings = 48, RingSegments = 8 },
 			MaterialOverride = _ringMat,
 			Rotation = new Vector3(rng.RandfRange(0f, Mathf.Pi), rng.RandfRange(0f, Mathf.Pi), rng.RandfRange(0f, Mathf.Pi)),
 			Scale = Vector3.One * 0.5f,
@@ -124,9 +132,12 @@ public partial class ExplosionEffect : Node3D
 			if (t >= 1f) { _flash.QueueFree(); _flash = null; }
 			else
 			{
-				_flash.Scale = Vector3.One * Mathf.Lerp(0.5f, 2.4f * _classScale, EaseOut(t));
-				_flashMat.EmissionEnergyMultiplier = FlashEnergy * (1f - t);
-				_flashMat.AlbedoColor = _flashMat.AlbedoColor with { A = 1f - t };
+				// Pop to full size almost instantly, then hold bright and fall off late (1-t^2)
+				// so the flash reads as a punch rather than a slow linear dim.
+				_flash.Scale = Vector3.One * Mathf.Lerp(1.0f, 2.4f * _classScale, EaseOut(t));
+				float fade = 1f - t * t;
+				_flashMat.EmissionEnergyMultiplier = FlashEnergy * fade;
+				_flashMat.AlbedoColor = _flashMat.AlbedoColor with { A = fade };
 			}
 		}
 
@@ -170,12 +181,13 @@ public partial class ExplosionEffect : Node3D
 		return new GradientTexture1D { Gradient = gradient, Width = 64 };
 	}
 
-	// Per-particle scale over life: small spark -> full ember -> shrink out.
+	// Per-particle scale over life: born large at the blast core, then shrinking as the ember
+	// races outward and burns down to nothing — the shrink sells the outward motion.
 	private static CurveTexture BurstScaleCurve()
 	{
 		var curve = new Curve();
-		curve.AddPoint(new Vector2(0f, 0.4f));
-		curve.AddPoint(new Vector2(0.3f, 1.0f));
+		curve.AddPoint(new Vector2(0f, 1.0f));
+		curve.AddPoint(new Vector2(0.5f, 0.6f));
 		curve.AddPoint(new Vector2(1f, 0.0f));
 		return new CurveTexture { Curve = curve };
 	}
