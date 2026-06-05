@@ -59,7 +59,7 @@ public partial class PredictionController : Node3D
 	// step (the player's real throttle, so the glow tracks their hand exactly).
 	private EngineGlow? _engine;
 	private float _throttle;
-	private float _afterburner;   // client-only afterburner key (0/1); see ShipController
+	private float _afterburner;   // afterburner glow intensity (0/1); see ShipController
 
 	private ShipState _state;                          // latest predicted state (tick N)
 	private ShipState _prevState;                      // previous predicted state (tick N-1)
@@ -106,9 +106,9 @@ public partial class PredictionController : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-	// The afterburner is a client-only visual (the flight model has no boost input
-	// yet — that's the future "booster" backlog item), so it rides alongside the
-	// networked input rather than in it. Set each frame by ShipController.
+	// Engine-glow intensity for the afterburner. The boost's FLIGHT effect now rides
+	// in the networked ShipInput (FlightModel reads input.Boost), so this only drives
+	// the visual exhaust; ShipController sets it from the same Shift key each frame.
 	public void SetAfterburner(float boost) => _afterburner = Mathf.Clamp(boost, 0f, 1f);
 
 	public void Initialize(Ship row)

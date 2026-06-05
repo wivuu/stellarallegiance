@@ -113,6 +113,24 @@ static class Program
             Console.WriteLine($"PASS: terminal speed {speed:R} <= MaxSpeed {scout.MaxSpeed}");
         }
 
+        // 4. Afterburner: holding Boost must raise the terminal speed ABOVE the
+        //    normal cap and converge on BoostSpeedMult * MaxSpeed. Guards the
+        //    "afterburner does nothing to speed" bug from regressing.
+        var sb = new ShipState { Rot = Quat.Identity };
+        var boostInput = new ShipInputState { Thrust = 1f, Boost = true };
+        for (int t = 0; t < 2000; t++) sb = FlightModel.Integrate(sb, boostInput, scout);
+        float boostSpeed = sb.Vel.Length();
+        float boostCap = scout.MaxSpeed * scout.BoostSpeedMult;
+        if (boostSpeed <= scout.MaxSpeed + Tol || boostSpeed > boostCap + Tol)
+        {
+            Console.WriteLine($"FAIL: boosted speed {boostSpeed:R} not in ({scout.MaxSpeed}, {boostCap}]");
+            failures++;
+        }
+        else
+        {
+            Console.WriteLine($"PASS: boosted terminal speed {boostSpeed:R} exceeds {scout.MaxSpeed}, capped at {boostCap}");
+        }
+
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;
     }

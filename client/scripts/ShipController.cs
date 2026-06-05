@@ -95,7 +95,7 @@ public partial class ShipController : Node
 		// Time ApplyInput round-trips for the latency readout. The reducer callback
 		// fires on the caller when the server commits our call, echoing clientTick.
 		_cm.Connected += conn => conn.Reducers.OnApplyInput +=
-			(_, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
+			(_, _, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
 
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
@@ -189,9 +189,14 @@ public partial class ShipController : Node
 			_hadShip = true;
 		}
 
-		// Afterburner: a client-only visual (engine glow only — no flight effect yet),
-		// held on Shift. Autofly pins it on so headless runs exercise the exhaust path.
-		pc.SetAfterburner(_autoFly || Input.IsPhysicalKeyPressed(Key.Shift) ? 1f : 0f);
+		// Afterburner (Shift): a real flight input now — extra forward thrust and a
+		// raised speed cap while held (see FlightModel Boost). It rides in the networked
+		// ShipInput so the server integrates the same boost the client predicted (no
+		// reconcile storm), and still drives the engine glow. Autofly pins it on so
+		// headless runs exercise the boost + exhaust path.
+		bool boost = _autoFly || Input.IsPhysicalKeyPressed(Key.Shift);
+		_input.Boost = boost;
+		pc.SetAfterburner(boost ? 1f : 0f);
 
 		UpdateAdaptiveLead();
 		int lead = (int)_predTick - (int)_world.ServerTick;
@@ -209,7 +214,7 @@ public partial class ShipController : Node
 			_cm.Conn?.Reducers.ApplyInput(
 				_input.Thrust, _input.StrafeX, _input.StrafeY,
 				_input.Yaw, _input.Pitch, _input.Roll,
-				_input.Firing, _predTick);
+				_input.Firing, _input.Boost, _predTick);
 			_sentAt[_predTick] = Time.GetTicksMsec();
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
 				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);

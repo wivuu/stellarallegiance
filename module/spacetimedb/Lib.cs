@@ -91,6 +91,7 @@ public partial struct ShipInput
     public float Pitch;         // -1..1
     public float Roll;          // -1..1
     public bool Firing;         // trigger held
+    public bool Boost;          // afterburner held
 }
 
 [SpacetimeDB.Table(Accessor = "Base", Public = true)]
@@ -722,7 +723,7 @@ public static partial class Module
         ReducerContext ctx,
         float thrust, float strafeX, float strafeY,
         float yaw, float pitch, float roll,
-        bool firing, uint clientTick)
+        bool firing, bool boost, uint clientTick)
     {
         var player = ctx.Db.Player.Identity.Find(ctx.Sender);
         if (player is null || player.Value.ShipId is not ulong shipId)
@@ -739,7 +740,7 @@ public static partial class Module
             ctx.Db.ShipInput.InputId.Update(e with
             {
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
             });
         }
         else
@@ -750,7 +751,7 @@ public static partial class Module
                 ShipId = shipId,
                 Tick = clientTick,
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
             });
         }
     }
@@ -1186,6 +1187,7 @@ public static partial class Module
         Pitch = i.Pitch,
         Roll = i.Roll,
         Firing = i.Firing,
+        Boost = i.Boost,
     };
 
     // Delete every buffered input for a ship (ShipId is an index, not the PK now).

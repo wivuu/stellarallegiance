@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void ApplyInputHandler(ReducerEventContext ctx, float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, uint clientTick);
+        public delegate void ApplyInputHandler(ReducerEventContext ctx, float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, uint clientTick);
         public event ApplyInputHandler? OnApplyInput;
 
-        public void ApplyInput(float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, uint clientTick)
+        public void ApplyInput(float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, uint clientTick)
         {
-            conn.InternalCallReducer(new Reducer.ApplyInput(thrust, strafeX, strafeY, yaw, pitch, roll, firing, clientTick));
+            conn.InternalCallReducer(new Reducer.ApplyInput(thrust, strafeX, strafeY, yaw, pitch, roll, firing, boost, clientTick));
         }
 
         public bool InvokeApplyInput(ReducerEventContext ctx, Reducer.ApplyInput args)
@@ -43,6 +43,7 @@ namespace SpacetimeDB.Types
                 args.Pitch,
                 args.Roll,
                 args.Firing,
+                args.Boost,
                 args.ClientTick
             );
             return true;
@@ -69,6 +70,8 @@ namespace SpacetimeDB.Types
             public float Roll;
             [DataMember(Name = "firing")]
             public bool Firing;
+            [DataMember(Name = "boost")]
+            public bool Boost;
             [DataMember(Name = "client_tick")]
             public uint ClientTick;
 
@@ -80,6 +83,7 @@ namespace SpacetimeDB.Types
                 float Pitch,
                 float Roll,
                 bool Firing,
+                bool Boost,
                 uint ClientTick
             )
             {
@@ -90,6 +94,7 @@ namespace SpacetimeDB.Types
                 this.Pitch = Pitch;
                 this.Roll = Roll;
                 this.Firing = Firing;
+                this.Boost = Boost;
                 this.ClientTick = ClientTick;
             }
 

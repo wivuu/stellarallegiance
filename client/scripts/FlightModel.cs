@@ -127,11 +127,15 @@ namespace StellarAllegiance.Shared
     {
         public float Thrust, StrafeX, StrafeY, Yaw, Pitch, Roll;
         public bool Firing;
+        public bool Boost;   // afterburner held: extra forward thrust + raised speed cap
     }
 
     public struct ShipStats
     {
         public float ThrustAccel, MaxSpeed, LinearDrag, AngularAccel, AngularDrag;
+        // Afterburner: while Boost is held, forward thrust accel is scaled by
+        // BoostThrustMult and the speed cap by BoostSpeedMult (both 1 = no boost).
+        public float BoostThrustMult, BoostSpeedMult;
     }
 
     public static class FlightModel
@@ -154,6 +158,8 @@ namespace StellarAllegiance.Shared
             LinearDrag = 1.2f,
             AngularAccel = 3.5f,
             AngularDrag = 2.5f,
+            BoostThrustMult = 2.2f,   // afterburner: 99 u/s forward accel
+            BoostSpeedMult = 1.6f,    // and a 112 u/s top speed while held
         };
 
         public static readonly ShipStats Fighter = new ShipStats
@@ -163,6 +169,8 @@ namespace StellarAllegiance.Shared
             LinearDrag = 1.0f,
             AngularAccel = 2.5f,
             AngularDrag = 2.0f,
+            BoostThrustMult = 1.8f,   // heavier hull: 54 u/s forward accel
+            BoostSpeedMult = 1.4f,    // and a 70 u/s top speed while held
         };
 
         public static ShipStats StatsFor(byte shipClass) =>
@@ -253,17 +261,22 @@ namespace StellarAllegiance.Shared
             Quat rot = (s.Rot * Quat.FromRotationVector(angVel * dt)).Normalized();
 
             // --- Linear: thrust along ship-local axes, then drag, then clamp. ---
-            // strafeX -> X, strafeY -> Y, thrust -> Z (forward).
-            Vec3 thrustLocal = new Vec3(i.StrafeX, i.StrafeY, i.Thrust) * st.ThrustAccel;
+            // strafeX -> X, strafeY -> Y, thrust -> Z (forward). The afterburner
+            // (Boost) scales the FORWARD axis accel and raises the speed cap while
+            // held; strafe is unaffected. Branching on the bool is deterministic
+            // (no transcendentals), so client prediction and server stay bit-identical.
+            float fwdAccel = st.ThrustAccel * (i.Boost ? st.BoostThrustMult : 1f);
+            Vec3 thrustLocal = new Vec3(i.StrafeX * st.ThrustAccel, i.StrafeY * st.ThrustAccel, i.Thrust * fwdAccel);
             Vec3 thrustWorld = rot.Rotate(thrustLocal);
             Vec3 vel = s.Vel + thrustWorld * dt;
             vel = vel * (1f - st.LinearDrag * dt);
 
+            float maxSpeed = st.MaxSpeed * (i.Boost ? st.BoostSpeedMult : 1f);
             float speedSq = vel.LengthSquared();
-            float maxSq = st.MaxSpeed * st.MaxSpeed;
+            float maxSq = maxSpeed * maxSpeed;
             if (speedSq > maxSq)
             {
-                float scale = st.MaxSpeed / (float)System.Math.Sqrt(speedSq);
+                float scale = maxSpeed / (float)System.Math.Sqrt(speedSq);
                 vel = vel * scale;
             }
 
