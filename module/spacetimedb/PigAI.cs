@@ -66,6 +66,35 @@ public static partial class Module
     private const float PigThreatDmgWeight = 0.4f;     // enemy weapon damage (Fighter > Scout)
     private const float PigThreatSwitchMargin = 1.3f;  // only switch when new threat ≥ 1.3× current
 
+    // ---- Aiming skill (per-slot, so a squad is a MIX, not five aimbots) ----
+    // Each drone slot draws a stable competence in [0,1] from a hash of its PigId
+    // (see PigAimSkill). That single number drives three things, so a "better pilot"
+    // both predicts movement and holds its reticle steadier:
+    //   • lead fraction — how much of the solved intercept it actually applies. A
+    //     sloppy pilot under-leads and trails a crossing/strafing target; an ace
+    //     solves the full lead and connects.
+    //   • turn gain     — how sharply it snaps the nose onto the (moving) aim point.
+    //     Low gain lags behind a strafing target and the shot is never lined up;
+    //     high gain tracks it, which is what lets a skilled drone actually HIT a
+    //     player who's juking sideways.
+    //   • aim wobble    — a slowly-wandering residual error (bigger for worse
+    //     pilots) so even the best isn't a pixel-perfect turret.
+    private const float PigTurnGainMin = 2.2f;     // sloppy pilot: laggy nose tracking
+    private const float PigTurnGainMax = 4.4f;     // ace: snaps onto a strafing target
+    private const float PigLeadFracMin = 0.55f;    // sloppy pilot under-leads crossers
+    private const float PigLeadFracMax = 1.0f;     // ace solves the full intercept
+    private const float PigAimWobbleMaxRad = 0.05f;// ~2.9° of sway for the WORST pilot, →0 for an ace
+    private const float PigAimWobbleRate = 0.11f;  // phase advance per tick of the wobble
+
+    // ---- Evasive side-thrusters ("juking") ----------------------------
+    // Once an enemy is close, the drone weaves with its lateral thrusters (ship-local
+    // X/Y strafe, perpendicular to its forward aim) to spoil incoming fire. Its OWN
+    // lead solver already inherits its velocity, so juking doesn't blunt its own aim.
+    private const float PigJukeRange = 300f;        // begin evasive strafing within this range of the target
+    private const float PigJukePeriodTicks = 13f;   // ~0.65 s per lateral weave
+    private const float PigJukeAmpMin = 0.45f;      // gentle weave at the edge of juke range
+    private const float PigJukeAmpMax = 1.0f;       // full lateral thrust point-blank
+
     // Create the drone slots once (idempotent — also covers a hot-swap that didn't
     // re-run Init). Alternating class gives a scout/fighter mix per side.
     private static void EnsurePigSlots(ReducerContext ctx)
@@ -344,10 +373,21 @@ public static partial class Module
         Vec3 tgtVel = new Vec3(tgt.VelX, tgt.VelY, tgt.VelZ);
         float dist = (tgtPos - myPos).Length();
 
+        // This drone's stable, per-slot aiming competence drives lead accuracy, how
+        // sharply it tracks, and its residual wobble (see PigAimSkill / the tuning block).
+        ulong pigId = slotOpt is Pig sps ? sps.PigId : me.ShipId;
+        float skill = PigAimSkill(pigId);
+        float turnGain = PigTurnGainMin + (PigTurnGainMax - PigTurnGainMin) * skill;
+        float leadFrac = PigLeadFracMin + (PigLeadFracMax - PigLeadFracMin) * skill;
+
         // Lead the target so the velocity-inheriting shot connects (same intercept the
         // player HUD solves). Fall back to the target's current position if there's no
-        // forward solution within range, so the drone still chases sensibly.
-        Vec3 aimPoint = PigLead(myPos, myVel, tgtPos, tgtVel, out bool haveLead);
+        // forward solution within range, so the drone still chases sensibly. A less
+        // skilled pilot applies only PART of the solved lead (trails a strafing target),
+        // then we add a slowly-wandering wobble so no drone is a perfect turret.
+        Vec3 leadPoint = PigLead(myPos, myVel, tgtPos, tgtVel, out bool haveLead);
+        Vec3 aimPoint = tgtPos + (leadPoint - tgtPos) * leadFrac;
+        aimPoint = aimPoint + PigAimWobble(aimPoint - myPos, pigId, tick, skill);
         Vec3 desiredDir = NormalizeOr(aimPoint - myPos, myRot.Rotate(new Vec3(0f, 0f, 1f)));
 
         // Bend the heading away from asteroids in our path (steering, not pathfinding).
@@ -363,8 +403,8 @@ public static partial class Module
         }
         else
         {
-            yaw = Clamp1(local.X * PigTurnGain);
-            pitch = Clamp1(-local.Y * PigTurnGain);
+            yaw = Clamp1(local.X * turnGain);
+            pitch = Clamp1(-local.Y * turnGain);
         }
 
         // Throttle: close to a standoff band and hold, easing off when nearly aligned &
@@ -375,6 +415,21 @@ public static partial class Module
         if (dist > PigStandoff * 1.5f)      thrust = facing ? 1f : 0.5f;
         else if (dist < PigStandoff * 0.7f) thrust = -0.25f;   // back off a touch
         else                                 thrust = 0.3f;
+
+        // Evasive side-thrusters: once the enemy is close, weave laterally to spoil its
+        // aim. The strafe is ship-local (perpendicular to our forward/aim direction),
+        // ramps up the closer we are, and is phase-offset per slot so a squad doesn't
+        // weave in unison. Our own lead solver inherits this velocity, so it doesn't
+        // hurt our shooting.
+        float strafeX = 0f, strafeY = 0f;
+        if (dist <= PigJukeRange)
+        {
+            float closeFrac = Clamp01(1f - dist / PigJukeRange);
+            float amp = PigJukeAmpMin + (PigJukeAmpMax - PigJukeAmpMin) * closeFrac;
+            float ph = tick / PigJukePeriodTicks + pigId * 1.61803399f;
+            strafeX = MathF.Sin(ph) * amp;
+            strafeY = MathF.Sin(ph * 1.7f + 0.6f) * amp * 0.5f;  // smaller vertical jink
+        }
 
         // Fire only inside range and when the nose is on the lead point.
         bool inRange = dist <= PigFireRange;
@@ -388,8 +443,8 @@ public static partial class Module
         return new ShipInputState
         {
             Thrust = thrust,
-            StrafeX = 0f,
-            StrafeY = 0f,
+            StrafeX = strafeX,
+            StrafeY = strafeY,
             Yaw = yaw,
             Pitch = pitch,
             Roll = 0f,
@@ -558,11 +613,44 @@ public static partial class Module
         return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch };
     }
 
+    // A drone slot's stable aiming competence in [0,1], hashed from its PigId so the
+    // same slot is a consistently better/worse shot for its whole life (and across
+    // respawns) and a squad is a spread of abilities. Server-only; integer avalanche.
+    private static float PigAimSkill(ulong pigId)
+    {
+        uint x = unchecked((uint)pigId * 2654435761u + 1013904223u);
+        x ^= x >> 16; x *= 0x7feb352du;
+        x ^= x >> 15; x *= 0x846ca68bu;
+        x ^= x >> 16;
+        return (x >> 8) * (1f / 16777216f);
+    }
+
+    // A slowly-wandering aim error added to the solved aim point: a constant-angle sway
+    // (so it's range-independent) whose magnitude grows for less-skilled pilots and
+    // vanishes for an ace. Phase is per-slot + per-tick so it drifts rather than biasing
+    // one direction. Returns a world-space offset perpendicular to the line of sight.
+    private static Vec3 PigAimWobble(Vec3 los, ulong pigId, uint tick, float skill)
+    {
+        float angle = PigAimWobbleMaxRad * (1f - skill);
+        if (angle <= 0f)
+            return new Vec3(0f, 0f, 0f);
+        Vec3 f = NormalizeOr(los, new Vec3(0f, 0f, 1f));
+        Vec3 right = NormalizeOr(Vec3.Cross(new Vec3(0f, 1f, 0f), f), new Vec3(1f, 0f, 0f));
+        Vec3 up = Vec3.Cross(f, right);
+        float reach = los.Length() * angle;     // lateral units ≈ angle·range → constant angle
+        float phase = tick * PigAimWobbleRate + pigId * 2.39996323f;
+        float sx = MathF.Sin(phase);
+        float sy = MathF.Sin(phase * 0.73f + 1.3f);
+        return right * (sx * reach) + up * (sy * reach * 0.6f);
+    }
+
     // ---- small server-only math helpers (plain MathF is fine; not synced) ----
 
     private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
+
+    private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
     private static Quat Conjugate(Quat q) => new Quat(-q.X, -q.Y, -q.Z, q.W);
 
