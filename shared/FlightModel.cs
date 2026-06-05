@@ -153,11 +153,11 @@ namespace StellarAllegiance.Shared
 
         // Per-class stats from .PLAN/03 (placeholders; AngularDrag chosen here,
         // all subject to tuning in T4). MaxHull is not part of integration.
-        public static readonly ShipStats Scout = new ShipStats
+        public static readonly ShipStats Scout = new()
         {
-            ThrustAccel = 45f,
+            ThrustAccel = 60f,
             MaxSpeed = 70f,
-            LinearDrag = 1.2f,
+            LinearDrag = 1.8f,
             // Light & nimble, but with noticeable rotational inertia: lower accel
             // means the turn spins up gradually, lower drag means it coasts after
             // you let off the stick (you counter-steer to stop). Still the quicker
@@ -168,7 +168,7 @@ namespace StellarAllegiance.Shared
             BoostSpeedMult = 1.6f,    // and a 112 u/s top speed while held
         };
 
-        public static readonly ShipStats Fighter = new ShipStats
+        public static readonly ShipStats Fighter = new()
         {
             ThrustAccel = 30f,
             MaxSpeed = 50f,
