@@ -57,6 +57,7 @@ public static partial class Module
     private const float PigAvoidLookahead = 160f; // asteroid-avoidance forward look distance (u)
     private const float PigAvoidMargin = 14f;     // extra clearance beyond the summed radii (u)
     private const uint  PigSpawnStaggerTicks = 30; // trickle a fresh wave in ~1.5 s apart, not all at once
+    private const uint  PigScrambleTicks = 4 * SimTickHz; // ~4 s to "scramble" — drones don't launch the instant a threat appears
     // Threat-based target priority (defensive): an enemy that is aiming at us AND close
     // AND hits hard most threatens this drone's survival. We switch to a new contact only
     // when it scores clearly higher than the current target (hysteresis, no thrashing).
@@ -145,11 +146,32 @@ public static partial class Module
             if (!EnemyInSector(ctx, team, baseSector))
                 continue;
 
-            // This team's dead slots whose respawn time has arrived, in stable order.
+            // Split this team's empty slots: "cold" ones (RespawnAtTick == 0 — fresh, or reset
+            // after the field emptied) versus those whose respawn/scramble timer has already
+            // elapsed and are cleared to launch. Cold slots don't spawn this tick: a threat just
+            // showed up, so they have to scramble first (see below).
+            var cold = new List<Pig>();
             var ready = new List<Pig>();
             foreach (var slot in ctx.Db.Pig.Iter())
-                if (slot.Team == team && slot.ShipId is null && tick >= slot.RespawnAtTick)
+            {
+                if (slot.Team != team || slot.ShipId is not null)
+                    continue;
+                if (slot.RespawnAtTick == 0)
+                    cold.Add(slot);
+                else if (tick >= slot.RespawnAtTick)
                     ready.Add(slot);
+            }
+
+            // Scramble: arm cold slots with a launch countdown instead of spawning instantly, so
+            // drones appear ~PigScrambleTicks after a threat enters the sector rather than the same
+            // tick. Stagger across the wave so they then trickle out one at a time, not in unison.
+            if (cold.Count > 0)
+            {
+                cold.Sort((a, b) => a.PigId.CompareTo(b.PigId));
+                for (int i = 0; i < cold.Count; i++)
+                    ctx.Db.Pig.PigId.Update(cold[i] with { RespawnAtTick = tick + PigScrambleTicks + (uint)i * PigSpawnStaggerTicks });
+            }
+
             if (ready.Count == 0)
                 continue;
             ready.Sort((a, b) => a.PigId.CompareTo(b.PigId));
