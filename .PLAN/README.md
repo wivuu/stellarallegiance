@@ -99,3 +99,4 @@ Not phase-bound — done when convenient or when a phase needs them.
 ## Deep backlog
 
 - **Replay system** — Tick log or time-travel query playback.
+- **.NET 10 upgrade** — Upgrade from .NET 8 to 10 for perf
