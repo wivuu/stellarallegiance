@@ -14,6 +14,7 @@ public partial class WorldRenderer : Node3D
 	private Node3D _ships = null!;
 	private Node3D _projectiles = null!;
 	private Node3D _alephs = null!;
+	private Node3D _effects = null!;   // transient FX (explosions, hit flashes); self-freeing
 
 	// How long a predicted ghost shot lives unmatched before it's culled. Covers
 	// prediction lead + round-trip to the authoritative row (~0.2s); a never-matched
@@ -105,11 +106,13 @@ public partial class WorldRenderer : Node3D
 		_ships = new Node3D { Name = "Ships" };
 		_projectiles = new Node3D { Name = "Projectiles" };
 		_alephs = new Node3D { Name = "Alephs" };
+		_effects = new Node3D { Name = "Effects" };
 		AddChild(_bases);
 		AddChild(_asteroids);
 		AddChild(_ships);
 		AddChild(_projectiles);
 		AddChild(_alephs);
+		AddChild(_effects);
 
 		_asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
 		_team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
@@ -190,10 +193,20 @@ public partial class WorldRenderer : Node3D
 	// called when the local ship warps to a new sector.
 	private void RefreshSectorVisibility()
 	{
-		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs })
+		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
 			foreach (var child in group.GetChildren())
 				if (child is Node3D n && n.HasMeta("sector"))
 					n.Visible = (int)n.GetMeta("sector") == (int)_localSector;
+	}
+
+	// Drop a transient, self-freeing effect into the world at a sector-local position. Tagged
+	// with its sector so it's hidden if the local view is elsewhere (effects are brief, so a
+	// warp mid-effect simply hides it).
+	private void SpawnEffect(Node3D fx, Vector3 pos, uint sector)
+	{
+		_effects.AddChild(fx);
+		fx.Position = pos;
+		SetNodeSector(fx, sector);
 	}
 
 	// ---- Aleph (warp funnel) -------------------------------------------
@@ -423,6 +436,12 @@ public partial class WorldRenderer : Node3D
 	{
 		if (!_shipNodes.Remove(row.ShipId, out var node))
 			return;
+
+		// A fiery blast at the death point (Fighters bigger than Scouts). Spawned before the
+		// local-death view reset below so it's tagged to the sector the ship actually died in.
+		var boom = ExplosionEffect.Create(row.Class, row.Team);
+		SpawnEffect(boom, new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId);
+
 		if (LocalShip == node)
 		{
 			LocalShip = null;
@@ -436,6 +455,10 @@ public partial class WorldRenderer : Node3D
 				_localSector = HomeSector;
 				_starscape?.SetSector(HomeSector);
 				RefreshSectorVisibility();
+				// Keep the player's own death blast visible through the home-overview snap
+				// (it self-frees in ~1s). It renders at the death-sector coords; for the rare
+				// case of dying away from home that placement is approximate but brief.
+				boom.Visible = true;
 			}
 		}
 		node.QueueFree();
@@ -521,10 +544,20 @@ public partial class WorldRenderer : Node3D
 		}
 	}
 
+	// A projectile leaving the table is either a hit or a natural end-of-life cull. The server
+	// only expires a shot once ExpiresAtTick <= tick, so a row whose expiry is still ahead of
+	// the latest sim tick was consumed by a hit — flash at the impact point. (Compare additively;
+	// ExpiresAtTick - ServerTick would underflow these uints on a natural expiry.)
+	private const uint HitMargin = 2;   // absorbs subscription-batch callback ordering jitter
+
 	private void OnProjectileDelete(EventContext ctx, Projectile row)
 	{
 		if (_projectileNodes.Remove(row.ProjectileId, out var pv))
+		{
+			if (row.ExpiresAtTick > ServerTick + HitMargin)
+				SpawnEffect(new HitFlash(), pv.Position, row.SectorId);
 			pv.QueueFree();
+		}
 	}
 
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
