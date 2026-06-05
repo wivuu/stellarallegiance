@@ -248,7 +248,8 @@ public partial struct Match
     public long LastTickMicros; // ctx.Timestamp of the previous SimTick (0 = first)
     public long AccumMicros;    // leftover sub-tick time not yet integrated
     // AI drones spawn only while this is true (toggled by the /pigs dev command). Default
-    // true; turning it off makes SimTick despawn the field on its next pass (see Pass 0).
+    // FALSE — drones stay dormant until someone runs `/pigs on`; turning it off makes
+    // SimTick despawn the field on its next pass (see Pass 0).
     public bool PigsEnabled;
 }
 
@@ -489,7 +490,7 @@ public static partial class Module
             Winner = null,
             EngagedTeams = 0,
             Seed = seed,
-            PigsEnabled = true,
+            PigsEnabled = false,
         });
 
         // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
@@ -919,7 +920,7 @@ public static partial class Module
             ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
         }
 
-        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0, PigsEnabled = true });
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0, PigsEnabled = false });
         Log.Info("[RestartMatch] world reset -> Lobby");
     }
 
@@ -1013,7 +1014,7 @@ public static partial class Module
         // The bare sim that remains with no ships is cheap. Newly spawned drones land in
         // the Pass A snapshot below and integrate immediately, like a fresh player ship.
         var match0 = ctx.Db.Match.Id.Find(0);
-        bool combatLive = (match0?.PigsEnabled ?? true)
+        bool combatLive = (match0?.PigsEnabled ?? false)
                           && (match0?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
                           && AnyPlayerShipAlive(ctx);
         if (combatLive)
