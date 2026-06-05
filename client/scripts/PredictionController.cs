@@ -55,6 +55,12 @@ public partial class PredictionController : Node3D
 		public ShipState Predicted;
 	}
 
+	// Dynamic engine glow, fed the local input's forward throttle each prediction
+	// step (the player's real throttle, so the glow tracks their hand exactly).
+	private EngineGlow? _engine;
+	private float _throttle;
+	private float _afterburner;   // client-only afterburner key (0/1); see ShipController
+
 	private ShipState _state;                          // latest predicted state (tick N)
 	private ShipState _prevState;                      // previous predicted state (tick N-1)
 	private ShipStats _stats;
@@ -97,6 +103,14 @@ public partial class PredictionController : Node3D
 	public float Health { get; private set; }
 	public float MaxHealth { get; private set; }
 
+	// Hand over the engine glow built by WorldRenderer; driven from _Process.
+	public void AttachEngine(EngineGlow engine) => _engine = engine;
+
+	// The afterburner is a client-only visual (the flight model has no boost input
+	// yet — that's the future "booster" backlog item), so it rides alongside the
+	// networked input rather than in it. Set each frame by ShipController.
+	public void SetAfterburner(float boost) => _afterburner = Mathf.Clamp(boost, 0f, 1f);
+
 	public void Initialize(Ship row)
 	{
 		ShipId = row.ShipId;
@@ -127,6 +141,7 @@ public partial class PredictionController : Node3D
 	public PredictedShot? Step(ShipInputState input, uint clientTick)
 	{
 		_prevState = _state;
+		_throttle = Mathf.Clamp(input.Thrust, 0f, 1f);   // forward thrust drives the engine glow
 		_state = FlightModel.Integrate(_state, input, _stats);
 		_buffer.Add(new Entry { Tick = clientTick, Input = input, Predicted = _state });
 		if (_buffer.Count > BufferLen)
@@ -275,6 +290,7 @@ public partial class PredictionController : Node3D
 		_rotErr = RotVecToQuat(rotVec);
 
 		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
+		_engine?.SetThrottle(_throttle, _afterburner);
 	}
 
 	// Semi-implicit critically-damped (ζ=1) spring driving offset x and its

@@ -189,6 +189,10 @@ public partial class ShipController : Node
 			_hadShip = true;
 		}
 
+		// Afterburner: a client-only visual (engine glow only — no flight effect yet),
+		// held on Shift. Autofly pins it on so headless runs exercise the exhaust path.
+		pc.SetAfterburner(_autoFly || Input.IsPhysicalKeyPressed(Key.Shift) ? 1f : 0f);
+
 		UpdateAdaptiveLead();
 		int lead = (int)_predTick - (int)_world.ServerTick;
 		float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);

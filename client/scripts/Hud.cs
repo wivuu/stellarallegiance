@@ -119,7 +119,7 @@ public partial class Hud : CanvasLayer
 		_label.Text = flying
 			? $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
 			: teamedInMatch
-				? "Choose your ship:\nW/S throttle · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
+				? "Choose your ship:\nW/S throttle · Shift afterburner · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
 				: "";
 	}
 }
