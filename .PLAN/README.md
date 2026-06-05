@@ -25,6 +25,9 @@ as-needed per phase rather than done up front.
 Make the existing two-team dogfighting richer on the systems already shipped
 (ships, guns, health/damage, boost, AI drones).
 
+NOTES:
+- Fix hitboxes for asteroids -- they're too big and are inaccurate
+
 - **Shields & damage systems** — Layer regenerating shields over the existing
   raw-health model; damage-type interactions.
 - **Missiles** — Launchers, lock-on, and chaff/flare countermeasures.
