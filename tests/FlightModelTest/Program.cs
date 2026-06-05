@@ -144,9 +144,10 @@ static class Program
     static bool Near(float a, float b) => Math.Abs(a - b) <= Tol;
 
     // Golden values — recorded from the canonical model (200-tick run above).
-    // Updated when FlightModel switched to deterministic MathDet.Sin/Cos.
-    const float GOLDEN_POS_X = 185.67072f, GOLDEN_POS_Y = 26.535467f, GOLDEN_POS_Z = 198.47957f;
-    const float GOLDEN_VEL_X = 22.944212f, GOLDEN_VEL_Y = 16.211218f, GOLDEN_VEL_Z = 24.101677f;
-    const float GOLDEN_ROT_X = 0.015179846f, GOLDEN_ROT_Y = 0.6347031f, GOLDEN_ROT_Z = 0.5819868f, GOLDEN_ROT_W = 0.5081465f;
-    const float GOLDEN_ANGVEL_X = 0.3175412f, GOLDEN_ANGVEL_Y = -0.1745934f, GOLDEN_ANGVEL_Z = 0.12249996f;
+    // Updated when FlightModel switched to deterministic MathDet.Sin/Cos, then
+    // again when the Scout/Fighter angular tuning was retuned for more turn inertia.
+    const float GOLDEN_POS_X = 195.2984f, GOLDEN_POS_Y = 37.427166f, GOLDEN_POS_Z = 132.64717f;
+    const float GOLDEN_VEL_X = 21.848227f, GOLDEN_VEL_Y = 19.546019f, GOLDEN_VEL_Z = 21.408785f;
+    const float GOLDEN_ROT_X = -0.037041605f, GOLDEN_ROT_Y = 0.64523476f, GOLDEN_ROT_Z = 0.72125757f, GOLDEN_ROT_W = 0.24917375f;
+    const float GOLDEN_ANGVEL_X = 0.30012128f, GOLDEN_ANGVEL_Y = 0.060707107f, GOLDEN_ANGVEL_Z = 0.17271416f;
 }

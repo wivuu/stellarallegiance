@@ -8,10 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Compile the canonical shared model directly. Because the module and
-         client copies are byte-identical to it (verified by diff in the T3
-         gate), a deterministic result here is the result on both sides. -->
-    <Compile Include="../../shared/FlightModel.cs" Link="FlightModel.cs" />
+    <!-- Reference the canonical shared flight model. The module and client
+         reference the very same project, so a deterministic result here is the
+         result on both sides. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
   </ItemGroup>
 
 </Project>

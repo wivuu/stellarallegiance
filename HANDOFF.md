@@ -12,7 +12,7 @@ done). The repo has:
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
 - A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies either ship class (HUD spawn menu) with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a HUD with a Scout/Fighter spawn menu
-- A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`) copied byte-identically into `module/` and `client/`, with a passing determinism+golden test
+- A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`, in `shared/Shared.csproj`) referenced by `module/` and `client/`, with a passing determinism+golden test
 - `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
 **Controls (Allegiance-style):** `W/S` throttle fwd/back · `A/D` strafe left/right · `E/C` strafe up/down · `Q/Z` roll · arrow keys yaw/pitch · **`Space`/left-mouse fire** · `1` spawn Scout / `2` spawn Fighter (or click the HUD menu) · `P` (debug) inject divergence.
@@ -147,19 +147,19 @@ the template under `module_bindings/{Tables,Types}/`.
 
 - **`shared/FlightModel.cs`** is the canonical, pure, fixed-`dt` (`Dt = 1/20`) integrator.
   It uses self-contained `Vec3`/`Quat` structs (no Godot / System.Numerics types) in
-  namespace `StellarAllegiance.Shared`, so the copies are engine-independent and truly
-  identical. `StatsFor(byte)` (0=Scout, 1=Fighter) keeps it free of any game enum.
-- **`shared/sync.sh`** copies the canonical file VERBATIM into `module/spacetimedb/FlightModel.cs`
-  and `client/scripts/FlightModel.cs`, then `diff`s to prove all three are byte-identical.
-  **Edit `shared/FlightModel.cs` then run `bash shared/sync.sh` — never edit a copy.**
+  namespace `StellarAllegiance.Shared`, so it is engine-independent and compiles truly
+  identically on both sides. `StatsFor(byte)` (0=Scout, 1=Fighter) keeps it free of any game enum.
+- **`shared/Shared.csproj`** is a net8.0 class library holding that one source. The module
+  (`StdbModule.csproj`), client (`wivuullegiance.csproj`), and the test all pull it in via
+  `<ProjectReference>` — there are no copies. **Edit `shared/FlightModel.cs`; it is the only copy.**
 - **`tests/FlightModelTest/`** is a standalone net8.0 console test: it integrates a fixed
   200-tick input sequence, asserts two runs are **bit-identical** (determinism), matches a
   recorded golden state within **1e-5**, and that terminal speed respects `MaxSpeed`.
   Run with `cd tests/FlightModelTest && dotnet run -c Release` → `ALL TESTS PASSED`.
 
-**Verified:** `diff shared/FlightModel.cs module/.../FlightModel.cs` and `…client/…` are both
-empty; the test passes; the client `dotnet build` and the module wasm publish both compile the
-file cleanly. Integration path has **no `delta`** — always `FlightModel.Dt`.
+**Verified:** the test passes; the client and module both `dotnet build` cleanly against the
+referenced `Shared.dll` (the module also compiles its `wasi-wasm` output). Integration path has
+**no `delta`** — always `FlightModel.Dt`.
 
 **Gotchas learned:** the module/client `ShipClass` enums live in *different* namespaces, so the
 shared file must not reference either — it takes a `byte` class id. Transcendental funcs
@@ -203,8 +203,8 @@ first attempt paired them with a buggy lead-bounding stall; T5 re-introduced the
 — stamping + a *slewed* clock with no stall. See the T5 section + `99`.)
 
 **Not done:** the subjective "is it fun for two minutes" gate needs a human flying with the
-keyboard. Constants are the `.PLAN/03` placeholders (Scout: thrust 45 / maxspeed 70 / drag 1.2;
-angular 3.5 / drag 2.5) — tune to taste in `shared/FlightModel.cs` then `bash shared/sync.sh`.
+keyboard. Constants live in `shared/FlightModel.cs` (Scout: thrust 45 / maxspeed 70 / drag 1.2;
+angular accel 2.6 / drag 1.4, retuned for more turn inertia) — tune to taste; there is one copy.
 
 **Gotchas learned:** headless Godot runs **uncapped**, so `--quit-after <frames>` elapses in a
 fraction of a real second — to observe live state, run with a huge frame cap in the background
@@ -461,14 +461,13 @@ scripts/
   start-db.sh             ← start server (persistent named volume) + populate-if-needed; idempotent
   populate-db.sh          ← publish the module (runs Init -> seeds Match/Bases/Asteroids); --reset wipes
 shared/
-  FlightModel.cs          ← CANONICAL deterministic flight model; edit here only
-  sync.sh                 ← copies FlightModel.cs verbatim into module/ + client/, diffs to verify
+  FlightModel.cs          ← deterministic flight model; the ONLY copy, edit here
+  Shared.csproj           ← net8.0 class library; referenced by module/, client/, tests/
 module/
   spacetime.json          ← points to spacetimedb/ subdirectory
   spacetimedb/
     Lib.cs                ← schema (Ship has AngVel) + reducers; SimTick integrates ships
-    FlightModel.cs        ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
-    StdbModule.csproj     ← do not touch
+    StdbModule.csproj     ← references ../../shared/Shared.csproj
     global.json           ← pins net8.0, do not touch
   CLAUDE.md               ← 2.x API reference, read this
 
@@ -482,7 +481,6 @@ client/
   scripts/CameraRig.cs           ← chase camera (Camera3D), overview fallback
   scripts/Hud.cs                 ← Scout/Fighter spawn menu (shipless) + speed/reconcile readout (flying)
   scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling
-  scripts/FlightModel.cs         ← GENERATED copy of shared/FlightModel.cs (via sync.sh); do not edit
   module_bindings/               ← GENERATED (tables + reducers), do not edit
   wivuullegiance.csproj
   scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, ShipController, env, light, CameraRig, Hud

@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SpacetimeDB.Runtime" Version="2.3.*" />
+    <ProjectReference Include="../../shared/Shared.csproj" />
   </ItemGroup>
 </Project>

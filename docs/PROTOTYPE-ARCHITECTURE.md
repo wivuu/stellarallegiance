@@ -52,11 +52,11 @@ rollback re-simulation.
 stellar-allegiance/
 ├── docs/                        # This file + future docs
 ├── module/                      # SpacetimeDB C# server module
-│   ├── StdbModule.csproj
+│   ├── StdbModule.csproj        # references ../shared/Shared.csproj
 │   └── Lib.cs                   # Tables + reducers
 ├── shared/
-│   ├── FlightModel.cs           # Deterministic flight math (canonical copy)
-│   └── sync.sh                  # Copies FlightModel.cs → module/ and client/
+│   ├── FlightModel.cs           # Deterministic flight math (the only copy)
+│   └── Shared.csproj            # net8.0 lib referenced by module/, client/, tests/
 ├── client/                      # Godot 4.6 C# project
 │   ├── project.godot
 │   ├── module_bindings/         # Generated — never hand-edit
@@ -69,8 +69,7 @@ stellar-allegiance/
 │       ├── ShipController.cs
 │       ├── PredictionController.cs
 │       ├── RemoteShipInterpolator.cs
-│       ├── WorldRenderer.cs
-│       └── FlightModel.cs       # Byte-identical copy of shared/
+│       └── WorldRenderer.cs     # (flight math comes from shared/Shared.csproj)
 ├── scripts/
 │   └── publish-maincloud.sh     # Build in Docker, publish via native CLI
 ├── tests/                       # FlightModel determinism + golden tests

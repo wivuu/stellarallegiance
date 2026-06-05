@@ -34,9 +34,12 @@ if [[ "${1:-}" == "--reset" ]]; then
 fi
 
 echo "[populate] publishing module -> '${DB}' @ ${SERVER}"
+# Mount the whole repo (not just module/) so the module's <ProjectReference> to
+# ../../shared/Shared.csproj resolves inside the container; -w is the module dir
+# so spacetime.json's "module-path": "./spacetimedb" still points at the module.
 docker run --rm \
   -v "${CONFIG}":/home/spacetime/.config/spacetime \
-  -v "${REPO_ROOT}/module":/workspace -w /workspace --network host \
+  -v "${REPO_ROOT}":/workspace -w /workspace/module --network host \
   "${IMAGE}" publish "${DB}" --server "${SERVER}" ${RESET_FLAG} --yes
 
 echo "[populate] seeded Match row:"

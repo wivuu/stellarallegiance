@@ -1,11 +1,13 @@
 // =====================================================================
 //  FlightModel.cs — SHARED, DETERMINISTIC FLIGHT INTEGRATION
 //
-//  CANONICAL COPY lives in shared/. It is copied VERBATIM into:
-//    module/spacetimedb/FlightModel.cs   (server authority)
-//    client/scripts/FlightModel.cs       (client prediction)
-//  The three files MUST be byte-for-byte identical (see shared/sync.sh and
-//  the T3 acceptance gate). Edit shared/ then run sync.sh — never edit a copy.
+//  This file lives in the shared/Shared.csproj library and is REFERENCED (via
+//  <ProjectReference>), not copied, by:
+//    module/spacetimedb/StdbModule.csproj   (server authority)
+//    client/wivuullegiance.csproj           (client prediction)
+//    tests/FlightModelTest/                  (determinism + golden test)
+//  Each consumer's own runtime compiles this one source, so the wasm-server and
+//  mono-client math stays bit-identical. There is one copy — edit it here.
 //
 //  Requirements (.PLAN/06-FLIGHT-MODEL.md):
 //    1. Fixed timestep only — always integrate with Dt, never a frame delta.
@@ -13,8 +15,8 @@
 //    3. Pure function — no globals, no randomness, no time reads.
 //
 //  Engine-independent on purpose: it uses the self-contained Vec3/Quat structs
-//  below rather than Godot's or System.Numerics' types, so the copy compiled
-//  into the wasm module and the copy compiled into the Godot client are truly
+//  below rather than Godot's or System.Numerics' types, so the assembly compiled
+//  into the wasm module and the one compiled into the Godot client are truly
 //  identical source. (Decision logged in .PLAN/99.)
 // =====================================================================
 
@@ -156,8 +158,12 @@ namespace StellarAllegiance.Shared
             ThrustAccel = 45f,
             MaxSpeed = 70f,
             LinearDrag = 1.2f,
-            AngularAccel = 3.5f,
-            AngularDrag = 2.5f,
+            // Light & nimble, but with noticeable rotational inertia: lower accel
+            // means the turn spins up gradually, lower drag means it coasts after
+            // you let off the stick (you counter-steer to stop). Still the quicker
+            // of the two craft — out-turns the Fighter.
+            AngularAccel = 2.6f,
+            AngularDrag = 1.4f,
             BoostThrustMult = 2.2f,   // afterburner: 99 u/s forward accel
             BoostSpeedMult = 1.6f,    // and a 112 u/s top speed while held
         };
@@ -167,8 +173,10 @@ namespace StellarAllegiance.Shared
             ThrustAccel = 30f,
             MaxSpeed = 50f,
             LinearDrag = 1.0f,
-            AngularAccel = 2.5f,
-            AngularDrag = 2.0f,
+            // Heavier in the turn than the Scout: spins up slower and carries more
+            // momentum, so it feels weightier while staying nimble overall.
+            AngularAccel = 1.8f,
+            AngularDrag = 1.1f,
             BoostThrustMult = 1.8f,   // heavier hull: 54 u/s forward accel
             BoostSpeedMult = 1.4f,    // and a 70 u/s top speed while held
         };

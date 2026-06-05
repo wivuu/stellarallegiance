@@ -25,7 +25,10 @@ DELETE=""
 [[ "${1:-}" == "--reset" ]] && DELETE="--delete-data=always"
 
 echo "[maincloud] building module wasm in Docker ..."
-docker run --rm -v "${REPO_ROOT}/module":/workspace -w /workspace "${IMAGE}" build
+# Mount the whole repo (not just module/) so the module's <ProjectReference> to
+# ../../shared/Shared.csproj resolves; -w is the module dir so `build` finds the
+# spacetimedb/ subdir and writes the wasm to module/spacetimedb/bin/... as before.
+docker run --rm -v "${REPO_ROOT}":/workspace -w /workspace/module "${IMAGE}" build
 
 if [[ ! -f "${REPO_ROOT}/${WASM}" ]]; then
   echo "[maincloud] ERROR: built wasm not found at ${WASM}" >&2

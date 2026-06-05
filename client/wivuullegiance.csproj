@@ -19,5 +19,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SpacetimeDB.ClientSDK" Version="2.3.0" />
+    <ProjectReference Include="../shared/Shared.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Canonical home of the deterministic flight model. Referenced (not copied)
+       by the SpacetimeDB module, the Godot client, and the FlightModelTest via
+       <ProjectReference>. Each consumer's own runtime compiles this same source,
+       so the wasm-server and mono-client math stays bit-identical. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Folder is shared/ but the namespace is StellarAllegiance.Shared (used by
+         every consumer); match RootNamespace so analyzers don't flag a mismatch. -->
+    <RootNamespace>StellarAllegiance.Shared</RootNamespace>
+    <!-- No RID here on purpose: this is portable managed IL. The consuming
+         project (e.g. the wasi-wasm module) supplies the RID and recompiles. -->
+  </PropertyGroup>
+</Project>
