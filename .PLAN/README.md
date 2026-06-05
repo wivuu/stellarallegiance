@@ -40,7 +40,7 @@ NOTES:
   booster/smoke-trail particle FX that react to speed, maneuver, and damage.
 - **Ship salvage & pickups** — Destroyed ships drop random ammo / guns /
   missiles / mines that must be flown over to collect.
-- **Escape pods** — Eject on ship death.
+- **Escape pods** — Eject on ship death; pod must either die or be rescued by a teammate in order for player to respawn.
 - **Improved in-game UI** — Health/shield bars, ship status indicators,
   team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.)
 
