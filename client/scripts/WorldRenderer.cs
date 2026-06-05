@@ -496,8 +496,11 @@ public partial class WorldRenderer : Node3D
 
 	private MeshInstance3D NewProjectileMesh() => new MeshInstance3D
 	{
-		Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f, RadialSegments = 8, Rings = 4 },
+		// Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z
+		// so it runs along ProjectileView's forward, which is aimed down the bolt's velocity.
+		Mesh = new CylinderMesh { TopRadius = 0.22f, BottomRadius = 0.22f, Height = 2.2f, RadialSegments = 8, Rings = 1 },
 		MaterialOverride = _projectileMat,
+		RotationDegrees = new Vector3(-90f, 0f, 0f),
 		// Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
 		CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 	};
@@ -571,7 +574,7 @@ public partial class WorldRenderer : Node3D
 				Name = "EngineGlow",
 				Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
 				NozzleRadius = 0.6f,
-				PlumeLength = 6f,
+				PlumeLength = 3.8f,
 				LightRange = 18f,
 				CoreColor = hot,
 			}
@@ -580,7 +583,7 @@ public partial class WorldRenderer : Node3D
 				Name = "EngineGlow",
 				Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
 				NozzleRadius = 0.85f,
-				PlumeLength = 5.5f,
+				PlumeLength = 3.5f,
 				LightRange = 15f,
 				CoreColor = hot,
 			};
@@ -591,5 +594,18 @@ public partial class WorldRenderer : Node3D
 			case PredictionController pc: pc.AttachEngine(glow); break;
 			case RemoteShip rs: rs.AttachEngine(glow); break;
 		}
+
+		// Ghostly team-coloured ribbon tracing the ship's path (same hue as the glow so
+		// friend/foe still reads). It rides the ship node's transform, so no per-frame
+		// driving is needed. Anchored at the rear of the hull (roughly where the engines
+		// sit) so the ribbon streams off the ship's BACK, not its centre. Fighters get a
+		// slightly wider streak to match their bulk.
+		shipNode.AddChild(new TeamTrail
+		{
+			Name = "TeamTrail",
+			Position = new Vector3(0f, 0f, cls == ShipClass.Fighter ? -2.75f : -2.25f),
+			TeamColor = hot,
+			Width = cls == ShipClass.Fighter ? 0.5f : 0.4f,
+		});
 	}
 }
