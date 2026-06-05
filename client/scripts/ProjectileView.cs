@@ -38,6 +38,7 @@ public partial class ProjectileView : Node3D
 		_pos = new Vector3(row.PosX, row.PosY, row.PosZ);
 		_vel = new Vector3(row.VelX, row.VelY, row.VelZ);
 		_t0 = _spawnTime;
+		OrientAlongVelocity();
 		Position = _pos + _vel * _renderLeadSec;   // honour the lead immediately (no 1-frame muzzle pop)
 	}
 
@@ -51,7 +52,16 @@ public partial class ProjectileView : Node3D
 		_pos = pos;
 		_vel = vel;
 		_t0 = _spawnTime;
+		OrientAlongVelocity();
 		Position = pos;
+	}
+
+	// Aim the bolt's local +Z down its velocity so the cylinder tracer points where it
+	// flies. Velocity is constant (fire-and-forget), so this is set once, never per frame.
+	private void OrientAlongVelocity()
+	{
+		if (_vel.LengthSquared() > 1e-6f)
+			Quaternion = new Quaternion(Vector3.Back, _vel.Normalized());
 	}
 
 	// The authoritative row arrived: adopt its id and become a normal projectile. We

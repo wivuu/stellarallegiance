@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://main"]
+[gd_scene load_steps=10 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/WorldRenderer.cs" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/Hud.cs" id="5"]
 [ext_resource type="Script" path="res://scripts/Sun.cs" id="6"]
 [ext_resource type="Script" path="res://scripts/Starscape.cs" id="7"]
+[ext_resource type="Script" path="res://scripts/DustField.cs" id="8"]
 
 [sub_resource type="Environment" id="Env"]
 background_mode = 1
@@ -45,6 +46,9 @@ environment = SubResource("Env")
 
 [node name="Starscape" type="Node3D" parent="."]
 script = ExtResource("7")
+
+[node name="DustField" type="Node3D" parent="."]
+script = ExtResource("8")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 0, 0)

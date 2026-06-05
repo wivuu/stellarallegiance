@@ -47,7 +47,9 @@ public partial class EngineGlow : Node3D
 	// Per-nozzle visuals we modulate every frame. Materials/particles are unique
 	// per EngineGlow instance so one ship's throttle never bleeds into another's.
 	private readonly System.Collections.Generic.List<StandardMaterial3D> _plumeMats = new();
+	private readonly System.Collections.Generic.List<StandardMaterial3D> _innerMats = new();
 	private readonly System.Collections.Generic.List<Node3D> _plumeHolders = new();
+	private readonly System.Collections.Generic.List<Node3D> _innerHolders = new();
 	private readonly System.Collections.Generic.List<StandardMaterial3D> _coreMats = new();
 	private readonly System.Collections.Generic.List<GpuParticles3D> _exhausts = new();
 	private readonly System.Collections.Generic.List<ParticleProcessMaterial> _exhaustMats = new();
@@ -110,7 +112,9 @@ public partial class EngineGlow : Node3D
 		AddChild(holder);
 		_plumeHolders.Add(holder);
 
-		// Flame cone: wide at the nozzle, tapering to a point behind the ship.
+		// Flame plume: wide at the nozzle, narrowing to a CUT-OFF tail (a frustum, not a
+		// sharp spike) so it reads as a jet-exhaust mouth rather than a needle. ApplyVisual
+		// jitters its length/width every frame for the licking-flame turbulence.
 		var plumeMat = new StandardMaterial3D
 		{
 			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
@@ -127,16 +131,51 @@ public partial class EngineGlow : Node3D
 		{
 			Mesh = new CylinderMesh
 			{
-				TopRadius = 0f,                 // tail point
-				BottomRadius = NozzleRadius,    // wide at the nozzle
+				TopRadius = NozzleRadius * 0.22f, // cut-off tail (exhaust mouth, not a point)
+				BottomRadius = NozzleRadius,      // wide at the nozzle
 				Height = PlumeLength,
 				RadialSegments = 12,
 			},
 			MaterialOverride = plumeMat,
-			// +Y tip -> -Z (backward); offset back by half-length so the wide end sits
+			// +Y wide-end -> -Z (backward); offset back by half-length so the wide end sits
 			// on the nozzle and growth extends behind the ship.
 			RotationDegrees = new Vector3(-90f, 0f, 0f),
 			Position = new Vector3(0f, 0f, -PlumeLength * 0.5f),
+			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+		});
+
+		// Hotter, shorter INNER plume in its OWN holder so ApplyVisual can stretch it
+		// out of phase with the outer flame — the two layers writhe independently, which
+		// is what sells a fluid jet instead of a single rigid cone.
+		var innerHolder = new Node3D { Position = pos };
+		AddChild(innerHolder);
+		_innerHolders.Add(innerHolder);
+
+		var innerMat = new StandardMaterial3D
+		{
+			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+			BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+			CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+			AlbedoColor = CoreColor,
+			EmissionEnabled = true,
+			Emission = CoreColor,
+			EmissionEnergyMultiplier = 5f,
+		};
+		_innerMats.Add(innerMat);
+		float innerLen = PlumeLength * 0.55f;
+		innerHolder.AddChild(new MeshInstance3D
+		{
+			Mesh = new CylinderMesh
+			{
+				TopRadius = NozzleRadius * 0.1f,
+				BottomRadius = NozzleRadius * 0.55f,
+				Height = innerLen,
+				RadialSegments = 12,
+			},
+			MaterialOverride = innerMat,
+			RotationDegrees = new Vector3(-90f, 0f, 0f),
+			Position = new Vector3(0f, 0f, -innerLen * 0.5f),
 			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 		});
 
@@ -207,7 +246,7 @@ public partial class EngineGlow : Node3D
 		float ease = 1f - Mathf.Exp(-EaseRate * dt);
 		_shown = Mathf.Lerp(_shown, Mathf.Max(IdleThrottle, _target), ease);
 		_shownBoost = Mathf.Lerp(_shownBoost, _targetBoost, ease);
-		_flicker += dt * 30f;
+		_flicker += dt * 12f;   // slow enough that turbulence reads as flow, not a strobe
 		ApplyVisual(_shown, _shownBoost);
 	}
 
@@ -215,20 +254,42 @@ public partial class EngineGlow : Node3D
 	private void ApplyVisual(float throttle, float boost)
 	{
 		// Tiny brightness flicker so the flame lives a little; deeper at low power.
-		float flick = 1f + (0.06f + 0.04f * (1f - throttle)) * Mathf.Sin(_flicker);
+		float flick = 1f + (0.04f + 0.03f * (1f - throttle)) * Mathf.Sin(_flicker);
+
+		// Turbulence: layered out-of-phase sines breathe the plume's length (and a touch
+		// of width) so the exhaust licks like a fluid jet instead of holding a rigid cone.
+		// Amplitude is kept gentle and the harmonics low so it flows rather than blinks;
+		// it still grows with throttle so an idling engine stays calm. The inner layer
+		// uses a different phase/frequency so the two cones writhe independently — the
+		// offset between them is what reads as turbulent flow.
+		float turbAmp = 0.08f + 0.2f * throttle;
+		float outerTurb = 0.6f * Mathf.Sin(_flicker * 1.7f) + 0.4f * Mathf.Sin(_flicker * 3.1f + 1.3f);
+		float innerTurb = 0.6f * Mathf.Sin(_flicker * 2.3f + 2.1f) + 0.4f * Mathf.Sin(_flicker * 3.9f);
+		float widthTurb = 1f + turbAmp * 0.4f * Mathf.Sin(_flicker * 2.5f + 0.7f);
 
 		Color plumeColor = CoreColor.Lerp(BoostColor, boost);
-		float lengthScale = Mathf.Lerp(0.55f, 1f, throttle) + boost * 0.6f; // afterburner stretch
-		float widthScale = Mathf.Lerp(0.7f, 1f, throttle);
+		// Short base plume; the afterburner is the only thing that really stretches it.
+		float baseLen = Mathf.Lerp(0.3f, 0.7f, throttle) + boost * 0.55f;
+		float lengthScale = baseLen * (1f + turbAmp * outerTurb);
+		float innerLength = baseLen * 0.8f * (1f + turbAmp * 1.4f * innerTurb); // shorter + livelier
+		float widthScale = Mathf.Lerp(0.7f, 1f, throttle) * widthTurb;
 		float plumeEnergy = (1.4f + 4.6f * throttle + 2.5f * boost) * flick;
 		float coreEnergy = (1f + 5f * throttle + 3f * boost) * flick;
+		// Inner jet runs hotter and biases toward white; brightest under afterburner.
+		Color innerColor = plumeColor.Lerp(Colors.White, 0.5f);
+		float innerEnergy = (2f + 6f * throttle + 4f * boost) * flick;
 
 		for (int i = 0; i < _plumeHolders.Count; i++)
 		{
+			// Wispier outer flame (lower alpha) so it reads as gas, not a solid shell.
 			_plumeHolders[i].Scale = new Vector3(widthScale, widthScale, lengthScale);
 			_plumeMats[i].Emission = plumeColor;
-			_plumeMats[i].AlbedoColor = new Color(plumeColor.R, plumeColor.G, plumeColor.B, Mathf.Lerp(0.35f, 0.8f, throttle));
+			_plumeMats[i].AlbedoColor = new Color(plumeColor.R, plumeColor.G, plumeColor.B, Mathf.Lerp(0.15f, 0.45f, throttle));
 			_plumeMats[i].EmissionEnergyMultiplier = plumeEnergy;
+			_innerHolders[i].Scale = new Vector3(widthScale * 0.9f, widthScale * 0.9f, innerLength);
+			_innerMats[i].Emission = innerColor;
+			_innerMats[i].AlbedoColor = new Color(innerColor.R, innerColor.G, innerColor.B, Mathf.Lerp(0.25f, 0.6f, throttle));
+			_innerMats[i].EmissionEnergyMultiplier = innerEnergy;
 			_coreMats[i].Emission = Colors.White.Lerp(plumeColor, 0.4f * (1f - boost));
 			_coreMats[i].EmissionEnergyMultiplier = coreEnergy;
 		}
