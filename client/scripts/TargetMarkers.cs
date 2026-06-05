@@ -67,6 +67,14 @@ public partial class TargetMarkers : Control
 	// one wraps back to none → first. A focus on a ship that died/left is dropped.
 	private void HandleFocusCycle()
 	{
+		// While the chat box is open, Tab switches chat channel — swallow it here so it
+		// doesn't also cycle the target focus (and mark it held so releasing won't fire).
+		if (Chat.Capturing)
+		{
+			_tabHeld = true;
+			return;
+		}
+
 		bool tab = Input.IsPhysicalKeyPressed(Key.Tab);
 		bool pressed = tab && !_tabHeld;
 		_tabHeld = tab;

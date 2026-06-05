@@ -21,6 +21,12 @@ public enum MatchPhase : byte { Lobby, Active, Ended }
 [SpacetimeDB.Type]
 public enum PigState : byte { Idle, Seek, Attack }
 
+// Chat delivery scope. Declaration order fixes the values (All=0, Team=1, Direct=2);
+// the row-level visibility filters on ChatMessage key off these exact numbers, so the
+// server — not the client — decides who can read a message.
+[SpacetimeDB.Type]
+public enum ChatScope : byte { All, Team, Direct }
+
 // ---- Tables ----------------------------------------------------------
 
 [SpacetimeDB.Table(Accessor = "Player", Public = true)]
@@ -33,6 +39,37 @@ public partial struct Player
     public ulong? ShipId;       // controlled ship; null when docked/dead
     public bool Online;         // false on disconnect; row retained for match
     public string Name;         // cosmetic
+    // Non-nullable mirror of Team (255 = no team) used solely by the team-chat visibility
+    // filter: STDB's RLS SQL can't compare the nullable Team column, so we join on this.
+    // Kept in lockstep wherever Team is written. Indexed: subscriptions require an index
+    // on the columns an RLS filter joins on.
+    [SpacetimeDB.Index.BTree]
+    public byte ChatTeam;
+}
+
+// Lobby + in-game chat, and the responses to dev commands. Public, but the
+// [ClientVisibilityFilter]s on Module restrict each client to the rows it may read:
+// every All row, the Team rows for its own side, and Direct rows addressed to it. So
+// team chat is genuinely private — a modified client never receives the enemy channel.
+[SpacetimeDB.Table(Accessor = "ChatMessage", Public = true)]
+public partial struct ChatMessage
+{
+    [PrimaryKey]
+    [AutoInc]
+    public ulong MessageId;
+    public Identity Sender;      // default(Identity) for system lines
+    public string SenderName;    // denormalized at insert (Name or ShortId) so history stays stable
+    public byte Scope;           // ChatScope (All=0 / Team=1 / Direct=2) — drives the visibility
+                                 // filters, which need a numeric column to compare against
+    // The side that may read it when Scope==Team (read only for Scope==Team rows; 0
+    // otherwise). Joined against Player.ChatTeam in the team-visibility filter; indexed
+    // because subscriptions require an index on RLS join columns.
+    [SpacetimeDB.Index.BTree]
+    public byte Team;
+    public Identity Recipient;   // the only reader when Scope==Direct (default otherwise)
+    public bool IsSystem;        // true => server line (match events, command replies); styled apart
+    public string Text;
+    public Timestamp CreatedAt;
 }
 
 [SpacetimeDB.Table(Accessor = "Ship", Public = true)]
@@ -210,6 +247,10 @@ public partial struct Match
     // is kept here so the rate is exact over time. (Clients ignore these fields.)
     public long LastTickMicros; // ctx.Timestamp of the previous SimTick (0 = first)
     public long AccumMicros;    // leftover sub-tick time not yet integrated
+    // AI drones spawn only while this is true (toggled by the /pigs dev command). Default
+    // FALSE — drones stay dormant until someone runs `/pigs on`; turning it off makes
+    // SimTick despawn the field on its next pass (see Pass 0).
+    public bool PigsEnabled;
 }
 
 // Scheduled-reducer table that drives SimTick at a fixed interval.
@@ -449,6 +490,7 @@ public static partial class Module
             Winner = null,
             EngagedTeams = 0,
             Seed = seed,
+            PigsEnabled = false,
         });
 
         // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
@@ -521,6 +563,7 @@ public static partial class Module
                 ShipId = null,
                 Online = true,
                 Name = "",
+                ChatTeam = NoTeam,
             });
             Log.Info($"[ClientConnected] new player {ctx.Sender} -> lobby");
         }
@@ -581,6 +624,167 @@ public static partial class Module
         ctx.Db.Player.Identity.Update(player.Value with { Name = name });
     }
 
+    // ---- Chat & dev commands ------------------------------------------
+
+    private const int ChatMaxLen = 240;
+    private const byte NoTeam = 255;   // Player.ChatTeam sentinel: not on a side (see Player.ChatTeam)
+
+    // Send a chat line, or run a dev command if the text starts with '/'. teamOnly routes a
+    // normal message to the sender's team channel (private via the visibility filters);
+    // without a team it falls back to all-chat. Rejected (logged, not thrown) for the usual
+    // expected conditions, matching the other reducers.
+    [SpacetimeDB.Reducer]
+    public static void SendChat(ReducerContext ctx, string text, bool teamOnly)
+    {
+        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
+        if (player is null || !player.Value.Online)
+            return;
+
+        text = (text ?? "").Trim();
+        if (text.Length == 0)
+            return;
+        if (text.Length > ChatMaxLen)
+            text = text[..ChatMaxLen];
+
+        if (text[0] == '/')
+        {
+            HandleCommand(ctx, player.Value, text);
+            return;
+        }
+
+        bool team = teamOnly && player.Value.Team is byte;
+        ctx.Db.ChatMessage.Insert(new ChatMessage
+        {
+            MessageId = 0,
+            Sender = ctx.Sender,
+            SenderName = DisplayName(player.Value),
+            Scope = (byte)(team ? ChatScope.Team : ChatScope.All),
+            Team = player.Value.Team ?? 0,
+            Recipient = default,
+            IsSystem = false,
+            Text = text,
+            CreatedAt = ctx.Timestamp,
+        });
+    }
+
+    // Dev commands. The verb is the first whitespace-delimited token, lowercased.
+    private static void HandleCommand(ReducerContext ctx, Player player, string raw)
+    {
+        var parts = raw[1..].Split((char[]?)null, System.StringSplitOptions.RemoveEmptyEntries);
+        string verb = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        string arg = parts.Length > 1 ? parts[1].ToLowerInvariant() : "";
+
+        switch (verb)
+        {
+            case "help":
+                SystemTo(ctx, player.Identity,
+                    "Commands:\n"
+                    + "/help — show this list\n"
+                    + "/pigs on|off — toggle AI drone spawns\n"
+                    + "/resign — forfeit the match for your team");
+                break;
+
+            case "pigs":
+                if (arg != "on" && arg != "off")
+                {
+                    SystemTo(ctx, player.Identity, "Usage: /pigs on|off");
+                    break;
+                }
+                bool enable = arg == "on";
+                if (ctx.Db.Match.Id.Find(0) is Match m)
+                    ctx.Db.Match.Id.Update(m with { PigsEnabled = enable });
+                SystemAll(ctx, $"{DisplayName(player)} turned AI drones {(enable ? "ON" : "OFF")}.");
+                break;
+
+            case "resign":
+                ResignMatch(ctx, player);
+                break;
+
+            default:
+                SystemTo(ctx, player.Identity, $"Unknown command: /{verb}. Try /help.");
+                break;
+        }
+    }
+
+    // /resign: forfeit the current match for the caller's team. Only meaningful while a
+    // match is Active and the caller is on a side; the other team is awarded the win
+    // (mirrors the base-destroyed path in SimulateTick).
+    private static void ResignMatch(ReducerContext ctx, Player player)
+    {
+        if (player.Team is not byte t)
+        {
+            SystemTo(ctx, player.Identity, "You're not on a team.");
+            return;
+        }
+        if (ctx.Db.Match.Id.Find(0) is not Match m || m.Phase != MatchPhase.Active)
+        {
+            SystemTo(ctx, player.Identity, "No match in progress.");
+            return;
+        }
+        byte winner = (byte)(t == 0 ? 1 : 0);
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Ended, Winner = winner });
+        SystemAll(ctx, $"Team {TeamName(t)} resigned — Team {TeamName(winner)} wins.");
+        Log.Info($"[Resign] {player.Identity} (team {t}) resigned -> team {winner} wins");
+    }
+
+    // System line visible only to one player (command replies).
+    private static void SystemTo(ReducerContext ctx, Identity recipient, string text) =>
+        ctx.Db.ChatMessage.Insert(new ChatMessage
+        {
+            MessageId = 0,
+            Sender = default,
+            SenderName = "",
+            Scope = (byte)ChatScope.Direct,
+            Team = 0,
+            Recipient = recipient,
+            IsSystem = true,
+            Text = text,
+            CreatedAt = ctx.Timestamp,
+        });
+
+    // System line visible to everyone (match events).
+    private static void SystemAll(ReducerContext ctx, string text) =>
+        ctx.Db.ChatMessage.Insert(new ChatMessage
+        {
+            MessageId = 0,
+            Sender = default,
+            SenderName = "",
+            Scope = (byte)ChatScope.All,
+            Team = 0,
+            Recipient = default,
+            IsSystem = true,
+            Text = text,
+            CreatedAt = ctx.Timestamp,
+        });
+
+    private static string TeamName(byte team) => team == 0 ? "BLUE" : "RED";
+
+    // Display name for chat, with the same fallback the lobby roster uses (Lobby.ShortId).
+    private static string DisplayName(Player p)
+    {
+        if (!string.IsNullOrEmpty(p.Name))
+            return p.Name;
+        string s = p.Identity.ToString();
+        return "Pilot " + (s.Length > 6 ? s[..6] : s);
+    }
+
+    // ---- Chat row-level visibility (server-enforced team privacy) ------
+    // A client may read a ChatMessage if it matches ANY of these (the filters are unioned):
+    // every All row, the Team rows for the team it is on, and Direct rows addressed to it.
+    [SpacetimeDB.ClientVisibilityFilter]
+    public static readonly Filter ChatAllVisible = new Filter.Sql(
+        "SELECT * FROM ChatMessage WHERE Scope = 0");
+
+    // Joins on Player.ChatTeam (a non-nullable mirror of Team) because STDB's RLS SQL can't
+    // compare nullable/option columns — see the ChatTeam field on Player.
+    [SpacetimeDB.ClientVisibilityFilter]
+    public static readonly Filter ChatTeamVisible = new Filter.Sql(
+        "SELECT c.* FROM ChatMessage c JOIN Player p ON p.ChatTeam = c.Team WHERE c.Scope = 1 AND p.Identity = :sender");
+
+    [SpacetimeDB.ClientVisibilityFilter]
+    public static readonly Filter ChatDirectVisible = new Filter.Sql(
+        "SELECT * FROM ChatMessage WHERE Scope = 2 AND Recipient = :sender");
+
     // Spawn a ship at the player's team base. Rejected (logged, not thrown) for
     // expected conditions: no player / offline / already flying / match ended.
     [SpacetimeDB.Reducer]
@@ -624,7 +828,7 @@ public static partial class Module
             return;
         }
 
-        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false });
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
         Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
     }
@@ -643,7 +847,7 @@ public static partial class Module
             ctx.Db.Ship.ShipId.Delete(sid);
             DeleteShipInputs(ctx, sid);
         }
-        ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null });
+        ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null, ChatTeam = NoTeam });
         Log.Info($"[LeaveTeam] {ctx.Sender} -> lobby");
         EndMatchIfSideAbandoned(ctx);
     }
@@ -681,7 +885,7 @@ public static partial class Module
             return;   // post-match: go through RestartMatch, not a direct join
 
         byte team = SmallestOnlineTeam(ctx, ctx.Sender);
-        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true });
+        ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
         Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
         MaybeStartMatch(ctx);
@@ -716,7 +920,7 @@ public static partial class Module
             ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
         }
 
-        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0 });
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0, PigsEnabled = false });
         Log.Info("[RestartMatch] world reset -> Lobby");
     }
 
@@ -809,7 +1013,9 @@ public static partial class Module
         // instantly the next time someone flies (no leftover cooldown from idle time).
         // The bare sim that remains with no ships is cheap. Newly spawned drones land in
         // the Pass A snapshot below and integrate immediately, like a fresh player ship.
-        bool combatLive = (ctx.Db.Match.Id.Find(0)?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
+        var match0 = ctx.Db.Match.Id.Find(0);
+        bool combatLive = (match0?.PigsEnabled ?? false)
+                          && (match0?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
                           && AnyPlayerShipAlive(ctx);
         if (combatLive)
         {

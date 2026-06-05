@@ -60,6 +60,12 @@ public partial class Hud : CanvasLayer
 		AddChild(lobby);
 		lobby.Init(_cm, _world);
 
+		// Chat overlay (added after the lobby so its log/input draw above the lobby
+		// backdrop). Owns Enter-to-type, the team/all channel, and dev commands.
+		var chat = new Chat { Name = "Chat" };
+		AddChild(chat);
+		chat.Init(_cm, _world);
+
 		// Connection-status overlay (added last so it draws on top of everything,
 		// including the lobby). Shows "Server offline" / "Connecting…" until we're live.
 		var conn = new ConnectionOverlay { Name = "ConnectionOverlay" };

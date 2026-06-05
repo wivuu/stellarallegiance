@@ -25,6 +25,8 @@ namespace SpacetimeDB.Types
         public bool Online;
         [DataMember(Name = "name")]
         public string Name;
+        [DataMember(Name = "chat_team")]
+        public byte ChatTeam;
 
         public Player(
             SpacetimeDB.Identity Identity,
@@ -32,7 +34,8 @@ namespace SpacetimeDB.Types
             bool Ready,
             ulong? ShipId,
             bool Online,
-            string Name
+            string Name,
+            byte ChatTeam
         )
         {
             this.Identity = Identity;
@@ -41,6 +44,7 @@ namespace SpacetimeDB.Types
             this.ShipId = ShipId;
             this.Online = Online;
             this.Name = Name;
+            this.ChatTeam = ChatTeam;
         }
 
         public Player()

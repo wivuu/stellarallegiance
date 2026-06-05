@@ -30,6 +30,7 @@ namespace SpacetimeDB.Types
             AddTable(Aleph = new(conn));
             AddTable(Asteroid = new(conn));
             AddTable(Base = new(conn));
+            AddTable(ChatMessage = new(conn));
             AddTable(Match = new(conn));
             AddTable(Pig = new(conn));
             AddTable(Player = new(conn));
@@ -536,6 +537,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Aleph().ToSql(),
             new QueryBuilder().From.Asteroid().ToSql(),
             new QueryBuilder().From.Base().ToSql(),
+            new QueryBuilder().From.ChatMessage().ToSql(),
             new QueryBuilder().From.Match().ToSql(),
             new QueryBuilder().From.Pig().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
@@ -552,6 +554,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Aleph, AlephCols, AlephIxCols> Aleph() => new("aleph", new AlephCols("aleph"), new AlephIxCols("aleph"));
         public global::SpacetimeDB.Table<Asteroid, AsteroidCols, AsteroidIxCols> Asteroid() => new("asteroid", new AsteroidCols("asteroid"), new AsteroidIxCols("asteroid"));
         public global::SpacetimeDB.Table<Base, BaseCols, BaseIxCols> Base() => new("base", new BaseCols("base"), new BaseIxCols("base"));
+        public global::SpacetimeDB.Table<ChatMessage, ChatMessageCols, ChatMessageIxCols> ChatMessage() => new("chat_message", new ChatMessageCols("chat_message"), new ChatMessageIxCols("chat_message"));
         public global::SpacetimeDB.Table<Match, MatchCols, MatchIxCols> Match() => new("match", new MatchCols("match"), new MatchIxCols("match"));
         public global::SpacetimeDB.Table<Pig, PigCols, PigIxCols> Pig() => new("pig", new PigCols("pig"), new PigIxCols("pig"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
@@ -647,6 +650,7 @@ namespace SpacetimeDB.Types
                 Reducer.RegenerateWorld args => Reducers.InvokeRegenerateWorld(eventContext, args),
                 Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
                 Reducer.RestartMatch args => Reducers.InvokeRestartMatch(eventContext, args),
+                Reducer.SendChat args => Reducers.InvokeSendChat(eventContext, args),
                 Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),
                 Reducer.SetReady args => Reducers.InvokeSetReady(eventContext, args),
                 Reducer.SpawnShip args => Reducers.InvokeSpawnShip(eventContext, args),

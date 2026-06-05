@@ -4,6 +4,9 @@
     <RuntimeIdentifier>wasi-wasm</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Row-level visibility filters ([ClientVisibilityFilter]) are still flagged
+         unstable by the SDK; we rely on them for private team chat. -->
+    <NoWarn>$(NoWarn);STDB_UNSTABLE</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SpacetimeDB.Runtime" Version="2.3.*" />
