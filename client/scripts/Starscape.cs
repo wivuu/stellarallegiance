@@ -64,7 +64,7 @@ public partial class Starscape : Node3D
 		var colorB = Color.FromHsv(hueB, rng.RandfRange(0.5f, 0.8f), 0.8f);
 		// Kept dim on purpose: the nebula is a faint backdrop, not a light source. Higher
 		// values wash the scene out via sky reflections bouncing onto ships/asteroids.
-		float intensity = rng.RandfRange(0.12f, 0.3f);
+		float intensity = rng.RandfRange(0.05f, 0.1f);
 
 		_mat.SetShaderParameter("seed_offset", offset);
 		_mat.SetShaderParameter("nebula_color_a", colorA);
@@ -76,7 +76,7 @@ public partial class Starscape : Node3D
 		// the shadowed sides of ships and asteroids. Energy is well above the old 0.2 so
 		// the world no longer reads as dim.
 		_env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.45f);
-		_env.AmbientLightEnergy = 0.0003f;
+		_env.AmbientLightEnergy = 0.2f;
 	}
 
 	// Deterministic ulong seed from a sector id (splitmix64 finalizer over a mixed id).
@@ -99,7 +99,7 @@ shader_type sky;
 uniform vec3 seed_offset = vec3(0.0);
 uniform vec3 nebula_color_a : source_color = vec3(0.5, 0.15, 0.6);
 uniform vec3 nebula_color_b : source_color = vec3(0.1, 0.25, 0.7);
-uniform float nebula_intensity = 0.6;
+uniform float nebula_intensity = 0.01;
 uniform vec3 bg_color : source_color = vec3(0.02, 0.02, 0.05);
 
 vec3 hash33(vec3 p) {
@@ -136,6 +136,21 @@ float fbm(vec3 p) {
 	return v;
 }
 
+// Ridged fbm: folds each octave at its midline (1 - |2n-1|) and squares it, turning
+// soft noise into sharp crests. Summed across octaves this yields filamentary,
+// tendril-like structure rather than the smooth blobs plain fbm gives.
+float ridged_fbm(vec3 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 6; i++) {
+		float n = 1.0 - abs(2.0 * vnoise(p) - 1.0);
+		v += a * n * n;
+		p *= 2.1;
+		a *= 0.5;
+	}
+	return v;
+}
+
 // One layer of stars: jittered points on a cell grid. Points stay well inside their
 // cell so a single-cell test never clips them at boundaries.
 float star_layer(vec3 dir, float scale, float density, float off) {
@@ -154,12 +169,15 @@ float star_layer(vec3 dir, float scale, float density, float off) {
 void sky() {
 	vec3 dir = normalize(EYEDIR);
 
-	// Nebula: clouds confined to a few dense banks rather than the whole sky. The high
-	// threshold leaves most of the backdrop as open black; the exponent sharpens the edge.
-	vec3 np = dir * 2.0 + seed_offset;
-	float n1 = fbm(np);
-	float n2 = fbm(np * 2.0 + vec3(5.2, 1.3, 8.7));
-	float cloud = pow(clamp(n1 * 1.7 - 0.65, 0.0, 1.0), 2.5);
+	// Nebula: domain-warped ridged noise for sharp, flowing filaments instead of soft
+	// blobs. The warp (q) bends the sample space so structures swirl; ridged_fbm carves
+	// the bright tendrils; the threshold + exponent confine them to a few dense banks
+	// and keep most of the backdrop open black.
+	vec3 np = dir * 2.6 + seed_offset;
+	vec3 q = vec3(fbm(np), fbm(np + vec3(3.1, 1.7, 8.2)), fbm(np + vec3(5.3, 9.1, 2.4)));
+	float ridges = ridged_fbm(np + 3.5 * q);
+	float cloud = pow(clamp(ridges - 0.18, 0.0, 1.0), 2.2);
+	float n2 = fbm(np * 1.4 + q);
 	vec3 neb = mix(nebula_color_a, nebula_color_b, clamp(n2, 0.0, 1.0));
 	vec3 color = bg_color + neb * cloud * nebula_intensity;
 
