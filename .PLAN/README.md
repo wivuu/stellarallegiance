@@ -13,8 +13,6 @@ Archives:
 
 ## QUICKNOTES:
 - Add lens bloom/sundog to sun or something to make it prettier
-- Dont see explosion of yourself whne you di, or hits hitting your own ship
-- auto-target next ship if the one you are targeting dies
 
 ---
 

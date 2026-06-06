@@ -64,7 +64,9 @@ public partial class TargetMarkers : Control
 
 	// Tab cycles focus through the currently visible (in-front-of-camera) enemies, in
 	// a stable order (ShipId) so the cycle is predictable. Re-pressing past the last
-	// one wraps back to none → first. A focus on a ship that died/left is dropped.
+	// one wraps back to none → first. When the focused ship dies/leaves, focus jumps
+	// to the nearest remaining enemy so combat focus carries to the next threat (a
+	// living focus that merely drifts behind the camera is kept, not dropped).
 	private void HandleFocusCycle()
 	{
 		// While the chat box is open, Tab switches chat channel — swallow it here so it
@@ -85,14 +87,20 @@ public partial class TargetMarkers : Control
 			return;
 		}
 
+		// EnemyShips() returns a shared scratch list — read it once and don't re-call it
+		// below (a second call would clear it mid-use).
+		var enemies = _world.EnemyShips();
+
 		_visible.Clear();
-		foreach (var e in _world.EnemyShips())
+		foreach (var e in enemies)
 			if (!_camera.IsPositionBehind(e.GlobalPosition))
 				_visible.Add(e.ShipId);
 		_visible.Sort();
 
-		if (_focused is ulong f && !_visible.Contains(f))
-			_focused = null;
+		// If the focused ship is no longer among the live enemies (it died or left),
+		// auto-target the nearest remaining enemy instead of dropping focus.
+		if (_focused is ulong f && !ContainsId(enemies, f))
+			_focused = NearestEnemy(enemies);
 
 		if (!pressed)
 			return;
@@ -108,6 +116,36 @@ public partial class TargetMarkers : Control
 		}
 		int idx = _visible.IndexOf(cur);
 		_focused = idx + 1 < _visible.Count ? _visible[idx + 1] : (ulong?)null; // wrap to none
+	}
+
+	private static bool ContainsId(IReadOnlyList<RemoteShip> enemies, ulong id)
+	{
+		foreach (var e in enemies)
+			if (e.ShipId == id)
+				return true;
+		return false;
+	}
+
+	// The enemy closest to the local ship, or null if there are none. Used to pick a
+	// fresh focus when the current target dies — nearest is the most useful next threat.
+	private ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies)
+	{
+		var local = _world.LocalShip;
+		if (local == null || enemies.Count == 0)
+			return null;
+		Vector3 p = local.GlobalPosition;
+		ulong? best = null;
+		float bestSq = float.MaxValue;
+		foreach (var e in enemies)
+		{
+			float dSq = (e.GlobalPosition - p).LengthSquared();
+			if (dSq < bestSq)
+			{
+				bestSq = dSq;
+				best = e.ShipId;
+			}
+		}
+		return best;
 	}
 
 	public override void _Draw()
