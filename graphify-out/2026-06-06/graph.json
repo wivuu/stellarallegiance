@@ -2696,7 +2696,7 @@
       "label": ".SetSector()",
       "file_type": "code",
       "source_file": "client/scripts/Starscape.cs",
-      "source_location": "L44",
+      "source_location": "L52",
       "id": "scripts_starscape_starscape_setsector",
       "community": 25,
       "norm_label": ".setsector()"
@@ -2705,7 +2705,7 @@
       "label": ".SeedFor()",
       "file_type": "code",
       "source_file": "client/scripts/Starscape.cs",
-      "source_location": "L84",
+      "source_location": "L92",
       "id": "scripts_starscape_starscape_seedfor",
       "community": 25,
       "norm_label": ".seedfor()"
@@ -2714,7 +2714,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "client/scripts/Starscape.cs",
-      "source_location": "L96",
+      "source_location": "L104",
       "id": "client_scripts_starscape_cs_string",
       "community": 25,
       "norm_label": "string"
@@ -2750,7 +2750,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L15",
+      "source_location": "L14",
       "id": "client_scripts_sun_cs_float",
       "community": 23,
       "norm_label": "float"
@@ -2759,7 +2759,7 @@
       "label": "Camera3D",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L18",
+      "source_location": "L17",
       "id": "client_scripts_sun_cs_camera3d",
       "community": 23,
       "norm_label": "camera3d"
@@ -2768,7 +2768,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L19",
+      "source_location": "L18",
       "id": "client_scripts_sun_cs_vector3",
       "community": 23,
       "norm_label": "vector3"
@@ -2777,7 +2777,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L21",
+      "source_location": "L20",
       "id": "scripts_sun_sun_ready",
       "community": 23,
       "norm_label": "._ready()"
@@ -2786,7 +2786,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L35",
+      "source_location": "L34",
       "id": "scripts_sun_sun_process",
       "community": 23,
       "norm_label": "._process()"
@@ -2795,28 +2795,19 @@
       "label": ".BuildMaterial()",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L42",
+      "source_location": "L41",
       "id": "scripts_sun_sun_buildmaterial",
       "community": 23,
       "norm_label": ".buildmaterial()"
     },
     {
-      "label": "ShaderMaterial",
+      "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/Sun.cs",
-      "source_location": "L42",
-      "id": "client_scripts_sun_cs_shadermaterial",
+      "source_location": "L41",
+      "id": "client_scripts_sun_cs_standardmaterial3d",
       "community": 23,
-      "norm_label": "shadermaterial"
-    },
-    {
-      "label": "string",
-      "file_type": "code",
-      "source_file": "client/scripts/Sun.cs",
-      "source_location": "L54",
-      "id": "client_scripts_sun_cs_string",
-      "community": 23,
-      "norm_label": "string"
+      "norm_label": "standardmaterial3d"
     },
     {
       "label": "TargetMarkers.cs",
@@ -6175,6 +6166,24 @@
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
     },
     {
+      "label": "ShaderMaterial",
+      "file_type": "code",
+      "source_file": "client/scripts/Sun.cs",
+      "source_location": "L42",
+      "community": 23,
+      "norm_label": "shadermaterial",
+      "id": "client_scripts_sun_cs_shadermaterial"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "client/scripts/Sun.cs",
+      "source_location": "L54",
+      "community": 23,
+      "norm_label": "string",
+      "id": "client_scripts_sun_cs_string"
+    },
+    {
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/AlephView.cs",
@@ -6409,15 +6418,6 @@
       "id": "vector2"
     },
     {
-      "label": "StandardMaterial3D",
-      "file_type": "code",
-      "source_file": "client/scripts/Sun.cs",
-      "source_location": "L41",
-      "community": 23,
-      "norm_label": "standardmaterial3d",
-      "id": "client_scripts_sun_cs_standardmaterial3d"
-    },
-    {
       "label": "Quaternion",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
@@ -6532,9 +6532,9 @@
       "source_location": "L15",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_alephview_alephview",
-      "target": "client_scripts_alephview_cs_float",
-      "confidence_score": 1.0
+      "target": "client_scripts_alephview_cs_float"
     },
     {
       "relation": "references",
@@ -6543,9 +6543,9 @@
       "source_location": "L17",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_alephview_alephview",
-      "target": "client_scripts_alephview_cs_int",
-      "confidence_score": 1.0
+      "target": "client_scripts_alephview_cs_int"
     },
     {
       "relation": "references",
@@ -6867,9 +6867,9 @@
       "source_location": "L149",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_alephview_alephview_buildvortexshader",
-      "target": "client_scripts_alephview_cs_shadermaterial",
-      "confidence_score": 1.0
+      "target": "client_scripts_alephview_cs_shadermaterial"
     },
     {
       "relation": "references",
@@ -7645,9 +7645,9 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_connectionmanager_connectionmanager",
-      "target": "client_scripts_worldrenderer_cs_node",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_node"
     },
     {
       "relation": "method",
@@ -10501,9 +10501,9 @@
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L9",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_shipcontroller_shipcontroller",
-      "target": "client_scripts_worldrenderer_cs_node",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_node"
     },
     {
       "relation": "references",
@@ -10914,9 +10914,9 @@
       "source_location": "L16",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_starscape_starscape",
-      "target": "client_scripts_starscape_cs_shadermaterial",
-      "confidence_score": 1.0
+      "target": "client_scripts_starscape_cs_shadermaterial"
     },
     {
       "relation": "references",
@@ -11053,9 +11053,9 @@
       "source_location": "L54",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_sun_sun",
-      "target": "client_scripts_sun_cs_string",
-      "confidence_score": 1.0
+      "target": "client_scripts_sun_cs_string"
     },
     {
       "relation": "references",
@@ -11159,9 +11159,9 @@
       "source_location": "L42",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_sun_sun_buildmaterial",
-      "target": "client_scripts_sun_cs_shadermaterial",
-      "confidence_score": 1.0
+      "target": "client_scripts_sun_cs_shadermaterial"
     },
     {
       "relation": "references",
@@ -11202,9 +11202,9 @@
       "source_location": "L47",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_bool",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_bool"
     },
     {
       "relation": "references",
@@ -11213,9 +11213,9 @@
       "source_location": "L44",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_camera3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_camera3d"
     },
     {
       "relation": "references",
@@ -11224,9 +11224,9 @@
       "source_location": "L41",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_color"
     },
     {
       "relation": "references",
@@ -11235,9 +11235,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_float",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_float"
     },
     {
       "relation": "references",
@@ -11246,9 +11246,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_list",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_list"
     },
     {
       "relation": "references",
@@ -11257,9 +11257,9 @@
       "source_location": "L43",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_worldrenderer",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_worldrenderer"
     },
     {
       "relation": "references",
@@ -11453,9 +11453,9 @@
       "source_location": "L279",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawarrow",
-      "target": "client_scripts_targetmarkers_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_color"
     },
     {
       "relation": "references",
@@ -11464,9 +11464,9 @@
       "source_location": "L247",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawbracket",
-      "target": "client_scripts_targetmarkers_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_color"
     },
     {
       "relation": "references",
@@ -11475,9 +11475,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_init",
-      "target": "client_scripts_targetmarkers_cs_worldrenderer",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_worldrenderer"
     },
     {
       "relation": "references",
@@ -11486,9 +11486,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_init",
-      "target": "client_scripts_targetmarkers_cs_camera3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_camera3d"
     },
     {
       "relation": "references",
@@ -11541,9 +11541,9 @@
       "source_location": "L121",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_containsid",
-      "target": "client_scripts_targetmarkers_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -11552,9 +11552,9 @@
       "source_location": "L121",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_containsid",
-      "target": "client_scripts_targetmarkers_cs_remoteship",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_remoteship"
     },
     {
       "relation": "references",
@@ -11585,9 +11585,9 @@
       "source_location": "L131",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_nearestenemy",
-      "target": "client_scripts_targetmarkers_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -11596,9 +11596,9 @@
       "source_location": "L131",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_nearestenemy",
-      "target": "client_scripts_targetmarkers_cs_remoteship",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_remoteship"
     },
     {
       "relation": "references",
@@ -11662,9 +11662,9 @@
       "source_location": "L205",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawmarker",
-      "target": "client_scripts_targetmarkers_cs_vector2",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector2"
     },
     {
       "relation": "references",
@@ -11673,9 +11673,9 @@
       "source_location": "L205",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawmarker",
-      "target": "client_scripts_targetmarkers_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector3"
     },
     {
       "relation": "calls",
@@ -11728,9 +11728,9 @@
       "source_location": "L266",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawaimreticle",
-      "target": "client_scripts_targetmarkers_cs_vector2",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector2"
     },
     {
       "relation": "references",
@@ -11739,9 +11739,9 @@
       "source_location": "L279",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawarrow",
-      "target": "client_scripts_targetmarkers_cs_vector2",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector2"
     },
     {
       "relation": "references",
@@ -11750,9 +11750,9 @@
       "source_location": "L247",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawbracket",
-      "target": "client_scripts_targetmarkers_cs_vector2",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector2"
     },
     {
       "relation": "references",
@@ -11761,9 +11761,9 @@
       "source_location": "L301",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_trylead",
-      "target": "client_scripts_targetmarkers_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector3"
     },
     {
       "relation": "references",
@@ -11998,9 +11998,9 @@
       "source_location": "L95",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_bool",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_bool"
     },
     {
       "relation": "references",
@@ -12020,9 +12020,9 @@
       "source_location": "L74",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_connectionmanager",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_connectionmanager"
     },
     {
       "relation": "references",
@@ -12031,9 +12031,9 @@
       "source_location": "L94",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_double",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_double"
     },
     {
       "relation": "references",
@@ -12053,9 +12053,9 @@
       "source_location": "L56",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_list",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_list"
     },
     {
       "relation": "references",
@@ -12064,9 +12064,9 @@
       "source_location": "L75",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_shipcontroller",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_shipcontroller"
     },
     {
       "relation": "references",
@@ -12075,9 +12075,9 @@
       "source_location": "L72",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_standardmaterial3d"
     },
     {
       "relation": "references",
@@ -12484,9 +12484,9 @@
       "source_location": "L113",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_enemyships",
-      "target": "client_scripts_worldrenderer_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -12495,9 +12495,9 @@
       "source_location": "L113",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_enemyships",
-      "target": "client_scripts_worldrenderer_cs_remoteship",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_remoteship"
     },
     {
       "relation": "references",
@@ -12528,9 +12528,9 @@
       "source_location": "L174",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onconnected",
-      "target": "client_scripts_worldrenderer_cs_dbconnection",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_dbconnection"
     },
     {
       "relation": "references",
@@ -12748,9 +12748,9 @@
       "source_location": "L228",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawneffect",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -12770,9 +12770,9 @@
       "source_location": "L659",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -12781,9 +12781,9 @@
       "source_location": "L568",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -12803,9 +12803,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onalephinsert",
-      "target": "client_scripts_worldrenderer_cs_aleph",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_aleph"
     },
     {
       "relation": "references",
@@ -12814,9 +12814,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onalephinsert",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12836,9 +12836,9 @@
       "source_location": "L264",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onalephdelete",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12847,9 +12847,9 @@
       "source_location": "L414",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onasteroiddelete",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12858,9 +12858,9 @@
       "source_location": "L380",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onasteroidinsert",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12869,9 +12869,9 @@
       "source_location": "L309",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbasedelete",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12880,9 +12880,9 @@
       "source_location": "L272",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12891,9 +12891,9 @@
       "source_location": "L293",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseupdate",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12902,9 +12902,9 @@
       "source_location": "L671",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12913,9 +12913,9 @@
       "source_location": "L527",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12924,9 +12924,9 @@
       "source_location": "L493",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipdelete",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12935,9 +12935,9 @@
       "source_location": "L425",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipinsert",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12946,9 +12946,9 @@
       "source_location": "L466",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipupdate",
-      "target": "client_scripts_worldrenderer_cs_eventcontext",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_eventcontext"
     },
     {
       "relation": "references",
@@ -12957,9 +12957,9 @@
       "source_location": "L264",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onalephdelete",
-      "target": "client_scripts_worldrenderer_cs_aleph",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_aleph"
     },
     {
       "relation": "references",
@@ -13133,9 +13133,9 @@
       "source_location": "L353",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_findmeshinstance",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
     },
     {
       "relation": "references",
@@ -13144,9 +13144,9 @@
       "source_location": "L353",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_findmeshinstance",
-      "target": "client_scripts_worldrenderer_cs_node",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_node"
     },
     {
       "relation": "references",
@@ -13166,9 +13166,9 @@
       "source_location": "L680",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_buildshipmesh",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
     },
     {
       "relation": "references",
@@ -13177,9 +13177,9 @@
       "source_location": "L578",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
     },
     {
       "relation": "references",
@@ -13342,9 +13342,9 @@
       "source_location": "L527",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
-      "target": "client_scripts_worldrenderer_cs_projectile",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_projectile"
     },
     {
       "relation": "references",
@@ -13397,9 +13397,9 @@
       "source_location": "L671",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
-      "target": "client_scripts_worldrenderer_cs_projectile",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_projectile"
     },
     {
       "relation": "calls",
@@ -13793,9 +13793,9 @@
       "source_location": "L360",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "module_spacetimedb_lib_cs_string",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_string"
     },
     {
       "relation": "references",
@@ -14670,9 +14670,9 @@
       "source_location": "L383",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_seedasteroidfield",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14692,9 +14692,9 @@
       "source_location": "L1603",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_anyonline",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14703,9 +14703,9 @@
       "source_location": "L940",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_applyinput",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14714,9 +14714,9 @@
       "source_location": "L1566",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_canjointeam",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14725,9 +14725,9 @@
       "source_location": "L551",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientconnected",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14736,9 +14736,9 @@
       "source_location": "L585",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientdisconnected",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14747,9 +14747,9 @@
       "source_location": "L1452",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_deleteshipinputs",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14758,9 +14758,9 @@
       "source_location": "L1659",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_endmatchifsideabandoned",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14769,9 +14769,9 @@
       "source_location": "L445",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_generatemap",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14780,9 +14780,9 @@
       "source_location": "L680",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_handlecommand",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14791,9 +14791,9 @@
       "source_location": "L484",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_init",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14802,9 +14802,9 @@
       "source_location": "L819",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_jointeam",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14813,9 +14813,9 @@
       "source_location": "L1429",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_killship",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14824,9 +14824,9 @@
       "source_location": "L847",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_leaveteam",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14835,9 +14835,9 @@
       "source_location": "L1644",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_markengagedifactive",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14846,9 +14846,9 @@
       "source_location": "L1704",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_maybestartmatch",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14857,9 +14857,9 @@
       "source_location": "L1551",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_onlineteamcounts",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14868,9 +14868,9 @@
       "source_location": "L884",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_quickjoin",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14879,9 +14879,9 @@
       "source_location": "L531",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_regenerateworld",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14890,9 +14890,9 @@
       "source_location": "L1588",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resetworld",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14901,9 +14901,9 @@
       "source_location": "L721",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resignmatch",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14912,9 +14912,9 @@
       "source_location": "L807",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_respawn",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14923,9 +14923,9 @@
       "source_location": "L905",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_restartmatch",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14934,9 +14934,9 @@
       "source_location": "L406",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_seedasteroidbelt",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14945,9 +14945,9 @@
       "source_location": "L645",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_sendchat",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14956,9 +14956,9 @@
       "source_location": "L627",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_setname",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14967,9 +14967,9 @@
       "source_location": "L866",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_setready",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14978,9 +14978,9 @@
       "source_location": "L980",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simtick",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14989,9 +14989,9 @@
       "source_location": "L1013",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15000,9 +15000,9 @@
       "source_location": "L1576",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_smallestonlineteam",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15011,9 +15011,9 @@
       "source_location": "L799",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnship",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15022,9 +15022,9 @@
       "source_location": "L1459",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnshipinternal",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15033,9 +15033,9 @@
       "source_location": "L1613",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_startsim",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15044,9 +15044,9 @@
       "source_location": "L1635",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_stopsim",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15055,9 +15055,9 @@
       "source_location": "L755",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_systemall",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -15066,9 +15066,9 @@
       "source_location": "L740",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_systemto",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "calls",
@@ -15451,9 +15451,9 @@
       "source_location": "L680",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_handlecommand",
-      "target": "module_spacetimedb_lib_cs_player",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_player"
     },
     {
       "relation": "references",
@@ -15528,9 +15528,9 @@
       "source_location": "L772",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_displayname",
-      "target": "module_spacetimedb_lib_cs_player",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_player"
     },
     {
       "relation": "references",
@@ -15539,9 +15539,9 @@
       "source_location": "L721",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resignmatch",
-      "target": "module_spacetimedb_lib_cs_player",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_player"
     },
     {
       "relation": "references",
@@ -15616,9 +15616,9 @@
       "source_location": "L740",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_systemto",
-      "target": "module_spacetimedb_lib_cs_identity",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_identity"
     },
     {
       "relation": "references",
@@ -15638,9 +15638,9 @@
       "source_location": "L1566",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_canjointeam",
-      "target": "module_spacetimedb_lib_cs_identity",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_identity"
     },
     {
       "relation": "references",
@@ -15649,9 +15649,9 @@
       "source_location": "L1551",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_onlineteamcounts",
-      "target": "module_spacetimedb_lib_cs_identity",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_identity"
     },
     {
       "relation": "references",
@@ -15660,9 +15660,9 @@
       "source_location": "L1576",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_smallestonlineteam",
-      "target": "module_spacetimedb_lib_cs_identity",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_identity"
     },
     {
       "relation": "references",
@@ -16144,9 +16144,9 @@
       "source_location": "L1439",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_toinputstate",
-      "target": "module_spacetimedb_lib_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_shipinputstate"
     },
     {
       "relation": "references",
