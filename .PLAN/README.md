@@ -2,16 +2,19 @@
 
 ## Prototype (COMPLETE)
 
-The two-ship prototype (T0–T10) and post-prototype polish are **finished**.
+The two-ship prototype (T0-T10) and post-prototype polish are **finished**.
 Archives:
 
-- `prototype-archive/00–09, 99` — original prototype plan documents
+- `prototype-archive/00-09, 99` — original prototype plan documents
 - `prototype-archive/10-POST-PROTOTYPE-DONE.md` — completed polish & PIGs
 - `docs/PROTOTYPE-ARCHITECTURE.md` — consolidated architecture reference
 
 ---
 
-## Current Milestone — Sectors & Lobby
+## QUICKNOTES:
+- Add concept of ship weight, instead of just tuning fake heaviness. This will matter when it comes to collisions
+- Add collisions between ships and bases
+- Create index of entire codebase for more efficient agent use.
 
 ---
 
@@ -20,14 +23,24 @@ Archives:
 Themed and ordered top-to-bottom. Infra (host-server image, CI) is pulled in
 as-needed pe1r phase rather than done up front.
 
-### Phase 1 — Combat feel & depth
+### Phase 1 — Configurability & maintainability refactor
+
+Move hard-coded tuning and content into data so new ships, weapons, and bases
+are config, not code. Unblocks variety in later phases.
+
+- **Data-driven ship classes & loadouts** — Lift weapon/tuning constants out of
+  `Lib.cs` into configurable class + loadout definitions (weapon systems,
+  hardpoint slotting).
+  - Break 'Lib.cs' into more focused modules, e.g. 'Weapons.cs', 'Ships.cs', 'Bases.cs'.
+- **Ship meshes & hardpoints** — Loader for ship models carrying hardpoints for
+  weapons, thrusters, main engine + booster, and turrets.
+- **Base meshes & hardpoints** — Loader for base models carrying hardpoints for
+  docking (entrance), lighting (blinking), and exit point(s).
+
+### Phase 2 — Combat feel & depth
 
 Make the existing two-team dogfighting richer on the systems already shipped
 (ships, guns, health/damage, boost, AI drones).
-
-NOTES:
-- Add concept of ship weight, instead of just tuning fake heaviness. This will matter when it comes to collisions
-- Add collisions between ships and bases
 
 - **Shields & damage systems** — Layer regenerating shields over the existing
   raw-health model; damage-type interactions.
@@ -41,20 +54,6 @@ NOTES:
 - **Escape pods** — Eject on ship death; pod must either die or be rescued by a teammate in order for player to respawn.
 - **Improved in-game UI** — Health/shield bars, ship status indicators,
   team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.)
-
-### Phase 2 — Configurability & maintainability refactor
-
-Move hard-coded tuning and content into data so new ships, weapons, and bases
-are config, not code. Unblocks variety in later phases.
-
-- **Data-driven ship classes & loadouts** — Lift weapon/tuning constants out of
-  `Lib.cs` into configurable class + loadout definitions (weapon systems,
-  hardpoint slotting).
-  - Break 'Lib.cs' into more focused modules, e.g. 'Weapons.cs', 'Ships.cs', 'Bases.cs'.
-- **Ship meshes & hardpoints** — Loader for ship models carrying hardpoints for
-  weapons, thrusters, main engine + booster, and turrets.
-- **Base meshes & hardpoints** — Loader for base models carrying hardpoints for
-  docking (entrance), lighting (blinking), and exit point(s).
 
 ### Phase 3 — Hosting at scale
 
