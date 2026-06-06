@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-06)
 
 ## Corpus Check
-- 46 files · ~48,952 words
+- 46 files · ~50,562 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 668 nodes · 1110 edges · 41 communities (34 shown, 7 thin omitted)
+- 674 nodes · 1125 edges · 41 communities (34 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4421be0a`
+- Built from commit: `9616c098`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -68,16 +68,16 @@
 10. `ExplosionEffect` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `TargetMarkers` --references--> `float`  [EXTRACTED]
+  client/scripts/TargetMarkers.cs → client/scripts/AlephView.cs
 - `Asteroids CI Workflow` --semantically_similar_to--> `Build Godot Client CI Workflow`  [INFERRED] [semantically similar]
   .github/workflows/asteroids.yml → .github/workflows/build-godot-client.yml
+- `Starscape` --references--> `ShaderMaterial`  [EXTRACTED]
+  client/scripts/Starscape.cs → client/scripts/AlephView.cs
 - `TargetMarkers` --references--> `List`  [EXTRACTED]
   client/scripts/TargetMarkers.cs → client/scripts/WorldRenderer.cs
 - `TargetMarkers` --references--> `bool`  [EXTRACTED]
   client/scripts/TargetMarkers.cs → client/scripts/WorldRenderer.cs
-- `Sun` --inherits--> `MeshInstance3D`  [EXTRACTED]
-  client/scripts/Sun.cs → client/scripts/WorldRenderer.cs
-- `TargetMarkers` --inherits--> `Control`  [EXTRACTED]
-  client/scripts/TargetMarkers.cs → client/scripts/Hud.cs
 
 ## Import Cycles
 - None detected.
@@ -92,8 +92,8 @@ Cohesion: 0.08
 Nodes (24): DetRng, Filter, Identity, long, byte, float, int, Ship (+16 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.06
-Nodes (28): Aleph, Asteroid, AuthoredRadius, Base, float, int, byte, float (+20 more)
+Cohesion: 0.07
+Nodes (24): Aleph, Asteroid, AuthoredRadius, Base, byte, float, Ship, ShipClass (+16 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -141,7 +141,7 @@ Nodes (11): byte, Color, CurveTexture, double, float, GradientTexture1D, Gradien
 
 ### Community 13 - "Target Markers HUD"
 Cohesion: 0.10
-Nodes (16): Basis, bool, Camera3D, Vector3, WorldRenderer, Color, Control, float (+8 more)
+Nodes (16): Basis, bool, Camera3D, Vector3, WorldRenderer, Color, Control, IReadOnlyList (+8 more)
 
 ### Community 14 - "Remote Ship Networked"
 Cohesion: 0.17
@@ -188,8 +188,8 @@ Cohesion: 0.42
 Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main(), _opts(), _sizes(), Path
 
 ### Community 25 - "Starscape Background"
-Cohesion: 0.28
-Nodes (5): string, uint, Environment, Starscape, ShaderMaterial
+Cohesion: 0.13
+Nodes (10): ArrayMesh, string, uint, Environment, float, int, AlephView, Starscape (+2 more)
 
 ### Community 27 - "DotNet Tools Config"
 Cohesion: 0.25
@@ -216,7 +216,7 @@ Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
 ## Knowledge Gaps
-- **189 isolated node(s):** `float`, `int`, `float`, `double`, `Dictionary` (+184 more)
+- **186 isolated node(s):** `int`, `float`, `double`, `Dictionary`, `uint` (+181 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -224,16 +224,16 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `WorldRenderer` connect `AlephView World State` to `Target Markers HUD`?**
-  _High betweenness centrality (0.305) - this node is a cross-community bridge._
-- **Why does `TargetMarkers` connect `Target Markers HUD` to `Connection Overlay UI`?**
-  _High betweenness centrality (0.194) - this node is a cross-community bridge._
+  _High betweenness centrality (0.274) - this node is a cross-community bridge._
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
+  _High betweenness centrality (0.193) - this node is a cross-community bridge._
 - **Why does `Aleph` connect `AlephView World State` to `PigAI NPC Behavior`?**
   _High betweenness centrality (0.176) - this node is a cross-community bridge._
-- **What connects `float`, `int`, `float` to the rest of the system?**
-  _209 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `int`, `float`, `double` to the rest of the system?**
+  _206 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.07901668129938542 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06240084611316764 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0734006734006734 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._

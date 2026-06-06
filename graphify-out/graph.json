@@ -25,7 +25,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L1",
       "id": "scripts_alephview",
-      "community": 1,
+      "community": 25,
       "norm_label": "alephview.cs"
     },
     {
@@ -34,7 +34,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L11",
       "id": "scripts_alephview_alephview",
-      "community": 1,
+      "community": 25,
       "norm_label": "alephview"
     },
     {
@@ -51,35 +51,107 @@
       "file_type": "code",
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L13",
-      "id": "client_scripts_alephview_cs_float",
-      "community": 1,
+      "id": "float",
+      "community": 25,
       "norm_label": "float"
     },
     {
       "label": "int",
       "file_type": "code",
       "source_file": "client/scripts/AlephView.cs",
-      "source_location": "L15",
-      "id": "client_scripts_alephview_cs_int",
-      "community": 1,
+      "source_location": "L16",
+      "id": "int",
+      "community": 25,
       "norm_label": "int"
     },
     {
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/AlephView.cs",
-      "source_location": "L22",
+      "source_location": "L19",
       "id": "scripts_alephview_alephview_ready",
-      "community": 1,
+      "community": 25,
       "norm_label": "._ready()"
+    },
+    {
+      "label": ".BuildFunnelMesh()",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L79",
+      "id": "scripts_alephview_alephview_buildfunnelmesh",
+      "community": 25,
+      "norm_label": ".buildfunnelmesh()"
+    },
+    {
+      "label": "ArrayMesh",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L79",
+      "id": "arraymesh",
+      "community": 25,
+      "norm_label": "arraymesh"
+    },
+    {
+      "label": ".BuildVortexShader()",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L149",
+      "id": "scripts_alephview_alephview_buildvortexshader",
+      "community": 25,
+      "norm_label": ".buildvortexshader()"
+    },
+    {
+      "label": "ShaderMaterial",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L149",
+      "id": "shadermaterial",
+      "community": 25,
+      "norm_label": "shadermaterial"
+    },
+    {
+      "label": ".BuildCapDisc()",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L264",
+      "id": "scripts_alephview_alephview_buildcapdisc",
+      "community": 25,
+      "norm_label": ".buildcapdisc()"
+    },
+    {
+      "label": ".BuildCapShader()",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L311",
+      "id": "scripts_alephview_alephview_buildcapshader",
+      "community": 25,
+      "norm_label": ".buildcapshader()"
+    },
+    {
+      "label": "Shader",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L311",
+      "id": "shader",
+      "community": 25,
+      "norm_label": "shader"
+    },
+    {
+      "label": ".BuildStarShader()",
+      "file_type": "code",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L344",
+      "id": "scripts_alephview_alephview_buildstarshader",
+      "community": 25,
+      "norm_label": ".buildstarshader()"
     },
     {
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/AlephView.cs",
-      "source_location": "L58",
+      "source_location": "L401",
       "id": "scripts_alephview_alephview_process",
-      "community": 1,
+      "community": 25,
       "norm_label": "._process()"
     },
     {
@@ -87,1206 +159,1206 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1",
-      "id": "scripts_worldrenderer",
       "community": 1,
-      "norm_label": "worldrenderer.cs"
+      "norm_label": "worldrenderer.cs",
+      "id": "scripts_worldrenderer"
     },
     {
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L8",
-      "id": "scripts_worldrenderer_worldrenderer",
       "community": 1,
-      "norm_label": "worldrenderer"
+      "norm_label": "worldrenderer",
+      "id": "scripts_worldrenderer_worldrenderer"
     },
     {
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L10",
-      "id": "client_scripts_worldrenderer_cs_float",
       "community": 1,
-      "norm_label": "float"
+      "norm_label": "float",
+      "id": "client_scripts_worldrenderer_cs_float"
     },
     {
       "label": "double",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L22",
-      "id": "double",
       "community": 1,
-      "norm_label": "double"
+      "norm_label": "double",
+      "id": "double"
     },
     {
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L24",
-      "id": "dictionary",
       "community": 1,
-      "norm_label": "dictionary"
+      "norm_label": "dictionary",
+      "id": "dictionary"
     },
     {
       "label": "uint",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L35",
-      "id": "client_scripts_worldrenderer_cs_uint",
       "community": 1,
-      "norm_label": "uint"
+      "norm_label": "uint",
+      "id": "client_scripts_worldrenderer_cs_uint"
     },
     {
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L48",
-      "id": "list",
       "community": 13,
-      "norm_label": "list"
+      "norm_label": "list",
+      "id": "list"
     },
     {
       "label": "byte",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L49",
-      "id": "client_scripts_worldrenderer_cs_byte",
       "community": 1,
-      "norm_label": "byte"
+      "norm_label": "byte",
+      "id": "client_scripts_worldrenderer_cs_byte"
     },
     {
       "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L65",
-      "id": "standardmaterial3d",
       "community": 1,
-      "norm_label": "standardmaterial3d"
+      "norm_label": "standardmaterial3d",
+      "id": "standardmaterial3d"
     },
     {
       "label": "ConnectionManager",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L74",
-      "id": "connectionmanager",
       "community": 1,
-      "norm_label": "connectionmanager"
+      "norm_label": "connectionmanager",
+      "id": "connectionmanager"
     },
     {
       "label": "ShipController",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L75",
-      "id": "shipcontroller",
       "community": 1,
-      "norm_label": "shipcontroller"
+      "norm_label": "shipcontroller",
+      "id": "shipcontroller"
     },
     {
       "label": "Starscape",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L76",
-      "id": "starscape",
       "community": 1,
-      "norm_label": "starscape"
+      "norm_label": "starscape",
+      "id": "starscape"
     },
     {
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L95",
-      "id": "bool",
       "community": 13,
-      "norm_label": "bool"
+      "norm_label": "bool",
+      "id": "bool"
     },
     {
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L113",
-      "id": "scripts_worldrenderer_worldrenderer_enemyships",
       "community": 13,
-      "norm_label": ".enemyships()"
+      "norm_label": ".enemyships()",
+      "id": "scripts_worldrenderer_worldrenderer_enemyships"
     },
     {
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L113",
-      "id": "ireadonlylist",
       "community": 13,
-      "norm_label": "ireadonlylist"
+      "norm_label": "ireadonlylist",
+      "id": "ireadonlylist"
     },
     {
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L113",
-      "id": "remoteship",
       "community": 13,
-      "norm_label": "remoteship"
+      "norm_label": "remoteship",
+      "id": "remoteship"
     },
     {
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L125",
-      "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
-      "norm_label": "._ready()"
+      "norm_label": "._ready()",
+      "id": "scripts_worldrenderer_worldrenderer_ready"
     },
     {
       "label": ".OnConnected()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L174",
-      "id": "scripts_worldrenderer_worldrenderer_onconnected",
       "community": 1,
-      "norm_label": ".onconnected()"
+      "norm_label": ".onconnected()",
+      "id": "scripts_worldrenderer_worldrenderer_onconnected"
     },
     {
       "label": "DbConnection",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L174",
-      "id": "dbconnection",
       "community": 1,
-      "norm_label": "dbconnection"
+      "norm_label": "dbconnection",
+      "id": "dbconnection"
     },
     {
       "label": ".OnMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L198",
-      "id": "scripts_worldrenderer_worldrenderer_onmatch",
       "community": 1,
-      "norm_label": ".onmatch()"
+      "norm_label": ".onmatch()",
+      "id": "scripts_worldrenderer_worldrenderer_onmatch"
     },
     {
       "label": "Match",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L198",
-      "id": "match",
       "community": 1,
-      "norm_label": "match"
+      "norm_label": "match",
+      "id": "match"
     },
     {
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L209",
-      "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 1,
-      "norm_label": ".setnodesector()"
+      "norm_label": ".setnodesector()",
+      "id": "scripts_worldrenderer_worldrenderer_setnodesector"
     },
     {
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L217",
-      "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 1,
-      "norm_label": ".refreshsectorvisibility()"
+      "norm_label": ".refreshsectorvisibility()",
+      "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility"
     },
     {
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L228",
-      "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 1,
-      "norm_label": ".spawneffect()"
+      "norm_label": ".spawneffect()",
+      "id": "scripts_worldrenderer_worldrenderer_spawneffect"
     },
     {
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L228",
-      "id": "vector3",
-      "community": 1,
-      "norm_label": "vector3"
+      "community": 13,
+      "norm_label": "vector3",
+      "id": "vector3"
     },
     {
       "label": ".OnAlephInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L237",
-      "id": "scripts_worldrenderer_worldrenderer_onalephinsert",
       "community": 1,
-      "norm_label": ".onalephinsert()"
+      "norm_label": ".onalephinsert()",
+      "id": "scripts_worldrenderer_worldrenderer_onalephinsert"
     },
     {
       "label": "EventContext",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L237",
-      "id": "eventcontext",
       "community": 1,
-      "norm_label": "eventcontext"
+      "norm_label": "eventcontext",
+      "id": "eventcontext"
     },
     {
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L237",
-      "id": "aleph",
       "community": 1,
-      "norm_label": "aleph"
+      "norm_label": "aleph",
+      "id": "aleph"
     },
     {
       "label": ".OnAlephDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L264",
-      "id": "scripts_worldrenderer_worldrenderer_onalephdelete",
       "community": 1,
-      "norm_label": ".onalephdelete()"
+      "norm_label": ".onalephdelete()",
+      "id": "scripts_worldrenderer_worldrenderer_onalephdelete"
     },
     {
       "label": ".OnBaseInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L272",
-      "id": "scripts_worldrenderer_worldrenderer_onbaseinsert",
       "community": 1,
-      "norm_label": ".onbaseinsert()"
+      "norm_label": ".onbaseinsert()",
+      "id": "scripts_worldrenderer_worldrenderer_onbaseinsert"
     },
     {
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L272",
-      "id": "base",
       "community": 1,
-      "norm_label": "base"
+      "norm_label": "base",
+      "id": "base"
     },
     {
       "label": ".OnBaseUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L293",
-      "id": "scripts_worldrenderer_worldrenderer_onbaseupdate",
       "community": 1,
-      "norm_label": ".onbaseupdate()"
+      "norm_label": ".onbaseupdate()",
+      "id": "scripts_worldrenderer_worldrenderer_onbaseupdate"
     },
     {
       "label": ".OnBaseDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L309",
-      "id": "scripts_worldrenderer_worldrenderer_onbasedelete",
       "community": 1,
-      "norm_label": ".onbasedelete()"
+      "norm_label": ".onbasedelete()",
+      "id": "scripts_worldrenderer_worldrenderer_onbasedelete"
     },
     {
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L325",
-      "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 1,
-      "norm_label": ".asteroidmesh()"
+      "norm_label": ".asteroidmesh()",
+      "id": "scripts_worldrenderer_worldrenderer_asteroidmesh"
     },
     {
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L325",
-      "id": "mesh",
       "community": 1,
-      "norm_label": "mesh"
+      "norm_label": "mesh",
+      "id": "mesh"
     },
     {
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L325",
-      "id": "authoredradius",
       "community": 1,
-      "norm_label": "authoredradius"
+      "norm_label": "authoredradius",
+      "id": "authoredradius"
     },
     {
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
-      "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 1,
-      "norm_label": ".findmeshinstance()"
+      "norm_label": ".findmeshinstance()",
+      "id": "scripts_worldrenderer_worldrenderer_findmeshinstance"
     },
     {
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
-      "id": "node",
       "community": 1,
-      "norm_label": "node"
+      "norm_label": "node",
+      "id": "node"
     },
     {
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
-      "id": "meshinstance3d",
       "community": 1,
-      "norm_label": "meshinstance3d"
+      "norm_label": "meshinstance3d",
+      "id": "meshinstance3d"
     },
     {
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L366",
-      "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 1,
-      "norm_label": ".meshboundingradius()"
+      "norm_label": ".meshboundingradius()",
+      "id": "scripts_worldrenderer_worldrenderer_meshboundingradius"
     },
     {
       "label": ".OnAsteroidInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L380",
-      "id": "scripts_worldrenderer_worldrenderer_onasteroidinsert",
       "community": 1,
-      "norm_label": ".onasteroidinsert()"
+      "norm_label": ".onasteroidinsert()",
+      "id": "scripts_worldrenderer_worldrenderer_onasteroidinsert"
     },
     {
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L380",
-      "id": "asteroid",
       "community": 1,
-      "norm_label": "asteroid"
+      "norm_label": "asteroid",
+      "id": "asteroid"
     },
     {
       "label": ".OnAsteroidDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L414",
-      "id": "scripts_worldrenderer_worldrenderer_onasteroiddelete",
       "community": 1,
-      "norm_label": ".onasteroiddelete()"
+      "norm_label": ".onasteroiddelete()",
+      "id": "scripts_worldrenderer_worldrenderer_onasteroiddelete"
     },
     {
       "label": ".IsLocal()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L422",
-      "id": "scripts_worldrenderer_worldrenderer_islocal",
       "community": 1,
-      "norm_label": ".islocal()"
+      "norm_label": ".islocal()",
+      "id": "scripts_worldrenderer_worldrenderer_islocal"
     },
     {
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L422",
-      "id": "client_scripts_worldrenderer_cs_ship",
       "community": 1,
-      "norm_label": "ship"
+      "norm_label": "ship",
+      "id": "client_scripts_worldrenderer_cs_ship"
     },
     {
       "label": ".OnShipInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L425",
-      "id": "scripts_worldrenderer_worldrenderer_onshipinsert",
       "community": 1,
-      "norm_label": ".onshipinsert()"
+      "norm_label": ".onshipinsert()",
+      "id": "scripts_worldrenderer_worldrenderer_onshipinsert"
     },
     {
       "label": ".OnShipUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L466",
-      "id": "scripts_worldrenderer_worldrenderer_onshipupdate",
       "community": 1,
-      "norm_label": ".onshipupdate()"
+      "norm_label": ".onshipupdate()",
+      "id": "scripts_worldrenderer_worldrenderer_onshipupdate"
     },
     {
       "label": ".OnShipDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L493",
-      "id": "scripts_worldrenderer_worldrenderer_onshipdelete",
       "community": 1,
-      "norm_label": ".onshipdelete()"
+      "norm_label": ".onshipdelete()",
+      "id": "scripts_worldrenderer_worldrenderer_onshipdelete"
     },
     {
       "label": ".OnProjectileInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L527",
-      "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
       "community": 1,
-      "norm_label": ".onprojectileinsert()"
+      "norm_label": ".onprojectileinsert()",
+      "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
     {
       "label": "Projectile",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L527",
-      "id": "projectile",
       "community": 1,
-      "norm_label": "projectile"
+      "norm_label": "projectile",
+      "id": "projectile"
     },
     {
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L557",
-      "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 1,
-      "norm_label": ".shotmaskleadsec()"
+      "norm_label": ".shotmaskleadsec()",
+      "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec"
     },
     {
       "label": ".SpawnPredictedProjectile()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L568",
-      "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "community": 1,
-      "norm_label": ".spawnpredictedprojectile()"
+      "norm_label": ".spawnpredictedprojectile()",
+      "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile"
     },
     {
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L578",
-      "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 1,
-      "norm_label": ".newprojectilemesh()"
+      "norm_label": ".newprojectilemesh()",
+      "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh"
     },
     {
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L590",
-      "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
-      "norm_label": "._process()"
+      "norm_label": "._process()",
+      "id": "scripts_worldrenderer_worldrenderer_process"
     },
     {
       "label": ".CheckBoltImpacts()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L624",
-      "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "community": 1,
-      "norm_label": ".checkboltimpacts()"
+      "norm_label": ".checkboltimpacts()",
+      "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts"
     },
     {
       "label": ".ClosestPointOnSegment()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L659",
-      "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "community": 1,
-      "norm_label": ".closestpointonsegment()"
+      "norm_label": ".closestpointonsegment()",
+      "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment"
     },
     {
       "label": ".OnProjectileDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L671",
-      "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
       "community": 1,
-      "norm_label": ".onprojectiledelete()"
+      "norm_label": ".onprojectiledelete()",
+      "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
     {
       "label": ".BuildShipMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L680",
-      "id": "scripts_worldrenderer_worldrenderer_buildshipmesh",
       "community": 1,
-      "norm_label": ".buildshipmesh()"
+      "norm_label": ".buildshipmesh()",
+      "id": "scripts_worldrenderer_worldrenderer_buildshipmesh"
     },
     {
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L680",
-      "id": "client_scripts_worldrenderer_cs_shipclass",
       "community": 1,
-      "norm_label": "shipclass"
+      "norm_label": "shipclass",
+      "id": "client_scripts_worldrenderer_cs_shipclass"
     },
     {
       "label": ".AttachEngineGlow()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L713",
-      "id": "scripts_worldrenderer_worldrenderer_attachengineglow",
       "community": 1,
-      "norm_label": ".attachengineglow()"
+      "norm_label": ".attachengineglow()",
+      "id": "scripts_worldrenderer_worldrenderer_attachengineglow"
     },
     {
       "label": "Lib.cs",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1",
-      "id": "spacetimedb_lib",
       "community": 0,
-      "norm_label": "lib.cs"
+      "norm_label": "lib.cs",
+      "id": "spacetimedb_lib"
     },
     {
       "label": "Module",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L274",
-      "id": "spacetimedb_lib_module",
       "community": 0,
-      "norm_label": "module"
+      "norm_label": "module",
+      "id": "spacetimedb_lib_module"
     },
     {
       "label": "uint",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L278",
-      "id": "module_spacetimedb_lib_cs_uint",
       "community": 0,
-      "norm_label": "uint"
+      "norm_label": "uint",
+      "id": "module_spacetimedb_lib_cs_uint"
     },
     {
       "label": "byte",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L279",
-      "id": "module_spacetimedb_lib_cs_byte",
       "community": 0,
-      "norm_label": "byte"
+      "norm_label": "byte",
+      "id": "module_spacetimedb_lib_cs_byte"
     },
     {
       "label": "int",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L280",
-      "id": "module_spacetimedb_lib_cs_int",
       "community": 0,
-      "norm_label": "int"
+      "norm_label": "int",
+      "id": "module_spacetimedb_lib_cs_int"
     },
     {
       "label": "long",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L282",
-      "id": "long",
       "community": 0,
-      "norm_label": "long"
+      "norm_label": "long",
+      "id": "long"
     },
     {
       "label": "float",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L286",
-      "id": "module_spacetimedb_lib_cs_float",
       "community": 0,
-      "norm_label": "float"
+      "norm_label": "float",
+      "id": "module_spacetimedb_lib_cs_float"
     },
     {
       "label": ".MassFor()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L323",
-      "id": "spacetimedb_lib_module_massfor",
       "community": 0,
-      "norm_label": ".massfor()"
+      "norm_label": ".massfor()",
+      "id": "spacetimedb_lib_module_massfor"
     },
     {
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L323",
-      "id": "module_spacetimedb_lib_cs_shipclass",
       "community": 0,
-      "norm_label": "shipclass"
+      "norm_label": "shipclass",
+      "id": "module_spacetimedb_lib_cs_shipclass"
     },
     {
       "label": ".MaxHull()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L324",
-      "id": "spacetimedb_lib_module_maxhull",
       "community": 0,
-      "norm_label": ".maxhull()"
+      "norm_label": ".maxhull()",
+      "id": "spacetimedb_lib_module_maxhull"
     },
     {
       "label": ".WeaponDamage()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L325",
-      "id": "spacetimedb_lib_module_weapondamage",
       "community": 5,
-      "norm_label": ".weapondamage()"
+      "norm_label": ".weapondamage()",
+      "id": "spacetimedb_lib_module_weapondamage"
     },
     {
       "label": ".FireInterval()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L326",
-      "id": "spacetimedb_lib_module_fireinterval",
       "community": 0,
-      "norm_label": ".fireinterval()"
+      "norm_label": ".fireinterval()",
+      "id": "spacetimedb_lib_module_fireinterval"
     },
     {
       "label": "NextULong()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L340",
-      "id": "spacetimedb_lib_nextulong",
       "community": 0,
-      "norm_label": "nextulong()"
+      "norm_label": "nextulong()",
+      "id": "spacetimedb_lib_nextulong"
     },
     {
       "label": "NextDouble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L350",
-      "id": "spacetimedb_lib_nextdouble",
       "community": 0,
-      "norm_label": "nextdouble()"
+      "norm_label": "nextdouble()",
+      "id": "spacetimedb_lib_nextdouble"
     },
     {
       "label": "NextRange()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L352",
-      "id": "spacetimedb_lib_nextrange",
       "community": 0,
-      "norm_label": "nextrange()"
+      "norm_label": "nextrange()",
+      "id": "spacetimedb_lib_nextrange"
     },
     {
       "label": "NextInt()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L354",
-      "id": "spacetimedb_lib_nextint",
       "community": 0,
-      "norm_label": "nextint()"
+      "norm_label": "nextint()",
+      "id": "spacetimedb_lib_nextint"
     },
     {
       "label": "string",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L360",
-      "id": "string",
       "community": 0,
-      "norm_label": "string"
+      "norm_label": "string",
+      "id": "string"
     },
     {
       "label": ".NextAsteroidShape()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "spacetimedb_lib_module_nextasteroidshape",
       "community": 0,
-      "norm_label": ".nextasteroidshape()"
+      "norm_label": ".nextasteroidshape()",
+      "id": "spacetimedb_lib_module_nextasteroidshape"
     },
     {
       "label": "DetRng",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "detrng",
       "community": 0,
-      "norm_label": "detrng"
+      "norm_label": "detrng",
+      "id": "detrng"
     },
     {
       "label": "variant",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "variant",
       "community": 0,
-      "norm_label": "variant"
+      "norm_label": "variant",
+      "id": "variant"
     },
     {
       "label": "rx",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "rx",
       "community": 0,
-      "norm_label": "rx"
+      "norm_label": "rx",
+      "id": "rx"
     },
     {
       "label": "ry",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "ry",
       "community": 0,
-      "norm_label": "ry"
+      "norm_label": "ry",
+      "id": "ry"
     },
     {
       "label": "rz",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L373",
-      "id": "rz",
       "community": 0,
-      "norm_label": "rz"
+      "norm_label": "rz",
+      "id": "rz"
     },
     {
       "label": ".SeedAsteroidField()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L383",
-      "id": "spacetimedb_lib_module_seedasteroidfield",
       "community": 0,
-      "norm_label": ".seedasteroidfield()"
+      "norm_label": ".seedasteroidfield()",
+      "id": "spacetimedb_lib_module_seedasteroidfield"
     },
     {
       "label": "ReducerContext",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L383",
-      "id": "reducercontext",
       "community": 0,
-      "norm_label": "reducercontext"
+      "norm_label": "reducercontext",
+      "id": "reducercontext"
     },
     {
       "label": ".SeedAsteroidBelt()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L406",
-      "id": "spacetimedb_lib_module_seedasteroidbelt",
       "community": 0,
-      "norm_label": ".seedasteroidbelt()"
+      "norm_label": ".seedasteroidbelt()",
+      "id": "spacetimedb_lib_module_seedasteroidbelt"
     },
     {
       "label": ".RandomOuterPos()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L432",
-      "id": "spacetimedb_lib_module_randomouterpos",
       "community": 0,
-      "norm_label": ".randomouterpos()"
+      "norm_label": ".randomouterpos()",
+      "id": "spacetimedb_lib_module_randomouterpos"
     },
     {
       "label": ".GenerateMap()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L445",
-      "id": "spacetimedb_lib_module_generatemap",
       "community": 0,
-      "norm_label": ".generatemap()"
+      "norm_label": ".generatemap()",
+      "id": "spacetimedb_lib_module_generatemap"
     },
     {
       "label": ".Init()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L484",
-      "id": "spacetimedb_lib_module_init",
       "community": 0,
-      "norm_label": ".init()"
+      "norm_label": ".init()",
+      "id": "spacetimedb_lib_module_init"
     },
     {
       "label": "Reducer",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L484",
-      "id": "reducer",
       "community": 0,
-      "norm_label": "reducer"
+      "norm_label": "reducer",
+      "id": "reducer"
     },
     {
       "label": ".RegenerateWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L531",
-      "id": "spacetimedb_lib_module_regenerateworld",
       "community": 0,
-      "norm_label": ".regenerateworld()"
+      "norm_label": ".regenerateworld()",
+      "id": "spacetimedb_lib_module_regenerateworld"
     },
     {
       "label": ".ClientConnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L551",
-      "id": "spacetimedb_lib_module_clientconnected",
       "community": 0,
-      "norm_label": ".clientconnected()"
+      "norm_label": ".clientconnected()",
+      "id": "spacetimedb_lib_module_clientconnected"
     },
     {
       "label": ".ClientDisconnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L585",
-      "id": "spacetimedb_lib_module_clientdisconnected",
       "community": 0,
-      "norm_label": ".clientdisconnected()"
+      "norm_label": ".clientdisconnected()",
+      "id": "spacetimedb_lib_module_clientdisconnected"
     },
     {
       "label": ".SetName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L627",
-      "id": "spacetimedb_lib_module_setname",
       "community": 0,
-      "norm_label": ".setname()"
+      "norm_label": ".setname()",
+      "id": "spacetimedb_lib_module_setname"
     },
     {
       "label": ".SendChat()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L645",
-      "id": "spacetimedb_lib_module_sendchat",
       "community": 0,
-      "norm_label": ".sendchat()"
+      "norm_label": ".sendchat()",
+      "id": "spacetimedb_lib_module_sendchat"
     },
     {
       "label": ".HandleCommand()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L680",
-      "id": "spacetimedb_lib_module_handlecommand",
       "community": 0,
-      "norm_label": ".handlecommand()"
+      "norm_label": ".handlecommand()",
+      "id": "spacetimedb_lib_module_handlecommand"
     },
     {
       "label": "Player",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L680",
-      "id": "player",
       "community": 0,
-      "norm_label": "player"
+      "norm_label": "player",
+      "id": "player"
     },
     {
       "label": ".ResignMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L721",
-      "id": "spacetimedb_lib_module_resignmatch",
       "community": 0,
-      "norm_label": ".resignmatch()"
+      "norm_label": ".resignmatch()",
+      "id": "spacetimedb_lib_module_resignmatch"
     },
     {
       "label": ".SystemTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L740",
-      "id": "spacetimedb_lib_module_systemto",
       "community": 0,
-      "norm_label": ".systemto()"
+      "norm_label": ".systemto()",
+      "id": "spacetimedb_lib_module_systemto"
     },
     {
       "label": "Identity",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L740",
-      "id": "identity",
       "community": 0,
-      "norm_label": "identity"
+      "norm_label": "identity",
+      "id": "identity"
     },
     {
       "label": ".SystemAll()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L755",
-      "id": "spacetimedb_lib_module_systemall",
       "community": 0,
-      "norm_label": ".systemall()"
+      "norm_label": ".systemall()",
+      "id": "spacetimedb_lib_module_systemall"
     },
     {
       "label": ".TeamName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L769",
-      "id": "spacetimedb_lib_module_teamname",
       "community": 0,
-      "norm_label": ".teamname()"
+      "norm_label": ".teamname()",
+      "id": "spacetimedb_lib_module_teamname"
     },
     {
       "label": ".DisplayName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L772",
-      "id": "spacetimedb_lib_module_displayname",
       "community": 0,
-      "norm_label": ".displayname()"
+      "norm_label": ".displayname()",
+      "id": "spacetimedb_lib_module_displayname"
     },
     {
       "label": "Filter",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L783",
-      "id": "filter",
       "community": 0,
-      "norm_label": "filter"
+      "norm_label": "filter",
+      "id": "filter"
     },
     {
       "label": ".SpawnShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L799",
-      "id": "spacetimedb_lib_module_spawnship",
       "community": 0,
-      "norm_label": ".spawnship()"
+      "norm_label": ".spawnship()",
+      "id": "spacetimedb_lib_module_spawnship"
     },
     {
       "label": ".Respawn()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L807",
-      "id": "spacetimedb_lib_module_respawn",
       "community": 0,
-      "norm_label": ".respawn()"
+      "norm_label": ".respawn()",
+      "id": "spacetimedb_lib_module_respawn"
     },
     {
       "label": ".JoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L819",
-      "id": "spacetimedb_lib_module_jointeam",
       "community": 0,
-      "norm_label": ".jointeam()"
+      "norm_label": ".jointeam()",
+      "id": "spacetimedb_lib_module_jointeam"
     },
     {
       "label": ".LeaveTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L847",
-      "id": "spacetimedb_lib_module_leaveteam",
       "community": 0,
-      "norm_label": ".leaveteam()"
+      "norm_label": ".leaveteam()",
+      "id": "spacetimedb_lib_module_leaveteam"
     },
     {
       "label": ".SetReady()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L866",
-      "id": "spacetimedb_lib_module_setready",
       "community": 0,
-      "norm_label": ".setready()"
+      "norm_label": ".setready()",
+      "id": "spacetimedb_lib_module_setready"
     },
     {
       "label": ".QuickJoin()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L884",
-      "id": "spacetimedb_lib_module_quickjoin",
       "community": 0,
-      "norm_label": ".quickjoin()"
+      "norm_label": ".quickjoin()",
+      "id": "spacetimedb_lib_module_quickjoin"
     },
     {
       "label": ".RestartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L905",
-      "id": "spacetimedb_lib_module_restartmatch",
       "community": 0,
-      "norm_label": ".restartmatch()"
+      "norm_label": ".restartmatch()",
+      "id": "spacetimedb_lib_module_restartmatch"
     },
     {
       "label": ".ApplyInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L940",
-      "id": "spacetimedb_lib_module_applyinput",
       "community": 0,
-      "norm_label": ".applyinput()"
+      "norm_label": ".applyinput()",
+      "id": "spacetimedb_lib_module_applyinput"
     },
     {
       "label": ".SimTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L980",
-      "id": "spacetimedb_lib_module_simtick",
       "community": 0,
-      "norm_label": ".simtick()"
+      "norm_label": ".simtick()",
+      "id": "spacetimedb_lib_module_simtick"
     },
     {
       "label": "SimTickTimer",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L980",
-      "id": "simticktimer",
       "community": 0,
-      "norm_label": "simticktimer"
+      "norm_label": "simticktimer",
+      "id": "simticktimer"
     },
     {
       "label": ".SimulateTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1013",
-      "id": "spacetimedb_lib_module_simulatetick",
       "community": 5,
-      "norm_label": ".simulatetick()"
+      "norm_label": ".simulatetick()",
+      "id": "spacetimedb_lib_module_simulatetick"
     },
     {
       "label": ".Dist2()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1393",
-      "id": "spacetimedb_lib_module_dist2",
       "community": 5,
-      "norm_label": ".dist2()"
+      "norm_label": ".dist2()",
+      "id": "spacetimedb_lib_module_dist2"
     },
     {
       "label": ".ResolveCollision()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1402",
-      "id": "spacetimedb_lib_module_resolvecollision",
       "community": 0,
-      "norm_label": ".resolvecollision()"
+      "norm_label": ".resolvecollision()",
+      "id": "spacetimedb_lib_module_resolvecollision"
     },
     {
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1402",
-      "id": "module_spacetimedb_lib_cs_ship",
       "community": 0,
-      "norm_label": "ship"
+      "norm_label": "ship",
+      "id": "module_spacetimedb_lib_cs_ship"
     },
     {
       "label": ".KillShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1429",
-      "id": "spacetimedb_lib_module_killship",
       "community": 0,
-      "norm_label": ".killship()"
+      "norm_label": ".killship()",
+      "id": "spacetimedb_lib_module_killship"
     },
     {
       "label": ".ToInputState()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1439",
-      "id": "spacetimedb_lib_module_toinputstate",
       "community": 5,
-      "norm_label": ".toinputstate()"
+      "norm_label": ".toinputstate()",
+      "id": "spacetimedb_lib_module_toinputstate"
     },
     {
       "label": "ShipInput",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1439",
-      "id": "shipinput",
       "community": 5,
-      "norm_label": "shipinput"
+      "norm_label": "shipinput",
+      "id": "shipinput"
     },
     {
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1439",
-      "id": "shipinputstate",
       "community": 5,
-      "norm_label": "shipinputstate"
+      "norm_label": "shipinputstate",
+      "id": "shipinputstate"
     },
     {
       "label": ".DeleteShipInputs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1452",
-      "id": "spacetimedb_lib_module_deleteshipinputs",
       "community": 0,
-      "norm_label": ".deleteshipinputs()"
+      "norm_label": ".deleteshipinputs()",
+      "id": "spacetimedb_lib_module_deleteshipinputs"
     },
     {
       "label": ".SpawnShipInternal()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1459",
-      "id": "spacetimedb_lib_module_spawnshipinternal",
       "community": 0,
-      "norm_label": ".spawnshipinternal()"
+      "norm_label": ".spawnshipinternal()",
+      "id": "spacetimedb_lib_module_spawnshipinternal"
     },
     {
       "label": ".OnlineTeamCounts()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1551",
-      "id": "spacetimedb_lib_module_onlineteamcounts",
       "community": 0,
-      "norm_label": ".onlineteamcounts()"
+      "norm_label": ".onlineteamcounts()",
+      "id": "spacetimedb_lib_module_onlineteamcounts"
     },
     {
       "label": ".CanJoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1566",
-      "id": "spacetimedb_lib_module_canjointeam",
       "community": 0,
-      "norm_label": ".canjointeam()"
+      "norm_label": ".canjointeam()",
+      "id": "spacetimedb_lib_module_canjointeam"
     },
     {
       "label": ".SmallestOnlineTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1576",
-      "id": "spacetimedb_lib_module_smallestonlineteam",
       "community": 0,
-      "norm_label": ".smallestonlineteam()"
+      "norm_label": ".smallestonlineteam()",
+      "id": "spacetimedb_lib_module_smallestonlineteam"
     },
     {
       "label": ".ResetWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1588",
-      "id": "spacetimedb_lib_module_resetworld",
       "community": 0,
-      "norm_label": ".resetworld()"
+      "norm_label": ".resetworld()",
+      "id": "spacetimedb_lib_module_resetworld"
     },
     {
       "label": ".AnyOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1603",
-      "id": "spacetimedb_lib_module_anyonline",
       "community": 0,
-      "norm_label": ".anyonline()"
+      "norm_label": ".anyonline()",
+      "id": "spacetimedb_lib_module_anyonline"
     },
     {
       "label": ".StartSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1613",
-      "id": "spacetimedb_lib_module_startsim",
       "community": 0,
-      "norm_label": ".startsim()"
+      "norm_label": ".startsim()",
+      "id": "spacetimedb_lib_module_startsim"
     },
     {
       "label": ".StopSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1635",
-      "id": "spacetimedb_lib_module_stopsim",
       "community": 0,
-      "norm_label": ".stopsim()"
+      "norm_label": ".stopsim()",
+      "id": "spacetimedb_lib_module_stopsim"
     },
     {
       "label": ".MarkEngagedIfActive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1644",
-      "id": "spacetimedb_lib_module_markengagedifactive",
       "community": 0,
-      "norm_label": ".markengagedifactive()"
+      "norm_label": ".markengagedifactive()",
+      "id": "spacetimedb_lib_module_markengagedifactive"
     },
     {
       "label": ".EndMatchIfSideAbandoned()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1659",
-      "id": "spacetimedb_lib_module_endmatchifsideabandoned",
       "community": 0,
-      "norm_label": ".endmatchifsideabandoned()"
+      "norm_label": ".endmatchifsideabandoned()",
+      "id": "spacetimedb_lib_module_endmatchifsideabandoned"
     },
     {
       "label": ".MaybeStartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1704",
-      "id": "spacetimedb_lib_module_maybestartmatch",
       "community": 0,
-      "norm_label": ".maybestartmatch()"
+      "norm_label": ".maybestartmatch()",
+      "id": "spacetimedb_lib_module_maybestartmatch"
     },
     {
       "label": "TargetMarkers.cs",
@@ -1314,15 +1386,6 @@
       "community": 13,
       "norm_label": "control",
       "id": "control"
-    },
-    {
-      "label": "float",
-      "file_type": "code",
-      "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L18",
-      "community": 13,
-      "norm_label": "float",
-      "id": "float"
     },
     {
       "label": "Color",
@@ -3980,15 +4043,6 @@
       "id": "client_scripts_starscape_cs_uint"
     },
     {
-      "label": "ShaderMaterial",
-      "file_type": "code",
-      "source_file": "client/scripts/Starscape.cs",
-      "source_location": "L16",
-      "community": 25,
-      "norm_label": "shadermaterial",
-      "id": "shadermaterial"
-    },
-    {
       "label": "Environment",
       "file_type": "code",
       "source_file": "client/scripts/Starscape.cs",
@@ -6151,23 +6205,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/AlephView.cs",
-      "source_location": "L19",
+      "source_location": "L15",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_alephview_alephview",
-      "target": "client_scripts_alephview_cs_float"
+      "target": "float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/AlephView.cs",
-      "source_location": "L15",
+      "source_location": "L17",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_alephview_alephview",
-      "target": "client_scripts_alephview_cs_int"
+      "target": "int",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -6178,6 +6232,56 @@
       "confidence_score": 1.0,
       "source": "scripts_alephview_alephview",
       "target": "node3d"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L264",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview",
+      "target": "scripts_alephview_alephview_buildcapdisc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L311",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview",
+      "target": "scripts_alephview_alephview_buildcapshader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L79",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview",
+      "target": "scripts_alephview_alephview_buildfunnelmesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L344",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview",
+      "target": "scripts_alephview_alephview_buildstarshader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview",
+      "target": "scripts_alephview_alephview_buildvortexshader",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -6334,6 +6438,138 @@
       "target": "node3d"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_targetmarkers_targetmarkers",
+      "target": "float"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview_ready",
+      "target": "scripts_alephview_alephview_buildcapdisc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview_ready",
+      "target": "scripts_alephview_alephview_buildcapshader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview_ready",
+      "target": "scripts_alephview_alephview_buildfunnelmesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview_ready",
+      "target": "scripts_alephview_alephview_buildstarshader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "source": "scripts_alephview_alephview_ready",
+      "target": "scripts_alephview_alephview_buildvortexshader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L79",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_alephview_alephview_buildfunnelmesh",
+      "target": "arraymesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L264",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_alephview_alephview_buildcapdisc",
+      "target": "arraymesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_alephview_alephview_buildvortexshader",
+      "target": "shadermaterial",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/Starscape.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_starscape_starscape",
+      "target": "shadermaterial"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L311",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_alephview_alephview_buildcapshader",
+      "target": "shader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/AlephView.cs",
+      "source_location": "L344",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_alephview_alephview_buildstarshader",
+      "target": "shader",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
@@ -6416,9 +6652,9 @@
       "source_location": "L94",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "double",
-      "confidence_score": 1.0
+      "target": "double"
     },
     {
       "relation": "references",
@@ -7078,9 +7314,9 @@
       "source_location": "L228",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawneffect",
-      "target": "vector3",
-      "confidence_score": 1.0
+      "target": "vector3"
     },
     {
       "relation": "references",
@@ -7122,9 +7358,9 @@
       "source_location": "L659",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
-      "target": "vector3",
-      "confidence_score": 1.0
+      "target": "vector3"
     },
     {
       "relation": "references",
@@ -7133,9 +7369,9 @@
       "source_location": "L568",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
-      "target": "vector3",
-      "confidence_score": 1.0
+      "target": "vector3"
     },
     {
       "relation": "references",
@@ -7572,9 +7808,9 @@
       "source_location": "L527",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
-      "target": "projectile",
-      "confidence_score": 1.0
+      "target": "projectile"
     },
     {
       "relation": "calls",
@@ -7605,9 +7841,9 @@
       "source_location": "L671",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
-      "target": "projectile",
-      "confidence_score": 1.0
+      "target": "projectile"
     },
     {
       "relation": "calls",
@@ -8642,9 +8878,9 @@
       "source_location": "L383",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_seedasteroidfield",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8653,9 +8889,9 @@
       "source_location": "L1603",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_anyonline",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8664,9 +8900,9 @@
       "source_location": "L940",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_applyinput",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8675,9 +8911,9 @@
       "source_location": "L1566",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_canjointeam",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8686,9 +8922,9 @@
       "source_location": "L551",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientconnected",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8697,9 +8933,9 @@
       "source_location": "L585",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientdisconnected",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8708,9 +8944,9 @@
       "source_location": "L1452",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_deleteshipinputs",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8719,9 +8955,9 @@
       "source_location": "L1659",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_endmatchifsideabandoned",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8730,9 +8966,9 @@
       "source_location": "L445",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_generatemap",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8741,9 +8977,9 @@
       "source_location": "L680",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_handlecommand",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8752,9 +8988,9 @@
       "source_location": "L484",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_init",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8763,9 +8999,9 @@
       "source_location": "L819",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_jointeam",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8774,9 +9010,9 @@
       "source_location": "L1429",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_killship",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8785,9 +9021,9 @@
       "source_location": "L847",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_leaveteam",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8796,9 +9032,9 @@
       "source_location": "L1644",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_markengagedifactive",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8807,9 +9043,9 @@
       "source_location": "L1704",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_maybestartmatch",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8818,9 +9054,9 @@
       "source_location": "L1551",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_onlineteamcounts",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8829,9 +9065,9 @@
       "source_location": "L884",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_quickjoin",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8840,9 +9076,9 @@
       "source_location": "L531",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_regenerateworld",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8851,9 +9087,9 @@
       "source_location": "L1588",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resetworld",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8862,9 +9098,9 @@
       "source_location": "L721",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resignmatch",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8873,9 +9109,9 @@
       "source_location": "L807",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_respawn",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8884,9 +9120,9 @@
       "source_location": "L905",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_restartmatch",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8895,9 +9131,9 @@
       "source_location": "L406",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_seedasteroidbelt",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8906,9 +9142,9 @@
       "source_location": "L645",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_sendchat",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8917,9 +9153,9 @@
       "source_location": "L627",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_setname",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8928,9 +9164,9 @@
       "source_location": "L866",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_setready",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8939,9 +9175,9 @@
       "source_location": "L980",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simtick",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8950,9 +9186,9 @@
       "source_location": "L1013",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8961,9 +9197,9 @@
       "source_location": "L1576",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_smallestonlineteam",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8972,9 +9208,9 @@
       "source_location": "L799",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnship",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8983,9 +9219,9 @@
       "source_location": "L1459",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnshipinternal",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -8994,9 +9230,9 @@
       "source_location": "L1613",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_startsim",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -9005,9 +9241,9 @@
       "source_location": "L1635",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_stopsim",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -9016,9 +9252,9 @@
       "source_location": "L755",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_systemall",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "references",
@@ -9027,9 +9263,9 @@
       "source_location": "L740",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_systemto",
-      "target": "reducercontext",
-      "confidence_score": 1.0
+      "target": "reducercontext"
     },
     {
       "relation": "calls",
@@ -9819,9 +10055,9 @@
       "source_location": "L1439",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_toinputstate",
-      "target": "shipinputstate",
-      "confidence_score": 1.0
+      "target": "shipinputstate"
     },
     {
       "relation": "calls",
@@ -9951,17 +10187,6 @@
       "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
       "target": "control"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L33",
-      "weight": 1.0,
-      "context": "field",
-      "confidence_score": 1.0,
-      "source": "scripts_targetmarkers_targetmarkers",
-      "target": "float"
     },
     {
       "relation": "method",
@@ -14296,17 +14521,6 @@
       "target": "scripts_starscape_starscape_setsector"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/Starscape.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "context": "field",
-      "confidence_score": 1.0,
-      "source": "scripts_starscape_starscape",
-      "target": "shadermaterial"
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -17943,5 +18157,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "4421be0af92bfb6f68930765f470d589cf5d5084"
+  "built_at_commit": "9616c0980680a5ad36922ef0d5dced5f2d43b2f1"
 }
