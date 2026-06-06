@@ -1,7 +1,7 @@
 {
   "client/scripts/AlephView.cs": {
-    "mtime": 1780755955.1713874,
-    "ast_hash": "29237c6656c8dbc837e0bcbcea024bcb",
+    "mtime": 1780756899.81516,
+    "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
     "semantic_hash": ""
   },
   "client/scripts/CameraRig.cs": {
@@ -90,9 +90,9 @@
     "semantic_hash": "1353cbe82c92236fb63abbc158ca592e"
   },
   "client/scripts/Sun.cs": {
-    "mtime": 1780668592.827007,
-    "ast_hash": "2280892dfca65720b99510a239ec7c6f",
-    "semantic_hash": "2280892dfca65720b99510a239ec7c6f"
+    "mtime": 1780765787.3718522,
+    "ast_hash": "3d20b2b346454404d2945be3b8f0cb87",
+    "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
     "mtime": 1780754042.9995205,

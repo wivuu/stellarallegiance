@@ -85,14 +85,14 @@
     "semantic_hash": ""
   },
   "client/scripts/Starscape.cs": {
-    "mtime": 1780668592.8265302,
-    "ast_hash": "1353cbe82c92236fb63abbc158ca592e",
-    "semantic_hash": "1353cbe82c92236fb63abbc158ca592e"
+    "mtime": 1780766148.0903552,
+    "ast_hash": "b3165310e9976b819474cbc3fbbd9d36",
+    "semantic_hash": ""
   },
   "client/scripts/Sun.cs": {
-    "mtime": 1780668592.827007,
+    "mtime": 1780766030.2042913,
     "ast_hash": "2280892dfca65720b99510a239ec7c6f",
-    "semantic_hash": "2280892dfca65720b99510a239ec7c6f"
+    "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
     "mtime": 1780754042.9995205,

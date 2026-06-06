@@ -22,6 +22,14 @@ public partial class Starscape : Node3D
 		var shader = new Shader { Code = ShaderCode };
 		_mat = new ShaderMaterial { Shader = shader };
 
+		// Feed the sky shader the sun's sky direction so it can wash out the dim
+		// backdrop near the disc. The DirectionalLight3D emits along -Z, so the light
+		// SOURCE (the visible sun) lies along +Z of its basis — same vector Sun.cs uses.
+		var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+		_mat.SetShaderParameter("sun_dir", light.GlobalTransform.Basis.Z.Normalized());
+		// Warm haze tint, matching the sun disc's emission colour.
+		_mat.SetShaderParameter("sun_glow_color", new Color(0.5f, 0.4f, 0.28f));
+
 		var sky = new Sky { SkyMaterial = _mat };
 
 		// Swap the flat background colour for the procedural sky. Ambient stays a flat
@@ -101,6 +109,10 @@ uniform vec3 nebula_color_a : source_color = vec3(0.5, 0.15, 0.6);
 uniform vec3 nebula_color_b : source_color = vec3(0.1, 0.25, 0.7);
 uniform float nebula_intensity = 0.01;
 uniform vec3 bg_color : source_color = vec3(0.02, 0.02, 0.05);
+// Direction TO the sun and the colour of its atmospheric glare. Near this
+// direction the sky is so much brighter than the stars/nebula that they wash out.
+uniform vec3 sun_dir = vec3(0.0, 0.0, 1.0);
+uniform vec3 sun_glow_color : source_color = vec3(0.5, 0.4, 0.28);
 
 vec3 hash33(vec3 p) {
 	p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
@@ -189,6 +201,17 @@ void sky() {
 	s += star_layer(dir, 90.0, 0.05, 27.0) * 1.6;
 	vec3 star_tint = mix(vec3(0.8, 0.85, 1.0), vec3(1.0, 0.96, 0.88), clamp(s, 0.0, 1.0));
 	color += star_tint * s;
+
+	// Sun glare wash-out. Two decoupled effects so the sun doesn't look bloated:
+	//   1) suppress — a WIDE, strong fade that replaces the dim stars/nebula with a
+	//      faint haze over a large cone (~55deg), so they genuinely disappear near
+	//      the sun rather than just getting a little glow on top.
+	//   2) glow — a TIGHT, brighter warm halo hugging the disc, kept small so the
+	//      visible sun stays the same size.
+	float sd = max(dot(dir, sun_dir), 0.0);
+	float suppress = smoothstep(0.05, 0.97, sd);
+	color = mix(color, sun_glow_color * 0.12, suppress);
+	color += sun_glow_color * pow(sd, 14.0) * 0.1;
 
 	COLOR = color;
 }

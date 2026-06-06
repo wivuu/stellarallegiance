@@ -12,7 +12,6 @@ Archives:
 ---
 
 ## QUICKNOTES:
-- Add lens bloom/sundog to sun or something to make it prettier
 
 ---
 

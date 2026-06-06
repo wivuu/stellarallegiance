@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-06)
 
 ## Corpus Check
-- 46 files · ~48,952 words
+- 46 files · ~50,820 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 668 nodes · 1110 edges · 41 communities (34 shown, 7 thin omitted)
+- 710 nodes · 1230 edges · 41 communities (34 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4421be0a`
+- Built from commit: `64bdc4cf`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -56,28 +56,28 @@
 - [[_COMMUNITY_Community 41|Community 41]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Module` - 55 edges
-2. `WorldRenderer` - 44 edges
+1. `Module` - 56 edges
+2. `WorldRenderer` - 50 edges
 3. `ReducerContext` - 36 edges
-4. `Chat` - 32 edges
-5. `Module` - 28 edges
-6. `PredictionController` - 27 edges
-7. `TargetMarkers` - 22 edges
-8. `ShipController` - 22 edges
-9. `EngineGlow` - 19 edges
-10. `ExplosionEffect` - 18 edges
+4. `ReducerContext` - 36 edges
+5. `Chat` - 32 edges
+6. `TargetMarkers` - 28 edges
+7. `Module` - 28 edges
+8. `PredictionController` - 27 edges
+9. `ShipController` - 23 edges
+10. `EngineGlow` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `TargetMarkers` --references--> `float`  [EXTRACTED]
+  client/scripts/TargetMarkers.cs → client/scripts/AlephView.cs
 - `Asteroids CI Workflow` --semantically_similar_to--> `Build Godot Client CI Workflow`  [INFERRED] [semantically similar]
   .github/workflows/asteroids.yml → .github/workflows/build-godot-client.yml
-- `TargetMarkers` --references--> `List`  [EXTRACTED]
-  client/scripts/TargetMarkers.cs → client/scripts/WorldRenderer.cs
-- `TargetMarkers` --references--> `bool`  [EXTRACTED]
-  client/scripts/TargetMarkers.cs → client/scripts/WorldRenderer.cs
-- `Sun` --inherits--> `MeshInstance3D`  [EXTRACTED]
-  client/scripts/Sun.cs → client/scripts/WorldRenderer.cs
-- `TargetMarkers` --inherits--> `Control`  [EXTRACTED]
-  client/scripts/TargetMarkers.cs → client/scripts/Hud.cs
+- `Chat` --inherits--> `Control`  [EXTRACTED]
+  client/scripts/Chat.cs → client/scripts/Hud.cs
+- `ConnectionManager` --inherits--> `Node`  [EXTRACTED]
+  client/scripts/ConnectionManager.cs → client/scripts/WorldRenderer.cs
+- `Lobby` --inherits--> `Control`  [EXTRACTED]
+  client/scripts/Lobby.cs → client/scripts/Hud.cs
 
 ## Import Cycles
 - None detected.
@@ -89,11 +89,11 @@
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.08
-Nodes (24): DetRng, Filter, Identity, long, byte, float, int, Ship (+16 more)
+Nodes (31): DetRng, Filter, Identity, long, byte, float, Identity, int (+23 more)
 
 ### Community 1 - "AlephView World State"
 Cohesion: 0.06
-Nodes (28): Aleph, Asteroid, AuthoredRadius, Base, float, int, byte, float (+20 more)
+Nodes (38): Aleph, Asteroid, AuthoredRadius, Base, Aleph, bool, byte, ConnectionManager (+30 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -108,8 +108,8 @@ Cohesion: 0.07
 Nodes (21): CanvasLayer, Button, Color, ConnectionManager, double, Label, Button, ConnectionManager (+13 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.13
-Nodes (13): Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState, uint (+5 more)
+Cohesion: 0.16
+Nodes (11): Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState, uint (+3 more)
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.11
@@ -140,8 +140,8 @@ Cohesion: 0.13
 Nodes (11): byte, Color, CurveTexture, double, float, GradientTexture1D, GradientTexture2D, MeshInstance3D (+3 more)
 
 ### Community 13 - "Target Markers HUD"
-Cohesion: 0.10
-Nodes (16): Basis, bool, Camera3D, Vector3, WorldRenderer, Color, Control, float (+8 more)
+Cohesion: 0.08
+Nodes (27): Basis, bool, Camera3D, Vector3, WorldRenderer, bool, Camera3D, Color (+19 more)
 
 ### Community 14 - "Remote Ship Networked"
 Cohesion: 0.17
@@ -180,16 +180,16 @@ Cohesion: 0.27
 Nodes (8): build_glb(), _normalize(), Assemble a Godot-ready GLB from the shape field + baked PBR textures.  The low-p, Per-vertex glTF TANGENT (vec4): T = normalize(d u / d lon), w = handedness., Return GLB bytes for the asteroid described by ``params``., _tangents(), Image, ndarray
 
 ### Community 23 - "Sun Visual"
-Cohesion: 0.25
-Nodes (5): Camera3D, float, StandardMaterial3D, Vector3, Sun
+Cohesion: 0.20
+Nodes (7): Camera3D, float, ShaderMaterial, StandardMaterial3D, string, Vector3, Sun
 
 ### Community 24 - "Asteroid Generator CLI"
 Cohesion: 0.42
 Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main(), _opts(), _sizes(), Path
 
 ### Community 25 - "Starscape Background"
-Cohesion: 0.28
-Nodes (5): string, uint, Environment, Starscape, ShaderMaterial
+Cohesion: 0.10
+Nodes (14): ArrayMesh, float, int, ShaderMaterial, ShaderMaterial, string, uint, Environment (+6 more)
 
 ### Community 27 - "DotNet Tools Config"
 Cohesion: 0.25
@@ -216,7 +216,7 @@ Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
 ## Knowledge Gaps
-- **189 isolated node(s):** `float`, `int`, `float`, `double`, `Dictionary` (+184 more)
+- **206 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+201 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -224,16 +224,16 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `WorldRenderer` connect `AlephView World State` to `Target Markers HUD`?**
-  _High betweenness centrality (0.305) - this node is a cross-community bridge._
-- **Why does `TargetMarkers` connect `Target Markers HUD` to `Connection Overlay UI`?**
-  _High betweenness centrality (0.194) - this node is a cross-community bridge._
+  _High betweenness centrality (0.364) - this node is a cross-community bridge._
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
+  _High betweenness centrality (0.222) - this node is a cross-community bridge._
 - **Why does `Aleph` connect `AlephView World State` to `PigAI NPC Behavior`?**
-  _High betweenness centrality (0.176) - this node is a cross-community bridge._
-- **What connects `float`, `int`, `float` to the rest of the system?**
-  _209 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.197) - this node is a cross-community bridge._
+- **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
+  _226 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.07901668129938542 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07721518987341772 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06240084611316764 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.060528559249786874 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._
