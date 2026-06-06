@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 678 nodes · 1121 edges · 43 communities (36 shown, 7 thin omitted)
+- 673 nodes · 1115 edges · 42 communities (35 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c8260c4b`
+- Built from commit: `fbf2c50f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -55,16 +55,15 @@
 - [[_COMMUNITY_Cloud Publishing Script|Cloud Publishing Script]]
 - [[_COMMUNITY_Client Start Script|Client Start Script]]
 - [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Module` - 56 edges
-2. `WorldRenderer` - 45 edges
+2. `WorldRenderer` - 44 edges
 3. `ReducerContext` - 36 edges
 4. `Chat` - 32 edges
 5. `Module` - 28 edges
 6. `PredictionController` - 27 edges
-7. `ShipController` - 23 edges
+7. `ShipController` - 22 edges
 8. `EngineGlow` - 19 edges
 9. `TargetMarkers` - 19 edges
 10. `ExplosionEffect` - 18 edges
@@ -72,14 +71,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `Asteroids CI Workflow` --semantically_similar_to--> `Build Godot Client CI Workflow`  [INFERRED] [semantically similar]
   .github/workflows/asteroids.yml → .github/workflows/build-godot-client.yml
+- `Sun` --inherits--> `MeshInstance3D`  [EXTRACTED]
+  client/scripts/Sun.cs → client/scripts/WorldRenderer.cs
 - `Chat` --inherits--> `Control`  [EXTRACTED]
   client/scripts/Chat.cs → client/scripts/Hud.cs
 - `Lobby` --inherits--> `Control`  [EXTRACTED]
   client/scripts/Lobby.cs → client/scripts/Hud.cs
 - `TargetMarkers` --inherits--> `Control`  [EXTRACTED]
   client/scripts/TargetMarkers.cs → client/scripts/Hud.cs
-- `ShipController` --inherits--> `Node`  [EXTRACTED]
-  client/scripts/ShipController.cs → client/scripts/WorldRenderer.cs
 
 ## Import Cycles
 - None detected.
@@ -87,15 +86,15 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (43 total, 7 thin omitted)
+## Communities (42 total, 7 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.07
-Nodes (29): DetRng, Filter, Identity, long, byte, float, Identity, int (+21 more)
+Nodes (28): DetRng, Filter, Identity, long, byte, float, Identity, int (+20 more)
 
 ### Community 1 - "AlephView World State"
 Cohesion: 0.06
-Nodes (29): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, ConnectionManager, DbConnection (+21 more)
+Nodes (31): Aleph, Asteroid, AuthoredRadius, Base, bool, byte, float, int (+23 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -111,7 +110,7 @@ Nodes (21): CanvasLayer, Button, Color, ConnectionManager, double, Label, Button
 
 ### Community 5 - "PigAI NPC Behavior"
 Cohesion: 0.13
-Nodes (13): Aleph, ShipInputState, Aleph, float, int, Quat, ReducerContext, Ship (+5 more)
+Nodes (13): ShipInputState, Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState (+5 more)
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.11
@@ -154,8 +153,8 @@ Cohesion: 0.14
 Nodes (11): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+3 more)
 
 ### Community 16 - "Connection & World Renderer"
-Cohesion: 0.23
-Nodes (6): DbConnection, Identity, string, Node, Exception, ConnectionManager
+Cohesion: 0.26
+Nodes (5): DbConnection, Identity, string, Exception, ConnectionManager
 
 ### Community 17 - "Dust Field Environment"
 Cohesion: 0.20
@@ -182,8 +181,8 @@ Cohesion: 0.27
 Nodes (8): build_glb(), _normalize(), Assemble a Godot-ready GLB from the shape field + baked PBR textures.  The low-p, Per-vertex glTF TANGENT (vec4): T = normalize(d u / d lon), w = handedness., Return GLB bytes for the asteroid described by ``params``., _tangents(), Image, ndarray
 
 ### Community 23 - "Sun Visual"
-Cohesion: 0.22
-Nodes (6): Camera3D, float, StandardMaterial3D, Vector3, MeshInstance3D, Sun
+Cohesion: 0.25
+Nodes (5): Camera3D, float, StandardMaterial3D, Vector3, Sun
 
 ### Community 24 - "Asteroid Generator CLI"
 Cohesion: 0.42
@@ -195,7 +194,7 @@ Nodes (5): string, uint, Environment, Starscape, ShaderMaterial
 
 ### Community 26 - "Camera Rig"
 Cohesion: 0.25
-Nodes (5): Basis, Camera3D, Vector3, WorldRenderer, CameraRig
+Nodes (5): Basis, Camera3D, Vector3, CameraRig, WorldRenderer
 
 ### Community 27 - "DotNet Tools Config"
 Cohesion: 0.25
@@ -221,28 +220,24 @@ Nodes (3): sdk, rollForward, version
 Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
-### Community 42 - "Community 42"
-Cohesion: 0.33
-Nodes (3): float, int, AlephView
-
 ## Knowledge Gaps
-- **198 isolated node(s):** `float`, `int`, `Vector3`, `Basis`, `WorldRenderer` (+193 more)
+- **197 isolated node(s):** `Vector3`, `Basis`, `WorldRenderer`, `double`, `float` (+192 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Node` connect `Connection & World Renderer` to `Ship Controller Input`, `AlephView World State`?**
-  _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **Why does `PredictionController` connect `Client-Side Prediction` to `AlephView World State`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
-- **What connects `float`, `int`, `Vector3` to the rest of the system?**
-  _218 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `ShipClass` connect `SpaceTimeDB Module Core` to `AlephView World State`?**
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
+- **Why does `Module` connect `SpaceTimeDB Module Core` to `PigAI NPC Behavior`?**
+  _High betweenness centrality (0.063) - this node is a cross-community bridge._
+- **What connects `Vector3`, `Basis`, `WorldRenderer` to the rest of the system?**
+  _217 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.07207207207207207 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07496194824961948 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06345848757271286 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05641025641025641 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._
 - **Should `Asteroid Shape Generation` be split into smaller, more focused modules?**

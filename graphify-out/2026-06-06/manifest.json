@@ -65,9 +65,9 @@
     "semantic_hash": "a33c69f946872cd103a72aa35e96f715"
   },
   "client/scripts/ProjectileView.cs": {
-    "mtime": 1780668592.8248732,
-    "ast_hash": "e403008aa54823ce7dd9fc980c4a90ab",
-    "semantic_hash": "e403008aa54823ce7dd9fc980c4a90ab"
+    "mtime": 1780753450.3530416,
+    "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
+    "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
     "mtime": 1780668592.8252892,
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1780752194.7048297,
-    "ast_hash": "3500b235924f8c0a382bc49bd4643207",
+    "mtime": 1780753535.3801723,
+    "ast_hash": "5cf317bfe88051395d881a2452ef139f",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {

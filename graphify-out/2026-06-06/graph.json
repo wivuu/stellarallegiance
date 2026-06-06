@@ -25,7 +25,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L1",
       "id": "scripts_alephview",
-      "community": 1,
+      "community": 42,
       "norm_label": "alephview.cs"
     },
     {
@@ -34,7 +34,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L10",
       "id": "scripts_alephview_alephview",
-      "community": 1,
+      "community": 42,
       "norm_label": "alephview"
     },
     {
@@ -52,7 +52,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L12",
       "id": "client_scripts_alephview_cs_float",
-      "community": 1,
+      "community": 42,
       "norm_label": "float"
     },
     {
@@ -61,7 +61,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L14",
       "id": "client_scripts_alephview_cs_int",
-      "community": 1,
+      "community": 42,
       "norm_label": "int"
     },
     {
@@ -70,7 +70,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L21",
       "id": "scripts_alephview_alephview_ready",
-      "community": 1,
+      "community": 42,
       "norm_label": "._ready()"
     },
     {
@@ -79,7 +79,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L57",
       "id": "scripts_alephview_alephview_process",
-      "community": 1,
+      "community": 42,
       "norm_label": "._process()"
     },
     {
@@ -2030,7 +2030,7 @@
       "label": ".Initialize()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L33",
+      "source_location": "L40",
       "id": "scripts_projectileview_projectileview_initialize",
       "community": 11,
       "norm_label": ".initialize()"
@@ -2039,7 +2039,7 @@
       "label": "Projectile",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L33",
+      "source_location": "L40",
       "id": "client_scripts_projectileview_cs_projectile",
       "community": 11,
       "norm_label": "projectile"
@@ -2048,7 +2048,7 @@
       "label": ".InitializePredicted()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L47",
+      "source_location": "L55",
       "id": "scripts_projectileview_projectileview_initializepredicted",
       "community": 11,
       "norm_label": ".initializepredicted()"
@@ -2057,7 +2057,7 @@
       "label": ".OrientAlongVelocity()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L61",
+      "source_location": "L70",
       "id": "scripts_projectileview_projectileview_orientalongvelocity",
       "community": 11,
       "norm_label": ".orientalongvelocity()"
@@ -2066,7 +2066,7 @@
       "label": ".AttachAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L69",
+      "source_location": "L78",
       "id": "scripts_projectileview_projectileview_attachauthoritative",
       "community": 11,
       "norm_label": ".attachauthoritative()"
@@ -2075,7 +2075,7 @@
       "label": ".GhostExpired()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L75",
+      "source_location": "L84",
       "id": "scripts_projectileview_projectileview_ghostexpired",
       "community": 11,
       "norm_label": ".ghostexpired()"
@@ -2084,7 +2084,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L77",
+      "source_location": "L86",
       "id": "scripts_projectileview_projectileview_process",
       "community": 11,
       "norm_label": "._process()"
@@ -3110,7 +3110,7 @@
       "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L54",
+      "source_location": "L65",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
       "community": 1,
       "norm_label": "standardmaterial3d"
@@ -3119,7 +3119,7 @@
       "label": "ConnectionManager",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L63",
+      "source_location": "L74",
       "id": "client_scripts_worldrenderer_cs_connectionmanager",
       "community": 1,
       "norm_label": "connectionmanager"
@@ -3128,7 +3128,7 @@
       "label": "ShipController",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L64",
+      "source_location": "L75",
       "id": "client_scripts_worldrenderer_cs_shipcontroller",
       "community": 1,
       "norm_label": "shipcontroller"
@@ -3137,7 +3137,7 @@
       "label": "Starscape",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L65",
+      "source_location": "L76",
       "id": "starscape",
       "community": 1,
       "norm_label": "starscape"
@@ -3146,7 +3146,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L84",
+      "source_location": "L95",
       "id": "client_scripts_worldrenderer_cs_bool",
       "community": 1,
       "norm_label": "bool"
@@ -3155,7 +3155,7 @@
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L102",
+      "source_location": "L113",
       "id": "scripts_worldrenderer_worldrenderer_enemyships",
       "community": 1,
       "norm_label": ".enemyships()"
@@ -3164,7 +3164,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L102",
+      "source_location": "L113",
       "id": "ireadonlylist",
       "community": 1,
       "norm_label": "ireadonlylist"
@@ -3173,7 +3173,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L102",
+      "source_location": "L113",
       "id": "remoteship",
       "community": 1,
       "norm_label": "remoteship"
@@ -3182,7 +3182,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L114",
+      "source_location": "L125",
       "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
       "norm_label": "._ready()"
@@ -3191,7 +3191,7 @@
       "label": ".OnConnected()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L163",
+      "source_location": "L174",
       "id": "scripts_worldrenderer_worldrenderer_onconnected",
       "community": 1,
       "norm_label": ".onconnected()"
@@ -3200,7 +3200,7 @@
       "label": "DbConnection",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L163",
+      "source_location": "L174",
       "id": "client_scripts_worldrenderer_cs_dbconnection",
       "community": 1,
       "norm_label": "dbconnection"
@@ -3209,7 +3209,7 @@
       "label": ".OnMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L187",
+      "source_location": "L198",
       "id": "scripts_worldrenderer_worldrenderer_onmatch",
       "community": 1,
       "norm_label": ".onmatch()"
@@ -3218,7 +3218,7 @@
       "label": "Match",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L187",
+      "source_location": "L198",
       "id": "match",
       "community": 1,
       "norm_label": "match"
@@ -3227,7 +3227,7 @@
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L198",
+      "source_location": "L209",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 1,
       "norm_label": ".setnodesector()"
@@ -3236,7 +3236,7 @@
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L206",
+      "source_location": "L217",
       "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 1,
       "norm_label": ".refreshsectorvisibility()"
@@ -3245,7 +3245,7 @@
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L217",
+      "source_location": "L228",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 1,
       "norm_label": ".spawneffect()"
@@ -3254,7 +3254,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L217",
+      "source_location": "L228",
       "id": "client_scripts_worldrenderer_cs_vector3",
       "community": 1,
       "norm_label": "vector3"
@@ -3263,7 +3263,7 @@
       "label": ".OnAlephInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L226",
+      "source_location": "L237",
       "id": "scripts_worldrenderer_worldrenderer_onalephinsert",
       "community": 1,
       "norm_label": ".onalephinsert()"
@@ -3272,7 +3272,7 @@
       "label": "EventContext",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L226",
+      "source_location": "L237",
       "id": "client_scripts_worldrenderer_cs_eventcontext",
       "community": 1,
       "norm_label": "eventcontext"
@@ -3281,7 +3281,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L226",
+      "source_location": "L237",
       "id": "client_scripts_worldrenderer_cs_aleph",
       "community": 1,
       "norm_label": "aleph"
@@ -3290,7 +3290,7 @@
       "label": ".OnAlephDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L240",
+      "source_location": "L251",
       "id": "scripts_worldrenderer_worldrenderer_onalephdelete",
       "community": 1,
       "norm_label": ".onalephdelete()"
@@ -3299,7 +3299,7 @@
       "label": ".OnBaseInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L248",
+      "source_location": "L259",
       "id": "scripts_worldrenderer_worldrenderer_onbaseinsert",
       "community": 1,
       "norm_label": ".onbaseinsert()"
@@ -3308,7 +3308,7 @@
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L248",
+      "source_location": "L259",
       "id": "base",
       "community": 1,
       "norm_label": "base"
@@ -3317,7 +3317,7 @@
       "label": ".OnBaseUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L269",
+      "source_location": "L280",
       "id": "scripts_worldrenderer_worldrenderer_onbaseupdate",
       "community": 1,
       "norm_label": ".onbaseupdate()"
@@ -3326,7 +3326,7 @@
       "label": ".OnBaseDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L285",
+      "source_location": "L296",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete",
       "community": 1,
       "norm_label": ".onbasedelete()"
@@ -3335,7 +3335,7 @@
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L301",
+      "source_location": "L312",
       "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 1,
       "norm_label": ".asteroidmesh()"
@@ -3344,7 +3344,7 @@
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L301",
+      "source_location": "L312",
       "id": "mesh",
       "community": 1,
       "norm_label": "mesh"
@@ -3353,7 +3353,7 @@
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L301",
+      "source_location": "L312",
       "id": "authoredradius",
       "community": 1,
       "norm_label": "authoredradius"
@@ -3362,7 +3362,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L329",
+      "source_location": "L340",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 1,
       "norm_label": ".findmeshinstance()"
@@ -3371,16 +3371,16 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L329",
+      "source_location": "L340",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 1,
+      "community": 16,
       "norm_label": "node"
     },
     {
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L329",
+      "source_location": "L340",
       "id": "client_scripts_worldrenderer_cs_meshinstance3d",
       "community": 1,
       "norm_label": "meshinstance3d"
@@ -3389,7 +3389,7 @@
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L342",
+      "source_location": "L353",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 1,
       "norm_label": ".meshboundingradius()"
@@ -3398,7 +3398,7 @@
       "label": ".OnAsteroidInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L356",
+      "source_location": "L367",
       "id": "scripts_worldrenderer_worldrenderer_onasteroidinsert",
       "community": 1,
       "norm_label": ".onasteroidinsert()"
@@ -3407,7 +3407,7 @@
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L356",
+      "source_location": "L367",
       "id": "asteroid",
       "community": 1,
       "norm_label": "asteroid"
@@ -3416,7 +3416,7 @@
       "label": ".OnAsteroidDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L390",
+      "source_location": "L401",
       "id": "scripts_worldrenderer_worldrenderer_onasteroiddelete",
       "community": 1,
       "norm_label": ".onasteroiddelete()"
@@ -3425,7 +3425,7 @@
       "label": ".IsLocal()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L398",
+      "source_location": "L409",
       "id": "scripts_worldrenderer_worldrenderer_islocal",
       "community": 1,
       "norm_label": ".islocal()"
@@ -3434,7 +3434,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L398",
+      "source_location": "L409",
       "id": "client_scripts_worldrenderer_cs_ship",
       "community": 1,
       "norm_label": "ship"
@@ -3443,7 +3443,7 @@
       "label": ".OnShipInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L401",
+      "source_location": "L412",
       "id": "scripts_worldrenderer_worldrenderer_onshipinsert",
       "community": 1,
       "norm_label": ".onshipinsert()"
@@ -3452,7 +3452,7 @@
       "label": ".OnShipUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L442",
+      "source_location": "L453",
       "id": "scripts_worldrenderer_worldrenderer_onshipupdate",
       "community": 1,
       "norm_label": ".onshipupdate()"
@@ -3461,7 +3461,7 @@
       "label": ".OnShipDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L476",
+      "source_location": "L480",
       "id": "scripts_worldrenderer_worldrenderer_onshipdelete",
       "community": 1,
       "norm_label": ".onshipdelete()"
@@ -3470,7 +3470,7 @@
       "label": ".OnProjectileInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L510",
+      "source_location": "L514",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
       "community": 1,
       "norm_label": ".onprojectileinsert()"
@@ -3479,7 +3479,7 @@
       "label": "Projectile",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L510",
+      "source_location": "L514",
       "id": "client_scripts_worldrenderer_cs_projectile",
       "community": 1,
       "norm_label": "projectile"
@@ -3488,7 +3488,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L540",
+      "source_location": "L544",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 1,
       "norm_label": ".shotmaskleadsec()"
@@ -3497,7 +3497,7 @@
       "label": ".SpawnPredictedProjectile()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L551",
+      "source_location": "L555",
       "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "community": 1,
       "norm_label": ".spawnpredictedprojectile()"
@@ -3506,7 +3506,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L561",
+      "source_location": "L565",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 1,
       "norm_label": ".newprojectilemesh()"
@@ -3515,43 +3515,43 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L573",
+      "source_location": "L577",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
     },
     {
+      "label": ".CheckBoltImpacts()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L611",
+      "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
+      "community": 1,
+      "norm_label": ".checkboltimpacts()"
+    },
+    {
+      "label": ".ClosestPointOnSegment()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L646",
+      "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
+      "community": 1,
+      "norm_label": ".closestpointonsegment()"
+    },
+    {
       "label": ".OnProjectileDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L615",
+      "source_location": "L658",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
       "community": 1,
       "norm_label": ".onprojectiledelete()"
     },
     {
-      "label": ".HitLocalShip()",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L630",
-      "id": "scripts_worldrenderer_worldrenderer_hitlocalship",
-      "community": 1,
-      "norm_label": ".hitlocalship()"
-    },
-    {
-      "label": "ProjectileView",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L630",
-      "id": "projectileview",
-      "community": 1,
-      "norm_label": "projectileview"
-    },
-    {
       "label": ".BuildShipMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L637",
+      "source_location": "L667",
       "id": "scripts_worldrenderer_worldrenderer_buildshipmesh",
       "community": 1,
       "norm_label": ".buildshipmesh()"
@@ -3560,7 +3560,7 @@
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L637",
+      "source_location": "L667",
       "id": "client_scripts_worldrenderer_cs_shipclass",
       "community": 1,
       "norm_label": "shipclass"
@@ -3569,7 +3569,7 @@
       "label": ".AttachEngineGlow()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L670",
+      "source_location": "L700",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow",
       "community": 1,
       "norm_label": ".attachengineglow()"
@@ -4237,7 +4237,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1013",
       "id": "spacetimedb_lib_module_simulatetick",
-      "community": 0,
+      "community": 5,
       "norm_label": ".simulatetick()"
     },
     {
@@ -4246,7 +4246,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1381",
       "id": "spacetimedb_lib_module_dist2",
-      "community": 0,
+      "community": 5,
       "norm_label": ".dist2()"
     },
     {
@@ -4282,7 +4282,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "spacetimedb_lib_module_toinputstate",
-      "community": 0,
+      "community": 5,
       "norm_label": ".toinputstate()"
     },
     {
@@ -4291,7 +4291,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "shipinput",
-      "community": 0,
+      "community": 5,
       "norm_label": "shipinput"
     },
     {
@@ -4300,7 +4300,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "module_spacetimedb_lib_cs_shipinputstate",
-      "community": 0,
+      "community": 5,
       "norm_label": "shipinputstate"
     },
     {
@@ -4462,7 +4462,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L100",
       "id": "spacetimedb_pigai_module_ensurepigslots",
-      "community": 0,
+      "community": 5,
       "norm_label": ".ensurepigslots()"
     },
     {
@@ -4480,7 +4480,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L127",
       "id": "spacetimedb_pigai_module_anyplayershipalive",
-      "community": 0,
+      "community": 5,
       "norm_label": ".anyplayershipalive()"
     },
     {
@@ -4489,7 +4489,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L139",
       "id": "spacetimedb_pigai_module_despawnallpigs",
-      "community": 0,
+      "community": 5,
       "norm_label": ".despawnallpigs()"
     },
     {
@@ -4507,7 +4507,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L219",
       "id": "spacetimedb_pigai_module_spawnpig",
-      "community": 5,
+      "community": 0,
       "norm_label": ".spawnpig()"
     },
     {
@@ -4516,7 +4516,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L219",
       "id": "pig",
-      "community": 5,
+      "community": 0,
       "norm_label": "pig"
     },
     {
@@ -6056,6 +6056,24 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": ".HitLocalShip()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "community": 1,
+      "norm_label": ".hitlocalship()",
+      "id": "scripts_worldrenderer_worldrenderer_hitlocalship"
+    },
+    {
+      "label": "ProjectileView",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "community": 1,
+      "norm_label": "projectileview",
+      "id": "projectileview"
     },
     {
       "label": "Vector3",
@@ -11232,6 +11250,26 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L611",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L646",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L90",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -11254,9 +11292,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L630",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_hitlocalship",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_hitlocalship"
     },
     {
       "relation": "method",
@@ -11701,6 +11739,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L634",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
+      "target": "scripts_worldrenderer_worldrenderer_spawneffect",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L577",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -11725,9 +11774,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L467",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipupdate",
-      "target": "scripts_worldrenderer_worldrenderer_spawneffect",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_spawneffect"
     },
     {
       "relation": "references",
@@ -11739,6 +11788,17 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawneffect",
       "target": "client_scripts_worldrenderer_cs_vector3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L646",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
+      "target": "client_scripts_worldrenderer_cs_vector3",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12198,9 +12258,9 @@
       "source_location": "L630",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_hitlocalship",
-      "target": "client_scripts_worldrenderer_cs_projectile",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_projectile"
     },
     {
       "relation": "references",
@@ -12229,22 +12289,33 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L622",
+      "source_location": "L590",
       "weight": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
-      "target": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "source": "scripts_worldrenderer_worldrenderer_process",
+      "target": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "confidence_score": 1.0
     },
     {
-      "relation": "references",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L630",
+      "source_location": "L631",
       "weight": 1.0,
-      "context": "parameter_type",
-      "source": "scripts_worldrenderer_worldrenderer_hitlocalship",
-      "target": "projectileview",
+      "source": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
+      "target": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L622",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
+      "target": "scripts_worldrenderer_worldrenderer_hitlocalship"
     },
     {
       "relation": "references",
@@ -18015,6 +18086,17 @@
       "confidence_score": 1.0,
       "source": "asteroid_gen_shapefield_random_unit_vectors",
       "target": "asteroid_gen_shapefield_normalize"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "target": "projectileview"
     },
     {
       "relation": "rationale_for",
