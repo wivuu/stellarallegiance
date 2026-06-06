@@ -1,8 +1,8 @@
 {
   "client/scripts/AlephView.cs": {
-    "mtime": 1780668592.81938,
-    "ast_hash": "a0e757e4b85a635abb45d8e3e55badea",
-    "semantic_hash": "a0e757e4b85a635abb45d8e3e55badea"
+    "mtime": 1780755955.1713874,
+    "ast_hash": "29237c6656c8dbc837e0bcbcea024bcb",
+    "semantic_hash": ""
   },
   "client/scripts/CameraRig.cs": {
     "mtime": 1780751630.428061,
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1780753535.3801723,
-    "ast_hash": "5cf317bfe88051395d881a2452ef139f",
+    "mtime": 1780755805.1722806,
+    "ast_hash": "89786cb08c99cf506a3cbf0434130f25",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,8 +135,8 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1780749205.271733,
-    "ast_hash": "9640ff92e2f445fd2d4c68bc0687895d",
+    "mtime": 1780755847.3690457,
+    "ast_hash": "78e0c2ecac7d042ae6bb9650cc1e54d1",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
