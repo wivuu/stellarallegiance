@@ -5,6 +5,8 @@
 
 build/
 
+graphify-out/cache/
+
 # dotenv files
 .env
 
