@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 665 nodes · 1087 edges · 43 communities (36 shown, 7 thin omitted)
+- 665 nodes · 1087 edges · 42 communities (35 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `999a02da`
+- Built from commit: `8d6edd98`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -55,7 +55,6 @@
 - [[_COMMUNITY_Cloud Publishing Script|Cloud Publishing Script]]
 - [[_COMMUNITY_Client Start Script|Client Start Script]]
 - [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Module` - 55 edges
@@ -74,12 +73,12 @@
   .github/workflows/asteroids.yml → .github/workflows/build-godot-client.yml
 - `Chat` --inherits--> `Control`  [EXTRACTED]
   client/scripts/Chat.cs → client/scripts/Hud.cs
-- `ConnectionManager` --inherits--> `Node`  [EXTRACTED]
-  client/scripts/ConnectionManager.cs → client/scripts/WorldRenderer.cs
 - `Lobby` --inherits--> `Control`  [EXTRACTED]
   client/scripts/Lobby.cs → client/scripts/Hud.cs
 - `TargetMarkers` --inherits--> `Control`  [EXTRACTED]
   client/scripts/TargetMarkers.cs → client/scripts/Hud.cs
+- `ShipController` --inherits--> `Node`  [EXTRACTED]
+  client/scripts/ShipController.cs → client/scripts/WorldRenderer.cs
 
 ## Import Cycles
 - None detected.
@@ -87,15 +86,15 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (43 total, 7 thin omitted)
+## Communities (42 total, 7 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.08
-Nodes (23): DetRng, Filter, long, byte, float, Identity, int, Player (+15 more)
+Nodes (25): DetRng, Filter, Identity, long, byte, float, int, ReducerContext (+17 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.07
-Nodes (28): Asteroid, AuthoredRadius, Base, Aleph, byte, ConnectionManager, DbConnection, double (+20 more)
+Cohesion: 0.06
+Nodes (30): Asteroid, AuthoredRadius, Base, float, int, Aleph, byte, ConnectionManager (+22 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -110,8 +109,8 @@ Cohesion: 0.07
 Nodes (21): CanvasLayer, Button, Color, ConnectionManager, double, Label, Button, ConnectionManager (+13 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.12
-Nodes (14): Ship, ShipInputState, Aleph, float, int, Quat, ReducerContext, Ship (+6 more)
+Cohesion: 0.13
+Nodes (12): Aleph, ShipInputState, float, int, Quat, ReducerContext, Ship, ShipInputState (+4 more)
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.11
@@ -119,7 +118,7 @@ Nodes (15): double, EngineGlow, float, int, List, Quaternion, Ship, ShipClass (+
 
 ### Community 7 - "Shared Flight Model"
 Cohesion: 0.15
-Nodes (16): Cross(), byte, float, Quat, ShipInputState, ShipState, ShipStats, Vec3 (+8 more)
+Nodes (16): Cross(), byte, float, Quat, ShipInputState, ShipState, Vec3, FlightModel (+8 more)
 
 ### Community 8 - "Ship Controller Input"
 Cohesion: 0.11
@@ -154,8 +153,8 @@ Cohesion: 0.14
 Nodes (11): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+3 more)
 
 ### Community 16 - "Connection & World Renderer"
-Cohesion: 0.26
-Nodes (5): DbConnection, Identity, string, Exception, ConnectionManager
+Cohesion: 0.23
+Nodes (6): DbConnection, Identity, string, Node, Exception, ConnectionManager
 
 ### Community 17 - "Dust Field Environment"
 Cohesion: 0.20
@@ -163,7 +162,7 @@ Nodes (7): float, GradientTexture2D, StandardMaterial3D, Texture2D, WorldRendere
 
 ### Community 18 - "Ship Math Utilities"
 Cohesion: 0.20
-Nodes (7): Quat, Quaternion, Ship, ShipState, Vec3, Vector3, ShipMath
+Nodes (7): Quat, Ship, ShipState, Vec3, Quaternion, ShipMath, Vector3
 
 ### Community 19 - "Team Trail Effects"
 Cohesion: 0.18
@@ -221,28 +220,24 @@ Nodes (3): sdk, rollForward, version
 Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
-### Community 42 - "Community 42"
-Cohesion: 0.33
-Nodes (3): float, int, AlephView
-
 ## Knowledge Gaps
-- **192 isolated node(s):** `float`, `int`, `Vector3`, `Basis`, `WorldRenderer` (+187 more)
+- **192 isolated node(s):** `Ship`, `ShipState`, `Vector3`, `Quaternion`, `uint` (+187 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Node` connect `AlephView World State` to `Connection & World Renderer`, `Ship Controller Input`?**
+- **Why does `Node` connect `Connection & World Renderer` to `Ship Controller Input`, `AlephView World State`?**
   _High betweenness centrality (0.036) - this node is a cross-community bridge._
 - **Why does `PredictionController` connect `Client-Side Prediction` to `AlephView World State`?**
   _High betweenness centrality (0.030) - this node is a cross-community bridge._
-- **What connects `float`, `int`, `Vector3` to the rest of the system?**
+- **What connects `Ship`, `ShipState`, `Vector3` to the rest of the system?**
   _212 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.08095884215287201 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07577639751552795 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06533575317604355 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.057859703020993344 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._
 - **Should `Asteroid Shape Generation` be split into smaller, more focused modules?**

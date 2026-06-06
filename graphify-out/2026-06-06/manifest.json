@@ -80,9 +80,9 @@
     "semantic_hash": "70599e403e3d60d885db840e470a3102"
   },
   "client/scripts/ShipMath.cs": {
-    "mtime": 1780668592.8260374,
-    "ast_hash": "7b0c088148d60d1a02c722a0c8af1b96",
-    "semantic_hash": "7b0c088148d60d1a02c722a0c8af1b96"
+    "mtime": 1780749220.7178583,
+    "ast_hash": "50ae535bd280c26fd209e16768313197",
+    "semantic_hash": ""
   },
   "client/scripts/Starscape.cs": {
     "mtime": 1780668592.8265302,
@@ -135,14 +135,14 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1780695227.6200728,
-    "ast_hash": "0c3716d40dd30d1aa16d7e083b28e6b3",
-    "semantic_hash": "0c3716d40dd30d1aa16d7e083b28e6b3"
+    "mtime": 1780749205.271733,
+    "ast_hash": "9640ff92e2f445fd2d4c68bc0687895d",
+    "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1780668592.8298256,
-    "ast_hash": "cb15b21a2ed3f00add40009eee9a4697",
-    "semantic_hash": "cb15b21a2ed3f00add40009eee9a4697"
+    "mtime": 1780749215.8906388,
+    "ast_hash": "c03242bcdc27e6039409fae7a7e3fa33",
+    "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
     "mtime": 1780695227.6203237,
@@ -180,9 +180,9 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1780668592.8302433,
-    "ast_hash": "850a2a8f85f7b170509f0370cc3cea62",
-    "semantic_hash": "850a2a8f85f7b170509f0370cc3cea62"
+    "mtime": 1780749309.4069448,
+    "ast_hash": "b0f0b229586256ffe29f321b82b6c8ad",
+    "semantic_hash": ""
   },
   "shared/Shared.csproj": {
     "mtime": 1780664948.316524,
@@ -195,9 +195,9 @@
     "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1780668592.8311322,
-    "ast_hash": "dcddf0c28c84f6d249bf48e8cb581e74",
-    "semantic_hash": "dcddf0c28c84f6d249bf48e8cb581e74"
+    "mtime": 1780749309.4072368,
+    "ast_hash": "30395b0e240e78e5698500b16504990b",
+    "semantic_hash": ""
   },
   "tools/asteroid-gen/asteroids.json": {
     "mtime": 1780607323.898378,
