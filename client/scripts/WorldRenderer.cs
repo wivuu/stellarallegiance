@@ -238,13 +238,26 @@ public partial class WorldRenderer : Node3D
 	{
 		if (_alephNodes.ContainsKey(row.AlephId))
 			return;
+		var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
 		var av = new AlephView
 		{
 			Name = $"Aleph_{row.AlephId}",
-			Position = new Vector3(row.PosX, row.PosY, row.PosZ),
+			Position = pos,
 		};
 		_alephs.AddChild(av);
 		_alephNodes[row.AlephId] = av;
+
+		// Orient the funnel so its mouth (+Y local axis) faces the sector center.
+		var center = _sectors.TryGetValue(row.SectorId, out var sec)
+			? new Vector3(sec.CenterX, sec.CenterY, sec.CenterZ)
+			: Vector3.Zero;
+		var toCenter = (center - pos).Normalized();
+		if (toCenter.LengthSquared() > 0.001f)
+		{
+			// Quaternion rotating default up (+Y) to the desired direction.
+			av.Quaternion = new Quaternion(Vector3.Up, toCenter);
+		}
+
 		SetNodeSector(av, row.SectorId);
 	}
 

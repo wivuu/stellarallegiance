@@ -5,7 +5,8 @@ using Godot;
 // whose angle twists a little per level, forming a vortex/funnel silhouette. The whole
 // node spins about its axis every frame so the swirl actually reads — a smooth surface
 // of revolution would show no rotation at all. The funnel is purely cosmetic: its world
-// position is set by WorldRenderer from the Aleph row, and flying into it warps your
+// position is set by WorldRenderer from the Aleph row, and its orientation is rotated so
+// the mouth (+Y local axis) faces toward the sector center. Flying into it warps your
 // ship (resolved authoritatively on the server, which moves you to the partner sector).
 public partial class AlephView : Node3D
 {
@@ -54,5 +55,5 @@ public partial class AlephView : Node3D
 		}
 	}
 
-	public override void _Process(double delta) => RotateY((float)delta * SpinSpeed);
+	public override void _Process(double delta) => RotateObjectLocal(Vector3.Up, (float)delta * SpinSpeed);
 }

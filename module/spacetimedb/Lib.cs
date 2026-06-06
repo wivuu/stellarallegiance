@@ -1134,24 +1134,36 @@ public static partial class Module
                 if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
                     break;
 
-                // Emerge OUT THE MOUTH. The funnel (AlephView) renders as a cone that
-                // opens along world +Y and is never reoriented, so every aleph's mouth
-                // faces straight up. The ship pops out of the partner's mouth: pushed out
-                // along +Y (alephs sit in the horizontal frontier ring with little Y, so
-                // +Y stays well inside the boundary) far enough to clear the partner's
-                // trigger sphere (no instant re-warp), and flying up and out.
+                // Emerge OUT THE MOUTH. The funnel (AlephView) is oriented so its
+                // mouth faces toward the sector center. The ship pops out of the
+                // partner's mouth along that axis — toward the partner's sector center —
+                // far enough to clear the partner's trigger sphere (no instant re-warp).
                 //
                 // The funnel discards the ship's heading: only the RAW SPEED carries
-                // through. The exit vector is the mouth axis (+Y), jittered by a small
-                // random cone so successive ships fan out instead of stacking in a line.
-                // Position and velocity share the one jittered direction so the ship
-                // travels along the axis it emerged on. Warp is server-authoritative, so
-                // this RNG never has to be reproduced by client prediction.
-                // Orientation/angular momentum are left untouched.
+                // through. The exit vector is the mouth axis (partner aleph → its sector
+                // center), jittered by a small random cone so successive ships fan out
+                // instead of stacking in a line. Position and velocity share the one
+                // jittered direction so the ship travels along the axis it emerged on.
+                // Warp is server-authoritative, so this RNG never has to be reproduced
+                // by client prediction. Orientation/angular momentum are left untouched.
                 float speed = MathF.Sqrt(ship.VelX * ship.VelX + ship.VelY * ship.VelY + ship.VelZ * ship.VelZ);
-                float ex = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-                float ey = 1f;
-                float ez = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+
+                // Mouth direction: from partner aleph toward its sector center.
+                var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
+                float mx = (destSec?.CenterX ?? 0f) - partner.PosX;
+                float my = (destSec?.CenterY ?? 0f) - partner.PosY;
+                float mz = (destSec?.CenterZ ?? 0f) - partner.PosZ;
+                float mlen = MathF.Sqrt(mx * mx + my * my + mz * mz);
+                if (mlen < 0.001f) { mx = 0f; my = 1f; mz = 0f; mlen = 1f; } // fallback: up
+                mx /= mlen; my /= mlen; mz /= mlen;
+
+                // Jitter around the mouth axis.
+                float jx = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+                float jy = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+                float jz = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+                float ex = mx + jx;
+                float ey = my + jy;
+                float ez = mz + jz;
                 float elen = MathF.Sqrt(ex * ex + ey * ey + ez * ez);
                 ex /= elen; ey /= elen; ez /= elen;
 
