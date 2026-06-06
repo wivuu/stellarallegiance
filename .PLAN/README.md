@@ -12,6 +12,8 @@ Archives:
 ---
 
 ## QUICKNOTES:
+- We need to figure out how to load-test the system, lots of networked clients and a server running; we want
+to determine how many players we can support in a single instance, and what the bottlenecks are.
 
 ---
 
