@@ -25,7 +25,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L1",
       "id": "scripts_alephview",
-      "community": 42,
+      "community": 1,
       "norm_label": "alephview.cs"
     },
     {
@@ -34,7 +34,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L10",
       "id": "scripts_alephview_alephview",
-      "community": 42,
+      "community": 1,
       "norm_label": "alephview"
     },
     {
@@ -52,7 +52,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L12",
       "id": "client_scripts_alephview_cs_float",
-      "community": 42,
+      "community": 1,
       "norm_label": "float"
     },
     {
@@ -61,7 +61,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L14",
       "id": "client_scripts_alephview_cs_int",
-      "community": 42,
+      "community": 1,
       "norm_label": "int"
     },
     {
@@ -70,7 +70,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L21",
       "id": "scripts_alephview_alephview_ready",
-      "community": 42,
+      "community": 1,
       "norm_label": "._ready()"
     },
     {
@@ -79,7 +79,7 @@
       "source_file": "client/scripts/AlephView.cs",
       "source_location": "L57",
       "id": "scripts_alephview_alephview_process",
-      "community": 42,
+      "community": 1,
       "norm_label": "._process()"
     },
     {
@@ -3143,10 +3143,19 @@
       "norm_label": "starscape"
     },
     {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L84",
+      "id": "client_scripts_worldrenderer_cs_bool",
+      "community": 1,
+      "norm_label": "bool"
+    },
+    {
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L90",
+      "source_location": "L102",
       "id": "scripts_worldrenderer_worldrenderer_enemyships",
       "community": 1,
       "norm_label": ".enemyships()"
@@ -3155,7 +3164,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L90",
+      "source_location": "L102",
       "id": "ireadonlylist",
       "community": 1,
       "norm_label": "ireadonlylist"
@@ -3164,7 +3173,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L90",
+      "source_location": "L102",
       "id": "remoteship",
       "community": 1,
       "norm_label": "remoteship"
@@ -3173,7 +3182,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L102",
+      "source_location": "L114",
       "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
       "norm_label": "._ready()"
@@ -3182,7 +3191,7 @@
       "label": ".OnConnected()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L151",
+      "source_location": "L163",
       "id": "scripts_worldrenderer_worldrenderer_onconnected",
       "community": 1,
       "norm_label": ".onconnected()"
@@ -3191,7 +3200,7 @@
       "label": "DbConnection",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L151",
+      "source_location": "L163",
       "id": "client_scripts_worldrenderer_cs_dbconnection",
       "community": 1,
       "norm_label": "dbconnection"
@@ -3200,7 +3209,7 @@
       "label": ".OnMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L175",
+      "source_location": "L187",
       "id": "scripts_worldrenderer_worldrenderer_onmatch",
       "community": 1,
       "norm_label": ".onmatch()"
@@ -3209,7 +3218,7 @@
       "label": "Match",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L175",
+      "source_location": "L187",
       "id": "match",
       "community": 1,
       "norm_label": "match"
@@ -3218,7 +3227,7 @@
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L186",
+      "source_location": "L198",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 1,
       "norm_label": ".setnodesector()"
@@ -3227,7 +3236,7 @@
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L194",
+      "source_location": "L206",
       "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 1,
       "norm_label": ".refreshsectorvisibility()"
@@ -3236,7 +3245,7 @@
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L205",
+      "source_location": "L217",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 1,
       "norm_label": ".spawneffect()"
@@ -3245,7 +3254,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L205",
+      "source_location": "L217",
       "id": "client_scripts_worldrenderer_cs_vector3",
       "community": 1,
       "norm_label": "vector3"
@@ -3254,7 +3263,7 @@
       "label": ".OnAlephInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L214",
+      "source_location": "L226",
       "id": "scripts_worldrenderer_worldrenderer_onalephinsert",
       "community": 1,
       "norm_label": ".onalephinsert()"
@@ -3263,7 +3272,7 @@
       "label": "EventContext",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L214",
+      "source_location": "L226",
       "id": "client_scripts_worldrenderer_cs_eventcontext",
       "community": 1,
       "norm_label": "eventcontext"
@@ -3272,7 +3281,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L214",
+      "source_location": "L226",
       "id": "client_scripts_worldrenderer_cs_aleph",
       "community": 1,
       "norm_label": "aleph"
@@ -3281,7 +3290,7 @@
       "label": ".OnAlephDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L228",
+      "source_location": "L240",
       "id": "scripts_worldrenderer_worldrenderer_onalephdelete",
       "community": 1,
       "norm_label": ".onalephdelete()"
@@ -3290,7 +3299,7 @@
       "label": ".OnBaseInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L236",
+      "source_location": "L248",
       "id": "scripts_worldrenderer_worldrenderer_onbaseinsert",
       "community": 1,
       "norm_label": ".onbaseinsert()"
@@ -3299,7 +3308,7 @@
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L236",
+      "source_location": "L248",
       "id": "base",
       "community": 1,
       "norm_label": "base"
@@ -3308,7 +3317,7 @@
       "label": ".OnBaseUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L257",
+      "source_location": "L269",
       "id": "scripts_worldrenderer_worldrenderer_onbaseupdate",
       "community": 1,
       "norm_label": ".onbaseupdate()"
@@ -3317,7 +3326,7 @@
       "label": ".OnBaseDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L273",
+      "source_location": "L285",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete",
       "community": 1,
       "norm_label": ".onbasedelete()"
@@ -3326,7 +3335,7 @@
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L289",
+      "source_location": "L301",
       "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 1,
       "norm_label": ".asteroidmesh()"
@@ -3335,7 +3344,7 @@
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L289",
+      "source_location": "L301",
       "id": "mesh",
       "community": 1,
       "norm_label": "mesh"
@@ -3344,7 +3353,7 @@
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L289",
+      "source_location": "L301",
       "id": "authoredradius",
       "community": 1,
       "norm_label": "authoredradius"
@@ -3353,7 +3362,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L317",
+      "source_location": "L329",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 1,
       "norm_label": ".findmeshinstance()"
@@ -3362,7 +3371,7 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L317",
+      "source_location": "L329",
       "id": "client_scripts_worldrenderer_cs_node",
       "community": 1,
       "norm_label": "node"
@@ -3371,7 +3380,7 @@
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L317",
+      "source_location": "L329",
       "id": "client_scripts_worldrenderer_cs_meshinstance3d",
       "community": 1,
       "norm_label": "meshinstance3d"
@@ -3380,7 +3389,7 @@
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L330",
+      "source_location": "L342",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 1,
       "norm_label": ".meshboundingradius()"
@@ -3389,7 +3398,7 @@
       "label": ".OnAsteroidInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L344",
+      "source_location": "L356",
       "id": "scripts_worldrenderer_worldrenderer_onasteroidinsert",
       "community": 1,
       "norm_label": ".onasteroidinsert()"
@@ -3398,7 +3407,7 @@
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L344",
+      "source_location": "L356",
       "id": "asteroid",
       "community": 1,
       "norm_label": "asteroid"
@@ -3407,7 +3416,7 @@
       "label": ".OnAsteroidDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L378",
+      "source_location": "L390",
       "id": "scripts_worldrenderer_worldrenderer_onasteroiddelete",
       "community": 1,
       "norm_label": ".onasteroiddelete()"
@@ -3416,7 +3425,7 @@
       "label": ".IsLocal()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L386",
+      "source_location": "L398",
       "id": "scripts_worldrenderer_worldrenderer_islocal",
       "community": 1,
       "norm_label": ".islocal()"
@@ -3425,7 +3434,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L386",
+      "source_location": "L398",
       "id": "client_scripts_worldrenderer_cs_ship",
       "community": 1,
       "norm_label": "ship"
@@ -3434,7 +3443,7 @@
       "label": ".OnShipInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L389",
+      "source_location": "L401",
       "id": "scripts_worldrenderer_worldrenderer_onshipinsert",
       "community": 1,
       "norm_label": ".onshipinsert()"
@@ -3443,7 +3452,7 @@
       "label": ".OnShipUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L427",
+      "source_location": "L442",
       "id": "scripts_worldrenderer_worldrenderer_onshipupdate",
       "community": 1,
       "norm_label": ".onshipupdate()"
@@ -3452,7 +3461,7 @@
       "label": ".OnShipDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L454",
+      "source_location": "L476",
       "id": "scripts_worldrenderer_worldrenderer_onshipdelete",
       "community": 1,
       "norm_label": ".onshipdelete()"
@@ -3461,7 +3470,7 @@
       "label": ".OnProjectileInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L488",
+      "source_location": "L510",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
       "community": 1,
       "norm_label": ".onprojectileinsert()"
@@ -3470,7 +3479,7 @@
       "label": "Projectile",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L488",
+      "source_location": "L510",
       "id": "client_scripts_worldrenderer_cs_projectile",
       "community": 1,
       "norm_label": "projectile"
@@ -3479,7 +3488,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L518",
+      "source_location": "L540",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 1,
       "norm_label": ".shotmaskleadsec()"
@@ -3488,7 +3497,7 @@
       "label": ".SpawnPredictedProjectile()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L529",
+      "source_location": "L551",
       "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "community": 1,
       "norm_label": ".spawnpredictedprojectile()"
@@ -3497,7 +3506,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L539",
+      "source_location": "L561",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 1,
       "norm_label": ".newprojectilemesh()"
@@ -3506,7 +3515,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L551",
+      "source_location": "L573",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
@@ -3515,16 +3524,34 @@
       "label": ".OnProjectileDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L572",
+      "source_location": "L615",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
       "community": 1,
       "norm_label": ".onprojectiledelete()"
     },
     {
+      "label": ".HitLocalShip()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "id": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "community": 1,
+      "norm_label": ".hitlocalship()"
+    },
+    {
+      "label": "ProjectileView",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "id": "projectileview",
+      "community": 1,
+      "norm_label": "projectileview"
+    },
+    {
       "label": ".BuildShipMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L585",
+      "source_location": "L637",
       "id": "scripts_worldrenderer_worldrenderer_buildshipmesh",
       "community": 1,
       "norm_label": ".buildshipmesh()"
@@ -3533,7 +3560,7 @@
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L585",
+      "source_location": "L637",
       "id": "client_scripts_worldrenderer_cs_shipclass",
       "community": 1,
       "norm_label": "shipclass"
@@ -3542,7 +3569,7 @@
       "label": ".AttachEngineGlow()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L618",
+      "source_location": "L670",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow",
       "community": 1,
       "norm_label": ".attachengineglow()"
@@ -4210,7 +4237,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1013",
       "id": "spacetimedb_lib_module_simulatetick",
-      "community": 5,
+      "community": 0,
       "norm_label": ".simulatetick()"
     },
     {
@@ -4219,7 +4246,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1381",
       "id": "spacetimedb_lib_module_dist2",
-      "community": 5,
+      "community": 0,
       "norm_label": ".dist2()"
     },
     {
@@ -4228,7 +4255,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1390",
       "id": "spacetimedb_lib_module_resolvecollision",
-      "community": 5,
+      "community": 0,
       "norm_label": ".resolvecollision()"
     },
     {
@@ -4237,7 +4264,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1390",
       "id": "module_spacetimedb_lib_cs_ship",
-      "community": 5,
+      "community": 0,
       "norm_label": "ship"
     },
     {
@@ -4255,7 +4282,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "spacetimedb_lib_module_toinputstate",
-      "community": 5,
+      "community": 0,
       "norm_label": ".toinputstate()"
     },
     {
@@ -4264,7 +4291,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "shipinput",
-      "community": 5,
+      "community": 0,
       "norm_label": "shipinput"
     },
     {
@@ -4273,7 +4300,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1427",
       "id": "module_spacetimedb_lib_cs_shipinputstate",
-      "community": 5,
+      "community": 0,
       "norm_label": "shipinputstate"
     },
     {
@@ -4435,7 +4462,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L100",
       "id": "spacetimedb_pigai_module_ensurepigslots",
-      "community": 5,
+      "community": 0,
       "norm_label": ".ensurepigslots()"
     },
     {
@@ -4453,7 +4480,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L127",
       "id": "spacetimedb_pigai_module_anyplayershipalive",
-      "community": 5,
+      "community": 0,
       "norm_label": ".anyplayershipalive()"
     },
     {
@@ -4462,7 +4489,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L139",
       "id": "spacetimedb_pigai_module_despawnallpigs",
-      "community": 5,
+      "community": 0,
       "norm_label": ".despawnallpigs()"
     },
     {
@@ -6029,6 +6056,78 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": "Vector3",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipMath.cs",
+      "source_location": "L19",
+      "community": 18,
+      "norm_label": "vector3",
+      "id": "vector3"
+    },
+    {
+      "label": "Quaternion",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipMath.cs",
+      "source_location": "L21",
+      "community": 18,
+      "norm_label": "quaternion",
+      "id": "quaternion"
+    },
+    {
+      "label": "ShipClass",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L323",
+      "community": 0,
+      "norm_label": "shipclass",
+      "id": "shipclass"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L360",
+      "community": 0,
+      "norm_label": "string",
+      "id": "string"
+    },
+    {
+      "label": "Player",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L680",
+      "community": 0,
+      "norm_label": "player",
+      "id": "player"
+    },
+    {
+      "label": "Identity",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L740",
+      "community": 0,
+      "norm_label": "identity",
+      "id": "identity"
+    },
+    {
+      "label": "Aleph",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L593",
+      "community": 5,
+      "norm_label": "aleph",
+      "id": "aleph"
+    },
+    {
+      "label": "ShipStats",
+      "file_type": "code",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L165",
+      "community": 7,
+      "norm_label": "shipstats",
+      "id": "shipstats"
     },
     {
       "label": ".csharpierrc.yaml (CSharpier Config)",
@@ -10193,7 +10292,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
@@ -10215,12 +10314,34 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "scripts_shipmath_shipmath_togodot",
       "target": "client_scripts_shipmath_cs_vector3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipMath.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_shipmath_shipmath_togodot",
+      "target": "quaternion"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipMath.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_shipmath_shipmath_togodot",
+      "target": "vector3"
     },
     {
       "relation": "references",
@@ -10971,6 +11092,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L84",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "client_scripts_worldrenderer_cs_bool"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L49",
       "weight": 1.0,
       "context": "field",
@@ -11115,6 +11247,16 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
       "target": "scripts_worldrenderer_worldrenderer_findmeshinstance"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -11548,6 +11690,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L575",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_process",
+      "target": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L577",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -11564,6 +11717,17 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipdelete",
       "target": "scripts_worldrenderer_worldrenderer_spawneffect"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L467",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onshipupdate",
+      "target": "scripts_worldrenderer_worldrenderer_spawneffect",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12031,6 +12195,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "target": "client_scripts_worldrenderer_cs_projectile",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L572",
       "weight": 1.0,
       "context": "parameter_type",
@@ -12048,6 +12223,28 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "target": "scripts_worldrenderer_worldrenderer_newprojectilemesh"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L622",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
+      "target": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L630",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_worldrenderer_worldrenderer_hitlocalship",
+      "target": "projectileview",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12361,7 +12558,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L351",
+      "source_location": "L360",
       "weight": 1.0,
       "context": "field",
       "confidence_score": 1.0,
@@ -12555,9 +12752,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L323",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "spacetimedb_lib_module_massfor",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_massfor"
     },
     {
       "relation": "method",
@@ -12853,12 +13050,34 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L360",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L323",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_massfor",
-      "target": "module_spacetimedb_lib_cs_shipclass",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_shipclass"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L323",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_massfor",
+      "target": "shipclass"
     },
     {
       "relation": "calls",
@@ -12867,9 +13086,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1525",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnshipinternal",
-      "target": "spacetimedb_lib_module_massfor",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_massfor"
     },
     {
       "relation": "calls",
@@ -12886,7 +13105,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L317",
+      "source_location": "L326",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -12897,7 +13116,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L315",
+      "source_location": "L324",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -12908,7 +13127,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L798",
+      "source_location": "L807",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -12919,7 +13138,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L790",
+      "source_location": "L799",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -12930,7 +13149,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1420",
+      "source_location": "L1447",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -12941,12 +13160,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L316",
+      "source_location": "L325",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_weapondamage",
       "target": "module_spacetimedb_lib_cs_shipclass"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L324",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_maxhull",
+      "target": "shipclass"
     },
     {
       "relation": "calls",
@@ -12982,6 +13212,17 @@
       "target": "spacetimedb_lib_module_weapondamage"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_weapondamage",
+      "target": "shipclass"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "INFERRED",
@@ -12991,6 +13232,17 @@
       "weight": 1.0,
       "source": "spacetimedb_pigai_module_pigthreatscore",
       "target": "spacetimedb_lib_module_weapondamage"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L326",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_fireinterval",
+      "target": "shipclass"
     },
     {
       "relation": "calls",
@@ -13909,12 +14161,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L671",
+      "source_location": "L680",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_handlecommand",
       "target": "module_spacetimedb_lib_cs_player"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L680",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_handlecommand",
+      "target": "player"
     },
     {
       "relation": "calls",
@@ -13964,7 +14227,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L763",
+      "source_location": "L772",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -13975,12 +14238,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L712",
+      "source_location": "L721",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resignmatch",
       "target": "module_spacetimedb_lib_cs_player"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L721",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_resignmatch",
+      "target": "player"
     },
     {
       "relation": "calls",
@@ -14019,7 +14293,18 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L731",
+      "source_location": "L740",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_systemto",
+      "target": "identity"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L740",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -14030,7 +14315,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1526",
+      "source_location": "L1554",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -14041,7 +14326,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1511",
+      "source_location": "L1539",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -14052,12 +14337,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1536",
+      "source_location": "L1564",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_smallestonlineteam",
       "target": "module_spacetimedb_lib_cs_identity"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L772",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_displayname",
+      "target": "player"
     },
     {
       "relation": "calls",
@@ -14093,6 +14389,17 @@
       "target": "filter"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L799",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_spawnship",
+      "target": "shipclass"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -14102,6 +14409,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnship",
       "target": "spacetimedb_lib_module_spawnshipinternal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L807",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_respawn",
+      "target": "shipclass"
     },
     {
       "relation": "calls",
@@ -14423,6 +14741,17 @@
       "target": "spacetimedb_lib_module_deleteshipinputs"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1447",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_spawnshipinternal",
+      "target": "shipclass"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -14445,6 +14774,17 @@
       "target": "spacetimedb_lib_module_onlineteamcounts"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1539",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_onlineteamcounts",
+      "target": "identity"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -14454,6 +14794,28 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_smallestonlineteam",
       "target": "spacetimedb_lib_module_onlineteamcounts"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1554",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_canjointeam",
+      "target": "identity"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1564",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_smallestonlineteam",
+      "target": "identity"
     },
     {
       "relation": "calls",
@@ -15446,7 +15808,18 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L592",
+      "source_location": "L593",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_alephto",
+      "target": "aleph"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L593",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
@@ -16139,7 +16512,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L171",
+      "source_location": "L181",
       "weight": 1.0,
       "context": "field",
       "confidence_score": 1.0,
@@ -16220,7 +16593,18 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L260",
+      "source_location": "L181",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel",
+      "target": "shipstats"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L271",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
@@ -16231,12 +16615,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L184",
+      "source_location": "L195",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_statsfor",
       "target": "shared_flightmodel_cs_shipstats"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L195",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel_statsfor",
+      "target": "shipstats"
     },
     {
       "relation": "calls",
@@ -16292,6 +16687,17 @@
       "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
       "target": "shared_flightmodel_cs_shipstate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L271",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel_integrate",
+      "target": "shipstats"
     },
     {
       "relation": "references",
@@ -17666,5 +18072,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "999a02da9e42448d991aea76a5f30da745a6d5d0"
+  "built_at_commit": "c8260c4baaa3cbe68271029e8098d56f90b1720f"
 }

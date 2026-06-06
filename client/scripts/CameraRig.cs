@@ -28,6 +28,15 @@ public partial class CameraRig : Camera3D
 		var ship = _world.LocalShip;
 		if (ship == null)
 		{
+			// Just died: hold the last chase framing on the death point for a beat so the
+			// player sees their own blast up close (see WorldRenderer death-cam) before the
+			// view pulls back to the wide overview.
+			if (_world.DeathCamActive)
+			{
+				Transform3D d = _world.DeathCamShipTransform;
+				GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * ChaseOffset);
+				return;
+			}
 			GlobalPosition = OverviewPos;
 			LookAt(Vector3.Zero, Vector3.Up);
 			return;

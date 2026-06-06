@@ -25,6 +25,13 @@ public partial class ProjectileView : Node3D
 
 	public ulong ProjectileId { get; private set; }
 
+	// Constant flight velocity (world u/s) and spawn point, read by WorldRenderer's client-side
+	// hit-spark pass. It sweeps the bolt across each frame (so a fast shot can't tunnel through a
+	// ship) and ignores ships until the bolt has cleared its muzzle, so a shot never sparks on the
+	// ship that fired it. Team is deliberately not tracked — friendly fire sparks like any other.
+	public Vector3 Velocity => _vel;
+	public Vector3 SpawnPos { get; private set; }
+
 	// True until the authoritative Projectile row arrives and adopts this node
 	// (client-side muzzle prediction). A ghost renders instantly on fire; if the
 	// matching authoritative row never arrives (a mispredicted shot), it expires.
@@ -37,6 +44,7 @@ public partial class ProjectileView : Node3D
 		_spawnTime = Time.GetTicksMsec() / 1000.0;
 		_pos = new Vector3(row.PosX, row.PosY, row.PosZ);
 		_vel = new Vector3(row.VelX, row.VelY, row.VelZ);
+		SpawnPos = _pos;
 		_t0 = _spawnTime;
 		OrientAlongVelocity();
 		Position = _pos + _vel * _renderLeadSec;   // honour the lead immediately (no 1-frame muzzle pop)
@@ -51,6 +59,7 @@ public partial class ProjectileView : Node3D
 		_spawnTime = Time.GetTicksMsec() / 1000.0;
 		_pos = pos;
 		_vel = vel;
+		SpawnPos = pos;
 		_t0 = _spawnTime;
 		OrientAlongVelocity();
 		Position = pos;

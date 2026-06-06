@@ -51,6 +51,17 @@ public partial class WorldRenderer : Node3D
 	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
 	private readonly List<RemoteShip> _enemyScratch = new();
 
+	// Scratch for the per-frame client-side hit-spark pass: ids of bolts that visually struck a
+	// ship this frame, collected then consumed after iteration (no mutating the dict mid-loop).
+	private readonly List<ulong> _projHitScratch = new();
+
+	// Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
+	// VisualHitRadius of a ship's rendered centre, but not until it has travelled MuzzleClearance
+	// from its spawn — so a shot never sparks on the ship that fired it. Team-agnostic by design
+	// (friendly fire sparks too). Tune to taste against the ship silhouette size.
+	private const float VisualHitRadius = 5f;
+	private const float MuzzleClearance = 10f;
+
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
 	private StandardMaterial3D _team1Mat = null!;
@@ -72,6 +83,18 @@ public partial class WorldRenderer : Node3D
 	// The local player's predicted ship, or null when not flying. Read by
 	// ShipController (drives prediction), CameraRig (chase target), and Hud.
 	public PredictionController? LocalShip { get; private set; }
+
+	// Death-cam: on local death the chase camera holds on the spot the ship died for a
+	// beat (DeathCamSec) so the player watches their own blast up close, THEN the view
+	// pulls back to the home overview. From the far overview the ~15u blast is an
+	// invisible speck, so without this the player never sees their own explosion. The
+	// home-overview reset is deferred to _Process so the death sector's scene — and the
+	// blast — stay visible through the hold. CameraRig reads DeathCamActive/Transform.
+	private const double DeathCamSec = 1.2;
+	private double _deathCamUntil = -1.0;
+	private bool _pendingHomeReset;
+	public bool DeathCamActive => Time.GetTicksMsec() / 1000.0 < _deathCamUntil;
+	public Transform3D DeathCamShipTransform { get; private set; }
 
 	// Latest authoritative sim tick (Match.Tick). ShipController slaves its
 	// prediction clock to this so client/server ticks index the same integration.
@@ -404,6 +427,9 @@ public partial class WorldRenderer : Node3D
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
+			// Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
+			_deathCamUntil = -1.0;
+			_pendingHomeReset = false;
 			// Follow the local ship's sector and re-show that sector's world.
 			_localSector = row.SectorId;
 			_starscape?.SetSector(row.SectorId);
@@ -456,29 +482,29 @@ public partial class WorldRenderer : Node3D
 		if (!_shipNodes.Remove(row.ShipId, out var node))
 			return;
 
-		// A fiery blast at the death point (Fighters bigger than Scouts). Spawned before the
-		// local-death view reset below so it's tagged to the sector the ship actually died in.
+		bool local = LocalShip == node;
+		// A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
+		// place it at the predicted node position the player was actually watching (not the
+		// authoritative row coords, which lag prediction) so the blast — and the death-cam
+		// framed on it below — line up exactly. Remote ships have no prediction; use row coords.
+		Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
 		var boom = ExplosionEffect.Create(row.Class, row.Team);
-		SpawnEffect(boom, new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId);
+		SpawnEffect(boom, deathPos, row.SectorId);
 
-		if (LocalShip == node)
+		if (local)
 		{
 			LocalShip = null;
 			// Drop unmatched ghosts so a respawn's FIFO never adopts a stale one.
 			foreach (var g in _predictedShots)
 				g.QueueFree();
 			_predictedShots.Clear();
-			// Back to the overview of the home battlefield (respawn is at the team base).
-			if (_localSector != HomeSector)
-			{
-				_localSector = HomeSector;
-				_starscape?.SetSector(HomeSector);
-				RefreshSectorVisibility();
-				// Keep the player's own death blast visible through the home-overview snap
-				// (it self-frees in ~1s). It renders at the death-sector coords; for the rare
-				// case of dying away from home that placement is approximate but brief.
-				boom.Visible = true;
-			}
+			// Hold the chase camera on the death point for a beat so the player sees their own
+			// blast up close. The return to the home overview (respawn is at the team base) is
+			// deferred until the hold expires (see _Process), keeping the death sector — where
+			// the blast lives and stays visible — on screen until then.
+			DeathCamShipTransform = node.GlobalTransform;
+			_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
+			_pendingHomeReset = _localSector != HomeSector;
 		}
 		node.QueueFree();
 	}
@@ -550,6 +576,19 @@ public partial class WorldRenderer : Node3D
 	// Cull predicted ghosts that were never matched to an authoritative row.
 	public override void _Process(double delta)
 	{
+		// Death-cam expiry: once the brief hold on the death point is over, pull the world
+		// back to the home-battlefield overview (deferred from OnShipDelete so the death
+		// sector stayed visible through the hold). Skipped if the player already respawned.
+		if (_pendingHomeReset && LocalShip == null && !DeathCamActive)
+		{
+			_localSector = HomeSector;
+			_starscape?.SetSector(HomeSector);
+			RefreshSectorVisibility();
+			_pendingHomeReset = false;
+		}
+
+		CheckBoltImpacts(delta);
+
 		if (_predictedShots.Count == 0)
 			return;
 		double now = Time.GetTicksMsec() / 1000.0;
@@ -563,20 +602,63 @@ public partial class WorldRenderer : Node3D
 		}
 	}
 
-	// A projectile leaving the table is either a hit or a natural end-of-life cull. The server
-	// only expires a shot once ExpiresAtTick <= tick, so a row whose expiry is still ahead of
-	// the latest sim tick was consumed by a hit — flash at the impact point. (Compare additively;
-	// ExpiresAtTick - ServerTick would underflow these uints on a natural expiry.)
-	private const uint HitMargin = 2;   // absorbs subscription-batch callback ordering jitter
+	// Purely client-side hit sparks: flash where a rendered bolt visually meets a ship this frame,
+	// then consume the bolt so it stops on impact. Cosmetic and team-agnostic (friendly fire sparks
+	// like anything else); the server still authoritatively resolves damage and deletes the row.
+	// Only authoritative bolts are tested (own predicted ghosts haven't cleared their muzzle yet
+	// and become authoritative long before reaching a target). Visibility gates both bolt and ship
+	// to the local sector — sectors share world coordinates, so this also avoids cross-sector hits.
+	private void CheckBoltImpacts(double delta)
+	{
+		if (_projectileNodes.Count == 0 || _shipNodes.Count == 0)
+			return;
 
+		_projHitScratch.Clear();
+		foreach (var (id, pv) in _projectileNodes)
+		{
+			if (!pv.Visible)
+				continue;
+			Vector3 b = pv.GlobalPosition;
+			// Don't let a shot spark on the ship that fired it: ignore until it has left the muzzle.
+			if (b.DistanceSquaredTo(pv.SpawnPos) < MuzzleClearance * MuzzleClearance)
+				continue;
+			Vector3 a = b - pv.Velocity * (float)delta;   // swept path across this frame
+			foreach (var ship in _shipNodes.Values)
+			{
+				if (!ship.Visible)
+					continue;
+				Vector3 c = ship.GlobalPosition;
+				Vector3 hit = ClosestPointOnSegment(a, b, c);
+				if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
+				{
+					SpawnEffect(new HitFlash(), hit, _localSector);
+					_projHitScratch.Add(id);
+					break;
+				}
+			}
+		}
+		foreach (var id in _projHitScratch)
+			if (_projectileNodes.Remove(id, out var pv))
+				pv.QueueFree();
+	}
+
+	// Closest point to p on segment [a, b], clamped to the endpoints.
+	private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 p)
+	{
+		Vector3 ab = b - a;
+		float len2 = ab.LengthSquared();
+		if (len2 < 1e-6f)
+			return a;
+		return a + ab * Mathf.Clamp((p - a).Dot(ab) / len2, 0f, 1f);
+	}
+
+	// A projectile leaving the table just frees its node. The hit SPARK is no longer driven from
+	// this server delete (its timing/position couldn't match what the player sees); it's a purely
+	// client-side effect spawned where the rendered bolt visually meets a ship (see _Process).
 	private void OnProjectileDelete(EventContext ctx, Projectile row)
 	{
 		if (_projectileNodes.Remove(row.ProjectileId, out var pv))
-		{
-			if (row.ExpiresAtTick > ServerTick + HitMargin)
-				SpawnEffect(new HitFlash(), pv.Position, row.SectorId);
 			pv.QueueFree();
-		}
 	}
 
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
