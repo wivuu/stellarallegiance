@@ -254,6 +254,7 @@ public static partial class Module
             RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
             Health = MaxHull(slot.Class),
+            Mass = MassFor(slot.Class),
             LastInputTick = tick,
             LastFireTick = 0,
             IsPig = true,

@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly MessageIdUniqueIndex MessageId;
 
+            public sealed class TeamIndex : BTreeIndexBase<byte>
+            {
+                protected override byte GetKey(ChatMessage row) => row.Team;
+
+                public TeamIndex(ChatMessageHandle table) : base(table) { }
+            }
+
+            public readonly TeamIndex Team;
+
             internal ChatMessageHandle(DbConnection conn) : base(conn)
             {
                 MessageId = new(this);
+                Team = new(this);
             }
 
             protected override object GetPrimaryKey(ChatMessage row) => row.MessageId;
@@ -66,10 +76,12 @@ namespace SpacetimeDB.Types
     public sealed class ChatMessageIxCols
     {
         public global::SpacetimeDB.IxCol<ChatMessage, ulong> MessageId { get; }
+        public global::SpacetimeDB.IxCol<ChatMessage, byte> Team { get; }
 
         public ChatMessageIxCols(string tableName)
         {
             MessageId = new global::SpacetimeDB.IxCol<ChatMessage, ulong>(tableName, "message_id");
+            Team = new global::SpacetimeDB.IxCol<ChatMessage, byte>(tableName, "team");
         }
     }
 }

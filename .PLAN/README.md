@@ -15,6 +15,8 @@ Archives:
 - Add concept of ship weight, instead of just tuning fake heaviness. This will matter when it comes to collisions
 - Add collisions between ships and bases
 - Create index of entire codebase for more efficient agent use.
+- Add lense flar/bloom to sun or something to make it prettier
+- Dont see explosion of yourself whne you di, or hits hitting your own ship
 
 ---
 

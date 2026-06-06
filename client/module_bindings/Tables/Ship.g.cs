@@ -58,6 +58,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Ship, float> AngVelY { get; }
         public global::SpacetimeDB.Col<Ship, float> AngVelZ { get; }
         public global::SpacetimeDB.Col<Ship, float> Health { get; }
+        public global::SpacetimeDB.Col<Ship, float> Mass { get; }
         public global::SpacetimeDB.Col<Ship, uint> LastInputTick { get; }
         public global::SpacetimeDB.Col<Ship, uint> LastFireTick { get; }
         public global::SpacetimeDB.Col<Ship, bool> IsPig { get; }
@@ -83,6 +84,7 @@ namespace SpacetimeDB.Types
             AngVelY = new global::SpacetimeDB.Col<Ship, float>(tableName, "ang_vel_y");
             AngVelZ = new global::SpacetimeDB.Col<Ship, float>(tableName, "ang_vel_z");
             Health = new global::SpacetimeDB.Col<Ship, float>(tableName, "health");
+            Mass = new global::SpacetimeDB.Col<Ship, float>(tableName, "mass");
             LastInputTick = new global::SpacetimeDB.Col<Ship, uint>(tableName, "last_input_tick");
             LastFireTick = new global::SpacetimeDB.Col<Ship, uint>(tableName, "last_fire_tick");
             IsPig = new global::SpacetimeDB.Col<Ship, bool>(tableName, "is_pig");

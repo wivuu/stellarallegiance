@@ -123,6 +123,10 @@ namespace StellarAllegiance.Shared
         public Vec3 Vel;
         public Quat Rot;
         public Vec3 AngVel;
+        // Per-instance actual mass (from the synced Ship row). Equals the class
+        // baseline (ShipStats.Mass) today; future cargo/upgrades may differ. A
+        // value <= 0 means "unset" and Integrate falls back to the class baseline.
+        public float Mass;
     }
 
     public struct ShipInputState
@@ -135,6 +139,11 @@ namespace StellarAllegiance.Shared
     public struct ShipStats
     {
         public float ThrustAccel, MaxSpeed, LinearDrag, AngularAccel, AngularDrag;
+        // Class baseline mass — the single source of truth for a class's weight.
+        // Thrust is treated as a force, so actual linear accel = ThrustAccel scaled
+        // by (Mass / actualMass): at baseline mass the feel is unchanged; a heavier
+        // instance accelerates slower. Also seeds Ship.Mass and drives collisions.
+        public float Mass;
         // Afterburner: while Boost is held, forward thrust accel is scaled by
         // BoostThrustMult and the speed cap by BoostSpeedMult (both 1 = no boost).
         public float BoostThrustMult, BoostSpeedMult;
@@ -158,6 +167,7 @@ namespace StellarAllegiance.Shared
             ThrustAccel = 60f,
             MaxSpeed = 70f,
             LinearDrag = 1.8f,
+            Mass = 1.0f,            // light & nimble (the lighter of the two craft)
             // Light & nimble, but with noticeable rotational inertia: lower accel
             // means the turn spins up gradually, lower drag means it coasts after
             // you let off the stick (you counter-steer to stop). Still the quicker
@@ -173,6 +183,7 @@ namespace StellarAllegiance.Shared
             ThrustAccel = 30f,
             MaxSpeed = 50f,
             LinearDrag = 1.0f,
+            Mass = 2.0f,            // heavy hull: twice the Scout — deflects less, hits harder
             // Heavier in the turn than the Scout: spins up slower and carries more
             // momentum, so it feels weightier while staying nimble overall.
             AngularAccel = 1.8f,
@@ -273,8 +284,15 @@ namespace StellarAllegiance.Shared
             // (Boost) scales the FORWARD axis accel and raises the speed cap while
             // held; strafe is unaffected. Branching on the bool is deterministic
             // (no transcendentals), so client prediction and server stay bit-identical.
-            float fwdAccel = st.ThrustAccel * (i.Boost ? st.BoostThrustMult : 1f);
-            Vec3 thrustLocal = new Vec3(i.StrafeX * st.ThrustAccel, i.StrafeY * st.ThrustAccel, i.Thrust * fwdAccel);
+            // Thrust is a force: actual linear accel = ThrustAccel * (baseline / actual)
+            // mass. At baseline mass (s.Mass == st.Mass) accelMul == 1 and the result is
+            // identical to the old accel-based model; a heavier instance accelerates
+            // slower. s.Mass <= 0 means "unset" -> fall back to baseline (accelMul == 1).
+            // Angular response is intentionally left mass-independent for now.
+            float accelMul = (s.Mass > 0f) ? st.Mass / s.Mass : 1f;
+            float thrustAccel = st.ThrustAccel * accelMul;
+            float fwdAccel = thrustAccel * (i.Boost ? st.BoostThrustMult : 1f);
+            Vec3 thrustLocal = new Vec3(i.StrafeX * thrustAccel, i.StrafeY * thrustAccel, i.Thrust * fwdAccel);
             Vec3 thrustWorld = rot.Rotate(thrustLocal);
             Vec3 vel = s.Vel + thrustWorld * dt;
             vel = vel * (1f - st.LinearDrag * dt);
@@ -290,7 +308,7 @@ namespace StellarAllegiance.Shared
 
             Vec3 pos = s.Pos + vel * dt;
 
-            return new ShipState { Pos = pos, Vel = vel, Rot = rot, AngVel = angVel };
+            return new ShipState { Pos = pos, Vel = vel, Rot = rot, AngVel = angVel, Mass = s.Mass };
         }
     }
 }

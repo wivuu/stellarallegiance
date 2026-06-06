@@ -98,6 +98,10 @@ public partial struct Ship
     public float AngVelY;
     public float AngVelZ;
     public float Health;
+    // Physical mass, seeded from Class at spawn (see MassFor). Drives flight accel
+    // (force/mass in FlightModel.Integrate) and ship-vs-ship collision response.
+    // A field (not derived) so future cargo/upgrades can vary it per ship.
+    public float Mass;
     public uint LastInputTick; // highest sim tick integrated; for reconciliation
     public uint LastFireTick;  // sim tick of this ship's most recent shot (fire-rate gate)
     // True for AI-controlled combat drones (PIGs). Players never set this; it lets the
@@ -292,7 +296,11 @@ public static partial class Module
     private const float AsteroidCollisionScale = 0.82f;
     private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
-    private const float CollisionDamageScale = 0.6f; // hull damage per (u/s) of inward impact
+    private const float CollisionDamageScale = 0.6f; // ship-vs-static hull damage per (u/s) of inward impact
+    // Ship-vs-ship damage per (u/s) of inward impact, multiplied by the pair's reduced
+    // mass. Set to 2x CollisionDamageScale so a baseline Scout-vs-Scout pair (reduced
+    // mass 0.5) still deals ~0.6/u·s as before; heavier pairs deal proportionally more.
+    private const float ShipShipDamageScale = 1.2f;
     private const float MaxCollisionDamage = 30f;    // cap per collision per tick
 
     // ---- Sectors & alephs ---------------------------------------------
@@ -312,6 +320,7 @@ public static partial class Module
     private const float BoundaryRampDps = 0.12f;     // extra dps per unit beyond the edge
     private const float BoundaryMaxDps = 60f;
 
+    private static float MassFor(ShipClass c) => FlightModel.StatsFor((byte)c).Mass;
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
     private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
     private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
@@ -1062,6 +1071,7 @@ public static partial class Module
                 Vel = new Vec3(ship.VelX, ship.VelY, ship.VelZ),
                 Rot = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW),
                 AngVel = new Vec3(ship.AngVelX, ship.AngVelY, ship.AngVelZ),
+                Mass = ship.Mass,
             };
 
             state = FlightModel.Integrate(state, input, stats);
@@ -1276,19 +1286,36 @@ public static partial class Module
                 if (dist > 1e-4f) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
                 else { nx = 0f; ny = 1f; nz = 0f; }
 
+                // Mass-weighted response: heavier ships deflect less and are shoved
+                // out less. iA/iB are inverse masses (guard against a missing/zero
+                // mass with a unit fallback). With equal mass this reduces exactly to
+                // the old 50/50 split.
+                float iA = a.Mass > 0f ? 1f / a.Mass : 1f;
+                float iB = b.Mass > 0f ? 1f / b.Mass : 1f;
+                float invSum = iA + iB;
+
                 float relVn = (a.VelX - b.VelX) * nx + (a.VelY - b.VelY) * ny + (a.VelZ - b.VelZ) * nz;
                 if (relVn < 0f)
                 {
-                    float dmg = MathF.Min(-relVn * CollisionDamageScale, MaxCollisionDamage);
+                    // Momentum-conserving normal impulse: J = -(1+e) * relVn / (iA+iB).
+                    float jimp = -(1f + CollisionRestitution) * relVn / invSum;
+                    a.VelX += jimp * iA * nx; a.VelY += jimp * iA * ny; a.VelZ += jimp * iA * nz;
+                    b.VelX -= jimp * iB * nx; b.VelY -= jimp * iB * ny; b.VelZ -= jimp * iB * nz;
+
+                    // Damage scales with the impact's reduced mass and closing speed,
+                    // so heavier/faster collisions hurt more (both ships feel the same
+                    // mutual impulse). reducedMass = (mA*mB)/(mA+mB) = 1/(iA+iB).
+                    float reducedMass = 1f / invSum;
+                    float dmg = MathF.Min(-relVn * reducedMass * ShipShipDamageScale, MaxCollisionDamage);
                     damage[a.ShipId] = (damage.TryGetValue(a.ShipId, out var da) ? da : 0f) + dmg;
                     damage[b.ShipId] = (damage.TryGetValue(b.ShipId, out var db) ? db : 0f) + dmg;
-                    float jimp = (1f + CollisionRestitution) * relVn * 0.5f;
-                    a.VelX -= jimp * nx; a.VelY -= jimp * ny; a.VelZ -= jimp * nz;
-                    b.VelX += jimp * nx; b.VelY += jimp * ny; b.VelZ += jimp * nz;
                 }
-                float push = (minD - dist) * 0.5f;
-                a.PosX += nx * push; a.PosY += ny * push; a.PosZ += nz * push;
-                b.PosX -= nx * push; b.PosY -= ny * push; b.PosZ -= nz * push;
+                // Mass-weighted positional separation (heavy ship moves out less).
+                float pen = minD - dist;
+                float pushA = pen * (iA / invSum);
+                float pushB = pen * (iB / invSum);
+                a.PosX += nx * pushA; a.PosY += ny * pushA; a.PosZ += nz * pushA;
+                b.PosX -= nx * pushB; b.PosY -= ny * pushB; b.PosZ -= nz * pushB;
                 ships[i] = a;
                 ships[j] = b;
             }
@@ -1495,6 +1522,7 @@ public static partial class Module
             RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
             Health = MaxHull(shipClass),
+            Mass = MassFor(shipClass),
             LastInputTick = 0,
             LastFireTick = 0,
             IsPig = false,

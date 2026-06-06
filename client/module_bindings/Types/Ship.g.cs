@@ -51,6 +51,8 @@ namespace SpacetimeDB.Types
         public float AngVelZ;
         [DataMember(Name = "health")]
         public float Health;
+        [DataMember(Name = "mass")]
+        public float Mass;
         [DataMember(Name = "last_input_tick")]
         public uint LastInputTick;
         [DataMember(Name = "last_fire_tick")]
@@ -78,6 +80,7 @@ namespace SpacetimeDB.Types
             float AngVelY,
             float AngVelZ,
             float Health,
+            float Mass,
             uint LastInputTick,
             uint LastFireTick,
             bool IsPig
@@ -102,6 +105,7 @@ namespace SpacetimeDB.Types
             this.AngVelY = AngVelY;
             this.AngVelZ = AngVelZ;
             this.Health = Health;
+            this.Mass = Mass;
             this.LastInputTick = LastInputTick;
             this.LastFireTick = LastFireTick;
             this.IsPig = IsPig;

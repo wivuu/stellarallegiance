@@ -17,6 +17,15 @@ namespace SpacetimeDB.Types
         {
             protected override string RemoteTableName => "player";
 
+            public sealed class ChatTeamIndex : BTreeIndexBase<byte>
+            {
+                protected override byte GetKey(Player row) => row.ChatTeam;
+
+                public ChatTeamIndex(PlayerHandle table) : base(table) { }
+            }
+
+            public readonly ChatTeamIndex ChatTeam;
+
             public sealed class IdentityUniqueIndex : UniqueIndexBase<SpacetimeDB.Identity>
             {
                 protected override SpacetimeDB.Identity GetKey(Player row) => row.Identity;
@@ -28,6 +37,7 @@ namespace SpacetimeDB.Types
 
             internal PlayerHandle(DbConnection conn) : base(conn)
             {
+                ChatTeam = new(this);
                 Identity = new(this);
             }
 
@@ -62,10 +72,12 @@ namespace SpacetimeDB.Types
     public sealed class PlayerIxCols
     {
         public global::SpacetimeDB.IxCol<Player, SpacetimeDB.Identity> Identity { get; }
+        public global::SpacetimeDB.IxCol<Player, byte> ChatTeam { get; }
 
         public PlayerIxCols(string tableName)
         {
             Identity = new global::SpacetimeDB.IxCol<Player, SpacetimeDB.Identity>(tableName, "identity");
+            ChatTeam = new global::SpacetimeDB.IxCol<Player, byte>(tableName, "chat_team");
         }
     }
 }

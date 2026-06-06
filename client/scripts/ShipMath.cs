@@ -13,6 +13,7 @@ public static class ShipMath
 		Vel = new Vec3(r.VelX, r.VelY, r.VelZ),
 		Rot = new Quat(r.RotX, r.RotY, r.RotZ, r.RotW),
 		AngVel = new Vec3(r.AngVelX, r.AngVelY, r.AngVelZ),
+		Mass = r.Mass,
 	};
 
 	public static Vector3 ToGodot(Vec3 v) => new Vector3(v.X, v.Y, v.Z);

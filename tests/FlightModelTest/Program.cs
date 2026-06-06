@@ -131,6 +131,39 @@ static class Program
             Console.WriteLine($"PASS: boosted terminal speed {boostSpeed:R} exceeds {scout.MaxSpeed}, capped at {boostCap}");
         }
 
+        // 5. Mass re-parameterizes flight: under identical full thrust, a heavier
+        //    ship gains speed slower (accel = ThrustAccel * baselineMass / actualMass).
+        //    Also confirms the zero-mass fallback equals baseline mass exactly.
+        var scoutStats = FlightModel.StatsFor(FlightModel.ClassScout);
+        var thrust = new ShipInputState { Thrust = 1f };
+        var light = new ShipState { Rot = Quat.Identity, Mass = scoutStats.Mass };       // baseline
+        var heavy = new ShipState { Rot = Quat.Identity, Mass = scoutStats.Mass * 4f };  // 4x heavier
+        var unset = new ShipState { Rot = Quat.Identity };                               // Mass = 0 -> baseline
+        for (int t = 0; t < 5; t++)
+        {
+            light = FlightModel.Integrate(light, thrust, scoutStats);
+            heavy = FlightModel.Integrate(heavy, thrust, scoutStats);
+            unset = FlightModel.Integrate(unset, thrust, scoutStats);
+        }
+        if (heavy.Vel.Length() >= light.Vel.Length())
+        {
+            Console.WriteLine($"FAIL: heavy ship speed {heavy.Vel.Length():R} not below light {light.Vel.Length():R}");
+            failures++;
+        }
+        else
+        {
+            Console.WriteLine($"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R})");
+        }
+        if (unset.Vel.Z != light.Vel.Z)
+        {
+            Console.WriteLine($"FAIL: zero-mass fallback {unset.Vel.Z:R} != baseline mass {light.Vel.Z:R}");
+            failures++;
+        }
+        else
+        {
+            Console.WriteLine("PASS: zero-mass fallback equals baseline mass (bit-identical)");
+        }
+
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;
     }
