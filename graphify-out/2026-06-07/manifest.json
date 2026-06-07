@@ -1,0 +1,247 @@
+{
+  "client/scripts/AlephView.cs": {
+    "mtime": 1780756899.81516,
+    "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
+    "semantic_hash": ""
+  },
+  "client/scripts/CameraRig.cs": {
+    "mtime": 1780751630.428061,
+    "ast_hash": "6c4d9e55a32f1354746e35860b3c39a8",
+    "semantic_hash": ""
+  },
+  "client/scripts/Chat.cs": {
+    "mtime": 1780695227.6188376,
+    "ast_hash": "4e9658cfe809f7b65bfaa7b81ac6c557",
+    "semantic_hash": "4e9658cfe809f7b65bfaa7b81ac6c557"
+  },
+  "client/scripts/ConnectionManager.cs": {
+    "mtime": 1780668592.8209198,
+    "ast_hash": "00ba21f5cf6b4e5896ef39088e4b9e09",
+    "semantic_hash": "00ba21f5cf6b4e5896ef39088e4b9e09"
+  },
+  "client/scripts/ConnectionOverlay.cs": {
+    "mtime": 1780682700.7644095,
+    "ast_hash": "bff1be5ff7da9defa3b36bfcc74f3da8",
+    "semantic_hash": "bff1be5ff7da9defa3b36bfcc74f3da8"
+  },
+  "client/scripts/DustField.cs": {
+    "mtime": 1780668592.8220572,
+    "ast_hash": "0119cebd52c7b7e59ffb768881a98abe",
+    "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
+  },
+  "client/scripts/EngineGlow.cs": {
+    "mtime": 1780668592.8225462,
+    "ast_hash": "d42df7b554c4671708d66782ca798b0f",
+    "semantic_hash": "d42df7b554c4671708d66782ca798b0f"
+  },
+  "client/scripts/ExplosionEffect.cs": {
+    "mtime": 1780678799.1349943,
+    "ast_hash": "a6ab4acf0ddf3815b791df79e2345048",
+    "semantic_hash": "a6ab4acf0ddf3815b791df79e2345048"
+  },
+  "client/scripts/HitFlash.cs": {
+    "mtime": 1780678799.1351247,
+    "ast_hash": "06cbbf17aa619336fdbf34371a93a577",
+    "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
+  },
+  "client/scripts/Hud.cs": {
+    "mtime": 1780695227.619088,
+    "ast_hash": "2b87cdc3230050c826d31513b471d178",
+    "semantic_hash": "2b87cdc3230050c826d31513b471d178"
+  },
+  "client/scripts/Lobby.cs": {
+    "mtime": 1780668592.8234627,
+    "ast_hash": "fd12a10ece76fdc1a985b2b672854dbf",
+    "semantic_hash": "fd12a10ece76fdc1a985b2b672854dbf"
+  },
+  "client/scripts/Minimap.cs": {
+    "mtime": 1780668592.8238854,
+    "ast_hash": "840f43e46d5bb113fb2a4379e19559be",
+    "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
+  },
+  "client/scripts/PredictionController.cs": {
+    "mtime": 1780668592.8244162,
+    "ast_hash": "a33c69f946872cd103a72aa35e96f715",
+    "semantic_hash": "a33c69f946872cd103a72aa35e96f715"
+  },
+  "client/scripts/ProjectileView.cs": {
+    "mtime": 1780753450.3530416,
+    "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
+    "semantic_hash": ""
+  },
+  "client/scripts/RemoteShip.cs": {
+    "mtime": 1780668592.8252892,
+    "ast_hash": "fb71a5d4057a9cb52ecc70003016b8aa",
+    "semantic_hash": "fb71a5d4057a9cb52ecc70003016b8aa"
+  },
+  "client/scripts/ShipController.cs": {
+    "mtime": 1780695227.6193702,
+    "ast_hash": "70599e403e3d60d885db840e470a3102",
+    "semantic_hash": "70599e403e3d60d885db840e470a3102"
+  },
+  "client/scripts/ShipMath.cs": {
+    "mtime": 1780749220.7178583,
+    "ast_hash": "50ae535bd280c26fd209e16768313197",
+    "semantic_hash": ""
+  },
+  "client/scripts/Starscape.cs": {
+    "mtime": 1780766621.203157,
+    "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
+    "semantic_hash": ""
+  },
+  "client/scripts/Sun.cs": {
+    "mtime": 1780766030.2042913,
+    "ast_hash": "2280892dfca65720b99510a239ec7c6f",
+    "semantic_hash": ""
+  },
+  "client/scripts/TargetMarkers.cs": {
+    "mtime": 1780754042.9995205,
+    "ast_hash": "360776da7afd49c2d23d37eaae67490c",
+    "semantic_hash": ""
+  },
+  "client/scripts/TeamTrail.cs": {
+    "mtime": 1780668592.827944,
+    "ast_hash": "fd5361bc51fc5cdb01d496ce803ddb4d",
+    "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
+  },
+  "client/scripts/WorldRenderer.cs": {
+    "mtime": 1780755805.1722806,
+    "ast_hash": "89786cb08c99cf506a3cbf0434130f25",
+    "semantic_hash": ""
+  },
+  "client/wivuullegiance.csproj": {
+    "mtime": 1780664788.4547856,
+    "ast_hash": "d05677b5691cac7d3f198689313a524f",
+    "semantic_hash": "d05677b5691cac7d3f198689313a524f"
+  },
+  "client/wivuullegiance.sln": {
+    "mtime": 1780421022.6209621,
+    "ast_hash": "85b5f0d2d50697c1ec03c1f09d7056d6",
+    "semantic_hash": "85b5f0d2d50697c1ec03c1f09d7056d6"
+  },
+  "dotnet-tools.json": {
+    "mtime": 1780664978.7781804,
+    "ast_hash": "0a8a0044ec250a189c7bd91e3a0e2bca",
+    "semantic_hash": "0a8a0044ec250a189c7bd91e3a0e2bca"
+  },
+  "module/spacetime.json": {
+    "mtime": 1780421022.6222467,
+    "ast_hash": "6c80223649a1d66cc472b0bd75b43cb4",
+    "semantic_hash": "6c80223649a1d66cc472b0bd75b43cb4"
+  },
+  "module/spacetime.local.json": {
+    "mtime": 1780421022.6223156,
+    "ast_hash": "c5b90c54e317827cea0a2c453ec8b2a1",
+    "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
+  },
+  "module/spacetimedb/Lib.cs": {
+    "mtime": 1780755847.3690457,
+    "ast_hash": "78e0c2ecac7d042ae6bb9650cc1e54d1",
+    "semantic_hash": ""
+  },
+  "module/spacetimedb/PigAI.cs": {
+    "mtime": 1780749215.8906388,
+    "ast_hash": "c03242bcdc27e6039409fae7a7e3fa33",
+    "semantic_hash": ""
+  },
+  "module/spacetimedb/StdbModule.csproj": {
+    "mtime": 1780695227.6203237,
+    "ast_hash": "052fc5e9100188103d7e2d040d74287a",
+    "semantic_hash": "052fc5e9100188103d7e2d040d74287a"
+  },
+  "module/spacetimedb/global.json": {
+    "mtime": 1780421022.6228979,
+    "ast_hash": "7c216785c0983e9451814c7203a9bd65",
+    "semantic_hash": "7c216785c0983e9451814c7203a9bd65"
+  },
+  "scripts/export-clients.sh": {
+    "mtime": 1780507561.8618631,
+    "ast_hash": "49aaf2d89a761ab7815f34bd31b70747",
+    "semantic_hash": "49aaf2d89a761ab7815f34bd31b70747"
+  },
+  "scripts/populate-db.sh": {
+    "mtime": 1780682700.7643836,
+    "ast_hash": "81db20ae618c18fea4162a950707515f",
+    "semantic_hash": "81db20ae618c18fea4162a950707515f"
+  },
+  "scripts/publish-local.sh": {
+    "mtime": 1780682700.764164,
+    "ast_hash": "a3312cebefaeffcd3bbe358f0cc0a662",
+    "semantic_hash": "a3312cebefaeffcd3bbe358f0cc0a662"
+  },
+  "scripts/publish-maincloud.sh": {
+    "mtime": 1780665186.7700179,
+    "ast_hash": "afa23ffc0f5c98816152c34ce8ce7a6f",
+    "semantic_hash": "afa23ffc0f5c98816152c34ce8ce7a6f"
+  },
+  "scripts/start-client.sh": {
+    "mtime": 1780421022.62336,
+    "ast_hash": "021685682be7a9bb8c70bd0ef03aa91a",
+    "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
+  },
+  "shared/FlightModel.cs": {
+    "mtime": 1780749309.4069448,
+    "ast_hash": "b0f0b229586256ffe29f321b82b6c8ad",
+    "semantic_hash": ""
+  },
+  "shared/Shared.csproj": {
+    "mtime": 1780664948.316524,
+    "ast_hash": "569baec20e5abc28ec535f8fd2831790",
+    "semantic_hash": "569baec20e5abc28ec535f8fd2831790"
+  },
+  "tests/FlightModelTest/FlightModelTest.csproj": {
+    "mtime": 1780668592.8306723,
+    "ast_hash": "a2a51d25196bb00b70a5172e3d4cc058",
+    "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
+  },
+  "tests/FlightModelTest/Program.cs": {
+    "mtime": 1780749309.4072368,
+    "ast_hash": "30395b0e240e78e5698500b16504990b",
+    "semantic_hash": ""
+  },
+  "tools/asteroid-gen/asteroids.json": {
+    "mtime": 1780607323.898378,
+    "ast_hash": "2db48f8e1fbba57f7df0a912d2cb1941",
+    "semantic_hash": "2db48f8e1fbba57f7df0a912d2cb1941"
+  },
+  "tools/asteroid-gen/bake.py": {
+    "mtime": 1780601481.6091838,
+    "ast_hash": "ded49bcbdb26934914bf1b16e1dfb363",
+    "semantic_hash": "ded49bcbdb26934914bf1b16e1dfb363"
+  },
+  "tools/asteroid-gen/build.sh": {
+    "mtime": 1780581831.9110441,
+    "ast_hash": "ccbae1e3e0d248fb142a0743796062d7",
+    "semantic_hash": "ccbae1e3e0d248fb142a0743796062d7"
+  },
+  "tools/asteroid-gen/generate.py": {
+    "mtime": 1780602518.4168644,
+    "ast_hash": "385e38b902198c4739e17fd9ca84d5fc",
+    "semantic_hash": "385e38b902198c4739e17fd9ca84d5fc"
+  },
+  "tools/asteroid-gen/glb.py": {
+    "mtime": 1780590412.5484626,
+    "ast_hash": "369fb5143db0c5c8aa21cd1e9ddd418e",
+    "semantic_hash": "369fb5143db0c5c8aa21cd1e9ddd418e"
+  },
+  "tools/asteroid-gen/shapefield.py": {
+    "mtime": 1780603578.8132992,
+    "ast_hash": "3e094f376a235b88f032954a5669052c",
+    "semantic_hash": "3e094f376a235b88f032954a5669052c"
+  },
+  ".csharpierrc.yaml": {
+    "mtime": 1780664998.5641737,
+    "ast_hash": "81b9ca12636cac7d60db0fa3c10e0ec7",
+    "semantic_hash": "81b9ca12636cac7d60db0fa3c10e0ec7"
+  },
+  ".github/workflows/asteroids.yml": {
+    "mtime": 1780607678.1612601,
+    "ast_hash": "19de9fd57d6b968e01ef133e9dbdabe2",
+    "semantic_hash": "19de9fd57d6b968e01ef133e9dbdabe2"
+  },
+  ".github/workflows/build-godot-client.yml": {
+    "mtime": 1780678799.1348352,
+    "ast_hash": "bf1a045c41435faa179f737e983f3821",
+    "semantic_hash": "bf1a045c41435faa179f737e983f3821"
+  }
+}

@@ -14,6 +14,14 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
+- Gamification -- make it more fun in the near term:
+  - Add pods that eject on ship death; pod must either die, be rescued by a teammate, or slowly make their own way back to a base (on impulse) in order for player to respawn.
+  - Pigs should be podded -- they eject just like players and pods head towards the closest base
+  - Add a delay between pigs respawn. Once a squad of pigs spawn, all have to be dead before the next squad can spawn, and there's a 10 second delay after the last pig dies before the next squad spawns. 
+- Pig improvements:
+  - They should rescue pods if there are no enemies nearby.
+  - Pigs should prioritize aggressive targets over non-aggressive targets, but if there are no aggressive targets nearby, they should pursue non-aggressive targets (e.g. pods and passive players) instead of patrolling.
+  - Pigs should patrol if there are no targets nearby, instead of idling in place.
 
 ---
 
