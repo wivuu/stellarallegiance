@@ -212,7 +212,7 @@ Local loop (per `module/CLAUDE.md` + memory `headless-sim-testing`): `spacetime 
   before considering it done.
 
 ## Open assumptions (sensible defaults; flag if wrong)
-- Pod hull ~20, pod speed ~25 u/s ("impulse"), rescue radius ~30-40u, aggro window ~3 s,
+- Pod hull ~5, pod speed ~25 u/s ("impulse"), rescue radius ~30-40u, aggro window ~3 s,
   squad delay 10 s, squad size = `MaxPigsPerTeam` (5). All single-constant tunables.
 - A pod is unarmed. PIG pods don't restore a drone on arrival (squad logic owns respawns);
   they're rescue targets + flavor.
