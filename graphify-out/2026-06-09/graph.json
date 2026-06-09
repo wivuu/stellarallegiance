@@ -4622,7 +4622,7 @@
       "label": ".EnsurePigSlots()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L109",
+      "source_location": "L114",
       "id": "spacetimedb_pigai_module_ensurepigslots",
       "community": 5,
       "norm_label": ".ensurepigslots()"
@@ -4631,7 +4631,7 @@
       "label": "ReducerContext",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L109",
+      "source_location": "L114",
       "id": "module_spacetimedb_pigai_cs_reducercontext",
       "community": 5,
       "norm_label": "reducercontext"
@@ -4640,7 +4640,7 @@
       "label": ".DespawnAllPigs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L142",
+      "source_location": "L147",
       "id": "spacetimedb_pigai_module_despawnallpigs",
       "community": 0,
       "norm_label": ".despawnallpigs()"
@@ -4649,7 +4649,7 @@
       "label": ".SimulatePigLifecycle()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L173",
+      "source_location": "L178",
       "id": "spacetimedb_pigai_module_simulatepiglifecycle",
       "community": 5,
       "norm_label": ".simulatepiglifecycle()"
@@ -4658,7 +4658,7 @@
       "label": ".AssignPigRescuers()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L244",
+      "source_location": "L249",
       "id": "spacetimedb_pigai_module_assignpigrescuers",
       "community": 0,
       "norm_label": ".assignpigrescuers()"
@@ -4667,7 +4667,7 @@
       "label": ".SpawnPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L292",
+      "source_location": "L297",
       "id": "spacetimedb_pigai_module_spawnpig",
       "community": 5,
       "norm_label": ".spawnpig()"
@@ -4676,7 +4676,7 @@
       "label": "Pig",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L292",
+      "source_location": "L297",
       "id": "pig",
       "community": 5,
       "norm_label": "pig"
@@ -4685,7 +4685,7 @@
       "label": ".KillPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L350",
+      "source_location": "L355",
       "id": "spacetimedb_pigai_module_killpig",
       "community": 0,
       "norm_label": ".killpig()"
@@ -4694,7 +4694,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L350",
+      "source_location": "L355",
       "id": "module_spacetimedb_pigai_cs_ship",
       "community": 5,
       "norm_label": "ship"
@@ -4703,7 +4703,7 @@
       "label": ".PigThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L400",
+      "source_location": "L405",
       "id": "spacetimedb_pigai_module_pigthink",
       "community": 5,
       "norm_label": ".pigthink()"
@@ -4712,7 +4712,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L400",
+      "source_location": "L405",
       "id": "module_spacetimedb_pigai_cs_shipinputstate",
       "community": 5,
       "norm_label": "shipinputstate"
@@ -4721,7 +4721,7 @@
       "label": ".PigPatrolInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L623",
+      "source_location": "L634",
       "id": "spacetimedb_pigai_module_pigpatrolinput",
       "community": 5,
       "norm_label": ".pigpatrolinput()"
@@ -4730,7 +4730,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L623",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_vec3",
       "community": 5,
       "norm_label": "vec3"
@@ -4739,7 +4739,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L623",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_quat",
       "community": 5,
       "norm_label": "quat"
@@ -4748,7 +4748,7 @@
       "label": ".IsAggressive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L640",
+      "source_location": "L651",
       "id": "spacetimedb_pigai_module_isaggressive",
       "community": 5,
       "norm_label": ".isaggressive()"
@@ -4757,7 +4757,7 @@
       "label": ".PodThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L647",
+      "source_location": "L658",
       "id": "spacetimedb_pigai_module_podthink",
       "community": 5,
       "norm_label": ".podthink()"
@@ -4766,7 +4766,7 @@
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L673",
+      "source_location": "L684",
       "id": "spacetimedb_pigai_module_piglead",
       "community": 5,
       "norm_label": ".piglead()"
@@ -4775,7 +4775,7 @@
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L712",
+      "source_location": "L723",
       "id": "spacetimedb_pigai_module_pigavoidasteroids",
       "community": 5,
       "norm_label": ".pigavoidasteroids()"
@@ -4784,7 +4784,7 @@
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L744",
+      "source_location": "L757",
       "id": "spacetimedb_pigai_module_pigthreatscore",
       "community": 5,
       "norm_label": ".pigthreatscore()"
@@ -4793,7 +4793,7 @@
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L762",
+      "source_location": "L786",
       "id": "spacetimedb_pigai_module_teambasesector",
       "community": 5,
       "norm_label": ".teambasesector()"
@@ -4802,7 +4802,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L771",
+      "source_location": "L795",
       "id": "spacetimedb_pigai_module_enemyinsector",
       "community": 5,
       "norm_label": ".enemyinsector()"
@@ -4811,7 +4811,7 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L781",
+      "source_location": "L805",
       "id": "spacetimedb_pigai_module_alephto",
       "community": 5,
       "norm_label": ".alephto()"
@@ -4820,7 +4820,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L781",
+      "source_location": "L805",
       "id": "module_spacetimedb_pigai_cs_aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -4829,7 +4829,7 @@
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L792",
+      "source_location": "L816",
       "id": "spacetimedb_pigai_module_pigsteerto",
       "community": 5,
       "norm_label": ".pigsteerto()"
@@ -4838,7 +4838,7 @@
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L810",
+      "source_location": "L834",
       "id": "spacetimedb_pigai_module_pigattackpoint",
       "community": 5,
       "norm_label": ".pigattackpoint()"
@@ -4847,7 +4847,7 @@
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L838",
+      "source_location": "L862",
       "id": "spacetimedb_pigai_module_pigaimskill",
       "community": 5,
       "norm_label": ".pigaimskill()"
@@ -4856,7 +4856,7 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L851",
+      "source_location": "L875",
       "id": "spacetimedb_pigai_module_pigaimwobble",
       "community": 5,
       "norm_label": ".pigaimwobble()"
@@ -4865,7 +4865,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L868",
+      "source_location": "L892",
       "id": "spacetimedb_pigai_module_dot",
       "community": 5,
       "norm_label": ".dot()"
@@ -4874,7 +4874,7 @@
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L870",
+      "source_location": "L894",
       "id": "spacetimedb_pigai_module_clamp1",
       "community": 5,
       "norm_label": ".clamp1()"
@@ -4883,7 +4883,7 @@
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L872",
+      "source_location": "L896",
       "id": "spacetimedb_pigai_module_clamp01",
       "community": 5,
       "norm_label": ".clamp01()"
@@ -4892,7 +4892,7 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L874",
+      "source_location": "L898",
       "id": "spacetimedb_pigai_module_conjugate",
       "community": 5,
       "norm_label": ".conjugate()"
@@ -4901,7 +4901,7 @@
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L876",
+      "source_location": "L900",
       "id": "spacetimedb_pigai_module_normalizeor",
       "community": 5,
       "norm_label": ".normalizeor()"
@@ -4910,7 +4910,7 @@
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L882",
+      "source_location": "L906",
       "id": "spacetimedb_pigai_module_perpendicularto",
       "community": 5,
       "norm_label": ".perpendicularto()"
@@ -4919,7 +4919,7 @@
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L888",
+      "source_location": "L912",
       "id": "spacetimedb_pigai_module_smallestpositivef",
       "community": 5,
       "norm_label": ".smallestpositivef()"
@@ -14027,9 +14027,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L351",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "spacetimedb_lib_module_randomunitvec",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_randomunitvec"
     },
     {
       "relation": "method",
@@ -14289,9 +14289,9 @@
       "source_location": "L351",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_randomunitvec",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -14300,9 +14300,9 @@
       "source_location": "L351",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_randomunitvec",
-      "target": "module_spacetimedb_lib_cs_vec3",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_vec3"
     },
     {
       "relation": "calls",
@@ -14311,9 +14311,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L353",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_randomunitvec",
-      "target": "spacetimedb_lib_nextdouble",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_nextdouble"
     },
     {
       "relation": "calls",
@@ -14322,9 +14322,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1566",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_spawnpodfor",
-      "target": "spacetimedb_lib_module_randomunitvec",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_randomunitvec"
     },
     {
       "relation": "calls",
@@ -17869,9 +17869,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L337",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_length",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_length"
     },
     {
       "relation": "calls",

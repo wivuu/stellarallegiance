@@ -9,6 +9,14 @@ public partial class WorldRenderer : Node3D
 {
 	private const float BaseRadius = 45f;
 
+	// A pod removed while a friendly non-pod ship is in (roughly) hull contact was RESCUED
+	// — picked up by a teammate/drone — not destroyed, so it should simply vanish without a
+	// blast (the server's rescue pass deletes the row exactly like a kill does, so the row
+	// alone can't tell them apart; we mirror its rule client-side). The threshold is looser
+	// than the server's tight RescueRadius (6 units) to absorb the gap between the rescuer's
+	// rendered position (predicted for the local ship, interpolated for remotes) and the pod's.
+	private const float RescuePickupDist = 12f;
+
 	private Node3D _bases = null!;
 	private Node3D _asteroids = null!;
 	private Node3D _ships = null!;
@@ -498,13 +506,22 @@ public partial class WorldRenderer : Node3D
 			return;
 
 		bool local = LocalShip == node;
-		// A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
-		// place it at the predicted node position the player was actually watching (not the
-		// authoritative row coords, which lag prediction) so the blast — and the death-cam
-		// framed on it below — line up exactly. Remote ships have no prediction; use row coords.
-		Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
-		var boom = ExplosionEffect.Create(row.Class, row.Team);
-		SpawnEffect(boom, deathPos, row.SectorId);
+
+		// A rescued pod is removed cleanly (a friendly flew onto it), not destroyed — it just
+		// vanishes, no blast. The row delete is identical to a kill's, so detect the rescue the
+		// way the server does: a friendly non-pod ship in hull contact (see FriendlyRescuerNear).
+		bool rescued = row.IsPod && FriendlyRescuerNear(node, row.SectorId, row.Team);
+
+		if (!rescued)
+		{
+			// A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
+			// place it at the predicted node position the player was actually watching (not the
+			// authoritative row coords, which lag prediction) so the blast — and the death-cam
+			// framed on it below — line up exactly. Remote ships have no prediction; use row coords.
+			Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
+			var boom = ExplosionEffect.Create(row.Class, row.Team);
+			SpawnEffect(boom, deathPos, row.SectorId);
+		}
 
 		if (local)
 		{
@@ -513,12 +530,12 @@ public partial class WorldRenderer : Node3D
 			foreach (var g in _predictedShots)
 				g.QueueFree();
 			_predictedShots.Clear();
-			// Death-cam ONLY when the local POD is destroyed — that's the real death (spawn
+			// Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
 			// menu reopens). A local COMBAT ship's death instead ejects an escape pod the
 			// SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
 			// straight to the pod (both row callbacks run before this frame renders, so there's
 			// no overview flicker). So skip the death-cam there and only fire it for the pod.
-			if (row.IsPod)
+			if (row.IsPod && !rescued)
 			{
 				// Hold the chase camera on the death point for a beat so the player sees their own
 				// blast up close. The return to the home overview (respawn is at the team base) is
@@ -528,8 +545,42 @@ public partial class WorldRenderer : Node3D
 				_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
 				_pendingHomeReset = _localSector != HomeSector;
 			}
+			else if (row.IsPod)
+			{
+				// Local pod rescued: no blast to hold the camera on, but still return the view to
+				// the home overview where the spawn menu reopens.
+				_pendingHomeReset = _localSector != HomeSector;
+			}
 		}
 		node.QueueFree();
+	}
+
+	// Client-side mirror of the server's rescue rule (Lib.cs rescue pass): is a friendly,
+	// non-pod ship in roughly hull contact with this pod? If so the pod was picked up, not
+	// killed, so its removal should be silent. Compares RENDERED positions (rescuer node vs
+	// pod node) so the interpolation lag they share largely cancels, with a generous radius
+	// (RescuePickupDist) for the residual predicted/interp gap. Restricted to the pod's own
+	// sector — sectors share a coordinate origin, so a same-team ship in another sector can
+	// overlap in raw coords. The pod node is already removed from _shipNodes by the caller.
+	private bool FriendlyRescuerNear(Node3D podNode, uint sector, byte team)
+	{
+		Vector3 podPos = podNode.GlobalPosition;
+		foreach (var node in _shipNodes.Values)
+		{
+			(byte t, bool isPod) = node switch
+			{
+				RemoteShip rs => (rs.Team, rs.IsPod),
+				PredictionController pc => (pc.Team, pc.IsPod),
+				_ => ((byte)255, true),
+			};
+			if (isPod || t != team)
+				continue;
+			if (node.HasMeta("sector") && (int)node.GetMeta("sector") != (int)sector)
+				continue;
+			if (podPos.DistanceSquaredTo(node.GlobalPosition) <= RescuePickupDist * RescuePickupDist)
+				return true;
+		}
+		return false;
 	}
 
 	// ---- Projectile -----------------------------------------------------
