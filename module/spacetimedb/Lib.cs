@@ -314,7 +314,7 @@ public static partial class Module
     // sphere tracks the rock's solid body rather than its outermost spikes, instead of bounding
     // empty space between them. Render scale is unchanged — this only tightens the sim.
     private const float AsteroidCollisionScale = 0.82f;
-    private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
+    private const float BaseMaxHealth = 1300f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // ship-vs-static hull damage per (u/s) of inward impact
     // Ship-vs-ship damage per (u/s) of inward impact, multiplied by the pair's reduced
@@ -338,6 +338,23 @@ public static partial class Module
     // so a pod isn't accidentally resolved by a ship merely passing near it; the rescuer has
     // to actually reach it. Resolves the pod like docking (player → spawn menu, PIG pod despawns).
     private const float RescueRadius = ShipRadius * 2f;
+    // Eject kinematics: a freshly-spawned pod (player OR PIG) is flung clear of the wreck —
+    // a high-speed impulse in a random direction plus a tumble. The flight model soft-caps
+    // coasting velocity (it bleeds off through LinearDrag rather than snapping), so this
+    // speed actually persists for a second or two before the pod settles to its slow crawl;
+    // the spin likewise decays via AngularDrag. Server-only RNG — the result is baked into
+    // the spawned Ship row, so client prediction just reads it (no RNG to reproduce).
+    private const float PodEjectSpeed = 90f;   // u/s initial fling (decays to FlightModel.Pod.MaxSpeed)
+    private const float PodEjectSpin  = 5f;    // rad/s initial tumble (decays via AngularDrag)
+
+    // A uniformly-distributed unit vector from the reducer's deterministic RNG.
+    private static Vec3 RandomUnitVec(ReducerContext ctx)
+    {
+        float z = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0);            // cos(polar), uniform on the sphere
+        float phi = (float)(ctx.Rng.NextDouble() * 2.0 * Math.PI);
+        float r = MathF.Sqrt(MathF.Max(0f, 1f - z * z));
+        return new Vec3(r * MathF.Cos(phi), r * MathF.Sin(phi), z);
+    }
 
     // ---- Sectors & alephs ---------------------------------------------
     private const uint  HomeSector = 0;              // bases + spawn live here (the battlefield)
@@ -1544,6 +1561,11 @@ public static partial class Module
         DeleteShipInputs(ctx, dead.ShipId);
         ctx.Db.Ship.ShipId.Delete(dead.ShipId);
 
+        // Fling the pod clear of the wreck: inherit the wreck's momentum plus a high-speed
+        // impulse in a random direction, and a random tumble (both decay; see PodEjectSpeed).
+        var dir = RandomUnitVec(ctx);
+        var spin = RandomUnitVec(ctx);
+
         var pod = ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
@@ -1552,9 +1574,11 @@ public static partial class Module
             SectorId = dead.SectorId,
             Class = dead.Class,
             PosX = dead.PosX, PosY = dead.PosY, PosZ = dead.PosZ,
-            VelX = 0f, VelY = 0f, VelZ = 0f,
+            VelX = dead.VelX + dir.X * PodEjectSpeed,
+            VelY = dead.VelY + dir.Y * PodEjectSpeed,
+            VelZ = dead.VelZ + dir.Z * PodEjectSpeed,
             RotX = dead.RotX, RotY = dead.RotY, RotZ = dead.RotZ, RotW = dead.RotW,
-            AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
+            AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
             Health = PodMaxHull,
             Mass = FlightModel.Pod.Mass,
             LastInputTick = 0,

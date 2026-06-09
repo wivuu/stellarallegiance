@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781003687.6436105,
-    "ast_hash": "f029a8a0d2368ff8c15ef4f048620856",
+    "mtime": 1781005852.3219934,
+    "ast_hash": "b4a9e5795992f034fe2ae8671f4d5edd",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781004443.4739103,
-    "ast_hash": "6231fcf9b8bd9810e05a4efb6346394a",
+    "mtime": 1781005861.8058605,
+    "ast_hash": "96291cbfc21559c13272509a121b566a",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -180,8 +180,8 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1780862546.6791403,
-    "ast_hash": "f454d9683c3a7b98312712d4cbaa1c42",
+    "mtime": 1781005886.9223785,
+    "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {

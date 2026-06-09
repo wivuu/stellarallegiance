@@ -14,10 +14,6 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
-- Gamification -- make it more fun in the near term:
-  - PIGs should prioritize attacking players that are attacking their bae
-  - increase the hull of bases by 30%
-  - Eject pods should be sent out, spinning, in a random direction at a high speed trajectory 
 ---
 
 ## Roadmap (prioritized)

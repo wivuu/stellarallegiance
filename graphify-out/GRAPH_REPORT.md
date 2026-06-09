@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-09)
 
 ## Corpus Check
-- 46 files · ~54,252 words
+- 46 files · ~54,937 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 709 nodes · 1217 edges · 41 communities (34 shown, 7 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
+- 711 nodes · 1224 edges · 41 communities (34 shown, 7 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `cf457a8d`
+- Built from commit: `c45d0ec8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -56,9 +56,9 @@
 - [[_COMMUNITY_Community 41|Community 41]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Module` - 60 edges
+1. `Module` - 61 edges
 2. `WorldRenderer` - 45 edges
-3. `ReducerContext` - 39 edges
+3. `ReducerContext` - 40 edges
 4. `Chat` - 32 edges
 5. `Module` - 31 edges
 6. `PredictionController` - 28 edges
@@ -89,11 +89,11 @@
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.07
-Nodes (27): DetRng, Filter, Identity, long, byte, float, Identity, int (+19 more)
+Nodes (28): DetRng, Filter, Identity, long, byte, float, Identity, int (+20 more)
 
 ### Community 1 - "AlephView World State"
 Cohesion: 0.07
-Nodes (32): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, ConnectionManager, DbConnection (+24 more)
+Nodes (31): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, ConnectionManager, DbConnection (+23 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -108,7 +108,7 @@ Cohesion: 0.06
 Nodes (24): Button, CanvasLayer, Button, Color, ConnectionManager, double, Label, Button (+16 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.15
+Cohesion: 0.17
 Nodes (11): Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState, uint (+3 more)
 
 ### Community 6 - "Client-Side Prediction"
@@ -152,8 +152,8 @@ Cohesion: 0.14
 Nodes (11): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+3 more)
 
 ### Community 16 - "Connection & World Renderer"
-Cohesion: 0.26
-Nodes (5): DbConnection, Identity, string, Exception, ConnectionManager
+Cohesion: 0.23
+Nodes (6): DbConnection, Identity, string, Node, Exception, ConnectionManager
 
 ### Community 17 - "Dust Field Environment"
 Cohesion: 0.20
@@ -216,7 +216,7 @@ Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
 ## Knowledge Gaps
-- **203 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+198 more)
+- **204 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+199 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -224,16 +224,16 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.228) - this node is a cross-community bridge._
+  _High betweenness centrality (0.227) - this node is a cross-community bridge._
 - **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
-  _High betweenness centrality (0.219) - this node is a cross-community bridge._
+  _High betweenness centrality (0.221) - this node is a cross-community bridge._
 - **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`?**
-  _High betweenness centrality (0.214) - this node is a cross-community bridge._
+  _High betweenness centrality (0.217) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _223 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _224 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.07043167802661474 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06540447504302926 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06810035842293907 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06980433632998413 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._

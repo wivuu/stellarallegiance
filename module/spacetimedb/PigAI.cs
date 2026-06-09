@@ -74,6 +74,11 @@ public static partial class Module
     private const float PigThreatCloseWeight = 0.7f;   // proximity (shorter time-to-impact)
     private const float PigThreatDmgWeight = 0.4f;     // enemy weapon damage (Fighter > Scout)
     private const float PigThreatSwitchMargin = 1.3f;  // only switch when new threat ≥ 1.3× current
+    // Base defense: an enemy near OUR base is shelling the win-condition target, so a drone
+    // treats it as the top threat — outweighing aim/close/dmg combined — regardless of whether
+    // that enemy is currently pointed at the drone. Scales with how close it is to the base.
+    private const float PigThreatBaseWeight = 2.5f;    // base attacker dominates the other terms
+    private const float PigBaseThreatRadius = 700f;    // within this of our base = "attacking it"
 
     // ---- Aiming skill (per-slot, so a squad is a MIX, not five aimbots) ----
     // Each drone slot draws a stable competence in [0,1] from a hash of its PigId
@@ -351,6 +356,11 @@ public static partial class Module
     {
         ctx.Db.Ship.ShipId.Delete(s.ShipId);
 
+        // Same eject as a player pod: flung clear of the wreck on a random high-speed,
+        // tumbling trajectory (decays via drag) before PodThink reasserts the flight home.
+        var dir = RandomUnitVec(ctx);
+        var spin = RandomUnitVec(ctx);
+
         ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
@@ -359,9 +369,11 @@ public static partial class Module
             SectorId = s.SectorId,
             Class = s.Class,
             PosX = s.PosX, PosY = s.PosY, PosZ = s.PosZ,
-            VelX = 0f, VelY = 0f, VelZ = 0f,
+            VelX = s.VelX + dir.X * PodEjectSpeed,
+            VelY = s.VelY + dir.Y * PodEjectSpeed,
+            VelZ = s.VelZ + dir.Z * PodEjectSpeed,
             RotX = s.RotX, RotY = s.RotY, RotZ = s.RotZ, RotW = s.RotW,
-            AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
+            AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
             Health = PodMaxHull,
             Mass = FlightModel.Pod.Mass,
             LastInputTick = tick,
@@ -453,6 +465,12 @@ public static partial class Module
         // float home, and a friendly pod is rescued passively on contact (the rescue pass) or
         // flies itself home, so drones don't break off to chase pods (which would drag them
         // back toward their OWN base instead of pressing the attack).
+        // Our own base in this sector (if any). Enemies near it are shelling the win-condition
+        // target, so PigThreatScore prioritises them for defense.
+        Vec3? myBasePos = null;
+        foreach (var b in ctx.Db.Base.Iter())
+            if (b.Team == me.Team && b.SectorId == me.SectorId) { myBasePos = new Vec3(b.PosX, b.PosY, b.PosZ); break; }
+
         float radar2 = PigRadarRange * PigRadarRange;
         float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
         Ship? bestAggr = null; float bestAggrScore = float.NegativeInfinity;
@@ -471,7 +489,7 @@ public static partial class Module
                 continue;
             if (IsAggressive(s, tick))
             {
-                float score = PigThreatScore(myPos, s);
+                float score = PigThreatScore(myPos, s, myBasePos);
                 if (keepId is ulong k && s.ShipId == k) { keptAggr = s; keptAggrScore = score; }
                 if (d2 <= radar2 && score > bestAggrScore) { bestAggrScore = score; bestAggr = s; }
             }
@@ -732,9 +750,11 @@ public static partial class Module
 
     // How much `enemy` threatens a drone at `myPos` right now — a defensive priority
     // score combining: is the enemy's nose pointed at us (about to shoot), how close it
-    // is (time-to-impact / dodge difficulty), and how hard its weapon hits. Higher =
-    // engage it first. All terms are roughly 0..1 so the weights set their relative pull.
-    private static float PigThreatScore(Vec3 myPos, Ship enemy)
+    // is (time-to-impact / dodge difficulty), how hard its weapon hits, and — dominating
+    // the rest — whether it's right on top of OUR base (shelling the win condition). Higher
+    // = engage it first. The first three terms are roughly 0..1 so their weights set their
+    // relative pull; the base term adds up to PigThreatBaseWeight on top.
+    private static float PigThreatScore(Vec3 myPos, Ship enemy, Vec3? myBasePos)
     {
         Vec3 ePos = new Vec3(enemy.PosX, enemy.PosY, enemy.PosZ);
         Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
@@ -748,7 +768,18 @@ public static partial class Module
         if (close < 0f) close = 0f;
         float dmg = WeaponDamage(enemy.Class) / 10f; // Scout 0.4, Fighter 1.0
 
-        return PigThreatAimWeight * aim + PigThreatCloseWeight * close + PigThreatDmgWeight * dmg;
+        // Base attacker: 1 = on the base, 0 = at/beyond the threat radius. Weighted heavily
+        // so a drone breaks off to defend an enemy pounding its base over a closer dogfight.
+        float baseThreat = 0f;
+        if (myBasePos is Vec3 bp)
+        {
+            float bd = (ePos - bp).Length();
+            baseThreat = 1f - bd / PigBaseThreatRadius;
+            if (baseThreat < 0f) baseThreat = 0f;
+        }
+
+        return PigThreatAimWeight * aim + PigThreatCloseWeight * close
+             + PigThreatDmgWeight * dmg + PigThreatBaseWeight * baseThreat;
     }
 
     // The sector containing this team's base (first found), or null if the team has none.
