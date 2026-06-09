@@ -1,6 +1,5 @@
 using SpacetimeDB;
 using StellarAllegiance.Shared;
-using StellarAllegiance.Shared.Navigation;
 
 // =====================================================================
 //  PigAI.cs — AI combat drones ("PIGs"), Allegiance-style.
@@ -806,24 +805,12 @@ public static partial class Module
         return false;
     }
 
-    // The aleph in `fromSector` to take to get to `destSector` — the direct funnel when
-    // the two are linked, otherwise the FIRST HOP of a multi-sector route planned over
-    // the aleph topology (SectorRoutePlanner, .PLAN/AI.md strategic layer). Null only
-    // when no aleph chain reaches the destination at all. Callers re-invoke this after
-    // every warp, so the route re-plans hop by hop.
+    // The aleph in `fromSector` whose far end is `destSector` (the funnel to take to get
+    // there), or null if the two sectors aren't directly linked.
     private static Aleph? AlephTo(ReducerContext ctx, uint fromSector, uint destSector)
     {
-        var links = new List<SectorLink>();
         foreach (var a in ctx.Db.Aleph.Iter())
-        {
             if (a.SectorId == fromSector && a.DestSectorId == destSector)
-                return a;   // directly linked — no route planning needed
-            links.Add(new SectorLink { FromSector = a.SectorId, ToSector = a.DestSectorId });
-        }
-        if (SectorRoutePlanner.NextHop(fromSector, destSector, links) is not uint next)
-            return null;
-        foreach (var a in ctx.Db.Aleph.Iter())
-            if (a.SectorId == fromSector && a.DestSectorId == next)
                 return a;
         return null;
     }
@@ -831,15 +818,8 @@ public static partial class Module
     // Steer toward a world point: turn the nose onto it (hard turn if it's behind), thrust
     // forward once roughly aligned, and bend around asteroids in the way. Used to run down
     // an aleph — chasing a locked target across sectors, or routing back home.
-    //
-    // Navigation-aware: when the straight segment to the point is blocked by static
-    // obstacles, steer for the next waypoint of a planned detour instead (PigNavWaypoint,
-    // .PLAN/AI.md local layer). With a clear line this is a no-op (point comes back
-    // unchanged), so open-space behaviour — and the reactive PigAvoidAsteroids layer
-    // below, which keeps handling close-range grazes — is untouched.
     private static ShipInputState PigSteerTo(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing)
     {
-        point = PigNavWaypoint(ctx, me.SectorId, myPos, point);
         Vec3 to = point - myPos;
         float d = to.Length();
         Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));

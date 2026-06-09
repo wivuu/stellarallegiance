@@ -574,7 +574,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L1",
       "id": "scripts_connectionmanager",
-      "community": 8,
+      "community": 16,
       "norm_label": "connectionmanager.cs"
     },
     {
@@ -583,7 +583,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "id": "scripts_connectionmanager_connectionmanager",
-      "community": 8,
+      "community": 16,
       "norm_label": "connectionmanager"
     },
     {
@@ -592,7 +592,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L15",
       "id": "client_scripts_connectionmanager_cs_string",
-      "community": 8,
+      "community": 16,
       "norm_label": "string"
     },
     {
@@ -601,7 +601,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L41",
       "id": "scripts_connectionmanager_connectionmanager_ready",
-      "community": 8,
+      "community": 16,
       "norm_label": "._ready()"
     },
     {
@@ -610,7 +610,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L61",
       "id": "scripts_connectionmanager_connectionmanager_connect",
-      "community": 8,
+      "community": 16,
       "norm_label": ".connect()"
     },
     {
@@ -619,7 +619,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
       "id": "scripts_connectionmanager_connectionmanager_process",
-      "community": 8,
+      "community": 16,
       "norm_label": "._process()"
     },
     {
@@ -628,7 +628,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "scripts_connectionmanager_connectionmanager_onconnect",
-      "community": 8,
+      "community": 16,
       "norm_label": ".onconnect()"
     },
     {
@@ -637,7 +637,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "client_scripts_connectionmanager_cs_dbconnection",
-      "community": 8,
+      "community": 16,
       "norm_label": "dbconnection"
     },
     {
@@ -646,7 +646,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "client_scripts_connectionmanager_cs_identity",
-      "community": 8,
+      "community": 16,
       "norm_label": "identity"
     },
     {
@@ -655,7 +655,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
       "id": "scripts_connectionmanager_connectionmanager_onconnecterror",
-      "community": 8,
+      "community": 16,
       "norm_label": ".onconnecterror()"
     },
     {
@@ -664,7 +664,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
       "id": "exception",
-      "community": 8,
+      "community": 16,
       "norm_label": "exception"
     },
     {
@@ -673,7 +673,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L102",
       "id": "scripts_connectionmanager_connectionmanager_ondisconnect",
-      "community": 8,
+      "community": 16,
       "norm_label": ".ondisconnect()"
     },
     {
@@ -2868,7 +2868,7 @@
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L46",
-      "id": "client_scripts_targetmarkers_cs_ulong",
+      "id": "ulong",
       "community": 13,
       "norm_label": "ulong"
     },
@@ -3183,7 +3183,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L38",
-      "id": "client_scripts_worldrenderer_cs_dictionary",
+      "id": "dictionary",
       "community": 1,
       "norm_label": "dictionary"
     },
@@ -3535,7 +3535,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L453",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 8,
+      "community": 16,
       "norm_label": "node"
     },
     {
@@ -4453,7 +4453,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1508",
       "id": "spacetimedb_lib_module_dist2",
-      "community": 5,
+      "community": 0,
       "norm_label": ".dist2()"
     },
     {
@@ -4637,132 +4637,6 @@
       "norm_label": ".maybestartmatch()"
     },
     {
-      "label": "NavigationAdapter.cs",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L1",
-      "id": "spacetimedb_navigationadapter",
-      "community": 43,
-      "norm_label": "navigationadapter.cs"
-    },
-    {
-      "label": "Module",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L21",
-      "id": "spacetimedb_navigationadapter_module",
-      "community": 43,
-      "norm_label": "module"
-    },
-    {
-      "label": "float",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L26",
-      "id": "module_spacetimedb_navigationadapter_cs_float",
-      "community": 43,
-      "norm_label": "float"
-    },
-    {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L32",
-      "id": "module_spacetimedb_navigationadapter_cs_int",
-      "community": 43,
-      "norm_label": "int"
-    },
-    {
-      "label": "NavGraphBuildOptions",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L35",
-      "id": "navgraphbuildoptions",
-      "community": 43,
-      "norm_label": "navgraphbuildoptions"
-    },
-    {
-      "label": "SectorNavEntry",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L37",
-      "id": "spacetimedb_navigationadapter_sectornaventry",
-      "community": 43,
-      "norm_label": "sectornaventry"
-    },
-    {
-      "label": "ulong",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L39",
-      "id": "module_spacetimedb_navigationadapter_cs_ulong",
-      "community": 43,
-      "norm_label": "ulong"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L40",
-      "id": "module_spacetimedb_navigationadapter_cs_list",
-      "community": 43,
-      "norm_label": "list"
-    },
-    {
-      "label": "NavGraph",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L41",
-      "id": "module_spacetimedb_navigationadapter_cs_navgraph",
-      "community": 43,
-      "norm_label": "navgraph"
-    },
-    {
-      "label": "Dictionary",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L44",
-      "id": "module_spacetimedb_navigationadapter_cs_dictionary",
-      "community": 43,
-      "norm_label": "dictionary"
-    },
-    {
-      "label": ".SectorNav()",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L48",
-      "id": "spacetimedb_navigationadapter_module_sectornav",
-      "community": 43,
-      "norm_label": ".sectornav()"
-    },
-    {
-      "label": "ReducerContext",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L48",
-      "id": "module_spacetimedb_navigationadapter_cs_reducercontext",
-      "community": 43,
-      "norm_label": "reducercontext"
-    },
-    {
-      "label": ".PigNavWaypoint()",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L116",
-      "id": "spacetimedb_navigationadapter_module_pignavwaypoint",
-      "community": 43,
-      "norm_label": ".pignavwaypoint()"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L116",
-      "id": "module_spacetimedb_navigationadapter_cs_vec3",
-      "community": 43,
-      "norm_label": "vec3"
-    },
-    {
       "label": "PigAI.cs",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
@@ -4775,7 +4649,7 @@
       "label": "Module",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L43",
+      "source_location": "L42",
       "id": "spacetimedb_pigai_module",
       "community": 5,
       "norm_label": "module"
@@ -4784,7 +4658,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L48",
+      "source_location": "L47",
       "id": "module_spacetimedb_pigai_cs_int",
       "community": 5,
       "norm_label": "int"
@@ -4793,7 +4667,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L52",
+      "source_location": "L51",
       "id": "module_spacetimedb_pigai_cs_uint",
       "community": 5,
       "norm_label": "uint"
@@ -4802,7 +4676,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L58",
+      "source_location": "L57",
       "id": "module_spacetimedb_pigai_cs_float",
       "community": 5,
       "norm_label": "float"
@@ -4811,7 +4685,7 @@
       "label": ".EnsurePigSlots()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L115",
+      "source_location": "L114",
       "id": "spacetimedb_pigai_module_ensurepigslots",
       "community": 5,
       "norm_label": ".ensurepigslots()"
@@ -4820,7 +4694,7 @@
       "label": "ReducerContext",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L115",
+      "source_location": "L114",
       "id": "module_spacetimedb_pigai_cs_reducercontext",
       "community": 5,
       "norm_label": "reducercontext"
@@ -4829,7 +4703,7 @@
       "label": ".DespawnAllPigs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L148",
+      "source_location": "L147",
       "id": "spacetimedb_pigai_module_despawnallpigs",
       "community": 5,
       "norm_label": ".despawnallpigs()"
@@ -4838,7 +4712,7 @@
       "label": ".SimulatePigLifecycle()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L179",
+      "source_location": "L178",
       "id": "spacetimedb_pigai_module_simulatepiglifecycle",
       "community": 5,
       "norm_label": ".simulatepiglifecycle()"
@@ -4847,7 +4721,7 @@
       "label": ".AssignPigRescuers()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L250",
+      "source_location": "L249",
       "id": "spacetimedb_pigai_module_assignpigrescuers",
       "community": 5,
       "norm_label": ".assignpigrescuers()"
@@ -4856,7 +4730,7 @@
       "label": ".SpawnPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L298",
+      "source_location": "L297",
       "id": "spacetimedb_pigai_module_spawnpig",
       "community": 5,
       "norm_label": ".spawnpig()"
@@ -4865,7 +4739,7 @@
       "label": "Pig",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L298",
+      "source_location": "L297",
       "id": "pig",
       "community": 5,
       "norm_label": "pig"
@@ -4874,7 +4748,7 @@
       "label": ".KillPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L356",
+      "source_location": "L355",
       "id": "spacetimedb_pigai_module_killpig",
       "community": 5,
       "norm_label": ".killpig()"
@@ -4883,7 +4757,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L356",
+      "source_location": "L355",
       "id": "module_spacetimedb_pigai_cs_ship",
       "community": 5,
       "norm_label": "ship"
@@ -4892,7 +4766,7 @@
       "label": ".PigThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L406",
+      "source_location": "L405",
       "id": "spacetimedb_pigai_module_pigthink",
       "community": 5,
       "norm_label": ".pigthink()"
@@ -4901,7 +4775,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L406",
+      "source_location": "L405",
       "id": "module_spacetimedb_pigai_cs_shipinputstate",
       "community": 5,
       "norm_label": "shipinputstate"
@@ -4910,7 +4784,7 @@
       "label": ".PigPatrolInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L635",
+      "source_location": "L634",
       "id": "spacetimedb_pigai_module_pigpatrolinput",
       "community": 5,
       "norm_label": ".pigpatrolinput()"
@@ -4919,7 +4793,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L635",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_vec3",
       "community": 5,
       "norm_label": "vec3"
@@ -4928,7 +4802,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L635",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_quat",
       "community": 5,
       "norm_label": "quat"
@@ -4937,7 +4811,7 @@
       "label": ".IsAggressive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L652",
+      "source_location": "L651",
       "id": "spacetimedb_pigai_module_isaggressive",
       "community": 5,
       "norm_label": ".isaggressive()"
@@ -4946,7 +4820,7 @@
       "label": ".PodThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L659",
+      "source_location": "L658",
       "id": "spacetimedb_pigai_module_podthink",
       "community": 5,
       "norm_label": ".podthink()"
@@ -4955,7 +4829,7 @@
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L685",
+      "source_location": "L684",
       "id": "spacetimedb_pigai_module_piglead",
       "community": 5,
       "norm_label": ".piglead()"
@@ -4964,7 +4838,7 @@
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L724",
+      "source_location": "L723",
       "id": "spacetimedb_pigai_module_pigavoidasteroids",
       "community": 5,
       "norm_label": ".pigavoidasteroids()"
@@ -4973,7 +4847,7 @@
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L758",
+      "source_location": "L757",
       "id": "spacetimedb_pigai_module_pigthreatscore",
       "community": 5,
       "norm_label": ".pigthreatscore()"
@@ -4982,7 +4856,7 @@
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L787",
+      "source_location": "L786",
       "id": "spacetimedb_pigai_module_teambasesector",
       "community": 5,
       "norm_label": ".teambasesector()"
@@ -4991,7 +4865,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L796",
+      "source_location": "L795",
       "id": "spacetimedb_pigai_module_enemyinsector",
       "community": 5,
       "norm_label": ".enemyinsector()"
@@ -5000,7 +4874,7 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L809",
+      "source_location": "L805",
       "id": "spacetimedb_pigai_module_alephto",
       "community": 5,
       "norm_label": ".alephto()"
@@ -5009,7 +4883,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L809",
+      "source_location": "L805",
       "id": "module_spacetimedb_pigai_cs_aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -5018,7 +4892,7 @@
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L835",
+      "source_location": "L816",
       "id": "spacetimedb_pigai_module_pigsteerto",
       "community": 5,
       "norm_label": ".pigsteerto()"
@@ -5027,7 +4901,7 @@
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L854",
+      "source_location": "L834",
       "id": "spacetimedb_pigai_module_pigattackpoint",
       "community": 5,
       "norm_label": ".pigattackpoint()"
@@ -5036,7 +4910,7 @@
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L882",
+      "source_location": "L862",
       "id": "spacetimedb_pigai_module_pigaimskill",
       "community": 5,
       "norm_label": ".pigaimskill()"
@@ -5045,7 +4919,7 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L895",
+      "source_location": "L875",
       "id": "spacetimedb_pigai_module_pigaimwobble",
       "community": 5,
       "norm_label": ".pigaimwobble()"
@@ -5054,7 +4928,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L912",
+      "source_location": "L892",
       "id": "spacetimedb_pigai_module_dot",
       "community": 5,
       "norm_label": ".dot()"
@@ -5063,7 +4937,7 @@
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L914",
+      "source_location": "L894",
       "id": "spacetimedb_pigai_module_clamp1",
       "community": 5,
       "norm_label": ".clamp1()"
@@ -5072,7 +4946,7 @@
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L916",
+      "source_location": "L896",
       "id": "spacetimedb_pigai_module_clamp01",
       "community": 5,
       "norm_label": ".clamp01()"
@@ -5081,7 +4955,7 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L918",
+      "source_location": "L898",
       "id": "spacetimedb_pigai_module_conjugate",
       "community": 5,
       "norm_label": ".conjugate()"
@@ -5090,7 +4964,7 @@
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L920",
+      "source_location": "L900",
       "id": "spacetimedb_pigai_module_normalizeor",
       "community": 5,
       "norm_label": ".normalizeor()"
@@ -5099,7 +4973,7 @@
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L926",
+      "source_location": "L906",
       "id": "spacetimedb_pigai_module_perpendicularto",
       "community": 5,
       "norm_label": ".perpendicularto()"
@@ -5108,7 +4982,7 @@
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L932",
+      "source_location": "L912",
       "id": "spacetimedb_pigai_module_smallestpositivef",
       "community": 5,
       "norm_label": ".smallestpositivef()"
@@ -5654,708 +5528,6 @@
       "norm_label": "shipinputstate"
     },
     {
-      "label": "AStarPlanner.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L1",
-      "id": "navigation_astarplanner",
-      "community": 46,
-      "norm_label": "astarplanner.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L13",
-      "id": "navigation_astarplanner_stellarallegiance_shared_navigation",
-      "community": 46,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "AStarPlanner",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L15",
-      "id": "navigation_astarplanner_astarplanner",
-      "community": 46,
-      "norm_label": "astarplanner"
-    },
-    {
-      "label": ".FindPath()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "id": "navigation_astarplanner_astarplanner_findpath",
-      "community": 46,
-      "norm_label": ".findpath()"
-    },
-    {
-      "label": "INavGraph",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "id": "shared_navigation_astarplanner_cs_inavgraph",
-      "community": 46,
-      "norm_label": "inavgraph"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "id": "shared_navigation_astarplanner_cs_list",
-      "community": 46,
-      "norm_label": "list"
-    },
-    {
-      "label": ".Reconstruct()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L59",
-      "id": "navigation_astarplanner_astarplanner_reconstruct",
-      "community": 46,
-      "norm_label": ".reconstruct()"
-    },
-    {
-      "label": "Dictionary",
-      "file_type": "code",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L59",
-      "id": "shared_navigation_astarplanner_cs_dictionary",
-      "community": 46,
-      "norm_label": "dictionary"
-    },
-    {
-      "label": "CompositeRoutePlanner.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L1",
-      "id": "navigation_compositerouteplanner",
-      "community": 16,
-      "norm_label": "compositerouteplanner.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L23",
-      "id": "navigation_compositerouteplanner_stellarallegiance_shared_navigation",
-      "community": 16,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "CompositeRoutePlanner",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L40",
-      "id": "navigation_compositerouteplanner_compositerouteplanner",
-      "community": 16,
-      "norm_label": "compositerouteplanner"
-    },
-    {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L42",
-      "id": "shared_navigation_compositerouteplanner_cs_int",
-      "community": 16,
-      "norm_label": "int"
-    },
-    {
-      "label": ".PlanLocalPath()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "community": 16,
-      "norm_label": ".planlocalpath()"
-    },
-    {
-      "label": "NavGraph",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "shared_navigation_compositerouteplanner_cs_navgraph",
-      "community": 16,
-      "norm_label": "navgraph"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "shared_navigation_compositerouteplanner_cs_ireadonlylist",
-      "community": 16,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "NavSphereObstacle",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "shared_navigation_compositerouteplanner_cs_navsphereobstacle",
-      "community": 16,
-      "norm_label": "navsphereobstacle"
-    },
-    {
-      "label": "PathQuery",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "pathquery",
-      "community": 16,
-      "norm_label": "pathquery"
-    },
-    {
-      "label": "PathResult",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "id": "shared_navigation_compositerouteplanner_cs_pathresult",
-      "community": 16,
-      "norm_label": "pathresult"
-    },
-    {
-      "label": ".FilterEndpointObstacles()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "id": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "community": 16,
-      "norm_label": ".filterendpointobstacles()"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "id": "shared_navigation_compositerouteplanner_cs_vec3",
-      "community": 16,
-      "norm_label": "vec3"
-    },
-    {
-      "label": "GraphWithEndpoints",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L105",
-      "id": "navigation_compositerouteplanner_graphwithendpoints",
-      "community": 16,
-      "norm_label": "graphwithendpoints"
-    },
-    {
-      "label": "INavGraph",
-      "file_type": "code",
-      "source_file": "",
-      "source_location": "",
-      "id": "inavgraph",
-      "community": 16,
-      "norm_label": "inavgraph"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L109",
-      "id": "shared_navigation_compositerouteplanner_cs_list",
-      "community": 16,
-      "norm_label": "list"
-    },
-    {
-      "label": "Dictionary",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L110",
-      "id": "shared_navigation_compositerouteplanner_cs_dictionary",
-      "community": 16,
-      "norm_label": "dictionary"
-    },
-    {
-      "label": ".NearestVisible()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "id": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "community": 16,
-      "norm_label": ".nearestvisible()"
-    },
-    {
-      "label": ".PositionOf()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L153",
-      "id": "navigation_compositerouteplanner_graphwithendpoints_positionof",
-      "community": 16,
-      "norm_label": ".positionof()"
-    },
-    {
-      "label": ".EdgesFrom()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L156",
-      "id": "navigation_compositerouteplanner_graphwithendpoints_edgesfrom",
-      "community": 16,
-      "norm_label": ".edgesfrom()"
-    },
-    {
-      "label": "NavEdge",
-      "file_type": "code",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L156",
-      "id": "shared_navigation_compositerouteplanner_cs_navedge",
-      "community": 16,
-      "norm_label": "navedge"
-    },
-    {
-      "label": "NavGeometry.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L1",
-      "id": "navigation_navgeometry",
-      "community": 44,
-      "norm_label": "navgeometry.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L16",
-      "id": "navigation_navgeometry_stellarallegiance_shared_navigation",
-      "community": 44,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "Contains()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L32",
-      "id": "navigation_navgeometry_contains",
-      "community": 44,
-      "norm_label": "contains()"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L32",
-      "id": "shared_navigation_navgeometry_cs_vec3",
-      "community": 44,
-      "norm_label": "vec3"
-    },
-    {
-      "label": "NavGeometry",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L36",
-      "id": "navigation_navgeometry_navgeometry",
-      "community": 44,
-      "norm_label": "navgeometry"
-    },
-    {
-      "label": ".Dot()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L38",
-      "id": "navigation_navgeometry_navgeometry_dot",
-      "community": 44,
-      "norm_label": ".dot()"
-    },
-    {
-      "label": ".NormalizeOr()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L40",
-      "id": "navigation_navgeometry_navgeometry_normalizeor",
-      "community": 44,
-      "norm_label": ".normalizeor()"
-    },
-    {
-      "label": ".SegmentIntersectsSphere()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L49",
-      "id": "navigation_navgeometry_navgeometry_segmentintersectssphere",
-      "community": 44,
-      "norm_label": ".segmentintersectssphere()"
-    },
-    {
-      "label": ".HasLineOfSight()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "id": "navigation_navgeometry_navgeometry_haslineofsight",
-      "community": 44,
-      "norm_label": ".haslineofsight()"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "id": "shared_navigation_navgeometry_cs_ireadonlylist",
-      "community": 44,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "NavSphereObstacle",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "id": "shared_navigation_navgeometry_cs_navsphereobstacle",
-      "community": 44,
-      "norm_label": "navsphereobstacle"
-    },
-    {
-      "label": ".PointInsideAny()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L75",
-      "id": "navigation_navgeometry_navgeometry_pointinsideany",
-      "community": 44,
-      "norm_label": ".pointinsideany()"
-    },
-    {
-      "label": "NavGraph.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L1",
-      "id": "navigation_navgraph",
-      "community": 26,
-      "norm_label": "navgraph.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L17",
-      "id": "navigation_navgraph_stellarallegiance_shared_navigation",
-      "community": 26,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "INavGraph",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L33",
-      "id": "navigation_navgraph_inavgraph",
-      "community": 26,
-      "norm_label": "inavgraph"
-    },
-    {
-      "label": ".PositionOf()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L36",
-      "id": "navigation_navgraph_inavgraph_positionof",
-      "community": 26,
-      "norm_label": ".positionof()"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L36",
-      "id": "shared_navigation_navgraph_cs_vec3",
-      "community": 26,
-      "norm_label": "vec3"
-    },
-    {
-      "label": ".EdgesFrom()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "id": "navigation_navgraph_inavgraph_edgesfrom",
-      "community": 26,
-      "norm_label": ".edgesfrom()"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "id": "shared_navigation_navgraph_cs_ireadonlylist",
-      "community": 26,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "NavEdge",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "id": "shared_navigation_navgraph_cs_navedge",
-      "community": 26,
-      "norm_label": "navedge"
-    },
-    {
-      "label": "NavGraph",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L40",
-      "id": "navigation_navgraph_navgraph",
-      "community": 26,
-      "norm_label": "navgraph"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L42",
-      "id": "shared_navigation_navgraph_cs_list",
-      "community": 26,
-      "norm_label": "list"
-    },
-    {
-      "label": ".PositionOf()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L48",
-      "id": "navigation_navgraph_navgraph_positionof",
-      "community": 26,
-      "norm_label": ".positionof()"
-    },
-    {
-      "label": ".EdgesFrom()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L50",
-      "id": "navigation_navgraph_navgraph_edgesfrom",
-      "community": 26,
-      "norm_label": ".edgesfrom()"
-    },
-    {
-      "label": ".AddNode()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L53",
-      "id": "navigation_navgraph_navgraph_addnode",
-      "community": 26,
-      "norm_label": ".addnode()"
-    },
-    {
-      "label": ".AddEdge()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L61",
-      "id": "navigation_navgraph_navgraph_addedge",
-      "community": 26,
-      "norm_label": ".addedge()"
-    },
-    {
-      "label": "NavGraphBuildOptions",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L65",
-      "id": "navigation_navgraph_navgraphbuildoptions",
-      "community": 26,
-      "norm_label": "navgraphbuildoptions"
-    },
-    {
-      "label": "float",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L70",
-      "id": "shared_navigation_navgraph_cs_float",
-      "community": 26,
-      "norm_label": "float"
-    },
-    {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L73",
-      "id": "shared_navigation_navgraph_cs_int",
-      "community": 26,
-      "norm_label": "int"
-    },
-    {
-      "label": "NavGraphBuilder",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L80",
-      "id": "navigation_navgraph_navgraphbuilder",
-      "community": 26,
-      "norm_label": "navgraphbuilder"
-    },
-    {
-      "label": ".Build()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "id": "navigation_navgraph_navgraphbuilder_build",
-      "community": 26,
-      "norm_label": ".build()"
-    },
-    {
-      "label": "NavSphereObstacle",
-      "file_type": "code",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "id": "shared_navigation_navgraph_cs_navsphereobstacle",
-      "community": 26,
-      "norm_label": "navsphereobstacle"
-    },
-    {
-      "label": "PathSmoother.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L1",
-      "id": "navigation_pathsmoother",
-      "community": 47,
-      "norm_label": "pathsmoother.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L13",
-      "id": "navigation_pathsmoother_stellarallegiance_shared_navigation",
-      "community": 47,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "PathSmoother",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L15",
-      "id": "navigation_pathsmoother_pathsmoother",
-      "community": 47,
-      "norm_label": "pathsmoother"
-    },
-    {
-      "label": ".Smooth()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "id": "navigation_pathsmoother_pathsmoother_smooth",
-      "community": 47,
-      "norm_label": ".smooth()"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "id": "shared_navigation_pathsmoother_cs_ireadonlylist",
-      "community": 47,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "id": "shared_navigation_pathsmoother_cs_vec3",
-      "community": 47,
-      "norm_label": "vec3"
-    },
-    {
-      "label": "NavSphereObstacle",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "id": "shared_navigation_pathsmoother_cs_navsphereobstacle",
-      "community": 47,
-      "norm_label": "navsphereobstacle"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "id": "shared_navigation_pathsmoother_cs_list",
-      "community": 47,
-      "norm_label": "list"
-    },
-    {
-      "label": "SectorRoutePlanner.cs",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L1",
-      "id": "navigation_sectorrouteplanner",
-      "community": 45,
-      "norm_label": "sectorrouteplanner.cs"
-    },
-    {
-      "label": "StellarAllegiance.Shared.Navigation",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L12",
-      "id": "navigation_sectorrouteplanner_stellarallegiance_shared_navigation",
-      "community": 45,
-      "norm_label": "stellarallegiance.shared.navigation"
-    },
-    {
-      "label": "SectorRoutePlanner",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L21",
-      "id": "navigation_sectorrouteplanner_sectorrouteplanner",
-      "community": 45,
-      "norm_label": "sectorrouteplanner"
-    },
-    {
-      "label": ".FindRoute()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "id": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "community": 45,
-      "norm_label": ".findroute()"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "id": "shared_navigation_sectorrouteplanner_cs_ireadonlylist",
-      "community": 45,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "SectorLink",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "id": "sectorlink",
-      "community": 45,
-      "norm_label": "sectorlink"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "id": "shared_navigation_sectorrouteplanner_cs_list",
-      "community": 45,
-      "norm_label": "list"
-    },
-    {
-      "label": ".NextHop()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L57",
-      "id": "navigation_sectorrouteplanner_sectorrouteplanner_nexthop",
-      "community": 45,
-      "norm_label": ".nexthop()"
-    },
-    {
-      "label": ".Reconstruct()",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L63",
-      "id": "navigation_sectorrouteplanner_sectorrouteplanner_reconstruct",
-      "community": 45,
-      "norm_label": ".reconstruct()"
-    },
-    {
-      "label": "Dictionary",
-      "file_type": "code",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L63",
-      "id": "shared_navigation_sectorrouteplanner_cs_dictionary",
-      "community": 45,
-      "norm_label": "dictionary"
-    },
-    {
       "label": "net8.0",
       "file_type": "concept",
       "source_file": "shared/Shared.csproj",
@@ -6507,186 +5679,6 @@
       "id": "flightmodeltest_program_program_near",
       "community": 20,
       "norm_label": ".near()"
-    },
-    {
-      "label": "NavigationTest.csproj",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "source_location": null,
-      "id": "navigationtest_navigationtest",
-      "community": 15,
-      "norm_label": "navigationtest.csproj"
-    },
-    {
-      "label": "net8.0",
-      "file_type": "concept",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "source_location": null,
-      "id": "tests_navigationtest_navigationtest_csproj_framework_net8_0",
-      "community": 15,
-      "norm_label": "net8.0"
-    },
-    {
-      "label": "Microsoft.NET.Sdk",
-      "file_type": "concept",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "source_location": null,
-      "id": "tests_navigationtest_navigationtest_csproj_sdk_microsoft_net_sdk",
-      "community": 15,
-      "norm_label": "microsoft.net.sdk"
-    },
-    {
-      "label": "Program.cs",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L1",
-      "id": "navigationtest_program",
-      "community": 42,
-      "norm_label": "program.cs"
-    },
-    {
-      "label": "Program",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L10",
-      "id": "navigationtest_program_program",
-      "community": 42,
-      "norm_label": "program"
-    },
-    {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L12",
-      "id": "tests_navigationtest_program_cs_int",
-      "community": 42,
-      "norm_label": "int"
-    },
-    {
-      "label": ".Check()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L14",
-      "id": "navigationtest_program_program_check",
-      "community": 42,
-      "norm_label": ".check()"
-    },
-    {
-      "label": ".PathClear()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "id": "navigationtest_program_program_pathclear",
-      "community": 42,
-      "norm_label": ".pathclear()"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "id": "tests_navigationtest_program_cs_list",
-      "community": 42,
-      "norm_label": "list"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "id": "tests_navigationtest_program_cs_vec3",
-      "community": 42,
-      "norm_label": "vec3"
-    },
-    {
-      "label": "NavSphereObstacle",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "id": "tests_navigationtest_program_cs_navsphereobstacle",
-      "community": 42,
-      "norm_label": "navsphereobstacle"
-    },
-    {
-      "label": ".PathLength()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L32",
-      "id": "navigationtest_program_program_pathlength",
-      "community": 42,
-      "norm_label": ".pathlength()"
-    },
-    {
-      "label": ".Plan()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "id": "navigationtest_program_program_plan",
-      "community": 42,
-      "norm_label": ".plan()"
-    },
-    {
-      "label": "PathResult",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "id": "tests_navigationtest_program_cs_pathresult",
-      "community": 42,
-      "norm_label": "pathresult"
-    },
-    {
-      "label": ".GeometryTests()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L48",
-      "id": "navigationtest_program_program_geometrytests",
-      "community": 42,
-      "norm_label": ".geometrytests()"
-    },
-    {
-      "label": ".AStarTests()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L77",
-      "id": "navigationtest_program_program_astartests",
-      "community": 42,
-      "norm_label": ".astartests()"
-    },
-    {
-      "label": ".SectorRoutingTests()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L103",
-      "id": "navigationtest_program_program_sectorroutingtests",
-      "community": 42,
-      "norm_label": ".sectorroutingtests()"
-    },
-    {
-      "label": ".LocalPlanningTests()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L129",
-      "id": "navigationtest_program_program_localplanningtests",
-      "community": 42,
-      "norm_label": ".localplanningtests()"
-    },
-    {
-      "label": ".CompositeScenarioTest()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L200",
-      "id": "navigationtest_program_program_compositescenariotest",
-      "community": 42,
-      "norm_label": ".compositescenariotest()"
-    },
-    {
-      "label": ".Main()",
-      "file_type": "code",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L221",
-      "id": "navigationtest_program_program_main",
-      "community": 42,
-      "norm_label": ".main()"
     },
     {
       "label": "asteroids.json",
@@ -7318,24 +6310,6 @@
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
     },
     {
-      "label": "ulong",
-      "file_type": "code",
-      "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L46",
-      "community": 13,
-      "norm_label": "ulong",
-      "id": "ulong"
-    },
-    {
-      "label": "Dictionary",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L38",
-      "community": 1,
-      "norm_label": "dictionary",
-      "id": "dictionary"
-    },
-    {
       "label": "Label",
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
@@ -7844,9 +6818,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "node3d"
+      "target": "node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -7877,9 +6851,9 @@
       "source_location": "L334",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "node3d"
+      "target": "node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12473,17 +11447,6 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L46",
-      "weight": 1.0,
-      "context": "field",
-      "source": "scripts_targetmarkers_targetmarkers",
-      "target": "client_scripts_targetmarkers_cs_ulong",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L43",
       "weight": 1.0,
       "context": "field",
@@ -13173,9 +12136,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L46",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13219,17 +12182,6 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
       "target": "client_scripts_worldrenderer_cs_connectionmanager"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L422",
-      "weight": 1.0,
-      "context": "field",
-      "source": "scripts_worldrenderer_worldrenderer",
-      "target": "client_scripts_worldrenderer_cs_dictionary",
-      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13334,9 +12286,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L774",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
+      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -13374,9 +12326,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L334",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -13414,9 +12366,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L379",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -13664,9 +12616,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L368",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13697,9 +12649,9 @@
       "source_location": "L49",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13708,9 +12660,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "client_scripts_worldrenderer_cs_standardmaterial3d"
+      "target": "client_scripts_worldrenderer_cs_standardmaterial3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13719,9 +12671,9 @@
       "source_location": "L334",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13730,9 +12682,9 @@
       "source_location": "L368",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -14269,9 +13221,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L325",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14280,9 +13232,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L326",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14324,9 +13276,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L348",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14335,9 +13287,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L404",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseupdate",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14346,9 +13298,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L374",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -14357,9 +13309,9 @@
       "source_location": "L379",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_healthcolor",
-      "target": "client_scripts_worldrenderer_cs_color"
+      "target": "client_scripts_worldrenderer_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -14709,9 +13661,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L755",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_process",
-      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
+      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14823,15 +13775,6 @@
       "confidence_score": 1.0,
       "source": "flightmodeltest_flightmodeltest",
       "target": "shared_shared"
-    },
-    {
-      "relation": "imports",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "weight": 1.0,
-      "source": "navigationtest_navigationtest",
-      "target": "shared_shared",
-      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -17522,189 +16465,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L21",
-      "weight": 1.0,
-      "source": "spacetimedb_navigationadapter",
-      "target": "spacetimedb_navigationadapter_module",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "source": "spacetimedb_navigationadapter",
-      "target": "spacetimedb_navigationadapter_sectornaventry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "module_spacetimedb_navigationadapter_cs_dictionary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L33",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "module_spacetimedb_navigationadapter_cs_float",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "module_spacetimedb_navigationadapter_cs_int",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "navgraphbuildoptions",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L116",
-      "weight": 1.0,
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "spacetimedb_navigationadapter_module_pignavwaypoint",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "spacetimedb_navigationadapter_module",
-      "target": "spacetimedb_navigationadapter_module_sectornav",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "spacetimedb_navigationadapter_module_sectornav",
-      "target": "spacetimedb_navigationadapter_sectornaventry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_sectornaventry",
-      "target": "module_spacetimedb_navigationadapter_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L41",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_sectornaventry",
-      "target": "module_spacetimedb_navigationadapter_cs_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L39",
-      "weight": 1.0,
-      "context": "field",
-      "source": "spacetimedb_navigationadapter_sectornaventry",
-      "target": "module_spacetimedb_navigationadapter_cs_ulong",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L118",
-      "weight": 1.0,
-      "source": "spacetimedb_navigationadapter_module_pignavwaypoint",
-      "target": "spacetimedb_navigationadapter_module_sectornav",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "spacetimedb_navigationadapter_module_sectornav",
-      "target": "module_spacetimedb_navigationadapter_cs_reducercontext",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L116",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "spacetimedb_navigationadapter_module_pignavwaypoint",
-      "target": "module_spacetimedb_navigationadapter_cs_reducercontext",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/NavigationAdapter.cs",
-      "source_location": "L116",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "spacetimedb_navigationadapter_module_pignavwaypoint",
-      "target": "module_spacetimedb_navigationadapter_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L837",
-      "weight": 1.0,
-      "source": "spacetimedb_pigai_module_pigsteerto",
-      "target": "spacetimedb_navigationadapter_module_pignavwaypoint"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L42",
       "weight": 1.0,
@@ -19725,1240 +18485,6 @@
       "target": "shared_flightmodel_cs_shipstate"
     },
     {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "source": "navigation_astarplanner",
-      "target": "navigation_astarplanner_astarplanner",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "navigation_astarplanner",
-      "target": "navigation_astarplanner_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "source": "navigation_astarplanner_astarplanner",
-      "target": "navigation_astarplanner_astarplanner_findpath",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L59",
-      "weight": 1.0,
-      "source": "navigation_astarplanner_astarplanner",
-      "target": "navigation_astarplanner_astarplanner_reconstruct",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "source": "navigation_astarplanner_astarplanner_findpath",
-      "target": "navigation_astarplanner_astarplanner_reconstruct",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_astarplanner_astarplanner_findpath",
-      "target": "shared_navigation_astarplanner_cs_inavgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_astarplanner_astarplanner_findpath",
-      "target": "shared_navigation_astarplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L59",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_astarplanner_astarplanner_reconstruct",
-      "target": "shared_navigation_astarplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/AStarPlanner.cs",
-      "source_location": "L59",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_astarplanner_astarplanner_reconstruct",
-      "target": "shared_navigation_astarplanner_cs_dictionary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner",
-      "target": "navigation_compositerouteplanner_compositerouteplanner",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner",
-      "target": "navigation_compositerouteplanner_graphwithendpoints",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner",
-      "target": "navigation_compositerouteplanner_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_compositerouteplanner",
-      "target": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_compositerouteplanner",
-      "target": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L42",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_compositerouteplanner_compositerouteplanner",
-      "target": "shared_navigation_compositerouteplanner_cs_int",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L50",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L72",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "navigation_compositerouteplanner_graphwithendpoints_positionof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "pathquery",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "shared_navigation_compositerouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "shared_navigation_compositerouteplanner_cs_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "shared_navigation_compositerouteplanner_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_planlocalpath",
-      "target": "shared_navigation_compositerouteplanner_cs_pathresult",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L107",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "shared_navigation_compositerouteplanner_cs_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "shared_navigation_compositerouteplanner_cs_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "target": "shared_navigation_compositerouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L156",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_edgesfrom",
-      "target": "shared_navigation_compositerouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "shared_navigation_compositerouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "target": "shared_navigation_compositerouteplanner_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "shared_navigation_compositerouteplanner_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_compositerouteplanner_filterendpointobstacles",
-      "target": "shared_navigation_compositerouteplanner_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L108",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "shared_navigation_compositerouteplanner_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "shared_navigation_compositerouteplanner_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L153",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_positionof",
-      "target": "shared_navigation_compositerouteplanner_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "inavgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L156",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "navigation_compositerouteplanner_graphwithendpoints_edgesfrom",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L153",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "navigation_compositerouteplanner_graphwithendpoints_positionof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L110",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "shared_navigation_compositerouteplanner_cs_dictionary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L111",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_compositerouteplanner_graphwithendpoints",
-      "target": "shared_navigation_compositerouteplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "shared_navigation_compositerouteplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L139",
-      "weight": 1.0,
-      "source": "navigation_compositerouteplanner_graphwithendpoints_nearestvisible",
-      "target": "navigation_compositerouteplanner_graphwithendpoints_positionof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/CompositeRoutePlanner.cs",
-      "source_location": "L156",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_compositerouteplanner_graphwithendpoints_edgesfrom",
-      "target": "shared_navigation_compositerouteplanner_cs_navedge",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "source": "navigation_navgeometry",
-      "target": "navigation_navgeometry_contains",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "source": "navigation_navgeometry",
-      "target": "navigation_navgeometry_navgeometry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "source": "navigation_navgeometry",
-      "target": "navigation_navgeometry_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_contains",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry_pointinsideany",
-      "target": "navigation_navgeometry_contains",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L38",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_dot",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_haslineofsight",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgeometry_navgeometry_normalizeor",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_pointinsideany",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L49",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_segmentintersectssphere",
-      "target": "shared_navigation_navgeometry_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L38",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry",
-      "target": "navigation_navgeometry_navgeometry_dot",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry",
-      "target": "navigation_navgeometry_navgeometry_haslineofsight",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry",
-      "target": "navigation_navgeometry_navgeometry_normalizeor",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry",
-      "target": "navigation_navgeometry_navgeometry_pointinsideany",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L49",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry",
-      "target": "navigation_navgeometry_navgeometry_segmentintersectssphere",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L58",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry_segmentintersectssphere",
-      "target": "navigation_navgeometry_navgeometry_dot",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L70",
-      "weight": 1.0,
-      "source": "navigation_navgeometry_navgeometry_haslineofsight",
-      "target": "navigation_navgeometry_navgeometry_segmentintersectssphere",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_haslineofsight",
-      "target": "shared_navigation_navgeometry_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L67",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgeometry_navgeometry_haslineofsight",
-      "target": "shared_navigation_navgeometry_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgeometry_navgeometry_pointinsideany",
-      "target": "shared_navigation_navgeometry_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGeometry.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgeometry_navgeometry_pointinsideany",
-      "target": "shared_navigation_navgeometry_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L33",
-      "weight": 1.0,
-      "source": "navigation_navgraph",
-      "target": "navigation_navgraph_inavgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "navigation_navgraph",
-      "target": "navigation_navgraph_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L80",
-      "weight": 1.0,
-      "source": "navigation_navgraph",
-      "target": "navigation_navgraph_navgraphbuilder",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L65",
-      "weight": 1.0,
-      "source": "navigation_navgraph",
-      "target": "navigation_navgraph_navgraphbuildoptions",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "source": "navigation_navgraph",
-      "target": "navigation_navgraph_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "source": "navigation_navgraph_inavgraph",
-      "target": "navigation_navgraph_inavgraph_edgesfrom",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "source": "navigation_navgraph_inavgraph",
-      "target": "navigation_navgraph_inavgraph_positionof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraph",
-      "target": "navigation_navgraph_inavgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgraph_inavgraph_positionof",
-      "target": "shared_navigation_navgraph_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L53",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgraph_navgraph_addnode",
-      "target": "shared_navigation_navgraph_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgraph_navgraph_positionof",
-      "target": "shared_navigation_navgraph_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L84",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_navgraph_navgraphbuilder",
-      "target": "shared_navigation_navgraph_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "shared_navigation_navgraph_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgraph_inavgraph_edgesfrom",
-      "target": "shared_navigation_navgraph_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgraph_inavgraph_edgesfrom",
-      "target": "shared_navigation_navgraph_cs_navedge",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L50",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgraph_navgraph_edgesfrom",
-      "target": "shared_navigation_navgraph_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "shared_navigation_navgraph_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L50",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgraph_navgraph_edgesfrom",
-      "target": "shared_navigation_navgraph_cs_navedge",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L61",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraph",
-      "target": "navigation_navgraph_navgraph_addedge",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L53",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraph",
-      "target": "navigation_navgraph_navgraph_addnode",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L50",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraph",
-      "target": "navigation_navgraph_navgraph_edgesfrom",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraph",
-      "target": "navigation_navgraph_navgraph_positionof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_navgraph_navgraph",
-      "target": "shared_navigation_navgraph_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "navigation_navgraph_navgraph",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L111",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "navigation_navgraph_navgraph_addnode",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L152",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "navigation_navgraph_navgraph_addedge",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "navigation_navgraph_navgraphbuildoptions",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_navgraph_navgraphbuildoptions",
-      "target": "shared_navigation_navgraph_cs_float",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L77",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_navgraph_navgraphbuildoptions",
-      "target": "shared_navigation_navgraph_cs_int",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L83",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigation_navgraph_navgraphbuilder",
-      "target": "shared_navigation_navgraph_cs_float",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "source": "navigation_navgraph_navgraphbuilder",
-      "target": "navigation_navgraph_navgraphbuilder_build",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/NavGraph.cs",
-      "source_location": "L99",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_navgraph_navgraphbuilder_build",
-      "target": "shared_navigation_navgraph_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "source": "navigation_pathsmoother",
-      "target": "navigation_pathsmoother_pathsmoother",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "navigation_pathsmoother",
-      "target": "navigation_pathsmoother_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "source": "navigation_pathsmoother_pathsmoother",
-      "target": "navigation_pathsmoother_pathsmoother_smooth",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_pathsmoother_pathsmoother_smooth",
-      "target": "shared_navigation_pathsmoother_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_pathsmoother_pathsmoother_smooth",
-      "target": "shared_navigation_pathsmoother_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_pathsmoother_pathsmoother_smooth",
-      "target": "shared_navigation_pathsmoother_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/PathSmoother.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_pathsmoother_pathsmoother_smooth",
-      "target": "shared_navigation_pathsmoother_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L21",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L12",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner",
-      "target": "navigation_sectorrouteplanner_stellarallegiance_shared_navigation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner_nexthop",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner_reconstruct",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner_reconstruct",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "target": "sectorlink",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "target": "shared_navigation_sectorrouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "target": "shared_navigation_sectorrouteplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L59",
-      "weight": 1.0,
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_nexthop",
-      "target": "navigation_sectorrouteplanner_sectorrouteplanner_findroute",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_nexthop",
-      "target": "shared_navigation_sectorrouteplanner_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_nexthop",
-      "target": "sectorlink",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_reconstruct",
-      "target": "shared_navigation_sectorrouteplanner_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/Navigation/SectorRoutePlanner.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigation_sectorrouteplanner_sectorrouteplanner_reconstruct",
-      "target": "shared_navigation_sectorrouteplanner_cs_dictionary",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "tests/FlightModelTest/FlightModelTest.csproj",
@@ -21166,409 +18692,6 @@
       "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_close",
       "target": "flightmodeltest_program_program_near"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "weight": 1.0,
-      "source": "navigationtest_navigationtest",
-      "target": "tests_navigationtest_navigationtest_csproj_framework_net8_0",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/NavigationTest.csproj",
-      "weight": 1.0,
-      "source": "navigationtest_navigationtest",
-      "target": "tests_navigationtest_navigationtest_csproj_sdk_microsoft_net_sdk",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L10",
-      "weight": 1.0,
-      "source": "navigationtest_program",
-      "target": "navigationtest_program_program",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L77",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_astartests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L14",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L200",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_compositescenariotest",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_geometrytests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L129",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_localplanningtests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L221",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_main",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_pathclear",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_pathlength",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_plan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L103",
-      "weight": 1.0,
-      "source": "navigationtest_program_program",
-      "target": "navigationtest_program_program_sectorroutingtests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L12",
-      "weight": 1.0,
-      "context": "field",
-      "source": "navigationtest_program_program",
-      "target": "tests_navigationtest_program_cs_int",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L91",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_astartests",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L211",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_compositescenariotest",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L51",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_geometrytests",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_localplanningtests",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L115",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_sectorroutingtests",
-      "target": "navigationtest_program_program_check",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L216",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_compositescenariotest",
-      "target": "navigationtest_program_program_pathclear",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L143",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_localplanningtests",
-      "target": "navigationtest_program_program_pathclear",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigationtest_program_program_pathclear",
-      "target": "tests_navigationtest_program_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigationtest_program_program_pathclear",
-      "target": "tests_navigationtest_program_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigationtest_program_program_pathclear",
-      "target": "tests_navigationtest_program_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigationtest_program_program_pathlength",
-      "target": "tests_navigationtest_program_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigationtest_program_program_plan",
-      "target": "tests_navigationtest_program_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigationtest_program_program_pathlength",
-      "target": "tests_navigationtest_program_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "navigationtest_program_program_plan",
-      "target": "tests_navigationtest_program_cs_vec3",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "navigationtest_program_program_plan",
-      "target": "tests_navigationtest_program_cs_navsphereobstacle",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L145",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_localplanningtests",
-      "target": "navigationtest_program_program_pathlength",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L215",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_compositescenariotest",
-      "target": "navigationtest_program_program_plan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L136",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_localplanningtests",
-      "target": "navigationtest_program_program_plan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "navigationtest_program_program_plan",
-      "target": "tests_navigationtest_program_cs_pathresult",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L223",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_main",
-      "target": "navigationtest_program_program_geometrytests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L224",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_main",
-      "target": "navigationtest_program_program_astartests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L225",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_main",
-      "target": "navigationtest_program_program_sectorroutingtests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L226",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_main",
-      "target": "navigationtest_program_program_localplanningtests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/NavigationTest/Program.cs",
-      "source_location": "L227",
-      "weight": 1.0,
-      "source": "navigationtest_program_program_main",
-      "target": "navigationtest_program_program_compositescenariotest",
-      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -22734,5 +19857,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "f94c92edd25697334bcb120f6caf52fc88ba9ecd"
+  "built_at_commit": "702590405c611136ab93a1c9b1eaac2e5dba9198"
 }
