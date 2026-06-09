@@ -1444,7 +1444,7 @@ public static partial class Module
                 }
                 if (Dist2(s.PosX, s.PosY, s.PosZ, b.PosX, b.PosY, b.PosZ) <= DockRadius * DockRadius)
                 {
-                    DockShip(ctx, s);
+                    DockShip(ctx, s, tick);
                     docked = true;
                     break;
                 }
@@ -1488,7 +1488,7 @@ public static partial class Module
                 if (Dist2(pod.PosX, pod.PosY, pod.PosZ, friend.PosX, friend.PosY, friend.PosZ)
                     <= RescueRadius * RescueRadius)
                 {
-                    DockShip(ctx, pod);
+                    DockShip(ctx, pod, tick);
                     break;
                 }
             }
@@ -1548,6 +1548,9 @@ public static partial class Module
         var owner = ctx.Db.Player.Identity.Find(s.Owner);
         if (owner is Player p && p.ShipId == s.ShipId)
             ctx.Db.Player.Identity.Update(p with { ShipId = null });
+        // Pig pod destroyed: free the slot with no stagger (joins the next squad wave).
+        if (s.IsPig && s.IsPod)
+            FreePigPodSlot(ctx, s.ShipId, 0u);
         Log.Info($"[SimTick] ship {s.ShipId} destroyed (team {s.Team})");
     }
 
@@ -1599,13 +1602,17 @@ public static partial class Module
     // no Player row (Owner is the module identity), so the ShipId clear is a no-op for it.
     // NOT a death — no pod is ejected and (for a player) no respawn cooldown. Shared by the
     // pod-reached-base, rescue, and voluntary friendly-base dock paths.
-    private static void DockShip(ReducerContext ctx, Ship s)
+    private static void DockShip(ReducerContext ctx, Ship s, uint tick)
     {
         ctx.Db.Ship.ShipId.Delete(s.ShipId);
         DeleteShipInputs(ctx, s.ShipId);
         var owner = ctx.Db.Player.Identity.Find(s.Owner);
         if (owner is Player p && p.ShipId == s.ShipId)
             ctx.Db.Player.Identity.Update(p with { ShipId = null });
+        // Pig pod docked/rescued: free the slot and queue an immediate respawn so the drone
+        // rejoins the current wave on the very next lifecycle tick.
+        if (s.IsPig && s.IsPod)
+            FreePigPodSlot(ctx, s.ShipId, tick + 1u);
         Log.Info($"[Dock] ship {s.ShipId} (team {s.Team}, pod={s.IsPod}) docked/resolved");
     }
 

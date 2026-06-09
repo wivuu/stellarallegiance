@@ -185,8 +185,10 @@ public static partial class Module
             if (ctx.Db.PigSquad.Team.Find(team) is not PigSquad squad)
                 continue;   // ensured by EnsurePigSlots
 
-            // Classify this team's slots: alive (flying), pending (staggered, awaiting their
-            // launch tick within the current wave), and dead (killed, ShipId+timer cleared).
+            // Classify this team's slots: occupied (ShipId set — live drone OR flying pod),
+            // pending (ShipId null, RespawnAtTick set), or empty (ShipId null, RespawnAtTick 0).
+            // A slot's ShipId tracks the pod after drone death so the slot stays occupied until
+            // the pod resolves; FreePigPodSlot clears it then.
             int alive = 0, pending = 0;
             var empty = new List<Pig>();
             foreach (var slot in ctx.Db.Pig.Iter())
@@ -199,7 +201,7 @@ public static partial class Module
 
             if (squad.Active)
             {
-                // Squad fully wiped (none alive AND none still staggering in) → arm the
+                // Squad fully wiped (no drone/pod alive, no slots staggering in) → arm the
                 // inter-squad delay; the next squad scrambles once it elapses.
                 if (alive == 0 && pending == 0)
                 {
@@ -362,7 +364,7 @@ public static partial class Module
         var dir = RandomUnitVec(ctx);
         var spin = RandomUnitVec(ctx);
 
-        ctx.Db.Ship.Insert(new Ship
+        var pod = ctx.Db.Ship.Insert(new Ship
         {
             ShipId = 0,
             Owner = s.Owner,
@@ -383,13 +385,16 @@ public static partial class Module
             IsPod = true,
         });
 
+        // Keep the pod's ShipId in the slot so the lifecycle tracks "recovering" (pod in
+        // flight) vs "dead" (slot truly free). The slot is freed by FreePigPodSlot when the
+        // pod docks, is rescued, or is destroyed.
         foreach (var slot in ctx.Db.Pig.Iter().ToList())
         {
             if (slot.ShipId == s.ShipId)
             {
                 ctx.Db.Pig.PigId.Update(slot with
                 {
-                    ShipId = null,
+                    ShipId = pod.ShipId,
                     RespawnAtTick = 0,
                     State = PigState.Idle,
                     TargetShipId = null,
@@ -397,7 +402,7 @@ public static partial class Module
                 break;
             }
         }
-        Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed -> PIG pod; squad owns respawn");
+        Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed -> PIG pod {pod.ShipId}; respawns when pod resolves");
     }
 
     // The per-tick brain: pick a target, run the Idle/Seek/Attack state machine, and
@@ -905,6 +910,28 @@ public static partial class Module
         float sx = MathF.Sin(phase);
         float sy = MathF.Sin(phase * 0.73f + 1.3f);
         return right * (sx * reach) + up * (sy * reach * 0.6f);
+    }
+
+    // Called by DockShip / KillShip when a pig pod is resolved. Finds the Pig slot tracking
+    // that pod and frees it. respawnAtTick==tick+1 queues an immediate respawn (docked/rescued);
+    // respawnAtTick==0 leaves the slot free to join the next squad wave (pod destroyed).
+    private static void FreePigPodSlot(ReducerContext ctx, ulong podShipId, uint respawnAtTick)
+    {
+        foreach (var slot in ctx.Db.Pig.Iter().ToList())
+        {
+            if (slot.ShipId == podShipId)
+            {
+                ctx.Db.Pig.PigId.Update(slot with
+                {
+                    ShipId = null,
+                    RespawnAtTick = respawnAtTick,
+                    State = PigState.Idle,
+                    TargetShipId = null,
+                });
+                Log.Info($"[Pig] pod {podShipId} resolved -> slot {slot.PigId} (team {slot.Team}) respawnAtTick={respawnAtTick}");
+                break;
+            }
+        }
     }
 
     // ---- small server-only math helpers (plain MathF is fine; not synced) ----
