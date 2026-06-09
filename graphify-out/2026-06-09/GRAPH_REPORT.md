@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-09)
 
 ## Corpus Check
-- 46 files · ~54,937 words
+- 46 files · ~55,308 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 711 nodes · 1224 edges · 41 communities (34 shown, 7 thin omitted)
+- 712 nodes · 1227 edges · 41 communities (34 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c45d0ec8`
+- Built from commit: `10f252d3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -57,7 +57,7 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `Module` - 61 edges
-2. `WorldRenderer` - 45 edges
+2. `WorldRenderer` - 46 edges
 3. `ReducerContext` - 40 edges
 4. `Chat` - 32 edges
 5. `Module` - 31 edges
@@ -234,6 +234,6 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.06540447504302926 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06980433632998413 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06912442396313365 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._

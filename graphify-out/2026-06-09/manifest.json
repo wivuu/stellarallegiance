@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1780862677.5834954,
-    "ast_hash": "a0c3a7019ba5950219ebe1deb554b68c",
+    "mtime": 1781008117.176867,
+    "ast_hash": "3780f264883f76d92729cc94b664957b",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
