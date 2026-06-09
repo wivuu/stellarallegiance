@@ -11,7 +11,7 @@ public partial class WorldRenderer : Node3D
 
 	// Floating damage bar above each base. BaseMaxHealth mirrors the module's win-condition
 	// hull (Lib.cs BaseMaxHealth) so the bar can show a 0..1 fraction; keep the two in sync.
-	private const float BaseMaxHealth = 1300f;
+	private const float BaseMaxHealth = 2000f;
 	private const float BaseHealthBarWidth = 110f;
 	private const float BaseHealthBarHeight = 10f;
 

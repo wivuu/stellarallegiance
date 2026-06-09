@@ -314,7 +314,7 @@ public static partial class Module
     // sphere tracks the rock's solid body rather than its outermost spikes, instead of bounding
     // empty space between them. Render scale is unchanged — this only tightens the sim.
     private const float AsteroidCollisionScale = 0.82f;
-    private const float BaseMaxHealth = 1300f;       // starting/restored base hull (win condition target)
+    private const float BaseMaxHealth = 2000f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // ship-vs-static hull damage per (u/s) of inward impact
     // Ship-vs-ship damage per (u/s) of inward impact, multiplied by the pair's reduced
