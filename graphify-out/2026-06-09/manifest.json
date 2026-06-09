@@ -45,7 +45,7 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1780859981.2683074,
+    "mtime": 1781032026.9275434,
     "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
     "semantic_hash": ""
   },
@@ -60,7 +60,7 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1780859919.029023,
+    "mtime": 1781032026.9280398,
     "ast_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3",
     "semantic_hash": ""
   },
@@ -70,12 +70,12 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1780862670.6388712,
+    "mtime": 1781032026.9284115,
     "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1780859968.5047383,
+    "mtime": 1781032026.9287775,
     "ast_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b",
     "semantic_hash": ""
   },
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781008117.176867,
-    "ast_hash": "3780f264883f76d92729cc94b664957b",
+    "mtime": 1781032026.9290001,
+    "ast_hash": "cdd1b7bcd5d781d3fc562ea71b47610e",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,12 +135,12 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781007264.6176882,
+    "mtime": 1781032026.9355786,
     "ast_hash": "9500e0f66e3e1e4006461a5787bb13ce",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781007326.675015,
+    "mtime": 1781032026.9360878,
     "ast_hash": "87d373e74efaf32a48c3fdf2ad9a3930",
     "semantic_hash": ""
   },
@@ -180,7 +180,7 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781005886.9223785,
+    "mtime": 1781032026.936273,
     "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
     "semantic_hash": ""
   },
