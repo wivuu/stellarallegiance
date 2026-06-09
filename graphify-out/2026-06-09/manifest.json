@@ -140,8 +140,8 @@
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781003772.3581152,
-    "ast_hash": "33e75b932fdbf1e92d78952bb101f833",
+    "mtime": 1781004443.4739103,
+    "ast_hash": "6231fcf9b8bd9810e05a4efb6346394a",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
