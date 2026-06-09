@@ -192,8 +192,32 @@ namespace StellarAllegiance.Shared
             BoostSpeedMult = 1.4f,    // and a 70 u/s top speed while held
         };
 
+        // Escape pod: a slow, unarmed lifeboat ejected on ship death (server Ship.IsPod).
+        // "Impulse" feel — low thrust + a low speed cap so it crawls home — with no
+        // afterburner (Boost mults = 1) and a light hull so collisions shove it around.
+        // Both the server (Pass A) and the client (prediction/interpolation) integrate
+        // pods with these stats, selected via the StatsFor(class, isPod) overload, so
+        // predicted and authoritative pod motion stay bit-identical like any ship.
+        public static readonly ShipStats Pod = new()
+        {
+            ThrustAccel = 11f,
+            MaxSpeed = 14f,         // a slow crawl home — the escape is a real journey
+            LinearDrag = 1.4f,
+            Mass = 0.6f,            // light: gets shoved around in collisions
+            AngularAccel = 2.0f,
+            AngularDrag = 1.5f,
+            BoostThrustMult = 1f,   // no afterburner on a pod
+            BoostSpeedMult = 1f,
+        };
+
         public static ShipStats StatsFor(byte shipClass) =>
             shipClass == ClassFighter ? Fighter : Scout;
+
+        // Pod-aware stats selection: a pod ignores its class and flies the slow,
+        // boost-less Pod profile. Callers pass ship.IsPod so server authority and
+        // client prediction agree on which stats a pod integrates with.
+        public static ShipStats StatsFor(byte shipClass, bool isPod) =>
+            isPod ? Pod : StatsFor(shipClass);
 
         // ---- Weapon spread -------------------------------------------------
         //

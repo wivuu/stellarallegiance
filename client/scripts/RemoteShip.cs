@@ -36,6 +36,10 @@ public partial class RemoteShip : Node3D
 	// TargetMarkers uses it to highlight drones distinctly on the HUD.
 	public bool IsPig { get; private set; }
 
+	// Escape pod (Ship.IsPod): harmless, unarmed. Excluded from the enemy target set
+	// (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
+	public bool IsPod { get; private set; }
+
 	// Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
 	// (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
 	// than being finite-differenced from positions — differencing 20 Hz snapshots over
@@ -69,7 +73,9 @@ public partial class RemoteShip : Node3D
 		ShipId = row.ShipId;
 		Team = row.Team;
 		IsPig = row.IsPig;
-		_maxSpeed = FlightModel.StatsFor((byte)row.Class).MaxSpeed;
+		IsPod = row.IsPod;
+		// Pod-aware so a pod's interpolated throttle proxy reads against its slow cap.
+		_maxSpeed = FlightModel.StatsFor((byte)row.Class, row.IsPod).MaxSpeed;
 		_burnCooldown = (float)GD.RandRange(1.0, 3.0);   // stagger drones' first burst roll
 		Push(row);
 	}

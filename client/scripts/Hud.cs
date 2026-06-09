@@ -123,7 +123,11 @@ public partial class Hud : CanvasLayer
 		// Top-left readout: the controls hint while choosing a ship (teamed, pre-spawn),
 		// the live flight stats while flying, and nothing while the lobby overlay is up.
 		_label.Text = flying
-			? $"HP: {ship!.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
+			? ship!.IsPod
+				// Ejected: flying the escape pod. Show the resolve hint + pod hull instead of
+				// the combat flight stats (the pod is unarmed and just trying to get home).
+				? $"⚠  EJECTED — reach a friendly base or get rescued   Pod HP: {ship.Health,3:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,4:0.0} u/s"
+				: $"HP: {ship.Health,4:0} / {ship.MaxHealth,3:0}   Speed: {ship.Speed,5:0.0} u/s   Ping: {_ship.PingMs,3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
 			: teamedInMatch
 				? "Choose your ship:\nW/S throttle · Shift afterburner · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
 				: "";

@@ -13,5 +13,7 @@ namespace SpacetimeDB.Types
         Idle,
         Seek,
         Attack,
+        Patrol,
+        Rescue,
     }
 }

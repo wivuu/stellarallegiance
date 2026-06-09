@@ -23,6 +23,9 @@ to determine how many players we can support in a single instance, and what the 
   - Pigs should prioritize aggressive targets over non-aggressive targets, but if there are no aggressive targets nearby, they should pursue non-aggressive targets (e.g. pods and passive players) instead of patrolling.
   - Pigs should patrol if there are no targets nearby, instead of idling in place.
 
+- Pigs should proceed to attack nearby enemy bases directly if there are no (non-pod) targets nearby, instead of patrolling
+- Pigs dont need to ALL rescue a single pod, if one PIG decides to save a pod the rest should proceed with their normal behavior.
+- Pigs could be refactored to use A* pathfinding instead of direct homing, which would allow them to navigate around asteroids and other obstacles more effectively. In conjunction w/ 3D waypoint graph for better patrol routes and navigation around obstacles.
 ---
 
 ## Roadmap (prioritized)

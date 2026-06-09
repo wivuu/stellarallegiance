@@ -116,7 +116,9 @@ public partial class WorldRenderer : Node3D
 		if (_localTeam is byte lt)
 		{
 			foreach (var node in _shipNodes.Values)
-				if (node is RemoteShip rs && rs.Team != lt && rs.Visible)
+				// Exclude enemy pods: they're harmless and shouldn't draw a marker or be
+				// Tab-targetable (let a downed opponent float home unmolested).
+				if (node is RemoteShip rs && rs.Team != lt && !rs.IsPod && rs.Visible)
 					_enemyScratch.Add(rs);
 		}
 		return _enemyScratch;
@@ -435,8 +437,8 @@ public partial class WorldRenderer : Node3D
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
-			AttachEngineGlow(pc, row.Class, row.Team);
+			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
+			AttachEngineGlow(pc, row.Class, row.Team, row.IsPod);
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -456,8 +458,8 @@ public partial class WorldRenderer : Node3D
 		var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 		node = rs;
 		_ships.AddChild(rs);
-		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
-		AttachEngineGlow(rs, row.Class, row.Team);
+		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
+		AttachEngineGlow(rs, row.Class, row.Team, row.IsPod);
 		rs.Initialize(row);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
@@ -511,13 +513,21 @@ public partial class WorldRenderer : Node3D
 			foreach (var g in _predictedShots)
 				g.QueueFree();
 			_predictedShots.Clear();
-			// Hold the chase camera on the death point for a beat so the player sees their own
-			// blast up close. The return to the home overview (respawn is at the team base) is
-			// deferred until the hold expires (see _Process), keeping the death sector — where
-			// the blast lives and stays visible — on screen until then.
-			DeathCamShipTransform = node.GlobalTransform;
-			_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
-			_pendingHomeReset = _localSector != HomeSector;
+			// Death-cam ONLY when the local POD is destroyed — that's the real death (spawn
+			// menu reopens). A local COMBAT ship's death instead ejects an escape pod the
+			// SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
+			// straight to the pod (both row callbacks run before this frame renders, so there's
+			// no overview flicker). So skip the death-cam there and only fire it for the pod.
+			if (row.IsPod)
+			{
+				// Hold the chase camera on the death point for a beat so the player sees their own
+				// blast up close. The return to the home overview (respawn is at the team base) is
+				// deferred until the hold expires (see _Process), keeping the death sector — where
+				// the blast lives and stays visible — on screen until then.
+				DeathCamShipTransform = node.GlobalTransform;
+				_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
+				_pendingHomeReset = _localSector != HomeSector;
+			}
 		}
 		node.QueueFree();
 	}
@@ -677,11 +687,21 @@ public partial class WorldRenderer : Node3D
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
 	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
 	// chunkier, boxier hull that reads as the heavier ship.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig)
+	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig, bool isPod)
 	{
 		var mat = isPig
 			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
 			: (team == 0 ? _team0Mat : _team1Mat);
+
+		// An escape pod reads as a small round lifeboat, not a fighter — class is ignored.
+		if (isPod)
+		{
+			return new MeshInstance3D
+			{
+				Mesh = new SphereMesh { Radius = 1.4f, Height = 2.8f, RadialSegments = 12, Rings = 8 },
+				MaterialOverride = mat,
+			};
+		}
 
 		if (cls == ShipClass.Fighter)
 		{
@@ -710,36 +730,41 @@ public partial class WorldRenderer : Node3D
 	// spawned ship, then hand the node its reference so it can drive throttle each
 	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
 	// Scout's single central thruster vs a Fighter's heavier twin engines.
-	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team)
+	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team, bool isPod)
 	{
 		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
 		Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
 
-		EngineGlow glow = cls == ShipClass.Fighter
-			? new EngineGlow
-			{
-				Name = "EngineGlow",
-				Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
-				NozzleRadius = 0.6f,
-				PlumeLength = 3.8f,
-				LightRange = 18f,
-				CoreColor = hot,
-			}
-			: new EngineGlow
-			{
-				Name = "EngineGlow",
-				Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
-				NozzleRadius = 0.85f,
-				PlumeLength = 3.5f,
-				LightRange = 15f,
-				CoreColor = hot,
-			};
-
-		shipNode.AddChild(glow);
-		switch (shipNode)
+		// A pod is a powered-down lifeboat — no engine glow/plume. It still gets the team
+		// trail below (so a drifting pod is trackable), but no thruster FX.
+		if (!isPod)
 		{
-			case PredictionController pc: pc.AttachEngine(glow); break;
-			case RemoteShip rs: rs.AttachEngine(glow); break;
+			EngineGlow glow = cls == ShipClass.Fighter
+				? new EngineGlow
+				{
+					Name = "EngineGlow",
+					Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
+					NozzleRadius = 0.6f,
+					PlumeLength = 3.8f,
+					LightRange = 18f,
+					CoreColor = hot,
+				}
+				: new EngineGlow
+				{
+					Name = "EngineGlow",
+					Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
+					NozzleRadius = 0.85f,
+					PlumeLength = 3.5f,
+					LightRange = 15f,
+					CoreColor = hot,
+				};
+
+			shipNode.AddChild(glow);
+			switch (shipNode)
+			{
+				case PredictionController pc: pc.AttachEngine(glow); break;
+				case RemoteShip rs: rs.AttachEngine(glow); break;
+			}
 		}
 
 		// Ghostly team-coloured ribbon tracing the ship's path (same hue as the glow so

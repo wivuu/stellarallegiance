@@ -91,6 +91,9 @@ public partial class PredictionController : Node3D
 
 	public ulong ShipId { get; private set; }
 	public byte Team { get; private set; }
+	// Escape pod (Ship.IsPod): slow, unarmed lifeboat. Drives pod-aware flight stats and
+	// lets ShipController suppress firing (a pod can't shoot).
+	public bool IsPod { get; private set; }
 	public float Speed => _state.Vel.Length();
 
 	// Predicted velocity (u/s, Godot space). Read by TargetMarkers so the lead
@@ -115,11 +118,13 @@ public partial class PredictionController : Node3D
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
+		IsPod = row.IsPod;
 		Health = row.Health;
 		MaxHealth = row.Health;
 		_class = row.Class;
 		_lastFireTick = 0;
-		_stats = FlightModel.StatsFor((byte)row.Class);
+		// Pods fly the slow, boost-less Pod profile; combat ships use their class stats.
+		_stats = FlightModel.StatsFor((byte)row.Class, row.IsPod);
 		_state = ShipMath.StateFromRow(row);
 		_prevState = _state;
 		_buffer.Clear();
