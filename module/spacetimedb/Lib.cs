@@ -1070,6 +1070,9 @@ public static partial class Module
         {
             EnsurePigSlots(ctx);
             SimulatePigLifecycle(ctx, tick);
+            // Commit at most one drone per team to pick up a downed teammate's pod (the rest
+            // keep attacking); runs before the per-drone brain so PigThink sees the assignment.
+            AssignPigRescuers(ctx, tick);
         }
         else
         {

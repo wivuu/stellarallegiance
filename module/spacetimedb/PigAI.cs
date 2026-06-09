@@ -230,6 +230,62 @@ public static partial class Module
         }
     }
 
+    // Rescue assignment (once per tick, before the per-drone brain runs): a downed teammate
+    // ejects an escape pod that a friendly ship must touch for the player to respawn. We do
+    // NOT want the squad to peel off for it — that hands the attacker a free run at the base —
+    // so AT MOST ONE drone per team is ever on rescue duty. That single rescuer is marked
+    // PigState.Rescue with the pod as its target; PigThink flies it onto the pod (the rescue
+    // pass in SimulateTick resolves the pickup) while every other drone keeps attacking. When
+    // the pod is resolved (rescued / died / warped to another sector) the slot frees and either
+    // grabs the NEXT nearest pod or rejoins the fight — pods are ferried home one at a time.
+    //
+    // Only PLAYER pods are targeted: a downed PIG's pod already auto-flies home via PodThink,
+    // so committing the rescuer to it would waste the one slot a human teammate needs.
+    private static void AssignPigRescuers(ReducerContext ctx, uint tick)
+    {
+        for (byte team = 0; team < NumTeams; team++)
+        {
+            // Is this team's rescuer (if any) still on a valid job — alive drone, and a live
+            // friendly player pod still in its sector? If so, leave it committed.
+            Pig? activeRescuer = null;
+            foreach (var p in ctx.Db.Pig.Iter())
+                if (p.Team == team && p.State == PigState.Rescue) { activeRescuer = p; break; }
+
+            if (activeRescuer is Pig ar)
+            {
+                bool valid = ar.ShipId is ulong rid
+                    && ctx.Db.Ship.ShipId.Find(rid) is Ship rship
+                    && ar.TargetShipId is ulong pid
+                    && ctx.Db.Ship.ShipId.Find(pid) is Ship curPod
+                    && curPod.IsPod && !curPod.IsPig && curPod.Team == team && curPod.SectorId == rship.SectorId;
+                if (valid)
+                    continue;   // keep ferrying this pod home
+                // Job's done / no longer reachable — release the slot back to combat.
+                ctx.Db.Pig.PigId.Update(ar with { State = PigState.Idle, TargetShipId = null });
+            }
+
+            // No active rescuer: commit the single nearest free drone to the nearest friendly
+            // player pod that shares its sector (one pair -> one diverted drone). Free = a live,
+            // non-pod drone not already rescuing.
+            Pig? bestDrone = null; ulong bestPod = 0; float best2 = float.PositiveInfinity;
+            foreach (var pod in ctx.Db.Ship.Iter())
+            {
+                if (!pod.IsPod || pod.IsPig || pod.Team != team) continue;
+                foreach (var p in ctx.Db.Pig.Iter())
+                {
+                    if (p.Team != team || p.State == PigState.Rescue) continue;
+                    if (p.ShipId is not ulong sid) continue;
+                    if (ctx.Db.Ship.ShipId.Find(sid) is not Ship drone) continue;
+                    if (drone.IsPod || drone.SectorId != pod.SectorId) continue;
+                    float d2 = Dist2(drone.PosX, drone.PosY, drone.PosZ, pod.PosX, pod.PosY, pod.PosZ);
+                    if (d2 < best2) { best2 = d2; bestDrone = p; bestPod = pod.ShipId; }
+                }
+            }
+            if (bestDrone is Pig chosen)
+                ctx.Db.Pig.PigId.Update(chosen with { State = PigState.Rescue, TargetShipId = bestPod });
+        }
+    }
+
     // Launch a fresh drone for a slot at its team base, facing the sector center
     // (mirrors the player spawn, plus a per-slot vertical fan so drones launched
     // on the same tick don't stack on one point).
@@ -346,6 +402,21 @@ public static partial class Module
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
         Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
         Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
+
+        // ---- Rescue duty: this slot was committed by AssignPigRescuers to retrieve a
+        // specific friendly pod (at most ONE rescuer per team — every other drone keeps
+        // attacking). Fly onto the pod; the rescue pass in SimulateTick resolves the pickup
+        // on hull contact. The assignment pass guarantees the target is a live, same-sector
+        // friendly pod and keeps State==Rescue across ticks, so here we just steer (PigSteerTo
+        // never fires) and return. Once the pod is resolved the slot is no longer Rescue and
+        // we fall straight through to normal combat below. ----
+        if (slotOpt is Pig rescuer && rescuer.State == PigState.Rescue
+            && rescuer.TargetShipId is ulong rescuePodId
+            && ctx.Db.Ship.ShipId.Find(rescuePodId) is Ship rescuePod
+            && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
+        {
+            return PigSteerTo(ctx, me, myPos, myRot, new Vec3(rescuePod.PosX, rescuePod.PosY, rescuePod.PosZ), 1f);
+        }
 
         // Pick a target by THREAT, not just proximity: score every enemy in radar by how
         // much it endangers THIS drone's survival (aiming at us + close + hits hard), and

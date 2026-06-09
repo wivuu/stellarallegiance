@@ -15,17 +15,9 @@ Archives:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
 - Gamification -- make it more fun in the near term:
-  - Add pods that eject on ship death; pod must either die, be rescued by a teammate, or slowly make their own way back to a base (on impulse) in order for player to respawn.
-  - Pigs should be podded -- they eject just like players and pods head towards the closest base
-  - Add a delay between pigs respawn. Once a squad of pigs spawn, all have to be dead before the next squad can spawn, and there's a 10 second delay after the last pig dies before the next squad spawns. 
-- Pig improvements:
-  - They should rescue pods if there are no enemies nearby.
-  - Pigs should prioritize aggressive targets over non-aggressive targets, but if there are no aggressive targets nearby, they should pursue non-aggressive targets (e.g. pods and passive players) instead of patrolling.
-  - Pigs should patrol if there are no targets nearby, instead of idling in place.
-
-- Pigs should proceed to attack nearby enemy bases directly if there are no (non-pod) targets nearby, instead of patrolling
-- Pigs dont need to ALL rescue a single pod, if one PIG decides to save a pod the rest should proceed with their normal behavior.
-- Pigs could be refactored to use A* pathfinding instead of direct homing, which would allow them to navigate around asteroids and other obstacles more effectively. In conjunction w/ 3D waypoint graph for better patrol routes and navigation around obstacles.
+  - PIGs should prioritize attacking players that are attacking their bae
+  - increase the hull of bases by 30%
+  - Eject pods should be sent out, spinning, in a random direction at a high speed trajectory 
 ---
 
 ## Roadmap (prioritized)

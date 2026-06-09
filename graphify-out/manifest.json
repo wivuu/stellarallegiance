@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781003687.6436105,
-    "ast_hash": "f029a8a0d2368ff8c15ef4f048620856",
+    "mtime": 1781005172.5599132,
+    "ast_hash": "ff22e2955cfd7c7dc8ca23c9b3475659",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781004443.4739103,
-    "ast_hash": "6231fcf9b8bd9810e05a4efb6346394a",
+    "mtime": 1781005226.0890667,
+    "ast_hash": "d762703c9ce8e8f2edaf232d05a6e3c4",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
