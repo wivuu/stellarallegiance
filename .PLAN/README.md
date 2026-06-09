@@ -14,6 +14,8 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
+- When sitting at 0 engine, turn off engine glow
+- PIGs should be able to boost towards their target, if they are far enough away, until they close down the target
 ---
 
 ## Roadmap (prioritized)

@@ -147,6 +147,10 @@ public static partial class Module
     // A no-op once everything is already dormant, so it costs nothing per idle tick.
     private static void DespawnAllPigs(ReducerContext ctx)
     {
+        // Combat is over — drop every drone/pod nav plan so the cache can't leak
+        // across a long-running server (entries are keyed by never-reused ShipId).
+        DroneNavCache.Clear();
+
         // Reset squad timing so the next time combat goes live a fresh squad scrambles
         // immediately (no banked delay from idle time).
         foreach (var sq in ctx.Db.PigSquad.Iter().ToList())
@@ -358,6 +362,7 @@ public static partial class Module
     private static void KillPig(ReducerContext ctx, Ship s, uint tick)
     {
         ctx.Db.Ship.ShipId.Delete(s.ShipId);
+        DroneNavCache.Remove(s.ShipId);   // ShipIds never repeat — drop the dead drone's nav plan
 
         // Same eject as a player pod: flung clear of the wreck on a random high-speed,
         // tumbling trajectory (decays via drag) before PodThink reasserts the flight home.
@@ -405,17 +410,63 @@ public static partial class Module
         Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed -> PIG pod {pod.ShipId}; respawns when pod resolves");
     }
 
+    // ---- Per-tick world snapshot -------------------------------------------
+    // The brain runs once PER DRONE per tick. Without this, every drone would
+    // re-scan the whole Ship/Pig/Asteroid tables (a full SpacetimeDB
+    // deserialize each) to find its slot, acquire targets, and dodge rocks —
+    // O(drones × world) table scans per tick, which is exactly what spikes in a
+    // big furball. Instead we snapshot those tables ONCE per tick into in-memory
+    // buckets and every drone reads those. Server-only derived state, fully
+    // rebuilt each tick (so it can't drift or leak); bucket lists are reused
+    // across ticks to avoid per-tick reallocation.
+    private static uint _pigSnapshotTick = uint.MaxValue;
+    private static readonly Dictionary<uint, List<Ship>> _shipsBySector = new();
+    private static readonly Dictionary<uint, List<Asteroid>> _asteroidsBySector = new();
+    private static readonly Dictionary<ulong, Pig> _pigByShipId = new();
+    private static readonly List<Ship> _noShips = new();
+    private static readonly List<Asteroid> _noAsteroids = new();
+
+    private static void EnsurePigSnapshot(ReducerContext ctx, uint tick)
+    {
+        if (_pigSnapshotTick == tick)
+            return;
+        _pigSnapshotTick = tick;
+
+        foreach (var l in _shipsBySector.Values) l.Clear();
+        foreach (var s in ctx.Db.Ship.Iter())
+        {
+            if (!_shipsBySector.TryGetValue(s.SectorId, out var list))
+                _shipsBySector[s.SectorId] = list = new List<Ship>();
+            list.Add(s);
+        }
+
+        foreach (var l in _asteroidsBySector.Values) l.Clear();
+        foreach (var a in ctx.Db.Asteroid.Iter())
+        {
+            if (!_asteroidsBySector.TryGetValue(a.SectorId, out var list))
+                _asteroidsBySector[a.SectorId] = list = new List<Asteroid>();
+            list.Add(a);
+        }
+
+        _pigByShipId.Clear();
+        foreach (var p in ctx.Db.Pig.Iter())
+            if (p.ShipId is ulong sid) _pigByShipId[sid] = p;
+    }
+
+    private static List<Ship> ShipsInSector(uint sector) =>
+        _shipsBySector.TryGetValue(sector, out var l) ? l : _noShips;
+    private static List<Asteroid> AsteroidsInSector(uint sector) =>
+        _asteroidsBySector.TryGetValue(sector, out var l) ? l : _noAsteroids;
+
     // The per-tick brain: pick a target, run the Idle/Seek/Attack state machine, and
     // return the synthesized flight input. Also updates this drone's Pig row (state +
     // target). Reads live world state directly — no determinism contract (server-only).
     private static ShipInputState PigThink(ReducerContext ctx, Ship me, uint tick)
     {
-        // Locate this drone's slot row (table is tiny).
-        Pig? slotOpt = null;
-        foreach (var p in ctx.Db.Pig.Iter())
-        {
-            if (p.ShipId == me.ShipId) { slotOpt = p; break; }
-        }
+        EnsurePigSnapshot(ctx, tick);
+
+        // This drone's slot row, from the per-tick snapshot.
+        Pig? slotOpt = _pigByShipId.TryGetValue(me.ShipId, out var slotV) ? slotV : (Pig?)null;
 
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
         Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
@@ -433,7 +484,7 @@ public static partial class Module
             && ctx.Db.Ship.ShipId.Find(rescuePodId) is Ship rescuePod
             && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
         {
-            return PigSteerTo(ctx, me, myPos, myRot, new Vec3(rescuePod.PosX, rescuePod.PosY, rescuePod.PosZ), 1f);
+            return PigSteerTo(ctx, me, myPos, myRot, new Vec3(rescuePod.PosX, rescuePod.PosY, rescuePod.PosZ), 1f, tick);
         }
 
         // Pick a target by THREAT, not just proximity: score every enemy in radar by how
@@ -456,7 +507,7 @@ public static partial class Module
             {
                 if (slotOpt is Pig spp)
                     ctx.Db.Pig.PigId.Update(spp with { State = PigState.Seek, TargetShipId = locked.ShipId });
-                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f);
+                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f, tick);
             }
             keepId = null;   // no path to that sector — drop the lock and re-acquire below
         }
@@ -482,9 +533,9 @@ public static partial class Module
         Ship? bestAggr = null; float bestAggrScore = float.NegativeInfinity;
         Ship? keptAggr = null; float keptAggrScore = float.NegativeInfinity;
         Ship? nearestPassive = null; float nearestPassive2 = float.PositiveInfinity;
-        foreach (var s in ctx.Db.Ship.Iter())
+        foreach (var s in ShipsInSector(me.SectorId))
         {
-            if (s.SectorId != me.SectorId || s.Team == me.Team)
+            if (s.Team == me.Team)
                 continue;
             // Never target a pod — denying the kill keeps a downed opponent out of the fight
             // longer (a respawn is worth more than the pod), so drones ignore enemy pods.
@@ -523,7 +574,7 @@ public static partial class Module
             {
                 if (slotOpt is Pig sh)
                     ctx.Db.Pig.PigId.Update(sh with { State = PigState.Patrol, TargetShipId = null });
-                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(homeGate.PosX, homeGate.PosY, homeGate.PosZ), 1f);
+                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(homeGate.PosX, homeGate.PosY, homeGate.PosZ), 1f, tick);
             }
             // Nothing hostile to fight → go on the OFFENSIVE: press the nearest ENEMY base in
             // this sector and shell it (PIG fire now erodes bases — Pass B), rather than idly
@@ -570,7 +621,7 @@ public static partial class Module
         Vec3 desiredDir = NormalizeOr(aimPoint - myPos, myRot.Rotate(new Vec3(0f, 0f, 1f)));
 
         // Bend the heading away from asteroids in our path (steering, not pathfinding).
-        desiredDir = PigAvoidAsteroids(ctx, myPos, desiredDir);
+        desiredDir = PigAvoidAsteroids(me.SectorId, myPos, desiredDir);
 
         // Steer: desired world direction -> ship-local; yaw/pitch proportionally toward it.
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desiredDir), new Vec3(0f, 0f, 1f));
@@ -648,7 +699,7 @@ public static partial class Module
             center.X + MathF.Cos(phase) * PigPatrolRadius,
             center.Y,
             center.Z + MathF.Sin(phase) * PigPatrolRadius);
-        return PigSteerTo(ctx, me, myPos, myRot, waypoint, 0.6f);
+        return PigSteerTo(ctx, me, myPos, myRot, waypoint, 0.6f, tick);
     }
 
     // True if `enemy` is "aggressive" right now: a non-pod that has fired within the aggro
@@ -663,6 +714,7 @@ public static partial class Module
     // sector, run down the aleph toward it (the warp pass carries the pod across).
     private static ShipInputState PodThink(ReducerContext ctx, Ship me, uint tick)
     {
+        EnsurePigSnapshot(ctx, tick);
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
         Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
 
@@ -671,13 +723,13 @@ public static partial class Module
             if (home != me.SectorId)
             {
                 if (AlephTo(ctx, me.SectorId, home) is Aleph gate)
-                    return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f);
+                    return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f, tick);
             }
             else
             {
                 foreach (var b in ctx.Db.Base.Iter())
                     if (b.Team == me.Team)
-                        return PigSteerTo(ctx, me, myPos, myRot, new Vec3(b.PosX, b.PosY, b.PosZ), 1f);
+                        return PigSteerTo(ctx, me, myPos, myRot, new Vec3(b.PosX, b.PosY, b.PosZ), 1f, tick);
             }
         }
         return default;   // no base / no path — drift until rescued, docked, or destroyed
@@ -726,12 +778,14 @@ public static partial class Module
     // Bend `desiredDir` around any asteroid lying ahead within the lookahead distance.
     // Simple potential-style steering (no external pathfinding lib): push perpendicular
     // away from each near-path asteroid, weighted by how close/forward it is.
-    private static Vec3 PigAvoidAsteroids(ReducerContext ctx, Vec3 pos, Vec3 desiredDir)
+    private static Vec3 PigAvoidAsteroids(uint sectorId, Vec3 pos, Vec3 desiredDir)
     {
         Vec3 dir = NormalizeOr(desiredDir, new Vec3(0f, 0f, 1f));
         Vec3 steer = new Vec3(0f, 0f, 0f);
 
-        foreach (var a in ctx.Db.Asteroid.Iter())
+        // Only this sector's rocks can be in our way — and they come from the
+        // per-tick snapshot, not a fresh table scan per drone.
+        foreach (var a in AsteroidsInSector(sectorId))
         {
             Vec3 center = new Vec3(a.PosX, a.PosY, a.PosZ);
             Vec3 toA = center - pos;
@@ -837,13 +891,13 @@ public static partial class Module
     // .PLAN/AI.md local layer). With a clear line this is a no-op (point comes back
     // unchanged), so open-space behaviour — and the reactive PigAvoidAsteroids layer
     // below, which keeps handling close-range grazes — is untouched.
-    private static ShipInputState PigSteerTo(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing)
+    private static ShipInputState PigSteerTo(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing, uint tick)
     {
-        point = PigNavWaypoint(ctx, me.SectorId, myPos, point);
+        point = PigNavWaypoint(ctx, me.ShipId, me.SectorId, myPos, point, tick);
         Vec3 to = point - myPos;
         float d = to.Length();
         Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
-        desired = PigAvoidAsteroids(ctx, myPos, desired);
+        desired = PigAvoidAsteroids(me.SectorId, myPos, desired);
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
         float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
         float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
@@ -860,7 +914,7 @@ public static partial class Module
     {
         Vec3 to = point - myPos;
         float dist = to.Length();
-        Vec3 desired = PigAvoidAsteroids(ctx, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
+        Vec3 desired = PigAvoidAsteroids(me.SectorId, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
 
         float yaw, pitch;

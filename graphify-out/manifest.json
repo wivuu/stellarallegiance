@@ -2,12 +2,12 @@
   "client/scripts/AlephView.cs": {
     "mtime": 1780756899.81516,
     "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
-    "semantic_hash": ""
+    "semantic_hash": "68adcc792e65c15546ade30fa7c5fce6"
   },
   "client/scripts/CameraRig.cs": {
     "mtime": 1780751630.428061,
     "ast_hash": "6c4d9e55a32f1354746e35860b3c39a8",
-    "semantic_hash": ""
+    "semantic_hash": "6c4d9e55a32f1354746e35860b3c39a8"
   },
   "client/scripts/Chat.cs": {
     "mtime": 1780695227.6188376,
@@ -47,7 +47,7 @@
   "client/scripts/Hud.cs": {
     "mtime": 1781032026.9275434,
     "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
-    "semantic_hash": ""
+    "semantic_hash": "ec33d6e4642d90c1c55d4b6d46f61860"
   },
   "client/scripts/Lobby.cs": {
     "mtime": 1780668592.8234627,
@@ -62,42 +62,42 @@
   "client/scripts/PredictionController.cs": {
     "mtime": 1781032026.9280398,
     "ast_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3",
-    "semantic_hash": ""
+    "semantic_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3"
   },
   "client/scripts/ProjectileView.cs": {
     "mtime": 1780753450.3530416,
     "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
-    "semantic_hash": ""
+    "semantic_hash": "14969e69f43e4bcd4a58121e0662d38d"
   },
   "client/scripts/RemoteShip.cs": {
     "mtime": 1781032026.9284115,
     "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
-    "semantic_hash": ""
+    "semantic_hash": "c2aa42d05b7747d86c07339bcc0b973d"
   },
   "client/scripts/ShipController.cs": {
     "mtime": 1781032026.9287775,
     "ast_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b",
-    "semantic_hash": ""
+    "semantic_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b"
   },
   "client/scripts/ShipMath.cs": {
     "mtime": 1780749220.7178583,
     "ast_hash": "50ae535bd280c26fd209e16768313197",
-    "semantic_hash": ""
+    "semantic_hash": "50ae535bd280c26fd209e16768313197"
   },
   "client/scripts/Starscape.cs": {
     "mtime": 1780766621.203157,
     "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
-    "semantic_hash": ""
+    "semantic_hash": "c7b0003302e125f821a91ebbbb6d19eb"
   },
   "client/scripts/Sun.cs": {
     "mtime": 1780766030.2042913,
     "ast_hash": "2280892dfca65720b99510a239ec7c6f",
-    "semantic_hash": ""
+    "semantic_hash": "2280892dfca65720b99510a239ec7c6f"
   },
   "client/scripts/TargetMarkers.cs": {
     "mtime": 1780754042.9995205,
     "ast_hash": "360776da7afd49c2d23d37eaae67490c",
-    "semantic_hash": ""
+    "semantic_hash": "360776da7afd49c2d23d37eaae67490c"
   },
   "client/scripts/TeamTrail.cs": {
     "mtime": 1780668592.827944,
@@ -105,9 +105,9 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781032026.9290001,
-    "ast_hash": "cdd1b7bcd5d781d3fc562ea71b47610e",
-    "semantic_hash": ""
+    "mtime": 1781033434.4503157,
+    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
+    "semantic_hash": "06442cfb0fb9800fae69d220169bae98"
   },
   "client/wivuullegiance.csproj": {
     "mtime": 1780664788.4547856,
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781032026.9355786,
-    "ast_hash": "9500e0f66e3e1e4006461a5787bb13ce",
-    "semantic_hash": ""
+    "mtime": 1781045287.148608,
+    "ast_hash": "ca4290bd1744f2612fb25050072c46b1",
+    "semantic_hash": "ca4290bd1744f2612fb25050072c46b1"
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781032782.8428004,
-    "ast_hash": "eef114097b0b446629f5cee42534f242",
+    "mtime": 1781041296.3606985,
+    "ast_hash": "f6c22a9e76e9e6b866997a48ca694c2d",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -182,7 +182,7 @@
   "shared/FlightModel.cs": {
     "mtime": 1781032026.936273,
     "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
-    "semantic_hash": ""
+    "semantic_hash": "c47a4e2883ff4bac4a2ac3d337dcb103"
   },
   "shared/Shared.csproj": {
     "mtime": 1780664948.316524,
@@ -197,7 +197,7 @@
   "tests/FlightModelTest/Program.cs": {
     "mtime": 1780749309.4072368,
     "ast_hash": "30395b0e240e78e5698500b16504990b",
-    "semantic_hash": ""
+    "semantic_hash": "30395b0e240e78e5698500b16504990b"
   },
   "tools/asteroid-gen/asteroids.json": {
     "mtime": 1780607323.898378,
@@ -245,338 +245,48 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "module/spacetimedb/NavigationAdapter.cs": {
-    "mtime": 1781032755.3642552,
-    "ast_hash": "688219a3481be5e9c2e5bd72fba46665",
+    "mtime": 1781045305.3658214,
+    "ast_hash": "88b2e8ec176c04532a4ba053c4b935a2",
     "semantic_hash": ""
   },
   "shared/Navigation/AStarPlanner.cs": {
-    "mtime": 1781032525.371184,
-    "ast_hash": "6d907e056314c09a0ec56bbde6a93213",
-    "semantic_hash": ""
-  },
-  "shared/Navigation/CompositeRoutePlanner.cs": {
-    "mtime": 1781032608.1571355,
-    "ast_hash": "180b0be21a46143ee5a484ef0345e323",
-    "semantic_hash": ""
-  },
-  "shared/Navigation/NavGeometry.cs": {
-    "mtime": 1781032482.895648,
-    "ast_hash": "a6e64dec6cee066c582d8a31ab096381",
-    "semantic_hash": ""
-  },
-  "shared/Navigation/NavGraph.cs": {
-    "mtime": 1781032513.5167246,
-    "ast_hash": "987b4154d90660ad4e0aca951223a560",
-    "semantic_hash": ""
-  },
-  "shared/Navigation/PathSmoother.cs": {
-    "mtime": 1781032534.9056425,
-    "ast_hash": "a9cc2f8899e2a9a2b0c8f22b4069fe21",
-    "semantic_hash": ""
-  },
-  "shared/Navigation/SectorRoutePlanner.cs": {
-    "mtime": 1781032548.650866,
-    "ast_hash": "276ee835a8ae559b0697de5207a206c3",
-    "semantic_hash": ""
-  },
-  "tests/NavigationTest/NavigationTest.csproj": {
-    "mtime": 1781032615.305175,
-    "ast_hash": "869dac9aacf4d11384f4c234e952fdcf",
-    "semantic_hash": ""
-  },
-  "tests/NavigationTest/Program.cs": {
-    "mtime": 1781032712.3029513,
-    "ast_hash": "af48c5d31fa52eae862e0e5cee790e9d",
-    "semantic_hash": ""
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/AlephView.cs": {
-    "mtime": 1780756899.81516,
-    "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
-    "semantic_hash": "68adcc792e65c15546ade30fa7c5fce6"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/CameraRig.cs": {
-    "mtime": 1780751630.428061,
-    "ast_hash": "6c4d9e55a32f1354746e35860b3c39a8",
-    "semantic_hash": "6c4d9e55a32f1354746e35860b3c39a8"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Chat.cs": {
-    "mtime": 1780695227.6188376,
-    "ast_hash": "4e9658cfe809f7b65bfaa7b81ac6c557",
-    "semantic_hash": "4e9658cfe809f7b65bfaa7b81ac6c557"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ConnectionManager.cs": {
-    "mtime": 1780668592.8209198,
-    "ast_hash": "00ba21f5cf6b4e5896ef39088e4b9e09",
-    "semantic_hash": "00ba21f5cf6b4e5896ef39088e4b9e09"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ConnectionOverlay.cs": {
-    "mtime": 1780682700.7644095,
-    "ast_hash": "bff1be5ff7da9defa3b36bfcc74f3da8",
-    "semantic_hash": "bff1be5ff7da9defa3b36bfcc74f3da8"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/DustField.cs": {
-    "mtime": 1780668592.8220572,
-    "ast_hash": "0119cebd52c7b7e59ffb768881a98abe",
-    "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/EngineGlow.cs": {
-    "mtime": 1780668592.8225462,
-    "ast_hash": "d42df7b554c4671708d66782ca798b0f",
-    "semantic_hash": "d42df7b554c4671708d66782ca798b0f"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ExplosionEffect.cs": {
-    "mtime": 1780678799.1349943,
-    "ast_hash": "a6ab4acf0ddf3815b791df79e2345048",
-    "semantic_hash": "a6ab4acf0ddf3815b791df79e2345048"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/HitFlash.cs": {
-    "mtime": 1780678799.1351247,
-    "ast_hash": "06cbbf17aa619336fdbf34371a93a577",
-    "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Hud.cs": {
-    "mtime": 1781032026.9275434,
-    "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
-    "semantic_hash": "ec33d6e4642d90c1c55d4b6d46f61860"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Lobby.cs": {
-    "mtime": 1780668592.8234627,
-    "ast_hash": "fd12a10ece76fdc1a985b2b672854dbf",
-    "semantic_hash": "fd12a10ece76fdc1a985b2b672854dbf"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Minimap.cs": {
-    "mtime": 1780668592.8238854,
-    "ast_hash": "840f43e46d5bb113fb2a4379e19559be",
-    "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/PredictionController.cs": {
-    "mtime": 1781032026.9280398,
-    "ast_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3",
-    "semantic_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ProjectileView.cs": {
-    "mtime": 1780753450.3530416,
-    "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
-    "semantic_hash": "14969e69f43e4bcd4a58121e0662d38d"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/RemoteShip.cs": {
-    "mtime": 1781032026.9284115,
-    "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
-    "semantic_hash": "c2aa42d05b7747d86c07339bcc0b973d"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ShipController.cs": {
-    "mtime": 1781032026.9287775,
-    "ast_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b",
-    "semantic_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/ShipMath.cs": {
-    "mtime": 1780749220.7178583,
-    "ast_hash": "50ae535bd280c26fd209e16768313197",
-    "semantic_hash": "50ae535bd280c26fd209e16768313197"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Starscape.cs": {
-    "mtime": 1780766621.203157,
-    "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
-    "semantic_hash": "c7b0003302e125f821a91ebbbb6d19eb"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/Sun.cs": {
-    "mtime": 1780766030.2042913,
-    "ast_hash": "2280892dfca65720b99510a239ec7c6f",
-    "semantic_hash": "2280892dfca65720b99510a239ec7c6f"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/TargetMarkers.cs": {
-    "mtime": 1780754042.9995205,
-    "ast_hash": "360776da7afd49c2d23d37eaae67490c",
-    "semantic_hash": "360776da7afd49c2d23d37eaae67490c"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/TeamTrail.cs": {
-    "mtime": 1780668592.827944,
-    "ast_hash": "fd5361bc51fc5cdb01d496ce803ddb4d",
-    "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
-  },
-  "/Users/erik/projects/wivuullegiance/client/scripts/WorldRenderer.cs": {
-    "mtime": 1781033434.4503157,
-    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
-    "semantic_hash": "06442cfb0fb9800fae69d220169bae98"
-  },
-  "/Users/erik/projects/wivuullegiance/client/wivuullegiance.csproj": {
-    "mtime": 1780664788.4547856,
-    "ast_hash": "d05677b5691cac7d3f198689313a524f",
-    "semantic_hash": "d05677b5691cac7d3f198689313a524f"
-  },
-  "/Users/erik/projects/wivuullegiance/client/wivuullegiance.sln": {
-    "mtime": 1780421022.6209621,
-    "ast_hash": "85b5f0d2d50697c1ec03c1f09d7056d6",
-    "semantic_hash": "85b5f0d2d50697c1ec03c1f09d7056d6"
-  },
-  "/Users/erik/projects/wivuullegiance/dotnet-tools.json": {
-    "mtime": 1780664978.7781804,
-    "ast_hash": "0a8a0044ec250a189c7bd91e3a0e2bca",
-    "semantic_hash": "0a8a0044ec250a189c7bd91e3a0e2bca"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetime.json": {
-    "mtime": 1780421022.6222467,
-    "ast_hash": "6c80223649a1d66cc472b0bd75b43cb4",
-    "semantic_hash": "6c80223649a1d66cc472b0bd75b43cb4"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetime.local.json": {
-    "mtime": 1780421022.6223156,
-    "ast_hash": "c5b90c54e317827cea0a2c453ec8b2a1",
-    "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetimedb/Lib.cs": {
-    "mtime": 1781034145.9529076,
-    "ast_hash": "ca4290bd1744f2612fb25050072c46b1",
-    "semantic_hash": "ca4290bd1744f2612fb25050072c46b1"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetimedb/NavigationAdapter.cs": {
-    "mtime": 1781037505.03918,
-    "ast_hash": "688219a3481be5e9c2e5bd72fba46665",
-    "semantic_hash": "688219a3481be5e9c2e5bd72fba46665"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetimedb/PigAI.cs": {
-    "mtime": 1781037505.0396523,
-    "ast_hash": "c6f3b416d0cab3e1f163ed167c584a67",
-    "semantic_hash": "c6f3b416d0cab3e1f163ed167c584a67"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetimedb/StdbModule.csproj": {
-    "mtime": 1780695227.6203237,
-    "ast_hash": "052fc5e9100188103d7e2d040d74287a",
-    "semantic_hash": "052fc5e9100188103d7e2d040d74287a"
-  },
-  "/Users/erik/projects/wivuullegiance/module/spacetimedb/global.json": {
-    "mtime": 1780421022.6228979,
-    "ast_hash": "7c216785c0983e9451814c7203a9bd65",
-    "semantic_hash": "7c216785c0983e9451814c7203a9bd65"
-  },
-  "/Users/erik/projects/wivuullegiance/scripts/export-clients.sh": {
-    "mtime": 1780507561.8618631,
-    "ast_hash": "49aaf2d89a761ab7815f34bd31b70747",
-    "semantic_hash": "49aaf2d89a761ab7815f34bd31b70747"
-  },
-  "/Users/erik/projects/wivuullegiance/scripts/populate-db.sh": {
-    "mtime": 1780682700.7643836,
-    "ast_hash": "81db20ae618c18fea4162a950707515f",
-    "semantic_hash": "81db20ae618c18fea4162a950707515f"
-  },
-  "/Users/erik/projects/wivuullegiance/scripts/publish-local.sh": {
-    "mtime": 1780682700.764164,
-    "ast_hash": "a3312cebefaeffcd3bbe358f0cc0a662",
-    "semantic_hash": "a3312cebefaeffcd3bbe358f0cc0a662"
-  },
-  "/Users/erik/projects/wivuullegiance/scripts/publish-maincloud.sh": {
-    "mtime": 1780665186.7700179,
-    "ast_hash": "afa23ffc0f5c98816152c34ce8ce7a6f",
-    "semantic_hash": "afa23ffc0f5c98816152c34ce8ce7a6f"
-  },
-  "/Users/erik/projects/wivuullegiance/scripts/start-client.sh": {
-    "mtime": 1780421022.62336,
-    "ast_hash": "021685682be7a9bb8c70bd0ef03aa91a",
-    "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
-  },
-  "/Users/erik/projects/wivuullegiance/shared/FlightModel.cs": {
-    "mtime": 1781032026.936273,
-    "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
-    "semantic_hash": "c47a4e2883ff4bac4a2ac3d337dcb103"
-  },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/AStarPlanner.cs": {
     "mtime": 1781037505.0399263,
     "ast_hash": "6d907e056314c09a0ec56bbde6a93213",
     "semantic_hash": "6d907e056314c09a0ec56bbde6a93213"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/CompositeRoutePlanner.cs": {
+  "shared/Navigation/CompositeRoutePlanner.cs": {
     "mtime": 1781037505.040102,
     "ast_hash": "180b0be21a46143ee5a484ef0345e323",
     "semantic_hash": "180b0be21a46143ee5a484ef0345e323"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/NavGeometry.cs": {
+  "shared/Navigation/NavGeometry.cs": {
     "mtime": 1781037505.0402806,
     "ast_hash": "a6e64dec6cee066c582d8a31ab096381",
     "semantic_hash": "a6e64dec6cee066c582d8a31ab096381"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/NavGraph.cs": {
+  "shared/Navigation/NavGraph.cs": {
     "mtime": 1781037505.0404198,
     "ast_hash": "987b4154d90660ad4e0aca951223a560",
     "semantic_hash": "987b4154d90660ad4e0aca951223a560"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/PathSmoother.cs": {
+  "shared/Navigation/PathSmoother.cs": {
     "mtime": 1781037505.0406127,
     "ast_hash": "a9cc2f8899e2a9a2b0c8f22b4069fe21",
     "semantic_hash": "a9cc2f8899e2a9a2b0c8f22b4069fe21"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Navigation/SectorRoutePlanner.cs": {
+  "shared/Navigation/SectorRoutePlanner.cs": {
     "mtime": 1781037505.0407565,
     "ast_hash": "276ee835a8ae559b0697de5207a206c3",
     "semantic_hash": "276ee835a8ae559b0697de5207a206c3"
   },
-  "/Users/erik/projects/wivuullegiance/shared/Shared.csproj": {
-    "mtime": 1780664948.316524,
-    "ast_hash": "569baec20e5abc28ec535f8fd2831790",
-    "semantic_hash": "569baec20e5abc28ec535f8fd2831790"
-  },
-  "/Users/erik/projects/wivuullegiance/tests/FlightModelTest/FlightModelTest.csproj": {
-    "mtime": 1780668592.8306723,
-    "ast_hash": "a2a51d25196bb00b70a5172e3d4cc058",
-    "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
-  },
-  "/Users/erik/projects/wivuullegiance/tests/FlightModelTest/Program.cs": {
-    "mtime": 1780749309.4072368,
-    "ast_hash": "30395b0e240e78e5698500b16504990b",
-    "semantic_hash": "30395b0e240e78e5698500b16504990b"
-  },
-  "/Users/erik/projects/wivuullegiance/tests/NavigationTest/NavigationTest.csproj": {
+  "tests/NavigationTest/NavigationTest.csproj": {
     "mtime": 1781037505.041005,
     "ast_hash": "869dac9aacf4d11384f4c234e952fdcf",
     "semantic_hash": "869dac9aacf4d11384f4c234e952fdcf"
   },
-  "/Users/erik/projects/wivuullegiance/tests/NavigationTest/Program.cs": {
+  "tests/NavigationTest/Program.cs": {
     "mtime": 1781037505.0412307,
     "ast_hash": "af48c5d31fa52eae862e0e5cee790e9d",
     "semantic_hash": "af48c5d31fa52eae862e0e5cee790e9d"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/asteroids.json": {
-    "mtime": 1780607323.898378,
-    "ast_hash": "2db48f8e1fbba57f7df0a912d2cb1941",
-    "semantic_hash": "2db48f8e1fbba57f7df0a912d2cb1941"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/bake.py": {
-    "mtime": 1780601481.6091838,
-    "ast_hash": "ded49bcbdb26934914bf1b16e1dfb363",
-    "semantic_hash": "ded49bcbdb26934914bf1b16e1dfb363"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/build.sh": {
-    "mtime": 1780581831.9110441,
-    "ast_hash": "ccbae1e3e0d248fb142a0743796062d7",
-    "semantic_hash": "ccbae1e3e0d248fb142a0743796062d7"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/generate.py": {
-    "mtime": 1780602518.4168644,
-    "ast_hash": "385e38b902198c4739e17fd9ca84d5fc",
-    "semantic_hash": "385e38b902198c4739e17fd9ca84d5fc"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/glb.py": {
-    "mtime": 1780590412.5484626,
-    "ast_hash": "369fb5143db0c5c8aa21cd1e9ddd418e",
-    "semantic_hash": "369fb5143db0c5c8aa21cd1e9ddd418e"
-  },
-  "/Users/erik/projects/wivuullegiance/tools/asteroid-gen/shapefield.py": {
-    "mtime": 1780603578.8132992,
-    "ast_hash": "3e094f376a235b88f032954a5669052c",
-    "semantic_hash": "3e094f376a235b88f032954a5669052c"
-  },
-  "/Users/erik/projects/wivuullegiance/.csharpierrc.yaml": {
-    "mtime": 1780664998.5641737,
-    "ast_hash": "81b9ca12636cac7d60db0fa3c10e0ec7",
-    "semantic_hash": "81b9ca12636cac7d60db0fa3c10e0ec7"
-  },
-  "/Users/erik/projects/wivuullegiance/.github/workflows/asteroids.yml": {
-    "mtime": 1780607678.1612601,
-    "ast_hash": "19de9fd57d6b968e01ef133e9dbdabe2",
-    "semantic_hash": "19de9fd57d6b968e01ef133e9dbdabe2"
-  },
-  "/Users/erik/projects/wivuullegiance/.github/workflows/build-godot-client.yml": {
-    "mtime": 1780678799.1348352,
-    "ast_hash": "bf1a045c41435faa179f737e983f3821",
-    "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   }
 }
