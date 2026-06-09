@@ -9,6 +9,20 @@ public partial class WorldRenderer : Node3D
 {
 	private const float BaseRadius = 45f;
 
+	// Floating damage bar above each base. BaseMaxHealth mirrors the module's win-condition
+	// hull (Lib.cs BaseMaxHealth) so the bar can show a 0..1 fraction; keep the two in sync.
+	private const float BaseMaxHealth = 1300f;
+	private const float BaseHealthBarWidth = 110f;
+	private const float BaseHealthBarHeight = 10f;
+
+	// A pod removed while a friendly non-pod ship is in (roughly) hull contact was RESCUED
+	// — picked up by a teammate/drone — not destroyed, so it should simply vanish without a
+	// blast (the server's rescue pass deletes the row exactly like a kill does, so the row
+	// alone can't tell them apart; we mirror its rule client-side). The threshold is looser
+	// than the server's tight RescueRadius (6 units) to absorb the gap between the rescuer's
+	// rendered position (predicted for the local ship, interpolated for remotes) and the pod's.
+	private const float RescuePickupDist = 12f;
+
 	private Node3D _bases = null!;
 	private Node3D _asteroids = null!;
 	private Node3D _ships = null!;
@@ -22,6 +36,19 @@ public partial class WorldRenderer : Node3D
 	private const double GhostTtl = 0.6;
 
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
+
+	// Floating damage bar per base, keyed by BaseId. Hidden at full health; it appears,
+	// shrinks (left-anchored), and reddens as the base is hit. The parts are children of
+	// the base node so they cull/move with it; the root is screen-aligned each frame in
+	// _Process (manual billboard) so the bar always faces the camera.
+	private readonly Dictionary<ulong, BaseHealthBar> _baseHealthBars = new();
+
+	private sealed class BaseHealthBar
+	{
+		public Node3D Root = null!;            // screen-aligned anchor above the base
+		public MeshInstance3D Fill = null!;    // colored fill, scaled/offset by the health fraction
+		public StandardMaterial3D FillMat = null!;
+	}
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
@@ -70,6 +97,9 @@ public partial class WorldRenderer : Node3D
 	private StandardMaterial3D _pigTeam0Mat = null!;
 	private StandardMaterial3D _pigTeam1Mat = null!;
 	private StandardMaterial3D _projectileMat = null!;
+	// Shared dark backdrop for the base damage bars; each bar gets its own fill material so
+	// its colour can ramp green->red independently.
+	private StandardMaterial3D _hpBarBgMat = null!;
 
 	private ConnectionManager _cm = null!;
 	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
@@ -116,7 +146,9 @@ public partial class WorldRenderer : Node3D
 		if (_localTeam is byte lt)
 		{
 			foreach (var node in _shipNodes.Values)
-				if (node is RemoteShip rs && rs.Team != lt && rs.Visible)
+				// Exclude enemy pods: they're harmless and shouldn't draw a marker or be
+				// Tab-targetable (let a downed opponent float home unmolested).
+				if (node is RemoteShip rs && rs.Team != lt && !rs.IsPod && rs.Visible)
 					_enemyScratch.Add(rs);
 		}
 		return _enemyScratch;
@@ -161,6 +193,13 @@ public partial class WorldRenderer : Node3D
 			EmissionEnabled = true,
 			Emission = new Color(1f, 0.85f, 0.35f),
 			EmissionEnergyMultiplier = 2.5f,
+		};
+
+		_hpBarBgMat = new StandardMaterial3D
+		{
+			AlbedoColor = new Color(0.03f, 0.03f, 0.04f, 0.75f),
+			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
 		};
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
@@ -283,9 +322,64 @@ public partial class WorldRenderer : Node3D
 		};
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
+		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node);
+		UpdateBaseHealthBar(_baseHealthBars[row.BaseId], row.Health);
 		SetNodeSector(node, row.SectorId);
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
 	}
+
+	// Build the floating damage bar (background + fill) as children of the base node, anchored
+	// just above the sphere. Returns the handle stored per base; the fill is repositioned/recoloured
+	// by UpdateBaseHealthBar and the root is screen-aligned each frame in _Process.
+	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode)
+	{
+		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, BaseRadius + 22f, 0f) };
+
+		var bg = new MeshInstance3D
+		{
+			Name = "Bg",
+			Mesh = new QuadMesh { Size = new Vector2(BaseHealthBarWidth, BaseHealthBarHeight) },
+			MaterialOverride = _hpBarBgMat,
+		};
+
+		var fillMat = new StandardMaterial3D
+		{
+			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+			AlbedoColor = HealthColor(1f),
+		};
+		var fill = new MeshInstance3D
+		{
+			Name = "Fill",
+			// Slightly smaller than the backdrop (a thin border) and nudged forward so it draws on top.
+			Mesh = new QuadMesh { Size = new Vector2(BaseHealthBarWidth - 4f, BaseHealthBarHeight - 4f) },
+			MaterialOverride = fillMat,
+			Position = new Vector3(0f, 0f, 0.1f),
+		};
+
+		root.AddChild(bg);
+		root.AddChild(fill);
+		baseNode.AddChild(root);
+		return new BaseHealthBar { Root = root, Fill = fill, FillMat = fillMat };
+	}
+
+	// Resize/recolour the fill to a 0..1 health fraction and hide the whole bar at full health.
+	// The fill is left-anchored: scaling X by the fraction and shifting its centre left keeps the
+	// left edge fixed so it depletes rightward.
+	private static void UpdateBaseHealthBar(BaseHealthBar bar, float health)
+	{
+		float frac = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
+		float innerWidth = BaseHealthBarWidth - 4f;
+		bar.Fill.Scale = new Vector3(frac, 1f, 1f);
+		bar.Fill.Position = new Vector3(-innerWidth * 0.5f * (1f - frac), 0f, 0.1f);
+		bar.FillMat.AlbedoColor = HealthColor(frac);
+		bar.Root.Visible = frac < 0.999f;   // only show once the base has taken a hit
+	}
+
+	// Green at full health, through yellow at half, to red when nearly destroyed.
+	private static Color HealthColor(float frac) =>
+		frac > 0.5f
+			? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
+			: new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
 
 	// A destroyed base (Health <= 0, T9) is removed from the scene. A base that comes
 	// back to full health (RestartMatch heals every base) is re-created if it had been
@@ -296,7 +390,8 @@ public partial class WorldRenderer : Node3D
 		{
 			if (_baseNodes.Remove(newRow.BaseId, out var node))
 			{
-				node.QueueFree();
+				node.QueueFree();   // the bar is a child, freed with it
+				_baseHealthBars.Remove(newRow.BaseId);
 				GD.Print($"[WorldRenderer] Base {newRow.BaseId} (team {newRow.Team}) destroyed");
 			}
 		}
@@ -304,12 +399,17 @@ public partial class WorldRenderer : Node3D
 		{
 			OnBaseInsert(ctx, newRow);   // restored after a restart
 		}
+		else if (_baseHealthBars.TryGetValue(newRow.BaseId, out var bar))
+		{
+			UpdateBaseHealthBar(bar, newRow.Health);   // took damage (or healed on restart)
+		}
 	}
 
 	private void OnBaseDelete(EventContext ctx, Base row)
 	{
 		if (_baseNodes.Remove(row.BaseId, out var node))
 			node.QueueFree();
+		_baseHealthBars.Remove(row.BaseId);
 	}
 
 	// ---- Asteroid -------------------------------------------------------
@@ -435,8 +535,8 @@ public partial class WorldRenderer : Node3D
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
-			AttachEngineGlow(pc, row.Class, row.Team);
+			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
+			AttachEngineGlow(pc, row.Class, row.Team, row.IsPod);
 			pc.Initialize(row);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -456,8 +556,8 @@ public partial class WorldRenderer : Node3D
 		var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 		node = rs;
 		_ships.AddChild(rs);
-		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig));
-		AttachEngineGlow(rs, row.Class, row.Team);
+		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
+		AttachEngineGlow(rs, row.Class, row.Team, row.IsPod);
 		rs.Initialize(row);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
@@ -496,13 +596,22 @@ public partial class WorldRenderer : Node3D
 			return;
 
 		bool local = LocalShip == node;
-		// A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
-		// place it at the predicted node position the player was actually watching (not the
-		// authoritative row coords, which lag prediction) so the blast — and the death-cam
-		// framed on it below — line up exactly. Remote ships have no prediction; use row coords.
-		Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
-		var boom = ExplosionEffect.Create(row.Class, row.Team);
-		SpawnEffect(boom, deathPos, row.SectorId);
+
+		// A rescued pod is removed cleanly (a friendly flew onto it), not destroyed — it just
+		// vanishes, no blast. The row delete is identical to a kill's, so detect the rescue the
+		// way the server does: a friendly non-pod ship in hull contact (see FriendlyRescuerNear).
+		bool rescued = row.IsPod && FriendlyRescuerNear(node, row.SectorId, row.Team);
+
+		if (!rescued)
+		{
+			// A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
+			// place it at the predicted node position the player was actually watching (not the
+			// authoritative row coords, which lag prediction) so the blast — and the death-cam
+			// framed on it below — line up exactly. Remote ships have no prediction; use row coords.
+			Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
+			var boom = ExplosionEffect.Create(row.Class, row.Team);
+			SpawnEffect(boom, deathPos, row.SectorId);
+		}
 
 		if (local)
 		{
@@ -511,15 +620,57 @@ public partial class WorldRenderer : Node3D
 			foreach (var g in _predictedShots)
 				g.QueueFree();
 			_predictedShots.Clear();
-			// Hold the chase camera on the death point for a beat so the player sees their own
-			// blast up close. The return to the home overview (respawn is at the team base) is
-			// deferred until the hold expires (see _Process), keeping the death sector — where
-			// the blast lives and stays visible — on screen until then.
-			DeathCamShipTransform = node.GlobalTransform;
-			_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
-			_pendingHomeReset = _localSector != HomeSector;
+			// Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
+			// menu reopens). A local COMBAT ship's death instead ejects an escape pod the
+			// SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
+			// straight to the pod (both row callbacks run before this frame renders, so there's
+			// no overview flicker). So skip the death-cam there and only fire it for the pod.
+			if (row.IsPod && !rescued)
+			{
+				// Hold the chase camera on the death point for a beat so the player sees their own
+				// blast up close. The return to the home overview (respawn is at the team base) is
+				// deferred until the hold expires (see _Process), keeping the death sector — where
+				// the blast lives and stays visible — on screen until then.
+				DeathCamShipTransform = node.GlobalTransform;
+				_deathCamUntil = Time.GetTicksMsec() / 1000.0 + DeathCamSec;
+				_pendingHomeReset = _localSector != HomeSector;
+			}
+			else if (row.IsPod)
+			{
+				// Local pod rescued: no blast to hold the camera on, but still return the view to
+				// the home overview where the spawn menu reopens.
+				_pendingHomeReset = _localSector != HomeSector;
+			}
 		}
 		node.QueueFree();
+	}
+
+	// Client-side mirror of the server's rescue rule (Lib.cs rescue pass): is a friendly,
+	// non-pod ship in roughly hull contact with this pod? If so the pod was picked up, not
+	// killed, so its removal should be silent. Compares RENDERED positions (rescuer node vs
+	// pod node) so the interpolation lag they share largely cancels, with a generous radius
+	// (RescuePickupDist) for the residual predicted/interp gap. Restricted to the pod's own
+	// sector — sectors share a coordinate origin, so a same-team ship in another sector can
+	// overlap in raw coords. The pod node is already removed from _shipNodes by the caller.
+	private bool FriendlyRescuerNear(Node3D podNode, uint sector, byte team)
+	{
+		Vector3 podPos = podNode.GlobalPosition;
+		foreach (var node in _shipNodes.Values)
+		{
+			(byte t, bool isPod) = node switch
+			{
+				RemoteShip rs => (rs.Team, rs.IsPod),
+				PredictionController pc => (pc.Team, pc.IsPod),
+				_ => ((byte)255, true),
+			};
+			if (isPod || t != team)
+				continue;
+			if (node.HasMeta("sector") && (int)node.GetMeta("sector") != (int)sector)
+				continue;
+			if (podPos.DistanceSquaredTo(node.GlobalPosition) <= RescuePickupDist * RescuePickupDist)
+				return true;
+		}
+		return false;
 	}
 
 	// ---- Projectile -----------------------------------------------------
@@ -601,6 +752,7 @@ public partial class WorldRenderer : Node3D
 		}
 
 		CheckBoltImpacts(delta);
+		BillboardBaseHealthBars();
 
 		if (_predictedShots.Count == 0)
 			return;
@@ -612,6 +764,26 @@ public partial class WorldRenderer : Node3D
 				_predictedShots[i].QueueFree();
 				_predictedShots.RemoveAt(i);
 			}
+		}
+	}
+
+	// Screen-align each visible base damage bar so it always faces the camera. Copying the
+	// camera's basis (orthonormal) makes the bar's local axes match the screen — left-anchored
+	// depletion in UpdateBaseHealthBar then reads correctly from any angle. Cheap: at most a
+	// couple of bases, and only those currently damaged-and-visible are touched.
+	private void BillboardBaseHealthBars()
+	{
+		if (_baseHealthBars.Count == 0)
+			return;
+		var cam = GetViewport()?.GetCamera3D();
+		if (cam == null)
+			return;
+		var camBasis = cam.GlobalTransform.Basis;
+		foreach (var bar in _baseHealthBars.Values)
+		{
+			if (!bar.Root.IsVisibleInTree())
+				continue;
+			bar.Root.GlobalBasis = camBasis;
 		}
 	}
 
@@ -677,11 +849,21 @@ public partial class WorldRenderer : Node3D
 	// Distinct silhouettes per class (T7), both built pointing local +Z to match
 	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
 	// chunkier, boxier hull that reads as the heavier ship.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig)
+	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig, bool isPod)
 	{
 		var mat = isPig
 			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
 			: (team == 0 ? _team0Mat : _team1Mat);
+
+		// An escape pod reads as a small round lifeboat, not a fighter — class is ignored.
+		if (isPod)
+		{
+			return new MeshInstance3D
+			{
+				Mesh = new SphereMesh { Radius = 1.4f, Height = 2.8f, RadialSegments = 12, Rings = 8 },
+				MaterialOverride = mat,
+			};
+		}
 
 		if (cls == ShipClass.Fighter)
 		{
@@ -710,36 +892,41 @@ public partial class WorldRenderer : Node3D
 	// spawned ship, then hand the node its reference so it can drive throttle each
 	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
 	// Scout's single central thruster vs a Fighter's heavier twin engines.
-	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team)
+	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team, bool isPod)
 	{
 		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
 		Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
 
-		EngineGlow glow = cls == ShipClass.Fighter
-			? new EngineGlow
-			{
-				Name = "EngineGlow",
-				Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
-				NozzleRadius = 0.6f,
-				PlumeLength = 3.8f,
-				LightRange = 18f,
-				CoreColor = hot,
-			}
-			: new EngineGlow
-			{
-				Name = "EngineGlow",
-				Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
-				NozzleRadius = 0.85f,
-				PlumeLength = 3.5f,
-				LightRange = 15f,
-				CoreColor = hot,
-			};
-
-		shipNode.AddChild(glow);
-		switch (shipNode)
+		// A pod is a powered-down lifeboat — no engine glow/plume. It still gets the team
+		// trail below (so a drifting pod is trackable), but no thruster FX.
+		if (!isPod)
 		{
-			case PredictionController pc: pc.AttachEngine(glow); break;
-			case RemoteShip rs: rs.AttachEngine(glow); break;
+			EngineGlow glow = cls == ShipClass.Fighter
+				? new EngineGlow
+				{
+					Name = "EngineGlow",
+					Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
+					NozzleRadius = 0.6f,
+					PlumeLength = 3.8f,
+					LightRange = 18f,
+					CoreColor = hot,
+				}
+				: new EngineGlow
+				{
+					Name = "EngineGlow",
+					Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
+					NozzleRadius = 0.85f,
+					PlumeLength = 3.5f,
+					LightRange = 15f,
+					CoreColor = hot,
+				};
+
+			shipNode.AddChild(glow);
+			switch (shipNode)
+			{
+				case PredictionController pc: pc.AttachEngine(glow); break;
+				case RemoteShip rs: rs.AttachEngine(glow); break;
+			}
 		}
 
 		// Ghostly team-coloured ribbon tracing the ship's path (same hue as the glow so

@@ -192,8 +192,32 @@ namespace StellarAllegiance.Shared
             BoostSpeedMult = 1.4f,    // and a 70 u/s top speed while held
         };
 
+        // Escape pod: a slow, unarmed lifeboat ejected on ship death (server Ship.IsPod).
+        // "Impulse" feel — low thrust + a low speed cap so it crawls home — with no
+        // afterburner (Boost mults = 1) and a light hull so collisions shove it around.
+        // Both the server (Pass A) and the client (prediction/interpolation) integrate
+        // pods with these stats, selected via the StatsFor(class, isPod) overload, so
+        // predicted and authoritative pod motion stay bit-identical like any ship.
+        public static readonly ShipStats Pod = new()
+        {
+            ThrustAccel = 11f,
+            MaxSpeed = 14f,         // a slow crawl home — the escape is a real journey
+            LinearDrag = 1.4f,
+            Mass = 0.6f,            // light: gets shoved around in collisions
+            AngularAccel = 2.0f,
+            AngularDrag = 1.5f,
+            BoostThrustMult = 1f,   // no afterburner on a pod
+            BoostSpeedMult = 1f,
+        };
+
         public static ShipStats StatsFor(byte shipClass) =>
             shipClass == ClassFighter ? Fighter : Scout;
+
+        // Pod-aware stats selection: a pod ignores its class and flies the slow,
+        // boost-less Pod profile. Callers pass ship.IsPod so server authority and
+        // client prediction agree on which stats a pod integrates with.
+        public static ShipStats StatsFor(byte shipClass, bool isPod) =>
+            isPod ? Pod : StatsFor(shipClass);
 
         // ---- Weapon spread -------------------------------------------------
         //
@@ -297,12 +321,26 @@ namespace StellarAllegiance.Shared
             Vec3 vel = s.Vel + thrustWorld * dt;
             vel = vel * (1f - st.LinearDrag * dt);
 
+            // Soft speed cap. Thrust can never drive speed past maxSpeed, but velocity
+            // imposed from OUTSIDE the flight model — collision knockback, aleph warp, an
+            // escape-pod eject impulse — is allowed to exceed it and bleed off through
+            // LinearDrag instead of being hard-snapped down on the next tick. The cap each
+            // tick is the larger of maxSpeed and the drag-decayed incoming speed (the speed
+            // this body keeps from pure coasting with no thrust); once that decays below
+            // maxSpeed the normal cap takes over. For any body already at/under maxSpeed the
+            // coast term is < maxSpeed, so this is identical to a hard clamp — normal flight,
+            // the golden run, and the boost cap are all unchanged (thrust/boost equilibrium
+            // sits below maxSpeed, so the clamp only ever bit externally-imposed velocity).
+            // Uses only cross-runtime-deterministic float ops (compare/mul/sqrt), so server
+            // authority and client prediction stay bit-identical.
             float maxSpeed = st.MaxSpeed * (i.Boost ? st.BoostSpeedMult : 1f);
+            float coastCap = s.Vel.Length() * (1f - st.LinearDrag * dt);
+            float cap = maxSpeed > coastCap ? maxSpeed : coastCap;
             float speedSq = vel.LengthSquared();
-            float maxSq = maxSpeed * maxSpeed;
-            if (speedSq > maxSq)
+            float capSq = cap * cap;
+            if (speedSq > capSq)
             {
-                float scale = maxSpeed / (float)System.Math.Sqrt(speedSq);
+                float scale = cap / (float)System.Math.Sqrt(speedSq);
                 vel = vel * scale;
             }
 

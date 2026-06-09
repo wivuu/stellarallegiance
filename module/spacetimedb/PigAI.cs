@@ -45,7 +45,17 @@ public static partial class Module
     // Max drones per side. This is the "configurable max PIGs (default 5)" knob;
     // change it and republish (a --reset re-creates the slots at the new count).
     private const int   MaxPigsPerTeam = 5;
-    private const uint  PigRespawnTicks = 30 * SimTickHz;  // 30 s cooldown after a drone dies
+    // Squad waves: a team's whole squad must be wiped before the next squad spawns, then a
+    // delay after the last drone dies before it scrambles. (Replaces the old per-slot
+    // respawn cooldown; squad timing lives in the PigSquad table.)
+    private const uint  PigSquadDelayTicks = 10 * SimTickHz; // 10 s after a wipe before the next squad
+    // An enemy is "aggressive" for this long after it last fired (Ship.LastFireTick). PIGs
+    // prioritise aggressive contacts (shooters) over passive ones (pods, idle players).
+    private const uint  PigAggroWindowTicks = 3 * SimTickHz;  // ~3 s aggression memory
+    // Patrol: when there's nothing to fight, drones sweep a ring around the sector center
+    // (keep moving + visible) instead of parking at base.
+    private const float PigPatrolRadius = 400f;    // ring radius of the patrol sweep
+    private const float PigPatrolAngRate = 0.05f;  // rad/tick the patrol point sweeps the ring
     // Acquire a target within this (kept to 1.25×). Must comfortably exceed the base
     // separation (~1000 u) so drones detect the enemy across the sector and engage,
     // rather than idling out of range at their own base.
@@ -56,8 +66,7 @@ public static partial class Module
     private const float PigTurnGain = 3.2f;     // proportional steering gain (toward desired heading)
     private const float PigAvoidLookahead = 160f; // asteroid-avoidance forward look distance (u)
     private const float PigAvoidMargin = 14f;     // extra clearance beyond the summed radii (u)
-    private const uint  PigSpawnStaggerTicks = 30; // trickle a fresh wave in ~1.5 s apart, not all at once
-    private const uint  PigScrambleTicks = 4 * SimTickHz; // ~4 s to "scramble" — drones don't launch the instant a threat appears
+    private const uint  PigSpawnStaggerTicks = 30; // stagger a squad's launches ~1.5 s apart, not all at once
     // Threat-based target priority (defensive): an enemy that is aiming at us AND close
     // AND hits hard most threatens this drone's survival. We switch to a new contact only
     // when it scores clearly higher than the current target (hysteresis, no thrashing).
@@ -65,6 +74,11 @@ public static partial class Module
     private const float PigThreatCloseWeight = 0.7f;   // proximity (shorter time-to-impact)
     private const float PigThreatDmgWeight = 0.4f;     // enemy weapon damage (Fighter > Scout)
     private const float PigThreatSwitchMargin = 1.3f;  // only switch when new threat ≥ 1.3× current
+    // Base defense: an enemy near OUR base is shelling the win-condition target, so a drone
+    // treats it as the top threat — outweighing aim/close/dmg combined — regardless of whether
+    // that enemy is currently pointed at the drone. Scales with how close it is to the base.
+    private const float PigThreatBaseWeight = 2.5f;    // base attacker dominates the other terms
+    private const float PigBaseThreatRadius = 700f;    // within this of our base = "attacking it"
 
     // ---- Aiming skill (per-slot, so a squad is a MIX, not five aimbots) ----
     // Each drone slot draws a stable competence in [0,1] from a hash of its PigId
@@ -99,6 +113,11 @@ public static partial class Module
     // re-run Init). Alternating class gives a scout/fighter mix per side.
     private static void EnsurePigSlots(ReducerContext ctx)
     {
+        // Squad-wave timing rows (one per team), created once and kept across hot-swaps.
+        for (byte team = 0; team < NumTeams; team++)
+            if (ctx.Db.PigSquad.Team.Find(team) is null)
+                ctx.Db.PigSquad.Insert(new PigSquad { Team = team, NextSquadTick = 0, Active = false });
+
         if (ctx.Db.Pig.Count > 0)
             return;
 
@@ -121,23 +140,18 @@ public static partial class Module
         Log.Info($"[Pig] created {MaxPigsPerTeam} drone slots per team");
     }
 
-    // True if at least one live PLAYER ship (non-drone) exists. Drones only spawn /
-    // think while this holds, so an idle or observer-only connection never drives
-    // drone combat. Cheap: the Ship table is tiny.
-    private static bool AnyPlayerShipAlive(ReducerContext ctx)
-    {
-        foreach (var s in ctx.Db.Ship.Iter())
-            if (!s.IsPig)
-                return true;
-        return false;
-    }
-
     // Tear down all drones (no player is flying / match ended): delete their ships and
     // reset every slot to ready (ShipId null, cooldown cleared) so they respawn
     // immediately when a player returns — idle time shouldn't bank a respawn penalty.
     // A no-op once everything is already dormant, so it costs nothing per idle tick.
     private static void DespawnAllPigs(ReducerContext ctx)
     {
+        // Reset squad timing so the next time combat goes live a fresh squad scrambles
+        // immediately (no banked delay from idle time).
+        foreach (var sq in ctx.Db.PigSquad.Iter().ToList())
+            if (sq.Active || sq.NextSquadTick != 0)
+                ctx.Db.PigSquad.Team.Update(sq with { Active = false, NextSquadTick = 0 });
+
         foreach (var slot in ctx.Db.Pig.Iter().ToList())
         {
             bool dormant = slot.ShipId is null && slot.RespawnAtTick == 0
@@ -156,60 +170,124 @@ public static partial class Module
         }
     }
 
-    // Bring dead/ready slots online, but TRICKLE them: at most one new drone per team
-    // per tick, and when several are ready at once (e.g. a fresh wave after the player
-    // spawns, where all slots reset to ready) push the rest to staggered future ticks so
-    // they appear ~PigSpawnStaggerTicks apart instead of all popping in on one tick.
+    // Squad waves (per team): a side fields its WHOLE squad (all its slots) at once, then
+    // NO new drones arrive until that squad is wiped — after which a short delay later the
+    // next squad scrambles. This replaces the old per-slot respawn trickle; PigSquad holds
+    // the per-team timing. Within a wave the launches are still staggered so they don't pop
+    // on one tick.
     private static void SimulatePigLifecycle(ReducerContext ctx, uint tick)
     {
         for (byte team = 0; team < NumTeams; team++)
         {
-            // PIGs defend their base's sector: a team only fields drones while an ENEMY
-            // ship (a player OR a hostile drone) is actually present in that sector. A team
-            // with no base, or whose home sector has no incursion, spawns nothing — drones
-            // appear in response to a threat rather than the moment any player is alive.
-            // (Already-flying drones are left alone here; the outer no-players-left gate in
-            // SimulateTick despawns everything when the field empties.)
             if (TeamBaseSector(ctx, team) is not uint baseSector)
+                continue;
+            if (ctx.Db.PigSquad.Team.Find(team) is not PigSquad squad)
+                continue;   // ensured by EnsurePigSlots
+
+            // Classify this team's slots: alive (flying), pending (staggered, awaiting their
+            // launch tick within the current wave), and dead (killed, ShipId+timer cleared).
+            int alive = 0, pending = 0;
+            var empty = new List<Pig>();
+            foreach (var slot in ctx.Db.Pig.Iter())
+            {
+                if (slot.Team != team) continue;
+                if (slot.ShipId is not null) { alive++; continue; }
+                empty.Add(slot);
+                if (slot.RespawnAtTick != 0) pending++;
+            }
+
+            if (squad.Active)
+            {
+                // Squad fully wiped (none alive AND none still staggering in) → arm the
+                // inter-squad delay; the next squad scrambles once it elapses.
+                if (alive == 0 && pending == 0)
+                {
+                    ctx.Db.PigSquad.Team.Update(squad with { Active = false, NextSquadTick = tick + PigSquadDelayTicks });
+                    continue;
+                }
+                // Otherwise bring any staggered slots online as their launch tick arrives.
+                foreach (var slot in empty)
+                    if (slot.RespawnAtTick != 0 && tick >= slot.RespawnAtTick)
+                        SpawnPig(ctx, slot, tick);
+                continue;
+            }
+
+            // No squad fielded: wait out the delay, and only scramble when there's an enemy
+            // in the base sector (a player OR a hostile drone). Once combat is underway the
+            // squads sustain each other across player respawns; the outer combatLive gate in
+            // SimulateTick stops everything when the last teamed player leaves.
+            if (tick < squad.NextSquadTick)
                 continue;
             if (!EnemyInSector(ctx, team, baseSector))
                 continue;
 
-            // Split this team's empty slots: "cold" ones (RespawnAtTick == 0 — fresh, or reset
-            // after the field emptied) versus those whose respawn/scramble timer has already
-            // elapsed and are cleared to launch. Cold slots don't spawn this tick: a threat just
-            // showed up, so they have to scramble first (see below).
-            var cold = new List<Pig>();
-            var ready = new List<Pig>();
-            foreach (var slot in ctx.Db.Pig.Iter())
+            // Field the WHOLE squad: launch the first now, stagger the rest into the near
+            // future (they come online in the Active branch above).
+            empty.Sort((a, b) => a.PigId.CompareTo(b.PigId));
+            for (int i = 0; i < empty.Count; i++)
             {
-                if (slot.Team != team || slot.ShipId is not null)
-                    continue;
-                if (slot.RespawnAtTick == 0)
-                    cold.Add(slot);
-                else if (tick >= slot.RespawnAtTick)
-                    ready.Add(slot);
+                if (i == 0)
+                    SpawnPig(ctx, empty[i], tick);
+                else
+                    ctx.Db.Pig.PigId.Update(empty[i] with { RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks });
+            }
+            ctx.Db.PigSquad.Team.Update(squad with { Active = true, NextSquadTick = 0 });
+        }
+    }
+
+    // Rescue assignment (once per tick, before the per-drone brain runs): a downed teammate
+    // ejects an escape pod that a friendly ship must touch for the player to respawn. We do
+    // NOT want the squad to peel off for it — that hands the attacker a free run at the base —
+    // so AT MOST ONE drone per team is ever on rescue duty. That single rescuer is marked
+    // PigState.Rescue with the pod as its target; PigThink flies it onto the pod (the rescue
+    // pass in SimulateTick resolves the pickup) while every other drone keeps attacking. When
+    // the pod is resolved (rescued / died / warped to another sector) the slot frees and either
+    // grabs the NEXT nearest pod or rejoins the fight — pods are ferried home one at a time.
+    //
+    // Only PLAYER pods are targeted: a downed PIG's pod already auto-flies home via PodThink,
+    // so committing the rescuer to it would waste the one slot a human teammate needs.
+    private static void AssignPigRescuers(ReducerContext ctx, uint tick)
+    {
+        for (byte team = 0; team < NumTeams; team++)
+        {
+            // Is this team's rescuer (if any) still on a valid job — alive drone, and a live
+            // friendly player pod still in its sector? If so, leave it committed.
+            Pig? activeRescuer = null;
+            foreach (var p in ctx.Db.Pig.Iter())
+                if (p.Team == team && p.State == PigState.Rescue) { activeRescuer = p; break; }
+
+            if (activeRescuer is Pig ar)
+            {
+                bool valid = ar.ShipId is ulong rid
+                    && ctx.Db.Ship.ShipId.Find(rid) is Ship rship
+                    && ar.TargetShipId is ulong pid
+                    && ctx.Db.Ship.ShipId.Find(pid) is Ship curPod
+                    && curPod.IsPod && !curPod.IsPig && curPod.Team == team && curPod.SectorId == rship.SectorId;
+                if (valid)
+                    continue;   // keep ferrying this pod home
+                // Job's done / no longer reachable — release the slot back to combat.
+                ctx.Db.Pig.PigId.Update(ar with { State = PigState.Idle, TargetShipId = null });
             }
 
-            // Scramble: arm cold slots with a launch countdown instead of spawning instantly, so
-            // drones appear ~PigScrambleTicks after a threat enters the sector rather than the same
-            // tick. Stagger across the wave so they then trickle out one at a time, not in unison.
-            if (cold.Count > 0)
+            // No active rescuer: commit the single nearest free drone to the nearest friendly
+            // player pod that shares its sector (one pair -> one diverted drone). Free = a live,
+            // non-pod drone not already rescuing.
+            Pig? bestDrone = null; ulong bestPod = 0; float best2 = float.PositiveInfinity;
+            foreach (var pod in ctx.Db.Ship.Iter())
             {
-                cold.Sort((a, b) => a.PigId.CompareTo(b.PigId));
-                for (int i = 0; i < cold.Count; i++)
-                    ctx.Db.Pig.PigId.Update(cold[i] with { RespawnAtTick = tick + PigScrambleTicks + (uint)i * PigSpawnStaggerTicks });
+                if (!pod.IsPod || pod.IsPig || pod.Team != team) continue;
+                foreach (var p in ctx.Db.Pig.Iter())
+                {
+                    if (p.Team != team || p.State == PigState.Rescue) continue;
+                    if (p.ShipId is not ulong sid) continue;
+                    if (ctx.Db.Ship.ShipId.Find(sid) is not Ship drone) continue;
+                    if (drone.IsPod || drone.SectorId != pod.SectorId) continue;
+                    float d2 = Dist2(drone.PosX, drone.PosY, drone.PosZ, pod.PosX, pod.PosY, pod.PosZ);
+                    if (d2 < best2) { best2 = d2; bestDrone = p; bestPod = pod.ShipId; }
+                }
             }
-
-            if (ready.Count == 0)
-                continue;
-            ready.Sort((a, b) => a.PigId.CompareTo(b.PigId));
-
-            SpawnPig(ctx, ready[0], tick);
-            // Defer the rest so they come online one stagger apart. Once pushed into the
-            // future they're no longer "ready", so they aren't re-deferred each tick.
-            for (int i = 1; i < ready.Count; i++)
-                ctx.Db.Pig.PigId.Update(ready[i] with { RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks });
+            if (bestDrone is Pig chosen)
+                ctx.Db.Pig.PigId.Update(chosen with { State = PigState.Rescue, TargetShipId = bestPod });
         }
     }
 
@@ -269,10 +347,41 @@ public static partial class Module
         Log.Info($"[Pig] slot {slot.PigId} -> drone {ship.ShipId} ({slot.Class}) team {slot.Team}");
     }
 
-    // A drone died: delete its Ship row, free the slot, and start the respawn timer.
+    // A combat drone died: EJECT a PIG pod (auto-flies home via PodThink — a rescue target
+    // + flavour) at the wreck, then free the slot. No per-slot respawn timer anymore — squad
+    // waves own respawns, so the freed slot only refills when its whole squad has been wiped
+    // (SimulatePigLifecycle). Called only for a dying PIG COMBAT drone (a dying PIG pod goes
+    // through KillShip), so this always ejects exactly one pod.
     private static void KillPig(ReducerContext ctx, Ship s, uint tick)
     {
         ctx.Db.Ship.ShipId.Delete(s.ShipId);
+
+        // Same eject as a player pod: flung clear of the wreck on a random high-speed,
+        // tumbling trajectory (decays via drag) before PodThink reasserts the flight home.
+        var dir = RandomUnitVec(ctx);
+        var spin = RandomUnitVec(ctx);
+
+        ctx.Db.Ship.Insert(new Ship
+        {
+            ShipId = 0,
+            Owner = s.Owner,
+            Team = s.Team,
+            SectorId = s.SectorId,
+            Class = s.Class,
+            PosX = s.PosX, PosY = s.PosY, PosZ = s.PosZ,
+            VelX = s.VelX + dir.X * PodEjectSpeed,
+            VelY = s.VelY + dir.Y * PodEjectSpeed,
+            VelZ = s.VelZ + dir.Z * PodEjectSpeed,
+            RotX = s.RotX, RotY = s.RotY, RotZ = s.RotZ, RotW = s.RotW,
+            AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
+            Health = PodMaxHull,
+            Mass = FlightModel.Pod.Mass,
+            LastInputTick = tick,
+            LastFireTick = 0,
+            IsPig = true,
+            IsPod = true,
+        });
+
         foreach (var slot in ctx.Db.Pig.Iter().ToList())
         {
             if (slot.ShipId == s.ShipId)
@@ -280,14 +389,14 @@ public static partial class Module
                 ctx.Db.Pig.PigId.Update(slot with
                 {
                     ShipId = null,
-                    RespawnAtTick = tick + PigRespawnTicks,
+                    RespawnAtTick = 0,
                     State = PigState.Idle,
                     TargetShipId = null,
                 });
                 break;
             }
         }
-        Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed; respawns @ tick {tick + PigRespawnTicks}");
+        Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed -> PIG pod; squad owns respawn");
     }
 
     // The per-tick brain: pick a target, run the Idle/Seek/Attack state machine, and
@@ -305,6 +414,21 @@ public static partial class Module
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
         Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
         Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
+
+        // ---- Rescue duty: this slot was committed by AssignPigRescuers to retrieve a
+        // specific friendly pod (at most ONE rescuer per team — every other drone keeps
+        // attacking). Fly onto the pod; the rescue pass in SimulateTick resolves the pickup
+        // on hull contact. The assignment pass guarantees the target is a live, same-sector
+        // friendly pod and keeps State==Rescue across ticks, so here we just steer (PigSteerTo
+        // never fires) and return. Once the pod is resolved the slot is no longer Rescue and
+        // we fall straight through to normal combat below. ----
+        if (slotOpt is Pig rescuer && rescuer.State == PigState.Rescue
+            && rescuer.TargetShipId is ulong rescuePodId
+            && ctx.Db.Ship.ShipId.Find(rescuePodId) is Ship rescuePod
+            && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
+        {
+            return PigSteerTo(ctx, me, myPos, myRot, new Vec3(rescuePod.PosX, rescuePod.PosY, rescuePod.PosZ), 1f);
+        }
 
         // Pick a target by THREAT, not just proximity: score every enemy in radar by how
         // much it endangers THIS drone's survival (aiming at us + close + hits hard), and
@@ -334,40 +458,88 @@ public static partial class Module
         // Acquire/keep a target among enemies in THIS sector only. Cross-sector contacts
         // are ignored for acquisition (projectiles are sector-scoped, so they can't be hit
         // anyway) — pursuit across sectors only continues an EXISTING lock, handled above.
+        // Classify enemy contacts in THIS sector. AGGRESSIVE enemies (recently fired, not
+        // pods) are the priority — picked by threat score with the usual hysteresis. If none
+        // are aggressive we still pursue the nearest NON-aggressive enemy (passive players,
+        // idle drones). Pods — friendly or enemy — are ignored here: an enemy pod is left to
+        // float home, and a friendly pod is rescued passively on contact (the rescue pass) or
+        // flies itself home, so drones don't break off to chase pods (which would drag them
+        // back toward their OWN base instead of pressing the attack).
+        // Our own base in this sector (if any). Enemies near it are shelling the win-condition
+        // target, so PigThreatScore prioritises them for defense.
+        Vec3? myBasePos = null;
+        foreach (var b in ctx.Db.Base.Iter())
+            if (b.Team == me.Team && b.SectorId == me.SectorId) { myBasePos = new Vec3(b.PosX, b.PosY, b.PosZ); break; }
+
         float radar2 = PigRadarRange * PigRadarRange;
         float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
-        Ship? best = null; float bestScore = float.NegativeInfinity;
-        Ship? kept = null; float keptScore = float.NegativeInfinity;
+        Ship? bestAggr = null; float bestAggrScore = float.NegativeInfinity;
+        Ship? keptAggr = null; float keptAggrScore = float.NegativeInfinity;
+        Ship? nearestPassive = null; float nearestPassive2 = float.PositiveInfinity;
         foreach (var s in ctx.Db.Ship.Iter())
         {
-            if (s.Team == me.Team || s.SectorId != me.SectorId)
+            if (s.SectorId != me.SectorId || s.Team == me.Team)
+                continue;
+            // Never target a pod — denying the kill keeps a downed opponent out of the fight
+            // longer (a respawn is worth more than the pod), so drones ignore enemy pods.
+            if (s.IsPod)
                 continue;
             float d2 = Dist2(myPos.X, myPos.Y, myPos.Z, s.PosX, s.PosY, s.PosZ);
             if (d2 > keep2)
                 continue;
-            float score = PigThreatScore(myPos, s);
-            if (keepId is ulong k && s.ShipId == k) { kept = s; keptScore = score; }
-            if (d2 <= radar2 && score > bestScore) { bestScore = score; best = s; }
+            if (IsAggressive(s, tick))
+            {
+                float score = PigThreatScore(myPos, s, myBasePos);
+                if (keepId is ulong k && s.ShipId == k) { keptAggr = s; keptAggrScore = score; }
+                if (d2 <= radar2 && score > bestAggrScore) { bestAggrScore = score; bestAggr = s; }
+            }
+            else if (d2 <= radar2 && d2 < nearestPassive2)
+            {
+                nearestPassive2 = d2; nearestPassive = s;
+            }
         }
 
-        // Keep the current target unless a fresh contact is clearly more threatening.
+        // Selection: aggressive first (keep the current aggressive lock unless a fresh one
+        // is clearly more threatening — hysteresis), else the nearest non-aggressive contact.
         Ship? target;
-        if (kept is Ship c)
-            target = (best is Ship b && bestScore > keptScore * PigThreatSwitchMargin) ? b : c;
+        if (bestAggr is Ship ba)
+            target = (keptAggr is Ship ka && bestAggrScore <= keptAggrScore * PigThreatSwitchMargin) ? ka : ba;
         else
-            target = best;
+            target = nearestPassive;
 
-        // ---- No target: route home, else loiter. ----
+        // ---- No enemy SHIP to engage: route home if stranded, else press the enemy base,
+        // else patrol. (Pods aren't chased — rescue happens on contact / pods fly home.) ----
         if (target is not Ship tgt)
         {
-            if (slotOpt is Pig sp)
-                ctx.Db.Pig.PigId.Update(sp with { State = PigState.Idle, TargetShipId = null });
-            // Chased a target into a foreign sector and lost it? Head back to our base
-            // sector through the aleph rather than milling about an outpost.
+            // Stranded in a foreign sector with nothing to do? Route home through the aleph.
             if (TeamBaseSector(ctx, me.Team) is uint home && home != me.SectorId
                 && AlephTo(ctx, me.SectorId, home) is Aleph homeGate)
+            {
+                if (slotOpt is Pig sh)
+                    ctx.Db.Pig.PigId.Update(sh with { State = PigState.Patrol, TargetShipId = null });
                 return PigSteerTo(ctx, me, myPos, myRot, new Vec3(homeGate.PosX, homeGate.PosY, homeGate.PosZ), 1f);
-            return PigIdleInput(ctx, me, myPos, myRot);
+            }
+            // Nothing hostile to fight → go on the OFFENSIVE: press the nearest ENEMY base in
+            // this sector and shell it (PIG fire now erodes bases — Pass B), rather than idly
+            // patrolling. This is what makes a lull dangerous — clear the fighters and the
+            // drones start cracking your base.
+            Base? targetBase = null; float tb2 = float.PositiveInfinity;
+            foreach (var b in ctx.Db.Base.Iter())
+            {
+                if (b.Team == me.Team || b.SectorId != me.SectorId) continue;
+                float bd2 = Dist2(myPos.X, myPos.Y, myPos.Z, b.PosX, b.PosY, b.PosZ);
+                if (bd2 < tb2) { tb2 = bd2; targetBase = b; }
+            }
+            if (targetBase is Base eb)
+            {
+                if (slotOpt is Pig sb)
+                    ctx.Db.Pig.PigId.Update(sb with { State = PigState.Attack, TargetShipId = null });
+                return PigAttackPoint(ctx, me, myPos, myRot, new Vec3(eb.PosX, eb.PosY, eb.PosZ), BaseRadius);
+            }
+            // No enemy base here either → patrol (keep moving + visible), not idle at base.
+            if (slotOpt is Pig sp)
+                ctx.Db.Pig.PigId.Update(sp with { State = PigState.Patrol, TargetShipId = null });
+            return PigPatrolInput(ctx, me, myPos, myRot, tick);
         }
 
         Vec3 tgtPos = new Vec3(tgt.PosX, tgt.PosY, tgt.PosZ);
@@ -453,29 +625,56 @@ public static partial class Module
         };
     }
 
-    // Idle behaviour: drift back toward base and coast once close. Keeps idle drones
-    // near their team base ("Idle (at base)") rather than frozen wherever they lost LOS.
-    private static ShipInputState PigIdleInput(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot)
+    // Patrol behaviour: with nothing to fight, sweep a slowly-rotating waypoint on a ring
+    // around the sector center so the drone keeps moving and visible instead of parking at
+    // base. The waypoint's angle advances with `tick` (phase offset per slot so a squad
+    // fans out rather than orbiting in lockstep); steering toward a perpetually-moving point
+    // gives a continuous patrol with no explicit "reached, pick next" bookkeeping. Server-
+    // only, so plain MathF + tick phase is fine (no determinism contract).
+    private static ShipInputState PigPatrolInput(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, uint tick)
     {
-        float bx = 0f, by = 0f, bz = 0f;
-        bool found = false;
-        foreach (var b in ctx.Db.Base.Iter())
+        Vec3 center = new Vec3(0f, 0f, 0f);
+        foreach (var sec in ctx.Db.Sector.Iter())
+            if (sec.SectorId == me.SectorId) { center = new Vec3(sec.CenterX, sec.CenterY, sec.CenterZ); break; }
+
+        float phase = tick * PigPatrolAngRate + me.ShipId * 1.61803399f;
+        Vec3 waypoint = new Vec3(
+            center.X + MathF.Cos(phase) * PigPatrolRadius,
+            center.Y,
+            center.Z + MathF.Sin(phase) * PigPatrolRadius);
+        return PigSteerTo(ctx, me, myPos, myRot, waypoint, 0.6f);
+    }
+
+    // True if `enemy` is "aggressive" right now: a non-pod that has fired within the aggro
+    // window (Ship.LastFireTick). PIGs prioritise these shooters over passive contacts.
+    // A pod is never aggressive (unarmed); LastFireTick == 0 means "never fired".
+    private static bool IsAggressive(Ship enemy, uint tick) =>
+        !enemy.IsPod && enemy.LastFireTick != 0 && tick - enemy.LastFireTick <= PigAggroWindowTicks;
+
+    // PIG pod brain: a dead drone's ejected pod (IsPod && IsPig) auto-flies to the nearest
+    // friendly base, where the Pass C dock check despawns it (or it's rescued / dies first).
+    // Reuses PigSteerTo; pods are unarmed so this never fires. If the base is in another
+    // sector, run down the aleph toward it (the warp pass carries the pod across).
+    private static ShipInputState PodThink(ReducerContext ctx, Ship me, uint tick)
+    {
+        Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
+        Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
+
+        if (TeamBaseSector(ctx, me.Team) is uint home)
         {
-            if (b.Team == me.Team) { bx = b.PosX; by = b.PosY; bz = b.PosZ; found = true; break; }
+            if (home != me.SectorId)
+            {
+                if (AlephTo(ctx, me.SectorId, home) is Aleph gate)
+                    return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f);
+            }
+            else
+            {
+                foreach (var b in ctx.Db.Base.Iter())
+                    if (b.Team == me.Team)
+                        return PigSteerTo(ctx, me, myPos, myRot, new Vec3(b.PosX, b.PosY, b.PosZ), 1f);
+            }
         }
-        if (!found)
-            return default;
-
-        Vec3 toBase = new Vec3(bx, by, bz) - myPos;
-        float d = toBase.Length();
-        if (d < BaseRadius + 60f)
-            return default;   // close enough — coast (drag bleeds off speed)
-
-        Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(toBase * (1f / d)), new Vec3(0f, 0f, 1f));
-        float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
-        float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
-        float thrust = local.Z > 0.3f ? 0.5f : 0.15f;
-        return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch };
+        return default;   // no base / no path — drift until rescued, docked, or destroyed
     }
 
     // Constant-velocity intercept in the shooter's frame — server-side mirror of the
@@ -551,9 +750,11 @@ public static partial class Module
 
     // How much `enemy` threatens a drone at `myPos` right now — a defensive priority
     // score combining: is the enemy's nose pointed at us (about to shoot), how close it
-    // is (time-to-impact / dodge difficulty), and how hard its weapon hits. Higher =
-    // engage it first. All terms are roughly 0..1 so the weights set their relative pull.
-    private static float PigThreatScore(Vec3 myPos, Ship enemy)
+    // is (time-to-impact / dodge difficulty), how hard its weapon hits, and — dominating
+    // the rest — whether it's right on top of OUR base (shelling the win condition). Higher
+    // = engage it first. The first three terms are roughly 0..1 so their weights set their
+    // relative pull; the base term adds up to PigThreatBaseWeight on top.
+    private static float PigThreatScore(Vec3 myPos, Ship enemy, Vec3? myBasePos)
     {
         Vec3 ePos = new Vec3(enemy.PosX, enemy.PosY, enemy.PosZ);
         Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
@@ -567,7 +768,18 @@ public static partial class Module
         if (close < 0f) close = 0f;
         float dmg = WeaponDamage(enemy.Class) / 10f; // Scout 0.4, Fighter 1.0
 
-        return PigThreatAimWeight * aim + PigThreatCloseWeight * close + PigThreatDmgWeight * dmg;
+        // Base attacker: 1 = on the base, 0 = at/beyond the threat radius. Weighted heavily
+        // so a drone breaks off to defend an enemy pounding its base over a closer dogfight.
+        float baseThreat = 0f;
+        if (myBasePos is Vec3 bp)
+        {
+            float bd = (ePos - bp).Length();
+            baseThreat = 1f - bd / PigBaseThreatRadius;
+            if (baseThreat < 0f) baseThreat = 0f;
+        }
+
+        return PigThreatAimWeight * aim + PigThreatCloseWeight * close
+             + PigThreatDmgWeight * dmg + PigThreatBaseWeight * baseThreat;
     }
 
     // The sector containing this team's base (first found), or null if the team has none.
@@ -612,6 +824,36 @@ public static partial class Module
         float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
         float thrust = local.Z > 0.3f ? thrustWhenFacing : 0.2f;
         return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch };
+    }
+
+    // Attack a STATIC target of the given radius (an enemy base): turn the nose onto its
+    // center, close to a firing standoff OUTSIDE its body, and fire when lined up. No lead
+    // (it doesn't move) and no juking. The standoff keeps the drone shelling the base rather
+    // than ramming it (an enemy base bounces + damages on contact). Pods never reach this —
+    // it's only called for combat drones, and the server gates pod fire regardless.
+    private static ShipInputState PigAttackPoint(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 point, float radius)
+    {
+        Vec3 to = point - myPos;
+        float dist = to.Length();
+        Vec3 desired = PigAvoidAsteroids(ctx, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
+        Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
+
+        float yaw, pitch;
+        if (local.Z < 0f) { yaw = local.X >= 0f ? 1f : -1f; pitch = local.Y >= 0f ? -1f : 1f; }
+        else { yaw = Clamp1(local.X * PigTurnGain); pitch = Clamp1(-local.Y * PigTurnGain); }
+
+        // Hold a standoff just outside the body; shell from there instead of charging in.
+        float standoff = radius + PigStandoff;
+        float thrust;
+        if (dist > standoff * 1.2f)               thrust = local.Z > 0.3f ? 1f : 0.5f;
+        else if (dist < radius + PigStandoff * 0.6f) thrust = -0.25f;   // back off if too close
+        else                                      thrust = 0.2f;
+
+        // Fire when the nose is on the base and we're within weapon range of its SURFACE.
+        float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
+        bool onTarget = local.Z > 0f && aimErr < MathF.Sin(PigAimDeg * (MathF.PI / 180f));
+        bool inRange = (dist - radius) <= PigFireRange;
+        return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch, Firing = inRange && onTarget };
     }
 
     // A drone slot's stable aiming competence in [0,1], hashed from its PigId so the

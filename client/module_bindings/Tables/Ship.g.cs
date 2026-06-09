@@ -62,6 +62,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Ship, uint> LastInputTick { get; }
         public global::SpacetimeDB.Col<Ship, uint> LastFireTick { get; }
         public global::SpacetimeDB.Col<Ship, bool> IsPig { get; }
+        public global::SpacetimeDB.Col<Ship, bool> IsPod { get; }
 
         public ShipCols(string tableName)
         {
@@ -88,6 +89,7 @@ namespace SpacetimeDB.Types
             LastInputTick = new global::SpacetimeDB.Col<Ship, uint>(tableName, "last_input_tick");
             LastFireTick = new global::SpacetimeDB.Col<Ship, uint>(tableName, "last_fire_tick");
             IsPig = new global::SpacetimeDB.Col<Ship, bool>(tableName, "is_pig");
+            IsPod = new global::SpacetimeDB.Col<Ship, bool>(tableName, "is_pod");
         }
     }
 

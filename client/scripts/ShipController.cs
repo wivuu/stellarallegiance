@@ -199,6 +199,11 @@ public partial class ShipController : Node
 		_input.Boost = boost;
 		pc.SetAfterburner(boost ? 1f : 0f);
 
+		// An escape pod is unarmed: drop firing so the player can't shoot and the client
+		// doesn't predict muzzle ghosts the server (which also ignores pod fire) won't make.
+		if (pc.IsPod)
+			_input.Firing = false;
+
 		UpdateAdaptiveLead();
 		int lead = (int)_predTick - (int)_world.ServerTick;
 		float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);

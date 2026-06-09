@@ -17,9 +17,10 @@ public enum ShipClass : byte { Scout, Fighter }
 public enum MatchPhase : byte { Lobby, Active, Ended }
 
 // AI drone behaviour state (see PigAI.cs). Declaration order fixes the values
-// (Idle=0, Seek=1, Attack=2).
+// (Idle=0, Seek=1, Attack=2, Patrol=3, Rescue=4). APPEND-ONLY so the existing
+// 0/1/2 values stay stable for clients that already decoded them.
 [SpacetimeDB.Type]
-public enum PigState : byte { Idle, Seek, Attack }
+public enum PigState : byte { Idle, Seek, Attack, Patrol, Rescue }
 
 // Chat delivery scope. Declaration order fixes the values (All=0, Team=1, Direct=2);
 // the row-level visibility filters on ChatMessage key off these exact numbers, so the
@@ -109,6 +110,11 @@ public partial struct Ship
     // (PigAI.cs) instead of the per-tick ShipInput buffer. PIGs otherwise reuse the exact
     // same physics, fire control, collision, and rendering path as player ships.
     public bool IsPig;
+    // True for an escape pod — a weak, slow, unarmed lifeboat ejected when a combat ship
+    // dies (mirrors IsPig: a pod reuses the Ship table, prediction, camera, collision, and
+    // render paths). A player pod is flown by its owner; a PIG pod (IsPod && IsPig) is
+    // auto-flown home by PodThink. Pods fly the slow FlightModel.Pod stats and never fire.
+    public bool IsPod;
 }
 
 // Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
@@ -257,6 +263,20 @@ public partial struct Match
     public bool PigsEnabled;
 }
 
+// Per-team PIG squad-wave timing. The drones of a side now spawn as a SQUAD (the whole
+// team's slots) rather than trickling per-slot: once a squad is fielded (Active) no new
+// drones arrive until the whole squad is wiped, then a short delay (PigSquadDelayTicks)
+// later the next squad scrambles. One row per team, created lazily by EnsurePigSlots and
+// reset by DespawnAllPigs. (See SimulatePigLifecycle in PigAI.cs.)
+[SpacetimeDB.Table(Accessor = "PigSquad", Public = true)]
+public partial struct PigSquad
+{
+    [PrimaryKey]
+    public byte Team;
+    public uint NextSquadTick;   // earliest tick the next squad may scramble (0 = ready now)
+    public bool Active;          // a squad is currently fielded (≥1 drone alive, or just spawned)
+}
+
 // Scheduled-reducer table that drives SimTick at a fixed interval.
 [SpacetimeDB.Table(
     Accessor = "SimTickTimer",
@@ -294,7 +314,7 @@ public static partial class Module
     // sphere tracks the rock's solid body rather than its outermost spikes, instead of bounding
     // empty space between them. Render scale is unchanged — this only tightens the sim.
     private const float AsteroidCollisionScale = 0.82f;
-    private const float BaseMaxHealth = 1000f;       // starting/restored base hull (win condition target)
+    private const float BaseMaxHealth = 1300f;       // starting/restored base hull (win condition target)
     private const float CollisionRestitution = 0.3f; // bounce factor on impact
     private const float CollisionDamageScale = 0.6f; // ship-vs-static hull damage per (u/s) of inward impact
     // Ship-vs-ship damage per (u/s) of inward impact, multiplied by the pair's reduced
@@ -302,6 +322,39 @@ public static partial class Module
     // mass 0.5) still deals ~0.6/u·s as before; heavier pairs deal proportionally more.
     private const float ShipShipDamageScale = 1.2f;
     private const float MaxCollisionDamage = 30f;    // cap per collision per tick
+
+    // ---- Escape pods + docking (Gamification) -------------------------
+    private const float PodMaxHull = 20f;            // an ejected escape pod's (low) starting hull
+    // Pods present a smaller WEAPON hit sphere than a combat ship — harder to gun down (still
+    // fragile via their low hull) so a downed pilot can run for it. Physical collision still
+    // uses the full ShipRadius; this only shrinks projectile hit tests (see HitRadius).
+    private const float PodHitRadius = ShipRadius * 0.5f;
+    // Dock radius: a ship/pod intersecting its OWN base within this distance despawns
+    // (player → spawn menu; pod → resolved). Kept comfortably inside the spawn offset
+    // (BaseRadius + ShipRadius) so a freshly-spawned ship doesn't instantly re-dock.
+    private const float DockRadius = BaseRadius * 0.9f;
+    // Rescue radius: a pod is rescued only on DIRECT hull contact with a friendly non-pod
+    // ship (same sector) — the two collision spheres touching (2·ShipRadius). Kept this tight
+    // so a pod isn't accidentally resolved by a ship merely passing near it; the rescuer has
+    // to actually reach it. Resolves the pod like docking (player → spawn menu, PIG pod despawns).
+    private const float RescueRadius = ShipRadius * 2f;
+    // Eject kinematics: a freshly-spawned pod (player OR PIG) is flung clear of the wreck —
+    // a high-speed impulse in a random direction plus a tumble. The flight model soft-caps
+    // coasting velocity (it bleeds off through LinearDrag rather than snapping), so this
+    // speed actually persists for a second or two before the pod settles to its slow crawl;
+    // the spin likewise decays via AngularDrag. Server-only RNG — the result is baked into
+    // the spawned Ship row, so client prediction just reads it (no RNG to reproduce).
+    private const float PodEjectSpeed = 90f;   // u/s initial fling (decays to FlightModel.Pod.MaxSpeed)
+    private const float PodEjectSpin  = 5f;    // rad/s initial tumble (decays via AngularDrag)
+
+    // A uniformly-distributed unit vector from the reducer's deterministic RNG.
+    private static Vec3 RandomUnitVec(ReducerContext ctx)
+    {
+        float z = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0);            // cos(polar), uniform on the sphere
+        float phi = (float)(ctx.Rng.NextDouble() * 2.0 * Math.PI);
+        float r = MathF.Sqrt(MathF.Max(0f, 1f - z * z));
+        return new Vec3(r * MathF.Cos(phi), r * MathF.Sin(phi), z);
+    }
 
     // ---- Sectors & alephs ---------------------------------------------
     private const uint  HomeSector = 0;              // bases + spawn live here (the battlefield)
@@ -324,6 +377,9 @@ public static partial class Module
     private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
     private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
     private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+    // Weapon hit sphere for a ship: a pod is a small, hard-to-hit target (PodHitRadius);
+    // every other ship uses the full ShipRadius. Physical collisions ignore this.
+    private static float HitRadius(Ship s) => s.IsPod ? PodHitRadius : ShipRadius;
 
     // ---- World seeding (Init) -----------------------------------------
 
@@ -1014,22 +1070,26 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
-        // --- Pass 0: AI drone (PIG) lifecycle. Drones exist ONLY while a human is
-        // actually flying — gated on a live PLAYER ship, not merely a connection — so an
-        // idle/observer/owner-dashboard connection never spins up 20 Hz drone combat (the
-        // expensive part of a tick). When the last player ship leaves (death or
-        // disconnect) all drones despawn and their slots reset to ready, so they respawn
-        // instantly the next time someone flies (no leftover cooldown from idle time).
-        // The bare sim that remains with no ships is cheap. Newly spawned drones land in
-        // the Pass A snapshot below and integrate immediately, like a fresh player ship.
+        // --- Pass 0: AI drone (PIG) lifecycle. Drones run while at least one TEAMED player
+        // is online — NOT merely while one has a live ship — so the battle keeps going across
+        // a player's death, dock, or respawn (the drone field doesn't blink out every time you
+        // re-ship). It still ends the moment the last player leaves the match (disconnect or
+        // back to the lobby): a teamless observer/owner-dashboard connection never spins up
+        // 20 Hz drone combat. Spawning the FIRST squad still needs a real incursion
+        // (EnemyInSector), so a teamed-but-shipless lobby alone fields nothing. When combat
+        // ends all drones despawn and slots reset to ready. Newly spawned drones land in the
+        // Pass A snapshot below and integrate immediately, like a fresh player ship.
         var match0 = ctx.Db.Match.Id.Find(0);
         bool combatLive = (match0?.PigsEnabled ?? false)
                           && (match0?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
-                          && AnyPlayerShipAlive(ctx);
+                          && AnyTeamedPlayerOnline(ctx);
         if (combatLive)
         {
             EnsurePigSlots(ctx);
             SimulatePigLifecycle(ctx, tick);
+            // Commit at most one drone per team to pick up a downed teammate's pod (the rest
+            // keep attacking); runs before the per-drone brain so PigThink sees the assignment.
+            AssignPigRescuers(ctx, tick);
         }
         else
         {
@@ -1046,7 +1106,13 @@ public static partial class Module
             // recent one with Tick <= this tick if it hasn't arrived) — matching the
             // client's input sequence is what makes auth == prediction.
             ShipInputState input;
-            if (ship.IsPig)
+            if (ship.IsPig && ship.IsPod)
+            {
+                // A PIG pod auto-flies to the nearest friendly base (PodThink); a PIG
+                // combat drone runs the full PigThink brain.
+                input = PodThink(ctx, ship, tick);
+            }
+            else if (ship.IsPig)
             {
                 input = PigThink(ctx, ship, tick);
             }
@@ -1063,7 +1129,7 @@ public static partial class Module
                 var src = exact ?? latest;
                 input = src is ShipInput si ? ToInputState(si) : default;
             }
-            var stats = FlightModel.StatsFor((byte)ship.Class);
+            var stats = FlightModel.StatsFor((byte)ship.Class, ship.IsPod);
 
             var state = new ShipState
             {
@@ -1077,9 +1143,10 @@ public static partial class Module
             state = FlightModel.Integrate(state, input, stats);
 
             // Fire control: spawn a projectile at the nose when held and the
-            // per-class cooldown has elapsed (tracked against Match.Tick).
+            // per-class cooldown has elapsed (tracked against Match.Tick). Pods are
+            // unarmed — they never fire, whatever input leaks through.
             uint lastFire = ship.LastFireTick;
-            if (input.Firing && tick - lastFire >= FireInterval(ship.Class))
+            if (!ship.IsPod && input.Firing && tick - lastFire >= FireInterval(ship.Class))
             {
                 // Spawn at the nose (true forward) but launch along a per-weapon
                 // scattered direction. SpreadDirection is deterministic in
@@ -1219,7 +1286,7 @@ public static partial class Module
                 foreach (var s in ships)
                 {
                     if (s.Team == p.Team || s.SectorId != p.SectorId) continue;
-                    float rr = ShipRadius + ProjectileRadius;
+                    float rr = HitRadius(s) + ProjectileRadius;
                     if (Dist2(nx, ny, nz, s.PosX, s.PosY, s.PosZ) <= rr * rr)
                     {
                         damage[s.ShipId] = (damage.TryGetValue(s.ShipId, out var d) ? d : 0f) + p.Damage;
@@ -1238,11 +1305,10 @@ public static partial class Module
                     float rr = BaseRadius + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
-                        // PIG fire leaves bases alone: it's absorbed on contact (so it
-                        // doesn't pass through) but deals no base damage. Only player
-                        // shots erode a base, keeping the win condition player-driven.
-                        if (!p.FromPig)
-                            baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
+                        // BOTH player and PIG fire erode an enemy base. Drones press the
+                        // attack on the enemy base during a lull (see PigThink's base-attack),
+                        // so a drone swarm can crack a base and win the match on its own.
+                        baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
                         consumed = true;
                         break;
                     }
@@ -1357,26 +1423,75 @@ public static partial class Module
                 break;
             }
 
-            // Asteroids + the ENEMY base in this SHIP's sector only — your own base is
-            // your dock/spawn point, so you pass through it.
+            // Asteroids in this SHIP's sector bounce it.
             foreach (var a in asteroids)
                 if (a.SectorId == s.SectorId)
                     s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
+
+            // Bases in this ship's sector: an ENEMY base is solid (bounce + damage); your
+            // OWN base is your dock. Fly into its core (within DockRadius) and you DOCK —
+            // the ship/pod despawns. For a player ship that reopens the spawn menu (a
+            // voluntary re-ship); for a player pod or a PIG pod it's "reached a friendly
+            // base" and resolves the pod. Docking ends this ship's tick, so skip the rest.
+            bool docked = false;
             foreach (var b in bases)
-                if (b.Team != s.Team && b.SectorId == s.SectorId)
+            {
+                if (b.SectorId != s.SectorId) continue;
+                if (b.Team != s.Team)
+                {
                     s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
+                    continue;
+                }
+                if (Dist2(s.PosX, s.PosY, s.PosZ, b.PosX, b.PosY, b.PosZ) <= DockRadius * DockRadius)
+                {
+                    DockShip(ctx, s);
+                    docked = true;
+                    break;
+                }
+            }
+            if (docked)
+                continue;
 
             if (s.Health <= 0f)
             {
-                // PIGs free their slot and start a respawn cooldown instead of clearing
-                // a player's ShipId (drones have no Player row).
-                if (s.IsPig)
-                    KillPig(ctx, s, tick);
-                else
+                // A dying POD just vanishes: a player pod clears the owner's ShipId (spawn
+                // menu reappears) via KillShip; a PIG pod has no Player row so KillShip is a
+                // clean delete. Pods don't eject pods.
+                if (s.IsPod)
                     KillShip(ctx, s);
+                // A dying PIG combat drone ejects a PIG pod and frees its slot (KillPig).
+                else if (s.IsPig)
+                    KillPig(ctx, s, tick);
+                // A dying player COMBAT ship ejects a player-piloted escape pod instead of
+                // going straight to the spawn menu (SpawnPodFor repoints Player.ShipId).
+                else
+                    SpawnPodFor(ctx, s);
             }
             else
                 ctx.Db.Ship.ShipId.Update(s);
+        }
+
+        // --- Rescue pass: a pod in DIRECT hull contact with a friendly non-pod ship (player
+        // OR drone) in the same sector is rescued — the same resolution as docking (player pod
+        // → spawn menu; PIG pod despawns). Reads LIVE rows because the death/dock pass above
+        // mutated the table. The tight RescueRadius (hulls touching) means rescue only happens
+        // when a teammate/drone actually flies onto the pod, not by merely passing nearby — so
+        // a pod ejected mid-dogfight isn't instantly resolved; left alone it floats home or dies.
+        foreach (var pod in ctx.Db.Ship.Iter().ToList())
+        {
+            if (!pod.IsPod)
+                continue;
+            foreach (var friend in ctx.Db.Ship.Iter())
+            {
+                if (friend.IsPod || friend.Team != pod.Team || friend.SectorId != pod.SectorId)
+                    continue;
+                if (Dist2(pod.PosX, pod.PosY, pod.PosZ, friend.PosX, friend.PosY, friend.PosZ)
+                    <= RescueRadius * RescueRadius)
+                {
+                    DockShip(ctx, pod);
+                    break;
+                }
+            }
         }
 
         // Prune consumed inputs so the per-tick buffer stays bounded (~InputKeep
@@ -1434,6 +1549,64 @@ public static partial class Module
         if (owner is Player p && p.ShipId == s.ShipId)
             ctx.Db.Player.Identity.Update(p with { ShipId = null });
         Log.Info($"[SimTick] ship {s.ShipId} destroyed (team {s.Team})");
+    }
+
+    // A player combat ship died: instead of going straight to the spawn menu, EJECT an
+    // escape pod — a weak, slow, unarmed Ship (IsPod) at the wreck's position/orientation/
+    // sector, inheriting team + owner — and repoint the owner's ShipId at it so they fly
+    // the pod. The spawn menu stays hidden until the pod resolves (dies / docks / rescued),
+    // each of which clears ShipId. Mirrors KillShip's teardown but spawns a pod in place.
+    private static void SpawnPodFor(ReducerContext ctx, Ship dead)
+    {
+        DeleteShipInputs(ctx, dead.ShipId);
+        ctx.Db.Ship.ShipId.Delete(dead.ShipId);
+
+        // Fling the pod clear of the wreck: inherit the wreck's momentum plus a high-speed
+        // impulse in a random direction, and a random tumble (both decay; see PodEjectSpeed).
+        var dir = RandomUnitVec(ctx);
+        var spin = RandomUnitVec(ctx);
+
+        var pod = ctx.Db.Ship.Insert(new Ship
+        {
+            ShipId = 0,
+            Owner = dead.Owner,
+            Team = dead.Team,
+            SectorId = dead.SectorId,
+            Class = dead.Class,
+            PosX = dead.PosX, PosY = dead.PosY, PosZ = dead.PosZ,
+            VelX = dead.VelX + dir.X * PodEjectSpeed,
+            VelY = dead.VelY + dir.Y * PodEjectSpeed,
+            VelZ = dead.VelZ + dir.Z * PodEjectSpeed,
+            RotX = dead.RotX, RotY = dead.RotY, RotZ = dead.RotZ, RotW = dead.RotW,
+            AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
+            Health = PodMaxHull,
+            Mass = FlightModel.Pod.Mass,
+            LastInputTick = 0,
+            LastFireTick = 0,
+            IsPig = false,
+            IsPod = true,
+        });
+
+        var owner = ctx.Db.Player.Identity.Find(dead.Owner);
+        if (owner is Player p && p.ShipId == dead.ShipId)
+            ctx.Db.Player.Identity.Update(p with { ShipId = pod.ShipId });
+        Log.Info($"[Pod] combat ship {dead.ShipId} destroyed -> escape pod {pod.ShipId} (team {dead.Team})");
+    }
+
+    // Resolve a ship that reached a friendly base — a voluntary dock by a combat ship, or
+    // a pod that flew home / was rescued. Same teardown as a clean despawn: remove the row
+    // + its inputs and clear the owner's ShipId so the spawn menu reappears. A PIG pod has
+    // no Player row (Owner is the module identity), so the ShipId clear is a no-op for it.
+    // NOT a death — no pod is ejected and (for a player) no respawn cooldown. Shared by the
+    // pod-reached-base, rescue, and voluntary friendly-base dock paths.
+    private static void DockShip(ReducerContext ctx, Ship s)
+    {
+        ctx.Db.Ship.ShipId.Delete(s.ShipId);
+        DeleteShipInputs(ctx, s.ShipId);
+        var owner = ctx.Db.Player.Identity.Find(s.Owner);
+        if (owner is Player p && p.ShipId == s.ShipId)
+            ctx.Db.Player.Identity.Update(p with { ShipId = null });
+        Log.Info($"[Dock] ship {s.ShipId} (team {s.Team}, pod={s.IsPod}) docked/resolved");
     }
 
     private static ShipInputState ToInputState(ShipInput i) => new ShipInputState
@@ -1538,6 +1711,7 @@ public static partial class Module
             LastInputTick = 0,
             LastFireTick = 0,
             IsPig = false,
+            IsPod = false,
         });
 
         // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
@@ -1604,6 +1778,17 @@ public static partial class Module
     {
         foreach (var p in ctx.Db.Player.Iter())
             if (p.Online)
+                return true;
+        return false;
+    }
+
+    // True if any ONLINE player is on a team (i.e. actually in the match, not a teamless
+    // observer/CLI connection). Drives the PIG combat gate: drones keep fighting while a
+    // teamed pilot is present, even between their ships, and stop when the last one leaves.
+    private static bool AnyTeamedPlayerOnline(ReducerContext ctx)
+    {
+        foreach (var p in ctx.Db.Player.Iter())
+            if (p.Online && p.Team is byte)
                 return true;
         return false;
     }
