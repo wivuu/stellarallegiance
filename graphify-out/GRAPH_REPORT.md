@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-09)
 
 ## Corpus Check
-- 46 files · ~55,942 words
+- 55 files · ~61,118 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 718 nodes · 1245 edges · 41 communities (34 shown, 7 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
+- 832 nodes · 1419 edges · 48 communities (41 shown, 7 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 16 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `70259040`
+- Built from commit: `f94c92ed`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -41,6 +41,7 @@
 - [[_COMMUNITY_Sun Visual|Sun Visual]]
 - [[_COMMUNITY_Asteroid Generator CLI|Asteroid Generator CLI]]
 - [[_COMMUNITY_Starscape Background|Starscape Background]]
+- [[_COMMUNITY_Community 26|Community 26]]
 - [[_COMMUNITY_DotNet Tools Config|DotNet Tools Config]]
 - [[_COMMUNITY_Local Publishing Scripts|Local Publishing Scripts]]
 - [[_COMMUNITY_CI Workflow Pipeline|CI Workflow Pipeline]]
@@ -54,15 +55,21 @@
 - [[_COMMUNITY_Cloud Publishing Script|Cloud Publishing Script]]
 - [[_COMMUNITY_Client Start Script|Client Start Script]]
 - [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 43|Community 43]]
+- [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_Community 45|Community 45]]
+- [[_COMMUNITY_Community 46|Community 46]]
+- [[_COMMUNITY_Community 47|Community 47]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Module` - 61 edges
-2. `WorldRenderer` - 50 edges
+2. `WorldRenderer` - 51 edges
 3. `ReducerContext` - 40 edges
 4. `Chat` - 32 edges
 5. `Module` - 31 edges
 6. `PredictionController` - 28 edges
-7. `TargetMarkers` - 26 edges
+7. `TargetMarkers` - 27 edges
 8. `ShipController` - 24 edges
 9. `EngineGlow` - 19 edges
 10. `ExplosionEffect` - 18 edges
@@ -85,15 +92,15 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (41 total, 7 thin omitted)
+## Communities (48 total, 7 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.07
 Nodes (28): DetRng, Filter, Identity, long, byte, float, Identity, int (+20 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.07
-Nodes (33): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, Color, ConnectionManager (+25 more)
+Cohesion: 0.06
+Nodes (34): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, Color, ConnectionManager (+26 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -120,8 +127,8 @@ Cohesion: 0.15
 Nodes (16): Cross(), byte, float, Quat, ShipInputState, ShipState, ShipStats, Vec3 (+8 more)
 
 ### Community 8 - "Ship Controller Input"
-Cohesion: 0.10
-Nodes (15): bool, ConnectionManager, double, float, InputEvent, int, ShipClass, ShipInputState (+7 more)
+Cohesion: 0.07
+Nodes (21): DbConnection, Identity, string, bool, ConnectionManager, double, float, InputEvent (+13 more)
 
 ### Community 9 - "Engine Glow Effects"
 Cohesion: 0.12
@@ -140,20 +147,20 @@ Cohesion: 0.13
 Nodes (11): byte, Color, CurveTexture, double, float, GradientTexture1D, GradientTexture2D, MeshInstance3D (+3 more)
 
 ### Community 13 - "Target Markers HUD"
-Cohesion: 0.09
-Nodes (24): Basis, Camera3D, Vector3, WorldRenderer, bool, Camera3D, Color, float (+16 more)
+Cohesion: 0.08
+Nodes (25): Basis, Camera3D, Vector3, WorldRenderer, bool, Camera3D, Color, float (+17 more)
 
 ### Community 14 - "Remote Ship Networked"
 Cohesion: 0.17
 Nodes (9): bool, double, EngineGlow, float, int, List, Ship, Vector3 (+1 more)
 
 ### Community 15 - "Project Build Config"
-Cohesion: 0.14
-Nodes (11): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+3 more)
+Cohesion: 0.12
+Nodes (13): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+5 more)
 
 ### Community 16 - "Connection & World Renderer"
-Cohesion: 0.23
-Nodes (6): DbConnection, Identity, string, Node, Exception, ConnectionManager
+Cohesion: 0.17
+Nodes (14): INavGraph, CompositeRoutePlanner, GraphWithEndpoints, StellarAllegiance.Shared.Navigation, PathQuery, Dictionary, int, IReadOnlyList (+6 more)
 
 ### Community 17 - "Dust Field Environment"
 Cohesion: 0.20
@@ -191,6 +198,10 @@ Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main
 Cohesion: 0.10
 Nodes (16): ArrayMesh, float, int, ShaderMaterial, ShaderMaterial, string, uint, Environment (+8 more)
 
+### Community 26 - "Community 26"
+Cohesion: 0.17
+Nodes (12): INavGraph, NavGraph, NavGraphBuilder, NavGraphBuildOptions, StellarAllegiance.Shared.Navigation, float, int, IReadOnlyList (+4 more)
+
 ### Community 27 - "DotNet Tools Config"
 Cohesion: 0.25
 Nodes (7): commands, rollForward, version, isRoot, tools, csharpier, version
@@ -215,25 +226,49 @@ Nodes (3): sdk, rollForward, version
 Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
+### Community 42 - "Community 42"
+Cohesion: 0.26
+Nodes (6): Program, int, List, NavSphereObstacle, PathResult, Vec3
+
+### Community 43 - "Community 43"
+Cohesion: 0.18
+Nodes (11): Dictionary, float, int, List, NavGraph, ReducerContext, ulong, Vec3 (+3 more)
+
+### Community 44 - "Community 44"
+Cohesion: 0.32
+Nodes (6): Contains(), NavGeometry, StellarAllegiance.Shared.Navigation, IReadOnlyList, NavSphereObstacle, Vec3
+
+### Community 45 - "Community 45"
+Cohesion: 0.31
+Nodes (6): SectorRoutePlanner, StellarAllegiance.Shared.Navigation, SectorLink, Dictionary, IReadOnlyList, List
+
+### Community 46 - "Community 46"
+Cohesion: 0.32
+Nodes (5): AStarPlanner, StellarAllegiance.Shared.Navigation, Dictionary, INavGraph, List
+
+### Community 47 - "Community 47"
+Cohesion: 0.25
+Nodes (6): PathSmoother, StellarAllegiance.Shared.Navigation, IReadOnlyList, List, NavSphereObstacle, Vec3
+
 ## Knowledge Gaps
-- **204 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+199 more)
+- **239 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+234 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.226) - this node is a cross-community bridge._
 - **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
-  _High betweenness centrality (0.220) - this node is a cross-community bridge._
-- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`?**
-  _High betweenness centrality (0.216) - this node is a cross-community bridge._
+  _High betweenness centrality (0.182) - this node is a cross-community bridge._
+- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`, `PigAI NPC Behavior`?**
+  _High betweenness centrality (0.180) - this node is a cross-community bridge._
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
+  _High betweenness centrality (0.176) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _224 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _259 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.06851851851851852 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06962025316455696 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06521739130434782 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06376811594202898 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._
