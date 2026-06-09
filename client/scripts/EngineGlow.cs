@@ -99,7 +99,7 @@ public partial class EngineGlow : Node3D
 		};
 		AddChild(_light);
 
-		ApplyVisual(IdleThrottle, 0f);
+		ApplyVisual(0f, 0f);   // start dark; _Process lights it once throttle is fed
 	}
 
 	private void BuildNozzle(Vector3 pos, Texture2D dot)
@@ -241,10 +241,11 @@ public partial class EngineGlow : Node3D
 	public override void _Process(double delta)
 	{
 		// Ease the rendered throttle toward the request (frame-rate independent) so
-		// power ramps smoothly. Idle keeps a faint pilot glow while the ship is alive.
+		// power ramps smoothly. A ship sitting at zero throttle eases to true zero and
+		// goes fully dark (ApplyVisual) — no idle pilot glow on a parked engine.
 		float dt = (float)delta;
 		float ease = 1f - Mathf.Exp(-EaseRate * dt);
-		_shown = Mathf.Lerp(_shown, Mathf.Max(IdleThrottle, _target), ease);
+		_shown = Mathf.Lerp(_shown, _target, ease);
 		_shownBoost = Mathf.Lerp(_shownBoost, _targetBoost, ease);
 		_flicker += dt * 12f;   // slow enough that turbulence reads as flow, not a strobe
 		ApplyVisual(_shown, _shownBoost);
@@ -253,6 +254,20 @@ public partial class EngineGlow : Node3D
 	// Map the current throttle + afterburner onto every modulated visual.
 	private void ApplyVisual(float throttle, float boost)
 	{
+		// Master on/off envelope: the engine is fully dark at rest and ramps to full
+		// glow by IdleThrottle, so a parked ship (throttle 0, no boost) shows nothing.
+		// Folds into every emission energy and the wash light, and the whole node is
+		// hidden once truly dark so even the additive plume albedo stops drawing.
+		float glow = Mathf.Clamp(Mathf.Max(throttle / IdleThrottle, boost), 0f, 1f);
+		Visible = glow > 0.001f;
+		if (!Visible)
+		{
+			_light.LightEnergy = 0f;
+			foreach (var ex in _exhausts)
+				ex.Emitting = false;
+			return;
+		}
+
 		// Tiny brightness flicker so the flame lives a little; deeper at low power.
 		float flick = 1f + (0.04f + 0.03f * (1f - throttle)) * Mathf.Sin(_flicker);
 
@@ -273,11 +288,11 @@ public partial class EngineGlow : Node3D
 		float lengthScale = baseLen * (1f + turbAmp * outerTurb);
 		float innerLength = baseLen * 0.8f * (1f + turbAmp * 1.4f * innerTurb); // shorter + livelier
 		float widthScale = Mathf.Lerp(0.7f, 1f, throttle) * widthTurb;
-		float plumeEnergy = (1.4f + 4.6f * throttle + 2.5f * boost) * flick;
-		float coreEnergy = (1f + 5f * throttle + 3f * boost) * flick;
+		float plumeEnergy = (1.4f + 4.6f * throttle + 2.5f * boost) * flick * glow;
+		float coreEnergy = (1f + 5f * throttle + 3f * boost) * flick * glow;
 		// Inner jet runs hotter and biases toward white; brightest under afterburner.
 		Color innerColor = plumeColor.Lerp(Colors.White, 0.5f);
-		float innerEnergy = (2f + 6f * throttle + 4f * boost) * flick;
+		float innerEnergy = (2f + 6f * throttle + 4f * boost) * flick * glow;
 
 		for (int i = 0; i < _plumeHolders.Count; i++)
 		{
@@ -305,7 +320,7 @@ public partial class EngineGlow : Node3D
 		}
 
 		_light.LightColor = plumeColor;
-		_light.LightEnergy = (0.4f + 2.6f * throttle + 1.5f * boost) * flick;
+		_light.LightEnergy = (0.4f + 2.6f * throttle + 1.5f * boost) * flick * glow;
 		_light.OmniRange = LightRange * (0.7f + 0.3f * throttle);
 	}
 
