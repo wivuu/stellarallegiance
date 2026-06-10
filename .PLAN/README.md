@@ -14,6 +14,7 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
+- Procedural spaceship generator - Using reusable/modular parts, be able to procedurally generate a wide variety of spaceship models with different shapes, sizes, textures, etc. An individual ship would be defined by a what parts it is made up of and defined in YAML. A build process would then take the YAML and produce a GLB file
 ---
 
 ## Roadmap (prioritized)
