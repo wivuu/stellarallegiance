@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-10)
 
 ## Corpus Check
-- 46 files · ~57,925 words
+- 47 files · ~60,302 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 729 nodes · 1269 edges · 41 communities (34 shown, 7 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.8)
+- 760 nodes · 1346 edges · 42 communities (35 shown, 7 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 22 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a107e071`
+- Built from commit: `b8769076`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -41,6 +41,7 @@
 - [[_COMMUNITY_Sun Visual|Sun Visual]]
 - [[_COMMUNITY_Asteroid Generator CLI|Asteroid Generator CLI]]
 - [[_COMMUNITY_Starscape Background|Starscape Background]]
+- [[_COMMUNITY_Community 26|Community 26]]
 - [[_COMMUNITY_DotNet Tools Config|DotNet Tools Config]]
 - [[_COMMUNITY_Local Publishing Scripts|Local Publishing Scripts]]
 - [[_COMMUNITY_CI Workflow Pipeline|CI Workflow Pipeline]]
@@ -65,7 +66,7 @@
 7. `TargetMarkers` - 26 edges
 8. `ShipController` - 24 edges
 9. `EngineGlow` - 19 edges
-10. `ExplosionEffect` - 18 edges
+10. `Module` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Starscape` --references--> `string`  [EXTRACTED]
@@ -85,15 +86,15 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (41 total, 7 thin omitted)
+## Communities (42 total, 7 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.07
-Nodes (28): DetRng, Filter, Identity, long, byte, float, Identity, int (+20 more)
+Nodes (29): DetRng, Filter, Identity, long, byte, float, Identity, int (+21 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.07
-Nodes (33): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, Color, ConnectionManager (+25 more)
+Cohesion: 0.06
+Nodes (34): Asteroid, AuthoredRadius, Base, Aleph, bool, byte, Color, ConnectionManager (+26 more)
 
 ### Community 2 - "Chat System"
 Cohesion: 0.08
@@ -152,8 +153,8 @@ Cohesion: 0.14
 Nodes (11): wivuullegiance, net8.0, net8.0, Microsoft.NET.Sdk, SpacetimeDB.ClientSDK (2.3.0), SpacetimeDB.Runtime (2.3.*), Godot.NET.Sdk/4.6.3, net8.0 (+3 more)
 
 ### Community 16 - "Connection & World Renderer"
-Cohesion: 0.23
-Nodes (6): DbConnection, Identity, string, Node, Exception, ConnectionManager
+Cohesion: 0.26
+Nodes (5): DbConnection, Identity, string, Exception, ConnectionManager
 
 ### Community 17 - "Dust Field Environment"
 Cohesion: 0.20
@@ -191,6 +192,10 @@ Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main
 Cohesion: 0.10
 Nodes (16): ArrayMesh, float, int, ShaderMaterial, ShaderMaterial, string, uint, Environment (+8 more)
 
+### Community 26 - "Community 26"
+Cohesion: 0.13
+Nodes (14): BaseDef, Dictionary<byte, ShipStats>, HardpointDef, HardpointKind, List<HardpointDef>, byte, Reducer, ReducerContext (+6 more)
+
 ### Community 27 - "DotNet Tools Config"
 Cohesion: 0.25
 Nodes (7): commands, rollForward, version, isRoot, tools, csharpier, version
@@ -216,24 +221,24 @@ Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
 ## Knowledge Gaps
-- **205 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+200 more)
+- **210 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+205 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.220) - this node is a cross-community bridge._
-- **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
-  _High betweenness centrality (0.215) - this node is a cross-community bridge._
 - **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`, `PigAI NPC Behavior`?**
-  _High betweenness centrality (0.211) - this node is a cross-community bridge._
+  _High betweenness centrality (0.246) - this node is a cross-community bridge._
+- **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
+  _High betweenness centrality (0.245) - this node is a cross-community bridge._
+- **Why does `string` connect `Starscape Background` to `SpaceTimeDB Module Core`?**
+  _High betweenness centrality (0.229) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _225 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _230 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.06962025316455696 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07253086419753087 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.06521739130434782 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06376811594202898 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07965860597439545 - nodes in this community are weakly interconnected._

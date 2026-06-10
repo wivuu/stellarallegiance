@@ -1,16 +1,16 @@
-# Graph Report - wivuullegiance  (2026-06-09)
+# Graph Report - wivuullegiance  (2026-06-10)
 
 ## Corpus Check
-- 46 files · ~55,942 words
+- 46 files · ~57,925 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 718 nodes · 1245 edges · 41 communities (34 shown, 7 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
+- 729 nodes · 1269 edges · 41 communities (34 shown, 7 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `70259040`
+- Built from commit: `a107e071`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -60,7 +60,7 @@
 2. `WorldRenderer` - 50 edges
 3. `ReducerContext` - 40 edges
 4. `Chat` - 32 edges
-5. `Module` - 31 edges
+5. `Module` - 32 edges
 6. `PredictionController` - 28 edges
 7. `TargetMarkers` - 26 edges
 8. `ShipController` - 24 edges
@@ -108,7 +108,7 @@ Cohesion: 0.06
 Nodes (24): Button, CanvasLayer, Button, Color, ConnectionManager, double, Label, Button (+16 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (11): Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState, uint (+3 more)
 
 ### Community 6 - "Client-Side Prediction"
@@ -116,8 +116,8 @@ Cohesion: 0.11
 Nodes (16): double, EngineGlow, float, int, List, Quaternion, Ship, ShipClass (+8 more)
 
 ### Community 7 - "Shared Flight Model"
-Cohesion: 0.15
-Nodes (16): Cross(), byte, float, Quat, ShipInputState, ShipState, ShipStats, Vec3 (+8 more)
+Cohesion: 0.13
+Nodes (18): Conjugate(), Create(), Cross(), byte, float, Quat, ShipInputState, ShipState (+10 more)
 
 ### Community 8 - "Ship Controller Input"
 Cohesion: 0.10
@@ -168,8 +168,8 @@ Cohesion: 0.18
 Nodes (8): Color, double, float, int, List, MeshInstance3D, ImmediateMesh, TeamTrail
 
 ### Community 20 - "Flight Model Tests"
-Cohesion: 0.27
-Nodes (5): Program, float, int, ShipInputState, ShipState
+Cohesion: 0.21
+Nodes (7): Program, float, int, Quat, ShipInputState, ShipState, ShipStats
 
 ### Community 21 - "Asteroid Normal Baking"
 Cohesion: 0.24
@@ -216,7 +216,7 @@ Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
 ## Knowledge Gaps
-- **204 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+199 more)
+- **205 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+200 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -224,15 +224,15 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.226) - this node is a cross-community bridge._
-- **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
   _High betweenness centrality (0.220) - this node is a cross-community bridge._
-- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`?**
-  _High betweenness centrality (0.216) - this node is a cross-community bridge._
+- **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
+  _High betweenness centrality (0.215) - this node is a cross-community bridge._
+- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`, `PigAI NPC Behavior`?**
+  _High betweenness centrality (0.211) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _224 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _225 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.06851851851851852 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06962025316455696 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
   _Cohesion score 0.06521739130434782 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**

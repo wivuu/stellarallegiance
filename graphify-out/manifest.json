@@ -60,8 +60,8 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781098646.9862568,
-    "ast_hash": "057b2e03d4ce1c05e3df783186d83d6f",
+    "mtime": 1781102224.3083892,
+    "ast_hash": "6be7d1f0f2fe77d68c87d091f9ad8689",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781098722.272873,
-    "ast_hash": "ffca66e57dc8d61b3fa1921a63b16a40",
+    "mtime": 1781101873.153051,
+    "ast_hash": "a3e7006708d39452b978cc0f4327c2d2",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -135,8 +135,8 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781098924.8487291,
-    "ast_hash": "88432d9364edea67a4105e5f8aabdb0f",
+    "mtime": 1781113847.8939304,
+    "ast_hash": "f8b6b3967b969aea31c9ae9cfc64db04",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
@@ -243,5 +243,10 @@
     "mtime": 1780678799.1348352,
     "ast_hash": "bf1a045c41435faa179f737e983f3821",
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
+  },
+  "module/spacetimedb/Defs.cs": {
+    "mtime": 1781113830.0466835,
+    "ast_hash": "8e3dd231d7e0e3a4cd639ff6b91bbc40",
+    "semantic_hash": ""
   }
 }

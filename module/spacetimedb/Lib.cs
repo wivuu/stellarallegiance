@@ -553,6 +553,11 @@ public static partial class Module
         ulong seed = ((ulong)(uint)ctx.Rng.Next() << 32) | (uint)ctx.Rng.Next();
         Log.Info($"[Init] seeding match state (map seed {seed})");
 
+        // Record the publisher as the server owner (the only place ctx.Sender is the owner)
+        // and seed the runtime def tables from the compiled-in defaults. Both live in Defs.cs.
+        CaptureOwner(ctx);
+        SeedDefaults(ctx);
+
         // Singleton match row.
         ctx.Db.Match.Insert(new Match
         {
@@ -584,7 +589,7 @@ public static partial class Module
         // This is a prototype, not a persistent universe — nothing needs to
         // advance while nobody is watching.
 
-        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, SimTick paused until first client");
+        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, {ctx.Db.ShipClassDef.Count} ship/{ctx.Db.WeaponDef.Count} weapon/{ctx.Db.BaseDef.Count} base defs, SimTick paused until first client");
     }
 
     // Rebuild the asteroid field + aleph pair from an explicit seed, and record it on the

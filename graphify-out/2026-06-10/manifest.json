@@ -30,9 +30,9 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1780668592.8225462,
-    "ast_hash": "d42df7b554c4671708d66782ca798b0f",
-    "semantic_hash": "d42df7b554c4671708d66782ca798b0f"
+    "mtime": 1781045873.7319667,
+    "ast_hash": "016c279e5369bd90da01568e4cd4909b",
+    "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
     "mtime": 1780678799.1349943,
@@ -45,7 +45,7 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1780859981.2683074,
+    "mtime": 1781032026.9275434,
     "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
     "semantic_hash": ""
   },
@@ -60,8 +60,8 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1780859919.029023,
-    "ast_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3",
+    "mtime": 1781098646.9862568,
+    "ast_hash": "057b2e03d4ce1c05e3df783186d83d6f",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -70,18 +70,18 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1780862670.6388712,
+    "mtime": 1781032026.9284115,
     "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1780859968.5047383,
-    "ast_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b",
+    "mtime": 1781098722.272873,
+    "ast_hash": "ffca66e57dc8d61b3fa1921a63b16a40",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
-    "mtime": 1780749220.7178583,
-    "ast_hash": "50ae535bd280c26fd209e16768313197",
+    "mtime": 1781098581.7030888,
+    "ast_hash": "4ba10beff2d51daef33766ed153e438b",
     "semantic_hash": ""
   },
   "client/scripts/Starscape.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781010058.7185,
-    "ast_hash": "cdd1b7bcd5d781d3fc562ea71b47610e",
+    "mtime": 1781033434.4503157,
+    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781007264.6176882,
-    "ast_hash": "9500e0f66e3e1e4006461a5787bb13ce",
+    "mtime": 1781098924.8487291,
+    "ast_hash": "88432d9364edea67a4105e5f8aabdb0f",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781007326.675015,
-    "ast_hash": "87d373e74efaf32a48c3fdf2ad9a3930",
+    "mtime": 1781095814.037597,
+    "ast_hash": "94c563b7b1edbb430f0a2dedd3aa2a32",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -180,8 +180,8 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781005886.9223785,
-    "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
+    "mtime": 1781098490.433963,
+    "ast_hash": "bb042822eb064c34aefb3f3016ea312f",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
@@ -195,8 +195,8 @@
     "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1780749309.4072368,
-    "ast_hash": "30395b0e240e78e5698500b16504990b",
+    "mtime": 1781098880.22535,
+    "ast_hash": "9981ad1b269ee4ab0959355dd8d1aad1",
     "semantic_hash": ""
   },
   "tools/asteroid-gen/asteroids.json": {

@@ -1976,7 +1976,7 @@
       "label": ".InjectDivergence()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L175",
+      "source_location": "L181",
       "id": "scripts_predictioncontroller_predictioncontroller_injectdivergence",
       "community": 6,
       "norm_label": ".injectdivergence()"
@@ -1985,7 +1985,7 @@
       "label": ".OnAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L193",
+      "source_location": "L199",
       "id": "scripts_predictioncontroller_predictioncontroller_onauthoritative",
       "community": 6,
       "norm_label": ".onauthoritative()"
@@ -1994,7 +1994,7 @@
       "label": ".HardSnapTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L247",
+      "source_location": "L253",
       "id": "scripts_predictioncontroller_predictioncontroller_hardsnapto",
       "community": 6,
       "norm_label": ".hardsnapto()"
@@ -2003,7 +2003,7 @@
       "label": ".RebaseTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L270",
+      "source_location": "L276",
       "id": "scripts_predictioncontroller_predictioncontroller_rebaseto",
       "community": 6,
       "norm_label": ".rebaseto()"
@@ -2012,7 +2012,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L283",
+      "source_location": "L289",
       "id": "scripts_predictioncontroller_predictioncontroller_process",
       "community": 6,
       "norm_label": "._process()"
@@ -2021,7 +2021,7 @@
       "label": ".SpringToZero()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L305",
+      "source_location": "L311",
       "id": "scripts_predictioncontroller_predictioncontroller_springtozero",
       "community": 6,
       "norm_label": ".springtozero()"
@@ -2030,7 +2030,7 @@
       "label": ".QuatToRotVec()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L312",
+      "source_location": "L318",
       "id": "scripts_predictioncontroller_predictioncontroller_quattorotvec",
       "community": 6,
       "norm_label": ".quattorotvec()"
@@ -2039,7 +2039,7 @@
       "label": ".RotVecToQuat()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L322",
+      "source_location": "L328",
       "id": "scripts_predictioncontroller_predictioncontroller_rotvectoquat",
       "community": 6,
       "norm_label": ".rotvectoquat()"
@@ -2048,7 +2048,7 @@
       "label": ".ApplyVisual()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L332",
+      "source_location": "L338",
       "id": "scripts_predictioncontroller_predictioncontroller_applyvisual",
       "community": 6,
       "norm_label": ".applyvisual()"
@@ -2408,7 +2408,7 @@
       "label": "Vector2",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L60",
+      "source_location": "L65",
       "id": "client_scripts_shipcontroller_cs_vector2",
       "community": 8,
       "norm_label": "vector2"
@@ -2417,7 +2417,7 @@
       "label": "Dictionary<uint, double>",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L76",
+      "source_location": "L82",
       "id": "dictionary_uint_double",
       "community": 8,
       "norm_label": "dictionary<uint, double>"
@@ -2426,7 +2426,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L80",
+      "source_location": "L86",
       "id": "scripts_shipcontroller_shipcontroller_ready",
       "community": 8,
       "norm_label": "._ready()"
@@ -2435,7 +2435,7 @@
       "label": ".RequestSpawn()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L120",
+      "source_location": "L126",
       "id": "scripts_shipcontroller_shipcontroller_requestspawn",
       "community": 8,
       "norm_label": ".requestspawn()"
@@ -2444,7 +2444,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L125",
+      "source_location": "L131",
       "id": "scripts_shipcontroller_shipcontroller_process",
       "community": 8,
       "norm_label": "._process()"
@@ -2453,7 +2453,7 @@
       "label": ".UpdateAdaptiveLead()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L247",
+      "source_location": "L253",
       "id": "scripts_shipcontroller_shipcontroller_updateadaptivelead",
       "community": 8,
       "norm_label": ".updateadaptivelead()"
@@ -2462,7 +2462,7 @@
       "label": ".OnInputAck()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L258",
+      "source_location": "L264",
       "id": "scripts_shipcontroller_shipcontroller_oninputack",
       "community": 8,
       "norm_label": ".oninputack()"
@@ -2471,7 +2471,7 @@
       "label": "._Input()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L273",
+      "source_location": "L279",
       "id": "scripts_shipcontroller_shipcontroller_input",
       "community": 8,
       "norm_label": "._input()"
@@ -2480,7 +2480,7 @@
       "label": "InputEvent",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L273",
+      "source_location": "L279",
       "id": "client_scripts_shipcontroller_cs_inputevent",
       "community": 8,
       "norm_label": "inputevent"
@@ -2489,7 +2489,7 @@
       "label": ".HandleMouseCapture()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L283",
+      "source_location": "L289",
       "id": "scripts_shipcontroller_shipcontroller_handlemousecapture",
       "community": 8,
       "norm_label": ".handlemousecapture()"
@@ -2498,7 +2498,7 @@
       "label": ".Axis()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L312",
+      "source_location": "L318",
       "id": "scripts_shipcontroller_shipcontroller_axis",
       "community": 8,
       "norm_label": ".axis()"
@@ -2507,7 +2507,7 @@
       "label": "Key",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L312",
+      "source_location": "L318",
       "id": "key",
       "community": 8,
       "norm_label": "key"
@@ -2516,7 +2516,7 @@
       "label": ".ReadInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L320",
+      "source_location": "L326",
       "id": "scripts_shipcontroller_shipcontroller_readinput",
       "community": 8,
       "norm_label": ".readinput()"
@@ -2525,7 +2525,7 @@
       "label": ".AutoInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L351",
+      "source_location": "L369",
       "id": "scripts_shipcontroller_shipcontroller_autoinput",
       "community": 8,
       "norm_label": ".autoinput()"
@@ -3535,7 +3535,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L453",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 16,
+      "community": 1,
       "norm_label": "node"
     },
     {
@@ -3917,6 +3917,276 @@
       "norm_label": "database"
     },
     {
+      "label": "Defs.cs",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L1",
+      "id": "spacetimedb_defs",
+      "community": 26,
+      "norm_label": "defs.cs"
+    },
+    {
+      "label": "Module",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L142",
+      "id": "spacetimedb_defs_module",
+      "community": 26,
+      "norm_label": "module"
+    },
+    {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L148",
+      "id": "module_spacetimedb_defs_cs_byte",
+      "community": 26,
+      "norm_label": "byte"
+    },
+    {
+      "label": "uint",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L152",
+      "id": "module_spacetimedb_defs_cs_uint",
+      "community": 26,
+      "norm_label": "uint"
+    },
+    {
+      "label": ".Hps()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L158",
+      "id": "spacetimedb_defs_module_hps",
+      "community": 26,
+      "norm_label": ".hps()"
+    },
+    {
+      "label": "List<HardpointDef>",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L158",
+      "id": "list_hardpointdef",
+      "community": 26,
+      "norm_label": "list<hardpointdef>"
+    },
+    {
+      "label": ".Hp()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "id": "spacetimedb_defs_module_hp",
+      "community": 26,
+      "norm_label": ".hp()"
+    },
+    {
+      "label": "HardpointKind",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "id": "hardpointkind",
+      "community": 26,
+      "norm_label": "hardpointkind"
+    },
+    {
+      "label": "HardpointDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "id": "hardpointdef",
+      "community": 26,
+      "norm_label": "hardpointdef"
+    },
+    {
+      "label": ".ShipDefFromStats()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "id": "spacetimedb_defs_module_shipdeffromstats",
+      "community": 26,
+      "norm_label": ".shipdeffromstats()"
+    },
+    {
+      "label": "ShipStats",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "id": "module_spacetimedb_defs_cs_shipstats",
+      "community": 26,
+      "norm_label": "shipstats"
+    },
+    {
+      "label": "ShipClassDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "id": "shipclassdef",
+      "community": 26,
+      "norm_label": "shipclassdef"
+    },
+    {
+      "label": ".SeedDefaults()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L193",
+      "id": "spacetimedb_defs_module_seeddefaults",
+      "community": 26,
+      "norm_label": ".seeddefaults()"
+    },
+    {
+      "label": "ReducerContext",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L193",
+      "id": "module_spacetimedb_defs_cs_reducercontext",
+      "community": 26,
+      "norm_label": "reducercontext"
+    },
+    {
+      "label": ".CaptureOwner()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L267",
+      "id": "spacetimedb_defs_module_captureowner",
+      "community": 26,
+      "norm_label": ".captureowner()"
+    },
+    {
+      "label": ".RequireOwner()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L275",
+      "id": "spacetimedb_defs_module_requireowner",
+      "community": 26,
+      "norm_label": ".requireowner()"
+    },
+    {
+      "label": ".UpsertShipClassDef()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "id": "spacetimedb_defs_module_upsertshipclassdef",
+      "community": 26,
+      "norm_label": ".upsertshipclassdef()"
+    },
+    {
+      "label": "Reducer",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "id": "module_spacetimedb_defs_cs_reducer",
+      "community": 26,
+      "norm_label": "reducer"
+    },
+    {
+      "label": ".UpsertWeaponDef()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "id": "spacetimedb_defs_module_upsertweapondef",
+      "community": 26,
+      "norm_label": ".upsertweapondef()"
+    },
+    {
+      "label": "WeaponDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "id": "weapondef",
+      "community": 26,
+      "norm_label": "weapondef"
+    },
+    {
+      "label": ".UpsertBaseDef()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "id": "spacetimedb_defs_module_upsertbasedef",
+      "community": 26,
+      "norm_label": ".upsertbasedef()"
+    },
+    {
+      "label": "BaseDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "id": "basedef",
+      "community": 26,
+      "norm_label": "basedef"
+    },
+    {
+      "label": ".UpsertWorldConfig()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "id": "spacetimedb_defs_module_upsertworldconfig",
+      "community": 26,
+      "norm_label": ".upsertworldconfig()"
+    },
+    {
+      "label": "WorldConfig",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "id": "worldconfig",
+      "community": 26,
+      "norm_label": "worldconfig"
+    },
+    {
+      "label": "Dictionary<byte, ShipStats>",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L346",
+      "id": "dictionary_byte_shipstats",
+      "community": 26,
+      "norm_label": "dictionary<byte, shipstats>"
+    },
+    {
+      "label": ".ShipDef()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L348",
+      "id": "spacetimedb_defs_module_shipdef",
+      "community": 26,
+      "norm_label": ".shipdef()"
+    },
+    {
+      "label": ".ShipStatsFor()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L354",
+      "id": "spacetimedb_defs_module_shipstatsfor",
+      "community": 26,
+      "norm_label": ".shipstatsfor()"
+    },
+    {
+      "label": ".WeaponFor()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L368",
+      "id": "spacetimedb_defs_module_weaponfor",
+      "community": 26,
+      "norm_label": ".weaponfor()"
+    },
+    {
+      "label": ".BaseDefFor()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L371",
+      "id": "spacetimedb_defs_module_basedeffor",
+      "community": 26,
+      "norm_label": ".basedeffor()"
+    },
+    {
+      "label": ".WorldConfigOrDefault()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L375",
+      "id": "spacetimedb_defs_module_worldconfigordefault",
+      "community": 26,
+      "norm_label": ".worldconfigordefault()"
+    },
+    {
       "label": "Lib.cs",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
@@ -4218,7 +4488,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L547",
-      "id": "reducer",
+      "id": "module_spacetimedb_lib_cs_reducer",
       "community": 0,
       "norm_label": "reducer"
     },
@@ -4226,7 +4496,7 @@
       "label": ".RegenerateWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L594",
+      "source_location": "L599",
       "id": "spacetimedb_lib_module_regenerateworld",
       "community": 0,
       "norm_label": ".regenerateworld()"
@@ -4235,7 +4505,7 @@
       "label": ".ClientConnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L614",
+      "source_location": "L619",
       "id": "spacetimedb_lib_module_clientconnected",
       "community": 0,
       "norm_label": ".clientconnected()"
@@ -4244,7 +4514,7 @@
       "label": ".ClientDisconnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L648",
+      "source_location": "L653",
       "id": "spacetimedb_lib_module_clientdisconnected",
       "community": 0,
       "norm_label": ".clientdisconnected()"
@@ -4253,7 +4523,7 @@
       "label": ".SetName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L690",
+      "source_location": "L695",
       "id": "spacetimedb_lib_module_setname",
       "community": 0,
       "norm_label": ".setname()"
@@ -4262,7 +4532,7 @@
       "label": ".SendChat()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L708",
+      "source_location": "L713",
       "id": "spacetimedb_lib_module_sendchat",
       "community": 0,
       "norm_label": ".sendchat()"
@@ -4271,7 +4541,7 @@
       "label": ".HandleCommand()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L743",
+      "source_location": "L748",
       "id": "spacetimedb_lib_module_handlecommand",
       "community": 0,
       "norm_label": ".handlecommand()"
@@ -4280,7 +4550,7 @@
       "label": "Player",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L743",
+      "source_location": "L748",
       "id": "module_spacetimedb_lib_cs_player",
       "community": 0,
       "norm_label": "player"
@@ -4289,7 +4559,7 @@
       "label": ".ResignMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L784",
+      "source_location": "L789",
       "id": "spacetimedb_lib_module_resignmatch",
       "community": 0,
       "norm_label": ".resignmatch()"
@@ -4298,7 +4568,7 @@
       "label": ".SystemTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L803",
+      "source_location": "L808",
       "id": "spacetimedb_lib_module_systemto",
       "community": 0,
       "norm_label": ".systemto()"
@@ -4307,7 +4577,7 @@
       "label": "Identity",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L803",
+      "source_location": "L808",
       "id": "module_spacetimedb_lib_cs_identity",
       "community": 0,
       "norm_label": "identity"
@@ -4316,7 +4586,7 @@
       "label": ".SystemAll()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L818",
+      "source_location": "L823",
       "id": "spacetimedb_lib_module_systemall",
       "community": 0,
       "norm_label": ".systemall()"
@@ -4325,7 +4595,7 @@
       "label": ".TeamName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L832",
+      "source_location": "L837",
       "id": "spacetimedb_lib_module_teamname",
       "community": 0,
       "norm_label": ".teamname()"
@@ -4334,7 +4604,7 @@
       "label": ".DisplayName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L835",
+      "source_location": "L840",
       "id": "spacetimedb_lib_module_displayname",
       "community": 0,
       "norm_label": ".displayname()"
@@ -4343,7 +4613,7 @@
       "label": "Filter",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L846",
+      "source_location": "L851",
       "id": "filter",
       "community": 0,
       "norm_label": "filter"
@@ -4352,7 +4622,7 @@
       "label": ".SpawnShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L862",
+      "source_location": "L867",
       "id": "spacetimedb_lib_module_spawnship",
       "community": 0,
       "norm_label": ".spawnship()"
@@ -4361,7 +4631,7 @@
       "label": ".Respawn()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L870",
+      "source_location": "L875",
       "id": "spacetimedb_lib_module_respawn",
       "community": 0,
       "norm_label": ".respawn()"
@@ -4370,7 +4640,7 @@
       "label": ".JoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L882",
+      "source_location": "L887",
       "id": "spacetimedb_lib_module_jointeam",
       "community": 0,
       "norm_label": ".jointeam()"
@@ -4379,7 +4649,7 @@
       "label": ".LeaveTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L910",
+      "source_location": "L915",
       "id": "spacetimedb_lib_module_leaveteam",
       "community": 0,
       "norm_label": ".leaveteam()"
@@ -4388,7 +4658,7 @@
       "label": ".SetReady()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L929",
+      "source_location": "L934",
       "id": "spacetimedb_lib_module_setready",
       "community": 0,
       "norm_label": ".setready()"
@@ -4397,7 +4667,7 @@
       "label": ".QuickJoin()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L947",
+      "source_location": "L952",
       "id": "spacetimedb_lib_module_quickjoin",
       "community": 0,
       "norm_label": ".quickjoin()"
@@ -4406,7 +4676,7 @@
       "label": ".RestartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L968",
+      "source_location": "L973",
       "id": "spacetimedb_lib_module_restartmatch",
       "community": 0,
       "norm_label": ".restartmatch()"
@@ -4415,7 +4685,7 @@
       "label": ".ApplyInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1003",
+      "source_location": "L1008",
       "id": "spacetimedb_lib_module_applyinput",
       "community": 0,
       "norm_label": ".applyinput()"
@@ -4424,7 +4694,7 @@
       "label": ".SimTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1043",
+      "source_location": "L1048",
       "id": "spacetimedb_lib_module_simtick",
       "community": 0,
       "norm_label": ".simtick()"
@@ -4433,7 +4703,7 @@
       "label": "SimTickTimer",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1043",
+      "source_location": "L1048",
       "id": "simticktimer",
       "community": 0,
       "norm_label": "simticktimer"
@@ -4442,7 +4712,7 @@
       "label": ".SimulateTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1076",
+      "source_location": "L1081",
       "id": "spacetimedb_lib_module_simulatetick",
       "community": 0,
       "norm_label": ".simulatetick()"
@@ -4451,7 +4721,7 @@
       "label": ".Dist2()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1517",
+      "source_location": "L1522",
       "id": "spacetimedb_lib_module_dist2",
       "community": 5,
       "norm_label": ".dist2()"
@@ -4460,7 +4730,7 @@
       "label": ".ResolveCollision()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1526",
+      "source_location": "L1531",
       "id": "spacetimedb_lib_module_resolvecollision",
       "community": 0,
       "norm_label": ".resolvecollision()"
@@ -4469,7 +4739,7 @@
       "label": ".KillShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1553",
+      "source_location": "L1558",
       "id": "spacetimedb_lib_module_killship",
       "community": 0,
       "norm_label": ".killship()"
@@ -4478,7 +4748,7 @@
       "label": ".SpawnPodFor()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1571",
+      "source_location": "L1576",
       "id": "spacetimedb_lib_module_spawnpodfor",
       "community": 0,
       "norm_label": ".spawnpodfor()"
@@ -4487,7 +4757,7 @@
       "label": ".DockShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1614",
+      "source_location": "L1619",
       "id": "spacetimedb_lib_module_dockship",
       "community": 0,
       "norm_label": ".dockship()"
@@ -4496,7 +4766,7 @@
       "label": ".ToInputState()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1633",
       "id": "spacetimedb_lib_module_toinputstate",
       "community": 0,
       "norm_label": ".toinputstate()"
@@ -4505,7 +4775,7 @@
       "label": "ShipInput",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1633",
       "id": "shipinput",
       "community": 0,
       "norm_label": "shipinput"
@@ -4514,7 +4784,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1633",
       "id": "module_spacetimedb_lib_cs_shipinputstate",
       "community": 0,
       "norm_label": "shipinputstate"
@@ -4523,7 +4793,7 @@
       "label": ".DeleteShipInputs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1642",
+      "source_location": "L1647",
       "id": "spacetimedb_lib_module_deleteshipinputs",
       "community": 0,
       "norm_label": ".deleteshipinputs()"
@@ -4532,7 +4802,7 @@
       "label": ".SpawnShipInternal()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1649",
+      "source_location": "L1654",
       "id": "spacetimedb_lib_module_spawnshipinternal",
       "community": 0,
       "norm_label": ".spawnshipinternal()"
@@ -4541,7 +4811,7 @@
       "label": ".OnlineTeamCounts()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1742",
+      "source_location": "L1747",
       "id": "spacetimedb_lib_module_onlineteamcounts",
       "community": 0,
       "norm_label": ".onlineteamcounts()"
@@ -4550,7 +4820,7 @@
       "label": ".CanJoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1757",
+      "source_location": "L1762",
       "id": "spacetimedb_lib_module_canjointeam",
       "community": 0,
       "norm_label": ".canjointeam()"
@@ -4559,7 +4829,7 @@
       "label": ".SmallestOnlineTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1767",
+      "source_location": "L1772",
       "id": "spacetimedb_lib_module_smallestonlineteam",
       "community": 0,
       "norm_label": ".smallestonlineteam()"
@@ -4568,7 +4838,7 @@
       "label": ".ResetWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1779",
+      "source_location": "L1784",
       "id": "spacetimedb_lib_module_resetworld",
       "community": 0,
       "norm_label": ".resetworld()"
@@ -4577,7 +4847,7 @@
       "label": ".AnyOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1794",
+      "source_location": "L1799",
       "id": "spacetimedb_lib_module_anyonline",
       "community": 0,
       "norm_label": ".anyonline()"
@@ -4586,7 +4856,7 @@
       "label": ".AnyTeamedPlayerOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1805",
+      "source_location": "L1810",
       "id": "spacetimedb_lib_module_anyteamedplayeronline",
       "community": 0,
       "norm_label": ".anyteamedplayeronline()"
@@ -4595,7 +4865,7 @@
       "label": ".StartSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1815",
+      "source_location": "L1820",
       "id": "spacetimedb_lib_module_startsim",
       "community": 0,
       "norm_label": ".startsim()"
@@ -4604,7 +4874,7 @@
       "label": ".StopSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1837",
+      "source_location": "L1842",
       "id": "spacetimedb_lib_module_stopsim",
       "community": 0,
       "norm_label": ".stopsim()"
@@ -4613,7 +4883,7 @@
       "label": ".MarkEngagedIfActive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1846",
+      "source_location": "L1851",
       "id": "spacetimedb_lib_module_markengagedifactive",
       "community": 0,
       "norm_label": ".markengagedifactive()"
@@ -4622,7 +4892,7 @@
       "label": ".EndMatchIfSideAbandoned()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1861",
+      "source_location": "L1866",
       "id": "spacetimedb_lib_module_endmatchifsideabandoned",
       "community": 0,
       "norm_label": ".endmatchifsideabandoned()"
@@ -4631,7 +4901,7 @@
       "label": ".MaybeStartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1906",
+      "source_location": "L1911",
       "id": "spacetimedb_lib_module_maybestartmatch",
       "community": 0,
       "norm_label": ".maybestartmatch()"
@@ -6407,6 +6677,15 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": "Reducer",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L547",
+      "community": 0,
+      "norm_label": "reducer",
+      "id": "reducer"
     },
     {
       "label": "Label",
@@ -14014,6 +14293,672 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L142",
+      "weight": 1.0,
+      "source": "spacetimedb_defs",
+      "target": "spacetimedb_defs_module",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L346",
+      "weight": 1.0,
+      "context": "field",
+      "source": "spacetimedb_defs_module",
+      "target": "dictionary_byte_shipstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "context": "field",
+      "source": "spacetimedb_defs_module",
+      "target": "module_spacetimedb_defs_cs_byte",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L153",
+      "weight": 1.0,
+      "context": "field",
+      "source": "spacetimedb_defs_module",
+      "target": "module_spacetimedb_defs_cs_uint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L371",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_basedeffor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L267",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_captureowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_hp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_hps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L275",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_requireowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L193",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_seeddefaults",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L348",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_shipdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_shipdeffromstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_shipstatsfor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_upsertbasedef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_upsertshipclassdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_upsertweapondef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_upsertworldconfig",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_weaponfor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L375",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module",
+      "target": "spacetimedb_defs_module_worldconfigordefault",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_hps",
+      "target": "list_hardpointdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L201",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_defs_module_hps",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_shipdeffromstats",
+      "target": "list_hardpointdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_hp",
+      "target": "hardpointdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L161",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_hp",
+      "target": "hardpointkind",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L202",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_defs_module_hp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L199",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_defs_module_shipdeffromstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_shipdeffromstats",
+      "target": "module_spacetimedb_defs_cs_shipstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_shipdeffromstats",
+      "target": "shipclassdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_shipstatsfor",
+      "target": "module_spacetimedb_defs_cs_shipstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L348",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_shipdef",
+      "target": "shipclassdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertshipclassdef",
+      "target": "shipclassdef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L193",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L200",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_lib_module_maxhull"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L224",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_lib_module_weapondamage"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L559",
+      "weight": 1.0,
+      "source": "spacetimedb_lib_module_init",
+      "target": "spacetimedb_defs_module_seeddefaults"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L371",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_basedeffor",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L267",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_captureowner",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L275",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_requireowner",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L348",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_shipdef",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_shipstatsfor",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertbasedef",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertshipclassdef",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertweapondef",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertworldconfig",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_weaponfor",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L375",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_worldconfigordefault",
+      "target": "module_spacetimedb_defs_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L558",
+      "weight": 1.0,
+      "source": "spacetimedb_lib_module_init",
+      "target": "spacetimedb_defs_module_captureowner"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L313",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_upsertbasedef",
+      "target": "spacetimedb_defs_module_requireowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L290",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_upsertshipclassdef",
+      "target": "spacetimedb_defs_module_requireowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L302",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_upsertweapondef",
+      "target": "spacetimedb_defs_module_requireowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L328",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_upsertworldconfig",
+      "target": "spacetimedb_defs_module_requireowner",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_defs_module_upsertshipclassdef",
+      "target": "module_spacetimedb_defs_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_defs_module_upsertbasedef",
+      "target": "module_spacetimedb_defs_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_defs_module_upsertweapondef",
+      "target": "module_spacetimedb_defs_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_defs_module_upsertworldconfig",
+      "target": "module_spacetimedb_defs_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L299",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertweapondef",
+      "target": "weapondef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_weaponfor",
+      "target": "weapondef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertbasedef",
+      "target": "basedef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L371",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_basedeffor",
+      "target": "basedef",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L337",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_upsertworldconfig",
+      "target": "spacetimedb_lib_module_generatemap"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_defs_module_upsertworldconfig",
+      "target": "worldconfig",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L375",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_defs_module_worldconfigordefault",
+      "target": "worldconfig",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L270",
       "weight": 1.0,
@@ -15641,6 +16586,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L547",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_init",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L475",
       "weight": 1.0,
       "context": "attribute",
@@ -15652,56 +16608,78 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L931",
+      "source_location": "L1008",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_applyinput",
-      "target": "reducer"
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L542",
+      "source_location": "L619",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientconnected",
-      "target": "reducer"
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L576",
+      "source_location": "L653",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientdisconnected",
-      "target": "reducer"
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L810",
+      "source_location": "L887",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_jointeam",
-      "target": "reducer"
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L838",
+      "source_location": "L915",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_leaveteam",
-      "target": "reducer"
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L952",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_quickjoin",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L599",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_regenerateworld",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -15710,9 +16688,75 @@
       "source_location": "L875",
       "weight": 1.0,
       "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_quickjoin",
-      "target": "reducer"
+      "source": "spacetimedb_lib_module_respawn",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L973",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_restartmatch",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L713",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_sendchat",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L695",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_setname",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L934",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_setready",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1048",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_simtick",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L867",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_lib_module_spawnship",
+      "target": "module_spacetimedb_lib_cs_reducer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -15729,77 +16773,11 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L798",
+      "source_location": "L542",
       "weight": 1.0,
       "context": "attribute",
       "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_respawn",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L896",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_restartmatch",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L636",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_sendchat",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L618",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_setname",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L857",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_setready",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L971",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_simtick",
-      "target": "reducer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L790",
-      "weight": 1.0,
-      "context": "attribute",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_spawnship",
+      "source": "spacetimedb_lib_module_clientconnected",
       "target": "reducer"
     },
     {
@@ -15812,6 +16790,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientconnected",
       "target": "spacetimedb_lib_module_startsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L576",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_clientdisconnected",
+      "target": "reducer"
     },
     {
       "relation": "calls",
@@ -15856,6 +16845,28 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_clientdisconnected",
       "target": "spacetimedb_lib_module_stopsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L618",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_setname",
+      "target": "reducer"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L636",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_sendchat",
+      "target": "reducer"
     },
     {
       "relation": "calls",
@@ -16078,6 +17089,17 @@
       "target": "filter"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L790",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_spawnship",
+      "target": "reducer"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16089,6 +17111,17 @@
       "target": "spacetimedb_lib_module_spawnshipinternal"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L798",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_respawn",
+      "target": "reducer"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16098,6 +17131,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_respawn",
       "target": "spacetimedb_lib_module_spawnshipinternal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L810",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_jointeam",
+      "target": "reducer"
     },
     {
       "relation": "calls",
@@ -16122,6 +17166,17 @@
       "target": "spacetimedb_lib_module_markengagedifactive"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L838",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_leaveteam",
+      "target": "reducer"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16144,6 +17199,17 @@
       "target": "spacetimedb_lib_module_endmatchifsideabandoned"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L857",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_setready",
+      "target": "reducer"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16153,6 +17219,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_setready",
       "target": "spacetimedb_lib_module_maybestartmatch"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L875",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_quickjoin",
+      "target": "reducer"
     },
     {
       "relation": "calls",
@@ -16188,6 +17265,17 @@
       "target": "spacetimedb_lib_module_smallestonlineteam"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L896",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_restartmatch",
+      "target": "reducer"
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -16197,6 +17285,28 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_restartmatch",
       "target": "spacetimedb_lib_module_resetworld"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L931",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_applyinput",
+      "target": "reducer"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L971",
+      "weight": 1.0,
+      "context": "attribute",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_simtick",
+      "target": "reducer"
     },
     {
       "relation": "references",
@@ -16722,9 +17832,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L898",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_freepigpodslot",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_freepigpodslot"
     },
     {
       "relation": "method",
@@ -16968,9 +18078,9 @@
       "source_location": "L898",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_freepigpodslot",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -18100,9 +19210,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L126",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel",
-      "target": "shared_flightmodel_conjugate",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_conjugate"
     },
     {
       "relation": "contains",
@@ -18110,9 +19220,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L217",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel",
-      "target": "shared_flightmodel_create",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_create"
     },
     {
       "relation": "contains",
@@ -18231,9 +19341,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L66",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_mathdet",
-      "target": "shared_flightmodel_mathdet_exp",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_mathdet_exp"
     },
     {
       "relation": "method",
@@ -18241,9 +19351,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L84",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_mathdet",
-      "target": "shared_flightmodel_mathdet_pow2",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_mathdet_pow2"
     },
     {
       "relation": "method",
@@ -18328,9 +19438,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L237",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_create",
-      "target": "shared_flightmodel_mathdet_exp",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_mathdet_exp"
     },
     {
       "relation": "calls",
@@ -18339,9 +19449,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L79",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_mathdet_exp",
-      "target": "shared_flightmodel_mathdet_pow2",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_mathdet_pow2"
     },
     {
       "relation": "calls",
@@ -18471,9 +19581,9 @@
       "source_location": "L126",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_conjugate",
-      "target": "shared_flightmodel_cs_quat",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_cs_quat"
     },
     {
       "relation": "calls",
@@ -18482,9 +19592,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L451",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_conjugate",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_conjugate"
     },
     {
       "relation": "references",
@@ -18548,9 +19658,9 @@
       "source_location": "L217",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_create",
-      "target": "shared_flightmodel_cs_shipstats",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_cs_shipstats"
     },
     {
       "relation": "references",
@@ -18632,9 +19742,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L493",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel",
-      "target": "shared_flightmodel_flightmodel_slewrate",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_flightmodel_slewrate"
     },
     {
       "relation": "method",
@@ -18662,9 +19772,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L367",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel",
-      "target": "shared_flightmodel_flightmodel_torquemultiplier",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_flightmodel_torquemultiplier"
     },
     {
       "relation": "method",
@@ -18726,9 +19836,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L399",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_flightmodel_torquemultiplier",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_flightmodel_torquemultiplier"
     },
     {
       "relation": "references",
@@ -18759,9 +19869,9 @@
       "source_file": "shared/FlightModel.cs",
       "source_location": "L401",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_flightmodel_slewrate",
-      "confidence_score": 1.0
+      "target": "shared_flightmodel_flightmodel_slewrate"
     },
     {
       "relation": "references",
@@ -18797,9 +19907,9 @@
       "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L258",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program",
-      "target": "flightmodeltest_program_program_angledeg",
-      "confidence_score": 1.0
+      "target": "flightmodeltest_program_program_angledeg"
     },
     {
       "relation": "method",
@@ -18827,9 +19937,9 @@
       "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L250",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program",
-      "target": "flightmodeltest_program_program_firsttickdv",
-      "confidence_score": 1.0
+      "target": "flightmodeltest_program_program_firsttickdv"
     },
     {
       "relation": "method",
@@ -18922,9 +20032,9 @@
       "source_location": "L250",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_firsttickdv",
-      "target": "tests_flightmodeltest_program_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "tests_flightmodeltest_program_cs_shipinputstate"
     },
     {
       "relation": "calls",
@@ -18988,9 +20098,9 @@
       "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L177",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_main",
-      "target": "flightmodeltest_program_program_angledeg",
-      "confidence_score": 1.0
+      "target": "flightmodeltest_program_program_angledeg"
     },
     {
       "relation": "calls",
@@ -19010,9 +20120,9 @@
       "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L200",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_main",
-      "target": "flightmodeltest_program_program_firsttickdv",
-      "confidence_score": 1.0
+      "target": "flightmodeltest_program_program_firsttickdv"
     },
     {
       "relation": "references",
@@ -19021,9 +20131,9 @@
       "source_location": "L250",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_firsttickdv",
-      "target": "tests_flightmodeltest_program_cs_shipstats",
-      "confidence_score": 1.0
+      "target": "tests_flightmodeltest_program_cs_shipstats"
     },
     {
       "relation": "references",
@@ -19032,9 +20142,9 @@
       "source_location": "L258",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_angledeg",
-      "target": "tests_flightmodeltest_program_cs_quat",
-      "confidence_score": 1.0
+      "target": "tests_flightmodeltest_program_cs_quat"
     },
     {
       "relation": "calls",
@@ -20211,5 +21321,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "a107e071cb3a289254d9715125666a0452b73f75"
+  "built_at_commit": "b87690764635761c6466fdd3d267e18a2b4e4e6c"
 }
