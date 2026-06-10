@@ -156,12 +156,18 @@ public partial class PredictionController : Node3D
 		if (input.Firing && clientTick - _lastFireTick >= FireInterval(_class))
 		{
 			_lastFireTick = clientTick;
-			// Mirror the server's muzzle math (Lib.cs): spawn at the nose along true
-			// forward, but launch along the same deterministic per-weapon scatter so the
-			// predicted tracer matches the authoritative projectile shot-for-shot.
-			Vec3 fwd = _state.Rot.Rotate(new Vec3(0f, 0f, 1f));
+			// Anchor the muzzle to the RENDERED transform (_renderedPos/_renderedRot), not
+			// the raw post-integration _state. _state.Pos is up to one tick of motion AHEAD
+			// of what's on screen (the visual interpolates toward it over the next tick, plus
+			// any reconcile _posErr offset), so spawning from it made the ghost's exit point
+			// drift off the nose by an amount proportional to the ship's speed. The rendered
+			// transform is exactly where the ship appears right now, so the muzzle stays
+			// pinned to the nose regardless of thrust/velocity.
+			Vector3 fwdG = _renderedRot * new Vector3(0f, 0f, 1f);
+			Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
 			Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)_class), ShipId, clientTick);
-			Vec3 mp = _state.Pos + fwd * NoseOffset;
+			Vec3 renderedPos = new Vec3(_renderedPos.X, _renderedPos.Y, _renderedPos.Z);
+			Vec3 mp = renderedPos + fwd * NoseOffset;
 			Vec3 mv = shotDir * ProjectileSpeed + _state.Vel;
 			return new PredictedShot { Pos = ShipMath.ToGodot(mp), Vel = ShipMath.ToGodot(mv) };
 		}
