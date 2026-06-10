@@ -98,6 +98,9 @@ public partial struct Ship
     public float AngVelX;
     public float AngVelY;
     public float AngVelZ;
+    // Afterburner power ramp 0..1 (FlightModel ShipState.AbPower). Persisted/synced so
+    // the client predicts the same afterburner spin-up/down the server integrates.
+    public float AbPower;
     public float Health;
     // Physical mass, seeded from Class at spawn (see MassFor). Drives flight accel
     // (force/mass in FlightModel.Integrate) and ship-vs-ship collision response.
@@ -139,6 +142,7 @@ public partial struct ShipInput
     public float Roll;          // -1..1
     public bool Firing;         // trigger held
     public bool Boost;          // afterburner held
+    public bool Coast;          // vector lock (thrust cancels drag, holds velocity)
 }
 
 [SpacetimeDB.Table(Accessor = "Base", Public = true)]
@@ -303,7 +307,9 @@ public static partial class Module
     private const int  MaxCatchupSteps = 8;               // cap sub-steps/call (anti-spiral)
 
     // Combat tuning (server-only; clients just render the resulting Projectile rows).
-    private const float ProjectileSpeed = 250f;      // u/s muzzle speed (added to ship velocity)
+    private const float ProjectileSpeed = 700f;      // u/s muzzle speed (added to ship velocity);
+                                                     // ~4× Scout MaxSpeed so guns out-range ships
+                                                     // under the Allegiance-native speeds (M0 calibration)
     private const uint  ProjectileLifeTicks = 50;    // ~2.5 s lifespan, then culled
     private const float NoseOffset = 3f;             // spawn this far ahead of ship center
     private const float ProjectileRadius = 1f;       // projectile hit sphere
@@ -339,11 +345,12 @@ public static partial class Module
     // to actually reach it. Resolves the pod like docking (player → spawn menu, PIG pod despawns).
     private const float RescueRadius = ShipRadius * 2f;
     // Eject kinematics: a freshly-spawned pod (player OR PIG) is flung clear of the wreck —
-    // a high-speed impulse in a random direction plus a tumble. The flight model soft-caps
-    // coasting velocity (it bleeds off through LinearDrag rather than snapping), so this
-    // speed actually persists for a second or two before the pod settles to its slow crawl;
-    // the spin likewise decays via AngularDrag. Server-only RNG — the result is baked into
-    // the spawned Ship row, so client prediction just reads it (no RNG to reproduce).
+    // a high-speed impulse in a random direction plus a tumble. The flight model's
+    // exponential drag bleeds the over-speed off smoothly (maxSpeed is an equilibrium, not
+    // a snap), so this speed persists for a second or two before the pod settles to its slow
+    // crawl; the spin likewise winds down as the pod's turn rate slews toward its (near-zero)
+    // commanded rate. Server-only RNG — the result is baked into the spawned Ship row, so
+    // client prediction just reads it (no RNG to reproduce).
     private const float PodEjectSpeed = 90f;   // u/s initial fling (decays to FlightModel.Pod.MaxSpeed)
     private const float PodEjectSpin  = 5f;    // rad/s initial tumble (decays via AngularDrag)
 
@@ -998,7 +1005,7 @@ public static partial class Module
         ReducerContext ctx,
         float thrust, float strafeX, float strafeY,
         float yaw, float pitch, float roll,
-        bool firing, bool boost, uint clientTick)
+        bool firing, bool boost, bool coast, uint clientTick)
     {
         var player = ctx.Db.Player.Identity.Find(ctx.Sender);
         if (player is null || player.Value.ShipId is not ulong shipId)
@@ -1015,7 +1022,7 @@ public static partial class Module
             ctx.Db.ShipInput.InputId.Update(e with
             {
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
             });
         }
         else
@@ -1026,7 +1033,7 @@ public static partial class Module
                 ShipId = shipId,
                 Tick = clientTick,
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
             });
         }
     }
@@ -1138,6 +1145,7 @@ public static partial class Module
                 Rot = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW),
                 AngVel = new Vec3(ship.AngVelX, ship.AngVelY, ship.AngVelZ),
                 Mass = ship.Mass,
+                AbPower = ship.AbPower,
             };
 
             state = FlightModel.Integrate(state, input, stats);
@@ -1175,6 +1183,7 @@ public static partial class Module
                 VelX = state.Vel.X, VelY = state.Vel.Y, VelZ = state.Vel.Z,
                 RotX = state.Rot.X, RotY = state.Rot.Y, RotZ = state.Rot.Z, RotW = state.Rot.W,
                 AngVelX = state.AngVel.X, AngVelY = state.AngVel.Y, AngVelZ = state.AngVel.Z,
+                AbPower = state.AbPower,
                 // Stamp with the SERVER tick (this state's integration index, since
                 // Match.Tick increments once per integration). Gives the client a
                 // shared, drift-free anchor so predicted[N] and auth[N] are the same
@@ -1626,6 +1635,7 @@ public static partial class Module
         Roll = i.Roll,
         Firing = i.Firing,
         Boost = i.Boost,
+        Coast = i.Coast,
     };
 
     // Delete every buffered input for a ship (ShipId is an index, not the PK now).

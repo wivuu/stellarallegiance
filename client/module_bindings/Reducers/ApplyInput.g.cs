@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void ApplyInputHandler(ReducerEventContext ctx, float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, uint clientTick);
+        public delegate void ApplyInputHandler(ReducerEventContext ctx, float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, bool coast, uint clientTick);
         public event ApplyInputHandler? OnApplyInput;
 
-        public void ApplyInput(float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, uint clientTick)
+        public void ApplyInput(float thrust, float strafeX, float strafeY, float yaw, float pitch, float roll, bool firing, bool boost, bool coast, uint clientTick)
         {
-            conn.InternalCallReducer(new Reducer.ApplyInput(thrust, strafeX, strafeY, yaw, pitch, roll, firing, boost, clientTick));
+            conn.InternalCallReducer(new Reducer.ApplyInput(thrust, strafeX, strafeY, yaw, pitch, roll, firing, boost, coast, clientTick));
         }
 
         public bool InvokeApplyInput(ReducerEventContext ctx, Reducer.ApplyInput args)
@@ -44,6 +44,7 @@ namespace SpacetimeDB.Types
                 args.Roll,
                 args.Firing,
                 args.Boost,
+                args.Coast,
                 args.ClientTick
             );
             return true;
@@ -72,6 +73,8 @@ namespace SpacetimeDB.Types
             public bool Firing;
             [DataMember(Name = "boost")]
             public bool Boost;
+            [DataMember(Name = "coast")]
+            public bool Coast;
             [DataMember(Name = "client_tick")]
             public uint ClientTick;
 
@@ -84,6 +87,7 @@ namespace SpacetimeDB.Types
                 float Roll,
                 bool Firing,
                 bool Boost,
+                bool Coast,
                 uint ClientTick
             )
             {
@@ -95,6 +99,7 @@ namespace SpacetimeDB.Types
                 this.Roll = Roll;
                 this.Firing = Firing;
                 this.Boost = Boost;
+                this.Coast = Coast;
                 this.ClientTick = ClientTick;
             }
 

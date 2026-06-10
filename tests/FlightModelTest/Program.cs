@@ -1,23 +1,24 @@
 using StellarAllegiance.Shared;
 
-// T3 determinism test for the shared FlightModel.
+// M0 determinism + feel-invariant tests for the Allegiance shared FlightModel.
 //
 // What it proves:
-//  - The integration is a pure, deterministic, fixed-dt function: integrating
-//    the same fixed input sequence twice yields a BIT-IDENTICAL final state.
-//  - The result matches a recorded golden state within 1e-5 (guards against
-//    accidental math/order-of-operations changes that would break the
-//    client/server agreement reconciliation depends on).
-//  - The MaxSpeed clamp holds under sustained full thrust.
-//
-// Because shared/, module/, and client/ copies of FlightModel.cs are
-// byte-identical (verified by `diff` in the gate), a deterministic result
-// here is the result produced on both the server and the client.
+//  - Integration is a pure, deterministic, fixed-dt function (two runs of the
+//    same input sequence are BIT-IDENTICAL). Because shared/, module/, and
+//    client/ all compile this one source, a deterministic result here is the
+//    result produced on both the wasm server and the mono client.
+//  - The result matches a recorded golden state within 1e-5 (guards accidental
+//    math / order-of-operations changes that would desync prediction/authority).
+//  - The five feel signatures of the Allegiance model hold (.PLAN/CONFIG.md M0):
+//    drag equilibrium, afterburner overspeed, drift overshoot, speed-dependent
+//    agility (TorqueMultiplier), weak strafe/reverse, and mass re-parameterization.
 
 static class Program
 {
     const int Ticks = 200;
     const float Tol = 1e-5f;
+    const float Deg2Rad = 0.017453292519943295f;
+    const float Rad2Deg = 57.29577951308232f;
 
     // A fixed, reproducible input sequence — no randomness, no time reads.
     static ShipInputState InputAt(int tick)
@@ -53,7 +54,8 @@ static class Program
         a.Pos.X == b.Pos.X && a.Pos.Y == b.Pos.Y && a.Pos.Z == b.Pos.Z &&
         a.Vel.X == b.Vel.X && a.Vel.Y == b.Vel.Y && a.Vel.Z == b.Vel.Z &&
         a.Rot.X == b.Rot.X && a.Rot.Y == b.Rot.Y && a.Rot.Z == b.Rot.Z && a.Rot.W == b.Rot.W &&
-        a.AngVel.X == b.AngVel.X && a.AngVel.Y == b.AngVel.Y && a.AngVel.Z == b.AngVel.Z;
+        a.AngVel.X == b.AngVel.X && a.AngVel.Y == b.AngVel.Y && a.AngVel.Z == b.AngVel.Z &&
+        a.AbPower == b.AbPower;
 
     static int Main()
     {
@@ -78,8 +80,9 @@ static class Program
         Console.WriteLine($"  Rot = ({r1.Rot.X:R}, {r1.Rot.Y:R}, {r1.Rot.Z:R}, {r1.Rot.W:R})");
         Console.WriteLine($"  AngVel = ({r1.AngVel.X:R}, {r1.AngVel.Y:R}, {r1.AngVel.Z:R})");
 
-        // 2. Golden state (recorded from the canonical model). A mismatch beyond
-        //    tolerance means the math changed — which would desync the sides.
+        // 2. Golden state (recorded from the canonical M0 Allegiance model). A
+        //    mismatch beyond tolerance means the math changed — which desyncs the
+        //    sides. Regenerate ONLY with a deliberate model change.
         var golden = new ShipState
         {
             Pos = new Vec3(GOLDEN_POS_X, GOLDEN_POS_Y, GOLDEN_POS_Z),
@@ -97,75 +100,166 @@ static class Program
             Console.WriteLine("PASS: matches golden within 1e-5");
         }
 
-        // 3. MaxSpeed clamp under sustained full forward thrust.
-        var s = new ShipState { Rot = Quat.Identity };
         var scout = FlightModel.StatsFor(FlightModel.ClassScout);
-        var fullThrust = new ShipInputState { Thrust = 1f };
-        for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, fullThrust, scout);
-        float speed = s.Vel.Length();
-        if (speed > scout.MaxSpeed + Tol)
+
+        // 3. Drag equilibrium (feel #1): full forward throttle asymptotes to
+        //    MaxSpeed — the equilibrium IS the cap, no hard snap.
         {
-            Console.WriteLine($"FAIL: speed {speed:R} exceeded MaxSpeed {scout.MaxSpeed}");
-            failures++;
-        }
-        else
-        {
-            Console.WriteLine($"PASS: terminal speed {speed:R} <= MaxSpeed {scout.MaxSpeed}");
+            var s = new ShipState { Rot = Quat.Identity };
+            var full = new ShipInputState { Thrust = 1f };
+            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, full, scout);
+            float speed = s.Vel.Length();
+            if (speed < scout.MaxSpeed * 0.98f || speed > scout.MaxSpeed + 0.5f)
+            {
+                Console.WriteLine($"FAIL: terminal speed {speed:R} not ~= MaxSpeed {scout.MaxSpeed}");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: drag equilibrium — terminal speed {speed:R} ~= MaxSpeed {scout.MaxSpeed}");
+            }
         }
 
-        // 4. Afterburner: holding Boost must raise the terminal speed ABOVE the
-        //    normal cap and converge on BoostSpeedMult * MaxSpeed. Guards the
-        //    "afterburner does nothing to speed" bug from regressing.
-        var sb = new ShipState { Rot = Quat.Identity };
-        var boostInput = new ShipInputState { Thrust = 1f, Boost = true };
-        for (int t = 0; t < 2000; t++) sb = FlightModel.Integrate(sb, boostInput, scout);
-        float boostSpeed = sb.Vel.Length();
-        float boostCap = scout.MaxSpeed * scout.BoostSpeedMult;
-        if (boostSpeed <= scout.MaxSpeed + Tol || boostSpeed > boostCap + Tol)
+        // 4. Afterburner overspeed (feel #5): holding Boost ramps AbPower and
+        //    raises the equilibrium to MaxSpeed*(1 + AbThrust/Thrust), then bleeds
+        //    off when released.
         {
-            Console.WriteLine($"FAIL: boosted speed {boostSpeed:R} not in ({scout.MaxSpeed}, {boostCap}]");
-            failures++;
-        }
-        else
-        {
-            Console.WriteLine($"PASS: boosted terminal speed {boostSpeed:R} exceeds {scout.MaxSpeed}, capped at {boostCap}");
+            var s = new ShipState { Rot = Quat.Identity };
+            var boost = new ShipInputState { Thrust = 1f, Boost = true };
+            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, scout);
+            float boostSpeed = s.Vel.Length();
+            float boostCap = scout.MaxSpeed * (1f + scout.AbThrust / scout.Thrust);
+            if (boostSpeed <= scout.MaxSpeed + 0.5f || boostSpeed > boostCap + 0.5f)
+            {
+                Console.WriteLine($"FAIL: boosted speed {boostSpeed:R} not in ({scout.MaxSpeed}, {boostCap}]");
+                failures++;
+            }
+            else if (s.AbPower < 0.999f)
+            {
+                Console.WriteLine($"FAIL: AbPower {s.AbPower:R} did not ramp to 1 under sustained boost");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: afterburner overspeed {boostSpeed:R} in ({scout.MaxSpeed}, {boostCap:R}], AbPower={s.AbPower:R}");
+            }
         }
 
-        // 5. Mass re-parameterizes flight: under identical full thrust, a heavier
-        //    ship gains speed slower (accel = ThrustAccel * baselineMass / actualMass).
-        //    Also confirms the zero-mass fallback equals baseline mass exactly.
-        var scoutStats = FlightModel.StatsFor(FlightModel.ClassScout);
-        var thrust = new ShipInputState { Thrust = 1f };
-        var light = new ShipState { Rot = Quat.Identity, Mass = scoutStats.Mass };       // baseline
-        var heavy = new ShipState { Rot = Quat.Identity, Mass = scoutStats.Mass * 4f };  // 4x heavier
-        var unset = new ShipState { Rot = Quat.Identity };                               // Mass = 0 -> baseline
-        for (int t = 0; t < 5; t++)
+        // 5. TorqueMultiplier endpoints (feel #3): 0.5 at rest, 1.0 at max speed.
         {
-            light = FlightModel.Integrate(light, thrust, scoutStats);
-            heavy = FlightModel.Integrate(heavy, thrust, scoutStats);
-            unset = FlightModel.Integrate(unset, thrust, scoutStats);
+            float atRest = FlightModel.TorqueMultiplier(0f, scout.MaxSpeed);
+            float atMax = FlightModel.TorqueMultiplier(scout.MaxSpeed, scout.MaxSpeed);
+            if (Math.Abs(atRest - 0.5f) > 1e-5f || Math.Abs(atMax - 1.0f) > 1e-5f)
+            {
+                Console.WriteLine($"FAIL: TorqueMultiplier endpoints ({atRest:R}, {atMax:R}) != (0.5, 1.0)");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: TorqueMultiplier 0.5 at rest, 1.0 at max ({atRest:R}, {atMax:R})");
+            }
         }
-        if (heavy.Vel.Length() >= light.Vel.Length())
+
+        // 6. Drift overshoot (feel #2): spin yaw up to max rate at rest, release,
+        //    and measure the heading swept while the rate decays. At rest the
+        //    TorqueMultiplier is 0.5, so the overshoot is ~driftYaw/0.5 = 2×driftYaw
+        //    (the authored drift is the at-max-speed figure). The ship keeps turning
+        //    after the stick is released — that's the rotational-inertia signature.
         {
-            Console.WriteLine($"FAIL: heavy ship speed {heavy.Vel.Length():R} not below light {light.Vel.Length():R}");
-            failures++;
+            var s = new ShipState { Rot = Quat.Identity };
+            var spin = new ShipInputState { Yaw = 1f };
+            for (int t = 0; t < 80; t++) s = FlightModel.Integrate(s, spin, scout);   // reach max yaw rate
+            float maxRateDeg = Math.Abs(s.AngVel.Y) * Rad2Deg;
+            Quat before = s.Rot;
+            var release = new ShipInputState();
+            int steps = 0;
+            while (Math.Abs(s.AngVel.Y) > 1e-4f && steps < 200) { s = FlightModel.Integrate(s, release, scout); steps++; }
+            float overshootDeg = AngleDeg(before, s.Rot);
+            float expected = scout.DriftYawDeg / 0.5f;   // ~10° for the Scout (drift 5°)
+            bool rateOk = Math.Abs(maxRateDeg - scout.RateYawDeg) < 2f;   // spun up to the authored cap
+            if (!rateOk)
+            {
+                Console.WriteLine($"FAIL: yaw rate {maxRateDeg:0.0}°/s did not reach cap {scout.RateYawDeg}°/s");
+                failures++;
+            }
+            else if (overshootDeg < expected * 0.6f || overshootDeg > expected * 1.15f)
+            {
+                Console.WriteLine($"FAIL: yaw drift overshoot {overshootDeg:0.00}° not ~= {expected:0.00}°");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: drift overshoot {overshootDeg:0.00}° ~= {expected:0.00}° (keeps turning after release over {steps} ticks)");
+            }
         }
-        else
+
+        // 7. Weak strafe/reverse (feel #4): from rest, one tick of pure strafe or
+        //    reverse yields SideMult / BackMult of the forward Δv (the lateral/
+        //    reverse thrust is divided by its multiplier before the capacity clip).
         {
-            Console.WriteLine($"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R})");
+            float dvFwd = FirstTickDv(scout, new ShipInputState { Thrust = 1f });
+            float dvStrafe = FirstTickDv(scout, new ShipInputState { StrafeX = 1f });
+            float dvReverse = FirstTickDv(scout, new ShipInputState { Thrust = -1f });
+            float sideRatio = dvStrafe / dvFwd;
+            float backRatio = dvReverse / dvFwd;
+            if (Math.Abs(sideRatio - scout.SideMult) > 0.02f || Math.Abs(backRatio - scout.BackMult) > 0.02f)
+            {
+                Console.WriteLine($"FAIL: clip ratios side {sideRatio:0.000} (want {scout.SideMult}), back {backRatio:0.000} (want {scout.BackMult})");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: weak strafe/reverse — side {sideRatio:0.000}=SideMult, back {backRatio:0.000}=BackMult");
+            }
         }
-        if (unset.Vel.Z != light.Vel.Z)
+
+        // 8. Mass re-parameterizes flight: under identical full throttle, a heavier
+        //    instance gains speed slower; the zero-mass fallback equals baseline mass.
         {
-            Console.WriteLine($"FAIL: zero-mass fallback {unset.Vel.Z:R} != baseline mass {light.Vel.Z:R}");
-            failures++;
-        }
-        else
-        {
-            Console.WriteLine("PASS: zero-mass fallback equals baseline mass (bit-identical)");
+            var thrust = new ShipInputState { Thrust = 1f };
+            var light = new ShipState { Rot = Quat.Identity, Mass = scout.Mass };       // baseline
+            var heavy = new ShipState { Rot = Quat.Identity, Mass = scout.Mass * 4f };  // 4x heavier
+            var unset = new ShipState { Rot = Quat.Identity };                          // Mass = 0 -> baseline
+            for (int t = 0; t < 5; t++)
+            {
+                light = FlightModel.Integrate(light, thrust, scout);
+                heavy = FlightModel.Integrate(heavy, thrust, scout);
+                unset = FlightModel.Integrate(unset, thrust, scout);
+            }
+            if (heavy.Vel.Length() >= light.Vel.Length())
+            {
+                Console.WriteLine($"FAIL: heavy ship speed {heavy.Vel.Length():R} not below light {light.Vel.Length():R}");
+                failures++;
+            }
+            else if (unset.Vel.Z != light.Vel.Z)
+            {
+                Console.WriteLine($"FAIL: zero-mass fallback {unset.Vel.Z:R} != baseline mass {light.Vel.Z:R}");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R}); zero-mass fallback exact");
+            }
         }
 
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    // Δv magnitude after one tick from rest under the given input.
+    static float FirstTickDv(ShipStats st, ShipInputState input)
+    {
+        var s = new ShipState { Rot = Quat.Identity };
+        s = FlightModel.Integrate(s, input, st);
+        return s.Vel.Length();
+    }
+
+    // Angle (degrees) between two unit quaternions.
+    static float AngleDeg(Quat a, Quat b)
+    {
+        float dot = a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
+        dot = Math.Min(1f, Math.Abs(dot));
+        return 2f * (float)Math.Acos(dot) * Rad2Deg;
     }
 
     static bool Close(ShipState a, ShipState b) =>
@@ -176,11 +270,10 @@ static class Program
 
     static bool Near(float a, float b) => Math.Abs(a - b) <= Tol;
 
-    // Golden values — recorded from the canonical model (200-tick run above).
-    // Updated when FlightModel switched to deterministic MathDet.Sin/Cos, then
-    // again when the Scout/Fighter angular tuning was retuned for more turn inertia.
-    const float GOLDEN_POS_X = 195.2984f, GOLDEN_POS_Y = 37.427166f, GOLDEN_POS_Z = 132.64717f;
-    const float GOLDEN_VEL_X = 21.848227f, GOLDEN_VEL_Y = 19.546019f, GOLDEN_VEL_Z = 21.408785f;
-    const float GOLDEN_ROT_X = -0.037041605f, GOLDEN_ROT_Y = 0.64523476f, GOLDEN_ROT_Z = 0.72125757f, GOLDEN_ROT_W = 0.24917375f;
-    const float GOLDEN_ANGVEL_X = 0.30012128f, GOLDEN_ANGVEL_Y = 0.060707107f, GOLDEN_ANGVEL_Z = 0.17271416f;
+    // Golden values — recorded from the canonical M0 Allegiance model (200-tick
+    // RunSequence above). Regenerated for the M0 flight-model rework.
+    const float GOLDEN_POS_X = 322.4554f, GOLDEN_POS_Y = 36.674164f, GOLDEN_POS_Z = 453.73428f;
+    const float GOLDEN_VEL_X = 46.985027f, GOLDEN_VEL_Y = 9.789256f, GOLDEN_VEL_Z = 71.76047f;
+    const float GOLDEN_ROT_X = 0.10109462f, GOLDEN_ROT_Y = 0.52838504f, GOLDEN_ROT_Z = 0.43981338f, GOLDEN_ROT_W = 0.71913385f;
+    const float GOLDEN_ANGVEL_X = 0.2617994f, GOLDEN_ANGVEL_Y = -0.3500468f, GOLDEN_ANGVEL_Z = 0.08726647f;
 }

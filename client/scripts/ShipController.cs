@@ -47,17 +47,23 @@ public partial class ShipController : Node
 	private double _spawnRetry;
 	private bool _perturbHeld;          // edge-detect the P debug key
 
-	// Mouse-look aiming (Allegiance style). The flight model already integrates yaw/
-	// pitch as -1..1 rate inputs, so mouse-look is purely an input-sampling change: we
-	// accumulate captured-cursor motion in _Input, then in ReadInput scale the per-frame
-	// pixel delta by sensitivity and clamp to -1..1, feeding the existing axis path. The
-	// cursor is captured while flying (Esc releases, click recaptures); arrow keys still
-	// work as a fallback and sum with the mouse. STDB_MOUSE_SENS tunes feel (px→rate),
-	// STDB_MOUSE_INVERT=1 flips pitch.
-	private const float DefaultMouseSens = 0.08f;
+	// Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
+	// commanded turn RATES that slew in under a torque limit, so it needs a HELD stick
+	// deflection — a raw per-frame pixel delta is a one-tick transient the rate-limited
+	// slew can't act on (small moves vanish, large moves saturate -> jerky, all-or-nothing
+	// aim). So the mouse drives a self-CENTERING virtual stick: captured-cursor motion is
+	// accumulated (in _Input) into a persistent deflection (_stickYaw/_stickPitch) that
+	// eases back toward center each frame when the mouse stops. Push to turn, release to
+	// straighten. This is purely an input-sampling change; the flight dynamics are untouched.
+	// The cursor is captured while flying (Esc releases, click recaptures); arrow keys still
+	// work as a fallback and sum with the stick. STDB_MOUSE_SENS tunes feel (px->deflection),
+	// STDB_MOUSE_INVERT=1 flips pitch. (Sens + return rate below want a quick in-flight tune.)
+	private const float DefaultMouseSens = 0.01f;   // px -> stick deflection per frame
+	private const float MouseReturnPerSec = 8f;      // how fast the virtual stick eases back to center
 	private float _mouseSens = DefaultMouseSens;
 	private bool _mouseInvert;
 	private Vector2 _mouseDelta;        // captured-cursor motion accumulated since last sample
+	private float _stickYaw, _stickPitch;  // persistent self-centering virtual-stick deflection (-1..1)
 	private bool _escHeld;              // edge-detect Escape (capture toggle)
 	private bool _clickHeld;            // edge-detect left click (recapture)
 
@@ -95,7 +101,7 @@ public partial class ShipController : Node
 		// Time ApplyInput round-trips for the latency readout. The reducer callback
 		// fires on the caller when the server commits our call, echoing clientTick.
 		_cm.Connected += conn => conn.Reducers.OnApplyInput +=
-			(_, _, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
+			(_, _, _, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
 
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
@@ -125,7 +131,7 @@ public partial class ShipController : Node
 	public override void _Process(double delta)
 	{
 		// Neutral input while the chat box is open so typing never steers or fires.
-		_input = _autoFly ? AutoInput() : (Chat.Capturing ? new ShipInputState() : ReadInput());
+		_input = _autoFly ? AutoInput() : (Chat.Capturing ? new ShipInputState() : ReadInput(delta));
 
 		// Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
 		// the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
@@ -220,7 +226,7 @@ public partial class ShipController : Node
 			_cm.Conn?.Reducers.ApplyInput(
 				_input.Thrust, _input.StrafeX, _input.StrafeY,
 				_input.Yaw, _input.Pitch, _input.Roll,
-				_input.Firing, _input.Boost, _predTick);
+				_input.Firing, _input.Boost, _input.Coast, _predTick);
 			_sentAt[_predTick] = Time.GetTicksMsec();
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
 				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);
@@ -317,27 +323,42 @@ public partial class ShipController : Node
 		return v;
 	}
 
-	private ShipInputState ReadInput()
+	private ShipInputState ReadInput(double delta)
 	{
-		// Consume the frame's captured-cursor motion. Mouse-right turns right (matches
-		// the Right arrow → -Yaw convention); mouse-up pitches like the Up arrow unless
-		// inverted. Pixel delta × sensitivity, clamped to the -1..1 rate axis, then
-		// summed with the arrow keys (which still work as a fallback).
+		// Fold this frame's captured-cursor motion into the self-centering virtual stick.
+		// Mouse-right turns right (matches the Right arrow → -Yaw convention); mouse-up
+		// pitches like the Up arrow unless inverted. The deflection PERSISTS and eases back
+		// toward center each frame (frame-rate-independent exp decay) so the rate-limited
+		// flight model gets a held command — releasing the mouse straightens the ship.
 		bool look = Input.MouseMode == Input.MouseModeEnum.Captured;
 		Vector2 m = _mouseDelta;
 		_mouseDelta = Vector2.Zero;
-		float mouseYaw = look ? -m.X * _mouseSens : 0f;
-		float mousePitch = look ? (_mouseInvert ? -m.Y : m.Y) * _mouseSens : 0f;
+		if (look)
+		{
+			_stickYaw = Mathf.Clamp(_stickYaw - m.X * _mouseSens, -1f, 1f);
+			_stickPitch = Mathf.Clamp(_stickPitch + (_mouseInvert ? -m.Y : m.Y) * _mouseSens, -1f, 1f);
+			float ret = Mathf.Exp(-MouseReturnPerSec * (float)delta);
+			_stickYaw *= ret;
+			_stickPitch *= ret;
+		}
+		else
+		{
+			_stickYaw = 0f;   // cursor freed (menu/Esc): no residual steering
+			_stickPitch = 0f;
+		}
 
 		return new ShipInputState
 		{
-			Thrust  = Axis(Key.W, Key.S),       // forward / reverse
+			// Thrust is now a THROTTLE: W = full forward throttle (commands MaxSpeed),
+			// S = weak reverse. Yaw/Pitch/Roll are commanded turn-RATE fractions.
+			Thrust  = Axis(Key.W, Key.S),       // forward throttle / reverse
 			StrafeX = Axis(Key.A, Key.D),       // strafe right / left
 			StrafeY = Axis(Key.E, Key.C),       // strafe up / down
-			Yaw     = Mathf.Clamp(Axis(Key.Left, Key.Right) + mouseYaw, -1f, 1f),
-			Pitch   = Mathf.Clamp(Axis(Key.Up, Key.Down) + mousePitch, -1f, 1f),
+			Yaw     = Mathf.Clamp(Axis(Key.Left, Key.Right) + _stickYaw, -1f, 1f),
+			Pitch   = Mathf.Clamp(Axis(Key.Up, Key.Down) + _stickPitch, -1f, 1f),
 			Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
 			Firing  = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
+			Coast   = Input.IsPhysicalKeyPressed(Key.X),   // vector lock: hold velocity
 		};
 	}
 

@@ -35,6 +35,8 @@ namespace SpacetimeDB.Types
         public bool Firing;
         [DataMember(Name = "boost")]
         public bool Boost;
+        [DataMember(Name = "coast")]
+        public bool Coast;
 
         public ShipInput(
             ulong InputId,
@@ -47,7 +49,8 @@ namespace SpacetimeDB.Types
             float Pitch,
             float Roll,
             bool Firing,
-            bool Boost
+            bool Boost,
+            bool Coast
         )
         {
             this.InputId = InputId;
@@ -61,6 +64,7 @@ namespace SpacetimeDB.Types
             this.Roll = Roll;
             this.Firing = Firing;
             this.Boost = Boost;
+            this.Coast = Coast;
         }
 
         public ShipInput()

@@ -1013,7 +1013,7 @@
       "label": ".ApplyVisual()",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L255",
+      "source_location": "L254",
       "id": "scripts_engineglow_engineglow_applyvisual",
       "community": 9,
       "norm_label": ".applyvisual()"
@@ -1022,7 +1022,7 @@
       "label": ".RadialDot()",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L328",
+      "source_location": "L313",
       "id": "scripts_engineglow_engineglow_radialdot",
       "community": 9,
       "norm_label": ".radialdot()"
@@ -1031,7 +1031,7 @@
       "label": "GradientTexture2D",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L328",
+      "source_location": "L313",
       "id": "client_scripts_engineglow_cs_gradienttexture2d",
       "community": 9,
       "norm_label": "gradienttexture2d"
@@ -1040,7 +1040,7 @@
       "label": ".ExhaustRamp()",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L352",
+      "source_location": "L337",
       "id": "scripts_engineglow_engineglow_exhaustramp",
       "community": 9,
       "norm_label": ".exhaustramp()"
@@ -1049,7 +1049,7 @@
       "label": "GradientTexture1D",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L352",
+      "source_location": "L337",
       "id": "client_scripts_engineglow_cs_gradienttexture1d",
       "community": 9,
       "norm_label": "gradienttexture1d"
@@ -1058,7 +1058,7 @@
       "label": ".ShrinkCurve()",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L369",
+      "source_location": "L354",
       "id": "scripts_engineglow_engineglow_shrinkcurve",
       "community": 9,
       "norm_label": ".shrinkcurve()"
@@ -1067,7 +1067,7 @@
       "label": "CurveTexture",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L369",
+      "source_location": "L354",
       "id": "client_scripts_engineglow_cs_curvetexture",
       "community": 9,
       "norm_label": "curvetexture"
@@ -1076,7 +1076,7 @@
       "label": ".ExhaustDrawMaterial()",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L377",
+      "source_location": "L362",
       "id": "scripts_engineglow_engineglow_exhaustdrawmaterial",
       "community": 9,
       "norm_label": ".exhaustdrawmaterial()"
@@ -1085,7 +1085,7 @@
       "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/EngineGlow.cs",
-      "source_location": "L377",
+      "source_location": "L362",
       "id": "client_scripts_engineglow_cs_standardmaterial3d",
       "community": 9,
       "norm_label": "standardmaterial3d"
@@ -2525,7 +2525,7 @@
       "label": ".AutoInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L351",
+      "source_location": "L348",
       "id": "scripts_shipcontroller_shipcontroller_autoinput",
       "community": 8,
       "norm_label": ".autoinput()"
@@ -2579,7 +2579,7 @@
       "label": ".ToGodot()",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L20",
+      "source_location": "L19",
       "id": "scripts_shipmath_shipmath_togodot",
       "community": 18,
       "norm_label": ".togodot()"
@@ -2588,7 +2588,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L20",
+      "source_location": "L19",
       "id": "client_scripts_shipmath_cs_vec3",
       "community": 18,
       "norm_label": "vec3"
@@ -2597,7 +2597,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L20",
+      "source_location": "L19",
       "id": "client_scripts_shipmath_cs_vector3",
       "community": 18,
       "norm_label": "vector3"
@@ -2606,7 +2606,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L22",
+      "source_location": "L21",
       "id": "client_scripts_shipmath_cs_quat",
       "community": 18,
       "norm_label": "quat"
@@ -2615,7 +2615,7 @@
       "label": "Quaternion",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L22",
+      "source_location": "L21",
       "id": "client_scripts_shipmath_cs_quaternion",
       "community": 18,
       "norm_label": "quaternion"
@@ -2624,7 +2624,7 @@
       "label": ".Distance()",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L24",
+      "source_location": "L23",
       "id": "scripts_shipmath_shipmath_distance",
       "community": 18,
       "norm_label": ".distance()"
@@ -2633,7 +2633,7 @@
       "label": ".AngleBetween()",
       "file_type": "code",
       "source_file": "client/scripts/ShipMath.cs",
-      "source_location": "L31",
+      "source_location": "L30",
       "id": "scripts_shipmath_shipmath_anglebetween",
       "community": 18,
       "norm_label": ".anglebetween()"
@@ -3929,7 +3929,7 @@
       "label": "Module",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L298",
+      "source_location": "L294",
       "id": "spacetimedb_lib_module",
       "community": 0,
       "norm_label": "module"
@@ -3938,7 +3938,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L302",
+      "source_location": "L298",
       "id": "module_spacetimedb_lib_cs_uint",
       "community": 0,
       "norm_label": "uint"
@@ -3947,7 +3947,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L303",
+      "source_location": "L299",
       "id": "module_spacetimedb_lib_cs_byte",
       "community": 0,
       "norm_label": "byte"
@@ -3956,7 +3956,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L304",
+      "source_location": "L300",
       "id": "module_spacetimedb_lib_cs_int",
       "community": 0,
       "norm_label": "int"
@@ -3965,7 +3965,7 @@
       "label": "long",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L306",
+      "source_location": "L302",
       "id": "long",
       "community": 0,
       "norm_label": "long"
@@ -3974,7 +3974,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L310",
+      "source_location": "L306",
       "id": "module_spacetimedb_lib_cs_float",
       "community": 0,
       "norm_label": "float"
@@ -3983,7 +3983,7 @@
       "label": ".RandomUnitVec()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L358",
+      "source_location": "L351",
       "id": "spacetimedb_lib_module_randomunitvec",
       "community": 0,
       "norm_label": ".randomunitvec()"
@@ -3992,7 +3992,7 @@
       "label": "ReducerContext",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L358",
+      "source_location": "L351",
       "id": "module_spacetimedb_lib_cs_reducercontext",
       "community": 0,
       "norm_label": "reducercontext"
@@ -4001,7 +4001,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L358",
+      "source_location": "L351",
       "id": "module_spacetimedb_lib_cs_vec3",
       "community": 0,
       "norm_label": "vec3"
@@ -4010,7 +4010,7 @@
       "label": ".MassFor()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L383",
+      "source_location": "L376",
       "id": "spacetimedb_lib_module_massfor",
       "community": 0,
       "norm_label": ".massfor()"
@@ -4019,7 +4019,7 @@
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L383",
+      "source_location": "L376",
       "id": "module_spacetimedb_lib_cs_shipclass",
       "community": 0,
       "norm_label": "shipclass"
@@ -4028,7 +4028,7 @@
       "label": ".MaxHull()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L384",
+      "source_location": "L377",
       "id": "spacetimedb_lib_module_maxhull",
       "community": 0,
       "norm_label": ".maxhull()"
@@ -4037,7 +4037,7 @@
       "label": ".WeaponDamage()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L385",
+      "source_location": "L378",
       "id": "spacetimedb_lib_module_weapondamage",
       "community": 0,
       "norm_label": ".weapondamage()"
@@ -4046,7 +4046,7 @@
       "label": ".FireInterval()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L386",
+      "source_location": "L379",
       "id": "spacetimedb_lib_module_fireinterval",
       "community": 0,
       "norm_label": ".fireinterval()"
@@ -4055,7 +4055,7 @@
       "label": ".HitRadius()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L389",
+      "source_location": "L382",
       "id": "spacetimedb_lib_module_hitradius",
       "community": 0,
       "norm_label": ".hitradius()"
@@ -4064,7 +4064,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L389",
+      "source_location": "L382",
       "id": "module_spacetimedb_lib_cs_ship",
       "community": 0,
       "norm_label": "ship"
@@ -4073,7 +4073,7 @@
       "label": "NextULong()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L403",
+      "source_location": "L396",
       "id": "spacetimedb_lib_nextulong",
       "community": 0,
       "norm_label": "nextulong()"
@@ -4082,7 +4082,7 @@
       "label": "NextDouble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L413",
+      "source_location": "L406",
       "id": "spacetimedb_lib_nextdouble",
       "community": 0,
       "norm_label": "nextdouble()"
@@ -4091,7 +4091,7 @@
       "label": "NextRange()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L415",
+      "source_location": "L408",
       "id": "spacetimedb_lib_nextrange",
       "community": 0,
       "norm_label": "nextrange()"
@@ -4100,7 +4100,7 @@
       "label": "NextInt()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L417",
+      "source_location": "L410",
       "id": "spacetimedb_lib_nextint",
       "community": 0,
       "norm_label": "nextint()"
@@ -4109,7 +4109,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L423",
+      "source_location": "L416",
       "id": "module_spacetimedb_lib_cs_string",
       "community": 0,
       "norm_label": "string"
@@ -4118,7 +4118,7 @@
       "label": ".NextAsteroidShape()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "spacetimedb_lib_module_nextasteroidshape",
       "community": 0,
       "norm_label": ".nextasteroidshape()"
@@ -4127,7 +4127,7 @@
       "label": "DetRng",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "detrng",
       "community": 0,
       "norm_label": "detrng"
@@ -4136,7 +4136,7 @@
       "label": "variant",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "variant",
       "community": 0,
       "norm_label": "variant"
@@ -4145,7 +4145,7 @@
       "label": "rx",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "rx",
       "community": 0,
       "norm_label": "rx"
@@ -4154,7 +4154,7 @@
       "label": "ry",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "ry",
       "community": 0,
       "norm_label": "ry"
@@ -4163,7 +4163,7 @@
       "label": "rz",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L436",
+      "source_location": "L429",
       "id": "rz",
       "community": 0,
       "norm_label": "rz"
@@ -4172,7 +4172,7 @@
       "label": ".SeedAsteroidField()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L446",
+      "source_location": "L439",
       "id": "spacetimedb_lib_module_seedasteroidfield",
       "community": 0,
       "norm_label": ".seedasteroidfield()"
@@ -4181,7 +4181,7 @@
       "label": ".SeedAsteroidBelt()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L469",
+      "source_location": "L462",
       "id": "spacetimedb_lib_module_seedasteroidbelt",
       "community": 0,
       "norm_label": ".seedasteroidbelt()"
@@ -4190,7 +4190,7 @@
       "label": ".RandomOuterPos()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L495",
+      "source_location": "L488",
       "id": "spacetimedb_lib_module_randomouterpos",
       "community": 0,
       "norm_label": ".randomouterpos()"
@@ -4199,7 +4199,7 @@
       "label": ".GenerateMap()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L508",
+      "source_location": "L501",
       "id": "spacetimedb_lib_module_generatemap",
       "community": 0,
       "norm_label": ".generatemap()"
@@ -4208,7 +4208,7 @@
       "label": ".Init()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L547",
+      "source_location": "L540",
       "id": "spacetimedb_lib_module_init",
       "community": 0,
       "norm_label": ".init()"
@@ -4217,7 +4217,7 @@
       "label": "Reducer",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L547",
+      "source_location": "L540",
       "id": "reducer",
       "community": 0,
       "norm_label": "reducer"
@@ -4226,7 +4226,7 @@
       "label": ".RegenerateWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L594",
+      "source_location": "L587",
       "id": "spacetimedb_lib_module_regenerateworld",
       "community": 0,
       "norm_label": ".regenerateworld()"
@@ -4235,7 +4235,7 @@
       "label": ".ClientConnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L614",
+      "source_location": "L607",
       "id": "spacetimedb_lib_module_clientconnected",
       "community": 0,
       "norm_label": ".clientconnected()"
@@ -4244,7 +4244,7 @@
       "label": ".ClientDisconnected()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L648",
+      "source_location": "L641",
       "id": "spacetimedb_lib_module_clientdisconnected",
       "community": 0,
       "norm_label": ".clientdisconnected()"
@@ -4253,7 +4253,7 @@
       "label": ".SetName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L690",
+      "source_location": "L683",
       "id": "spacetimedb_lib_module_setname",
       "community": 0,
       "norm_label": ".setname()"
@@ -4262,7 +4262,7 @@
       "label": ".SendChat()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L708",
+      "source_location": "L701",
       "id": "spacetimedb_lib_module_sendchat",
       "community": 0,
       "norm_label": ".sendchat()"
@@ -4271,7 +4271,7 @@
       "label": ".HandleCommand()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L743",
+      "source_location": "L736",
       "id": "spacetimedb_lib_module_handlecommand",
       "community": 0,
       "norm_label": ".handlecommand()"
@@ -4280,7 +4280,7 @@
       "label": "Player",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L743",
+      "source_location": "L736",
       "id": "module_spacetimedb_lib_cs_player",
       "community": 0,
       "norm_label": "player"
@@ -4289,7 +4289,7 @@
       "label": ".ResignMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L784",
+      "source_location": "L777",
       "id": "spacetimedb_lib_module_resignmatch",
       "community": 0,
       "norm_label": ".resignmatch()"
@@ -4298,7 +4298,7 @@
       "label": ".SystemTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L803",
+      "source_location": "L796",
       "id": "spacetimedb_lib_module_systemto",
       "community": 0,
       "norm_label": ".systemto()"
@@ -4307,7 +4307,7 @@
       "label": "Identity",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L803",
+      "source_location": "L796",
       "id": "module_spacetimedb_lib_cs_identity",
       "community": 0,
       "norm_label": "identity"
@@ -4316,7 +4316,7 @@
       "label": ".SystemAll()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L818",
+      "source_location": "L811",
       "id": "spacetimedb_lib_module_systemall",
       "community": 0,
       "norm_label": ".systemall()"
@@ -4325,7 +4325,7 @@
       "label": ".TeamName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L832",
+      "source_location": "L825",
       "id": "spacetimedb_lib_module_teamname",
       "community": 0,
       "norm_label": ".teamname()"
@@ -4334,7 +4334,7 @@
       "label": ".DisplayName()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L835",
+      "source_location": "L828",
       "id": "spacetimedb_lib_module_displayname",
       "community": 0,
       "norm_label": ".displayname()"
@@ -4343,7 +4343,7 @@
       "label": "Filter",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L846",
+      "source_location": "L839",
       "id": "filter",
       "community": 0,
       "norm_label": "filter"
@@ -4352,7 +4352,7 @@
       "label": ".SpawnShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L862",
+      "source_location": "L855",
       "id": "spacetimedb_lib_module_spawnship",
       "community": 0,
       "norm_label": ".spawnship()"
@@ -4361,7 +4361,7 @@
       "label": ".Respawn()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L870",
+      "source_location": "L863",
       "id": "spacetimedb_lib_module_respawn",
       "community": 0,
       "norm_label": ".respawn()"
@@ -4370,7 +4370,7 @@
       "label": ".JoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L882",
+      "source_location": "L875",
       "id": "spacetimedb_lib_module_jointeam",
       "community": 0,
       "norm_label": ".jointeam()"
@@ -4379,7 +4379,7 @@
       "label": ".LeaveTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L910",
+      "source_location": "L903",
       "id": "spacetimedb_lib_module_leaveteam",
       "community": 0,
       "norm_label": ".leaveteam()"
@@ -4388,7 +4388,7 @@
       "label": ".SetReady()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L929",
+      "source_location": "L922",
       "id": "spacetimedb_lib_module_setready",
       "community": 0,
       "norm_label": ".setready()"
@@ -4397,7 +4397,7 @@
       "label": ".QuickJoin()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L947",
+      "source_location": "L940",
       "id": "spacetimedb_lib_module_quickjoin",
       "community": 0,
       "norm_label": ".quickjoin()"
@@ -4406,7 +4406,7 @@
       "label": ".RestartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L968",
+      "source_location": "L961",
       "id": "spacetimedb_lib_module_restartmatch",
       "community": 0,
       "norm_label": ".restartmatch()"
@@ -4415,7 +4415,7 @@
       "label": ".ApplyInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1003",
+      "source_location": "L996",
       "id": "spacetimedb_lib_module_applyinput",
       "community": 0,
       "norm_label": ".applyinput()"
@@ -4424,7 +4424,7 @@
       "label": ".SimTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1043",
+      "source_location": "L1036",
       "id": "spacetimedb_lib_module_simtick",
       "community": 0,
       "norm_label": ".simtick()"
@@ -4433,7 +4433,7 @@
       "label": "SimTickTimer",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1043",
+      "source_location": "L1036",
       "id": "simticktimer",
       "community": 0,
       "norm_label": "simticktimer"
@@ -4442,7 +4442,7 @@
       "label": ".SimulateTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1076",
+      "source_location": "L1069",
       "id": "spacetimedb_lib_module_simulatetick",
       "community": 0,
       "norm_label": ".simulatetick()"
@@ -4451,16 +4451,16 @@
       "label": ".Dist2()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1517",
+      "source_location": "L1508",
       "id": "spacetimedb_lib_module_dist2",
-      "community": 5,
+      "community": 0,
       "norm_label": ".dist2()"
     },
     {
       "label": ".ResolveCollision()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1526",
+      "source_location": "L1517",
       "id": "spacetimedb_lib_module_resolvecollision",
       "community": 0,
       "norm_label": ".resolvecollision()"
@@ -4469,7 +4469,7 @@
       "label": ".KillShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1553",
+      "source_location": "L1544",
       "id": "spacetimedb_lib_module_killship",
       "community": 0,
       "norm_label": ".killship()"
@@ -4478,7 +4478,7 @@
       "label": ".SpawnPodFor()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1571",
+      "source_location": "L1559",
       "id": "spacetimedb_lib_module_spawnpodfor",
       "community": 0,
       "norm_label": ".spawnpodfor()"
@@ -4487,7 +4487,7 @@
       "label": ".DockShip()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1614",
+      "source_location": "L1602",
       "id": "spacetimedb_lib_module_dockship",
       "community": 0,
       "norm_label": ".dockship()"
@@ -4496,7 +4496,7 @@
       "label": ".ToInputState()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1612",
       "id": "spacetimedb_lib_module_toinputstate",
       "community": 0,
       "norm_label": ".toinputstate()"
@@ -4505,7 +4505,7 @@
       "label": "ShipInput",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1612",
       "id": "shipinput",
       "community": 0,
       "norm_label": "shipinput"
@@ -4514,7 +4514,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1628",
+      "source_location": "L1612",
       "id": "module_spacetimedb_lib_cs_shipinputstate",
       "community": 0,
       "norm_label": "shipinputstate"
@@ -4523,7 +4523,7 @@
       "label": ".DeleteShipInputs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1642",
+      "source_location": "L1625",
       "id": "spacetimedb_lib_module_deleteshipinputs",
       "community": 0,
       "norm_label": ".deleteshipinputs()"
@@ -4532,7 +4532,7 @@
       "label": ".SpawnShipInternal()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1649",
+      "source_location": "L1632",
       "id": "spacetimedb_lib_module_spawnshipinternal",
       "community": 0,
       "norm_label": ".spawnshipinternal()"
@@ -4541,7 +4541,7 @@
       "label": ".OnlineTeamCounts()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1742",
+      "source_location": "L1725",
       "id": "spacetimedb_lib_module_onlineteamcounts",
       "community": 0,
       "norm_label": ".onlineteamcounts()"
@@ -4550,7 +4550,7 @@
       "label": ".CanJoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1757",
+      "source_location": "L1740",
       "id": "spacetimedb_lib_module_canjointeam",
       "community": 0,
       "norm_label": ".canjointeam()"
@@ -4559,7 +4559,7 @@
       "label": ".SmallestOnlineTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1767",
+      "source_location": "L1750",
       "id": "spacetimedb_lib_module_smallestonlineteam",
       "community": 0,
       "norm_label": ".smallestonlineteam()"
@@ -4568,7 +4568,7 @@
       "label": ".ResetWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1779",
+      "source_location": "L1762",
       "id": "spacetimedb_lib_module_resetworld",
       "community": 0,
       "norm_label": ".resetworld()"
@@ -4577,7 +4577,7 @@
       "label": ".AnyOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1794",
+      "source_location": "L1777",
       "id": "spacetimedb_lib_module_anyonline",
       "community": 0,
       "norm_label": ".anyonline()"
@@ -4586,7 +4586,7 @@
       "label": ".AnyTeamedPlayerOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1805",
+      "source_location": "L1788",
       "id": "spacetimedb_lib_module_anyteamedplayeronline",
       "community": 0,
       "norm_label": ".anyteamedplayeronline()"
@@ -4595,7 +4595,7 @@
       "label": ".StartSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1815",
+      "source_location": "L1798",
       "id": "spacetimedb_lib_module_startsim",
       "community": 0,
       "norm_label": ".startsim()"
@@ -4604,7 +4604,7 @@
       "label": ".StopSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1837",
+      "source_location": "L1820",
       "id": "spacetimedb_lib_module_stopsim",
       "community": 0,
       "norm_label": ".stopsim()"
@@ -4613,7 +4613,7 @@
       "label": ".MarkEngagedIfActive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1846",
+      "source_location": "L1829",
       "id": "spacetimedb_lib_module_markengagedifactive",
       "community": 0,
       "norm_label": ".markengagedifactive()"
@@ -4622,7 +4622,7 @@
       "label": ".EndMatchIfSideAbandoned()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1861",
+      "source_location": "L1844",
       "id": "spacetimedb_lib_module_endmatchifsideabandoned",
       "community": 0,
       "norm_label": ".endmatchifsideabandoned()"
@@ -4631,7 +4631,7 @@
       "label": ".MaybeStartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1906",
+      "source_location": "L1889",
       "id": "spacetimedb_lib_module_maybestartmatch",
       "community": 0,
       "norm_label": ".maybestartmatch()"
@@ -4721,7 +4721,7 @@
       "label": ".AssignPigRescuers()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L251",
+      "source_location": "L249",
       "id": "spacetimedb_pigai_module_assignpigrescuers",
       "community": 5,
       "norm_label": ".assignpigrescuers()"
@@ -4730,7 +4730,7 @@
       "label": ".SpawnPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L299",
+      "source_location": "L297",
       "id": "spacetimedb_pigai_module_spawnpig",
       "community": 5,
       "norm_label": ".spawnpig()"
@@ -4739,7 +4739,7 @@
       "label": "Pig",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L299",
+      "source_location": "L297",
       "id": "pig",
       "community": 5,
       "norm_label": "pig"
@@ -4748,7 +4748,7 @@
       "label": ".KillPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L357",
+      "source_location": "L355",
       "id": "spacetimedb_pigai_module_killpig",
       "community": 5,
       "norm_label": ".killpig()"
@@ -4757,7 +4757,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L357",
+      "source_location": "L355",
       "id": "module_spacetimedb_pigai_cs_ship",
       "community": 5,
       "norm_label": "ship"
@@ -4766,7 +4766,7 @@
       "label": ".PigThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L410",
+      "source_location": "L405",
       "id": "spacetimedb_pigai_module_pigthink",
       "community": 5,
       "norm_label": ".pigthink()"
@@ -4775,7 +4775,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L410",
+      "source_location": "L405",
       "id": "module_spacetimedb_pigai_cs_shipinputstate",
       "community": 5,
       "norm_label": "shipinputstate"
@@ -4784,7 +4784,7 @@
       "label": ".PigPatrolInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
+      "source_location": "L634",
       "id": "spacetimedb_pigai_module_pigpatrolinput",
       "community": 5,
       "norm_label": ".pigpatrolinput()"
@@ -4793,7 +4793,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_vec3",
       "community": 5,
       "norm_label": "vec3"
@@ -4802,7 +4802,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
+      "source_location": "L634",
       "id": "module_spacetimedb_pigai_cs_quat",
       "community": 5,
       "norm_label": "quat"
@@ -4811,7 +4811,7 @@
       "label": ".IsAggressive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L656",
+      "source_location": "L651",
       "id": "spacetimedb_pigai_module_isaggressive",
       "community": 5,
       "norm_label": ".isaggressive()"
@@ -4820,7 +4820,7 @@
       "label": ".PodThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L663",
+      "source_location": "L658",
       "id": "spacetimedb_pigai_module_podthink",
       "community": 5,
       "norm_label": ".podthink()"
@@ -4829,7 +4829,7 @@
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L689",
+      "source_location": "L684",
       "id": "spacetimedb_pigai_module_piglead",
       "community": 5,
       "norm_label": ".piglead()"
@@ -4838,7 +4838,7 @@
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L728",
+      "source_location": "L723",
       "id": "spacetimedb_pigai_module_pigavoidasteroids",
       "community": 5,
       "norm_label": ".pigavoidasteroids()"
@@ -4847,7 +4847,7 @@
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L762",
+      "source_location": "L757",
       "id": "spacetimedb_pigai_module_pigthreatscore",
       "community": 5,
       "norm_label": ".pigthreatscore()"
@@ -4856,7 +4856,7 @@
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L791",
+      "source_location": "L786",
       "id": "spacetimedb_pigai_module_teambasesector",
       "community": 5,
       "norm_label": ".teambasesector()"
@@ -4865,7 +4865,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L800",
+      "source_location": "L795",
       "id": "spacetimedb_pigai_module_enemyinsector",
       "community": 5,
       "norm_label": ".enemyinsector()"
@@ -4874,7 +4874,7 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L810",
+      "source_location": "L805",
       "id": "spacetimedb_pigai_module_alephto",
       "community": 5,
       "norm_label": ".alephto()"
@@ -4883,7 +4883,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L810",
+      "source_location": "L805",
       "id": "module_spacetimedb_pigai_cs_aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -4892,7 +4892,7 @@
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L821",
+      "source_location": "L816",
       "id": "spacetimedb_pigai_module_pigsteerto",
       "community": 5,
       "norm_label": ".pigsteerto()"
@@ -4901,7 +4901,7 @@
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L839",
+      "source_location": "L834",
       "id": "spacetimedb_pigai_module_pigattackpoint",
       "community": 5,
       "norm_label": ".pigattackpoint()"
@@ -4910,7 +4910,7 @@
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L867",
+      "source_location": "L862",
       "id": "spacetimedb_pigai_module_pigaimskill",
       "community": 5,
       "norm_label": ".pigaimskill()"
@@ -4919,25 +4919,16 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L880",
+      "source_location": "L875",
       "id": "spacetimedb_pigai_module_pigaimwobble",
       "community": 5,
       "norm_label": ".pigaimwobble()"
     },
     {
-      "label": ".FreePigPodSlot()",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L898",
-      "id": "spacetimedb_pigai_module_freepigpodslot",
-      "community": 5,
-      "norm_label": ".freepigpodslot()"
-    },
-    {
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L919",
+      "source_location": "L892",
       "id": "spacetimedb_pigai_module_dot",
       "community": 5,
       "norm_label": ".dot()"
@@ -4946,7 +4937,7 @@
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L921",
+      "source_location": "L894",
       "id": "spacetimedb_pigai_module_clamp1",
       "community": 5,
       "norm_label": ".clamp1()"
@@ -4955,7 +4946,7 @@
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L923",
+      "source_location": "L896",
       "id": "spacetimedb_pigai_module_clamp01",
       "community": 5,
       "norm_label": ".clamp01()"
@@ -4964,7 +4955,7 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L925",
+      "source_location": "L898",
       "id": "spacetimedb_pigai_module_conjugate",
       "community": 5,
       "norm_label": ".conjugate()"
@@ -4973,7 +4964,7 @@
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L927",
+      "source_location": "L900",
       "id": "spacetimedb_pigai_module_normalizeor",
       "community": 5,
       "norm_label": ".normalizeor()"
@@ -4982,7 +4973,7 @@
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L933",
+      "source_location": "L906",
       "id": "spacetimedb_pigai_module_perpendicularto",
       "community": 5,
       "norm_label": ".perpendicularto()"
@@ -4991,7 +4982,7 @@
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L939",
+      "source_location": "L912",
       "id": "spacetimedb_pigai_module_smallestpositivef",
       "community": 5,
       "norm_label": ".smallestpositivef()"
@@ -5357,28 +5348,10 @@
       "norm_label": ".cos()"
     },
     {
-      "label": ".Exp()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L66",
-      "id": "shared_flightmodel_mathdet_exp",
-      "community": 7,
-      "norm_label": ".exp()"
-    },
-    {
-      "label": ".Pow2()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L84",
-      "id": "shared_flightmodel_mathdet_pow2",
-      "community": 7,
-      "norm_label": ".pow2()"
-    },
-    {
       "label": "LengthSquared()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L101",
+      "source_location": "L68",
       "id": "shared_flightmodel_lengthsquared",
       "community": 7,
       "norm_label": "lengthsquared()"
@@ -5387,7 +5360,7 @@
       "label": "Length()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L102",
+      "source_location": "L69",
       "id": "shared_flightmodel_length",
       "community": 7,
       "norm_label": "length()"
@@ -5396,7 +5369,7 @@
       "label": "Cross()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L104",
+      "source_location": "L71",
       "id": "shared_flightmodel_cross",
       "community": 7,
       "norm_label": "cross()"
@@ -5405,43 +5378,34 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L104",
+      "source_location": "L71",
       "id": "shared_flightmodel_cs_vec3",
       "community": 7,
       "norm_label": "vec3"
     },
     {
-      "label": "Conjugate()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L126",
-      "id": "shared_flightmodel_conjugate",
-      "community": 7,
-      "norm_label": "conjugate()"
-    },
-    {
-      "label": "Quat",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L126",
-      "id": "shared_flightmodel_cs_quat",
-      "community": 7,
-      "norm_label": "quat"
-    },
-    {
       "label": "Normalized()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L128",
+      "source_location": "L91",
       "id": "shared_flightmodel_normalized",
       "community": 7,
       "norm_label": "normalized()"
     },
     {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L91",
+      "id": "shared_flightmodel_cs_quat",
+      "community": 7,
+      "norm_label": "quat"
+    },
+    {
       "label": "FromRotationVector()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L137",
+      "source_location": "L100",
       "id": "shared_flightmodel_fromrotationvector",
       "community": 7,
       "norm_label": "fromrotationvector()"
@@ -5450,34 +5414,16 @@
       "label": "Rotate()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L149",
+      "source_location": "L112",
       "id": "shared_flightmodel_rotate",
       "community": 7,
       "norm_label": "rotate()"
     },
     {
-      "label": "Create()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L217",
-      "id": "shared_flightmodel_create",
-      "community": 7,
-      "norm_label": "create()"
-    },
-    {
-      "label": "ShipStats",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L217",
-      "id": "shared_flightmodel_cs_shipstats",
-      "community": 7,
-      "norm_label": "shipstats"
-    },
-    {
       "label": "FlightModel",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L251",
+      "source_location": "L152",
       "id": "shared_flightmodel_flightmodel",
       "community": 7,
       "norm_label": "flightmodel"
@@ -5486,16 +5432,25 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L259",
+      "source_location": "L160",
       "id": "shared_flightmodel_cs_byte",
       "community": 7,
       "norm_label": "byte"
     },
     {
+      "label": "ShipStats",
+      "file_type": "code",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L165",
+      "id": "shared_flightmodel_cs_shipstats",
+      "community": 7,
+      "norm_label": "shipstats"
+    },
+    {
       "label": ".StatsFor()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L284",
+      "source_location": "L213",
       "id": "shared_flightmodel_flightmodel_statsfor",
       "community": 7,
       "norm_label": ".statsfor()"
@@ -5504,7 +5459,7 @@
       "label": ".WeaponSpreadRad()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L304",
+      "source_location": "L233",
       "id": "shared_flightmodel_flightmodel_weaponspreadrad",
       "community": 7,
       "norm_label": ".weaponspreadrad()"
@@ -5513,7 +5468,7 @@
       "label": ".SpreadDirection()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L314",
+      "source_location": "L243",
       "id": "shared_flightmodel_flightmodel_spreaddirection",
       "community": 7,
       "norm_label": ".spreaddirection()"
@@ -5522,7 +5477,7 @@
       "label": ".NormalizeVec()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L342",
+      "source_location": "L271",
       "id": "shared_flightmodel_flightmodel_normalizevec",
       "community": 7,
       "norm_label": ".normalizevec()"
@@ -5531,7 +5486,7 @@
       "label": ".Hash()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L351",
+      "source_location": "L280",
       "id": "shared_flightmodel_flightmodel_hash",
       "community": 7,
       "norm_label": ".hash()"
@@ -5540,25 +5495,16 @@
       "label": ".UnitFloat()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L362",
+      "source_location": "L291",
       "id": "shared_flightmodel_flightmodel_unitfloat",
       "community": 7,
       "norm_label": ".unitfloat()"
     },
     {
-      "label": ".TorqueMultiplier()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L367",
-      "id": "shared_flightmodel_flightmodel_torquemultiplier",
-      "community": 7,
-      "norm_label": ".torquemultiplier()"
-    },
-    {
       "label": ".Integrate()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L385",
+      "source_location": "L295",
       "id": "shared_flightmodel_flightmodel_integrate",
       "community": 7,
       "norm_label": ".integrate()"
@@ -5567,7 +5513,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L385",
+      "source_location": "L295",
       "id": "shared_flightmodel_cs_shipstate",
       "community": 7,
       "norm_label": "shipstate"
@@ -5576,19 +5522,10 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L385",
+      "source_location": "L295",
       "id": "shared_flightmodel_cs_shipinputstate",
       "community": 7,
       "norm_label": "shipinputstate"
-    },
-    {
-      "label": ".SlewRate()",
-      "file_type": "code",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L493",
-      "id": "shared_flightmodel_flightmodel_slewrate",
-      "community": 7,
-      "norm_label": ".slewrate()"
     },
     {
       "label": "net8.0",
@@ -5648,7 +5585,7 @@
       "label": "Program",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L16",
+      "source_location": "L17",
       "id": "flightmodeltest_program_program",
       "community": 20,
       "norm_label": "program"
@@ -5657,7 +5594,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L18",
+      "source_location": "L19",
       "id": "tests_flightmodeltest_program_cs_int",
       "community": 20,
       "norm_label": "int"
@@ -5666,7 +5603,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L19",
+      "source_location": "L20",
       "id": "tests_flightmodeltest_program_cs_float",
       "community": 20,
       "norm_label": "float"
@@ -5675,7 +5612,7 @@
       "label": ".InputAt()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L24",
+      "source_location": "L23",
       "id": "flightmodeltest_program_program_inputat",
       "community": 20,
       "norm_label": ".inputat()"
@@ -5684,7 +5621,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L24",
+      "source_location": "L23",
       "id": "tests_flightmodeltest_program_cs_shipinputstate",
       "community": 20,
       "norm_label": "shipinputstate"
@@ -5693,7 +5630,7 @@
       "label": ".RunSequence()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L38",
+      "source_location": "L37",
       "id": "flightmodeltest_program_program_runsequence",
       "community": 20,
       "norm_label": ".runsequence()"
@@ -5702,7 +5639,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L38",
+      "source_location": "L37",
       "id": "tests_flightmodeltest_program_cs_shipstate",
       "community": 20,
       "norm_label": "shipstate"
@@ -5711,7 +5648,7 @@
       "label": ".BitEqual()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L53",
+      "source_location": "L52",
       "id": "flightmodeltest_program_program_bitequal",
       "community": 20,
       "norm_label": ".bitequal()"
@@ -5720,52 +5657,16 @@
       "label": ".Main()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L60",
+      "source_location": "L58",
       "id": "flightmodeltest_program_program_main",
       "community": 20,
       "norm_label": ".main()"
     },
     {
-      "label": ".FirstTickDv()",
-      "file_type": "code",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L250",
-      "id": "flightmodeltest_program_program_firsttickdv",
-      "community": 20,
-      "norm_label": ".firsttickdv()"
-    },
-    {
-      "label": "ShipStats",
-      "file_type": "code",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L250",
-      "id": "tests_flightmodeltest_program_cs_shipstats",
-      "community": 20,
-      "norm_label": "shipstats"
-    },
-    {
-      "label": ".AngleDeg()",
-      "file_type": "code",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L258",
-      "id": "flightmodeltest_program_program_angledeg",
-      "community": 20,
-      "norm_label": ".angledeg()"
-    },
-    {
-      "label": "Quat",
-      "file_type": "code",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L258",
-      "id": "tests_flightmodeltest_program_cs_quat",
-      "community": 20,
-      "norm_label": "quat"
-    },
-    {
       "label": ".Close()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L265",
+      "source_location": "L171",
       "id": "flightmodeltest_program_program_close",
       "community": 20,
       "norm_label": ".close()"
@@ -5774,7 +5675,7 @@
       "label": ".Near()",
       "file_type": "code",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L271",
+      "source_location": "L177",
       "id": "flightmodeltest_program_program_near",
       "community": 20,
       "norm_label": ".near()"
@@ -6917,9 +6818,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "node3d"
+      "target": "node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -6950,9 +6851,9 @@
       "source_location": "L334",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "node3d"
+      "target": "node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12235,9 +12136,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L46",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12385,9 +12286,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L774",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
+      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -12425,9 +12326,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L334",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -12465,9 +12366,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L379",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -12715,9 +12616,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L368",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12748,9 +12649,9 @@
       "source_location": "L49",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12759,9 +12660,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_basehealthbar",
-      "target": "client_scripts_worldrenderer_cs_standardmaterial3d"
+      "target": "client_scripts_worldrenderer_cs_standardmaterial3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12770,9 +12671,9 @@
       "source_location": "L334",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -12781,9 +12682,9 @@
       "source_location": "L368",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
+      "target": "scripts_worldrenderer_basehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13320,9 +13221,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L325",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -13331,9 +13232,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L326",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -13375,9 +13276,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L348",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -13386,9 +13287,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L404",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onbaseupdate",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -13397,9 +13298,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L374",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13408,9 +13309,9 @@
       "source_location": "L379",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_healthcolor",
-      "target": "client_scripts_worldrenderer_cs_color"
+      "target": "client_scripts_worldrenderer_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13760,9 +13661,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L755",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_process",
-      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
+      "target": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16410,17 +16311,6 @@
     {
       "relation": "calls",
       "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1562",
-      "weight": 1.0,
-      "source": "spacetimedb_lib_module_killship",
-      "target": "spacetimedb_pigai_module_freepigpodslot"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1531",
@@ -16439,17 +16329,6 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_dockship",
       "target": "spacetimedb_lib_module_deleteshipinputs"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1624",
-      "weight": 1.0,
-      "source": "spacetimedb_lib_module_dockship",
-      "target": "spacetimedb_pigai_module_freepigpodslot"
     },
     {
       "relation": "references",
@@ -16720,16 +16599,6 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L898",
-      "weight": 1.0,
-      "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_freepigpodslot",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L566",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -16960,17 +16829,6 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_enemyinsector",
       "target": "module_spacetimedb_pigai_cs_reducercontext"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L898",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "spacetimedb_pigai_module_freepigpodslot",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -18098,26 +17956,6 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L126",
-      "weight": 1.0,
-      "source": "shared_flightmodel",
-      "target": "shared_flightmodel_conjugate",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L217",
-      "weight": 1.0,
-      "source": "shared_flightmodel",
-      "target": "shared_flightmodel_create",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
       "source_location": "L71",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18229,26 +18067,6 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "source": "shared_flightmodel_mathdet",
-      "target": "shared_flightmodel_mathdet_exp",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L84",
-      "weight": 1.0,
-      "source": "shared_flightmodel_mathdet",
-      "target": "shared_flightmodel_mathdet_pow2",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
       "source_location": "L40",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18320,28 +18138,6 @@
       "confidence_score": 1.0,
       "source": "shared_flightmodel_fromrotationvector",
       "target": "shared_flightmodel_mathdet_cos"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L237",
-      "weight": 1.0,
-      "source": "shared_flightmodel_create",
-      "target": "shared_flightmodel_mathdet_exp",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "source": "shared_flightmodel_mathdet_exp",
-      "target": "shared_flightmodel_mathdet_pow2",
-      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -18465,37 +18261,15 @@
       "target": "shared_flightmodel_cs_vec3"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L126",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "shared_flightmodel_conjugate",
-      "target": "shared_flightmodel_cs_quat",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L451",
+      "source_location": "L269",
       "weight": 1.0,
-      "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_conjugate",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L100",
-      "weight": 1.0,
-      "context": "return_type",
       "confidence_score": 1.0,
-      "source": "shared_flightmodel_fromrotationvector",
-      "target": "shared_flightmodel_cs_quat"
+      "source": "shared_flightmodel_flightmodel_integrate",
+      "target": "shared_flightmodel_normalized"
     },
     {
       "relation": "references",
@@ -18509,15 +18283,15 @@
       "target": "shared_flightmodel_cs_quat"
     },
     {
-      "relation": "calls",
-      "context": "call",
+      "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L269",
+      "source_location": "L100",
       "weight": 1.0,
+      "context": "return_type",
       "confidence_score": 1.0,
-      "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_normalized"
+      "source": "shared_flightmodel_fromrotationvector",
+      "target": "shared_flightmodel_cs_quat"
     },
     {
       "relation": "calls",
@@ -18545,12 +18319,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L217",
+      "source_location": "L152",
       "weight": 1.0,
-      "context": "return_type",
-      "source": "shared_flightmodel_create",
-      "target": "shared_flightmodel_cs_shipstats",
-      "confidence_score": 1.0
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel",
+      "target": "shared_flightmodel_cs_byte"
     },
     {
       "relation": "references",
@@ -18562,39 +18336,6 @@
       "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel",
       "target": "shared_flightmodel_cs_shipstats"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L271",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_cs_shipstats"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L195",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "shared_flightmodel_flightmodel_statsfor",
-      "target": "shared_flightmodel_cs_shipstats"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L152",
-      "weight": 1.0,
-      "context": "field",
-      "confidence_score": 1.0,
-      "source": "shared_flightmodel_flightmodel",
-      "target": "shared_flightmodel_cs_byte"
     },
     {
       "relation": "method",
@@ -18630,16 +18371,6 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L493",
-      "weight": 1.0,
-      "source": "shared_flightmodel_flightmodel",
-      "target": "shared_flightmodel_flightmodel_slewrate",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
       "source_location": "L208",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18660,16 +18391,6 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L367",
-      "weight": 1.0,
-      "source": "shared_flightmodel_flightmodel",
-      "target": "shared_flightmodel_flightmodel_torquemultiplier",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
       "source_location": "L256",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18685,6 +18406,28 @@
       "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel",
       "target": "shared_flightmodel_flightmodel_weaponspreadrad"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L271",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel_integrate",
+      "target": "shared_flightmodel_cs_shipstats"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "shared/FlightModel.cs",
+      "source_location": "L195",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "shared_flightmodel_flightmodel_statsfor",
+      "target": "shared_flightmodel_cs_shipstats"
     },
     {
       "relation": "calls",
@@ -18720,17 +18463,6 @@
       "target": "shared_flightmodel_flightmodel_unitfloat"
     },
     {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L399",
-      "weight": 1.0,
-      "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_flightmodel_torquemultiplier",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "shared/FlightModel.cs",
@@ -18751,17 +18483,6 @@
       "confidence_score": 1.0,
       "source": "shared_flightmodel_flightmodel_integrate",
       "target": "shared_flightmodel_cs_shipstate"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "shared/FlightModel.cs",
-      "source_location": "L401",
-      "weight": 1.0,
-      "source": "shared_flightmodel_flightmodel_integrate",
-      "target": "shared_flightmodel_flightmodel_slewrate",
-      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -18795,16 +18516,6 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L258",
-      "weight": 1.0,
-      "source": "flightmodeltest_program_program",
-      "target": "flightmodeltest_program_program_angledeg",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L52",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18820,16 +18531,6 @@
       "confidence_score": 1.0,
       "source": "flightmodeltest_program_program",
       "target": "flightmodeltest_program_program_close"
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L250",
-      "weight": 1.0,
-      "source": "flightmodeltest_program_program",
-      "target": "flightmodeltest_program_program_firsttickdv",
-      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -18916,17 +18617,6 @@
       "target": "flightmodeltest_program_program_inputat"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L250",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "flightmodeltest_program_program_firsttickdv",
-      "target": "tests_flightmodeltest_program_cs_shipinputstate",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -18986,55 +18676,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L177",
-      "weight": 1.0,
-      "source": "flightmodeltest_program_program_main",
-      "target": "flightmodeltest_program_program_angledeg",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
       "source_location": "L90",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "flightmodeltest_program_program_main",
       "target": "flightmodeltest_program_program_close"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L200",
-      "weight": 1.0,
-      "source": "flightmodeltest_program_program_main",
-      "target": "flightmodeltest_program_program_firsttickdv",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L250",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "flightmodeltest_program_program_firsttickdv",
-      "target": "tests_flightmodeltest_program_cs_shipstats",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/FlightModelTest/Program.cs",
-      "source_location": "L258",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "flightmodeltest_program_program_angledeg",
-      "target": "tests_flightmodeltest_program_cs_quat",
-      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -20211,5 +19857,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "a107e071cb3a289254d9715125666a0452b73f75"
+  "built_at_commit": "702590405c611136ab93a1c9b1eaac2e5dba9198"
 }

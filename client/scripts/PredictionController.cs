@@ -40,7 +40,7 @@ public partial class PredictionController : Node3D
 	// NoseOffset, FireInterval) so the predicted ghost shot lines up 1:1 with the
 	// authoritative Projectile row the server later spawns. The server stays the
 	// single source of truth for damage/hits; this only predicts the visual.
-	private const float ProjectileSpeed = 250f;
+	private const float ProjectileSpeed = 700f;   // mirror Lib.cs (M0 calibration)
 	private const float NoseOffset = 3f;
 	private static uint FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
 

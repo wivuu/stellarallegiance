@@ -49,6 +49,8 @@ namespace SpacetimeDB.Types
         public float AngVelY;
         [DataMember(Name = "ang_vel_z")]
         public float AngVelZ;
+        [DataMember(Name = "ab_power")]
+        public float AbPower;
         [DataMember(Name = "health")]
         public float Health;
         [DataMember(Name = "mass")]
@@ -81,6 +83,7 @@ namespace SpacetimeDB.Types
             float AngVelX,
             float AngVelY,
             float AngVelZ,
+            float AbPower,
             float Health,
             float Mass,
             uint LastInputTick,
@@ -107,6 +110,7 @@ namespace SpacetimeDB.Types
             this.AngVelX = AngVelX;
             this.AngVelY = AngVelY;
             this.AngVelZ = AngVelZ;
+            this.AbPower = AbPower;
             this.Health = Health;
             this.Mass = Mass;
             this.LastInputTick = LastInputTick;
