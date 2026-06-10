@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781033434.4503157,
-    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
+    "mtime": 1781123995.0550172,
+    "ast_hash": "f9d955d35fa36d2b50e5a2c5935117f3",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781113847.8939304,
-    "ast_hash": "f8b6b3967b969aea31c9ae9cfc64db04",
+    "mtime": 1781131679.3795884,
+    "ast_hash": "a529c0ac5aff4637c8d4987cb042981a",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781095814.037597,
-    "ast_hash": "94c563b7b1edbb430f0a2dedd3aa2a32",
+    "mtime": 1781123555.3753574,
+    "ast_hash": "a1990684a1551588b39a1f8369631d70",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -245,8 +245,23 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "module/spacetimedb/Defs.cs": {
-    "mtime": 1781113830.0466835,
-    "ast_hash": "8e3dd231d7e0e3a4cd639ff6b91bbc40",
+    "mtime": 1781127515.667979,
+    "ast_hash": "22a7db40558aa06b8963f111e2124f3f",
+    "semantic_hash": ""
+  },
+  "module/spacetimedb/Bases.cs": {
+    "mtime": 1781124256.0161142,
+    "ast_hash": "811e2950838d76eea46a76410a0c9fbb",
+    "semantic_hash": ""
+  },
+  "module/spacetimedb/Ships.cs": {
+    "mtime": 1781121310.5261886,
+    "ast_hash": "107558e2985827ce333dda98ca97f81a",
+    "semantic_hash": ""
+  },
+  "module/spacetimedb/Weapons.cs": {
+    "mtime": 1781121599.2855525,
+    "ast_hash": "fbb0723d84da1a3b560be51437528c89",
     "semantic_hash": ""
   }
 }

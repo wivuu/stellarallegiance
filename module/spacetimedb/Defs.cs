@@ -320,8 +320,11 @@ public static partial class Module
 
     // Upsert the world-scale config and rebuild the map from the stored seed so the new
     // scale/density take effect immediately (same seed + same config ⇒ byte-identical map).
-    // M2 makes GenerateMap actually consume the config and re-clamps live ships into the new
-    // sector radius; until then the rebuild reproduces the identical map from the seed.
+    // GenerateMap writes the new (scaled) Sector radii + regenerated asteroid/aleph field;
+    // we then re-clamp any live ship back inside its new sector radius, since shrinking the
+    // world mid-match can leave a flying ship outside the (now smaller) boundary. (Rocks may
+    // still relocate under a ship — full graceful handling is a noted follow-up; restricting
+    // regen to between matches is the alternative.)
     [SpacetimeDB.Reducer]
     public static void UpsertWorldConfig(ReducerContext ctx, WorldConfig cfg)
     {
@@ -334,8 +337,34 @@ public static partial class Module
 
         var m = ctx.Db.Match.Id.Find(0);
         if (m is Match match)
+        {
             GenerateMap(ctx, match.Seed);
+            ClampShipsToSector(ctx);
+        }
         Log.Info($"[UpsertWorldConfig] scale {cfg.SectorScale}, density {cfg.AsteroidDensity} (map rebuilt)");
+    }
+
+    // Pull every live ship that now sits outside its sector radius back onto the boundary
+    // sphere (sectors are origin-centered). Called after a world-scale change rebuilds the
+    // map; harmless when nothing moved out of bounds.
+    private static void ClampShipsToSector(ReducerContext ctx)
+    {
+        foreach (var ship in ctx.Db.Ship.Iter())
+        {
+            if (ctx.Db.Sector.SectorId.Find(ship.SectorId) is not Sector sec)
+                continue;
+            float dx = ship.PosX - sec.CenterX, dy = ship.PosY - sec.CenterY, dz = ship.PosZ - sec.CenterZ;
+            float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist <= sec.Radius || dist < 1e-3f)
+                continue;
+            float k = sec.Radius / dist;
+            ctx.Db.Ship.ShipId.Update(ship with
+            {
+                PosX = sec.CenterX + dx * k,
+                PosY = sec.CenterY + dy * k,
+                PosZ = sec.CenterZ + dz * k,
+            });
+        }
     }
 
     // ---- Server read helpers ------------------------------------------

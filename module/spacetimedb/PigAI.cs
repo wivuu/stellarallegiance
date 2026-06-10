@@ -333,8 +333,8 @@ public static partial class Module
             VelX = 0f, VelY = 0f, VelZ = 0f,
             RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
             AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
-            Health = MaxHull(slot.Class),
-            Mass = MassFor(slot.Class),
+            Health = ShipMaxHull(ctx, (byte)slot.Class),
+            Mass = ShipStatsFor(ctx, (byte)slot.Class).Mass,
             LastInputTick = tick,
             LastFireTick = 0,
             IsPig = true,
@@ -376,8 +376,8 @@ public static partial class Module
             VelZ = s.VelZ + dir.Z * PodEjectSpeed,
             RotX = s.RotX, RotY = s.RotY, RotZ = s.RotZ, RotW = s.RotW,
             AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
-            Health = PodMaxHull,
-            Mass = FlightModel.Pod.Mass,
+            Health = ShipMaxHull(ctx, PodClassId),
+            Mass = ShipStatsFor(ctx, PodClassId).Mass,
             LastInputTick = tick,
             LastFireTick = 0,
             IsPig = true,
@@ -494,7 +494,7 @@ public static partial class Module
                 continue;
             if (IsAggressive(s, tick))
             {
-                float score = PigThreatScore(myPos, s, myBasePos);
+                float score = PigThreatScore(ctx, myPos, s, myBasePos);
                 if (keepId is ulong k && s.ShipId == k) { keptAggr = s; keptAggrScore = score; }
                 if (d2 <= radar2 && score > bestAggrScore) { bestAggrScore = score; bestAggr = s; }
             }
@@ -569,7 +569,7 @@ public static partial class Module
         Vec3 desiredDir = NormalizeOr(aimPoint - myPos, myRot.Rotate(new Vec3(0f, 0f, 1f)));
 
         // Bend the heading away from asteroids in our path (steering, not pathfinding).
-        desiredDir = PigAvoidAsteroids(ctx, myPos, desiredDir);
+        desiredDir = PigAvoidAsteroids(ctx, me.SectorId, myPos, desiredDir);
 
         // Steer: desired world direction -> ship-local; yaw/pitch proportionally toward it.
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desiredDir), new Vec3(0f, 0f, 1f));
@@ -724,28 +724,41 @@ public static partial class Module
 
     // Bend `desiredDir` around any asteroid lying ahead within the lookahead distance.
     // Simple potential-style steering (no external pathfinding lib): push perpendicular
-    // away from each near-path asteroid, weighted by how close/forward it is.
-    private static Vec3 PigAvoidAsteroids(ReducerContext ctx, Vec3 pos, Vec3 desiredDir)
+    // away from each near-path asteroid, weighted by how close/forward it is. Only the
+    // drone's OWN sector matters (rocks in other sectors can't be on its path), and within it
+    // we visit just the spatial-grid cell the drone occupies plus the 26 neighbours — that
+    // block covers a ball of AsteroidGridCell (= the look-ahead) around the drone, so it sees
+    // every rock its ray can reach without scanning the whole field (AsteroidGridForSector).
+    private static Vec3 PigAvoidAsteroids(ReducerContext ctx, uint sector, Vec3 pos, Vec3 desiredDir)
     {
         Vec3 dir = NormalizeOr(desiredDir, new Vec3(0f, 0f, 1f));
         Vec3 steer = new Vec3(0f, 0f, 0f);
 
-        foreach (var a in ctx.Db.Asteroid.Iter())
+        var grid = AsteroidGridForSector(ctx, sector);
+        int cx = AsteroidCellOf(pos.X), cy = AsteroidCellOf(pos.Y), cz = AsteroidCellOf(pos.Z);
+        for (int gx = cx - 1; gx <= cx + 1; gx++)
+        for (int gy = cy - 1; gy <= cy + 1; gy++)
+        for (int gz = cz - 1; gz <= cz + 1; gz++)
         {
-            Vec3 center = new Vec3(a.PosX, a.PosY, a.PosZ);
-            Vec3 toA = center - pos;
-            float proj = Dot(toA, dir);                  // distance along our heading
-            if (proj <= 0f || proj > PigAvoidLookahead)
+            if (!grid.TryGetValue((gx, gy, gz), out var cell))
                 continue;
-            Vec3 closest = pos + dir * proj;             // nearest point on our ray to the asteroid
-            Vec3 off = closest - center;                 // from asteroid center toward that point
-            float clearance = a.Radius + ShipRadius + PigAvoidMargin;
-            float perp = off.Length();
-            if (perp >= clearance)
-                continue;
-            Vec3 pushDir = NormalizeOr(off, PerpendicularTo(dir));
-            float strength = (1f - proj / PigAvoidLookahead) * (1f - perp / clearance);
-            steer = steer + pushDir * strength;
+            foreach (var a in cell)
+            {
+                Vec3 center = new Vec3(a.PosX, a.PosY, a.PosZ);
+                Vec3 toA = center - pos;
+                float proj = Dot(toA, dir);                  // distance along our heading
+                if (proj <= 0f || proj > PigAvoidLookahead)
+                    continue;
+                Vec3 closest = pos + dir * proj;             // nearest point on our ray to the asteroid
+                Vec3 off = closest - center;                 // from asteroid center toward that point
+                float clearance = a.Radius + ShipRadius + PigAvoidMargin;
+                float perp = off.Length();
+                if (perp >= clearance)
+                    continue;
+                Vec3 pushDir = NormalizeOr(off, PerpendicularTo(dir));
+                float strength = (1f - proj / PigAvoidLookahead) * (1f - perp / clearance);
+                steer = steer + pushDir * strength;
+            }
         }
 
         if (steer.LengthSquared() < 1e-8f)
@@ -759,7 +772,7 @@ public static partial class Module
     // the rest — whether it's right on top of OUR base (shelling the win condition). Higher
     // = engage it first. The first three terms are roughly 0..1 so their weights set their
     // relative pull; the base term adds up to PigThreatBaseWeight on top.
-    private static float PigThreatScore(Vec3 myPos, Ship enemy, Vec3? myBasePos)
+    private static float PigThreatScore(ReducerContext ctx, Vec3 myPos, Ship enemy, Vec3? myBasePos)
     {
         Vec3 ePos = new Vec3(enemy.PosX, enemy.PosY, enemy.PosZ);
         Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
@@ -771,7 +784,7 @@ public static partial class Module
         float dist = (ePos - myPos).Length();
         float close = 1f - dist / PigRadarRange;     // 1 = right on top of us
         if (close < 0f) close = 0f;
-        float dmg = WeaponDamage(enemy.Class) / 10f; // Scout 0.4, Fighter 1.0
+        float dmg = ShipWeaponDamage(ctx, (byte)enemy.Class) / 10f; // from the enemy's WeaponDef (Scout 0.4, Fighter 1.0)
 
         // Base attacker: 1 = on the base, 0 = at/beyond the threat radius. Weighted heavily
         // so a drone breaks off to defend an enemy pounding its base over a closer dogfight.
@@ -823,7 +836,7 @@ public static partial class Module
         Vec3 to = point - myPos;
         float d = to.Length();
         Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
-        desired = PigAvoidAsteroids(ctx, myPos, desired);
+        desired = PigAvoidAsteroids(ctx, me.SectorId, myPos, desired);
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
         float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
         float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
@@ -840,7 +853,7 @@ public static partial class Module
     {
         Vec3 to = point - myPos;
         float dist = to.Length();
-        Vec3 desired = PigAvoidAsteroids(ctx, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
+        Vec3 desired = PigAvoidAsteroids(ctx, me.SectorId, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
 
         float yaw, pitch;
