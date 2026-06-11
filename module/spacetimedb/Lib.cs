@@ -11,7 +11,7 @@ using StellarAllegiance.Shared;
 // SpacetimeDB enums disallow explicit values; declaration order fixes them
 // (Scout=0, Fighter=1) and (Lobby=0, Active=1, Ended=2).
 [SpacetimeDB.Type]
-public enum ShipClass : byte { Scout, Fighter }
+public enum ShipClass : byte { Scout, Fighter, Bomber }
 
 [SpacetimeDB.Type]
 public enum MatchPhase : byte { Lobby, Active, Ended }
@@ -313,9 +313,24 @@ public static partial class Module
     // MaxHull / WeaponDamage / FireInterval are the compiled-in defaults SeedDefaults pours
     // into the def tables, and the fallback values the def-read helpers use when a row is
     // missing (ShipMaxHull, ShipWeaponDamage). Instance mass now comes from ShipStatsFor.
-    private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
-    private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
-    private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+    private static float MaxHull(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 240f,
+        ShipClass.Fighter => 120f,
+        _ => 60f,
+    };
+    private static float WeaponDamage(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 22f,
+        ShipClass.Fighter => 10f,
+        _ => 4f,
+    };
+    private static uint FireInterval(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 14u,
+        ShipClass.Fighter => 8u,
+        _ => 4u,
+    };
     // Weapon hit sphere for a ship: a pod is a small, hard-to-hit target (PodHitRadius);
     // every other ship uses the full ShipRadius. Physical collisions ignore this.
     private static float HitRadius(Ship s) => s.IsPod ? PodHitRadius : ShipRadius;

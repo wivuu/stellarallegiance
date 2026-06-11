@@ -886,9 +886,10 @@ public partial class WorldRenderer : Node3D
 			pv.QueueFree();
 	}
 
-	// Distinct silhouettes per class (T7), both built pointing local +Z to match
+	// Distinct silhouettes per class (T7), all built pointing local +Z to match
 	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
-	// chunkier, boxier hull that reads as the heavier ship.
+	// chunkier, boxier hull, the Bomber a long heavy slab that reads as the
+	// biggest ship on the field.
 	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig, bool isPod)
 	{
 		var mat = isPig
@@ -914,6 +915,15 @@ public partial class WorldRenderer : Node3D
 			};
 		}
 
+		if (cls == ShipClass.Bomber)
+		{
+			return new MeshInstance3D
+			{
+				Mesh = new BoxMesh { Size = new Vector3(4.8f, 2.2f, 7.2f) },
+				MaterialOverride = mat,
+			};
+		}
+
 		return new MeshInstance3D
 		{
 			Mesh = new CylinderMesh
@@ -931,7 +941,9 @@ public partial class WorldRenderer : Node3D
 	// Build and attach the dynamic engine glow (see EngineGlow) to a freshly
 	// spawned ship, then hand the node its reference so it can drive throttle each
 	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
-	// Scout's single central thruster vs a Fighter's heavier twin engines.
+	// Scout's single central thruster, a Fighter's twin engines, a Bomber's
+	// wider-set twin heavies. (Positions mirror the seeded MainEngine/Booster
+	// hardpoints in Defs.cs until the M4 loader reads them from data.)
 	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team, bool isPod)
 	{
 		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
@@ -941,8 +953,9 @@ public partial class WorldRenderer : Node3D
 		// trail below (so a drifting pod is trackable), but no thruster FX.
 		if (!isPod)
 		{
-			EngineGlow glow = cls == ShipClass.Fighter
-				? new EngineGlow
+			EngineGlow glow = cls switch
+			{
+				ShipClass.Fighter => new EngineGlow
 				{
 					Name = "EngineGlow",
 					Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
@@ -950,8 +963,17 @@ public partial class WorldRenderer : Node3D
 					PlumeLength = 3.8f,
 					LightRange = 18f,
 					CoreColor = hot,
-				}
-				: new EngineGlow
+				},
+				ShipClass.Bomber => new EngineGlow
+				{
+					Name = "EngineGlow",
+					Nozzles = new[] { new Vector3(-1.4f, 0f, -3.4f), new Vector3(1.4f, 0f, -3.4f) },
+					NozzleRadius = 0.75f,
+					PlumeLength = 4.2f,
+					LightRange = 20f,
+					CoreColor = hot,
+				},
+				_ => new EngineGlow
 				{
 					Name = "EngineGlow",
 					Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
@@ -959,7 +981,8 @@ public partial class WorldRenderer : Node3D
 					PlumeLength = 3.5f,
 					LightRange = 15f,
 					CoreColor = hot,
-				};
+				},
+			};
 
 			shipNode.AddChild(glow);
 			switch (shipNode)
@@ -977,9 +1000,10 @@ public partial class WorldRenderer : Node3D
 		shipNode.AddChild(new TeamTrail
 		{
 			Name = "TeamTrail",
-			Position = new Vector3(0f, 0f, cls == ShipClass.Fighter ? -2.75f : -2.25f),
+			Position = new Vector3(0f, 0f,
+				cls == ShipClass.Bomber ? -3.4f : cls == ShipClass.Fighter ? -2.75f : -2.25f),
 			TeamColor = hot,
-			Width = cls == ShipClass.Fighter ? 0.5f : 0.4f,
+			Width = cls == ShipClass.Bomber ? 0.65f : cls == ShipClass.Fighter ? 0.5f : 0.4f,
 		});
 	}
 }

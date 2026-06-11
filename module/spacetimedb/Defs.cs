@@ -147,10 +147,11 @@ public static partial class Module
     // numbers; M3 wires IsPod → this row.
     private const byte PodClassId = 255;
 
-    // Weapon ids for the two seeded class guns (referenced by their ship's Weapon
+    // Weapon ids for the seeded class guns (referenced by their ship's Weapon
     // hardpoint). Append new weapons with new ids.
     private const uint ScoutWeaponId = 0;
     private const uint FighterWeaponId = 1;
+    private const uint BomberWeaponId = 2;
 
     // ---- Seeding ------------------------------------------------------
 
@@ -210,13 +211,21 @@ public static partial class Module
                 Hp(HardpointKind.Booster, 0, -1.1f, 0f, -2.75f, 0f, 0f, -1f),
                 Hp(HardpointKind.Booster, 1, 1.1f, 0f, -2.75f, 0f, 0f, -1f))));
 
+        // Bomber: the heavy hull — twin main engines astern; one slow, hard-hitting cannon.
+        ctx.Db.ShipClassDef.Insert(ShipDefFromStats(
+            FlightModel.ClassBomber, "Bomber", FlightModel.Bomber, MaxHull(ShipClass.Bomber),
+            Hps(
+                Hp(HardpointKind.Weapon, 0, 0f, 0f, NoseOffset, 0f, 0f, 1f, BomberWeaponId),
+                Hp(HardpointKind.MainEngine, 0, -1.4f, 0f, -3.4f, 0f, 0f, -1f),
+                Hp(HardpointKind.MainEngine, 1, 1.4f, 0f, -3.4f, 0f, 0f, -1f))));
+
         // Escape pod: slow, unarmed lifeboat (no Weapon hardpoint). Single nozzle anchors
         // its team trail; PodMaxHull is its low hull. Selected via IsPod, see PodClassId.
         ctx.Db.ShipClassDef.Insert(ShipDefFromStats(
             PodClassId, "Pod", FlightModel.Pod, PodMaxHull,
             Hps(Hp(HardpointKind.MainEngine, 0, 0f, 0f, -2.25f, 0f, 0f, -1f))));
 
-        // Two class guns. Speed/life/radius are the shared combat constants; damage,
+        // The class guns. Speed/life/radius are the shared combat constants; damage,
         // fire-interval and spread are the former per-class ternaries / FlightModel spreads.
         ctx.Db.WeaponDef.Insert(new WeaponDef
         {
@@ -237,6 +246,16 @@ public static partial class Module
             ProjectileLifeTicks = ProjectileLifeTicks,
             ProjectileRadius = ProjectileRadius,
             SpreadRad = FlightModel.FighterSpread,
+        });
+        ctx.Db.WeaponDef.Insert(new WeaponDef
+        {
+            WeaponId = BomberWeaponId, Name = "Bomber Cannon",
+            Damage = WeaponDamage(ShipClass.Bomber),
+            FireIntervalTicks = FireInterval(ShipClass.Bomber),
+            ProjectileSpeed = ProjectileSpeed,
+            ProjectileLifeTicks = ProjectileLifeTicks,
+            ProjectileRadius = ProjectileRadius,
+            SpreadRad = FlightModel.BomberSpread,
         });
 
         // One base type. Radius/health are the current constants. A minimal hardpoint set

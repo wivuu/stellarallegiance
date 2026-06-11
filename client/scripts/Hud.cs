@@ -35,11 +35,12 @@ public partial class Hud : CanvasLayer
 		_label.AddThemeFontSizeOverride("font_size", 18);
 		AddChild(_label);
 
-		// Spawn menu: two buttons, shown only when the player has no ship.
+		// Spawn menu: one button per class, shown only when the player has no ship.
 		_menu = new VBoxContainer { Position = new Vector2(16, 64) };
 		AddChild(_menu);
 		_menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
 		_menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
+		_menu.AddChild(SpawnButton("Spawn Bomber  [3]  — heavy & ponderous", ShipClass.Bomber));
 
 		// Out-of-bounds warning (sector boundary): centered in the upper third, hidden
 		// until the local ship strays past its sector radius and starts taking damage.

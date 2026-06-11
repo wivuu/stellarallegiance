@@ -108,6 +108,7 @@ public partial class ShipController : Node
 		{
 			if (a == "--autofly") _autoFly = true;
 			if (a == "--fighter") autoClass = ShipClass.Fighter;   // autofly picks Fighter (dev verify)
+			if (a == "--bomber") autoClass = ShipClass.Bomber;     // autofly picks Bomber (dev verify)
 			if (a == "--combat-test") { _autoFly = true; _combatTest = true; }
 		}
 		// Headless runs are otherwise uncapped: _Process spins as fast as possible,
@@ -156,6 +157,7 @@ public partial class ShipController : Node
 		{
 			if (Input.IsPhysicalKeyPressed(Key.Key1)) _spawnRequest = ShipClass.Scout;
 			if (Input.IsPhysicalKeyPressed(Key.Key2)) _spawnRequest = ShipClass.Fighter;
+			if (Input.IsPhysicalKeyPressed(Key.Key3)) _spawnRequest = ShipClass.Bomber;
 		}
 
 		if (_spawnPending)

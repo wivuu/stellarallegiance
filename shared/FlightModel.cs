@@ -255,9 +255,10 @@ namespace StellarAllegiance.Shared
 
         // Ship class as a raw byte so this file depends on no game enum
         // (module's ShipClass and the client's generated ShipClass differ).
-        // Matches enum order in .PLAN/03: Scout = 0, Fighter = 1.
+        // Matches enum order in .PLAN/03: Scout = 0, Fighter = 1, Bomber = 2.
         public const byte ClassScout = 0;
         public const byte ClassFighter = 1;
+        public const byte ClassBomber = 2;
 
         // Per-class seed stats from the extracted Allegiance hulls (.PLAN/CONFIG.md,
         // .PLAN/ship_movement/06_extracted_hull_stats.md). Authored knobs only — the
@@ -274,6 +275,14 @@ namespace StellarAllegiance.Shared
             100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f);
         // abAccel 10 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
 
+        // Bomber: the heavy hull, straight from the extracted Allegiance numbers
+        // ("Bomber" row, 06_extracted_hull_stats.md). 20°/s rates at 8° drift give
+        // only rate²/(2·drift) = 25°/s² of angular accel — ~0.8-1.6 s to wind a turn
+        // up or stop it. This is the hull where the rotational inertia really shows.
+        public static readonly ShipStats Bomber = ShipStats.Create(
+            60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 6f, 2.0f, 1.0f);
+        // abAccel 6 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
+
         // Escape pod (server Ship.IsPod): a slow, unarmed lifeboat ejected on ship death.
         // Full strafe/reverse (1.0) and no afterburner (AbAccel 0) — it crawls home and
         // gets shoved around in collisions (light mass). Selected via StatsFor(class,
@@ -282,7 +291,8 @@ namespace StellarAllegiance.Shared
             60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f);
 
         public static ShipStats StatsFor(byte shipClass) =>
-            shipClass == ClassFighter ? Fighter : Scout;
+            shipClass == ClassFighter ? Fighter :
+            shipClass == ClassBomber ? Bomber : Scout;
 
         // Pod-aware stats selection: a pod ignores its class and flies the slow,
         // boost-less Pod profile. Callers pass ship.IsPod so server authority and
@@ -300,9 +310,11 @@ namespace StellarAllegiance.Shared
         // the SAME value (no mirrored-constant drift).
         public const float ScoutSpread = 0.006f;    // ~0.34° — minimal (default weapon)
         public const float FighterSpread = 0.035f;  // ~2.0°
+        public const float BomberSpread = 0.012f;   // ~0.7° — slow heavy slugs, fairly true
 
         public static float WeaponSpreadRad(byte shipClass) =>
-            shipClass == ClassFighter ? FighterSpread : ScoutSpread;
+            shipClass == ClassFighter ? FighterSpread :
+            shipClass == ClassBomber ? BomberSpread : ScoutSpread;
 
         // Deterministically scatter a unit fire direction within a cone of the given
         // half-angle. Keyed by (shipId, fireTick) so the wasm server and the mono
