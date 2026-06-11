@@ -8,8 +8,9 @@ using StellarAllegiance.Shared.Navigation;
 //  Kept deliberately SEPARATE from player logic. PIGs reuse the exact same
 //  Ship table, FlightModel integrator, fire control, projectile, collision and
 //  client-render path as player ships — the only differences live here:
-//    • a flag (Ship.IsPig) routes a drone's per-tick input through PigThink
-//      instead of the client's ShipInput buffer;
+//    • a flag (Ship.IsPig) synthesizes a drone's input server-side — picked by
+//      the 5 Hz brain (PigDecide) and turned into per-tick flight input by
+//      PigExecute (20 Hz) — instead of the client's ShipInput buffer;
 //    • a persistent Pig row per "slot" tracks lifecycle (spawn / death cooldown)
 //      and behaviour (Idle / Seek / Attack + current target).
 //
@@ -373,7 +374,7 @@ public static partial class Module
     // ejects an escape pod that a friendly ship must touch for the player to respawn. We do
     // NOT want the squad to peel off for it — that hands the attacker a free run at the base —
     // so AT MOST ONE drone per team is ever on rescue duty. That single rescuer is marked
-    // PigState.Rescue with the pod as its target; PigThink flies it onto the pod (the rescue
+    // PigState.Rescue with the pod as its target; PigExecute flies it onto the pod (the rescue
     // pass in SimulateTick resolves the pickup) while every other drone keeps attacking. When
     // the pod is resolved (rescued / died / warped to another sector) the slot frees and either
     // grabs the NEXT nearest pod or rejoins the fight — pods are ferried home one at a time.
