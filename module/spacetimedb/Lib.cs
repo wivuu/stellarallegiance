@@ -1160,12 +1160,19 @@ public static partial class Module
         // change a step made (the win condition writes Match inside SimulateTick).
         var cur = ctx.Db.Match.Id.Find(0)!.Value;
         ctx.Db.Match.Id.Update(cur with { Tick = tick, LastTickMicros = now, AccumMicros = accum });
+
+        // Benchmark instrumentation (ai-benching): log every 100 ticks so the wall-clock
+        // gap between log lines / 100 gives the real per-tick cost of SimTick (incl.
+        // catch-up steps), independent of the host's invocation cadence.
+        if (tick % 100 < (uint)steps)
+            Log.Info($"[Bench] tick={tick} steps={steps} ships={ctx.Db.Ship.Count} proj={ctx.Db.Projectile.Count}");
     }
 
     // One fixed-dt authoritative step for sim tick `tick`.
     private static void SimulateTick(ReducerContext ctx, uint tick)
     {
         float dt = FlightModel.Dt;
+        var worldCfg = WorldConfigOrDefault(ctx);
 
         // AI drone (PIG) lifecycle + target SELECTION no longer live here — they run in the
         // separate, slower PigBrainTick reducer (PigAI.cs), which caches one PigDecision per
@@ -1247,7 +1254,7 @@ public static partial class Module
             // offset/forward, damage, interval, speed, life and spread all come from the
             // ship's ShipClassDef hardpoint + the WeaponDef it names (see Weapons.cs). Pods
             // are unarmed — TryFire never fires them.
-            uint lastFire = TryFire(ctx, ship, state, input.Firing, tick, ship.LastFireTick);
+            uint lastFire = TryFire(ctx, ship, state, input.Firing && !worldCfg.DebugNoFire, tick, ship.LastFireTick);
 
             var updated = ship with
             {

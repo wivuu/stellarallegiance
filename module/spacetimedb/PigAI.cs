@@ -257,6 +257,13 @@ public static partial class Module
 
         EnsurePigSlots(ctx);
         SimulatePigLifecycle(ctx, tick);
+
+        // Benchmark toggle: skip rescue assignment + per-drone target selection entirely,
+        // leaving drones flying their last cached PigDecision. Isolates AI decision cost
+        // (this loop) from sim physics/projectile cost (see SimulateTick).
+        if (WorldConfigOrDefault(ctx).DebugFreezeBrain)
+            return;
+
         // Commit at most one drone per team to pick up a downed teammate's pod (the rest keep
         // attacking); runs before the per-drone brain so PigDecide sees the assignment.
         AssignPigRescuers(ctx, tick);
@@ -418,6 +425,36 @@ public static partial class Module
             if (bestDrone is Pig chosen)
                 ctx.Db.Pig.PigId.Update(chosen with { State = PigState.Rescue, TargetShipId = bestPod });
         }
+    }
+
+    // Benchmark-only (ai-benching): force every Pig slot with no live drone to spawn
+    // immediately, bypassing the squad-wave/EnemyInSector gating in
+    // SimulatePigLifecycle. Marks each team's squad Active so the lifecycle leaves the
+    // freshly-spawned full squad alone. Lets us load N drones/team for a tick-cost
+    // benchmark without needing real player ships in a base sector.
+    [SpacetimeDB.Reducer]
+    public static void BenchSpawnAllPigs(ReducerContext ctx)
+    {
+        var match0 = ctx.Db.Match.Id.Find(0);
+        if (match0 is null)
+            return;
+        uint tick = match0.Value.Tick;
+
+        EnsurePigSlots(ctx);
+
+        int spawned = 0;
+        foreach (var slot in ctx.Db.Pig.Iter().ToList())
+        {
+            if (slot.ShipId is not null)
+                continue;
+            SpawnPig(ctx, slot, tick);
+            spawned++;
+        }
+        for (byte team = 0; team < NumTeams; team++)
+            if (ctx.Db.PigSquad.Team.Find(team) is PigSquad squad)
+                ctx.Db.PigSquad.Team.Update(squad with { Active = true, NextSquadTick = 0 });
+
+        Log.Info($"[Bench] BenchSpawnAllPigs: spawned {spawned} drones");
     }
 
     // Launch a fresh drone for a slot at its team base, facing the sector center

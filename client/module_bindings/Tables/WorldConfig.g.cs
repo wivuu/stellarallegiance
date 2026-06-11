@@ -42,12 +42,16 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<WorldConfig, byte> Id { get; }
         public global::SpacetimeDB.Col<WorldConfig, float> SectorScale { get; }
         public global::SpacetimeDB.Col<WorldConfig, float> AsteroidDensity { get; }
+        public global::SpacetimeDB.Col<WorldConfig, bool> DebugFreezeBrain { get; }
+        public global::SpacetimeDB.Col<WorldConfig, bool> DebugNoFire { get; }
 
         public WorldConfigCols(string tableName)
         {
             Id = new global::SpacetimeDB.Col<WorldConfig, byte>(tableName, "id");
             SectorScale = new global::SpacetimeDB.Col<WorldConfig, float>(tableName, "sector_scale");
             AsteroidDensity = new global::SpacetimeDB.Col<WorldConfig, float>(tableName, "asteroid_density");
+            DebugFreezeBrain = new global::SpacetimeDB.Col<WorldConfig, bool>(tableName, "debug_freeze_brain");
+            DebugNoFire = new global::SpacetimeDB.Col<WorldConfig, bool>(tableName, "debug_no_fire");
         }
     }
 

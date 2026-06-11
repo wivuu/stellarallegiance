@@ -125,6 +125,14 @@ public partial struct WorldConfig
     public byte Id;              // always 0 (singleton)
     public float SectorScale;    // multiplier on authored sector radii (CoreRadius/VergeRadius)
     public float AsteroidDensity;// asteroids per unit of normalized sector volume
+
+    // ---- Benchmark/debug toggles (ai-benching) -------------------------
+    // Skip the per-drone PigBrainTick decision loop (rescue assignment + PigDecide) when
+    // set, isolating AI decision cost from the 20 Hz sim's physics/projectile passes.
+    public bool DebugFreezeBrain;
+    // Force every ship's Firing input to false in SimulateTick when set, isolating the
+    // projectile spawn/advance/hit-test cost (Pass B) from ship integration (Pass A/C).
+    public bool DebugNoFire;
 }
 
 // Private singleton recording the database OWNER (the identity that published the
@@ -421,5 +429,5 @@ public static partial class Module
 
     // The world config, or the seed defaults if no row exists yet (pre-M2 callers).
     public static WorldConfig WorldConfigOrDefault(ReducerContext ctx)
-        => ctx.Db.WorldConfig.Id.Find((byte)0) ?? new WorldConfig { Id = 0, SectorScale = 2.25f, AsteroidDensity = 1.0f };
+        => ctx.Db.WorldConfig.Id.Find((byte)0) ?? new WorldConfig { Id = 0, SectorScale = 2.25f, AsteroidDensity = 1.0f, DebugFreezeBrain = false, DebugNoFire = false };
 }

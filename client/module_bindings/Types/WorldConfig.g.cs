@@ -19,16 +19,24 @@ namespace SpacetimeDB.Types
         public float SectorScale;
         [DataMember(Name = "asteroid_density")]
         public float AsteroidDensity;
+        [DataMember(Name = "debug_freeze_brain")]
+        public bool DebugFreezeBrain;
+        [DataMember(Name = "debug_no_fire")]
+        public bool DebugNoFire;
 
         public WorldConfig(
             byte Id,
             float SectorScale,
-            float AsteroidDensity
+            float AsteroidDensity,
+            bool DebugFreezeBrain,
+            bool DebugNoFire
         )
         {
             this.Id = Id;
             this.SectorScale = SectorScale;
             this.AsteroidDensity = AsteroidDensity;
+            this.DebugFreezeBrain = DebugFreezeBrain;
+            this.DebugNoFire = DebugNoFire;
         }
 
         public WorldConfig()
