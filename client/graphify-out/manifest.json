@@ -1,0 +1,122 @@
+{
+  "scripts/AlephView.cs": {
+    "mtime": 1780756899.81516,
+    "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
+    "semantic_hash": ""
+  },
+  "scripts/CameraRig.cs": {
+    "mtime": 1780751630.428061,
+    "ast_hash": "6c4d9e55a32f1354746e35860b3c39a8",
+    "semantic_hash": ""
+  },
+  "scripts/Chat.cs": {
+    "mtime": 1780695227.6188376,
+    "ast_hash": "4e9658cfe809f7b65bfaa7b81ac6c557",
+    "semantic_hash": ""
+  },
+  "scripts/ConnectionManager.cs": {
+    "mtime": 1780668592.8209198,
+    "ast_hash": "00ba21f5cf6b4e5896ef39088e4b9e09",
+    "semantic_hash": ""
+  },
+  "scripts/ConnectionOverlay.cs": {
+    "mtime": 1780682700.7644095,
+    "ast_hash": "bff1be5ff7da9defa3b36bfcc74f3da8",
+    "semantic_hash": ""
+  },
+  "scripts/DustField.cs": {
+    "mtime": 1780668592.8220572,
+    "ast_hash": "0119cebd52c7b7e59ffb768881a98abe",
+    "semantic_hash": ""
+  },
+  "scripts/EngineGlow.cs": {
+    "mtime": 1781045873.7319667,
+    "ast_hash": "016c279e5369bd90da01568e4cd4909b",
+    "semantic_hash": ""
+  },
+  "scripts/ExplosionEffect.cs": {
+    "mtime": 1780678799.1349943,
+    "ast_hash": "a6ab4acf0ddf3815b791df79e2345048",
+    "semantic_hash": ""
+  },
+  "scripts/HitFlash.cs": {
+    "mtime": 1780678799.1351247,
+    "ast_hash": "06cbbf17aa619336fdbf34371a93a577",
+    "semantic_hash": ""
+  },
+  "scripts/Hud.cs": {
+    "mtime": 1781032026.9275434,
+    "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
+    "semantic_hash": ""
+  },
+  "scripts/Lobby.cs": {
+    "mtime": 1780668592.8234627,
+    "ast_hash": "fd12a10ece76fdc1a985b2b672854dbf",
+    "semantic_hash": ""
+  },
+  "scripts/Minimap.cs": {
+    "mtime": 1780668592.8238854,
+    "ast_hash": "840f43e46d5bb113fb2a4379e19559be",
+    "semantic_hash": ""
+  },
+  "scripts/PredictionController.cs": {
+    "mtime": 1781102224.3083892,
+    "ast_hash": "6be7d1f0f2fe77d68c87d091f9ad8689",
+    "semantic_hash": ""
+  },
+  "scripts/ProjectileView.cs": {
+    "mtime": 1780753450.3530416,
+    "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
+    "semantic_hash": ""
+  },
+  "scripts/RemoteShip.cs": {
+    "mtime": 1781032026.9284115,
+    "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
+    "semantic_hash": ""
+  },
+  "scripts/ShipController.cs": {
+    "mtime": 1781101873.153051,
+    "ast_hash": "a3e7006708d39452b978cc0f4327c2d2",
+    "semantic_hash": ""
+  },
+  "scripts/ShipMath.cs": {
+    "mtime": 1781098581.7030888,
+    "ast_hash": "4ba10beff2d51daef33766ed153e438b",
+    "semantic_hash": ""
+  },
+  "scripts/Starscape.cs": {
+    "mtime": 1780766621.203157,
+    "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
+    "semantic_hash": ""
+  },
+  "scripts/Sun.cs": {
+    "mtime": 1780766030.2042913,
+    "ast_hash": "2280892dfca65720b99510a239ec7c6f",
+    "semantic_hash": ""
+  },
+  "scripts/TargetMarkers.cs": {
+    "mtime": 1780754042.9995205,
+    "ast_hash": "360776da7afd49c2d23d37eaae67490c",
+    "semantic_hash": ""
+  },
+  "scripts/TeamTrail.cs": {
+    "mtime": 1780668592.827944,
+    "ast_hash": "fd5361bc51fc5cdb01d496ce803ddb4d",
+    "semantic_hash": ""
+  },
+  "scripts/WorldRenderer.cs": {
+    "mtime": 1781033434.4503157,
+    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
+    "semantic_hash": ""
+  },
+  "wivuullegiance.csproj": {
+    "mtime": 1780664788.4547856,
+    "ast_hash": "d05677b5691cac7d3f198689313a524f",
+    "semantic_hash": ""
+  },
+  "wivuullegiance.sln": {
+    "mtime": 1780421022.6209621,
+    "ast_hash": "85b5f0d2d50697c1ec03c1f09d7056d6",
+    "semantic_hash": ""
+  }
+}

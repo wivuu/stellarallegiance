@@ -7,7 +7,9 @@ using SpacetimeDB.Types;
 // mutates state here — it only mirrors whatever the subscription delivers.
 public partial class WorldRenderer : Node3D
 {
-	private const float BaseRadius = 45f;
+	// Every base is this single base type this phase (mirror of the module's
+	// DefaultBaseTypeId); the BaseDef supplies radius/health/hardpoints.
+	private const byte DefaultBaseTypeId = 0;
 
 	// Floating damage bar above each base. BaseMaxHealth mirrors the module's win-condition
 	// hull (Lib.cs BaseMaxHealth) so the bar can show a 0..1 fraction; keep the two in sync.
@@ -50,6 +52,10 @@ public partial class WorldRenderer : Node3D
 		public StandardMaterial3D FillMat = null!;
 	}
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
+	// Purely cosmetic lazy tumble: each rock spins slowly about a fixed pseudo-random axis,
+	// derived once from its id (stable across frames; the sim treats rocks as static spheres).
+	// Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
+	private readonly Dictionary<ulong, (Node3D Node, Vector3 Axis, float Speed)> _asteroidSpins = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
 	private readonly Dictionary<ulong, Node3D> _alephNodes = new();
@@ -104,6 +110,7 @@ public partial class WorldRenderer : Node3D
 	private ConnectionManager _cm = null!;
 	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
 	private Starscape? _starscape;   // sibling; repaints the backdrop as the local sector changes
+	private DefRegistry _defs = null!;   // sibling; runtime ship/weapon/base defs the local ship predicts from
 
 	// Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
 	// one-way latency); >= 0 = a fixed override in ms, pinned via STDB_SHOT_MASK_MS for
@@ -204,6 +211,7 @@ public partial class WorldRenderer : Node3D
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
+		_defs = GetNode<DefRegistry>("../DefRegistry");
 		_starscape = GetNodeOrNull<Starscape>("../Starscape");
 
 		if (float.TryParse(OS.GetEnvironment("STDB_SHOT_MASK_MS"), out var ms) && ms >= 0f)
@@ -313,16 +321,14 @@ public partial class WorldRenderer : Node3D
 		if (_baseNodes.ContainsKey(row.BaseId))
 			return;
 
-		var node = new MeshInstance3D
-		{
-			Name = $"Base_{row.BaseId}",
-			Mesh = new SphereMesh { Radius = BaseRadius, Height = BaseRadius * 2f, RadialSegments = 32, Rings = 16 },
-			MaterialOverride = row.Team == 0 ? _team0Mat : _team1Mat,
-			Position = new Vector3(row.PosX, row.PosY, row.PosZ),
-		};
+		// Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
+		// from the subscribed BaseDef (M5). Every base is BaseTypeId 0 this phase.
+		var node = BaseModelLoader.Build(_defs, DefaultBaseTypeId, row.Team, row.Team == 0 ? _team0Mat : _team1Mat);
+		node.Name = $"Base_{row.BaseId}";
+		node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
-		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node);
+		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node, BaseModelLoader.Radius(_defs, DefaultBaseTypeId));
 		UpdateBaseHealthBar(_baseHealthBars[row.BaseId], row.Health);
 		SetNodeSector(node, row.SectorId);
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
@@ -331,9 +337,9 @@ public partial class WorldRenderer : Node3D
 	// Build the floating damage bar (background + fill) as children of the base node, anchored
 	// just above the sphere. Returns the handle stored per base; the fill is repositioned/recoloured
 	// by UpdateBaseHealthBar and the root is screen-aligned each frame in _Process.
-	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode)
+	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode, float baseRadius)
 	{
-		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, BaseRadius + 22f, 0f) };
+		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, baseRadius + 22f, 0f) };
 
 		var bg = new MeshInstance3D
 		{
@@ -508,13 +514,39 @@ public partial class WorldRenderer : Node3D
 		}
 		_asteroids.AddChild(node);
 		_asteroidNodes[row.AsteroidId] = node;
+		var (axis, speed) = AsteroidSpin(row.AsteroidId);
+		_asteroidSpins[row.AsteroidId] = (node, axis, speed);
 		SetNodeSector(node, row.SectorId);
 	}
 
 	private void OnAsteroidDelete(EventContext ctx, Asteroid row)
 	{
+		_asteroidSpins.Remove(row.AsteroidId);
 		if (_asteroidNodes.Remove(row.AsteroidId, out var node))
 			node.QueueFree();
+	}
+
+	// Stable pseudo-random tumble for one rock: hash the id into a uniform-ish unit axis and a
+	// slow rate. Deterministic so the axis never changes frame-to-frame (no per-frame RNG), and
+	// purely client-side — nothing here touches the sim. Rates are deliberately lazy (~0.03..0.15
+	// rad/s) so rocks drift rather than visibly whirl.
+	private static (Vector3 Axis, float Speed) AsteroidSpin(ulong id)
+	{
+		// splitmix64-style avalanche so neighbouring ids don't share an axis.
+		ulong h = id * 0x9E3779B97F4A7C15UL + 0x632BE59BD9B4E019UL;
+		h ^= h >> 30; h *= 0xBF58476D1CE4E5B9UL;
+		h ^= h >> 27; h *= 0x94D049BB133111EBUL;
+		h ^= h >> 31;
+		float u1 = (h & 0x1FFFFF) / (float)0x200000;          // [0,1)  -> cos(polar)
+		float u2 = ((h >> 21) & 0x1FFFFF) / (float)0x200000;  // [0,1)  -> azimuth
+		float u3 = ((h >> 42) & 0xFFFF) / (float)0x10000;     // [0,1)  -> rate
+		float z = u1 * 2f - 1f;
+		float phi = u2 * Mathf.Tau;
+		float r = Mathf.Sqrt(Mathf.Max(0f, 1f - z * z));
+		var axis = new Vector3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z);
+		if (axis.LengthSquared() < 1e-6f)
+			axis = Vector3.Up;
+		return (axis.Normalized(), 0.03f + u3 * 0.12f);
 	}
 
 	// ---- Ship -----------------------------------------------------------
@@ -535,9 +567,9 @@ public partial class WorldRenderer : Node3D
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
-			AttachEngineGlow(pc, row.Class, row.Team, row.IsPod);
-			pc.Initialize(row);
+			pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
+			ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
+			pc.Initialize(row, _defs);
 			LocalShip = pc;
 			_localTeam = row.Team;
 			// Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
@@ -556,9 +588,9 @@ public partial class WorldRenderer : Node3D
 		var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 		node = rs;
 		_ships.AddChild(rs);
-		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
-		AttachEngineGlow(rs, row.Class, row.Team, row.IsPod);
-		rs.Initialize(row);
+		rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
+		ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
+		rs.Initialize(row, _defs);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
 	}
@@ -754,6 +786,14 @@ public partial class WorldRenderer : Node3D
 		CheckBoltImpacts(delta);
 		BillboardBaseHealthBars();
 
+		// Lazy cosmetic tumble: spin each rock slowly about its fixed pseudo-random axis.
+		if (_asteroidSpins.Count > 0)
+		{
+			float fdelta = (float)delta;
+			foreach (var (node, axis, speed) in _asteroidSpins.Values)
+				node.Rotate(axis, speed * fdelta);
+		}
+
 		if (_predictedShots.Count == 0)
 			return;
 		double now = Time.GetTicksMsec() / 1000.0;
@@ -846,100 +886,11 @@ public partial class WorldRenderer : Node3D
 			pv.QueueFree();
 	}
 
-	// Distinct silhouettes per class (T7), both built pointing local +Z to match
-	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
-	// chunkier, boxier hull that reads as the heavier ship.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig, bool isPod)
-	{
-		var mat = isPig
+	// Team/PIG hull material for a ship's placeholder mesh. The ShipModelLoader (M4)
+	// owns the mesh + hardpoint geometry; the materials live here with the rest of the
+	// renderer's shared resources, so it resolves one and hands it to the loader.
+	private StandardMaterial3D ShipMaterial(byte team, bool isPig)
+		=> isPig
 			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
 			: (team == 0 ? _team0Mat : _team1Mat);
-
-		// An escape pod reads as a small round lifeboat, not a fighter — class is ignored.
-		if (isPod)
-		{
-			return new MeshInstance3D
-			{
-				Mesh = new SphereMesh { Radius = 1.4f, Height = 2.8f, RadialSegments = 12, Rings = 8 },
-				MaterialOverride = mat,
-			};
-		}
-
-		if (cls == ShipClass.Fighter)
-		{
-			return new MeshInstance3D
-			{
-				Mesh = new BoxMesh { Size = new Vector3(3.6f, 1.6f, 5.5f) },
-				MaterialOverride = mat,
-			};
-		}
-
-		return new MeshInstance3D
-		{
-			Mesh = new CylinderMesh
-			{
-				TopRadius = 0f,
-				BottomRadius = 1.4f,
-				Height = 4.5f,
-				RadialSegments = 12,
-			},
-			MaterialOverride = mat,
-			RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
-		};
-	}
-
-	// Build and attach the dynamic engine glow (see EngineGlow) to a freshly
-	// spawned ship, then hand the node its reference so it can drive throttle each
-	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
-	// Scout's single central thruster vs a Fighter's heavier twin engines.
-	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team, bool isPod)
-	{
-		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
-		Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
-
-		// A pod is a powered-down lifeboat — no engine glow/plume. It still gets the team
-		// trail below (so a drifting pod is trackable), but no thruster FX.
-		if (!isPod)
-		{
-			EngineGlow glow = cls == ShipClass.Fighter
-				? new EngineGlow
-				{
-					Name = "EngineGlow",
-					Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
-					NozzleRadius = 0.6f,
-					PlumeLength = 3.8f,
-					LightRange = 18f,
-					CoreColor = hot,
-				}
-				: new EngineGlow
-				{
-					Name = "EngineGlow",
-					Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
-					NozzleRadius = 0.85f,
-					PlumeLength = 3.5f,
-					LightRange = 15f,
-					CoreColor = hot,
-				};
-
-			shipNode.AddChild(glow);
-			switch (shipNode)
-			{
-				case PredictionController pc: pc.AttachEngine(glow); break;
-				case RemoteShip rs: rs.AttachEngine(glow); break;
-			}
-		}
-
-		// Ghostly team-coloured ribbon tracing the ship's path (same hue as the glow so
-		// friend/foe still reads). It rides the ship node's transform, so no per-frame
-		// driving is needed. Anchored at the rear of the hull (roughly where the engines
-		// sit) so the ribbon streams off the ship's BACK, not its centre. Fighters get a
-		// slightly wider streak to match their bulk.
-		shipNode.AddChild(new TeamTrail
-		{
-			Name = "TeamTrail",
-			Position = new Vector3(0f, 0f, cls == ShipClass.Fighter ? -2.75f : -2.25f),
-			TeamColor = hot,
-			Width = cls == ShipClass.Fighter ? 0.5f : 0.4f,
-		});
-	}
 }

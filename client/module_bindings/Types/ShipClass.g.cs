@@ -12,5 +12,6 @@ namespace SpacetimeDB.Types
     {
         Scout,
         Fighter,
+        Bomber,
     }
 }

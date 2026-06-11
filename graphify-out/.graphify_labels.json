@@ -15,7 +15,7 @@
   "13": "Target Markers HUD",
   "14": "Remote Ship Networked",
   "15": "Project Build Config",
-  "16": "Connection & World Renderer",
+  "16": "Community 16",
   "17": "Dust Field Environment",
   "18": "Ship Math Utilities",
   "19": "Team Trail Effects",
@@ -25,6 +25,7 @@
   "23": "Sun Visual",
   "24": "Asteroid Generator CLI",
   "25": "Starscape Background",
+  "26": "Community 26",
   "27": "DotNet Tools Config",
   "28": "Local Publishing Scripts",
   "29": "CI Workflow Pipeline",
@@ -39,5 +40,9 @@
   "38": "Client Start Script",
   "39": "Asteroid JSON Data",
   "40": "Solution File",
-  "41": "Community 41"
+  "41": "Community 41",
+  "42": "Community 42",
+  "43": "Community 43",
+  "44": "Community 44",
+  "45": "Community 45"
 }

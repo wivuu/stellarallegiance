@@ -35,15 +35,6 @@ public partial class PredictionController : Node3D
 	private const int BufferLen = 40;             // ~2s at 20 Hz
 	private const float SmoothFreq = 14f;         // reconcile-ease spring natural frequency (rad/s)
 
-	// Weapon constants for client-side MUZZLE PREDICTION. These MUST mirror the
-	// server's authoritative values in module/spacetimedb/Lib.cs (ProjectileSpeed,
-	// NoseOffset, FireInterval) so the predicted ghost shot lines up 1:1 with the
-	// authoritative Projectile row the server later spawns. The server stays the
-	// single source of truth for damage/hits; this only predicts the visual.
-	private const float ProjectileSpeed = 250f;
-	private const float NoseOffset = 3f;
-	private static uint FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
-
 	// A shot the prediction step just fired, in Godot space, for the renderer to
 	// spawn an immediate ghost projectile.
 	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; }
@@ -64,7 +55,9 @@ public partial class PredictionController : Node3D
 	private ShipState _state;                          // latest predicted state (tick N)
 	private ShipState _prevState;                      // previous predicted state (tick N-1)
 	private ShipStats _stats;
-	private ShipClass _class;                          // for the fire-rate gate
+	private bool _hasStats;                             // false until this class's def arrives (then guard, don't bake)
+	private DefRegistry _defs = null!;                  // runtime ship/weapon defs (M3); wired at Initialize
+	private ShipClass _class;                          // class id for def/weapon lookups
 	private uint _lastFireTick;                        // mirrors server Ship.LastFireTick (0 = ready)
 	private readonly List<Entry> _buffer = new();
 
@@ -114,7 +107,7 @@ public partial class PredictionController : Node3D
 	// the visual exhaust; ShipController sets it from the same Shift key each frame.
 	public void SetAfterburner(float boost) => _afterburner = Mathf.Clamp(boost, 0f, 1f);
 
-	public void Initialize(Ship row)
+	public void Initialize(Ship row, DefRegistry defs)
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
@@ -122,9 +115,15 @@ public partial class PredictionController : Node3D
 		Health = row.Health;
 		MaxHealth = row.Health;
 		_class = row.Class;
+		_defs = defs;
 		_lastFireTick = 0;
-		// Pods fly the slow, boost-less Pod profile; combat ships use their class stats.
-		_stats = FlightModel.StatsFor((byte)row.Class, row.IsPod);
+		// Stats come purely from the runtime ShipClassDef (M3): a pod flies the slow,
+		// boost-less Pod profile, combat ships their class stats. DefRegistry rebuilds the
+		// SAME shared ShipStats the server derives, so prediction stays bit-identical to
+		// authority. No baked-in fallback: until the def lands _hasStats is false and Step
+		// holds authority instead of flying stale numbers (defs arrive in the initial
+		// snapshot, before spawn, so this is effectively always ready here).
+		_hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, out _stats);
 		_state = ShipMath.StateFromRow(row);
 		_prevState = _state;
 		_buffer.Clear();
@@ -146,6 +145,13 @@ public partial class PredictionController : Node3D
 	public PredictedShot? Step(ShipInputState input, uint clientTick)
 	{
 		_prevState = _state;
+		// Re-pull stats from the registry each tick (a cheap cached lookup) so a runtime
+		// retune of this class's ShipClassDef flows into prediction with no respawn — and
+		// stays in step with the server, which reads the same row. If the def hasn't loaded
+		// yet, don't predict on missing data: hold the last authoritative state until it
+		// arrives (no baked-tuning fallback).
+		if (_defs.TryGetStats((byte)_class, IsPod, out var st)) { _stats = st; _hasStats = true; }
+		if (!_hasStats) return null;
 		_throttle = Mathf.Clamp(input.Thrust, 0f, 1f);   // forward thrust drives the engine glow
 		_state = FlightModel.Integrate(_state, input, _stats);
 		_buffer.Add(new Entry { Tick = clientTick, Input = input, Predicted = _state });
@@ -153,16 +159,30 @@ public partial class PredictionController : Node3D
 			_buffer.RemoveRange(0, _buffer.Count - BufferLen);
 		_tickTimer = 0;
 
-		if (input.Firing && clientTick - _lastFireTick >= FireInterval(_class))
+		// Muzzle + weapon now come from data (M3): the ship's primary Weapon hardpoint and
+		// the WeaponDef it names — the SAME rows the server's TryFire reads, so each ghost
+		// corresponds 1:1 to the authoritative Projectile. No def / no weapon hardpoint (e.g.
+		// a pod) ⇒ the server won't fire either, so we predict nothing.
+		if (input.Firing
+			&& _defs.TryGetWeapon((byte)_class, out var hp, out var weapon)
+			&& clientTick - _lastFireTick >= weapon.FireIntervalTicks)
 		{
 			_lastFireTick = clientTick;
-			// Mirror the server's muzzle math (Lib.cs): spawn at the nose along true
-			// forward, but launch along the same deterministic per-weapon scatter so the
-			// predicted tracer matches the authoritative projectile shot-for-shot.
-			Vec3 fwd = _state.Rot.Rotate(new Vec3(0f, 0f, 1f));
-			Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)_class), ShipId, clientTick);
-			Vec3 mp = _state.Pos + fwd * NoseOffset;
-			Vec3 mv = shotDir * ProjectileSpeed + _state.Vel;
+			// Anchor the muzzle to the RENDERED transform (_renderedPos/_renderedRot), not
+			// the raw post-integration _state. _state.Pos is up to one tick of motion AHEAD
+			// of what's on screen (the visual interpolates toward it over the next tick, plus
+			// any reconcile _posErr offset), so spawning from it made the ghost's exit point
+			// drift off the nose by an amount proportional to the ship's speed. The rendered
+			// transform is exactly where the ship appears right now, so the muzzle stays
+			// pinned to the nose regardless of thrust/velocity. The local hardpoint
+			// offset/forward are rotated by the rendered attitude (offset (0,0,NoseOffset),
+			// forward +Z on the seeded hulls reproduces the old `pos + fwd*NoseOffset`).
+			Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
+			Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
+			Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
+			Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick);
+			Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
+			Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
 			return new PredictedShot { Pos = ShipMath.ToGodot(mp), Vel = ShipMath.ToGodot(mv) };
 		}
 		return null;

@@ -14,6 +14,8 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
+- Procedural spaceship generator - Using reusable/modular parts, be able to procedurally generate a wide variety of spaceship models with different shapes, sizes, textures, etc. An individual ship would be defined by a what parts it is made up of and defined in YAML. A build process would then take the YAML and produce a GLB file
+- CONFIG M5 addendum
 ---
 
 ## Roadmap (prioritized)
@@ -51,7 +53,7 @@ Make the existing two-team dogfighting richer on the systems already shipped
   missiles / mines that must be flown over to collect.
 - **Escape pods** — Eject on ship death; pod must either die or be rescued by a teammate in order for player to respawn.
 - **Improved in-game UI** — Health/shield bars, ship status indicators,
-  team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.)
+  team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.). Healthbars should be hud elements, not world-space objects -- currently base health bar casts a shadow on base for example
 
 ### Phase 3 — Hosting at scale
 
@@ -64,13 +66,14 @@ Stand up many independent game servers and let players find and join them.
   (likely a web server) lists available servers / acts as a browser.
 - **Tune prediction lead for WAN** — `STDB_LEAD` exists; playtest and commit a
   good default, ideally adaptive on measured RTT.
-- **Chat** — Lobby and in-game text chat.
 - **Scores, kills/deaths & ranks** — Per-player in-match and post-match stats,
   an overall point system, and player ranks.
 - **Spectator mode** — Follow players with Tab (camera orbits target); pick
   sectors to watch from the lobby.
 - **Matchmaking, accounts & persistence** — Player identities, ELO, match
   history.
+- **Custom Maps** - Maps configurable on a server, the asteroids would not be hardcoded, but instead the aleph layout would be configurable.
+
 
 ### Phase 4 — Strategy layer (Allegiance core)
 
