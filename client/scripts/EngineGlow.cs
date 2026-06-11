@@ -41,7 +41,7 @@ public partial class EngineGlow : Node3D
 	// --- Tuning ---------------------------------------------------------
 
 	private const float IdleThrottle = 0.12f;   // engines never go fully black while alive
-	private const float EaseRate = 9f;           // how fast shown throttle/boost track the target (1/s)
+	private const float EaseRate = 9f;           // spool-UP rate: engines ramp in smoothly (1/s)
 	private static readonly Color BoostColor = new(0.85f, 0.92f, 1f); // blue-white afterburner
 
 	// Per-nozzle visuals we modulate every frame. Materials/particles are unique
@@ -244,12 +244,17 @@ public partial class EngineGlow : Node3D
 		// power ramps smoothly. A ship sitting at zero throttle eases to true zero and
 		// goes fully dark (ApplyVisual) — no idle pilot glow on a parked engine.
 		float dt = (float)delta;
-		float ease = 1f - Mathf.Exp(-EaseRate * dt);
-		_shown = Mathf.Lerp(_shown, _target, ease);
-		_shownBoost = Mathf.Lerp(_shownBoost, _targetBoost, ease);
+		_shown = EaseToward(_shown, _target, dt);
+		_shownBoost = EaseToward(_shownBoost, _targetBoost, dt);
 		_flicker += dt * 12f;   // slow enough that turbulence reads as flow, not a strobe
 		ApplyVisual(_shown, _shownBoost);
 	}
+
+	// Spool UP smoothly; cut DOWN instantly. The flame must die the frame the pilot drops
+	// throttle, not linger bright on a hull coasting under drag, so a falling target snaps
+	// straight through (no ease) while a rising one ramps in.
+	private static float EaseToward(float cur, float target, float dt)
+		=> target <= cur ? target : Mathf.Lerp(cur, target, 1f - Mathf.Exp(-EaseRate * dt));
 
 	// Map the current throttle + afterburner onto every modulated visual.
 	private void ApplyVisual(float throttle, float boost)

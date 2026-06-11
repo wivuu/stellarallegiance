@@ -1,6 +1,7 @@
-[gd_scene load_steps=10 format=3 uid="uid://main"]
+[gd_scene load_steps=11 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/DefRegistry.cs" id="9"]
 [ext_resource type="Script" path="res://scripts/WorldRenderer.cs" id="2"]
 [ext_resource type="Script" path="res://scripts/ShipController.cs" id="3"]
 [ext_resource type="Script" path="res://scripts/CameraRig.cs" id="4"]
@@ -34,6 +35,9 @@ glow_hdr_threshold = 0.95
 
 [node name="ConnectionManager" type="Node" parent="."]
 script = ExtResource("1")
+
+[node name="DefRegistry" type="Node" parent="."]
+script = ExtResource("9")
 
 [node name="WorldRenderer" type="Node3D" parent="."]
 script = ExtResource("2")

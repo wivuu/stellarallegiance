@@ -14,6 +14,7 @@ public static class ShipMath
 		Rot = new Quat(r.RotX, r.RotY, r.RotZ, r.RotW),
 		AngVel = new Vec3(r.AngVelX, r.AngVelY, r.AngVelZ),
 		Mass = r.Mass,
+		AbPower = r.AbPower,
 	};
 
 	public static Vector3 ToGodot(Vec3 v) => new Vector3(v.X, v.Y, v.Z);

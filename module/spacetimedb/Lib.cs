@@ -11,7 +11,7 @@ using StellarAllegiance.Shared;
 // SpacetimeDB enums disallow explicit values; declaration order fixes them
 // (Scout=0, Fighter=1) and (Lobby=0, Active=1, Ended=2).
 [SpacetimeDB.Type]
-public enum ShipClass : byte { Scout, Fighter }
+public enum ShipClass : byte { Scout, Fighter, Bomber }
 
 [SpacetimeDB.Type]
 public enum MatchPhase : byte { Lobby, Active, Ended }
@@ -73,56 +73,19 @@ public partial struct ChatMessage
     public Timestamp CreatedAt;
 }
 
-[SpacetimeDB.Table(Accessor = "Ship", Public = true)]
-public partial struct Ship
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong ShipId;
-    public Identity Owner;
-    public byte Team;           // denormalized from Player for fast sim checks
-    public uint SectorId;       // which sector this ship is flying in (partitions the world)
-    public ShipClass Class;
-    public float PosX;
-    public float PosY;
-    public float PosZ;
-    public float VelX;
-    public float VelY;
-    public float VelZ;
-    public float RotX;
-    public float RotY;
-    public float RotZ;
-    public float RotW;
-    // Angular velocity (rad/s, world axes). Persisted so rotational momentum
-    // survives between SimTicks and the client can reconcile against it.
-    public float AngVelX;
-    public float AngVelY;
-    public float AngVelZ;
-    public float Health;
-    // Physical mass, seeded from Class at spawn (see MassFor). Drives flight accel
-    // (force/mass in FlightModel.Integrate) and ship-vs-ship collision response.
-    // A field (not derived) so future cargo/upgrades can vary it per ship.
-    public float Mass;
-    public uint LastInputTick; // highest sim tick integrated; for reconciliation
-    public uint LastFireTick;  // sim tick of this ship's most recent shot (fire-rate gate)
-    // True for AI-controlled combat drones (PIGs). Players never set this; it lets the
-    // client highlight drones on the HUD and the server route input through the AI brain
-    // (PigAI.cs) instead of the per-tick ShipInput buffer. PIGs otherwise reuse the exact
-    // same physics, fire control, collision, and rendering path as player ships.
-    public bool IsPig;
-    // True for an escape pod — a weak, slow, unarmed lifeboat ejected when a combat ship
-    // dies (mirrors IsPig: a pod reuses the Ship table, prediction, camera, collision, and
-    // render paths). A player pod is flown by its owner; a PIG pod (IsPod && IsPig) is
-    // auto-flown home by PodThink. Pods fly the slow FlightModel.Pod stats and never fire.
-    public bool IsPod;
-}
+// The Ship table + ship lifecycle (spawn/respawn/kill/pod/dock) live in Ships.cs (M2).
 
 // Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
 // input the client predicted with for that tick, rather than "latest" — this makes
 // the server replay the client's input sequence and drives prediction/authority
 // divergence to zero (.PLAN/07, /99). Server-private: clients write it via
 // ApplyInput and never read it, so it isn't synced. Pruned to a short window.
+// Multi-column index on (ShipId, Tick) so SimTick can fetch the exact input row for a ship
+// and tick with a direct index lookup (ByShipTick.Filter) instead of scanning the ship's whole
+// ~InputKeep-row buffer. The single-column ShipId index is kept for the latest-before fallback
+// and for bulk delete on despawn.
 [SpacetimeDB.Table(Accessor = "ShipInput", Public = false)]
+[SpacetimeDB.Index.BTree(Accessor = "ByShipTick", Columns = ["ShipId", "Tick"])]
 public partial struct ShipInput
 {
     [PrimaryKey]
@@ -139,21 +102,10 @@ public partial struct ShipInput
     public float Roll;          // -1..1
     public bool Firing;         // trigger held
     public bool Boost;          // afterburner held
+    public bool Coast;          // vector lock (thrust cancels drag, holds velocity)
 }
 
-[SpacetimeDB.Table(Accessor = "Base", Public = true)]
-public partial struct Base
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong BaseId;
-    public byte Team;
-    public uint SectorId;       // which sector this base sits in
-    public float PosX;
-    public float PosY;
-    public float PosZ;
-    public float Health;        // <= 0 => base destroyed => match ends
-}
+// The Base table + base content (radius/health from BaseDef) live in Bases.cs (M2).
 
 [SpacetimeDB.Table(Accessor = "Asteroid", Public = true)]
 public partial struct Asteroid
@@ -213,26 +165,7 @@ public partial struct Aleph
     public float PosZ;
 }
 
-[SpacetimeDB.Table(Accessor = "Projectile", Public = true)]
-public partial struct Projectile
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong ProjectileId;
-    public byte Team;           // so friendly fire can be ignored
-    public uint SectorId;       // sector it travels in (inherited from the firing ship)
-    public float Damage;        // hull damage dealt on hit (from the firing ship's class)
-    public float PosX;
-    public float PosY;
-    public float PosZ;
-    public float VelX;
-    public float VelY;
-    public float VelZ;
-    public uint ExpiresAtTick;  // sim tick at which it is culled
-    // Fired by an AI drone (PIG). PIG fire damages ships but NOT bases — drones
-    // "leave bases alone", so only players can erode a base (the win condition).
-    public bool FromPig;
-}
+// The Projectile table + fire control live in Weapons.cs (Phase-1 M2).
 
 [SpacetimeDB.Table(Accessor = "Match", Public = true)]
 public partial struct Match
@@ -297,13 +230,15 @@ public static partial class Module
 
     private const uint SimTickHz = 20;
     private const byte NumTeams = 2;
-    private const int AsteroidCount = 30;
+    private const int AsteroidCount = 4;
     private const uint InputKeep = 64;   // per-tick input buffer window (ticks)
     private const long DtMicros = 1_000_000 / SimTickHz;  // 50 ms — one fixed sim step
     private const int  MaxCatchupSteps = 8;               // cap sub-steps/call (anti-spiral)
 
     // Combat tuning (server-only; clients just render the resulting Projectile rows).
-    private const float ProjectileSpeed = 250f;      // u/s muzzle speed (added to ship velocity)
+    private const float ProjectileSpeed = 700f;      // u/s muzzle speed (added to ship velocity);
+                                                     // ~4× Scout MaxSpeed so guns out-range ships
+                                                     // under the Allegiance-native speeds (M0 calibration)
     private const uint  ProjectileLifeTicks = 50;    // ~2.5 s lifespan, then culled
     private const float NoseOffset = 3f;             // spawn this far ahead of ship center
     private const float ProjectileRadius = 1f;       // projectile hit sphere
@@ -329,21 +264,23 @@ public static partial class Module
     // fragile via their low hull) so a downed pilot can run for it. Physical collision still
     // uses the full ShipRadius; this only shrinks projectile hit tests (see HitRadius).
     private const float PodHitRadius = ShipRadius * 0.5f;
-    // Dock radius: a ship/pod intersecting its OWN base within this distance despawns
-    // (player → spawn menu; pod → resolved). Kept comfortably inside the spawn offset
-    // (BaseRadius + ShipRadius) so a freshly-spawned ship doesn't instantly re-dock.
-    private const float DockRadius = BaseRadius * 0.9f;
+    // Dock radius fraction: a ship/pod intersecting its OWN base within this fraction of the
+    // base radius despawns (player → spawn menu; pod → resolved). 0.9 keeps it comfortably
+    // inside the spawn offset (baseRadius + ShipRadius) so a freshly-spawned ship doesn't
+    // instantly re-dock. Multiplied against the live BaseRadiusOf (def-driven) at the use site.
+    private const float DockRadiusFrac = 0.9f;
     // Rescue radius: a pod is rescued only on DIRECT hull contact with a friendly non-pod
     // ship (same sector) — the two collision spheres touching (2·ShipRadius). Kept this tight
     // so a pod isn't accidentally resolved by a ship merely passing near it; the rescuer has
     // to actually reach it. Resolves the pod like docking (player → spawn menu, PIG pod despawns).
     private const float RescueRadius = ShipRadius * 2f;
     // Eject kinematics: a freshly-spawned pod (player OR PIG) is flung clear of the wreck —
-    // a high-speed impulse in a random direction plus a tumble. The flight model soft-caps
-    // coasting velocity (it bleeds off through LinearDrag rather than snapping), so this
-    // speed actually persists for a second or two before the pod settles to its slow crawl;
-    // the spin likewise decays via AngularDrag. Server-only RNG — the result is baked into
-    // the spawned Ship row, so client prediction just reads it (no RNG to reproduce).
+    // a high-speed impulse in a random direction plus a tumble. The flight model's
+    // exponential drag bleeds the over-speed off smoothly (maxSpeed is an equilibrium, not
+    // a snap), so this speed persists for a second or two before the pod settles to its slow
+    // crawl; the spin likewise winds down as the pod's turn rate slews toward its (near-zero)
+    // commanded rate. Server-only RNG — the result is baked into the spawned Ship row, so
+    // client prediction just reads it (no RNG to reproduce).
     private const float PodEjectSpeed = 90f;   // u/s initial fling (decays to FlightModel.Pod.MaxSpeed)
     private const float PodEjectSpin  = 5f;    // rad/s initial tumble (decays via AngularDrag)
 
@@ -359,9 +296,9 @@ public static partial class Module
     // ---- Sectors & alephs ---------------------------------------------
     private const uint  HomeSector = 0;              // bases + spawn live here (the battlefield)
     private const uint  VergeSector = 1;             // the linked outpost sector across the aleph
-    private const float CoreRadius = 1100f;          // sector 0 boundary (contains bases ±500, field ±800)
+    private const float CoreRadius = 2100f;          // sector 0 boundary (contains bases ±500, field ±800)
     private const float VergeRadius = 700f;          // sector 1 boundary (a tighter outpost)
-    private const int   VergeAsteroidCount = 14;     // smaller asteroid field in the Verge
+    private const int   VergeAsteroidCount = 4;     // smaller asteroid field in the Verge
     private const float VergeBeltRadius = 380f;       // ring radius of the Verge's asteroid belt
     private const float AlephTriggerRadius = 18f;    // touch this close to a funnel to warp through
     private const float WarpExitOffset = 60f;        // placed this far past the dest aleph (no instant re-warp)
@@ -373,10 +310,27 @@ public static partial class Module
     private const float BoundaryRampDps = 0.12f;     // extra dps per unit beyond the edge
     private const float BoundaryMaxDps = 60f;
 
-    private static float MassFor(ShipClass c) => FlightModel.StatsFor((byte)c).Mass;
-    private static float MaxHull(ShipClass c) => c == ShipClass.Scout ? 60f : 120f;
-    private static float WeaponDamage(ShipClass c) => c == ShipClass.Scout ? 4f : 10f;
-    private static uint  FireInterval(ShipClass c) => c == ShipClass.Scout ? 4u : 8u;
+    // MaxHull / WeaponDamage / FireInterval are the compiled-in defaults SeedDefaults pours
+    // into the def tables, and the fallback values the def-read helpers use when a row is
+    // missing (ShipMaxHull, ShipWeaponDamage). Instance mass now comes from ShipStatsFor.
+    private static float MaxHull(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 240f,
+        ShipClass.Fighter => 120f,
+        _ => 60f,
+    };
+    private static float WeaponDamage(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 22f,
+        ShipClass.Fighter => 10f,
+        _ => 4f,
+    };
+    private static uint FireInterval(ShipClass c) => c switch
+    {
+        ShipClass.Bomber => 14u,
+        ShipClass.Fighter => 8u,
+        _ => 4u,
+    };
     // Weapon hit sphere for a ship: a pod is a small, hard-to-hit target (PodHitRadius);
     // every other ship uses the full ShipRadius. Physical collisions ignore this.
     private static float HitRadius(Ship s) => s.IsPod ? PodHitRadius : ShipRadius;
@@ -435,14 +389,40 @@ public static partial class Module
         return (variant, rx, ry, rz);
     }
 
-    // Core pattern: a diffuse cloud scattered across a wide box.
-    private static void SeedAsteroidField(ReducerContext ctx, ref DetRng rng, uint sector, int count)
+    // Core pattern: a handful of diffuse BANDS (ribbons) rather than an even box-fill, so the
+    // field reads as something you thread between with open lanes between, not uniform static.
+    // Each band is a slab of rocks centred on a pseudo-random plane that's slightly sheared
+    // (tilted) across X, giving diagonal ribbons; rocks scatter freely along the ribbon but
+    // cluster tightly across its thickness (triangular jitter), leaving the lanes clear. The
+    // band layout is drawn from the same DetRng so the map stays byte-stable per seed. Extents
+    // scale with the world SectorScale (rock SIZES stay fixed) exactly like the old cloud.
+    private static void SeedAsteroidField(ReducerContext ctx, ref DetRng rng, uint sector, int count, float scale)
     {
+        const double halfX = 800.0, halfY = 200.0, halfZ = 800.0;
+
+        // Lay out 3..5 ribbons up front: each gets a pseudo-random centre along Z, a half-
+        // thickness, and a shear (dz per unit x) that tilts its plane so bands aren't axis walls.
+        int bandCount = 3 + rng.NextInt(3);
+        var bandZ = new double[bandCount];
+        var bandThick = new double[bandCount];
+        var bandShear = new double[bandCount];
+        for (int b = 0; b < bandCount; b++)
+        {
+            bandZ[b] = (rng.NextDouble() * 2.0 - 1.0) * halfZ;       // ribbon centre along Z
+            bandThick[b] = 40.0 + rng.NextDouble() * 70.0;           // half-thickness across the ribbon
+            bandShear[b] = (rng.NextDouble() * 2.0 - 1.0) * 0.6;     // tilt: dz per unit x
+        }
+
         for (int i = 0; i < count; i++)
         {
-            float px = (float)(rng.NextDouble() * 1600.0 - 800.0);
-            float py = (float)(rng.NextDouble() * 400.0 - 200.0);
-            float pz = (float)(rng.NextDouble() * 1600.0 - 800.0);
+            int b = rng.NextInt(bandCount);
+            double ux = rng.NextDouble() * 2.0 - 1.0;                // free along the ribbon (X)
+            // Triangular jitter (sum of two uniforms) packs rocks toward the band centre.
+            double across = (rng.NextDouble() + rng.NextDouble() - 1.0) * bandThick[b];
+            double zc = bandZ[b] + bandShear[b] * (ux * halfX);
+            float px = (float)(ux * halfX * scale);
+            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * halfY * scale);
+            float pz = (float)((zc + across) * scale);
             float radius = (float)(rng.NextDouble() * 30.0 + 10.0);
             var (variant, rx, ry, rz) = NextAsteroidShape(ref rng);
             ctx.Db.Asteroid.Insert(new Asteroid
@@ -458,15 +438,16 @@ public static partial class Module
 
     // Verge pattern: a flattened belt ringing the sector center. Asteroids sit near
     // VergeBeltRadius in the XZ plane (with radial + vertical jitter) so the field reads
-    // as a band you thread, distinct from the Core's open cloud.
-    private static void SeedAsteroidBelt(ReducerContext ctx, ref DetRng rng, uint sector, int count)
+    // as a band you thread, distinct from the Core's open cloud. Belt radius + jitter scale
+    // with the world SectorScale (rock sizes fixed, like the Core field).
+    private static void SeedAsteroidBelt(ReducerContext ctx, ref DetRng rng, uint sector, int count, float scale)
     {
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
-            double r = VergeBeltRadius + (rng.NextDouble() - 0.5) * 160.0;  // ±80 radial jitter
+            double r = (VergeBeltRadius + (rng.NextDouble() - 0.5) * 160.0) * scale;  // ±80 radial jitter (scaled)
             float px = (float)(Math.Cos(ang) * r);
-            float py = (float)((rng.NextDouble() - 0.5) * 90.0);           // thin vertical band
+            float py = (float)((rng.NextDouble() - 0.5) * 90.0 * scale);  // thin vertical band (scaled)
             float pz = (float)(Math.Sin(ang) * r);
             float radius = (float)(rng.NextDouble() * 18.0 + 8.0);
             var (variant, rx, ry, rz) = NextAsteroidShape(ref rng);
@@ -494,32 +475,56 @@ public static partial class Module
         return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 
-    // Build the whole map (asteroid fields + the Core<->Verge aleph pair) deterministically
-    // from one seed: clears any existing asteroids/alephs, then re-creates them off a single
-    // DetRng stream. Same seed => byte-identical map. Sectors and bases are fixed and not
-    // touched here. Used by Init and RegenerateWorld.
+    // Build the whole map (sector radii + asteroid fields + the Core<->Verge aleph pair)
+    // deterministically from one seed AND the WorldConfig: clears any existing asteroids/
+    // alephs, then re-creates them off a single DetRng stream. Same seed + same config =>
+    // byte-identical map. World scale (config) drives sector radii, asteroid counts, and
+    // field/belt/aleph spread; the authored CoreRadius/VergeRadius/AsteroidCount constants
+    // are the BASE values the config multiplies. Bases are fixed and not touched here.
+    // Used by Init, RegenerateWorld, and UpsertWorldConfig.
     private static void GenerateMap(ReducerContext ctx, ulong seed)
     {
+        var cfg = WorldConfigOrDefault(ctx);
+        float scale = cfg.SectorScale;
+        float density = cfg.AsteroidDensity;
+        float scale3 = scale * scale * scale;
+
+        float coreR = CoreRadius * scale;
+        float vergeR = VergeRadius * scale;
+        // Count scales with sector volume (scale³) at constant density, so a bigger sector
+        // holds proportionally more rocks. (Cube law is the starting point per .PLAN/CONFIG.md;
+        // drop the exponent to square-law here if big sectors feel cluttered.)
+        int coreCount = (int)MathF.Round(density * AsteroidCount * scale3);
+        int vergeCount = (int)MathF.Round(density * VergeAsteroidCount * scale3);
+
         foreach (var a in ctx.Db.Asteroid.Iter().ToList())
             ctx.Db.Asteroid.AsteroidId.Delete(a.AsteroidId);
         foreach (var al in ctx.Db.Aleph.Iter().ToList())
             ctx.Db.Aleph.AlephId.Delete(al.AlephId);
 
+        // Sector radii are config-driven: write the scaled values onto the Sector rows the
+        // client already subscribes to (boundary warnings + minimap pick it up for free).
+        if (ctx.Db.Sector.SectorId.Find(HomeSector) is Sector hs)
+            ctx.Db.Sector.SectorId.Update(hs with { Radius = coreR });
+        if (ctx.Db.Sector.SectorId.Find(VergeSector) is Sector vsec)
+            ctx.Db.Sector.SectorId.Update(vsec with { Radius = vergeR });
+
         var rng = new DetRng(seed);
 
         // Each sector gets a DIFFERENT asteroid pattern so they read as distinct places.
         //   • Core  — a diffuse 3D field scattered across a wide box (the open battlefield).
-        SeedAsteroidField(ctx, ref rng, HomeSector, AsteroidCount);
+        SeedAsteroidField(ctx, ref rng, HomeSector, coreCount, scale);
         //   • Verge — a flattened belt: asteroids ring the sector center in the XZ plane
         //     with only slight vertical spread, so flying it feels like threading a band.
-        SeedAsteroidBelt(ctx, ref rng, VergeSector, VergeAsteroidCount);
+        SeedAsteroidBelt(ctx, ref rng, VergeSector, vergeCount, scale);
 
         // One linked aleph pair joining Core <-> Verge. Each funnel is placed at a random
-        // spot biased toward the OUTER reaches of its sector (so warps sit out near the
-        // frontier, not on top of the bases). Insert both, then wire each to its partner
-        // (AlephId is autoinc, so the ids aren't known until after insert).
-        var (cx, cy, cz) = RandomOuterPos(ref rng, CoreRadius);
-        var (vx, vy, vz) = RandomOuterPos(ref rng, VergeRadius);
+        // spot biased toward the OUTER reaches of its (scaled) sector (so warps sit out near
+        // the frontier, not on top of the bases). A bigger sector spreads the alephs farther
+        // apart by construction. Insert both, then wire each to its partner (AlephId is
+        // autoinc, so the ids aren't known until after insert).
+        var (cx, cy, cz) = RandomOuterPos(ref rng, coreR);
+        var (vx, vy, vz) = RandomOuterPos(ref rng, vergeR);
         var alephCore = ctx.Db.Aleph.Insert(new Aleph
         {
             AlephId = 0, SectorId = HomeSector, PartnerId = 0, DestSectorId = VergeSector,
@@ -532,6 +537,96 @@ public static partial class Module
         });
         ctx.Db.Aleph.AlephId.Update(alephCore with { PartnerId = alephVerge.AlephId });
         ctx.Db.Aleph.AlephId.Update(alephVerge with { PartnerId = alephCore.AlephId });
+
+        // The asteroid set just changed — drop the spatial-grid cache (see AsteroidGridForSector).
+        _asteroidGridDirty = true;
+    }
+
+    // ---- Per-sector asteroid spatial grid (read cache) ----------------
+    // The asteroid field is STATIC between map regenerations (GenerateMap is its only mutator),
+    // but the AI drones each scan it every tick to steer around rocks. With the world now
+    // holding hundreds of asteroids (WorldConfig scale), re-reading the whole Asteroid table
+    // from the datastore per drone per tick was the dominant sim cost. Bucket the field ONCE
+    // into a uniform spatial grid (per sector), and a drone only examines asteroids in its own
+    // cell + the 26 neighbours — O(asteroids near the drone) instead of O(asteroids in sector).
+    // The cell is sized to the avoidance look-ahead so a 3x3x3 query provably covers a ball of
+    // that radius around the drone (a point in cell C lies >= one cell from the edge of the
+    // C±1 block). One uniform level suffices: the field is sparse and roughly uniform, so cells
+    // hold ~0-1 rocks; a deeper hierarchy (octree) would only help under heavy clustering.
+    // Server-only (PIG steering is authoritative), so the captured Iter() order needn't match a
+    // client. Reused across every drone and tick until GenerateMap invalidates it.
+    private const float AsteroidGridCell = PigAvoidLookahead;
+
+    private static bool _asteroidGridDirty = true;
+    private static readonly Dictionary<uint, Dictionary<(int, int, int), List<Asteroid>>> _asteroidGrid = new();
+    private static readonly Dictionary<(int, int, int), List<Asteroid>> _noGrid = new();
+
+    // The grid cell index for one world coordinate.
+    private static int AsteroidCellOf(float v) => (int)MathF.Floor(v / AsteroidGridCell);
+
+    private static Dictionary<(int, int, int), List<Asteroid>> AsteroidGridForSector(ReducerContext ctx, uint sector)
+    {
+        if (_asteroidGridDirty)
+        {
+            _asteroidGrid.Clear();
+            foreach (var a in ctx.Db.Asteroid.Iter())
+            {
+                if (!_asteroidGrid.TryGetValue(a.SectorId, out var grid))
+                    _asteroidGrid[a.SectorId] = grid = new Dictionary<(int, int, int), List<Asteroid>>();
+                var key = (AsteroidCellOf(a.PosX), AsteroidCellOf(a.PosY), AsteroidCellOf(a.PosZ));
+                if (!grid.TryGetValue(key, out var cell))
+                    grid[key] = cell = new List<Asteroid>();
+                cell.Add(a);
+            }
+            _asteroidGridDirty = false;
+        }
+        return _asteroidGrid.TryGetValue(sector, out var g) ? g : _noGrid;
+    }
+
+    // True if the point (x,y,z) lies within (asteroid radius + extraRadius) of ANY asteroid in
+    // its sector. Broad-phased through the spatial grid — only the rocks in the point's cell +
+    // 26 neighbours are tested. This is EQUIVALENT to scanning the whole field: the hit radius
+    // (~34u) is far below the block's guaranteed coverage (AsteroidGridCell = 160u), so every
+    // omitted asteroid is a guaranteed miss. Used by the projectile-vs-asteroid pass.
+    private static bool HitsAsteroid(ReducerContext ctx, uint sector, float x, float y, float z, float extraRadius)
+    {
+        var grid = AsteroidGridForSector(ctx, sector);
+        int cx = AsteroidCellOf(x), cy = AsteroidCellOf(y), cz = AsteroidCellOf(z);
+        for (int gx = cx - 1; gx <= cx + 1; gx++)
+        for (int gy = cy - 1; gy <= cy + 1; gy++)
+        for (int gz = cz - 1; gz <= cz + 1; gz++)
+        {
+            if (!grid.TryGetValue((gx, gy, gz), out var cell))
+                continue;
+            foreach (var a in cell)
+            {
+                float rr = a.Radius * AsteroidCollisionScale + extraRadius;
+                if (Dist2(x, y, z, a.PosX, a.PosY, a.PosZ) <= rr * rr)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Bounce a ship out of any asteroid it overlaps, broad-phased through the spatial grid so
+    // only nearby rocks are tested. Equivalent to resolving against the whole field: a rock the
+    // ship doesn't overlap is a no-op in ResolveCollision, and any rock it COULD overlap (within
+    // ~43u) is well inside the queried block (160u). The ship's collision push (<= a rock's
+    // radius) keeps it inside that block, so re-querying per push is unnecessary.
+    private static Ship ResolveAsteroidCollisions(ReducerContext ctx, Ship s)
+    {
+        var grid = AsteroidGridForSector(ctx, s.SectorId);
+        int cx = AsteroidCellOf(s.PosX), cy = AsteroidCellOf(s.PosY), cz = AsteroidCellOf(s.PosZ);
+        for (int gx = cx - 1; gx <= cx + 1; gx++)
+        for (int gy = cy - 1; gy <= cy + 1; gy++)
+        for (int gz = cz - 1; gz <= cz + 1; gz++)
+        {
+            if (!grid.TryGetValue((gx, gy, gz), out var cell))
+                continue;
+            foreach (var a in cell)
+                s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
+        }
+        return s;
     }
 
     // ---- Lifecycle ----------------------------------------------------
@@ -545,6 +640,11 @@ public static partial class Module
         // then derives from this stored value — RegenerateWorld(seed) reproduces it.
         ulong seed = ((ulong)(uint)ctx.Rng.Next() << 32) | (uint)ctx.Rng.Next();
         Log.Info($"[Init] seeding match state (map seed {seed})");
+
+        // Record the publisher as the server owner (the only place ctx.Sender is the owner)
+        // and seed the runtime def tables from the compiled-in defaults. Both live in Defs.cs.
+        CaptureOwner(ctx);
+        SeedDefaults(ctx);
 
         // Singleton match row.
         ctx.Db.Match.Insert(new Match
@@ -560,13 +660,13 @@ public static partial class Module
 
         // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
         // and the Verge outpost across the aleph. CenterX/Y/Z are 0 — boundary is a
-        // radius from the origin.
+        // radius from the origin. Radii are inserted at the authored base values, then
+        // rescaled by WorldConfig.SectorScale in GenerateMap below.
         ctx.Db.Sector.Insert(new Sector { SectorId = HomeSector, Name = "Core Sector", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = CoreRadius });
         ctx.Db.Sector.Insert(new Sector { SectorId = VergeSector, Name = "The Verge", CenterX = 0f, CenterY = 0f, CenterZ = 0f, Radius = VergeRadius });
 
-        // Two bases at opposite ends of the Core sector.
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 0, SectorId = HomeSector, PosX = -500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
-        ctx.Db.Base.Insert(new Base { BaseId = 0, Team = 1, SectorId = HomeSector, PosX = 500f, PosY = 0f, PosZ = 0f, Health = BaseMaxHealth });
+        // Two bases at opposite ends of the Core sector (hull from BaseDef; see Bases.cs).
+        SeedBases(ctx);
 
         // Asteroid fields + the Core<->Verge aleph pair, all derived from the seed above.
         GenerateMap(ctx, seed);
@@ -577,7 +677,7 @@ public static partial class Module
         // This is a prototype, not a persistent universe — nothing needs to
         // advance while nobody is watching.
 
-        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {AsteroidCount}+{VergeAsteroidCount} asteroids, 1 aleph pair, SimTick paused until first client");
+        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {ctx.Db.Asteroid.Count} asteroids (scale {WorldConfigOrDefault(ctx).SectorScale}), 1 aleph pair, {ctx.Db.ShipClassDef.Count} ship/{ctx.Db.WeaponDef.Count} weapon/{ctx.Db.BaseDef.Count} base defs, SimTick paused until first client");
     }
 
     // Rebuild the asteroid field + aleph pair from an explicit seed, and record it on the
@@ -850,21 +950,7 @@ public static partial class Module
     public static readonly Filter ChatDirectVisible = new Filter.Sql(
         "SELECT * FROM ChatMessage WHERE Scope = 2 AND Recipient = :sender");
 
-    // Spawn a ship at the player's team base. Rejected (logged, not thrown) for
-    // expected conditions: no player / offline / already flying / match ended.
-    [SpacetimeDB.Reducer]
-    public static void SpawnShip(ReducerContext ctx, ShipClass shipClass)
-    {
-        SpawnShipInternal(ctx, shipClass);
-    }
-
-    // Respawn after death: identical to SpawnShip for the prototype (a cooldown
-    // can be added later). The "no live ship" guard lives in SpawnShipInternal.
-    [SpacetimeDB.Reducer]
-    public static void Respawn(ReducerContext ctx, ShipClass shipClass)
-    {
-        SpawnShipInternal(ctx, shipClass);
-    }
+    // SpawnShip / Respawn reducers live in Ships.cs (M2).
 
     // ---- Lobby actions ------------------------------------------------
 
@@ -998,7 +1084,7 @@ public static partial class Module
         ReducerContext ctx,
         float thrust, float strafeX, float strafeY,
         float yaw, float pitch, float roll,
-        bool firing, bool boost, uint clientTick)
+        bool firing, bool boost, bool coast, uint clientTick)
     {
         var player = ctx.Db.Player.Identity.Find(ctx.Sender);
         if (player is null || player.Value.ShipId is not ulong shipId)
@@ -1015,7 +1101,7 @@ public static partial class Module
             ctx.Db.ShipInput.InputId.Update(e with
             {
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
             });
         }
         else
@@ -1026,7 +1112,7 @@ public static partial class Module
                 ShipId = shipId,
                 Tick = clientTick,
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost,
+                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
             });
         }
     }
@@ -1040,6 +1126,17 @@ public static partial class Module
         if (match is null)
             return;
         var m = match.Value;
+
+        // Invariant: while the sim loop runs, the AI brain loop runs too. Self-heal if they
+        // ever desync — chiefly after a hot-swap that ADDED the brain timer table to an
+        // already-running sim (StartSim seeds it only on client connect, so without this the
+        // brain wouldn't fire until a reconnect).
+        if (ctx.Db.PigBrainTimer.Count == 0)
+            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
+            {
+                ScheduledId = 0,
+                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
+            });
 
         // Pace by REAL elapsed time, not by how often the scheduler fires us. Each
         // call integrates as many fixed-dt steps as wall-clock time has passed since
@@ -1070,34 +1167,17 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
-        // --- Pass 0: AI drone (PIG) lifecycle. Drones run while at least one TEAMED player
-        // is online — NOT merely while one has a live ship — so the battle keeps going across
-        // a player's death, dock, or respawn (the drone field doesn't blink out every time you
-        // re-ship). It still ends the moment the last player leaves the match (disconnect or
-        // back to the lobby): a teamless observer/owner-dashboard connection never spins up
-        // 20 Hz drone combat. Spawning the FIRST squad still needs a real incursion
-        // (EnemyInSector), so a teamed-but-shipless lobby alone fields nothing. When combat
-        // ends all drones despawn and slots reset to ready. Newly spawned drones land in the
-        // Pass A snapshot below and integrate immediately, like a fresh player ship.
-        var match0 = ctx.Db.Match.Id.Find(0);
-        bool combatLive = (match0?.PigsEnabled ?? false)
-                          && (match0?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
-                          && AnyTeamedPlayerOnline(ctx);
-        if (combatLive)
-        {
-            EnsurePigSlots(ctx);
-            SimulatePigLifecycle(ctx, tick);
-            // Commit at most one drone per team to pick up a downed teammate's pod (the rest
-            // keep attacking); runs before the per-drone brain so PigThink sees the assignment.
-            AssignPigRescuers(ctx, tick);
-        }
-        else
-        {
-            DespawnAllPigs(ctx);
-        }
+        // AI drone (PIG) lifecycle + target SELECTION no longer live here — they run in the
+        // separate, slower PigBrainTick reducer (PigAI.cs), which caches one PigDecision per
+        // live drone. This sim tick just integrates whatever ships exist and (in Pass A)
+        // re-steers each drone toward its cached decision. Drone DEATHS still happen here
+        // (Pass C / KillPig), and pods are still flown per-tick by PodThink below.
 
-        // --- Pass A: integrate every ship, and fire if the trigger is held & cooled.
-        // Snapshot to a list first — we mutate rows while iterating.
+        // --- Pass A: integrate every ship, fire if the trigger is held & cooled, and warp it
+        // through any aleph it flew into — all in ONE pass. Snapshot to a list first (we mutate
+        // rows while iterating), and collect the post-integration ships into `live` so the
+        // hit/collision passes below reuse it instead of re-reading the whole Ship table.
+        var live = new List<Ship>();
         foreach (var ship in ctx.Db.Ship.Iter().ToList())
         {
             // PIGs are server-driven: the AI brain (PigAI.cs) synthesizes this tick's
@@ -1108,28 +1188,47 @@ public static partial class Module
             ShipInputState input;
             if (ship.IsPig && ship.IsPod)
             {
-                // A PIG pod auto-flies to the nearest friendly base (PodThink); a PIG
-                // combat drone runs the full PigThink brain.
+                // A PIG pod auto-flies to the nearest friendly base, decided fresh each tick
+                // (cheap — pods aren't brained on the slower schedule).
                 input = PodThink(ctx, ship, tick);
             }
             else if (ship.IsPig)
             {
-                input = PigThink(ctx, ship, tick);
+                // Combat drone: replay the decision PigBrainTick last cached for it. PigExecute
+                // cheaply re-steers/leads/fires toward that decision against current world state
+                // (the expensive target selection ran in the separate brain reducer). No row yet
+                // — just spawned, brain hasn't fired since — so coast a tick or two until it does.
+                input = ctx.Db.PigDecision.ShipId.Find(ship.ShipId) is PigDecision pd
+                    ? PigExecute(ctx, ship, pd, tick)
+                    : default;
             }
             else
             {
-                ShipInput? exact = null;
-                ShipInput? latest = null;
-                foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+                // Common case: the client already stamped this exact tick — direct index hit
+                // on (ShipId, Tick), no buffer scan.
+                ShipInput? src = null;
+                foreach (var r in ctx.Db.ShipInput.ByShipTick.Filter((ship.ShipId, tick)))
                 {
-                    if (r.Tick == tick) { exact = r; break; }
-                    if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
-                        latest = r;
+                    src = r;
+                    break;
                 }
-                var src = exact ?? latest;
+                // Fallback (input for this tick hasn't arrived yet, e.g. under lag): replay the
+                // most recent input BEFORE this tick. Rare, so the buffer scan is acceptable here.
+                if (src is null)
+                {
+                    ShipInput? latest = null;
+                    foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
+                    {
+                        if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
+                            latest = r;
+                    }
+                    src = latest;
+                }
                 input = src is ShipInput si ? ToInputState(si) : default;
             }
-            var stats = FlightModel.StatsFor((byte)ship.Class, ship.IsPod);
+            // Per-ship flight stats from the class's ShipClassDef (pods resolve to the Pod
+            // def), derived once and cached; falls back to FlightModel defaults if unseeded.
+            var stats = ShipStatsFor(ctx, ClassIdOf(ship));
 
             var state = new ShipState
             {
@@ -1138,123 +1237,50 @@ public static partial class Module
                 Rot = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW),
                 AngVel = new Vec3(ship.AngVelX, ship.AngVelY, ship.AngVelZ),
                 Mass = ship.Mass,
+                AbPower = ship.AbPower,
             };
 
             state = FlightModel.Integrate(state, input, stats);
 
-            // Fire control: spawn a projectile at the nose when held and the
-            // per-class cooldown has elapsed (tracked against Match.Tick). Pods are
-            // unarmed — they never fire, whatever input leaks through.
-            uint lastFire = ship.LastFireTick;
-            if (!ship.IsPod && input.Firing && tick - lastFire >= FireInterval(ship.Class))
-            {
-                // Spawn at the nose (true forward) but launch along a per-weapon
-                // scattered direction. SpreadDirection is deterministic in
-                // (ShipId, tick), so the client predicts the same scatter (.PLAN).
-                Vec3 fwd = state.Rot.Rotate(new Vec3(0f, 0f, 1f));
-                Vec3 shotDir = FlightModel.SpreadDirection(fwd, FlightModel.WeaponSpreadRad((byte)ship.Class), ship.ShipId, tick);
-                Vec3 mp = state.Pos + fwd * NoseOffset;
-                Vec3 mv = shotDir * ProjectileSpeed + state.Vel;
-                ctx.Db.Projectile.Insert(new Projectile
-                {
-                    ProjectileId = 0,
-                    Team = ship.Team,
-                    SectorId = ship.SectorId,
-                    Damage = WeaponDamage(ship.Class),
-                    PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
-                    VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
-                    ExpiresAtTick = tick + ProjectileLifeTicks,
-                    FromPig = ship.IsPig,
-                });
-                lastFire = tick;
-            }
+            // Fire control: spawn a projectile from the ship's Weapon hardpoint when held
+            // and the per-weapon cooldown has elapsed (tracked against Match.Tick). Muzzle
+            // offset/forward, damage, interval, speed, life and spread all come from the
+            // ship's ShipClassDef hardpoint + the WeaponDef it names (see Weapons.cs). Pods
+            // are unarmed — TryFire never fires them.
+            uint lastFire = TryFire(ctx, ship, state, input.Firing, tick, ship.LastFireTick);
 
-            ctx.Db.Ship.ShipId.Update(ship with
+            var updated = ship with
             {
                 PosX = state.Pos.X, PosY = state.Pos.Y, PosZ = state.Pos.Z,
                 VelX = state.Vel.X, VelY = state.Vel.Y, VelZ = state.Vel.Z,
                 RotX = state.Rot.X, RotY = state.Rot.Y, RotZ = state.Rot.Z, RotW = state.Rot.W,
                 AngVelX = state.AngVel.X, AngVelY = state.AngVel.Y, AngVelZ = state.AngVel.Z,
+                AbPower = state.AbPower,
                 // Stamp with the SERVER tick (this state's integration index, since
                 // Match.Tick increments once per integration). Gives the client a
                 // shared, drift-free anchor so predicted[N] and auth[N] are the same
                 // step count. The client (ShipController) predicts in this tick space.
                 LastInputTick = tick,
                 LastFireTick = lastFire,
-            });
+            };
+
+            // Aleph warp folded into the same pass: if the freshly-integrated position is
+            // inside an aleph trigger, carry the ship THROUGH the funnel before persisting.
+            updated = TryWarp(ctx, updated);
+
+            ctx.Db.Ship.ShipId.Update(updated);
+            live.Add(updated);
         }
 
-        // --- Pass A.5: aleph warp. A ship that has flown into an aleph in its sector is
-        // moved THROUGH it: same velocity/orientation (momentum carries through the
-        // funnel), but its SectorId becomes the partner's and it re-emerges just past the
-        // partner aleph so it doesn't immediately warp back. Runs on freshly-integrated
-        // positions, before the collision/boundary passes use them.
-        foreach (var ship in ctx.Db.Ship.Iter().ToList())
-        {
-            foreach (var al in ctx.Db.Aleph.Iter())
-            {
-                if (al.SectorId != ship.SectorId)
-                    continue;
-                float rr = AlephTriggerRadius + ShipRadius;
-                if (Dist2(ship.PosX, ship.PosY, ship.PosZ, al.PosX, al.PosY, al.PosZ) > rr * rr)
-                    continue;
-                if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
-                    break;
-
-                // Emerge OUT THE MOUTH. The funnel (AlephView) is oriented so its
-                // mouth faces toward the sector center. The ship pops out of the
-                // partner's mouth along that axis — toward the partner's sector center —
-                // far enough to clear the partner's trigger sphere (no instant re-warp).
-                //
-                // The funnel discards the ship's heading: only the RAW SPEED carries
-                // through. The exit vector is the mouth axis (partner aleph → its sector
-                // center), jittered by a small random cone so successive ships fan out
-                // instead of stacking in a line. Position and velocity share the one
-                // jittered direction so the ship travels along the axis it emerged on.
-                // Warp is server-authoritative, so this RNG never has to be reproduced
-                // by client prediction. Orientation/angular momentum are left untouched.
-                float speed = MathF.Sqrt(ship.VelX * ship.VelX + ship.VelY * ship.VelY + ship.VelZ * ship.VelZ);
-
-                // Mouth direction: from partner aleph toward its sector center.
-                var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
-                float mx = (destSec?.CenterX ?? 0f) - partner.PosX;
-                float my = (destSec?.CenterY ?? 0f) - partner.PosY;
-                float mz = (destSec?.CenterZ ?? 0f) - partner.PosZ;
-                float mlen = MathF.Sqrt(mx * mx + my * my + mz * mz);
-                if (mlen < 0.001f) { mx = 0f; my = 1f; mz = 0f; mlen = 1f; } // fallback: up
-                mx /= mlen; my /= mlen; mz /= mlen;
-
-                // Jitter around the mouth axis.
-                float jx = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-                float jy = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-                float jz = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-                float ex = mx + jx;
-                float ey = my + jy;
-                float ez = mz + jz;
-                float elen = MathF.Sqrt(ex * ex + ey * ey + ez * ez);
-                ex /= elen; ey /= elen; ez /= elen;
-
-                float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
-                ctx.Db.Ship.ShipId.Update(ship with
-                {
-                    SectorId = al.DestSectorId,
-                    PosX = partner.PosX + ex * exit,
-                    PosY = partner.PosY + ey * exit,
-                    PosZ = partner.PosZ + ez * exit,
-                    VelX = ex * speed,
-                    VelY = ey * speed,
-                    VelZ = ez * speed,
-                });
-                Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
-                break;
-            }
-        }
-
-        // Snapshot post-integration ships + static geometry for the hit/collision
-        // passes. Damage is accumulated here and applied once at the end.
-        var ships = ctx.Db.Ship.Iter().ToList();
-        var asteroids = ctx.Db.Asteroid.Iter().ToList();
+        // The post-integration ship set IS `live` (every ship was updated above, none
+        // spawned/deleted since) — reuse it for the hit/collision passes instead of re-reading
+        // the whole Ship table. Damage is accumulated here and applied once at the end.
+        var ships = live;
         var bases = ctx.Db.Base.Iter().ToList();
+        // Asteroids are NOT snapshotted into a flat list — the hit/collision passes below
+        // broad-phase them through the per-sector spatial grid (HitsAsteroid /
+        // ResolveAsteroidCollisions), so a tick costs ~O(entities) instead of O(ships+projectiles
+        // × asteroids). The grid is built once and reused (invalidated only by GenerateMap).
         var damage = new Dictionary<ulong, float>();   // shipId -> hull damage this tick
         var baseDamage = new Dictionary<ulong, float>(); // baseId -> damage this tick
 
@@ -1270,15 +1296,9 @@ public static partial class Module
             float nx = p.PosX + p.VelX * dt;
             float ny = p.PosY + p.VelY * dt;
             float nz = p.PosZ + p.VelZ * dt;
-            bool consumed = false;
 
             // Blocked by asteroids in the SAME sector (static; they take no damage).
-            foreach (var a in asteroids)
-            {
-                if (a.SectorId != p.SectorId) continue;
-                float rr = a.Radius * AsteroidCollisionScale + ProjectileRadius;
-                if (Dist2(nx, ny, nz, a.PosX, a.PosY, a.PosZ) <= rr * rr) { consumed = true; break; }
-            }
+            bool consumed = HitsAsteroid(ctx, p.SectorId, nx, ny, nz, ProjectileRadius);
 
             // Hit an enemy ship in the same sector (friendly fire ignored).
             if (!consumed)
@@ -1302,7 +1322,7 @@ public static partial class Module
                 foreach (var b in bases)
                 {
                     if (b.Team == p.Team || b.SectorId != p.SectorId) continue;
-                    float rr = BaseRadius + ProjectileRadius;
+                    float rr = BaseRadiusOf(ctx) + ProjectileRadius;
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
                         // BOTH player and PIG fire erode an enemy base. Drones press the
@@ -1321,28 +1341,8 @@ public static partial class Module
                 ctx.Db.Projectile.ProjectileId.Update(p with { PosX = nx, PosY = ny, PosZ = nz });
         }
 
-        // Apply base damage; a base reaching 0 health ends the match. The winner
-        // is the OTHER team — the side that destroyed the enemy base. Once Ended
-        // we never reopen the match (SpawnShip already refuses in the Ended phase).
-        foreach (var b in bases)
-        {
-            if (!baseDamage.TryGetValue(b.BaseId, out var bd))
-                continue;
-
-            float hp = MathF.Max(0f, b.Health - bd);
-            ctx.Db.Base.BaseId.Update(b with { Health = hp });
-
-            if (hp <= 0f)
-            {
-                var m = ctx.Db.Match.Id.Find(0);
-                if (m is Match mm && mm.Phase != MatchPhase.Ended)
-                {
-                    byte winner = (byte)(b.Team == 0 ? 1 : 0);
-                    ctx.Db.Match.Id.Update(mm with { Phase = MatchPhase.Ended, Winner = winner });
-                    Log.Info($"[Match] base {b.BaseId} (team {b.Team}) destroyed -> team {winner} wins");
-                }
-            }
-        }
+        // Apply base damage + win check (see Bases.cs).
+        ApplyBaseDamage(ctx, bases, baseDamage);
 
         // --- Pass C: collisions, then apply all damage and kill at <= 0 health.
         // Enemy ship-vs-ship: mutual damage + separation (pairwise; N is tiny here).
@@ -1423,26 +1423,26 @@ public static partial class Module
                 break;
             }
 
-            // Asteroids in this SHIP's sector bounce it.
-            foreach (var a in asteroids)
-                if (a.SectorId == s.SectorId)
-                    s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
+            // Asteroids in this SHIP's sector bounce it (broad-phased via the spatial grid).
+            s = ResolveAsteroidCollisions(ctx, s);
 
             // Bases in this ship's sector: an ENEMY base is solid (bounce + damage); your
-            // OWN base is your dock. Fly into its core (within DockRadius) and you DOCK —
+            // OWN base is your dock. Fly into its core (within dockR) and you DOCK —
             // the ship/pod despawns. For a player ship that reopens the spawn menu (a
             // voluntary re-ship); for a player pod or a PIG pod it's "reached a friendly
             // base" and resolves the pod. Docking ends this ship's tick, so skip the rest.
             bool docked = false;
+            float baseR = BaseRadiusOf(ctx);
+            float dockR = baseR * DockRadiusFrac;
             foreach (var b in bases)
             {
                 if (b.SectorId != s.SectorId) continue;
                 if (b.Team != s.Team)
                 {
-                    s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, BaseRadius);
+                    s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, baseR);
                     continue;
                 }
-                if (Dist2(s.PosX, s.PosY, s.PosZ, b.PosX, b.PosY, b.PosZ) <= DockRadius * DockRadius)
+                if (Dist2(s.PosX, s.PosY, s.PosZ, b.PosX, b.PosY, b.PosZ) <= dockR * dockR)
                 {
                     DockShip(ctx, s, tick);
                     docked = true;
@@ -1477,11 +1477,14 @@ public static partial class Module
         // mutated the table. The tight RescueRadius (hulls touching) means rescue only happens
         // when a teammate/drone actually flies onto the pod, not by merely passing nearby — so
         // a pod ejected mid-dogfight isn't instantly resolved; left alone it floats home or dies.
-        foreach (var pod in ctx.Db.Ship.Iter().ToList())
+        // Read the live rows ONCE (the death/dock pass above mutated the table) and reuse the
+        // snapshot for both the pod scan and the friend scan, instead of re-iterating per pod.
+        var rescueShips = ctx.Db.Ship.Iter().ToList();
+        foreach (var pod in rescueShips)
         {
             if (!pod.IsPod)
                 continue;
-            foreach (var friend in ctx.Db.Ship.Iter())
+            foreach (var friend in rescueShips)
             {
                 if (friend.IsPod || friend.Team != pod.Team || friend.SectorId != pod.SectorId)
                     continue;
@@ -1509,6 +1512,71 @@ public static partial class Module
     {
         float dx = ax - bx, dy = ay - by, dz = az - bz;
         return dx * dx + dy * dy + dz * dz;
+    }
+
+    // If `ship`'s (freshly-integrated) position is inside an aleph trigger in its sector, return
+    // it carried THROUGH the funnel: same velocity/orientation magnitude (momentum carries
+    // through), but its SectorId becomes the partner's and it re-emerges just past the partner
+    // aleph so it doesn't immediately warp back. Otherwise returns `ship` unchanged. A pure
+    // transform on one ship + the (static) aleph/sector tables; the caller persists the result.
+    private static Ship TryWarp(ReducerContext ctx, Ship ship)
+    {
+        foreach (var al in ctx.Db.Aleph.Iter())
+        {
+            if (al.SectorId != ship.SectorId)
+                continue;
+            float rr = AlephTriggerRadius + ShipRadius;
+            if (Dist2(ship.PosX, ship.PosY, ship.PosZ, al.PosX, al.PosY, al.PosZ) > rr * rr)
+                continue;
+            if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
+                break;
+
+            // Emerge OUT THE MOUTH. The funnel (AlephView) is oriented so its mouth faces
+            // toward the sector center. The ship pops out of the partner's mouth along that
+            // axis — toward the partner's sector center — far enough to clear the partner's
+            // trigger sphere (no instant re-warp).
+            //
+            // The funnel discards the ship's heading: only the RAW SPEED carries through. The
+            // exit vector is the mouth axis (partner aleph → its sector center), jittered by a
+            // small random cone so successive ships fan out instead of stacking in a line.
+            // Position and velocity share the one jittered direction so the ship travels along
+            // the axis it emerged on. Warp is server-authoritative, so this RNG never has to be
+            // reproduced by client prediction. Orientation/angular momentum are left untouched.
+            float speed = MathF.Sqrt(ship.VelX * ship.VelX + ship.VelY * ship.VelY + ship.VelZ * ship.VelZ);
+
+            // Mouth direction: from partner aleph toward its sector center.
+            var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
+            float mx = (destSec?.CenterX ?? 0f) - partner.PosX;
+            float my = (destSec?.CenterY ?? 0f) - partner.PosY;
+            float mz = (destSec?.CenterZ ?? 0f) - partner.PosZ;
+            float mlen = MathF.Sqrt(mx * mx + my * my + mz * mz);
+            if (mlen < 0.001f) { mx = 0f; my = 1f; mz = 0f; mlen = 1f; } // fallback: up
+            mx /= mlen; my /= mlen; mz /= mlen;
+
+            // Jitter around the mouth axis.
+            float jx = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+            float jy = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+            float jz = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
+            float ex = mx + jx;
+            float ey = my + jy;
+            float ez = mz + jz;
+            float elen = MathF.Sqrt(ex * ex + ey * ey + ez * ez);
+            ex /= elen; ey /= elen; ez /= elen;
+
+            float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
+            Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
+            return ship with
+            {
+                SectorId = al.DestSectorId,
+                PosX = partner.PosX + ex * exit,
+                PosY = partner.PosY + ey * exit,
+                PosZ = partner.PosZ + ez * exit,
+                VelX = ex * speed,
+                VelY = ey * speed,
+                VelZ = ez * speed,
+            };
+        }
+        return ship;
     }
 
     // Resolve a ship overlapping a static sphere (asteroid / base): on inward
@@ -1539,82 +1607,7 @@ public static partial class Module
         return s;
     }
 
-    // Destroy a ship: remove the row + its input buffer, and clear the owner's
-    // ShipId so the client's spawn menu reappears (Player.ShipId -> null).
-    private static void KillShip(ReducerContext ctx, Ship s)
-    {
-        ctx.Db.Ship.ShipId.Delete(s.ShipId);
-        DeleteShipInputs(ctx, s.ShipId);
-        var owner = ctx.Db.Player.Identity.Find(s.Owner);
-        if (owner is Player p && p.ShipId == s.ShipId)
-            ctx.Db.Player.Identity.Update(p with { ShipId = null });
-        // Pig pod destroyed: free the slot with no stagger (joins the next squad wave).
-        if (s.IsPig && s.IsPod)
-            FreePigPodSlot(ctx, s.ShipId, 0u);
-        Log.Info($"[SimTick] ship {s.ShipId} destroyed (team {s.Team})");
-    }
-
-    // A player combat ship died: instead of going straight to the spawn menu, EJECT an
-    // escape pod — a weak, slow, unarmed Ship (IsPod) at the wreck's position/orientation/
-    // sector, inheriting team + owner — and repoint the owner's ShipId at it so they fly
-    // the pod. The spawn menu stays hidden until the pod resolves (dies / docks / rescued),
-    // each of which clears ShipId. Mirrors KillShip's teardown but spawns a pod in place.
-    private static void SpawnPodFor(ReducerContext ctx, Ship dead)
-    {
-        DeleteShipInputs(ctx, dead.ShipId);
-        ctx.Db.Ship.ShipId.Delete(dead.ShipId);
-
-        // Fling the pod clear of the wreck: inherit the wreck's momentum plus a high-speed
-        // impulse in a random direction, and a random tumble (both decay; see PodEjectSpeed).
-        var dir = RandomUnitVec(ctx);
-        var spin = RandomUnitVec(ctx);
-
-        var pod = ctx.Db.Ship.Insert(new Ship
-        {
-            ShipId = 0,
-            Owner = dead.Owner,
-            Team = dead.Team,
-            SectorId = dead.SectorId,
-            Class = dead.Class,
-            PosX = dead.PosX, PosY = dead.PosY, PosZ = dead.PosZ,
-            VelX = dead.VelX + dir.X * PodEjectSpeed,
-            VelY = dead.VelY + dir.Y * PodEjectSpeed,
-            VelZ = dead.VelZ + dir.Z * PodEjectSpeed,
-            RotX = dead.RotX, RotY = dead.RotY, RotZ = dead.RotZ, RotW = dead.RotW,
-            AngVelX = spin.X * PodEjectSpin, AngVelY = spin.Y * PodEjectSpin, AngVelZ = spin.Z * PodEjectSpin,
-            Health = PodMaxHull,
-            Mass = FlightModel.Pod.Mass,
-            LastInputTick = 0,
-            LastFireTick = 0,
-            IsPig = false,
-            IsPod = true,
-        });
-
-        var owner = ctx.Db.Player.Identity.Find(dead.Owner);
-        if (owner is Player p && p.ShipId == dead.ShipId)
-            ctx.Db.Player.Identity.Update(p with { ShipId = pod.ShipId });
-        Log.Info($"[Pod] combat ship {dead.ShipId} destroyed -> escape pod {pod.ShipId} (team {dead.Team})");
-    }
-
-    // Resolve a ship that reached a friendly base — a voluntary dock by a combat ship, or
-    // a pod that flew home / was rescued. Same teardown as a clean despawn: remove the row
-    // + its inputs and clear the owner's ShipId so the spawn menu reappears. A PIG pod has
-    // no Player row (Owner is the module identity), so the ShipId clear is a no-op for it.
-    // NOT a death — no pod is ejected and (for a player) no respawn cooldown. Shared by the
-    // pod-reached-base, rescue, and voluntary friendly-base dock paths.
-    private static void DockShip(ReducerContext ctx, Ship s, uint tick)
-    {
-        ctx.Db.Ship.ShipId.Delete(s.ShipId);
-        DeleteShipInputs(ctx, s.ShipId);
-        var owner = ctx.Db.Player.Identity.Find(s.Owner);
-        if (owner is Player p && p.ShipId == s.ShipId)
-            ctx.Db.Player.Identity.Update(p with { ShipId = null });
-        // Pig pod docked/rescued: free the slot and queue an immediate respawn so the drone
-        // rejoins the current wave on the very next lifecycle tick.
-        if (s.IsPig && s.IsPod)
-            FreePigPodSlot(ctx, s.ShipId, tick + 1u);
-        Log.Info($"[Dock] ship {s.ShipId} (team {s.Team}, pod={s.IsPod}) docked/resolved");
-    }
+    // KillShip / SpawnPodFor / DockShip live in Ships.cs (M2).
 
     private static ShipInputState ToInputState(ShipInput i) => new ShipInputState
     {
@@ -1626,6 +1619,7 @@ public static partial class Module
         Roll = i.Roll,
         Firing = i.Firing,
         Boost = i.Boost,
+        Coast = i.Coast,
     };
 
     // Delete every buffered input for a ship (ShipId is an index, not the PK now).
@@ -1635,97 +1629,7 @@ public static partial class Module
             ctx.Db.ShipInput.InputId.Delete(r.InputId);
     }
 
-    // Shared spawn logic for SpawnShip / Respawn.
-    private static void SpawnShipInternal(ReducerContext ctx, ShipClass shipClass)
-    {
-        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
-        if (player is null)
-        {
-            Log.Info("[SpawnShip] no player row for sender");
-            return;
-        }
-
-        var p = player.Value;
-        if (!p.Online)
-        {
-            Log.Info("[SpawnShip] player offline");
-            return;
-        }
-        if (p.ShipId is not null)
-        {
-            Log.Info("[SpawnShip] player already controls a ship");
-            return;
-        }
-        if (p.Team is not byte team)
-        {
-            Log.Info("[SpawnShip] no team — still in the lobby");
-            return;
-        }
-
-        var match = ctx.Db.Match.Id.Find(0);
-        // You only fly once the match is Active. Lobby/Ended players sit in the lobby
-        // UI; spawning is gated until the lobby readies everyone in (MaybeStartMatch).
-        if (match is null || match.Value.Phase != MatchPhase.Active)
-        {
-            Log.Info("[SpawnShip] match not active");
-            return;
-        }
-
-        // Spawn at the player's team base (origin if none found).
-        float bx = 0f, by = 0f, bz = 0f;
-        foreach (var b in ctx.Db.Base.Iter())
-        {
-            if (b.Team == team)
-            {
-                bx = b.PosX; by = b.PosY; bz = b.PosZ;
-                break;
-            }
-        }
-
-        // Face the sector center (the battlefield) so you spawn looking at the
-        // fight rather than down +Z. Yaw about Y so local +Z points base->origin.
-        float yaw = MathF.Atan2(-bx, -bz);
-        float ry = MathF.Sin(yaw * 0.5f);
-        float rw = MathF.Cos(yaw * 0.5f);
-
-        // Launch outward from the base center toward the sector center so the
-        // ship clears the base sphere instead of starting buried inside it.
-        // Offset by base radius + ship radius along the base->center direction
-        // (the same direction the ship faces above).
-        float sx = bx, sy = by, sz = bz;
-        float dirLen = MathF.Sqrt(bx * bx + by * by + bz * bz);
-        if (dirLen > 1e-3f)
-        {
-            float offset = BaseRadius + ShipRadius;
-            sx = bx + (-bx / dirLen) * offset;
-            sy = by + (-by / dirLen) * offset;
-            sz = bz + (-bz / dirLen) * offset;
-        }
-
-        var inserted = ctx.Db.Ship.Insert(new Ship
-        {
-            ShipId = 0,
-            Owner = ctx.Sender,
-            Team = team,
-            SectorId = HomeSector,
-            Class = shipClass,
-            PosX = sx, PosY = sy, PosZ = sz,
-            VelX = 0f, VelY = 0f, VelZ = 0f,
-            RotX = 0f, RotY = ry, RotZ = 0f, RotW = rw,
-            AngVelX = 0f, AngVelY = 0f, AngVelZ = 0f,
-            Health = MaxHull(shipClass),
-            Mass = MassFor(shipClass),
-            LastInputTick = 0,
-            LastFireTick = 0,
-            IsPig = false,
-            IsPod = false,
-        });
-
-        // No input rows yet — the per-tick buffer fills as ApplyInput arrives;
-        // SimTick falls back to zero input until then.
-        ctx.Db.Player.Identity.Update(p with { ShipId = inserted.ShipId });
-        Log.Info($"[SpawnShip] {ctx.Sender} -> ship {inserted.ShipId} ({shipClass}) team {team} @ ({sx},{sy},{sz})");
-    }
+    // SpawnShipInternal lives in Ships.cs (M2).
 
     // Count online, teamed players per side, optionally excluding one identity (so a
     // player switching teams isn't counted on their old side).
@@ -1776,8 +1680,9 @@ public static partial class Module
         }
         foreach (var pr in ctx.Db.Projectile.Iter().ToList())
             ctx.Db.Projectile.ProjectileId.Delete(pr.ProjectileId);
+        float baseHp = BaseMaxHealthOf(ctx);
         foreach (var b in ctx.Db.Base.Iter().ToList())
-            ctx.Db.Base.BaseId.Update(b with { Health = BaseMaxHealth });
+            ctx.Db.Base.BaseId.Update(b with { Health = baseHp });
     }
 
     // True if any player connection is currently online.
@@ -1819,7 +1724,15 @@ public static partial class Module
             ScheduledId = 0,
             ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / SimTickHz)),
         });
-        Log.Info($"[Sim] resumed @ {SimTickHz}Hz");
+
+        // The AI decision loop rides the same lifecycle, but on its own slower schedule.
+        if (ctx.Db.PigBrainTimer.Count == 0)
+            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
+            {
+                ScheduledId = 0,
+                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
+            });
+        Log.Info($"[Sim] resumed @ {SimTickHz}Hz (AI brain @ {PigBrainHz}Hz)");
     }
 
     // Stop the sim loop by removing the scheduled-timer row(s). With no rows,
@@ -1828,6 +1741,8 @@ public static partial class Module
     {
         foreach (var t in ctx.Db.SimTickTimer.Iter().ToList())
             ctx.Db.SimTickTimer.ScheduledId.Delete(t.ScheduledId);
+        foreach (var t in ctx.Db.PigBrainTimer.Iter().ToList())
+            ctx.Db.PigBrainTimer.ScheduledId.Delete(t.ScheduledId);
         Log.Info("[Sim] paused (no clients connected)");
     }
 
