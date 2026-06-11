@@ -1326,7 +1326,7 @@ public static partial class Module
                     if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
                     {
                         // BOTH player and PIG fire erode an enemy base. Drones press the
-                        // attack on the enemy base during a lull (see PigThink's base-attack),
+                        // attack on the enemy base during a lull (see PigDecide's base-attack),
                         // so a drone swarm can crack a base and win the match on its own.
                         baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
                         consumed = true;

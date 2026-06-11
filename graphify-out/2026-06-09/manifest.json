@@ -2,12 +2,12 @@
   "client/scripts/AlephView.cs": {
     "mtime": 1780756899.81516,
     "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
-    "semantic_hash": ""
+    "semantic_hash": "68adcc792e65c15546ade30fa7c5fce6"
   },
   "client/scripts/CameraRig.cs": {
     "mtime": 1780751630.428061,
     "ast_hash": "6c4d9e55a32f1354746e35860b3c39a8",
-    "semantic_hash": ""
+    "semantic_hash": "6c4d9e55a32f1354746e35860b3c39a8"
   },
   "client/scripts/Chat.cs": {
     "mtime": 1780695227.6188376,
@@ -45,9 +45,9 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1780859981.2683074,
+    "mtime": 1781032026.9275434,
     "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
-    "semantic_hash": ""
+    "semantic_hash": "ec33d6e4642d90c1c55d4b6d46f61860"
   },
   "client/scripts/Lobby.cs": {
     "mtime": 1780668592.8234627,
@@ -60,44 +60,44 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1780859919.029023,
+    "mtime": 1781032026.9280398,
     "ast_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3",
-    "semantic_hash": ""
+    "semantic_hash": "9cf4bf4fac0af8488df9d8ab7376a8b3"
   },
   "client/scripts/ProjectileView.cs": {
     "mtime": 1780753450.3530416,
     "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
-    "semantic_hash": ""
+    "semantic_hash": "14969e69f43e4bcd4a58121e0662d38d"
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1780862670.6388712,
+    "mtime": 1781032026.9284115,
     "ast_hash": "c2aa42d05b7747d86c07339bcc0b973d",
-    "semantic_hash": ""
+    "semantic_hash": "c2aa42d05b7747d86c07339bcc0b973d"
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1780859968.5047383,
+    "mtime": 1781032026.9287775,
     "ast_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b",
-    "semantic_hash": ""
+    "semantic_hash": "904fde0f5cb8c4af6d7fc65a8d07f12b"
   },
   "client/scripts/ShipMath.cs": {
     "mtime": 1780749220.7178583,
     "ast_hash": "50ae535bd280c26fd209e16768313197",
-    "semantic_hash": ""
+    "semantic_hash": "50ae535bd280c26fd209e16768313197"
   },
   "client/scripts/Starscape.cs": {
     "mtime": 1780766621.203157,
     "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
-    "semantic_hash": ""
+    "semantic_hash": "c7b0003302e125f821a91ebbbb6d19eb"
   },
   "client/scripts/Sun.cs": {
     "mtime": 1780766030.2042913,
     "ast_hash": "2280892dfca65720b99510a239ec7c6f",
-    "semantic_hash": ""
+    "semantic_hash": "2280892dfca65720b99510a239ec7c6f"
   },
   "client/scripts/TargetMarkers.cs": {
     "mtime": 1780754042.9995205,
     "ast_hash": "360776da7afd49c2d23d37eaae67490c",
-    "semantic_hash": ""
+    "semantic_hash": "360776da7afd49c2d23d37eaae67490c"
   },
   "client/scripts/TeamTrail.cs": {
     "mtime": 1780668592.827944,
@@ -105,9 +105,9 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781008117.176867,
-    "ast_hash": "3780f264883f76d92729cc94b664957b",
-    "semantic_hash": ""
+    "mtime": 1781033434.4503157,
+    "ast_hash": "06442cfb0fb9800fae69d220169bae98",
+    "semantic_hash": "06442cfb0fb9800fae69d220169bae98"
   },
   "client/wivuullegiance.csproj": {
     "mtime": 1780664788.4547856,
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781007264.6176882,
-    "ast_hash": "9500e0f66e3e1e4006461a5787bb13ce",
-    "semantic_hash": ""
+    "mtime": 1781034145.9529076,
+    "ast_hash": "ca4290bd1744f2612fb25050072c46b1",
+    "semantic_hash": "ca4290bd1744f2612fb25050072c46b1"
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781007326.675015,
-    "ast_hash": "87d373e74efaf32a48c3fdf2ad9a3930",
+    "mtime": 1781041296.3606985,
+    "ast_hash": "f6c22a9e76e9e6b866997a48ca694c2d",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -180,9 +180,9 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781005886.9223785,
+    "mtime": 1781032026.936273,
     "ast_hash": "c47a4e2883ff4bac4a2ac3d337dcb103",
-    "semantic_hash": ""
+    "semantic_hash": "c47a4e2883ff4bac4a2ac3d337dcb103"
   },
   "shared/Shared.csproj": {
     "mtime": 1780664948.316524,
@@ -197,7 +197,7 @@
   "tests/FlightModelTest/Program.cs": {
     "mtime": 1780749309.4072368,
     "ast_hash": "30395b0e240e78e5698500b16504990b",
-    "semantic_hash": ""
+    "semantic_hash": "30395b0e240e78e5698500b16504990b"
   },
   "tools/asteroid-gen/asteroids.json": {
     "mtime": 1780607323.898378,
@@ -243,5 +243,50 @@
     "mtime": 1780678799.1348352,
     "ast_hash": "bf1a045c41435faa179f737e983f3821",
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
+  },
+  "module/spacetimedb/NavigationAdapter.cs": {
+    "mtime": 1781039073.2741716,
+    "ast_hash": "dd34f0b97a15563a3a2047fa0871aa9c",
+    "semantic_hash": ""
+  },
+  "shared/Navigation/AStarPlanner.cs": {
+    "mtime": 1781037505.0399263,
+    "ast_hash": "6d907e056314c09a0ec56bbde6a93213",
+    "semantic_hash": "6d907e056314c09a0ec56bbde6a93213"
+  },
+  "shared/Navigation/CompositeRoutePlanner.cs": {
+    "mtime": 1781037505.040102,
+    "ast_hash": "180b0be21a46143ee5a484ef0345e323",
+    "semantic_hash": "180b0be21a46143ee5a484ef0345e323"
+  },
+  "shared/Navigation/NavGeometry.cs": {
+    "mtime": 1781037505.0402806,
+    "ast_hash": "a6e64dec6cee066c582d8a31ab096381",
+    "semantic_hash": "a6e64dec6cee066c582d8a31ab096381"
+  },
+  "shared/Navigation/NavGraph.cs": {
+    "mtime": 1781037505.0404198,
+    "ast_hash": "987b4154d90660ad4e0aca951223a560",
+    "semantic_hash": "987b4154d90660ad4e0aca951223a560"
+  },
+  "shared/Navigation/PathSmoother.cs": {
+    "mtime": 1781037505.0406127,
+    "ast_hash": "a9cc2f8899e2a9a2b0c8f22b4069fe21",
+    "semantic_hash": "a9cc2f8899e2a9a2b0c8f22b4069fe21"
+  },
+  "shared/Navigation/SectorRoutePlanner.cs": {
+    "mtime": 1781037505.0407565,
+    "ast_hash": "276ee835a8ae559b0697de5207a206c3",
+    "semantic_hash": "276ee835a8ae559b0697de5207a206c3"
+  },
+  "tests/NavigationTest/NavigationTest.csproj": {
+    "mtime": 1781037505.041005,
+    "ast_hash": "869dac9aacf4d11384f4c234e952fdcf",
+    "semantic_hash": "869dac9aacf4d11384f4c234e952fdcf"
+  },
+  "tests/NavigationTest/Program.cs": {
+    "mtime": 1781037505.0412307,
+    "ast_hash": "af48c5d31fa52eae862e0e5cee790e9d",
+    "semantic_hash": "af48c5d31fa52eae862e0e5cee790e9d"
   }
 }
