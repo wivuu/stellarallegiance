@@ -1112,6 +1112,17 @@ public static partial class Module
             return;
         var m = match.Value;
 
+        // Invariant: while the sim loop runs, the AI brain loop runs too. Self-heal if they
+        // ever desync — chiefly after a hot-swap that ADDED the brain timer table to an
+        // already-running sim (StartSim seeds it only on client connect, so without this the
+        // brain wouldn't fire until a reconnect).
+        if (ctx.Db.PigBrainTimer.Count == 0)
+            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
+            {
+                ScheduledId = 0,
+                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
+            });
+
         // Pace by REAL elapsed time, not by how often the scheduler fires us. Each
         // call integrates as many fixed-dt steps as wall-clock time has passed since
         // the last call, carrying the sub-step remainder so the rate is exact. This
@@ -1141,31 +1152,11 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
 
-        // --- Pass 0: AI drone (PIG) lifecycle. Drones run while at least one TEAMED player
-        // is online — NOT merely while one has a live ship — so the battle keeps going across
-        // a player's death, dock, or respawn (the drone field doesn't blink out every time you
-        // re-ship). It still ends the moment the last player leaves the match (disconnect or
-        // back to the lobby): a teamless observer/owner-dashboard connection never spins up
-        // 20 Hz drone combat. Spawning the FIRST squad still needs a real incursion
-        // (EnemyInSector), so a teamed-but-shipless lobby alone fields nothing. When combat
-        // ends all drones despawn and slots reset to ready. Newly spawned drones land in the
-        // Pass A snapshot below and integrate immediately, like a fresh player ship.
-        var match0 = ctx.Db.Match.Id.Find(0);
-        bool combatLive = (match0?.PigsEnabled ?? false)
-                          && (match0?.Phase ?? MatchPhase.Lobby) != MatchPhase.Ended
-                          && AnyTeamedPlayerOnline(ctx);
-        if (combatLive)
-        {
-            EnsurePigSlots(ctx);
-            SimulatePigLifecycle(ctx, tick);
-            // Commit at most one drone per team to pick up a downed teammate's pod (the rest
-            // keep attacking); runs before the per-drone brain so PigThink sees the assignment.
-            AssignPigRescuers(ctx, tick);
-        }
-        else
-        {
-            DespawnAllPigs(ctx);
-        }
+        // AI drone (PIG) lifecycle + target SELECTION no longer live here — they run in the
+        // separate, slower PigBrainTick reducer (PigAI.cs), which caches one PigDecision per
+        // live drone. This sim tick just integrates whatever ships exist and (in Pass A)
+        // re-steers each drone toward its cached decision. Drone DEATHS still happen here
+        // (Pass C / KillPig), and pods are still flown per-tick by PodThink below.
 
         // --- Pass A: integrate every ship, fire if the trigger is held & cooled, and warp it
         // through any aleph it flew into — all in ONE pass. Snapshot to a list first (we mutate
@@ -1182,13 +1173,19 @@ public static partial class Module
             ShipInputState input;
             if (ship.IsPig && ship.IsPod)
             {
-                // A PIG pod auto-flies to the nearest friendly base (PodThink); a PIG
-                // combat drone runs the full PigThink brain.
+                // A PIG pod auto-flies to the nearest friendly base, decided fresh each tick
+                // (cheap — pods aren't brained on the slower schedule).
                 input = PodThink(ctx, ship, tick);
             }
             else if (ship.IsPig)
             {
-                input = PigThink(ctx, ship, tick);
+                // Combat drone: replay the decision PigBrainTick last cached for it. PigExecute
+                // cheaply re-steers/leads/fires toward that decision against current world state
+                // (the expensive target selection ran in the separate brain reducer). No row yet
+                // — just spawned, brain hasn't fired since — so coast a tick or two until it does.
+                input = ctx.Db.PigDecision.ShipId.Find(ship.ShipId) is PigDecision pd
+                    ? PigExecute(ctx, ship, pd, tick)
+                    : default;
             }
             else
             {
@@ -1712,7 +1709,15 @@ public static partial class Module
             ScheduledId = 0,
             ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / SimTickHz)),
         });
-        Log.Info($"[Sim] resumed @ {SimTickHz}Hz");
+
+        // The AI decision loop rides the same lifecycle, but on its own slower schedule.
+        if (ctx.Db.PigBrainTimer.Count == 0)
+            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
+            {
+                ScheduledId = 0,
+                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
+            });
+        Log.Info($"[Sim] resumed @ {SimTickHz}Hz (AI brain @ {PigBrainHz}Hz)");
     }
 
     // Stop the sim loop by removing the scheduled-timer row(s). With no rows,
@@ -1721,6 +1726,8 @@ public static partial class Module
     {
         foreach (var t in ctx.Db.SimTickTimer.Iter().ToList())
             ctx.Db.SimTickTimer.ScheduledId.Delete(t.ScheduledId);
+        foreach (var t in ctx.Db.PigBrainTimer.Iter().ToList())
+            ctx.Db.PigBrainTimer.ScheduledId.Delete(t.ScheduledId);
         Log.Info("[Sim] paused (no clients connected)");
     }
 

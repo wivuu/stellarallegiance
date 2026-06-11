@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-10)
 
 ## Corpus Check
-- 50 files · ~63,557 words
+- 50 files · ~64,975 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 813 nodes · 1479 edges · 43 communities (36 shown, 7 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 52 edges (avg confidence: 0.8)
+- 824 nodes · 1532 edges · 43 communities (36 shown, 7 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 55 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3fe0c904`
+- Built from commit: `2dc8bb08`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,13 +61,13 @@
 1. `Module` - 68 edges
 2. `WorldRenderer` - 52 edges
 3. `ReducerContext` - 44 edges
-4. `Chat` - 32 edges
-5. `Module` - 32 edges
+4. `Module` - 39 edges
+5. `Chat` - 32 edges
 6. `PredictionController` - 28 edges
 7. `TargetMarkers` - 26 edges
 8. `ShipController` - 24 edges
-9. `Module` - 20 edges
-10. `EngineGlow` - 19 edges
+9. `ReducerContext` - 23 edges
+10. `Module` - 20 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Starscape` --references--> `string`  [EXTRACTED]
@@ -90,7 +90,7 @@
 ## Communities (43 total, 7 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
-Cohesion: 0.07
+Cohesion: 0.06
 Nodes (33): DetRng, Filter, Identity, long, Asteroid, bool, byte, Dictionary (+25 more)
 
 ### Community 1 - "AlephView World State"
@@ -106,12 +106,12 @@ Cohesion: 0.10
 Nodes (34): _base_params(), _bumps(), _colour_params(), _crystal(), _cull(), _detail_params(), eval_base(), _eval_shape() (+26 more)
 
 ### Community 4 - "Connection Overlay UI"
-Cohesion: 0.13
-Nodes (12): Button, CanvasLayer, Button, ConnectionManager, Label, Player, ShipClass, ShipController (+4 more)
+Cohesion: 0.06
+Nodes (24): Button, CanvasLayer, Button, Color, ConnectionManager, double, Label, Button (+16 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.16
-Nodes (11): Aleph, float, int, Quat, ReducerContext, Ship, ShipInputState, uint (+3 more)
+Cohesion: 0.13
+Nodes (16): Aleph, byte, float, int, Quat, Reducer, ReducerContext, Ship (+8 more)
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.07
@@ -130,8 +130,8 @@ Cohesion: 0.12
 Nodes (14): Color, CurveTexture, float, GradientTexture1D, GradientTexture2D, StandardMaterial3D, Texture2D, Vector3 (+6 more)
 
 ### Community 10 - "Lobby UI"
-Cohesion: 0.07
-Nodes (25): Action, Button, Color, ConnectionManager, double, Label, Control, Button (+17 more)
+Cohesion: 0.14
+Nodes (13): Action, Button, Color, ConnectionManager, DbConnection, HBoxContainer, Identity, Label (+5 more)
 
 ### Community 11 - "Hit Flash Effect"
 Cohesion: 0.21
@@ -226,23 +226,23 @@ Cohesion: 0.25
 Nodes (6): Base, byte, Dictionary, List, ReducerContext, Module
 
 ## Knowledge Gaps
-- **225 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+220 more)
+- **229 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Vector3`, `Basis` (+224 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`, `Community 26`?**
-  _High betweenness centrality (0.287) - this node is a cross-community bridge._
+- **Why does `Module` connect `SpaceTimeDB Module Core` to `Starscape Background`?**
+  _High betweenness centrality (0.295) - this node is a cross-community bridge._
 - **Why does `Starscape` connect `Starscape Background` to `AlephView World State`?**
-  _High betweenness centrality (0.279) - this node is a cross-community bridge._
+  _High betweenness centrality (0.286) - this node is a cross-community bridge._
 - **Why does `string` connect `Starscape Background` to `SpaceTimeDB Module Core`?**
-  _High betweenness centrality (0.266) - this node is a cross-community bridge._
+  _High betweenness centrality (0.273) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _245 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _249 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.0651685393258427 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06495726495726496 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
   _Cohesion score 0.05789473684210526 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**

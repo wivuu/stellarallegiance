@@ -135,8 +135,8 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781123965.3928487,
-    "ast_hash": "44ae011e056e6dd69f67d34144912261",
+    "mtime": 1781131679.3795884,
+    "ast_hash": "a529c0ac5aff4637c8d4987cb042981a",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
@@ -245,13 +245,13 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "module/spacetimedb/Defs.cs": {
-    "mtime": 1781121535.7307024,
-    "ast_hash": "8bc7976b7f381b7ba18a3c4cc67415ef",
+    "mtime": 1781127515.667979,
+    "ast_hash": "22a7db40558aa06b8963f111e2124f3f",
     "semantic_hash": ""
   },
   "module/spacetimedb/Bases.cs": {
-    "mtime": 1781121403.3172572,
-    "ast_hash": "7fa8a8f8ca0fe4d2990ad48ae6823422",
+    "mtime": 1781124256.0161142,
+    "ast_hash": "811e2950838d76eea46a76410a0c9fbb",
     "semantic_hash": ""
   },
   "module/spacetimedb/Ships.cs": {

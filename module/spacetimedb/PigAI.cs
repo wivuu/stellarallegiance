@@ -39,8 +39,60 @@ public partial struct Pig
     public ulong? TargetShipId;   // current target ship (while Seek/Attack)
 }
 
+// Scheduled-reducer table that drives PigBrainTick — the AI's *decision* loop — at a
+// LOWER rate than the 20 Hz sim (see PigBrainHz). Drones are server-only (clients render
+// them from snapshots, never predict them), so their target selection carries no
+// lockstep-determinism constraint and is safe to run on its own slower schedule; the
+// 20 Hz sim just re-steers toward the last cached decision (PigExecute). Created/torn
+// down alongside SimTickTimer in StartSim/StopSim.
+[SpacetimeDB.Table(
+    Accessor = "PigBrainTimer",
+    Scheduled = nameof(Module.PigBrainTick),
+    ScheduledAt = nameof(ScheduledAt),
+    Public = true)]
+public partial struct PigBrainTimer
+{
+    [PrimaryKey]
+    [AutoInc]
+    public ulong ScheduledId;
+    public ScheduleAt ScheduledAt;
+}
+
+// One cached AI decision per live combat drone, keyed by its Ship. Written by the 5 Hz
+// PigBrainTick (the expensive target-selection pass) and read every 20 Hz sim tick by
+// PigExecute, which cheaply RE-STEERS toward it (fresh lead/juke/wobble/fire) so the
+// drone still tracks a juking player smoothly between decisions. Private: pure server
+// scratch, no client binding. Pruned when its drone dies / despawns.
+[SpacetimeDB.Table(Accessor = "PigDecision", Public = false)]
+public partial struct PigDecision
+{
+    [PrimaryKey]
+    public ulong ShipId;          // the live drone this decision is for
+    public ulong PigId;           // owning slot (skill hash — avoids a per-tick slot scan)
+    public byte Kind;             // PigKind* — how PigExecute should fly it this decision
+    public ulong TargetShipId;    // Chase/SteerShip: the ship to lead/follow
+    public float Px, Py, Pz;      // SteerPoint/AttackPoint: world target; Patrol: sector center
+    public float Radius;          // AttackPoint: target body radius (standoff)
+    public uint DecidedTick;      // sim tick this decision was made (debug / staleness)
+}
+
 public static partial class Module
 {
+    // ---- AI decision rate ---------------------------------------------
+    // The brain reducer (PigBrainTick) runs at this rate; the 20 Hz sim re-steers toward
+    // the cached decision every tick in between. 5 Hz = re-decide every 4th sim tick
+    // (~200 ms target-selection latency) — drones still TRACK at 20 Hz, they just re-PICK
+    // their target/mode 4× less often. Tune to trade AI CPU against decision latency.
+    private const uint  PigBrainHz = 5;
+
+    // PigDecision.Kind — how PigExecute should fly a drone for the cached decision.
+    private const byte PigKindNone        = 0; // no decision yet → coast
+    private const byte PigKindChase       = 1; // combat: lead + juke + fire on a target ship
+    private const byte PigKindSteerShip   = 2; // fly onto a moving friendly ship (rescue pod), no fire
+    private const byte PigKindSteerPoint  = 3; // fly to a static point (aleph gate / home), no fire
+    private const byte PigKindAttackPoint = 4; // shell a static target (enemy base) from standoff
+    private const byte PigKindPatrol      = 5; // sweep a ring around the cached sector center
+
     // ---- PIG tuning ---------------------------------------------------
     // Max drones per side. This is the "configurable max PIGs (default 5)" knob;
     // change it and republish (a --reset re-creates the slots at the new count).
@@ -159,7 +211,10 @@ public static partial class Module
             if (dormant)
                 continue;
             if (slot.ShipId is ulong sid)
+            {
+                ctx.Db.PigDecision.ShipId.Delete(sid);
                 ctx.Db.Ship.ShipId.Delete(sid);
+            }
             ctx.Db.Pig.PigId.Update(slot with
             {
                 ShipId = null,
@@ -168,6 +223,78 @@ public static partial class Module
                 TargetShipId = null,
             });
         }
+    }
+
+    // The AI DECISION loop, on its own slower schedule (PigBrainHz, default 5 Hz) — split
+    // out of the 20 Hz sim so the expensive per-drone target selection runs 4× less often.
+    // Owns everything that picks WHAT drones should do (lifecycle/spawns, rescue assignment,
+    // per-drone target/mode), writing one cached PigDecision per live combat drone; the sim's
+    // Pass A then cheaply re-steers toward those decisions every tick (PigExecute). Safe to
+    // decouple because drones are server-only (clients render them from snapshots and never
+    // predict them), so their decisions carry no lockstep-determinism constraint — unlike the
+    // physics/collision passes, which stay in the single ordered SimTick. Combat deaths still
+    // happen in SimTick (Pass C / KillPig); this loop only decides and spawns.
+    [SpacetimeDB.Reducer]
+    public static void PigBrainTick(ReducerContext ctx, PigBrainTimer timer)
+    {
+        var match0 = ctx.Db.Match.Id.Find(0);
+        if (match0 is null)
+            return;
+        uint tick = match0.Value.Tick;
+
+        // Same gate the sim used to apply in Pass 0: drones run only while a teamed pilot is
+        // present and the match is live. Otherwise tear them down (and clear their decisions).
+        bool combatLive = match0.Value.PigsEnabled
+                          && match0.Value.Phase != MatchPhase.Ended
+                          && AnyTeamedPlayerOnline(ctx);
+        if (!combatLive)
+        {
+            DespawnAllPigs(ctx);
+            foreach (var pd in ctx.Db.PigDecision.Iter().ToList())
+                ctx.Db.PigDecision.ShipId.Delete(pd.ShipId);
+            return;
+        }
+
+        EnsurePigSlots(ctx);
+        SimulatePigLifecycle(ctx, tick);
+        // Commit at most one drone per team to pick up a downed teammate's pod (the rest keep
+        // attacking); runs before the per-drone brain so PigDecide sees the assignment.
+        AssignPigRescuers(ctx, tick);
+
+        // Decide once per live combat drone and cache it (pods auto-fly home via PodThink,
+        // still resolved per-tick in the sim — they aren't brained here).
+        var liveIds = new HashSet<ulong>();
+        foreach (var me in ctx.Db.Ship.Iter().ToList())
+        {
+            if (!me.IsPig || me.IsPod)
+                continue;
+            liveIds.Add(me.ShipId);
+            UpsertPigDecision(ctx, me.ShipId, PigDecide(ctx, me, tick), tick);
+        }
+        // Prune decisions whose drone no longer exists (died/warped-away/despawned between
+        // brain ticks) — a safety net on top of the deletes at KillPig/DespawnAllPigs.
+        foreach (var pd in ctx.Db.PigDecision.Iter().ToList())
+            if (!liveIds.Contains(pd.ShipId))
+                ctx.Db.PigDecision.ShipId.Delete(pd.ShipId);
+    }
+
+    // Insert-or-update the cached decision for a drone (PrimaryKey on ShipId).
+    private static void UpsertPigDecision(ReducerContext ctx, ulong shipId, in PigPlan p, uint tick)
+    {
+        var row = new PigDecision
+        {
+            ShipId = shipId,
+            PigId = p.PigId,
+            Kind = p.Kind,
+            TargetShipId = p.TargetShipId,
+            Px = p.Px, Py = p.Py, Pz = p.Pz,
+            Radius = p.Radius,
+            DecidedTick = tick,
+        };
+        if (ctx.Db.PigDecision.ShipId.Find(shipId) is null)
+            ctx.Db.PigDecision.Insert(row);
+        else
+            ctx.Db.PigDecision.ShipId.Update(row);
     }
 
     // Squad waves (per team): a side fields its WHOLE squad (all its slots) at once, then
@@ -356,6 +483,7 @@ public static partial class Module
     // through KillShip), so this always ejects exactly one pod.
     private static void KillPig(ReducerContext ctx, Ship s, uint tick)
     {
+        ctx.Db.PigDecision.ShipId.Delete(s.ShipId);   // its cached decision dies with it
         ctx.Db.Ship.ShipId.Delete(s.ShipId);
 
         // Same eject as a player pod: flung clear of the wreck on a random high-speed,
@@ -404,10 +532,25 @@ public static partial class Module
         Log.Info($"[Pig] drone {s.ShipId} (team {s.Team}) destroyed -> PIG pod {pod.ShipId}; respawns when pod resolves");
     }
 
-    // The per-tick brain: pick a target, run the Idle/Seek/Attack state machine, and
-    // return the synthesized flight input. Also updates this drone's Pig row (state +
-    // target). Reads live world state directly — no determinism contract (server-only).
-    private static ShipInputState PigThink(ReducerContext ctx, Ship me, uint tick)
+    // What the brain DECIDED for one drone this cycle: which mode to fly and toward what.
+    // The cheap 20 Hz PigExecute re-steers from this every tick (fresh lead/juke/fire) so a
+    // 5 Hz decision still tracks a juking target smoothly. Plain struct (server scratch).
+    private struct PigPlan
+    {
+        public byte Kind;             // PigKind*
+        public ulong PigId;           // owning slot — drives aim skill in PigChaseInput
+        public ulong TargetShipId;    // Chase / SteerShip
+        public float Px, Py, Pz;      // SteerPoint / AttackPoint world target; Patrol center
+        public float Radius;          // AttackPoint standoff radius
+    }
+
+    // The DECISION half of the old per-tick brain, now run at PigBrainHz: pick a target,
+    // run the Idle/Seek/Attack state machine, update this drone's Pig row (state + target),
+    // and return the PLAN (mode + what to fly toward). All the heavy scans live here —
+    // target acquisition over every ship, threat scoring, base/aleph lookups — so they run
+    // 4× less often. The actual steering/lead/fire is deferred to PigExecute (20 Hz). Reads
+    // live world state directly — no determinism contract (server-only).
+    private static PigPlan PigDecide(ReducerContext ctx, Ship me, uint tick)
     {
         // Locate this drone's slot row (table is tiny).
         Pig? slotOpt = null;
@@ -415,24 +558,23 @@ public static partial class Module
         {
             if (p.ShipId == me.ShipId) { slotOpt = p; break; }
         }
+        ulong pigId = slotOpt is Pig sp0 ? sp0.PigId : me.ShipId;
 
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
-        Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
-        Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
 
         // ---- Rescue duty: this slot was committed by AssignPigRescuers to retrieve a
         // specific friendly pod (at most ONE rescuer per team — every other drone keeps
-        // attacking). Fly onto the pod; the rescue pass in SimulateTick resolves the pickup
-        // on hull contact. The assignment pass guarantees the target is a live, same-sector
-        // friendly pod and keeps State==Rescue across ticks, so here we just steer (PigSteerTo
-        // never fires) and return. Once the pod is resolved the slot is no longer Rescue and
-        // we fall straight through to normal combat below. ----
+        // attacking). PigExecute flies it onto the (moving) pod; the rescue pass in
+        // SimulateTick resolves the pickup on hull contact. The assignment pass guarantees
+        // the target is a live, same-sector friendly pod and keeps State==Rescue across
+        // ticks, so here we just emit a SteerShip plan. Once the pod is resolved the slot is
+        // no longer Rescue and we fall straight through to normal combat below. ----
         if (slotOpt is Pig rescuer && rescuer.State == PigState.Rescue
             && rescuer.TargetShipId is ulong rescuePodId
             && ctx.Db.Ship.ShipId.Find(rescuePodId) is Ship rescuePod
             && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
         {
-            return PigSteerTo(ctx, me, myPos, myRot, new Vec3(rescuePod.PosX, rescuePod.PosY, rescuePod.PosZ), 1f);
+            return new PigPlan { Kind = PigKindSteerShip, PigId = pigId, TargetShipId = rescuePodId };
         }
 
         // Pick a target by THREAT, not just proximity: score every enemy in radar by how
@@ -455,7 +597,7 @@ public static partial class Module
             {
                 if (slotOpt is Pig spp)
                     ctx.Db.Pig.PigId.Update(spp with { State = PigState.Seek, TargetShipId = locked.ShipId });
-                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(gate.PosX, gate.PosY, gate.PosZ), 1f);
+                return new PigPlan { Kind = PigKindSteerPoint, PigId = pigId, Px = gate.PosX, Py = gate.PosY, Pz = gate.PosZ };
             }
             keepId = null;   // no path to that sector — drop the lock and re-acquire below
         }
@@ -522,7 +664,7 @@ public static partial class Module
             {
                 if (slotOpt is Pig sh)
                     ctx.Db.Pig.PigId.Update(sh with { State = PigState.Patrol, TargetShipId = null });
-                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(homeGate.PosX, homeGate.PosY, homeGate.PosZ), 1f);
+                return new PigPlan { Kind = PigKindSteerPoint, PigId = pigId, Px = homeGate.PosX, Py = homeGate.PosY, Pz = homeGate.PosZ };
             }
             // Nothing hostile to fight → go on the OFFENSIVE: press the nearest ENEMY base in
             // this sector and shell it (PIG fire now erodes bases — Pass B), rather than idly
@@ -539,21 +681,73 @@ public static partial class Module
             {
                 if (slotOpt is Pig sb)
                     ctx.Db.Pig.PigId.Update(sb with { State = PigState.Attack, TargetShipId = null });
-                return PigAttackPoint(ctx, me, myPos, myRot, new Vec3(eb.PosX, eb.PosY, eb.PosZ), BaseRadius);
+                return new PigPlan { Kind = PigKindAttackPoint, PigId = pigId, Px = eb.PosX, Py = eb.PosY, Pz = eb.PosZ, Radius = BaseRadius };
             }
             // No enemy base here either → patrol (keep moving + visible), not idle at base.
+            // Cache the sector center; PigExecute sweeps the moving waypoint each tick.
+            Vec3 center = new Vec3(0f, 0f, 0f);
+            foreach (var sec in ctx.Db.Sector.Iter())
+                if (sec.SectorId == me.SectorId) { center = new Vec3(sec.CenterX, sec.CenterY, sec.CenterZ); break; }
             if (slotOpt is Pig sp)
                 ctx.Db.Pig.PigId.Update(sp with { State = PigState.Patrol, TargetShipId = null });
-            return PigPatrolInput(ctx, me, myPos, myRot, tick);
+            return new PigPlan { Kind = PigKindPatrol, PigId = pigId, Px = center.X, Py = center.Y, Pz = center.Z };
         }
 
+        // Combat: lock this target. The decision-time distance sets the HUD/debug state;
+        // PigExecute re-solves the actual lead/aim/fire against the target's CURRENT
+        // position every tick (so a 5 Hz decision still tracks a juking player at 20 Hz).
+        float dist = (new Vec3(tgt.PosX, tgt.PosY, tgt.PosZ) - myPos).Length();
+        PigState state = dist <= PigFireRange ? PigState.Attack : PigState.Seek;
+        if (slotOpt is Pig sp2)
+            ctx.Db.Pig.PigId.Update(sp2 with { State = state, TargetShipId = tgt.ShipId });
+
+        return new PigPlan { Kind = PigKindChase, PigId = pigId, TargetShipId = tgt.ShipId };
+    }
+
+    // The EXECUTION half (runs every 20 Hz sim tick in Pass A): turn the brain's last cached
+    // decision into this tick's flight input. Cheap by design — at most one indexed ship
+    // Find plus steering math — so the expensive selection in PigDecide runs 4× less often
+    // while the drone still flies/tracks/fires at the full sim rate.
+    private static ShipInputState PigExecute(ReducerContext ctx, Ship me, PigDecision d, uint tick)
+    {
+        Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
+        Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
+        switch (d.Kind)
+        {
+            case PigKindChase:
+                // Re-read the locked target (indexed) and lead/fire against where it is NOW.
+                if (ctx.Db.Ship.ShipId.Find(d.TargetShipId) is Ship tgt
+                    && !tgt.IsPod && tgt.Team != me.Team && tgt.SectorId == me.SectorId)
+                    return PigChaseInput(ctx, me, tgt, d.PigId, tick);
+                return default;   // target lost/warped — coast until the brain re-decides (≤4 ticks)
+            case PigKindSteerShip:
+                if (ctx.Db.Ship.ShipId.Find(d.TargetShipId) is Ship sp && sp.SectorId == me.SectorId)
+                    return PigSteerTo(ctx, me, myPos, myRot, new Vec3(sp.PosX, sp.PosY, sp.PosZ), 1f);
+                return default;
+            case PigKindSteerPoint:
+                return PigSteerTo(ctx, me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 1f);
+            case PigKindAttackPoint:
+                return PigAttackPoint(ctx, me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius);
+            case PigKindPatrol:
+                return PigPatrolFromCenter(ctx, me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), tick);
+            default:
+                return default;
+        }
+    }
+
+    // Combat steering against a locked target — the old brain's lead/aim/throttle/juke/fire
+    // tail, now run every sim tick by PigExecute. Re-solves the intercept from the target's
+    // CURRENT position so tracking stays smooth between (slower) target decisions. The
+    // per-slot aim skill (lead accuracy, turn snappiness, residual wobble) comes from pigId.
+    private static ShipInputState PigChaseInput(ReducerContext ctx, Ship me, Ship tgt, ulong pigId, uint tick)
+    {
+        Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
+        Vec3 myVel = new Vec3(me.VelX, me.VelY, me.VelZ);
+        Quat myRot = new Quat(me.RotX, me.RotY, me.RotZ, me.RotW);
         Vec3 tgtPos = new Vec3(tgt.PosX, tgt.PosY, tgt.PosZ);
         Vec3 tgtVel = new Vec3(tgt.VelX, tgt.VelY, tgt.VelZ);
         float dist = (tgtPos - myPos).Length();
 
-        // This drone's stable, per-slot aiming competence drives lead accuracy, how
-        // sharply it tracks, and its residual wobble (see PigAimSkill / the tuning block).
-        ulong pigId = slotOpt is Pig sps ? sps.PigId : me.ShipId;
         float skill = PigAimSkill(pigId);
         float turnGain = PigTurnGainMin + (PigTurnGainMax - PigTurnGainMin) * skill;
         float leadFrac = PigLeadFracMin + (PigLeadFracMax - PigLeadFracMin) * skill;
@@ -565,7 +759,7 @@ public static partial class Module
         // then we add a slowly-wandering wobble so no drone is a perfect turret.
         Vec3 leadPoint = PigLead(myPos, myVel, tgtPos, tgtVel, out bool haveLead);
         Vec3 aimPoint = tgtPos + (leadPoint - tgtPos) * leadFrac;
-        aimPoint = aimPoint + PigAimWobble(aimPoint - myPos, pigId, tick, skill);
+        aimPoint += PigAimWobble(aimPoint - myPos, pigId, tick, skill);
         Vec3 desiredDir = NormalizeOr(aimPoint - myPos, myRot.Rotate(new Vec3(0f, 0f, 1f)));
 
         // Bend the heading away from asteroids in our path (steering, not pathfinding).
@@ -614,10 +808,6 @@ public static partial class Module
         bool onTarget = haveLead && local.Z > 0f && aimErr < MathF.Sin(PigAimDeg * (MathF.PI / 180f));
         bool firing = inRange && onTarget;
 
-        PigState state = inRange ? PigState.Attack : PigState.Seek;
-        if (slotOpt is Pig sp2)
-            ctx.Db.Pig.PigId.Update(sp2 with { State = state, TargetShipId = tgt.ShipId });
-
         return new ShipInputState
         {
             Thrust = thrust,
@@ -631,17 +821,13 @@ public static partial class Module
     }
 
     // Patrol behaviour: with nothing to fight, sweep a slowly-rotating waypoint on a ring
-    // around the sector center so the drone keeps moving and visible instead of parking at
-    // base. The waypoint's angle advances with `tick` (phase offset per slot so a squad
-    // fans out rather than orbiting in lockstep); steering toward a perpetually-moving point
-    // gives a continuous patrol with no explicit "reached, pick next" bookkeeping. Server-
-    // only, so plain MathF + tick phase is fine (no determinism contract).
-    private static ShipInputState PigPatrolInput(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, uint tick)
+    // around the (cached) sector center so the drone keeps moving and visible instead of
+    // parking at base. The waypoint's angle advances with `tick` (phase offset per slot so a
+    // squad fans out rather than orbiting in lockstep); steering toward a perpetually-moving
+    // point gives a continuous patrol with no "reached, pick next" bookkeeping. Server-only,
+    // so plain MathF + tick phase is fine (no determinism contract).
+    private static ShipInputState PigPatrolFromCenter(ReducerContext ctx, Ship me, Vec3 myPos, Quat myRot, Vec3 center, uint tick)
     {
-        Vec3 center = new Vec3(0f, 0f, 0f);
-        foreach (var sec in ctx.Db.Sector.Iter())
-            if (sec.SectorId == me.SectorId) { center = new Vec3(sec.CenterX, sec.CenterY, sec.CenterZ); break; }
-
         float phase = tick * PigPatrolAngRate + me.ShipId * 1.61803399f;
         Vec3 waypoint = new Vec3(
             center.X + MathF.Cos(phase) * PigPatrolRadius,

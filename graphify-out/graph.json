@@ -682,7 +682,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 10,
+      "community": 4,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -691,7 +691,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 10,
+      "community": 4,
       "norm_label": "connectionoverlay"
     },
     {
@@ -700,7 +700,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 10,
+      "community": 4,
       "norm_label": "color"
     },
     {
@@ -709,7 +709,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 10,
+      "community": 4,
       "norm_label": "connectionmanager"
     },
     {
@@ -718,7 +718,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 10,
+      "community": 4,
       "norm_label": "label"
     },
     {
@@ -727,7 +727,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 10,
+      "community": 4,
       "norm_label": "button"
     },
     {
@@ -736,7 +736,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 10,
+      "community": 4,
       "norm_label": "double"
     },
     {
@@ -745,7 +745,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 10,
+      "community": 4,
       "norm_label": ".init()"
     },
     {
@@ -754,7 +754,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 10,
+      "community": 4,
       "norm_label": ".centered()"
     },
     {
@@ -763,7 +763,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 10,
+      "community": 4,
       "norm_label": "._process()"
     },
     {
@@ -1438,7 +1438,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 10,
+      "community": 4,
       "norm_label": "control"
     },
     {
@@ -1708,7 +1708,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 10,
+      "community": 4,
       "norm_label": "minimap.cs"
     },
     {
@@ -1717,7 +1717,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 10,
+      "community": 4,
       "norm_label": "minimap"
     },
     {
@@ -1726,7 +1726,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 10,
+      "community": 4,
       "norm_label": "float"
     },
     {
@@ -1735,7 +1735,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 10,
+      "community": 4,
       "norm_label": "color"
     },
     {
@@ -1744,7 +1744,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 10,
+      "community": 4,
       "norm_label": "connectionmanager"
     },
     {
@@ -1753,7 +1753,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 10,
+      "community": 4,
       "norm_label": "worldrenderer"
     },
     {
@@ -1762,7 +1762,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L37",
       "id": "scripts_minimap_minimap_init",
-      "community": 10,
+      "community": 4,
       "norm_label": ".init()"
     },
     {
@@ -1771,7 +1771,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L45",
       "id": "scripts_minimap_minimap_process",
-      "community": 10,
+      "community": 4,
       "norm_label": "._process()"
     },
     {
@@ -1780,7 +1780,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L47",
       "id": "scripts_minimap_minimap_draw",
-      "community": 10,
+      "community": 4,
       "norm_label": "._draw()"
     },
     {
@@ -4678,7 +4678,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L620",
       "id": "spacetimedb_lib_module_init",
-      "community": 26,
+      "community": 0,
       "norm_label": ".init()"
     },
     {
@@ -4892,7 +4892,7 @@
       "label": ".SimulateTick()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1140",
+      "source_location": "L1151",
       "id": "spacetimedb_lib_module_simulatetick",
       "community": 0,
       "norm_label": ".simulatetick()"
@@ -4901,7 +4901,7 @@
       "label": ".Dist2()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1499",
+      "source_location": "L1496",
       "id": "spacetimedb_lib_module_dist2",
       "community": 0,
       "norm_label": ".dist2()"
@@ -4910,7 +4910,7 @@
       "label": ".TryWarp()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1510",
+      "source_location": "L1507",
       "id": "spacetimedb_lib_module_trywarp",
       "community": 0,
       "norm_label": ".trywarp()"
@@ -4919,7 +4919,7 @@
       "label": ".ResolveCollision()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1573",
+      "source_location": "L1570",
       "id": "spacetimedb_lib_module_resolvecollision",
       "community": 0,
       "norm_label": ".resolvecollision()"
@@ -4928,7 +4928,7 @@
       "label": ".ToInputState()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1600",
+      "source_location": "L1597",
       "id": "spacetimedb_lib_module_toinputstate",
       "community": 0,
       "norm_label": ".toinputstate()"
@@ -4937,7 +4937,7 @@
       "label": "ShipInput",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1600",
+      "source_location": "L1597",
       "id": "shipinput",
       "community": 0,
       "norm_label": "shipinput"
@@ -4946,7 +4946,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1600",
+      "source_location": "L1597",
       "id": "module_spacetimedb_lib_cs_shipinputstate",
       "community": 0,
       "norm_label": "shipinputstate"
@@ -4955,7 +4955,7 @@
       "label": ".DeleteShipInputs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1614",
+      "source_location": "L1611",
       "id": "spacetimedb_lib_module_deleteshipinputs",
       "community": 0,
       "norm_label": ".deleteshipinputs()"
@@ -4964,7 +4964,7 @@
       "label": ".OnlineTeamCounts()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1624",
+      "source_location": "L1621",
       "id": "spacetimedb_lib_module_onlineteamcounts",
       "community": 0,
       "norm_label": ".onlineteamcounts()"
@@ -4973,7 +4973,7 @@
       "label": ".CanJoinTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1639",
+      "source_location": "L1636",
       "id": "spacetimedb_lib_module_canjointeam",
       "community": 0,
       "norm_label": ".canjointeam()"
@@ -4982,7 +4982,7 @@
       "label": ".SmallestOnlineTeam()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1649",
+      "source_location": "L1646",
       "id": "spacetimedb_lib_module_smallestonlineteam",
       "community": 0,
       "norm_label": ".smallestonlineteam()"
@@ -4991,7 +4991,7 @@
       "label": ".ResetWorld()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1661",
+      "source_location": "L1658",
       "id": "spacetimedb_lib_module_resetworld",
       "community": 0,
       "norm_label": ".resetworld()"
@@ -5000,7 +5000,7 @@
       "label": ".AnyOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1677",
+      "source_location": "L1674",
       "id": "spacetimedb_lib_module_anyonline",
       "community": 0,
       "norm_label": ".anyonline()"
@@ -5009,7 +5009,7 @@
       "label": ".AnyTeamedPlayerOnline()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1688",
+      "source_location": "L1685",
       "id": "spacetimedb_lib_module_anyteamedplayeronline",
       "community": 0,
       "norm_label": ".anyteamedplayeronline()"
@@ -5018,7 +5018,7 @@
       "label": ".StartSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1698",
+      "source_location": "L1695",
       "id": "spacetimedb_lib_module_startsim",
       "community": 0,
       "norm_label": ".startsim()"
@@ -5027,7 +5027,7 @@
       "label": ".StopSim()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1720",
+      "source_location": "L1725",
       "id": "spacetimedb_lib_module_stopsim",
       "community": 0,
       "norm_label": ".stopsim()"
@@ -5036,7 +5036,7 @@
       "label": ".MarkEngagedIfActive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1729",
+      "source_location": "L1736",
       "id": "spacetimedb_lib_module_markengagedifactive",
       "community": 0,
       "norm_label": ".markengagedifactive()"
@@ -5045,7 +5045,7 @@
       "label": ".EndMatchIfSideAbandoned()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1744",
+      "source_location": "L1751",
       "id": "spacetimedb_lib_module_endmatchifsideabandoned",
       "community": 0,
       "norm_label": ".endmatchifsideabandoned()"
@@ -5054,7 +5054,7 @@
       "label": ".MaybeStartMatch()",
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L1789",
+      "source_location": "L1796",
       "id": "spacetimedb_lib_module_maybestartmatch",
       "community": 0,
       "norm_label": ".maybestartmatch()"
@@ -5072,34 +5072,43 @@
       "label": "Module",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L42",
+      "source_location": "L79",
       "id": "spacetimedb_pigai_module",
       "community": 5,
       "norm_label": "module"
     },
     {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L47",
-      "id": "module_spacetimedb_pigai_cs_int",
-      "community": 5,
-      "norm_label": "int"
-    },
-    {
       "label": "uint",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L51",
+      "source_location": "L86",
       "id": "module_spacetimedb_pigai_cs_uint",
       "community": 5,
       "norm_label": "uint"
     },
     {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L89",
+      "id": "module_spacetimedb_pigai_cs_byte",
+      "community": 5,
+      "norm_label": "byte"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L99",
+      "id": "module_spacetimedb_pigai_cs_int",
+      "community": 5,
+      "norm_label": "int"
+    },
+    {
       "label": "float",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L57",
+      "source_location": "L109",
       "id": "module_spacetimedb_pigai_cs_float",
       "community": 5,
       "norm_label": "float"
@@ -5108,7 +5117,7 @@
       "label": ".EnsurePigSlots()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L114",
+      "source_location": "L166",
       "id": "spacetimedb_pigai_module_ensurepigslots",
       "community": 5,
       "norm_label": ".ensurepigslots()"
@@ -5117,7 +5126,7 @@
       "label": "ReducerContext",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L114",
+      "source_location": "L166",
       "id": "module_spacetimedb_pigai_cs_reducercontext",
       "community": 5,
       "norm_label": "reducercontext"
@@ -5126,16 +5135,61 @@
       "label": ".DespawnAllPigs()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L147",
+      "source_location": "L199",
       "id": "spacetimedb_pigai_module_despawnallpigs",
       "community": 5,
       "norm_label": ".despawnallpigs()"
     },
     {
+      "label": ".PigBrainTick()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "id": "spacetimedb_pigai_module_pigbraintick",
+      "community": 5,
+      "norm_label": ".pigbraintick()"
+    },
+    {
+      "label": "PigBrainTimer",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "id": "pigbraintimer",
+      "community": 5,
+      "norm_label": "pigbraintimer"
+    },
+    {
+      "label": "Reducer",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "id": "module_spacetimedb_pigai_cs_reducer",
+      "community": 5,
+      "norm_label": "reducer"
+    },
+    {
+      "label": ".UpsertPigDecision()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L282",
+      "id": "spacetimedb_pigai_module_upsertpigdecision",
+      "community": 5,
+      "norm_label": ".upsertpigdecision()"
+    },
+    {
+      "label": "PigPlan",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L282",
+      "id": "pigplan",
+      "community": 5,
+      "norm_label": "pigplan"
+    },
+    {
       "label": ".SimulatePigLifecycle()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L178",
+      "source_location": "L305",
       "id": "spacetimedb_pigai_module_simulatepiglifecycle",
       "community": 5,
       "norm_label": ".simulatepiglifecycle()"
@@ -5144,7 +5198,7 @@
       "label": ".AssignPigRescuers()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L251",
+      "source_location": "L378",
       "id": "spacetimedb_pigai_module_assignpigrescuers",
       "community": 5,
       "norm_label": ".assignpigrescuers()"
@@ -5153,7 +5207,7 @@
       "label": ".SpawnPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L299",
+      "source_location": "L426",
       "id": "spacetimedb_pigai_module_spawnpig",
       "community": 5,
       "norm_label": ".spawnpig()"
@@ -5162,7 +5216,7 @@
       "label": "Pig",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L299",
+      "source_location": "L426",
       "id": "pig",
       "community": 5,
       "norm_label": "pig"
@@ -5171,7 +5225,7 @@
       "label": ".KillPig()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L357",
+      "source_location": "L484",
       "id": "spacetimedb_pigai_module_killpig",
       "community": 5,
       "norm_label": ".killpig()"
@@ -5180,43 +5234,70 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L357",
+      "source_location": "L484",
       "id": "module_spacetimedb_pigai_cs_ship",
       "community": 5,
       "norm_label": "ship"
     },
     {
-      "label": ".PigThink()",
+      "label": ".PigDecide()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L410",
-      "id": "spacetimedb_pigai_module_pigthink",
+      "source_location": "L553",
+      "id": "spacetimedb_pigai_module_pigdecide",
       "community": 5,
-      "norm_label": ".pigthink()"
+      "norm_label": ".pigdecide()"
+    },
+    {
+      "label": ".PigExecute()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "id": "spacetimedb_pigai_module_pigexecute",
+      "community": 5,
+      "norm_label": ".pigexecute()"
+    },
+    {
+      "label": "PigDecision",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "id": "pigdecision",
+      "community": 5,
+      "norm_label": "pigdecision"
     },
     {
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L410",
+      "source_location": "L711",
       "id": "module_spacetimedb_pigai_cs_shipinputstate",
       "community": 5,
       "norm_label": "shipinputstate"
     },
     {
-      "label": ".PigPatrolInput()",
+      "label": ".PigChaseInput()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
-      "id": "spacetimedb_pigai_module_pigpatrolinput",
+      "source_location": "L742",
+      "id": "spacetimedb_pigai_module_pigchaseinput",
       "community": 5,
-      "norm_label": ".pigpatrolinput()"
+      "norm_label": ".pigchaseinput()"
+    },
+    {
+      "label": ".PigPatrolFromCenter()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "id": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "community": 5,
+      "norm_label": ".pigpatrolfromcenter()"
     },
     {
       "label": "Vec3",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
+      "source_location": "L829",
       "id": "module_spacetimedb_pigai_cs_vec3",
       "community": 5,
       "norm_label": "vec3"
@@ -5225,7 +5306,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L639",
+      "source_location": "L829",
       "id": "module_spacetimedb_pigai_cs_quat",
       "community": 5,
       "norm_label": "quat"
@@ -5234,7 +5315,7 @@
       "label": ".IsAggressive()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L656",
+      "source_location": "L842",
       "id": "spacetimedb_pigai_module_isaggressive",
       "community": 5,
       "norm_label": ".isaggressive()"
@@ -5243,7 +5324,7 @@
       "label": ".PodThink()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L663",
+      "source_location": "L849",
       "id": "spacetimedb_pigai_module_podthink",
       "community": 5,
       "norm_label": ".podthink()"
@@ -5252,7 +5333,7 @@
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L689",
+      "source_location": "L875",
       "id": "spacetimedb_pigai_module_piglead",
       "community": 5,
       "norm_label": ".piglead()"
@@ -5261,7 +5342,7 @@
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L732",
+      "source_location": "L918",
       "id": "spacetimedb_pigai_module_pigavoidasteroids",
       "community": 5,
       "norm_label": ".pigavoidasteroids()"
@@ -5270,7 +5351,7 @@
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L775",
+      "source_location": "L961",
       "id": "spacetimedb_pigai_module_pigthreatscore",
       "community": 5,
       "norm_label": ".pigthreatscore()"
@@ -5279,7 +5360,7 @@
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L804",
+      "source_location": "L990",
       "id": "spacetimedb_pigai_module_teambasesector",
       "community": 5,
       "norm_label": ".teambasesector()"
@@ -5288,7 +5369,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L813",
+      "source_location": "L999",
       "id": "spacetimedb_pigai_module_enemyinsector",
       "community": 5,
       "norm_label": ".enemyinsector()"
@@ -5297,7 +5378,7 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L823",
+      "source_location": "L1009",
       "id": "spacetimedb_pigai_module_alephto",
       "community": 5,
       "norm_label": ".alephto()"
@@ -5306,7 +5387,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L823",
+      "source_location": "L1009",
       "id": "module_spacetimedb_pigai_cs_aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -5315,7 +5396,7 @@
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L834",
+      "source_location": "L1020",
       "id": "spacetimedb_pigai_module_pigsteerto",
       "community": 5,
       "norm_label": ".pigsteerto()"
@@ -5324,7 +5405,7 @@
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L852",
+      "source_location": "L1038",
       "id": "spacetimedb_pigai_module_pigattackpoint",
       "community": 5,
       "norm_label": ".pigattackpoint()"
@@ -5333,7 +5414,7 @@
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L880",
+      "source_location": "L1066",
       "id": "spacetimedb_pigai_module_pigaimskill",
       "community": 5,
       "norm_label": ".pigaimskill()"
@@ -5342,7 +5423,7 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L893",
+      "source_location": "L1079",
       "id": "spacetimedb_pigai_module_pigaimwobble",
       "community": 5,
       "norm_label": ".pigaimwobble()"
@@ -5351,7 +5432,7 @@
       "label": ".FreePigPodSlot()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L911",
+      "source_location": "L1097",
       "id": "spacetimedb_pigai_module_freepigpodslot",
       "community": 18,
       "norm_label": ".freepigpodslot()"
@@ -5360,7 +5441,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L932",
+      "source_location": "L1118",
       "id": "spacetimedb_pigai_module_dot",
       "community": 5,
       "norm_label": ".dot()"
@@ -5369,7 +5450,7 @@
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L934",
+      "source_location": "L1120",
       "id": "spacetimedb_pigai_module_clamp1",
       "community": 5,
       "norm_label": ".clamp1()"
@@ -5378,7 +5459,7 @@
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L936",
+      "source_location": "L1122",
       "id": "spacetimedb_pigai_module_clamp01",
       "community": 5,
       "norm_label": ".clamp01()"
@@ -5387,7 +5468,7 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L938",
+      "source_location": "L1124",
       "id": "spacetimedb_pigai_module_conjugate",
       "community": 5,
       "norm_label": ".conjugate()"
@@ -5396,7 +5477,7 @@
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L940",
+      "source_location": "L1126",
       "id": "spacetimedb_pigai_module_normalizeor",
       "community": 5,
       "norm_label": ".normalizeor()"
@@ -5405,7 +5486,7 @@
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L946",
+      "source_location": "L1132",
       "id": "spacetimedb_pigai_module_perpendicularto",
       "community": 5,
       "norm_label": ".perpendicularto()"
@@ -5414,7 +5495,7 @@
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L952",
+      "source_location": "L1138",
       "id": "spacetimedb_pigai_module_smallestpositivef",
       "community": 5,
       "norm_label": ".smallestpositivef()"
@@ -7046,6 +7127,24 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": ".PigThink()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L410",
+      "community": 5,
+      "norm_label": ".pigthink()",
+      "id": "spacetimedb_pigai_module_pigthink"
+    },
+    {
+      "label": ".PigPatrolInput()",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L639",
+      "community": 5,
+      "norm_label": ".pigpatrolinput()",
+      "id": "spacetimedb_pigai_module_pigpatrolinput"
     },
     {
       "label": "Asteroid",
@@ -16224,9 +16323,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L576",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "spacetimedb_lib_module_hitsasteroid",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_hitsasteroid"
     },
     {
       "relation": "method",
@@ -16394,9 +16493,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L601",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_resolveasteroidcollisions"
     },
     {
       "relation": "method",
@@ -16604,9 +16703,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1510",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "spacetimedb_lib_module_trywarp",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_trywarp"
     },
     {
       "relation": "method",
@@ -16834,9 +16933,9 @@
       "source_location": "L576",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_hitsasteroid",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -16966,9 +17065,9 @@
       "source_location": "L601",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -17164,9 +17263,9 @@
       "source_location": "L1510",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_trywarp",
-      "target": "module_spacetimedb_lib_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -17362,9 +17461,9 @@
       "source_location": "L601",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "target": "module_spacetimedb_lib_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_ship"
     },
     {
       "relation": "references",
@@ -17395,9 +17494,9 @@
       "source_location": "L1510",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_trywarp",
-      "target": "module_spacetimedb_lib_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_lib_cs_ship"
     },
     {
       "relation": "calls",
@@ -17461,9 +17560,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1545",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_trywarp",
-      "target": "spacetimedb_lib_nextdouble",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_nextdouble"
     },
     {
       "relation": "calls",
@@ -17714,9 +17813,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L579",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_hitsasteroid",
-      "target": "spacetimedb_lib_module_asteroidcellof",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_asteroidcellof"
     },
     {
       "relation": "calls",
@@ -17725,9 +17824,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L604",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "target": "spacetimedb_lib_module_asteroidcellof",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_asteroidcellof"
     },
     {
       "relation": "calls",
@@ -17769,9 +17868,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L578",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_hitsasteroid",
-      "target": "spacetimedb_lib_module_asteroidgridforsector",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_asteroidgridforsector"
     },
     {
       "relation": "calls",
@@ -17780,9 +17879,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L603",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "target": "spacetimedb_lib_module_asteroidgridforsector",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_asteroidgridforsector"
     },
     {
       "relation": "calls",
@@ -17802,9 +17901,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L589",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_hitsasteroid",
-      "target": "spacetimedb_lib_module_dist2",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_dist2"
     },
     {
       "relation": "calls",
@@ -17813,9 +17912,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1289",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
-      "target": "spacetimedb_lib_module_hitsasteroid",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_hitsasteroid"
     },
     {
       "relation": "calls",
@@ -17824,9 +17923,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L612",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "target": "spacetimedb_lib_module_resolvecollision",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_resolvecollision"
     },
     {
       "relation": "calls",
@@ -17835,9 +17934,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1415",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
-      "target": "spacetimedb_lib_module_resolveasteroidcollisions",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_resolveasteroidcollisions"
     },
     {
       "relation": "references",
@@ -18627,9 +18726,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1257",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
-      "target": "spacetimedb_lib_module_trywarp",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_trywarp"
     },
     {
       "relation": "calls",
@@ -18674,6 +18773,17 @@
       "weight": 1.0,
       "source": "spacetimedb_lib_module_simulatetick",
       "target": "spacetimedb_pigai_module_killpig"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L1187",
+      "weight": 1.0,
+      "source": "spacetimedb_lib_module_simulatetick",
+      "target": "spacetimedb_pigai_module_pigexecute"
     },
     {
       "relation": "calls",
@@ -18770,9 +18880,9 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1517",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_trywarp",
-      "target": "spacetimedb_lib_module_dist2",
-      "confidence_score": 1.0
+      "target": "spacetimedb_lib_module_dist2"
     },
     {
       "relation": "calls",
@@ -18783,6 +18893,17 @@
       "source_location": "L280",
       "weight": 1.0,
       "source": "spacetimedb_pigai_module_assignpigrescuers",
+      "target": "spacetimedb_lib_module_dist2"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L634",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigdecide",
       "target": "spacetimedb_lib_module_dist2"
     },
     {
@@ -18995,6 +19116,17 @@
       "target": "spacetimedb_pigai_module_despawnallpigs"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L249",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_lib_module_anyteamedplayeronline"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
@@ -19003,6 +19135,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai",
       "target": "spacetimedb_pigai_module"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L94",
+      "weight": 1.0,
+      "context": "field",
+      "source": "spacetimedb_pigai_module",
+      "target": "module_spacetimedb_pigai_cs_byte",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -19221,11 +19364,61 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_pigbraintick",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L742",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_pigchaseinput",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L553",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_pigdecide",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_pigexecute",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L484",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
       "target": "spacetimedb_pigai_module_piglead"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -19318,6 +19511,16 @@
       "target": "spacetimedb_pigai_module_teambasesector"
     },
     {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L282",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module",
+      "target": "spacetimedb_pigai_module_upsertpigdecision",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
@@ -19327,6 +19530,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_ensurepigslots",
       "target": "module_spacetimedb_pigai_cs_reducercontext"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L258",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_ensurepigslots",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -19420,6 +19634,61 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L742",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L553",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L549",
       "weight": 1.0,
       "context": "parameter_type",
@@ -19503,6 +19772,116 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_teambasesector",
       "target": "module_spacetimedb_pigai_cs_reducercontext"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L282",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_upsertpigdecision",
+      "target": "module_spacetimedb_pigai_cs_reducercontext",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L252",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_despawnallpigs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "module_spacetimedb_pigai_cs_reducer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "pigbraintimer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L262",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_assignpigrescuers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L272",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_pigdecide",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L259",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_simulatepiglifecycle",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L272",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigbraintick",
+      "target": "spacetimedb_pigai_module_upsertpigdecision",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L282",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_upsertpigdecision",
+      "target": "pigplan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L553",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "pigplan",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -19618,6 +19997,50 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L742",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "module_spacetimedb_pigai_cs_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L553",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "module_spacetimedb_pigai_cs_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "module_spacetimedb_pigai_cs_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "module_spacetimedb_pigai_cs_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L549",
       "weight": 1.0,
       "context": "parameter_type",
@@ -19670,180 +20093,114 @@
       "target": "module_spacetimedb_pigai_cs_ship"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L596",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "spacetimedb_pigai_module_alephto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L637",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "spacetimedb_pigai_module_isaggressive",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L639",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "spacetimedb_pigai_module_pigthreatscore",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L662",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigdecide",
+      "target": "spacetimedb_pigai_module_teambasesector",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L295",
+      "source_location": "L711",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "module_spacetimedb_pigai_cs_shipinputstate"
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "module_spacetimedb_pigai_cs_shipinputstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L711",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "pigdecision",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L324",
+      "source_location": "L730",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_alephto"
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "spacetimedb_pigai_module_pigattackpoint",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L427",
+      "source_location": "L721",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_clamp01"
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "spacetimedb_pigai_module_pigchaseinput",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L406",
+      "source_location": "L732",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_clamp1"
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L397",
+      "source_location": "L725",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_conjugate"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L416",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_isaggressive"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L391",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_normalizeor"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L379",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigaimskill"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L390",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigaimwobble"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L467",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigattackpoint"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L394",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigavoidasteroids"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L388",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_piglead"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L457",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigpatrolinput"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L328",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigsteerto"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L347",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_pigthreatscore"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L366",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigthink",
-      "target": "spacetimedb_pigai_module_teambasesector"
+      "source": "spacetimedb_pigai_module_pigexecute",
+      "target": "spacetimedb_pigai_module_pigsteerto",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -19855,6 +20212,28 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigattackpoint",
       "target": "module_spacetimedb_pigai_cs_shipinputstate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L742",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "module_spacetimedb_pigai_cs_shipinputstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "module_spacetimedb_pigai_cs_shipinputstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -19882,6 +20261,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L295",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "module_spacetimedb_pigai_cs_shipinputstate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L573",
       "weight": 1.0,
       "context": "return_type",
@@ -19890,37 +20280,125 @@
       "target": "module_spacetimedb_pigai_cs_shipinputstate"
     },
     {
-      "relation": "references",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L549",
+      "source_location": "L799",
       "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigpatrolinput",
-      "target": "module_spacetimedb_pigai_cs_quat"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L549",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigpatrolinput",
-      "target": "module_spacetimedb_pigai_cs_vec3"
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_clamp01",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
-      "source_location": "L560",
+      "source_location": "L778",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_pigai_module_pigpatrolinput",
-      "target": "spacetimedb_pigai_module_pigsteerto"
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_clamp1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L769",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_conjugate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L763",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_normalizeor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L751",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_pigaimskill",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L762",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_pigaimwobble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L766",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_pigavoidasteroids",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L760",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigchaseinput",
+      "target": "spacetimedb_pigai_module_piglead",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "module_spacetimedb_pigai_cs_quat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L829",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "module_spacetimedb_pigai_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L836",
+      "weight": 1.0,
+      "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
+      "target": "spacetimedb_pigai_module_pigsteerto",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -20003,6 +20481,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L549",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigpatrolinput",
+      "target": "module_spacetimedb_pigai_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L603",
       "weight": 1.0,
       "context": "parameter_type",
@@ -20047,12 +20536,34 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L549",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigpatrolinput",
+      "target": "module_spacetimedb_pigai_cs_quat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L603",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigsteerto",
       "target": "module_spacetimedb_pigai_cs_quat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L416",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_isaggressive"
     },
     {
       "relation": "calls",
@@ -20114,6 +20625,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L388",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_piglead"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L755",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -20169,6 +20691,28 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L394",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigavoidasteroids"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L347",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigthreatscore"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L562",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -20198,6 +20742,17 @@
       "target": "spacetimedb_weapons_module_shipweapondamage"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L366",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_teambasesector"
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
@@ -20207,6 +20762,28 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_alephto",
       "target": "module_spacetimedb_pigai_cs_aleph"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L324",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_alephto"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L560",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigpatrolinput",
+      "target": "spacetimedb_pigai_module_pigsteerto"
     },
     {
       "relation": "calls",
@@ -20246,6 +20823,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L328",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigsteerto"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L760",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -20279,11 +20867,44 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L467",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigattackpoint"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L379",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigaimskill"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L637",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigaimwobble",
       "target": "spacetimedb_pigai_module_normalizeor"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L390",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigaimwobble"
     },
     {
       "relation": "calls",
@@ -20334,10 +20955,54 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L406",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_clamp1"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L427",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_clamp01"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L397",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_conjugate"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L666",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_perpendicularto",
+      "target": "spacetimedb_pigai_module_normalizeor"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L391",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
       "target": "spacetimedb_pigai_module_normalizeor"
     },
     {
@@ -23129,6 +23794,17 @@
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/PigAI.cs",
+      "source_location": "L457",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_pigai_module_pigthink",
+      "target": "spacetimedb_pigai_module_pigpatrolinput"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1525",
       "weight": 1.0,
@@ -23236,5 +23912,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "3fe0c904f8dbc0dd30021d7d1f3d72fd2109ee17"
+  "built_at_commit": "2dc8bb08d79f2742703981aa93e5e87b62b377a5"
 }

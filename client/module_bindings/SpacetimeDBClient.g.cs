@@ -34,6 +34,7 @@ namespace SpacetimeDB.Types
             AddTable(ChatMessage = new(conn));
             AddTable(Match = new(conn));
             AddTable(Pig = new(conn));
+            AddTable(PigBrainTimer = new(conn));
             AddTable(PigSquad = new(conn));
             AddTable(Player = new(conn));
             AddTable(Projectile = new(conn));
@@ -546,6 +547,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ChatMessage().ToSql(),
             new QueryBuilder().From.Match().ToSql(),
             new QueryBuilder().From.Pig().ToSql(),
+            new QueryBuilder().From.PigBrainTimer().ToSql(),
             new QueryBuilder().From.PigSquad().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.Projectile().ToSql(),
@@ -568,6 +570,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ChatMessage, ChatMessageCols, ChatMessageIxCols> ChatMessage() => new("chat_message", new ChatMessageCols("chat_message"), new ChatMessageIxCols("chat_message"));
         public global::SpacetimeDB.Table<Match, MatchCols, MatchIxCols> Match() => new("match", new MatchCols("match"), new MatchIxCols("match"));
         public global::SpacetimeDB.Table<Pig, PigCols, PigIxCols> Pig() => new("pig", new PigCols("pig"), new PigIxCols("pig"));
+        public global::SpacetimeDB.Table<PigBrainTimer, PigBrainTimerCols, PigBrainTimerIxCols> PigBrainTimer() => new("pig_brain_timer", new PigBrainTimerCols("pig_brain_timer"), new PigBrainTimerIxCols("pig_brain_timer"));
         public global::SpacetimeDB.Table<PigSquad, PigSquadCols, PigSquadIxCols> PigSquad() => new("pig_squad", new PigSquadCols("pig_squad"), new PigSquadIxCols("pig_squad"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<Projectile, ProjectileCols, ProjectileIxCols> Projectile() => new("projectile", new ProjectileCols("projectile"), new ProjectileIxCols("projectile"));
