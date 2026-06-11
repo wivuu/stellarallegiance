@@ -14,6 +14,9 @@ Archives:
 ## QUICKNOTES:
 - We need to figure out how to load-test the system, lots of networked clients and a server running; we want
 to determine how many players we can support in a single instance, and what the bottlenecks are.
+- Determine where the bottlenecks are in the current AI implementation, and suggest optimizations
+  - Idea: 2 birds with one stone - refactor the AI to run on client-side, instead of single-threaded server ticks; a client (authorized to) can spawn multiple thinking AI drones with a command like "/spawn-drone 5" which would spawn 5 drones that run their own thinking loops on the client, and report their actions to the server. This would allow us to scale the number of AI drones with the number of clients, and reduce the load on the server.
+  - Alternative: A headless client that can spawn and run AI workers and report their actions to the server, which would allow us to scale the number of AI drones independently of the number of human clients.
 - Procedural spaceship generator - Using reusable/modular parts, be able to procedurally generate a wide variety of spaceship models with different shapes, sizes, textures, etc. An individual ship would be defined by a what parts it is made up of and defined in YAML. A build process would then take the YAML and produce a GLB file
 - CONFIG M5 addendum
 ---
