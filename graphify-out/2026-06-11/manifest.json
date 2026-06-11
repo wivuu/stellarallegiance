@@ -30,8 +30,8 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781045873.7319667,
-    "ast_hash": "016c279e5369bd90da01568e4cd4909b",
+    "mtime": 1781179559.7308311,
+    "ast_hash": "9647cede223ce9e7eab0b51f11365c19",
     "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
@@ -45,8 +45,8 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781032026.9275434,
-    "ast_hash": "ec33d6e4642d90c1c55d4b6d46f61860",
+    "mtime": 1781178075.034344,
+    "ast_hash": "b2fa3b13f2f1f8033c61225198c8e123",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781101873.153051,
-    "ast_hash": "a3e7006708d39452b978cc0f4327c2d2",
+    "mtime": 1781178059.209574,
+    "ast_hash": "a5874f85f3f2e2321f3113411868fd2b",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781142676.6048284,
-    "ast_hash": "df6e07c40dccfbf283cabfb2940efac3",
+    "mtime": 1781179203.5122814,
+    "ast_hash": "86031ce345a67ad0f4a2b42345ffb19a",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,8 +135,8 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781140406.6613655,
-    "ast_hash": "5979f96c97e64b75bfb6b063e8b88fae",
+    "mtime": 1781178027.7769003,
+    "ast_hash": "208b90e3097bd7de411b98b81abcd3e5",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
@@ -180,8 +180,8 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781098490.433963,
-    "ast_hash": "bb042822eb064c34aefb3f3016ea312f",
+    "mtime": 1781178018.1875443,
+    "ast_hash": "7e89b2b84db37bf49bffb75764914ae6",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
@@ -245,8 +245,8 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "module/spacetimedb/Defs.cs": {
-    "mtime": 1781127515.667979,
-    "ast_hash": "22a7db40558aa06b8963f111e2124f3f",
+    "mtime": 1781178054.011771,
+    "ast_hash": "fa6891a8e2142e4a1ea14ca00082de38",
     "semantic_hash": ""
   },
   "module/spacetimedb/Bases.cs": {
@@ -267,6 +267,11 @@
   "client/scripts/DefRegistry.cs": {
     "mtime": 1781142632.4166994,
     "ast_hash": "ed7be952163140749de4236469b329a2",
+    "semantic_hash": ""
+  },
+  "client/scripts/ShipModelLoader.cs": {
+    "mtime": 1781179169.4706626,
+    "ast_hash": "219f901032b0c89edc181ef02a9fe2c7",
     "semantic_hash": ""
   }
 }

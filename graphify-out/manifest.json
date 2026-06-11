@@ -30,8 +30,8 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781045873.7319667,
-    "ast_hash": "016c279e5369bd90da01568e4cd4909b",
+    "mtime": 1781179706.8993666,
+    "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
     "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781178098.559837,
-    "ast_hash": "0b7e1ecfc8c503ad18cc76002a0c945f",
+    "mtime": 1781179203.5122814,
+    "ast_hash": "86031ce345a67ad0f4a2b42345ffb19a",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -267,6 +267,11 @@
   "client/scripts/DefRegistry.cs": {
     "mtime": 1781142632.4166994,
     "ast_hash": "ed7be952163140749de4236469b329a2",
+    "semantic_hash": ""
+  },
+  "client/scripts/ShipModelLoader.cs": {
+    "mtime": 1781179169.4706626,
+    "ast_hash": "219f901032b0c89edc181ef02a9fe2c7",
     "semantic_hash": ""
   }
 }

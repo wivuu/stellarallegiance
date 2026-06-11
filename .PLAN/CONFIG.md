@@ -337,7 +337,7 @@ files (no namespace change — `Module` is already `partial`):
   from `MainEngine`/`Booster`/`Thruster` hardpoints; anchor the team trail from a
   hardpoint — deleting the hard-coded `(0,0,-2.25)`/`(±1.1,0,-2.75)` floats.
   Engine-glow/trail intensity can now key off the *real* engine vector
-  (throttle/coast/AB power) rather than raw input — small, optional polish.
+  (throttle/coast/AB power) rather than raw input — small, optional polish. When the user cuts throttle engine glow should disappear, regardless of whether the ship is actually drifting or held still by drag.
 - Document the future GLB convention: when a ship `.glb` exists, the loader loads
   it and reads same-named `HP_*` nodes to override placeholder markers. Turret
   hardpoints are carried as data + markers now; turret *firing logic* is out of

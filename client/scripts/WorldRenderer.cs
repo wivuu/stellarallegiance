@@ -567,8 +567,8 @@ public partial class WorldRenderer : Node3D
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
 			_ships.AddChild(pc);
-			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
-			AttachEngineGlow(pc, row.Class, row.Team, row.IsPod);
+			pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
+			ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
 			pc.Initialize(row, _defs);
 			LocalShip = pc;
 			_localTeam = row.Team;
@@ -588,8 +588,8 @@ public partial class WorldRenderer : Node3D
 		var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
 		node = rs;
 		_ships.AddChild(rs);
-		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
-		AttachEngineGlow(rs, row.Class, row.Team, row.IsPod);
+		rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
+		ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
 		rs.Initialize(row, _defs);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
@@ -886,124 +886,11 @@ public partial class WorldRenderer : Node3D
 			pv.QueueFree();
 	}
 
-	// Distinct silhouettes per class (T7), all built pointing local +Z to match
-	// the flight model's forward axis: the Scout is a sleek cone, the Fighter a
-	// chunkier, boxier hull, the Bomber a long heavy slab that reads as the
-	// biggest ship on the field.
-	private MeshInstance3D BuildShipMesh(byte team, ShipClass cls, bool isPig, bool isPod)
-	{
-		var mat = isPig
+	// Team/PIG hull material for a ship's placeholder mesh. The ShipModelLoader (M4)
+	// owns the mesh + hardpoint geometry; the materials live here with the rest of the
+	// renderer's shared resources, so it resolves one and hands it to the loader.
+	private StandardMaterial3D ShipMaterial(byte team, bool isPig)
+		=> isPig
 			? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat)
 			: (team == 0 ? _team0Mat : _team1Mat);
-
-		// An escape pod reads as a small round lifeboat, not a fighter — class is ignored.
-		if (isPod)
-		{
-			return new MeshInstance3D
-			{
-				Mesh = new SphereMesh { Radius = 1.4f, Height = 2.8f, RadialSegments = 12, Rings = 8 },
-				MaterialOverride = mat,
-			};
-		}
-
-		if (cls == ShipClass.Fighter)
-		{
-			return new MeshInstance3D
-			{
-				Mesh = new BoxMesh { Size = new Vector3(3.6f, 1.6f, 5.5f) },
-				MaterialOverride = mat,
-			};
-		}
-
-		if (cls == ShipClass.Bomber)
-		{
-			return new MeshInstance3D
-			{
-				Mesh = new BoxMesh { Size = new Vector3(4.8f, 2.2f, 7.2f) },
-				MaterialOverride = mat,
-			};
-		}
-
-		return new MeshInstance3D
-		{
-			Mesh = new CylinderMesh
-			{
-				TopRadius = 0f,
-				BottomRadius = 1.4f,
-				Height = 4.5f,
-				RadialSegments = 12,
-			},
-			MaterialOverride = mat,
-			RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
-		};
-	}
-
-	// Build and attach the dynamic engine glow (see EngineGlow) to a freshly
-	// spawned ship, then hand the node its reference so it can drive throttle each
-	// frame. Nozzle layout matches the hull silhouette from BuildShipMesh: a
-	// Scout's single central thruster, a Fighter's twin engines, a Bomber's
-	// wider-set twin heavies. (Positions mirror the seeded MainEngine/Booster
-	// hardpoints in Defs.cs until the M4 loader reads them from data.)
-	private void AttachEngineGlow(Node3D shipNode, ShipClass cls, byte team, bool isPod)
-	{
-		// Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
-		Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
-
-		// A pod is a powered-down lifeboat — no engine glow/plume. It still gets the team
-		// trail below (so a drifting pod is trackable), but no thruster FX.
-		if (!isPod)
-		{
-			EngineGlow glow = cls switch
-			{
-				ShipClass.Fighter => new EngineGlow
-				{
-					Name = "EngineGlow",
-					Nozzles = new[] { new Vector3(-1.1f, 0f, -2.75f), new Vector3(1.1f, 0f, -2.75f) },
-					NozzleRadius = 0.6f,
-					PlumeLength = 3.8f,
-					LightRange = 18f,
-					CoreColor = hot,
-				},
-				ShipClass.Bomber => new EngineGlow
-				{
-					Name = "EngineGlow",
-					Nozzles = new[] { new Vector3(-1.4f, 0f, -3.4f), new Vector3(1.4f, 0f, -3.4f) },
-					NozzleRadius = 0.75f,
-					PlumeLength = 4.2f,
-					LightRange = 20f,
-					CoreColor = hot,
-				},
-				_ => new EngineGlow
-				{
-					Name = "EngineGlow",
-					Nozzles = new[] { new Vector3(0f, 0f, -2.25f) },
-					NozzleRadius = 0.85f,
-					PlumeLength = 3.5f,
-					LightRange = 15f,
-					CoreColor = hot,
-				},
-			};
-
-			shipNode.AddChild(glow);
-			switch (shipNode)
-			{
-				case PredictionController pc: pc.AttachEngine(glow); break;
-				case RemoteShip rs: rs.AttachEngine(glow); break;
-			}
-		}
-
-		// Ghostly team-coloured ribbon tracing the ship's path (same hue as the glow so
-		// friend/foe still reads). It rides the ship node's transform, so no per-frame
-		// driving is needed. Anchored at the rear of the hull (roughly where the engines
-		// sit) so the ribbon streams off the ship's BACK, not its centre. Fighters get a
-		// slightly wider streak to match their bulk.
-		shipNode.AddChild(new TeamTrail
-		{
-			Name = "TeamTrail",
-			Position = new Vector3(0f, 0f,
-				cls == ShipClass.Bomber ? -3.4f : cls == ShipClass.Fighter ? -2.75f : -2.25f),
-			TeamColor = hot,
-			Width = cls == ShipClass.Bomber ? 0.65f : cls == ShipClass.Fighter ? 0.5f : 0.4f,
-		});
-	}
 }
