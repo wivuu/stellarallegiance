@@ -66,7 +66,6 @@ Stand up many independent game servers and let players find and join them.
   (likely a web server) lists available servers / acts as a browser.
 - **Tune prediction lead for WAN** — `STDB_LEAD` exists; playtest and commit a
   good default, ideally adaptive on measured RTT.
-- **Chat** — Lobby and in-game text chat.
 - **Scores, kills/deaths & ranks** — Per-player in-match and post-match stats,
   an overall point system, and player ranks.
 - **Spectator mode** — Follow players with Tab (camera orbits target); pick
