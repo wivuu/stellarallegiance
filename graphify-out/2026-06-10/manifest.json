@@ -60,8 +60,8 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781102224.3083892,
-    "ast_hash": "6be7d1f0f2fe77d68c87d091f9ad8689",
+    "mtime": 1781140961.6112182,
+    "ast_hash": "eb79a44661654f7ab06b0af46c9f141c",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781123995.0550172,
-    "ast_hash": "f9d955d35fa36d2b50e5a2c5935117f3",
+    "mtime": 1781140919.7235441,
+    "ast_hash": "ede8405d693c3d23956172573572cce8",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781131679.3795884,
-    "ast_hash": "a529c0ac5aff4637c8d4987cb042981a",
+    "mtime": 1781140406.6613655,
+    "ast_hash": "5979f96c97e64b75bfb6b063e8b88fae",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781123555.3753574,
-    "ast_hash": "a1990684a1551588b39a1f8369631d70",
+    "mtime": 1781140406.6622095,
+    "ast_hash": "93bb4678afe5c762687e65094ba68fa3",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -262,6 +262,11 @@
   "module/spacetimedb/Weapons.cs": {
     "mtime": 1781121599.2855525,
     "ast_hash": "fbb0723d84da1a3b560be51437528c89",
+    "semantic_hash": ""
+  },
+  "client/scripts/DefRegistry.cs": {
+    "mtime": 1781140904.2181883,
+    "ast_hash": "d67ef07a4f50cebcaa89d8783d4049df",
     "semantic_hash": ""
   }
 }

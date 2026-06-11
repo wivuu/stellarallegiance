@@ -574,7 +574,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L1",
       "id": "scripts_connectionmanager",
-      "community": 16,
+      "community": 43,
       "norm_label": "connectionmanager.cs"
     },
     {
@@ -583,7 +583,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "id": "scripts_connectionmanager_connectionmanager",
-      "community": 16,
+      "community": 43,
       "norm_label": "connectionmanager"
     },
     {
@@ -592,7 +592,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L15",
       "id": "client_scripts_connectionmanager_cs_string",
-      "community": 16,
+      "community": 43,
       "norm_label": "string"
     },
     {
@@ -601,7 +601,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L41",
       "id": "scripts_connectionmanager_connectionmanager_ready",
-      "community": 16,
+      "community": 43,
       "norm_label": "._ready()"
     },
     {
@@ -610,7 +610,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L61",
       "id": "scripts_connectionmanager_connectionmanager_connect",
-      "community": 16,
+      "community": 43,
       "norm_label": ".connect()"
     },
     {
@@ -619,7 +619,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
       "id": "scripts_connectionmanager_connectionmanager_process",
-      "community": 16,
+      "community": 43,
       "norm_label": "._process()"
     },
     {
@@ -628,7 +628,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "scripts_connectionmanager_connectionmanager_onconnect",
-      "community": 16,
+      "community": 43,
       "norm_label": ".onconnect()"
     },
     {
@@ -637,7 +637,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "client_scripts_connectionmanager_cs_dbconnection",
-      "community": 16,
+      "community": 43,
       "norm_label": "dbconnection"
     },
     {
@@ -646,7 +646,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
       "id": "client_scripts_connectionmanager_cs_identity",
-      "community": 16,
+      "community": 43,
       "norm_label": "identity"
     },
     {
@@ -655,7 +655,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
       "id": "scripts_connectionmanager_connectionmanager_onconnecterror",
-      "community": 16,
+      "community": 43,
       "norm_label": ".onconnecterror()"
     },
     {
@@ -664,7 +664,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
       "id": "exception",
-      "community": 16,
+      "community": 43,
       "norm_label": "exception"
     },
     {
@@ -673,7 +673,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L102",
       "id": "scripts_connectionmanager_connectionmanager_ondisconnect",
-      "community": 16,
+      "community": 43,
       "norm_label": ".ondisconnect()"
     },
     {
@@ -765,6 +765,186 @@
       "id": "scripts_connectionoverlay_connectionoverlay_process",
       "community": 4,
       "norm_label": "._process()"
+    },
+    {
+      "label": "DefRegistry.cs",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L1",
+      "id": "scripts_defregistry",
+      "community": 16,
+      "norm_label": "defregistry.cs"
+    },
+    {
+      "label": "DefRegistry",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L27",
+      "id": "scripts_defregistry_defregistry",
+      "community": 16,
+      "norm_label": "defregistry"
+    },
+    {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L32",
+      "id": "client_scripts_defregistry_cs_byte",
+      "community": 16,
+      "norm_label": "byte"
+    },
+    {
+      "label": "ConnectionManager",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L34",
+      "id": "client_scripts_defregistry_cs_connectionmanager",
+      "community": 16,
+      "norm_label": "connectionmanager"
+    },
+    {
+      "label": "Dictionary",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L36",
+      "id": "client_scripts_defregistry_cs_dictionary",
+      "community": 16,
+      "norm_label": "dictionary"
+    },
+    {
+      "label": "._Ready()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L46",
+      "id": "scripts_defregistry_defregistry_ready",
+      "community": 16,
+      "norm_label": "._ready()"
+    },
+    {
+      "label": ".OnConnected()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L52",
+      "id": "scripts_defregistry_defregistry_onconnected",
+      "community": 16,
+      "norm_label": ".onconnected()"
+    },
+    {
+      "label": "DbConnection",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L52",
+      "id": "client_scripts_defregistry_cs_dbconnection",
+      "community": 16,
+      "norm_label": "dbconnection"
+    },
+    {
+      "label": ".TryGetStats()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L75",
+      "id": "scripts_defregistry_defregistry_trygetstats",
+      "community": 16,
+      "norm_label": ".trygetstats()"
+    },
+    {
+      "label": "ShipStats",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L75",
+      "id": "client_scripts_defregistry_cs_shipstats",
+      "community": 16,
+      "norm_label": "shipstats"
+    },
+    {
+      "label": ".TryGetWeapon()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L97",
+      "id": "scripts_defregistry_defregistry_trygetweapon",
+      "community": 16,
+      "norm_label": ".trygetweapon()"
+    },
+    {
+      "label": "HardpointDef",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L97",
+      "id": "client_scripts_defregistry_cs_hardpointdef",
+      "community": 16,
+      "norm_label": "hardpointdef"
+    },
+    {
+      "label": "WeaponDef",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L97",
+      "id": "client_scripts_defregistry_cs_weapondef",
+      "community": 16,
+      "norm_label": "weapondef"
+    },
+    {
+      "label": ".GetHardpoints()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L120",
+      "id": "scripts_defregistry_defregistry_gethardpoints",
+      "community": 16,
+      "norm_label": ".gethardpoints()"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L120",
+      "id": "client_scripts_defregistry_cs_list",
+      "community": 16,
+      "norm_label": "list"
+    },
+    {
+      "label": ".TryGetShipDef()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L123",
+      "id": "scripts_defregistry_defregistry_trygetshipdef",
+      "community": 16,
+      "norm_label": ".trygetshipdef()"
+    },
+    {
+      "label": "ShipClassDef",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L123",
+      "id": "client_scripts_defregistry_cs_shipclassdef",
+      "community": 16,
+      "norm_label": "shipclassdef"
+    },
+    {
+      "label": ".GetWeapon()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L126",
+      "id": "scripts_defregistry_defregistry_getweapon",
+      "community": 16,
+      "norm_label": ".getweapon()"
+    },
+    {
+      "label": ".GetBaseDef()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L131",
+      "id": "scripts_defregistry_defregistry_getbasedef",
+      "community": 16,
+      "norm_label": ".getbasedef()"
+    },
+    {
+      "label": "BaseDef",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L131",
+      "id": "client_scripts_defregistry_cs_basedef",
+      "community": 16,
+      "norm_label": "basedef"
     },
     {
       "label": "DustField.cs",
@@ -1820,28 +2000,10 @@
       "norm_label": "int"
     },
     {
-      "label": ".FireInterval()",
-      "file_type": "code",
-      "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L45",
-      "id": "scripts_predictioncontroller_predictioncontroller_fireinterval",
-      "community": 6,
-      "norm_label": ".fireinterval()"
-    },
-    {
-      "label": "ShipClass",
-      "file_type": "code",
-      "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L45",
-      "id": "client_scripts_predictioncontroller_cs_shipclass",
-      "community": 6,
-      "norm_label": "shipclass"
-    },
-    {
       "label": "EngineGlow",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L60",
+      "source_location": "L51",
       "id": "client_scripts_predictioncontroller_cs_engineglow",
       "community": 6,
       "norm_label": "engineglow"
@@ -1850,7 +2012,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L64",
+      "source_location": "L55",
       "id": "client_scripts_predictioncontroller_cs_shipstate",
       "community": 6,
       "norm_label": "shipstate"
@@ -1859,16 +2021,43 @@
       "label": "ShipStats",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L66",
+      "source_location": "L57",
       "id": "client_scripts_predictioncontroller_cs_shipstats",
       "community": 6,
       "norm_label": "shipstats"
     },
     {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L58",
+      "id": "client_scripts_predictioncontroller_cs_bool",
+      "community": 6,
+      "norm_label": "bool"
+    },
+    {
+      "label": "DefRegistry",
+      "file_type": "code",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L59",
+      "id": "client_scripts_predictioncontroller_cs_defregistry",
+      "community": 6,
+      "norm_label": "defregistry"
+    },
+    {
+      "label": "ShipClass",
+      "file_type": "code",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L60",
+      "id": "client_scripts_predictioncontroller_cs_shipclass",
+      "community": 6,
+      "norm_label": "shipclass"
+    },
+    {
       "label": "uint",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L68",
+      "source_location": "L61",
       "id": "client_scripts_predictioncontroller_cs_uint",
       "community": 6,
       "norm_label": "uint"
@@ -1877,7 +2066,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L69",
+      "source_location": "L62",
       "id": "client_scripts_predictioncontroller_cs_list",
       "community": 6,
       "norm_label": "list"
@@ -1886,7 +2075,7 @@
       "label": "double",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L71",
+      "source_location": "L64",
       "id": "client_scripts_predictioncontroller_cs_double",
       "community": 6,
       "norm_label": "double"
@@ -1895,7 +2084,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L79",
+      "source_location": "L72",
       "id": "client_scripts_predictioncontroller_cs_vector3",
       "community": 6,
       "norm_label": "vector3"
@@ -1904,7 +2093,7 @@
       "label": "Quaternion",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L81",
+      "source_location": "L74",
       "id": "client_scripts_predictioncontroller_cs_quaternion",
       "community": 6,
       "norm_label": "quaternion"
@@ -1913,7 +2102,7 @@
       "label": ".AttachEngine()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L110",
+      "source_location": "L103",
       "id": "scripts_predictioncontroller_predictioncontroller_attachengine",
       "community": 6,
       "norm_label": ".attachengine()"
@@ -1922,7 +2111,7 @@
       "label": ".SetAfterburner()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L115",
+      "source_location": "L108",
       "id": "scripts_predictioncontroller_predictioncontroller_setafterburner",
       "community": 6,
       "norm_label": ".setafterburner()"
@@ -1931,7 +2120,7 @@
       "label": ".Initialize()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L117",
+      "source_location": "L110",
       "id": "scripts_predictioncontroller_predictioncontroller_initialize",
       "community": 6,
       "norm_label": ".initialize()"
@@ -1940,7 +2129,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L117",
+      "source_location": "L110",
       "id": "client_scripts_predictioncontroller_cs_ship",
       "community": 6,
       "norm_label": "ship"
@@ -1949,7 +2138,7 @@
       "label": ".Step()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L146",
+      "source_location": "L145",
       "id": "scripts_predictioncontroller_predictioncontroller_step",
       "community": 6,
       "norm_label": ".step()"
@@ -1958,7 +2147,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L146",
+      "source_location": "L145",
       "id": "client_scripts_predictioncontroller_cs_shipinputstate",
       "community": 6,
       "norm_label": "shipinputstate"
@@ -1967,7 +2156,7 @@
       "label": "PredictedShot",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L146",
+      "source_location": "L145",
       "id": "predictedshot",
       "community": 6,
       "norm_label": "predictedshot"
@@ -1976,7 +2165,7 @@
       "label": ".InjectDivergence()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L181",
+      "source_location": "L195",
       "id": "scripts_predictioncontroller_predictioncontroller_injectdivergence",
       "community": 6,
       "norm_label": ".injectdivergence()"
@@ -1985,7 +2174,7 @@
       "label": ".OnAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L199",
+      "source_location": "L213",
       "id": "scripts_predictioncontroller_predictioncontroller_onauthoritative",
       "community": 6,
       "norm_label": ".onauthoritative()"
@@ -1994,7 +2183,7 @@
       "label": ".HardSnapTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L253",
+      "source_location": "L267",
       "id": "scripts_predictioncontroller_predictioncontroller_hardsnapto",
       "community": 6,
       "norm_label": ".hardsnapto()"
@@ -2003,7 +2192,7 @@
       "label": ".RebaseTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L276",
+      "source_location": "L290",
       "id": "scripts_predictioncontroller_predictioncontroller_rebaseto",
       "community": 6,
       "norm_label": ".rebaseto()"
@@ -2012,7 +2201,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L289",
+      "source_location": "L303",
       "id": "scripts_predictioncontroller_predictioncontroller_process",
       "community": 6,
       "norm_label": "._process()"
@@ -2021,7 +2210,7 @@
       "label": ".SpringToZero()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L311",
+      "source_location": "L325",
       "id": "scripts_predictioncontroller_predictioncontroller_springtozero",
       "community": 6,
       "norm_label": ".springtozero()"
@@ -2030,7 +2219,7 @@
       "label": ".QuatToRotVec()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L318",
+      "source_location": "L332",
       "id": "scripts_predictioncontroller_predictioncontroller_quattorotvec",
       "community": 6,
       "norm_label": ".quattorotvec()"
@@ -2039,7 +2228,7 @@
       "label": ".RotVecToQuat()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L328",
+      "source_location": "L342",
       "id": "scripts_predictioncontroller_predictioncontroller_rotvectoquat",
       "community": 6,
       "norm_label": ".rotvectoquat()"
@@ -2048,7 +2237,7 @@
       "label": ".ApplyVisual()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L338",
+      "source_location": "L352",
       "id": "scripts_predictioncontroller_predictioncontroller_applyvisual",
       "community": 6,
       "norm_label": ".applyvisual()"
@@ -2270,10 +2459,19 @@
       "norm_label": "ship"
     },
     {
+      "label": "DefRegistry",
+      "file_type": "code",
+      "source_file": "client/scripts/RemoteShip.cs",
+      "source_location": "L71",
+      "id": "client_scripts_remoteship_cs_defregistry",
+      "community": 14,
+      "norm_label": "defregistry"
+    },
+    {
       "label": ".OnAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L83",
+      "source_location": "L86",
       "id": "scripts_remoteship_remoteship_onauthoritative",
       "community": 14,
       "norm_label": ".onauthoritative()"
@@ -2282,7 +2480,7 @@
       "label": ".Push()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L85",
+      "source_location": "L88",
       "id": "scripts_remoteship_remoteship_push",
       "community": 14,
       "norm_label": ".push()"
@@ -2291,7 +2489,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L110",
+      "source_location": "L113",
       "id": "scripts_remoteship_remoteship_process",
       "community": 14,
       "norm_label": "._process()"
@@ -2300,7 +2498,7 @@
       "label": ".PigBoost()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L174",
+      "source_location": "L177",
       "id": "scripts_remoteship_remoteship_pigboost",
       "community": 14,
       "norm_label": ".pigboost()"
@@ -3269,10 +3467,19 @@
       "norm_label": "starscape"
     },
     {
+      "label": "DefRegistry",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L111",
+      "id": "client_scripts_worldrenderer_cs_defregistry",
+      "community": 1,
+      "norm_label": "defregistry"
+    },
+    {
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L129",
+      "source_location": "L130",
       "id": "client_scripts_worldrenderer_cs_bool",
       "community": 1,
       "norm_label": "bool"
@@ -3281,7 +3488,7 @@
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L147",
+      "source_location": "L148",
       "id": "scripts_worldrenderer_worldrenderer_enemyships",
       "community": 13,
       "norm_label": ".enemyships()"
@@ -3290,7 +3497,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L147",
+      "source_location": "L148",
       "id": "client_scripts_worldrenderer_cs_ireadonlylist",
       "community": 13,
       "norm_label": "ireadonlylist"
@@ -3299,7 +3506,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L147",
+      "source_location": "L148",
       "id": "client_scripts_worldrenderer_cs_remoteship",
       "community": 13,
       "norm_label": "remoteship"
@@ -3308,7 +3515,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L161",
+      "source_location": "L162",
       "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
       "norm_label": "._ready()"
@@ -3317,7 +3524,7 @@
       "label": ".OnConnected()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L217",
+      "source_location": "L219",
       "id": "scripts_worldrenderer_worldrenderer_onconnected",
       "community": 1,
       "norm_label": ".onconnected()"
@@ -3326,7 +3533,7 @@
       "label": "DbConnection",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L217",
+      "source_location": "L219",
       "id": "client_scripts_worldrenderer_cs_dbconnection",
       "community": 1,
       "norm_label": "dbconnection"
@@ -3335,7 +3542,7 @@
       "label": ".OnMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L241",
+      "source_location": "L243",
       "id": "scripts_worldrenderer_worldrenderer_onmatch",
       "community": 1,
       "norm_label": ".onmatch()"
@@ -3344,7 +3551,7 @@
       "label": "Match",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L241",
+      "source_location": "L243",
       "id": "match",
       "community": 1,
       "norm_label": "match"
@@ -3353,7 +3560,7 @@
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L252",
+      "source_location": "L254",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 1,
       "norm_label": ".setnodesector()"
@@ -3362,7 +3569,7 @@
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L260",
+      "source_location": "L262",
       "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 1,
       "norm_label": ".refreshsectorvisibility()"
@@ -3371,7 +3578,7 @@
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L271",
+      "source_location": "L273",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 1,
       "norm_label": ".spawneffect()"
@@ -3380,7 +3587,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L271",
+      "source_location": "L273",
       "id": "client_scripts_worldrenderer_cs_vector3",
       "community": 1,
       "norm_label": "vector3"
@@ -3389,7 +3596,7 @@
       "label": ".OnAlephInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L280",
+      "source_location": "L282",
       "id": "scripts_worldrenderer_worldrenderer_onalephinsert",
       "community": 1,
       "norm_label": ".onalephinsert()"
@@ -3398,7 +3605,7 @@
       "label": "EventContext",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L280",
+      "source_location": "L282",
       "id": "client_scripts_worldrenderer_cs_eventcontext",
       "community": 1,
       "norm_label": "eventcontext"
@@ -3407,7 +3614,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L280",
+      "source_location": "L282",
       "id": "client_scripts_worldrenderer_cs_aleph",
       "community": 1,
       "norm_label": "aleph"
@@ -3416,7 +3623,7 @@
       "label": ".OnAlephDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L307",
+      "source_location": "L309",
       "id": "scripts_worldrenderer_worldrenderer_onalephdelete",
       "community": 1,
       "norm_label": ".onalephdelete()"
@@ -3425,7 +3632,7 @@
       "label": ".OnBaseInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L315",
+      "source_location": "L317",
       "id": "scripts_worldrenderer_worldrenderer_onbaseinsert",
       "community": 1,
       "norm_label": ".onbaseinsert()"
@@ -3434,7 +3641,7 @@
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L315",
+      "source_location": "L317",
       "id": "client_scripts_worldrenderer_cs_base",
       "community": 1,
       "norm_label": "base"
@@ -3443,7 +3650,7 @@
       "label": ".CreateBaseHealthBar()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L338",
+      "source_location": "L340",
       "id": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
       "community": 1,
       "norm_label": ".createbasehealthbar()"
@@ -3452,7 +3659,7 @@
       "label": ".UpdateBaseHealthBar()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L372",
+      "source_location": "L374",
       "id": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
       "community": 1,
       "norm_label": ".updatebasehealthbar()"
@@ -3461,7 +3668,7 @@
       "label": ".HealthColor()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L383",
+      "source_location": "L385",
       "id": "scripts_worldrenderer_worldrenderer_healthcolor",
       "community": 1,
       "norm_label": ".healthcolor()"
@@ -3470,7 +3677,7 @@
       "label": "Color",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L383",
+      "source_location": "L385",
       "id": "client_scripts_worldrenderer_cs_color",
       "community": 1,
       "norm_label": "color"
@@ -3479,7 +3686,7 @@
       "label": ".OnBaseUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L391",
+      "source_location": "L393",
       "id": "scripts_worldrenderer_worldrenderer_onbaseupdate",
       "community": 1,
       "norm_label": ".onbaseupdate()"
@@ -3488,7 +3695,7 @@
       "label": ".OnBaseDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L412",
+      "source_location": "L414",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete",
       "community": 1,
       "norm_label": ".onbasedelete()"
@@ -3497,7 +3704,7 @@
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L429",
+      "source_location": "L431",
       "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 1,
       "norm_label": ".asteroidmesh()"
@@ -3506,7 +3713,7 @@
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L429",
+      "source_location": "L431",
       "id": "mesh",
       "community": 1,
       "norm_label": "mesh"
@@ -3515,7 +3722,7 @@
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L429",
+      "source_location": "L431",
       "id": "authoredradius",
       "community": 1,
       "norm_label": "authoredradius"
@@ -3524,7 +3731,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L457",
+      "source_location": "L459",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 1,
       "norm_label": ".findmeshinstance()"
@@ -3533,7 +3740,7 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L457",
+      "source_location": "L459",
       "id": "client_scripts_worldrenderer_cs_node",
       "community": 1,
       "norm_label": "node"
@@ -3542,7 +3749,7 @@
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L470",
+      "source_location": "L472",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 1,
       "norm_label": ".meshboundingradius()"
@@ -3551,7 +3758,7 @@
       "label": ".OnAsteroidInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L484",
+      "source_location": "L486",
       "id": "scripts_worldrenderer_worldrenderer_onasteroidinsert",
       "community": 1,
       "norm_label": ".onasteroidinsert()"
@@ -3560,7 +3767,7 @@
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L484",
+      "source_location": "L486",
       "id": "client_scripts_worldrenderer_cs_asteroid",
       "community": 1,
       "norm_label": "asteroid"
@@ -3569,7 +3776,7 @@
       "label": ".OnAsteroidDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L520",
+      "source_location": "L522",
       "id": "scripts_worldrenderer_worldrenderer_onasteroiddelete",
       "community": 1,
       "norm_label": ".onasteroiddelete()"
@@ -3578,7 +3785,7 @@
       "label": ".AsteroidSpin()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L531",
+      "source_location": "L533",
       "id": "scripts_worldrenderer_worldrenderer_asteroidspin",
       "community": 1,
       "norm_label": ".asteroidspin()"
@@ -3587,7 +3794,7 @@
       "label": "Axis",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L531",
+      "source_location": "L533",
       "id": "axis",
       "community": 1,
       "norm_label": "axis"
@@ -3596,7 +3803,7 @@
       "label": "Speed",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L531",
+      "source_location": "L533",
       "id": "speed",
       "community": 1,
       "norm_label": "speed"
@@ -3605,7 +3812,7 @@
       "label": ".IsLocal()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L552",
+      "source_location": "L554",
       "id": "scripts_worldrenderer_worldrenderer_islocal",
       "community": 1,
       "norm_label": ".islocal()"
@@ -3614,7 +3821,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L552",
+      "source_location": "L554",
       "id": "client_scripts_worldrenderer_cs_ship",
       "community": 1,
       "norm_label": "ship"
@@ -3623,7 +3830,7 @@
       "label": ".OnShipInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L555",
+      "source_location": "L557",
       "id": "scripts_worldrenderer_worldrenderer_onshipinsert",
       "community": 1,
       "norm_label": ".onshipinsert()"
@@ -3632,7 +3839,7 @@
       "label": ".OnShipUpdate()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L596",
+      "source_location": "L598",
       "id": "scripts_worldrenderer_worldrenderer_onshipupdate",
       "community": 1,
       "norm_label": ".onshipupdate()"
@@ -3641,7 +3848,7 @@
       "label": ".OnShipDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L623",
+      "source_location": "L625",
       "id": "scripts_worldrenderer_worldrenderer_onshipdelete",
       "community": 1,
       "norm_label": ".onshipdelete()"
@@ -3650,7 +3857,7 @@
       "label": ".FriendlyRescuerNear()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L685",
+      "source_location": "L687",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
       "community": 1,
       "norm_label": ".friendlyrescuernear()"
@@ -3659,7 +3866,7 @@
       "label": ".OnProjectileInsert()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L708",
+      "source_location": "L710",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert",
       "community": 1,
       "norm_label": ".onprojectileinsert()"
@@ -3668,7 +3875,7 @@
       "label": "Projectile",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L708",
+      "source_location": "L710",
       "id": "client_scripts_worldrenderer_cs_projectile",
       "community": 1,
       "norm_label": "projectile"
@@ -3677,7 +3884,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L738",
+      "source_location": "L740",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 1,
       "norm_label": ".shotmaskleadsec()"
@@ -3686,7 +3893,7 @@
       "label": ".SpawnPredictedProjectile()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L749",
+      "source_location": "L751",
       "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "community": 1,
       "norm_label": ".spawnpredictedprojectile()"
@@ -3695,7 +3902,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L759",
+      "source_location": "L761",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 1,
       "norm_label": ".newprojectilemesh()"
@@ -3704,7 +3911,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L771",
+      "source_location": "L773",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
@@ -3713,7 +3920,7 @@
       "label": ".BillboardBaseHealthBars()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L812",
+      "source_location": "L814",
       "id": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
       "community": 1,
       "norm_label": ".billboardbasehealthbars()"
@@ -3722,7 +3929,7 @@
       "label": ".CheckBoltImpacts()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L834",
+      "source_location": "L836",
       "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "community": 1,
       "norm_label": ".checkboltimpacts()"
@@ -3731,7 +3938,7 @@
       "label": ".ClosestPointOnSegment()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L869",
+      "source_location": "L871",
       "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "community": 1,
       "norm_label": ".closestpointonsegment()"
@@ -3740,7 +3947,7 @@
       "label": ".OnProjectileDelete()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L881",
+      "source_location": "L883",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete",
       "community": 1,
       "norm_label": ".onprojectiledelete()"
@@ -3749,7 +3956,7 @@
       "label": ".BuildShipMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L890",
+      "source_location": "L892",
       "id": "scripts_worldrenderer_worldrenderer_buildshipmesh",
       "community": 1,
       "norm_label": ".buildshipmesh()"
@@ -3758,7 +3965,7 @@
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L890",
+      "source_location": "L892",
       "id": "client_scripts_worldrenderer_cs_shipclass",
       "community": 1,
       "norm_label": "shipclass"
@@ -3767,7 +3974,7 @@
       "label": ".AttachEngineGlow()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L933",
+      "source_location": "L935",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow",
       "community": 1,
       "norm_label": ".attachengineglow()"
@@ -4146,7 +4353,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Defs.cs",
       "source_location": "L174",
-      "id": "shipclassdef",
+      "id": "module_spacetimedb_defs_cs_shipclassdef",
       "community": 26,
       "norm_label": "shipclassdef"
     },
@@ -4156,7 +4363,7 @@
       "source_file": "module/spacetimedb/Defs.cs",
       "source_location": "L193",
       "id": "spacetimedb_defs_module_seeddefaults",
-      "community": 26,
+      "community": 0,
       "norm_label": ".seeddefaults()"
     },
     {
@@ -4236,7 +4443,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Defs.cs",
       "source_location": "L310",
-      "id": "basedef",
+      "id": "module_spacetimedb_defs_cs_basedef",
       "community": 26,
       "norm_label": "basedef"
     },
@@ -4903,7 +5110,7 @@
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L1496",
       "id": "spacetimedb_lib_module_dist2",
-      "community": 0,
+      "community": 5,
       "norm_label": ".dist2()"
     },
     {
@@ -5434,7 +5641,7 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L1097",
       "id": "spacetimedb_pigai_module_freepigpodslot",
-      "community": 18,
+      "community": 0,
       "norm_label": ".freepigpodslot()"
     },
     {
@@ -5506,7 +5713,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L1",
       "id": "spacetimedb_ships",
-      "community": 18,
+      "community": 42,
       "norm_label": "ships.cs"
     },
     {
@@ -5515,7 +5722,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L63",
       "id": "spacetimedb_ships_module",
-      "community": 18,
+      "community": 42,
       "norm_label": "module"
     },
     {
@@ -5524,7 +5731,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L67",
       "id": "spacetimedb_ships_module_classidof",
-      "community": 18,
+      "community": 0,
       "norm_label": ".classidof()"
     },
     {
@@ -5533,7 +5740,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L67",
       "id": "module_spacetimedb_ships_cs_ship",
-      "community": 18,
+      "community": 0,
       "norm_label": "ship"
     },
     {
@@ -5542,7 +5749,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L71",
       "id": "spacetimedb_ships_module_shipmaxhull",
-      "community": 18,
+      "community": 42,
       "norm_label": ".shipmaxhull()"
     },
     {
@@ -5551,7 +5758,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L71",
       "id": "module_spacetimedb_ships_cs_reducercontext",
-      "community": 18,
+      "community": 42,
       "norm_label": "reducercontext"
     },
     {
@@ -5560,7 +5767,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L80",
       "id": "spacetimedb_ships_module_spawnship",
-      "community": 18,
+      "community": 42,
       "norm_label": ".spawnship()"
     },
     {
@@ -5569,7 +5776,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L80",
       "id": "module_spacetimedb_ships_cs_shipclass",
-      "community": 18,
+      "community": 42,
       "norm_label": "shipclass"
     },
     {
@@ -5578,7 +5785,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L80",
       "id": "module_spacetimedb_ships_cs_reducer",
-      "community": 18,
+      "community": 42,
       "norm_label": "reducer"
     },
     {
@@ -5587,7 +5794,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L88",
       "id": "spacetimedb_ships_module_respawn",
-      "community": 18,
+      "community": 42,
       "norm_label": ".respawn()"
     },
     {
@@ -5596,7 +5803,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L95",
       "id": "spacetimedb_ships_module_spawnshipinternal",
-      "community": 18,
+      "community": 42,
       "norm_label": ".spawnshipinternal()"
     },
     {
@@ -5605,7 +5812,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L190",
       "id": "spacetimedb_ships_module_killship",
-      "community": 18,
+      "community": 0,
       "norm_label": ".killship()"
     },
     {
@@ -5614,7 +5821,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L208",
       "id": "spacetimedb_ships_module_spawnpodfor",
-      "community": 18,
+      "community": 0,
       "norm_label": ".spawnpodfor()"
     },
     {
@@ -5623,7 +5830,7 @@
       "source_file": "module/spacetimedb/Ships.cs",
       "source_location": "L251",
       "id": "spacetimedb_ships_module_dockship",
-      "community": 18,
+      "community": 0,
       "norm_label": ".dockship()"
     },
     {
@@ -7127,6 +7334,42 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": ".StatsFor()",
+      "file_type": "code",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L74",
+      "community": 16,
+      "norm_label": ".statsfor()",
+      "id": "scripts_defregistry_defregistry_statsfor"
+    },
+    {
+      "label": ".FireInterval()",
+      "file_type": "code",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L45",
+      "community": 6,
+      "norm_label": ".fireinterval()",
+      "id": "scripts_predictioncontroller_predictioncontroller_fireinterval"
+    },
+    {
+      "label": "ShipClassDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "community": 26,
+      "norm_label": "shipclassdef",
+      "id": "shipclassdef"
+    },
+    {
+      "label": "BaseDef",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L310",
+      "community": 26,
+      "norm_label": "basedef",
+      "id": "basedef"
     },
     {
       "label": ".PigThink()",
@@ -9008,6 +9251,259 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry",
+      "target": "scripts_defregistry_defregistry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L31",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "client_scripts_defregistry_cs_byte"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "client_scripts_defregistry_cs_connectionmanager"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "client_scripts_defregistry_cs_dictionary"
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "client_scripts_worldrenderer_cs_node"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L130",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_getbasedef"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_gethardpoints"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_getweapon"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_onconnected"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_ready"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_statsfor"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L122",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_trygetshipdef"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L75",
+      "weight": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_trygetstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L96",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "scripts_defregistry_defregistry_trygetweapon"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_onconnected",
+      "target": "client_scripts_defregistry_cs_dbconnection"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L75",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_defregistry_defregistry_trygetstats",
+      "target": "client_scripts_defregistry_cs_shipstats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_statsfor",
+      "target": "client_scripts_defregistry_cs_shipstats"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L96",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_trygetweapon",
+      "target": "client_scripts_defregistry_cs_hardpointdef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L96",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_trygetweapon",
+      "target": "client_scripts_defregistry_cs_weapondef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_gethardpoints",
+      "target": "client_scripts_defregistry_cs_hardpointdef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_getweapon",
+      "target": "client_scripts_defregistry_cs_weapondef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_gethardpoints",
+      "target": "client_scripts_defregistry_cs_list"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L122",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_trygetshipdef",
+      "target": "client_scripts_defregistry_cs_shipclassdef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L130",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_defregistry_defregistry_getbasedef",
+      "target": "client_scripts_defregistry_cs_basedef"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L11",
       "weight": 1.0,
@@ -10586,6 +11082,28 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L58",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_predictioncontroller_predictioncontroller",
+      "target": "client_scripts_predictioncontroller_cs_bool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L58",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_predictioncontroller_predictioncontroller",
+      "target": "client_scripts_predictioncontroller_cs_defregistry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/PredictionController.cs",
       "source_location": "L71",
       "weight": 1.0,
       "context": "field",
@@ -10858,28 +11376,6 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L45",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "scripts_predictioncontroller_predictioncontroller_fireinterval",
-      "target": "client_scripts_predictioncontroller_cs_shipclass"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L151",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_predictioncontroller_predictioncontroller_step",
-      "target": "scripts_predictioncontroller_predictioncontroller_fireinterval"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/PredictionController.cs",
       "source_location": "L107",
       "weight": 1.0,
       "context": "parameter_type",
@@ -10897,6 +11393,28 @@
       "confidence_score": 1.0,
       "source": "scripts_predictioncontroller_predictioncontroller_rebaseto",
       "target": "client_scripts_predictioncontroller_cs_shipstate"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L109",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_predictioncontroller_predictioncontroller_initialize",
+      "target": "client_scripts_predictioncontroller_cs_defregistry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_predictioncontroller_predictioncontroller_fireinterval",
+      "target": "client_scripts_predictioncontroller_cs_shipclass"
     },
     {
       "relation": "references",
@@ -11029,6 +11547,17 @@
       "confidence_score": 1.0,
       "source": "scripts_predictioncontroller_predictioncontroller_step",
       "target": "predictedshot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/PredictionController.cs",
+      "source_location": "L151",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_predictioncontroller_predictioncontroller_step",
+      "target": "scripts_predictioncontroller_predictioncontroller_fireinterval"
     },
     {
       "relation": "calls",
@@ -11433,6 +11962,17 @@
       "confidence_score": 1.0,
       "source": "scripts_remoteship_remoteship_attachengine",
       "target": "client_scripts_remoteship_cs_engineglow"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/RemoteShip.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_remoteship_remoteship_initialize",
+      "target": "client_scripts_remoteship_cs_defregistry",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -13136,6 +13676,17 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
       "target": "client_scripts_worldrenderer_cs_connectionmanager"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "client_scripts_worldrenderer_cs_defregistry"
     },
     {
       "relation": "references",
@@ -15487,6 +16038,17 @@
       "source_file": "module/spacetimedb/Defs.cs",
       "source_location": "L174",
       "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_defs_module_shipdeffromstats",
+      "target": "module_spacetimedb_defs_cs_shipclassdef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L174",
+      "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_shipdeffromstats",
@@ -15518,12 +16080,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Defs.cs",
-      "source_location": "L348",
+      "source_location": "L377",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_shipdef",
-      "target": "shipclassdef"
+      "target": "module_spacetimedb_defs_cs_shipclassdef"
     },
     {
       "relation": "references",
@@ -15534,7 +16096,7 @@
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_upsertshipclassdef",
-      "target": "shipclassdef"
+      "target": "module_spacetimedb_defs_cs_shipclassdef"
     },
     {
       "relation": "references",
@@ -15546,6 +16108,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_seeddefaults",
       "target": "module_spacetimedb_defs_cs_reducercontext"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L225",
+      "weight": 1.0,
+      "source": "spacetimedb_defs_module_seeddefaults",
+      "target": "spacetimedb_lib_module_fireinterval"
     },
     {
       "relation": "calls",
@@ -15782,6 +16355,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_defs_module_upsertshipclassdef",
+      "target": "shipclassdef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
       "source_location": "L310",
       "weight": 1.0,
       "context": "attribute",
@@ -15859,12 +16443,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Defs.cs",
-      "source_location": "L371",
+      "source_location": "L310",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_defs_module_upsertbasedef",
+      "target": "module_spacetimedb_defs_cs_basedef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L400",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_basedeffor",
-      "target": "basedef"
+      "target": "module_spacetimedb_defs_cs_basedef"
     },
     {
       "relation": "calls",
@@ -15909,6 +16504,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_worldconfigordefault",
       "target": "worldconfig"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L348",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_defs_module_shipdef",
+      "target": "shipclassdef"
     },
     {
       "relation": "calls",
@@ -15975,6 +16581,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_defs_module_weaponfor",
       "target": "weapondef"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Defs.cs",
+      "source_location": "L371",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_defs_module_basedeffor",
+      "target": "basedef"
     },
     {
       "relation": "calls",
@@ -19143,9 +19760,9 @@
       "source_location": "L94",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "module_spacetimedb_pigai_cs_byte",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_byte"
     },
     {
       "relation": "references",
@@ -19366,9 +19983,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L237",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_pigbraintick",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigbraintick"
     },
     {
       "relation": "method",
@@ -19376,9 +19993,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L742",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_pigchaseinput",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigchaseinput"
     },
     {
       "relation": "method",
@@ -19386,9 +20003,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L553",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_pigdecide",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigdecide"
     },
     {
       "relation": "method",
@@ -19396,9 +20013,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L711",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_pigexecute",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigexecute"
     },
     {
       "relation": "method",
@@ -19416,9 +20033,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L829",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigpatrolfromcenter"
     },
     {
       "relation": "method",
@@ -19516,9 +20133,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L282",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_upsertpigdecision",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_upsertpigdecision"
     },
     {
       "relation": "references",
@@ -19538,9 +20155,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L258",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_ensurepigslots",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_ensurepigslots"
     },
     {
       "relation": "references",
@@ -19637,9 +20254,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -19648,9 +20265,9 @@
       "source_location": "L742",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -19659,9 +20276,9 @@
       "source_location": "L553",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -19670,9 +20287,9 @@
       "source_location": "L711",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -19681,9 +20298,9 @@
       "source_location": "L829",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -19780,9 +20397,9 @@
       "source_location": "L282",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_upsertpigdecision",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "calls",
@@ -19791,9 +20408,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L252",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_despawnallpigs",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_despawnallpigs"
     },
     {
       "relation": "references",
@@ -19802,9 +20419,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "attribute",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "module_spacetimedb_pigai_cs_reducer",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducer"
     },
     {
       "relation": "references",
@@ -19813,9 +20430,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "pigbraintimer",
-      "confidence_score": 1.0
+      "target": "pigbraintimer"
     },
     {
       "relation": "calls",
@@ -19824,9 +20441,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L262",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_assignpigrescuers",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_assignpigrescuers"
     },
     {
       "relation": "calls",
@@ -19835,9 +20452,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L272",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_pigdecide",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigdecide"
     },
     {
       "relation": "calls",
@@ -19846,9 +20463,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L259",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_simulatepiglifecycle",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_simulatepiglifecycle"
     },
     {
       "relation": "calls",
@@ -19857,9 +20474,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L272",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_upsertpigdecision",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_upsertpigdecision"
     },
     {
       "relation": "references",
@@ -19868,9 +20485,9 @@
       "source_location": "L282",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_upsertpigdecision",
-      "target": "pigplan",
-      "confidence_score": 1.0
+      "target": "pigplan"
     },
     {
       "relation": "references",
@@ -19879,9 +20496,9 @@
       "source_location": "L553",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "pigplan",
-      "confidence_score": 1.0
+      "target": "pigplan"
     },
     {
       "relation": "calls",
@@ -20000,9 +20617,9 @@
       "source_location": "L742",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "module_spacetimedb_pigai_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_ship"
     },
     {
       "relation": "references",
@@ -20011,9 +20628,9 @@
       "source_location": "L553",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "module_spacetimedb_pigai_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_ship"
     },
     {
       "relation": "references",
@@ -20022,9 +20639,9 @@
       "source_location": "L711",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "module_spacetimedb_pigai_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_ship"
     },
     {
       "relation": "references",
@@ -20033,9 +20650,9 @@
       "source_location": "L829",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "module_spacetimedb_pigai_cs_ship",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_ship"
     },
     {
       "relation": "references",
@@ -20099,9 +20716,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L596",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_alephto",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_alephto"
     },
     {
       "relation": "calls",
@@ -20110,9 +20727,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L637",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_isaggressive",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_isaggressive"
     },
     {
       "relation": "calls",
@@ -20121,9 +20738,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L639",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_pigthreatscore",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigthreatscore"
     },
     {
       "relation": "calls",
@@ -20132,9 +20749,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L662",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_teambasesector",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_teambasesector"
     },
     {
       "relation": "references",
@@ -20143,9 +20760,9 @@
       "source_location": "L711",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "module_spacetimedb_pigai_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_shipinputstate"
     },
     {
       "relation": "references",
@@ -20154,9 +20771,9 @@
       "source_location": "L711",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "pigdecision",
-      "confidence_score": 1.0
+      "target": "pigdecision"
     },
     {
       "relation": "calls",
@@ -20165,9 +20782,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L730",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "spacetimedb_pigai_module_pigattackpoint",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigattackpoint"
     },
     {
       "relation": "calls",
@@ -20176,9 +20793,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L721",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "spacetimedb_pigai_module_pigchaseinput",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigchaseinput"
     },
     {
       "relation": "calls",
@@ -20187,9 +20804,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L732",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigpatrolfromcenter"
     },
     {
       "relation": "calls",
@@ -20198,9 +20815,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L725",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigexecute",
-      "target": "spacetimedb_pigai_module_pigsteerto",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigsteerto"
     },
     {
       "relation": "references",
@@ -20220,9 +20837,9 @@
       "source_location": "L742",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "module_spacetimedb_pigai_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_shipinputstate"
     },
     {
       "relation": "references",
@@ -20231,9 +20848,9 @@
       "source_location": "L829",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "module_spacetimedb_pigai_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_shipinputstate"
     },
     {
       "relation": "references",
@@ -20286,9 +20903,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L799",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_clamp01",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_clamp01"
     },
     {
       "relation": "calls",
@@ -20297,9 +20914,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L778",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_clamp1",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_clamp1"
     },
     {
       "relation": "calls",
@@ -20308,9 +20925,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L769",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_conjugate",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_conjugate"
     },
     {
       "relation": "calls",
@@ -20319,9 +20936,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L763",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_normalizeor",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_normalizeor"
     },
     {
       "relation": "calls",
@@ -20330,9 +20947,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L751",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_pigaimskill",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigaimskill"
     },
     {
       "relation": "calls",
@@ -20341,9 +20958,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L762",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_pigaimwobble",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigaimwobble"
     },
     {
       "relation": "calls",
@@ -20352,9 +20969,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L766",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_pigavoidasteroids",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigavoidasteroids"
     },
     {
       "relation": "calls",
@@ -20363,9 +20980,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L760",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigchaseinput",
-      "target": "spacetimedb_pigai_module_piglead",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_piglead"
     },
     {
       "relation": "references",
@@ -20374,9 +20991,9 @@
       "source_location": "L829",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "module_spacetimedb_pigai_cs_quat",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_quat"
     },
     {
       "relation": "references",
@@ -20385,9 +21002,9 @@
       "source_location": "L829",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "module_spacetimedb_pigai_cs_vec3",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_vec3"
     },
     {
       "relation": "calls",
@@ -20396,9 +21013,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L836",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigpatrolfromcenter",
-      "target": "spacetimedb_pigai_module_pigsteerto",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_pigsteerto"
     },
     {
       "relation": "references",
@@ -23912,5 +24529,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "2dc8bb08d79f2742703981aa93e5e87b62b377a5"
+  "built_at_commit": "042b7c45a2693c35be3bfac079f1576935e85980"
 }

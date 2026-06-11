@@ -108,6 +108,7 @@ public partial class WorldRenderer : Node3D
 	private ConnectionManager _cm = null!;
 	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
 	private Starscape? _starscape;   // sibling; repaints the backdrop as the local sector changes
+	private DefRegistry _defs = null!;   // sibling; runtime ship/weapon/base defs the local ship predicts from
 
 	// Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
 	// one-way latency); >= 0 = a fixed override in ms, pinned via STDB_SHOT_MASK_MS for
@@ -208,6 +209,7 @@ public partial class WorldRenderer : Node3D
 
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
 		_cm.Connected += OnConnected;
+		_defs = GetNode<DefRegistry>("../DefRegistry");
 		_starscape = GetNodeOrNull<Starscape>("../Starscape");
 
 		if (float.TryParse(OS.GetEnvironment("STDB_SHOT_MASK_MS"), out var ms) && ms >= 0f)
@@ -567,7 +569,7 @@ public partial class WorldRenderer : Node3D
 			_ships.AddChild(pc);
 			pc.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
 			AttachEngineGlow(pc, row.Class, row.Team, row.IsPod);
-			pc.Initialize(row);
+			pc.Initialize(row, _defs);
 			LocalShip = pc;
 			_localTeam = row.Team;
 			// Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
@@ -588,7 +590,7 @@ public partial class WorldRenderer : Node3D
 		_ships.AddChild(rs);
 		rs.AddChild(BuildShipMesh(row.Team, row.Class, row.IsPig, row.IsPod));
 		AttachEngineGlow(rs, row.Class, row.Team, row.IsPod);
-		rs.Initialize(row);
+		rs.Initialize(row, _defs);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
 	}

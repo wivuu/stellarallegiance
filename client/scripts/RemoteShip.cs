@@ -68,14 +68,17 @@ public partial class RemoteShip : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-	public void Initialize(Ship row)
+	public void Initialize(Ship row, DefRegistry defs)
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
 		IsPig = row.IsPig;
 		IsPod = row.IsPod;
-		// Pod-aware so a pod's interpolated throttle proxy reads against its slow cap.
-		_maxSpeed = FlightModel.StatsFor((byte)row.Class, row.IsPod).MaxSpeed;
+		// Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
+		// leaves the harmless 1f default until the row lands — no baked tuning on the
+		// client. Pod-aware so a pod's proxy reads against its slow cap.
+		if (defs.TryGetStats((byte)row.Class, row.IsPod, out var s))
+			_maxSpeed = s.MaxSpeed;
 		_burnCooldown = (float)GD.RandRange(1.0, 3.0);   // stagger drones' first burst roll
 		Push(row);
 	}
