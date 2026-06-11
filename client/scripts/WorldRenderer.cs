@@ -7,7 +7,9 @@ using SpacetimeDB.Types;
 // mutates state here — it only mirrors whatever the subscription delivers.
 public partial class WorldRenderer : Node3D
 {
-	private const float BaseRadius = 45f;
+	// Every base is this single base type this phase (mirror of the module's
+	// DefaultBaseTypeId); the BaseDef supplies radius/health/hardpoints.
+	private const byte DefaultBaseTypeId = 0;
 
 	// Floating damage bar above each base. BaseMaxHealth mirrors the module's win-condition
 	// hull (Lib.cs BaseMaxHealth) so the bar can show a 0..1 fraction; keep the two in sync.
@@ -319,16 +321,14 @@ public partial class WorldRenderer : Node3D
 		if (_baseNodes.ContainsKey(row.BaseId))
 			return;
 
-		var node = new MeshInstance3D
-		{
-			Name = $"Base_{row.BaseId}",
-			Mesh = new SphereMesh { Radius = BaseRadius, Height = BaseRadius * 2f, RadialSegments = 32, Rings = 16 },
-			MaterialOverride = row.Team == 0 ? _team0Mat : _team1Mat,
-			Position = new Vector3(row.PosX, row.PosY, row.PosZ),
-		};
+		// Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
+		// from the subscribed BaseDef (M5). Every base is BaseTypeId 0 this phase.
+		var node = BaseModelLoader.Build(_defs, DefaultBaseTypeId, row.Team, row.Team == 0 ? _team0Mat : _team1Mat);
+		node.Name = $"Base_{row.BaseId}";
+		node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
-		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node);
+		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node, BaseModelLoader.Radius(_defs, DefaultBaseTypeId));
 		UpdateBaseHealthBar(_baseHealthBars[row.BaseId], row.Health);
 		SetNodeSector(node, row.SectorId);
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
@@ -337,9 +337,9 @@ public partial class WorldRenderer : Node3D
 	// Build the floating damage bar (background + fill) as children of the base node, anchored
 	// just above the sphere. Returns the handle stored per base; the fill is repositioned/recoloured
 	// by UpdateBaseHealthBar and the root is screen-aligned each frame in _Process.
-	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode)
+	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode, float baseRadius)
 	{
-		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, BaseRadius + 22f, 0f) };
+		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, baseRadius + 22f, 0f) };
 
 		var bg = new MeshInstance3D
 		{

@@ -437,3 +437,88 @@ files (no namespace change — `Module` is already `partial`):
    denser field — no rebuild. Re-apply the original config + same seed ⇒ the
    original map, byte-identical.
 8. `graphify update .` to refresh the knowledge graph after the refactor.
+
+---
+
+## Addendum — hardcoded client values audit (post-M5)
+
+A sweep of `client/scripts/` after M0-M5 for values that the "content → runtime
+data" goal would eventually move off the client, plus the ones that *correctly*
+stay constants so a later pass doesn't churn them. M5 wired base **geometry +
+hardpoints** to `BaseDef`; the items below are what's still compiled in. Grouped
+by priority; file:line are indicative (they drift — grep the symbol).
+
+### A. Duplicates a server/def value already on the client — fix next (drift/determinism risk)
+
+- **`WorldRenderer.BaseMaxHealth = 2000f`** (`WorldRenderer.cs:16`) — its own
+  comment says "mirrors the module's win-condition hull … keep the two in sync."
+  `BaseDef.MaxHealth` is now subscribed via `DefRegistry`, so the health-bar
+  fraction should divide by `defs.GetBaseDef(DefaultBaseTypeId)?.MaxHealth`
+  instead of this constant. M5 left it untouched (it's combat/UI, outside the
+  mesh+hardpoint scope) — small follow-up, removes the last "keep in sync" base
+  constant. Needs a `DefRegistry` getter for the def's `MaxHealth` (or reuse
+  `GetBaseDef`).
+- **`BaseModelLoader.FallbackRadius = 45f`** (`BaseModelLoader.cs:33`) — a second
+  copy of the server's `BaseRadiusFor` fallback (`Bases.cs`). Intentional (used
+  only until the def row arrives in the initial snapshot), but it *is* a second
+  literal `45`. Acceptable; flagged so the two don't silently diverge if the
+  authored base radius changes.
+
+### B. Team/faction identity duplicated across ≥5 files — the reserved `FactionDef` seam
+
+"Team 0 = blue, team 1 = red" is re-encoded, with *slightly different RGBs*, in
+every file that paints something team-coloured. No single source:
+- `WorldRenderer` ship mats `_team0Mat`/`_team1Mat` (`:180-181`) and the aleph
+  team mats (`:184-192`).
+- `ShipModelLoader` hot-exhaust tint (`:59`).
+- `BaseModelLoader` nav-beacon tint (`:89`, added in M5).
+- `Minimap` `Team0`/`Team1` (`:26-27`) — comment literally reads "matches
+  WorldRenderer team 0/1", a hand-maintained copy.
+- `TargetMarkers.PigColor` (`:41`) is a related per-allegiance marker hue.
+
+This is exactly the per-team identity CONFIG.md reserves for `FactionDef` (Global
+Attributes, faction-ready def rows). First slice when factions land: a single
+client team→palette resolver (eventually `FactionDef.PrimaryColor`/`AccentColor`),
+and delete the scattered literals. Until then, treat `WorldRenderer`'s pair as
+the canonical source and have the others reference it rather than re-typing RGBs.
+
+### C. Spawn menu doesn't enumerate def rows — blocks the content-pipeline payoff
+
+- **`Hud` spawn buttons** (`Hud.cs:41-43`) hardcode three classes, their
+  display names, descriptions, and `[1]/[2]/[3]` key hints
+  ("Spawn Scout — fast & agile", …). The M1 content pipeline lets an operator add
+  a 4th hull as data (a `hull_stats.csv` row → `ShipClassDef`), but it would
+  never appear in the menu without a client edit — so the headline "new ships are
+  config, not code" stops at the spawn UI. Follow-up: build the menu by
+  iterating subscribed `ShipClassDef` rows, using `ShipClassDef.Name` for the
+  label (the class enum stays the wire type; the *menu* becomes data-driven).
+
+### D. Placeholder ship geometry — not yet a def field (lower priority, GLB convention covers it)
+
+- **`ShipModelLoader` silhouette dims** (`:132,139,145,125`): Fighter box
+  `3.6×1.6×5.5`, Bomber box `4.8×2.2×7.2`, Scout cone `r1.4×h4.5`, pod sphere
+  `r1.4`. These are stand-in art keyed off the `ShipClass` enum, so a data-only
+  hull added per §C would render with a *wrong-shaped* placeholder until art
+  exists. The documented **future GLB convention** (M4) is the real fix — a
+  `<class>.glb` overrides the procedural mesh and carries its own `HP_*` markers.
+  No `ShipClassDef` mesh/scale field is proposed; note only that placeholder
+  shape is still enum-bound, not def-bound.
+
+### E. Correctly client-only — *not* config targets (recorded so future passes skip them)
+
+- **Cosmetic FX with no server analog:** beacon blink (`BaseModelLoader` Period/
+  OnFraction/Range/MoteSize), `EngineGlow` tuning, `DustField`, `Starscape`,
+  health-bar pixel dims (`BaseHealthBarWidth/Height`), `Minimap` layout
+  (`PanelW/H`, `NodeRadius`, `LayoutRadius`). Pure presentation; keep constant.
+- **Netcode/feel tuning (sim-infrastructure, per the CONFIG "what stays a
+  constant" rule):** `RemoteShip` `InterpDelayMs`/`MaxSamples`/`VelSmoothRate`/
+  `PigTurnThreshold`; `PredictionController` `PosTolerance`/`RotTolerance`/
+  `BufferLen`/`SmoothFreq`; `ShipController` `MaxStepsPerFrame`/`DefaultTargetLead`/
+  `SlewGain`/`MaxSlew`/`DefaultMouseSens`/`MouseReturnPerSec`; `WorldRenderer`
+  `GhostTtl`/`DeathCamSec`. These are client prediction/input feel, not content.
+
+  **Watch-item:** `WorldRenderer.VisualHitRadius`/`MuzzleClearance` (`:95-96`) and
+  `RescuePickupDist` (`:26`) are client constants tuned against *ship silhouette
+  size* and the server's `RescueRadius`. They read as netcode now, but if ship
+  visual scale ever becomes config (§D) or the server rescue radius is retuned,
+  these must track it or hit-sparks/rescue-fade will desync from the new scale.

@@ -30,8 +30,8 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781179559.7308311,
-    "ast_hash": "9647cede223ce9e7eab0b51f11365c19",
+    "mtime": 1781179706.8993666,
+    "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
     "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
