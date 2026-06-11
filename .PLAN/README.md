@@ -73,6 +73,8 @@ Stand up many independent game servers and let players find and join them.
   sectors to watch from the lobby.
 - **Matchmaking, accounts & persistence** — Player identities, ELO, match
   history.
+- **Custom Maps** - Maps configurable on a server, the asteroids would not be hardcoded, but instead the aleph layout would be configurable.
+
 
 ### Phase 4 — Strategy layer (Allegiance core)
 
