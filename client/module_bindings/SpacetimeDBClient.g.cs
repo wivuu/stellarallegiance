@@ -662,6 +662,7 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.ApplyInput args => Reducers.InvokeApplyInput(eventContext, args),
+                Reducer.BenchSpawnAllPigs args => Reducers.InvokeBenchSpawnAllPigs(eventContext, args),
                 Reducer.JoinTeam args => Reducers.InvokeJoinTeam(eventContext, args),
                 Reducer.LeaveTeam args => Reducers.InvokeLeaveTeam(eventContext, args),
                 Reducer.QuickJoin args => Reducers.InvokeQuickJoin(eventContext, args),

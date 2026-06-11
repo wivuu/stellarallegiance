@@ -27,12 +27,18 @@ public partial struct Projectile
     public byte Team;           // so friendly fire can be ignored
     public uint SectorId;       // sector it travels in (inherited from the firing ship)
     public float Damage;        // hull damage dealt on hit (from the firing weapon's def)
+    // Spawn position/velocity, fixed at fire time and never rewritten — the client
+    // already fire-and-forget extrapolates from these (see ProjectileView.cs) and
+    // ignores per-tick position updates, so the server derives its own current
+    // position from SpawnTick analytically (see Pass B in Lib.cs) instead of paying
+    // an Update on every live projectile every tick.
     public float PosX;
     public float PosY;
     public float PosZ;
     public float VelX;
     public float VelY;
     public float VelZ;
+    public uint SpawnTick;      // sim tick this projectile was fired
     public uint ExpiresAtTick;  // sim tick at which it is culled
     // Fired by an AI drone (PIG). PIG fire damages ships but NOT bases — drones
     // "leave bases alone", so only players can erode a base (the win condition).
@@ -101,6 +107,7 @@ public static partial class Module
             Damage = weapon.Damage,
             PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
             VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
+            SpawnTick = tick,
             ExpiresAtTick = tick + weapon.ProjectileLifeTicks,
             FromPig = ship.IsPig,
         });

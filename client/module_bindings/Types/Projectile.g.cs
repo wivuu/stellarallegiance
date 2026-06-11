@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public float VelY;
         [DataMember(Name = "vel_z")]
         public float VelZ;
+        [DataMember(Name = "spawn_tick")]
+        public uint SpawnTick;
         [DataMember(Name = "expires_at_tick")]
         public uint ExpiresAtTick;
         [DataMember(Name = "from_pig")]
@@ -49,6 +51,7 @@ namespace SpacetimeDB.Types
             float VelX,
             float VelY,
             float VelZ,
+            uint SpawnTick,
             uint ExpiresAtTick,
             bool FromPig
         )
@@ -63,6 +66,7 @@ namespace SpacetimeDB.Types
             this.VelX = VelX;
             this.VelY = VelY;
             this.VelZ = VelZ;
+            this.SpawnTick = SpawnTick;
             this.ExpiresAtTick = ExpiresAtTick;
             this.FromPig = FromPig;
         }

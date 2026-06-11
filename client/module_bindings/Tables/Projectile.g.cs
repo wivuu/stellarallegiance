@@ -49,6 +49,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Projectile, float> VelX { get; }
         public global::SpacetimeDB.Col<Projectile, float> VelY { get; }
         public global::SpacetimeDB.Col<Projectile, float> VelZ { get; }
+        public global::SpacetimeDB.Col<Projectile, uint> SpawnTick { get; }
         public global::SpacetimeDB.Col<Projectile, uint> ExpiresAtTick { get; }
         public global::SpacetimeDB.Col<Projectile, bool> FromPig { get; }
 
@@ -64,6 +65,7 @@ namespace SpacetimeDB.Types
             VelX = new global::SpacetimeDB.Col<Projectile, float>(tableName, "vel_x");
             VelY = new global::SpacetimeDB.Col<Projectile, float>(tableName, "vel_y");
             VelZ = new global::SpacetimeDB.Col<Projectile, float>(tableName, "vel_z");
+            SpawnTick = new global::SpacetimeDB.Col<Projectile, uint>(tableName, "spawn_tick");
             ExpiresAtTick = new global::SpacetimeDB.Col<Projectile, uint>(tableName, "expires_at_tick");
             FromPig = new global::SpacetimeDB.Col<Projectile, bool>(tableName, "from_pig");
         }
