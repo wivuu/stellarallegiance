@@ -23,7 +23,7 @@ to determine how many players we can support in a single instance, and what the 
 Themed and ordered top-to-bottom. Infra (host-server image, CI) is pulled in
 as-needed per phase rather than done up front.
 
-### Phase 1 — Configurability & maintainability refactor
+### Phase 1 — Configurability & maintainability refactor -- DONE
 
 Move hard-coded tuning and content into data so new ships, weapons, and bases
 are config, not code. Unblocks variety in later phases.
