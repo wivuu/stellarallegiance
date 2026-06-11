@@ -17,6 +17,15 @@ namespace SpacetimeDB.Types
         {
             protected override string RemoteTableName => "ship";
 
+            public sealed class SectorIdIndex : BTreeIndexBase<uint>
+            {
+                protected override uint GetKey(Ship row) => row.SectorId;
+
+                public SectorIdIndex(ShipHandle table) : base(table) { }
+            }
+
+            public readonly SectorIdIndex SectorId;
+
             public sealed class ShipIdUniqueIndex : UniqueIndexBase<ulong>
             {
                 protected override ulong GetKey(Ship row) => row.ShipId;
@@ -28,6 +37,7 @@ namespace SpacetimeDB.Types
 
             internal ShipHandle(DbConnection conn) : base(conn)
             {
+                SectorId = new(this);
                 ShipId = new(this);
             }
 
@@ -98,10 +108,12 @@ namespace SpacetimeDB.Types
     public sealed class ShipIxCols
     {
         public global::SpacetimeDB.IxCol<Ship, ulong> ShipId { get; }
+        public global::SpacetimeDB.IxCol<Ship, uint> SectorId { get; }
 
         public ShipIxCols(string tableName)
         {
             ShipId = new global::SpacetimeDB.IxCol<Ship, ulong>(tableName, "ship_id");
+            SectorId = new global::SpacetimeDB.IxCol<Ship, uint>(tableName, "sector_id");
         }
     }
 }

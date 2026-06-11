@@ -30,7 +30,7 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781179706.8993666,
+    "mtime": 1781181928.125832,
     "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
     "semantic_hash": ""
   },
@@ -45,7 +45,7 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781178075.034344,
+    "mtime": 1781181928.1260355,
     "ast_hash": "b2fa3b13f2f1f8033c61225198c8e123",
     "semantic_hash": ""
   },
@@ -60,7 +60,7 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781142666.201172,
+    "mtime": 1781181928.126196,
     "ast_hash": "0cc6f112c57b4c1e4879c90da67bb285",
     "semantic_hash": ""
   },
@@ -70,17 +70,17 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781142673.3851092,
+    "mtime": 1781181928.1263556,
     "ast_hash": "2d15f86326aec7f385b58439e0fe46c0",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781178059.209574,
+    "mtime": 1781181928.1265411,
     "ast_hash": "a5874f85f3f2e2321f3113411868fd2b",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
-    "mtime": 1781098581.7030888,
+    "mtime": 1781181928.126753,
     "ast_hash": "4ba10beff2d51daef33766ed153e438b",
     "semantic_hash": ""
   },
@@ -105,7 +105,7 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781179950.070377,
+    "mtime": 1781181928.1270905,
     "ast_hash": "06a441e930a20a21982d473c7e9cf0f9",
     "semantic_hash": ""
   },
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781178027.7769003,
-    "ast_hash": "208b90e3097bd7de411b98b81abcd3e5",
+    "mtime": 1781208549.9438114,
+    "ast_hash": "17185745aa853c81d3c1d3ee2fe61eab",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781140406.6622095,
-    "ast_hash": "93bb4678afe5c762687e65094ba68fa3",
+    "mtime": 1781208150.2178316,
+    "ast_hash": "2146ff7360b5e07ef30a1ae5bd899714",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -180,7 +180,7 @@
     "semantic_hash": "021685682be7a9bb8c70bd0ef03aa91a"
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781178018.1875443,
+    "mtime": 1781181928.1350548,
     "ast_hash": "7e89b2b84db37bf49bffb75764914ae6",
     "semantic_hash": ""
   },
@@ -195,7 +195,7 @@
     "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1781098880.22535,
+    "mtime": 1781181928.1354146,
     "ast_hash": "9981ad1b269ee4ab0959355dd8d1aad1",
     "semantic_hash": ""
   },
@@ -245,37 +245,37 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "module/spacetimedb/Defs.cs": {
-    "mtime": 1781178054.011771,
-    "ast_hash": "fa6891a8e2142e4a1ea14ca00082de38",
+    "mtime": 1781198185.9249043,
+    "ast_hash": "19232b12738bfca180582718f233689b",
     "semantic_hash": ""
   },
   "module/spacetimedb/Bases.cs": {
-    "mtime": 1781124256.0161142,
+    "mtime": 1781181928.1336408,
     "ast_hash": "811e2950838d76eea46a76410a0c9fbb",
     "semantic_hash": ""
   },
   "module/spacetimedb/Ships.cs": {
-    "mtime": 1781121310.5261886,
-    "ast_hash": "107558e2985827ce333dda98ca97f81a",
+    "mtime": 1781208544.2680862,
+    "ast_hash": "c4f4e63ac3559d13fd3b1106e65839b0",
     "semantic_hash": ""
   },
   "module/spacetimedb/Weapons.cs": {
-    "mtime": 1781121599.2855525,
-    "ast_hash": "fbb0723d84da1a3b560be51437528c89",
+    "mtime": 1781208561.0193515,
+    "ast_hash": "208917685e9326d76a96f4854a3fb25e",
     "semantic_hash": ""
   },
   "client/scripts/DefRegistry.cs": {
-    "mtime": 1781142632.4166994,
+    "mtime": 1781181928.1256132,
     "ast_hash": "ed7be952163140749de4236469b329a2",
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781179169.4706626,
+    "mtime": 1781181928.126853,
     "ast_hash": "219f901032b0c89edc181ef02a9fe2c7",
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1781179923.7097445,
+    "mtime": 1781181928.1253903,
     "ast_hash": "78815890d0f96c6964c6198236d055ea",
     "semantic_hash": ""
   }

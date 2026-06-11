@@ -113,6 +113,7 @@ public partial struct Asteroid
     [PrimaryKey]
     [AutoInc]
     public ulong AsteroidId;
+    [SpacetimeDB.Index.BTree]
     public uint SectorId;       // which sector this asteroid belongs to
     public float PosX;
     public float PosY;
@@ -627,64 +628,6 @@ public static partial class Module
                 s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
         }
         return s;
-    }
-
-    // ---- Per-tick ship spatial grid (Pass B broad-phase) ---------------
-    // Pass B (projectile vs. ship hit-testing) was O(projectiles x ships) — at 25v25 with
-    // a few hundred live projectiles this saturated SimTick's tick budget (see ai-benching
-    // benchmark notes). Bucket the post-integration `live` ships into a per-sector uniform
-    // grid ONCE per tick (ships move every tick, unlike the static asteroid field, so this
-    // cache is rebuilt every SimulateTick rather than persisted). A projectile then only
-    // tests ships in its own cell + the 26 neighbours. ShipGridCell only needs to exceed
-    // the largest hit-test radius (HitRadius + ProjectileRadius, <= ShipRadius + 1 = 4u) for
-    // the 3x3x3 query to be equivalent to scanning every ship in the sector; sized larger
-    // (32u) to keep cell counts/dictionary overhead reasonable for sparse fields.
-    private const float ShipGridCell = 32f;
-
-    private static int ShipCellOf(float v) => (int)MathF.Floor(v / ShipGridCell);
-
-    private static Dictionary<uint, Dictionary<(int, int, int), List<Ship>>> BuildShipGrid(List<Ship> ships)
-    {
-        var grid = new Dictionary<uint, Dictionary<(int, int, int), List<Ship>>>();
-        foreach (var s in ships)
-        {
-            if (!grid.TryGetValue(s.SectorId, out var sectorGrid))
-                grid[s.SectorId] = sectorGrid = new Dictionary<(int, int, int), List<Ship>>();
-            var key = (ShipCellOf(s.PosX), ShipCellOf(s.PosY), ShipCellOf(s.PosZ));
-            if (!sectorGrid.TryGetValue(key, out var cell))
-                sectorGrid[key] = cell = new List<Ship>();
-            cell.Add(s);
-        }
-        return grid;
-    }
-
-    // First enemy (different team) ship within hit range of (x,y,z), broad-phased through
-    // sectorGrid's 3x3x3 block around the point. Mirrors HitsAsteroid's "first hit wins"
-    // semantics (order is whatever BuildShipGrid happened to bucket, same as the old
-    // first-match-in-Iter()-order loop it replaces).
-    private static bool TryHitShip(Dictionary<(int, int, int), List<Ship>> sectorGrid, byte team,
-        float x, float y, float z, out ulong hitShipId)
-    {
-        int cx = ShipCellOf(x), cy = ShipCellOf(y), cz = ShipCellOf(z);
-        for (int gx = cx - 1; gx <= cx + 1; gx++)
-        for (int gy = cy - 1; gy <= cy + 1; gy++)
-        for (int gz = cz - 1; gz <= cz + 1; gz++)
-        {
-            if (!sectorGrid.TryGetValue((gx, gy, gz), out var cell))
-                continue;
-            foreach (var s in cell)
-            {
-                if (s.Team == team) continue;
-                float rr = HitRadius(s) + ProjectileRadius;
-                if (Dist2(x, y, z, s.PosX, s.PosY, s.PosZ) <= rr * rr)
-                {
-                    hitShipId = s.ShipId;
-                    return true;
-                }
-            }
-        }
-        hitShipId = 0;
-        return false;
     }
 
     // ---- Lifecycle ----------------------------------------------------
@@ -1347,68 +1290,6 @@ public static partial class Module
         // ResolveAsteroidCollisions), so a tick costs ~O(entities) instead of O(ships+projectiles
         // × asteroids). The grid is built once and reused (invalidated only by GenerateMap).
         var damage = new Dictionary<ulong, float>();   // shipId -> hull damage this tick
-        var baseDamage = new Dictionary<ulong, float>(); // baseId -> damage this tick
-
-        // Broad-phase grid for Pass B's projectile-vs-ship hit test (see BuildShipGrid).
-        var shipGrid = BuildShipGrid(ships);
-
-        // --- Pass B: advance projectiles, cull expired, resolve hits.
-        foreach (var p in ctx.Db.Projectile.Iter().ToList())
-        {
-            if (p.ExpiresAtTick <= tick)
-            {
-                ctx.Db.Projectile.ProjectileId.Delete(p.ProjectileId);
-                continue;
-            }
-
-            // Position is derived analytically from the spawn pos/vel + elapsed ticks
-            // (never persisted — see the SpawnTick comment on Projectile). `elapsed`
-            // is the number of integration steps applied by the end of THIS tick,
-            // matching the old per-tick `PosX += VelX * dt` accumulation exactly.
-            float elapsed = (tick - p.SpawnTick + 1) * dt;
-            float nx = p.PosX + p.VelX * elapsed;
-            float ny = p.PosY + p.VelY * elapsed;
-            float nz = p.PosZ + p.VelZ * elapsed;
-
-            // Blocked by asteroids in the SAME sector (static; they take no damage).
-            bool consumed = HitsAsteroid(ctx, p.SectorId, nx, ny, nz, ProjectileRadius);
-
-            // Hit an enemy ship in the same sector (friendly fire ignored), broad-phased
-            // through the per-sector ship grid built above.
-            if (!consumed && shipGrid.TryGetValue(p.SectorId, out var sectorShipGrid)
-                && TryHitShip(sectorShipGrid, p.Team, nx, ny, nz, out var hitShipId))
-            {
-                damage[hitShipId] = (damage.TryGetValue(hitShipId, out var d) ? d : 0f) + p.Damage;
-                consumed = true;
-            }
-
-            // Hit the ENEMY base (your own base is friendly — shots pass through).
-            if (!consumed)
-            {
-                foreach (var b in bases)
-                {
-                    if (b.Team == p.Team || b.SectorId != p.SectorId) continue;
-                    float rr = BaseRadiusOf(ctx) + ProjectileRadius;
-                    if (Dist2(nx, ny, nz, b.PosX, b.PosY, b.PosZ) <= rr * rr)
-                    {
-                        // BOTH player and PIG fire erode an enemy base. Drones press the
-                        // attack on the enemy base during a lull (see PigThink's base-attack),
-                        // so a drone swarm can crack a base and win the match on its own.
-                        baseDamage[b.BaseId] = (baseDamage.TryGetValue(b.BaseId, out var bd) ? bd : 0f) + p.Damage;
-                        consumed = true;
-                        break;
-                    }
-                }
-            }
-
-            // Only consumed (hit/blocked) projectiles touch the table — a live miss
-            // needs no write at all, since its position is derived above, not stored.
-            if (consumed)
-                ctx.Db.Projectile.ProjectileId.Delete(p.ProjectileId);
-        }
-
-        // Apply base damage + win check (see Bases.cs).
-        ApplyBaseDamage(ctx, bases, baseDamage);
 
         // --- Pass C: collisions, then apply all damage and kill at <= 0 health.
         // Enemy ship-vs-ship: mutual damage + separation (pairwise; N is tiny here).

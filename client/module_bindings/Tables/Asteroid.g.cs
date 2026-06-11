@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly AsteroidIdUniqueIndex AsteroidId;
 
+            public sealed class SectorIdIndex : BTreeIndexBase<uint>
+            {
+                protected override uint GetKey(Asteroid row) => row.SectorId;
+
+                public SectorIdIndex(AsteroidHandle table) : base(table) { }
+            }
+
+            public readonly SectorIdIndex SectorId;
+
             internal AsteroidHandle(DbConnection conn) : base(conn)
             {
                 AsteroidId = new(this);
+                SectorId = new(this);
             }
 
             protected override object GetPrimaryKey(Asteroid row) => row.AsteroidId;
@@ -68,10 +78,12 @@ namespace SpacetimeDB.Types
     public sealed class AsteroidIxCols
     {
         public global::SpacetimeDB.IxCol<Asteroid, ulong> AsteroidId { get; }
+        public global::SpacetimeDB.IxCol<Asteroid, uint> SectorId { get; }
 
         public AsteroidIxCols(string tableName)
         {
             AsteroidId = new global::SpacetimeDB.IxCol<Asteroid, ulong>(tableName, "asteroid_id");
+            SectorId = new global::SpacetimeDB.IxCol<Asteroid, uint>(tableName, "sector_id");
         }
     }
 }

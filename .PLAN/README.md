@@ -19,6 +19,7 @@ to determine how many players we can support in a single instance, and what the 
   - Alternative: A headless client that can spawn and run AI workers and report their actions to the server, which would allow us to scale the number of AI drones independently of the number of human clients.
 - Procedural spaceship generator - Using reusable/modular parts, be able to procedurally generate a wide variety of spaceship models with different shapes, sizes, textures, etc. An individual ship would be defined by a what parts it is made up of and defined in YAML. A build process would then take the YAML and produce a GLB file
 - CONFIG M5 addendum
+- Create a sidecar process for physics simulation. Offload all physics calculations to a separate process that can be optimized and scaled independently of the main spacetimedb module. This module should be multi-threaded and able to utilize multiple CPU cores to handle the physics calculations for a large number of ships and projectiles. The main SpacetimeDB module would send the current state of the game world to the physics process, which would then return the updated positions and velocities of all objects after applying the physics simulation for that tick. This would allow us to scale the physics simulation with the number of players and AI drones, and reduce the load on the main server process.
 ---
 
 ## Roadmap (prioritized)

@@ -96,7 +96,7 @@ public static partial class Module
     // ---- PIG tuning ---------------------------------------------------
     // Max drones per side. This is the "configurable max PIGs (default 5)" knob;
     // change it and republish (a --reset re-creates the slots at the new count).
-    private const int   MaxPigsPerTeam = 5;
+    private const int   MaxPigsPerTeam = 25;
     // Squad waves: a team's whole squad must be wiped before the next squad spawns, then a
     // delay after the last drone dies before it scrambles. (Replaces the old per-slot
     // respawn cooldown; squad timing lives in the PigSquad table.)
