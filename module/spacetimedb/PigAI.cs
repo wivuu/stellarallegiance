@@ -264,25 +264,86 @@ public static partial class Module
         if (WorldConfigOrDefault(ctx).DebugFreezeBrain)
             return;
 
+        // ONE world snapshot for the whole brain pass. Each per-drone decision used to
+        // re-read the full Ship table (O(drones × ships) row reads across the WASM
+        // boundary per brain tick) plus two def-table Finds per threat candidate; now the
+        // table scans happen once and every drone shares them. Taken AFTER the lifecycle
+        // pass so freshly-scrambled drones are included.
+        var scratch = BuildPigScratch(ctx);
+
         // Commit at most one drone per team to pick up a downed teammate's pod (the rest keep
         // attacking); runs before the per-drone brain so PigDecide sees the assignment.
-        AssignPigRescuers(ctx, tick);
+        AssignPigRescuers(ctx, tick, scratch);
+
+        // The slot map is filled AFTER rescuer assignment (it rewrites State/Target on the
+        // chosen slots) so decisions read the committed rescue duty. Pig is a tiny table.
+        foreach (var p in ctx.Db.Pig.Iter())
+            if (p.ShipId is ulong sid)
+                scratch.SlotByShip[sid] = p;
 
         // Decide once per live combat drone and cache it (pods auto-fly home via PodThink,
         // still resolved per-tick in the sim — they aren't brained here).
         var liveIds = new HashSet<ulong>();
-        foreach (var me in ctx.Db.Ship.Iter().ToList())
+        foreach (var me in scratch.Ships)
         {
             if (!me.IsPig || me.IsPod)
                 continue;
             liveIds.Add(me.ShipId);
-            UpsertPigDecision(ctx, me.ShipId, PigDecide(ctx, me, tick), tick);
+            UpsertPigDecision(ctx, me.ShipId, PigDecide(ctx, me, tick, scratch), tick);
         }
         // Prune decisions whose drone no longer exists (died/warped-away/despawned between
         // brain ticks) — a safety net on top of the deletes at KillPig/DespawnAllPigs.
         foreach (var pd in ctx.Db.PigDecision.Iter().ToList())
             if (!liveIds.Contains(pd.ShipId))
                 ctx.Db.PigDecision.ShipId.Delete(pd.ShipId);
+    }
+
+    // World snapshot shared by every drone's decision within one PigBrainTick. The brain
+    // reads world state heavily but only ever WRITES Pig/PigDecision rows, so reading the
+    // (≤200 ms stale by design) snapshot is equivalent to the old per-drone re-reads while
+    // costing one table scan each per brain tick instead of one per drone.
+    private sealed class PigBrainScratch
+    {
+        public readonly List<Ship> Ships = new();
+        public readonly Dictionary<ulong, Ship> ShipById = new();
+        public readonly Dictionary<ulong, Pig> SlotByShip = new();   // filled post-rescuer-assignment
+        public readonly List<Base> Bases = new();
+        public readonly List<Aleph> Alephs = new();
+        public readonly List<Sector> Sectors = new();
+        public readonly Dictionary<byte, float> WeaponDmg = new();   // classId -> primary weapon damage
+    }
+
+    private static PigBrainScratch BuildPigScratch(ReducerContext ctx)
+    {
+        var s = new PigBrainScratch();
+        foreach (var ship in ctx.Db.Ship.Iter())
+        {
+            s.Ships.Add(ship);
+            s.ShipById[ship.ShipId] = ship;
+        }
+        foreach (var b in ctx.Db.Base.Iter()) s.Bases.Add(b);
+        foreach (var a in ctx.Db.Aleph.Iter()) s.Alephs.Add(a);
+        foreach (var sec in ctx.Db.Sector.Iter()) s.Sectors.Add(sec);
+        return s;
+    }
+
+    // Per-class primary-weapon damage for threat scoring, resolved once per brain tick
+    // instead of per candidate (ShipWeaponDamage costs two def-table Finds per call).
+    private static float WeaponDamageCached(ReducerContext ctx, PigBrainScratch s, byte classId)
+    {
+        if (!s.WeaponDmg.TryGetValue(classId, out var dmg))
+            s.WeaponDmg[classId] = dmg = ShipWeaponDamage(ctx, classId);
+        return dmg;
+    }
+
+    // The aleph in `fromSector` leading to `destSector`, from the snapshot (brain-pass
+    // counterpart of the ctx-reading AlephTo used by the per-tick PodThink).
+    private static Aleph? AlephToFrom(List<Aleph> alephs, uint fromSector, uint destSector)
+    {
+        foreach (var a in alephs)
+            if (a.SectorId == fromSector && a.DestSectorId == destSector)
+                return a;
+        return null;
     }
 
     // Insert-or-update the cached decision for a drone (PrimaryKey on ShipId).
@@ -382,7 +443,7 @@ public static partial class Module
     //
     // Only PLAYER pods are targeted: a downed PIG's pod already auto-flies home via PodThink,
     // so committing the rescuer to it would waste the one slot a human teammate needs.
-    private static void AssignPigRescuers(ReducerContext ctx, uint tick)
+    private static void AssignPigRescuers(ReducerContext ctx, uint tick, PigBrainScratch scratch)
     {
         for (byte team = 0; team < NumTeams; team++)
         {
@@ -395,9 +456,9 @@ public static partial class Module
             if (activeRescuer is Pig ar)
             {
                 bool valid = ar.ShipId is ulong rid
-                    && ctx.Db.Ship.ShipId.Find(rid) is Ship rship
+                    && scratch.ShipById.TryGetValue(rid, out var rship)
                     && ar.TargetShipId is ulong pid
-                    && ctx.Db.Ship.ShipId.Find(pid) is Ship curPod
+                    && scratch.ShipById.TryGetValue(pid, out var curPod)
                     && curPod.IsPod && !curPod.IsPig && curPod.Team == team && curPod.SectorId == rship.SectorId;
                 if (valid)
                     continue;   // keep ferrying this pod home
@@ -409,14 +470,14 @@ public static partial class Module
             // player pod that shares its sector (one pair -> one diverted drone). Free = a live,
             // non-pod drone not already rescuing.
             Pig? bestDrone = null; ulong bestPod = 0; float best2 = float.PositiveInfinity;
-            foreach (var pod in ctx.Db.Ship.Iter())
+            foreach (var pod in scratch.Ships)
             {
                 if (!pod.IsPod || pod.IsPig || pod.Team != team) continue;
                 foreach (var p in ctx.Db.Pig.Iter())
                 {
                     if (p.Team != team || p.State == PigState.Rescue) continue;
                     if (p.ShipId is not ulong sid) continue;
-                    if (ctx.Db.Ship.ShipId.Find(sid) is not Ship drone) continue;
+                    if (!scratch.ShipById.TryGetValue(sid, out var drone)) continue;
                     if (drone.IsPod || drone.SectorId != pod.SectorId) continue;
                     float d2 = Dist2(drone.PosX, drone.PosY, drone.PosZ, pod.PosX, pod.PosY, pod.PosZ);
                     if (d2 < best2) { best2 = d2; bestDrone = p; bestPod = pod.ShipId; }
@@ -587,14 +648,10 @@ public static partial class Module
     // target acquisition over every ship, threat scoring, base/aleph lookups — so they run
     // 4× less often. The actual steering/lead/fire is deferred to PigExecute (20 Hz). Reads
     // live world state directly — no determinism contract (server-only).
-    private static PigPlan PigDecide(ReducerContext ctx, Ship me, uint tick)
+    private static PigPlan PigDecide(ReducerContext ctx, Ship me, uint tick, PigBrainScratch scratch)
     {
-        // Locate this drone's slot row (table is tiny).
-        Pig? slotOpt = null;
-        foreach (var p in ctx.Db.Pig.Iter())
-        {
-            if (p.ShipId == me.ShipId) { slotOpt = p; break; }
-        }
+        // This drone's slot row, from the snapshot's map.
+        Pig? slotOpt = scratch.SlotByShip.TryGetValue(me.ShipId, out var slotRow) ? slotRow : null;
         ulong pigId = slotOpt is Pig sp0 ? sp0.PigId : me.ShipId;
 
         Vec3 myPos = new Vec3(me.PosX, me.PosY, me.PosZ);
@@ -608,7 +665,7 @@ public static partial class Module
         // no longer Rescue and we fall straight through to normal combat below. ----
         if (slotOpt is Pig rescuer && rescuer.State == PigState.Rescue
             && rescuer.TargetShipId is ulong rescuePodId
-            && ctx.Db.Ship.ShipId.Find(rescuePodId) is Ship rescuePod
+            && scratch.ShipById.TryGetValue(rescuePodId, out var rescuePod)
             && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
         {
             return new PigPlan { Kind = PigKindSteerShip, PigId = pigId, TargetShipId = rescuePodId };
@@ -627,10 +684,10 @@ public static partial class Module
         // warp pass carries us across when we touch it. A committed drone can't be shaken
         // by ducking through a gate.
         if (keepId is ulong lockId
-            && ctx.Db.Ship.ShipId.Find(lockId) is Ship locked
+            && scratch.ShipById.TryGetValue(lockId, out var locked)
             && locked.Team != me.Team && locked.SectorId != me.SectorId)
         {
-            if (AlephTo(ctx, me.SectorId, locked.SectorId) is Aleph gate)
+            if (AlephToFrom(scratch.Alephs, me.SectorId, locked.SectorId) is Aleph gate)
             {
                 if (slotOpt is Pig spp)
                     ctx.Db.Pig.PigId.Update(spp with { State = PigState.Seek, TargetShipId = locked.ShipId });
@@ -652,7 +709,7 @@ public static partial class Module
         // Our own base in this sector (if any). Enemies near it are shelling the win-condition
         // target, so PigThreatScore prioritises them for defense.
         Vec3? myBasePos = null;
-        foreach (var b in ctx.Db.Base.Iter())
+        foreach (var b in scratch.Bases)
             if (b.Team == me.Team && b.SectorId == me.SectorId) { myBasePos = new Vec3(b.PosX, b.PosY, b.PosZ); break; }
 
         float radar2 = PigRadarRange * PigRadarRange;
@@ -660,7 +717,7 @@ public static partial class Module
         Ship? bestAggr = null; float bestAggrScore = float.NegativeInfinity;
         Ship? keptAggr = null; float keptAggrScore = float.NegativeInfinity;
         Ship? nearestPassive = null; float nearestPassive2 = float.PositiveInfinity;
-        foreach (var s in ctx.Db.Ship.Iter())
+        foreach (var s in scratch.Ships)
         {
             if (s.SectorId != me.SectorId || s.Team == me.Team)
                 continue;
@@ -673,7 +730,7 @@ public static partial class Module
                 continue;
             if (IsAggressive(s, tick))
             {
-                float score = PigThreatScore(ctx, myPos, s, myBasePos);
+                float score = PigThreatScore(ctx, scratch, myPos, s, myBasePos);
                 if (keepId is ulong k && s.ShipId == k) { keptAggr = s; keptAggrScore = score; }
                 if (d2 <= radar2 && score > bestAggrScore) { bestAggrScore = score; bestAggr = s; }
             }
@@ -696,8 +753,8 @@ public static partial class Module
         if (target is not Ship tgt)
         {
             // Stranded in a foreign sector with nothing to do? Route home through the aleph.
-            if (TeamBaseSector(ctx, me.Team) is uint home && home != me.SectorId
-                && AlephTo(ctx, me.SectorId, home) is Aleph homeGate)
+            if (TeamBaseSectorFrom(scratch.Bases, me.Team) is uint home && home != me.SectorId
+                && AlephToFrom(scratch.Alephs, me.SectorId, home) is Aleph homeGate)
             {
                 if (slotOpt is Pig sh)
                     ctx.Db.Pig.PigId.Update(sh with { State = PigState.Patrol, TargetShipId = null });
@@ -708,7 +765,7 @@ public static partial class Module
             // patrolling. This is what makes a lull dangerous — clear the fighters and the
             // drones start cracking your base.
             Base? targetBase = null; float tb2 = float.PositiveInfinity;
-            foreach (var b in ctx.Db.Base.Iter())
+            foreach (var b in scratch.Bases)
             {
                 if (b.Team == me.Team || b.SectorId != me.SectorId) continue;
                 float bd2 = Dist2(myPos.X, myPos.Y, myPos.Z, b.PosX, b.PosY, b.PosZ);
@@ -723,7 +780,7 @@ public static partial class Module
             // No enemy base here either → patrol (keep moving + visible), not idle at base.
             // Cache the sector center; PigExecute sweeps the moving waypoint each tick.
             Vec3 center = new Vec3(0f, 0f, 0f);
-            foreach (var sec in ctx.Db.Sector.Iter())
+            foreach (var sec in scratch.Sectors)
                 if (sec.SectorId == me.SectorId) { center = new Vec3(sec.CenterX, sec.CenterY, sec.CenterZ); break; }
             if (slotOpt is Pig sp)
                 ctx.Db.Pig.PigId.Update(sp with { State = PigState.Patrol, TargetShipId = null });
@@ -995,7 +1052,7 @@ public static partial class Module
     // the rest — whether it's right on top of OUR base (shelling the win condition). Higher
     // = engage it first. The first three terms are roughly 0..1 so their weights set their
     // relative pull; the base term adds up to PigThreatBaseWeight on top.
-    private static float PigThreatScore(ReducerContext ctx, Vec3 myPos, Ship enemy, Vec3? myBasePos)
+    private static float PigThreatScore(ReducerContext ctx, PigBrainScratch scratch, Vec3 myPos, Ship enemy, Vec3? myBasePos)
     {
         Vec3 ePos = new Vec3(enemy.PosX, enemy.PosY, enemy.PosZ);
         Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
@@ -1007,7 +1064,7 @@ public static partial class Module
         float dist = (ePos - myPos).Length();
         float close = 1f - dist / PigRadarRange;     // 1 = right on top of us
         if (close < 0f) close = 0f;
-        float dmg = ShipWeaponDamage(ctx, (byte)enemy.Class) / 10f; // from the enemy's WeaponDef (Scout 0.4, Fighter 1.0)
+        float dmg = WeaponDamageCached(ctx, scratch, (byte)enemy.Class) / 10f; // from the enemy's WeaponDef (Scout 0.4, Fighter 1.0)
 
         // Base attacker: 1 = on the base, 0 = at/beyond the threat radius. Weighted heavily
         // so a drone breaks off to defend an enemy pounding its base over a closer dogfight.
@@ -1027,6 +1084,15 @@ public static partial class Module
     private static uint? TeamBaseSector(ReducerContext ctx, byte team)
     {
         foreach (var b in ctx.Db.Base.Iter())
+            if (b.Team == team)
+                return b.SectorId;
+        return null;
+    }
+
+    // Snapshot counterpart of TeamBaseSector for the brain pass.
+    private static uint? TeamBaseSectorFrom(List<Base> bases, byte team)
+    {
+        foreach (var b in bases)
             if (b.Team == team)
                 return b.SectorId;
         return null;

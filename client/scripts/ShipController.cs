@@ -42,6 +42,16 @@ public partial class ShipController : Node
 	private bool _hadShip;
 	private int _stepsSinceSpawn;
 	private ShipInputState _input;
+
+	// On-change input sending: ApplyInput goes out only when the stick state differs from
+	// the last SENT input, or the keepalive window lapses. The server replays the last
+	// received input for the silent ticks (held input) — exactly what our own prediction
+	// does with an unchanged stick — so auth == prediction still holds while idle/cruise
+	// ticks cost no reducer transaction at all (~10x fewer under keyboard flight; mouse
+	// easing changes the stick every tick, so active maneuvering still sends at full rate).
+	private const uint InputKeepaliveTicks = 20;   // ~1 s at 20 Hz; also paces PingMs samples
+	private ShipInputState _lastSentInput;
+	private uint _lastSentTick;
 	private ShipClass? _spawnRequest;   // class chosen via HUD menu / 1-2 keys; cleared once flying
 	private bool _spawnPending;
 	private double _spawnRetry;
@@ -70,6 +80,13 @@ public partial class ShipController : Node
 	// Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
 	// input so the full ApplyInput -> SimTick -> reconcile loop can be checked
 	// without a human at the keyboard.
+	// Exact field compare (bools + floats sampled from the same key/stick state repeat
+	// bit-identically while unchanged, so == is the right test — no epsilon wanted).
+	private static bool InputsEqual(in ShipInputState a, in ShipInputState b) =>
+		a.Thrust == b.Thrust && a.StrafeX == b.StrafeX && a.StrafeY == b.StrafeY
+		&& a.Yaw == b.Yaw && a.Pitch == b.Pitch && a.Roll == b.Roll
+		&& a.Firing == b.Firing && a.Boost == b.Boost && a.Coast == b.Coast;
+
 	private bool _autoFly;
 	private bool _autoJoined;            // autofly QuickJoins (team + ready) once on connect
 	private bool _selfTestDone;         // autofly fires one divergence injection
@@ -196,6 +213,9 @@ public partial class ShipController : Node
 			_acc = 0;
 			_stepsSinceSpawn = 0;
 			_hadShip = true;
+			// Fresh ship: force the first step to send (server starts from default input).
+			_lastSentInput = default;
+			_lastSentTick = 0;
 		}
 
 		// Afterburner (Shift): a real flight input now — extra forward thrust and a
@@ -225,13 +245,18 @@ public partial class ShipController : Node
 
 			_predTick++;
 			_stepsSinceSpawn++;
-			_cm.Conn?.Reducers.ApplyInput(
-				_input.Thrust, _input.StrafeX, _input.StrafeY,
-				_input.Yaw, _input.Pitch, _input.Roll,
-				_input.Firing, _input.Boost, _input.Coast, _predTick);
-			_sentAt[_predTick] = Time.GetTicksMsec();
+			if (!InputsEqual(_input, _lastSentInput) || _predTick - _lastSentTick >= InputKeepaliveTicks)
+			{
+				_cm.Conn?.Reducers.ApplyInput(
+					_input.Thrust, _input.StrafeX, _input.StrafeY,
+					_input.Yaw, _input.Pitch, _input.Roll,
+					_input.Firing, _input.Boost, _input.Coast, _predTick);
+				_sentAt[_predTick] = Time.GetTicksMsec();
+				_lastSentInput = _input;
+				_lastSentTick = _predTick;
+			}
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
-				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);
+				_world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.LifeSec);
 		}
 
 		// T5 divergence injection (debug). Press P to force a misprediction and

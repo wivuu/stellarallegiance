@@ -165,7 +165,8 @@ public partial struct Aleph
     public float PosZ;
 }
 
-// The Projectile table + fire control live in Weapons.cs (Phase-1 M2).
+// Fire control + analytic shot resolution live in Weapons.cs (Phase-1 M2). Bolts are
+// client-synthesized visuals — no projectile rows exist anywhere.
 
 [SpacetimeDB.Table(Accessor = "Match", Public = true)]
 public partial struct Match
@@ -235,7 +236,7 @@ public static partial class Module
     private const long DtMicros = 1_000_000 / SimTickHz;  // 50 ms — one fixed sim step
     private const int  MaxCatchupSteps = 8;               // cap sub-steps/call (anti-spiral)
 
-    // Combat tuning (server-only; clients just render the resulting Projectile rows).
+    // Combat tuning (server-only; clients render bolts they synthesize from ship rows).
     private const float ProjectileSpeed = 200f;      // u/s muzzle speed (added to ship velocity);
                                                      // 700 * 0.85 — 15% slower than the original M0 calibration
     private const uint  ProjectileLifeTicks = 16;    // ~1.45 s lifespan, then culled — combined with the
@@ -686,6 +687,18 @@ public static partial class Module
             }
         }
     }
+
+    // ---- Held input (replay between buffered rows) ---------------------
+    // The input applied to each player ship on its most recent sim tick. A buffered
+    // ShipInput row now only has to exist for ticks where the stick state CHANGED (clients
+    // send on change + keepalive); on every other tick the sim replays this held value —
+    // which is exactly what the client's prediction did, so auth == prediction holds with
+    // ~10x fewer input rows/transactions. Static WASM memory like the spatial grids:
+    // survives between reducer calls, self-heals after a hot-swap via the dirty/cold
+    // re-derive scan in Pass A. _inputDirty marks ships whose buffer changed since the
+    // last derive (covers rows that arrive LATE, for ticks already simulated).
+    private static readonly Dictionary<ulong, ShipInputState> _heldInput = new();
+    private static readonly HashSet<ulong> _inputDirty = new();
 
     // ---- Lifecycle ----------------------------------------------------
 
@@ -1149,9 +1162,10 @@ public static partial class Module
             return;
 
         ShipInput? existing = null;
-        foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId))
+        foreach (var r in ctx.Db.ShipInput.ByShipTick.Filter((shipId, clientTick)))
         {
-            if (r.Tick == clientTick) { existing = r; break; }
+            existing = r;
+            break;
         }
 
         if (existing is ShipInput e)
@@ -1172,6 +1186,20 @@ public static partial class Module
                 Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
                 Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
             });
+        }
+
+        // The buffer changed: make Pass A re-derive this ship's held input even if this
+        // row's tick was already simulated (a late arrival under lag).
+        _inputDirty.Add(shipId);
+
+        // Amortized per-ship prune (~once per InputKeep ticks of this ship's sending):
+        // replaces the old every-tick full-table sweep in SimulateTick. Despawn paths
+        // still clear the whole buffer via DeleteShipInputs.
+        if (clientTick % InputKeep == 0)
+        {
+            foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId).ToList())
+                if (r.Tick + InputKeep < clientTick)
+                    ctx.Db.ShipInput.InputId.Delete(r.InputId);
         }
     }
 
@@ -1223,7 +1251,7 @@ public static partial class Module
         // gap between log lines / 100 gives the real per-tick cost of SimTick (incl.
         // catch-up steps), independent of the host's invocation cadence.
         if (tick % 100 < (uint)steps)
-            Log.Info($"[Bench] tick={tick} steps={steps} ships={ctx.Db.Ship.Count} proj={ctx.Db.Projectile.Count}");
+            Log.Info($"[Bench] tick={tick} steps={steps} ships={ctx.Db.Ship.Count} pendingShots={ctx.Db.ShotResolution.Count}");
     }
 
     // One fixed-dt authoritative step for sim tick `tick`.
@@ -1231,6 +1259,11 @@ public static partial class Module
     {
         float dt = FlightModel.Dt;
         var worldCfg = WorldConfigOrDefault(ctx);
+
+        // Shots whose analytic impact/expiry lands on this tick (see TryFire/ResolveDueShots
+        // in Weapons.cs) — applied before integration, where the old per-shot scheduler
+        // would have fired between sim transactions.
+        ResolveDueShots(ctx, tick);
 
         // AI drone (PIG) lifecycle + target SELECTION no longer live here — they run in the
         // separate, slower PigBrainTick reducer (PigAI.cs), which caches one PigDecision per
@@ -1269,27 +1302,44 @@ public static partial class Module
             }
             else
             {
-                // Common case: the client already stamped this exact tick — direct index hit
-                // on (ShipId, Tick), no buffer scan.
+                // Exact hit first: the client stamped this very tick — direct index hit on
+                // (ShipId, Tick). With on-change senders this only happens on ticks where
+                // the stick state changed; in between, the held input below replays for free.
                 ShipInput? src = null;
                 foreach (var r in ctx.Db.ShipInput.ByShipTick.Filter((ship.ShipId, tick)))
                 {
                     src = r;
                     break;
                 }
-                // Fallback (input for this tick hasn't arrived yet, e.g. under lag): replay the
-                // most recent input BEFORE this tick. Rare, so the buffer scan is acceptable here.
-                if (src is null)
+                if (src is ShipInput si)
                 {
+                    input = ToInputState(si);
+                    _heldInput[ship.ShipId] = input;
+                    _inputDirty.Remove(ship.ShipId);
+                }
+                else if (!_inputDirty.Contains(ship.ShipId)
+                         && _heldInput.TryGetValue(ship.ShipId, out var held))
+                {
+                    // Nothing arrived since the last derive: the stick state is unchanged —
+                    // replay it with zero datastore reads. This is the common per-tick path.
+                    input = held;
+                }
+                else
+                {
+                    // A row arrived since the last derive (possibly LATE, for a tick already
+                    // simulated), or the cache is cold (fresh spawn / module hot-swap):
+                    // re-derive as the most recent buffered input before this tick — the
+                    // same value the client predicted those ticks with.
                     ShipInput? latest = null;
                     foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
                     {
                         if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
                             latest = r;
                     }
-                    src = latest;
+                    input = latest is ShipInput li ? ToInputState(li) : default;
+                    _heldInput[ship.ShipId] = input;
+                    _inputDirty.Remove(ship.ShipId);
                 }
-                input = src is ShipInput si ? ToInputState(si) : default;
             }
             // Per-ship flight stats from the class's ShipClassDef (pods resolve to the Pod
             // def), derived once and cached; falls back to FlightModel defaults if unseeded.
@@ -1501,13 +1551,9 @@ public static partial class Module
             }
         }
 
-        // Prune consumed inputs so the per-tick buffer stays bounded (~InputKeep
-        // ticks). The client predicts only ~1 tick ahead, so old inputs are dead.
-        foreach (var r in ctx.Db.ShipInput.Iter().ToList())
-        {
-            if (r.Tick + InputKeep < tick)
-                ctx.Db.ShipInput.InputId.Delete(r.InputId);
-        }
+        // Input-buffer pruning no longer happens here: ApplyInput prunes each ship's own
+        // buffer amortized (every InputKeep-th stamped tick), and despawn paths clear it
+        // outright — the old every-tick full-table sweep was O(ships x InputKeep) rows.
     }
 
     // ---- Helpers ------------------------------------------------------
@@ -1626,11 +1672,14 @@ public static partial class Module
         Coast = i.Coast,
     };
 
-    // Delete every buffered input for a ship (ShipId is an index, not the PK now).
+    // Delete every buffered input for a ship (ShipId is an index, not the PK now), and
+    // drop its held-input cache entries (ShipIds are never recycled, but stay tidy).
     private static void DeleteShipInputs(ReducerContext ctx, ulong shipId)
     {
         foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId).ToList())
             ctx.Db.ShipInput.InputId.Delete(r.InputId);
+        _heldInput.Remove(shipId);
+        _inputDirty.Remove(shipId);
     }
 
     // SpawnShipInternal lives in Ships.cs (M2).
@@ -1682,8 +1731,9 @@ public static partial class Module
             DeleteShipInputs(ctx, s.ShipId);
             ctx.Db.Ship.ShipId.Delete(s.ShipId);
         }
-        foreach (var pr in ctx.Db.Projectile.Iter().ToList())
-            ctx.Db.Projectile.ProjectileId.Delete(pr.ProjectileId);
+        // Pending shot outcomes die with the battlefield (their targets are being reset).
+        foreach (var sr in ctx.Db.ShotResolution.Iter().ToList())
+            ctx.Db.ShotResolution.ShotId.Delete(sr.ShotId);
         float baseHp = BaseMaxHealthOf(ctx);
         foreach (var b in ctx.Db.Base.Iter().ToList())
             ctx.Db.Base.BaseId.Update(b with { Health = baseHp });

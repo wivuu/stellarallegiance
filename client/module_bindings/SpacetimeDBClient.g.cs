@@ -37,7 +37,6 @@ namespace SpacetimeDB.Types
             AddTable(PigBrainTimer = new(conn));
             AddTable(PigSquad = new(conn));
             AddTable(Player = new(conn));
-            AddTable(Projectile = new(conn));
             AddTable(Sector = new(conn));
             AddTable(Ship = new(conn));
             AddTable(ShipClassDef = new(conn));
@@ -550,7 +549,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.PigBrainTimer().ToSql(),
             new QueryBuilder().From.PigSquad().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
-            new QueryBuilder().From.Projectile().ToSql(),
             new QueryBuilder().From.Sector().ToSql(),
             new QueryBuilder().From.Ship().ToSql(),
             new QueryBuilder().From.ShipClassDef().ToSql(),
@@ -573,7 +571,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<PigBrainTimer, PigBrainTimerCols, PigBrainTimerIxCols> PigBrainTimer() => new("pig_brain_timer", new PigBrainTimerCols("pig_brain_timer"), new PigBrainTimerIxCols("pig_brain_timer"));
         public global::SpacetimeDB.Table<PigSquad, PigSquadCols, PigSquadIxCols> PigSquad() => new("pig_squad", new PigSquadCols("pig_squad"), new PigSquadIxCols("pig_squad"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
-        public global::SpacetimeDB.Table<Projectile, ProjectileCols, ProjectileIxCols> Projectile() => new("projectile", new ProjectileCols("projectile"), new ProjectileIxCols("projectile"));
         public global::SpacetimeDB.Table<Sector, SectorCols, SectorIxCols> Sector() => new("sector", new SectorCols("sector"), new SectorIxCols("sector"));
         public global::SpacetimeDB.Table<Ship, ShipCols, ShipIxCols> Ship() => new("ship", new ShipCols("ship"), new ShipIxCols("ship"));
         public global::SpacetimeDB.Table<ShipClassDef, ShipClassDefCols, ShipClassDefIxCols> ShipClassDef() => new("ship_class_def", new ShipClassDefCols("ship_class_def"), new ShipClassDefIxCols("ship_class_def"));

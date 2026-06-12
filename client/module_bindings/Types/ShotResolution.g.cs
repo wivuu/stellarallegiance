@@ -13,12 +13,10 @@ namespace SpacetimeDB.Types
     [DataContract]
     public sealed partial class ShotResolution
     {
-        [DataMember(Name = "scheduled_id")]
-        public ulong ScheduledId;
-        [DataMember(Name = "scheduled_at")]
-        public SpacetimeDB.ScheduleAt ScheduledAt;
-        [DataMember(Name = "projectile_id")]
-        public ulong ProjectileId;
+        [DataMember(Name = "shot_id")]
+        public ulong ShotId;
+        [DataMember(Name = "resolve_at_tick")]
+        public uint ResolveAtTick;
         [DataMember(Name = "kind")]
         public ShotOutcomeKind Kind;
         [DataMember(Name = "target_id")]
@@ -27,17 +25,15 @@ namespace SpacetimeDB.Types
         public float Damage;
 
         public ShotResolution(
-            ulong ScheduledId,
-            SpacetimeDB.ScheduleAt ScheduledAt,
-            ulong ProjectileId,
+            ulong ShotId,
+            uint ResolveAtTick,
             ShotOutcomeKind Kind,
             ulong TargetId,
             float Damage
         )
         {
-            this.ScheduledId = ScheduledId;
-            this.ScheduledAt = ScheduledAt;
-            this.ProjectileId = ProjectileId;
+            this.ShotId = ShotId;
+            this.ResolveAtTick = ResolveAtTick;
             this.Kind = Kind;
             this.TargetId = TargetId;
             this.Damage = Damage;
@@ -45,7 +41,6 @@ namespace SpacetimeDB.Types
 
         public ShotResolution()
         {
-            this.ScheduledAt = null!;
         }
     }
 }

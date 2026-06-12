@@ -4,18 +4,17 @@ using StellarAllegiance.Shared;
 // =====================================================================
 //  Weapons.cs — projectiles + fire control (Phase-1 M2, .PLAN/CONFIG.md)
 //
-//  The Projectile table and the fire pass moved out of Lib.cs here. Firing now
-//  reads DATA, not constants: a ship's primary Weapon hardpoint (from its
-//  ShipClassDef) gives the muzzle offset/forward, and the WeaponDef it names gives
-//  damage, fire interval, projectile speed, life and spread. SeedDefaults seeded
-//  those rows from the very constants this used to hard-code, so behaviour is
-//  bit-identical on a fresh DB while an operator can now retune a gun at runtime
-//  (UpsertWeaponDef) with no rebuild.
+//  Fire control + analytic shot resolution. Firing reads DATA, not constants: a
+//  ship's primary Weapon hardpoint (from its ShipClassDef) gives the muzzle
+//  offset/forward, and the WeaponDef it names gives damage, fire interval,
+//  projectile speed, life and spread. SeedDefaults seeded those rows from the very
+//  constants this used to hard-code, so behaviour is bit-identical on a fresh DB
+//  while an operator can retune a gun at runtime (UpsertWeaponDef) with no rebuild.
 //
 //  Collision-time projectile geometry (ProjectileRadius) stays a shared constant in
-//  Lib.cs: the Projectile row carries no weapon id, and every seeded gun uses the
-//  same hit sphere, so per-weapon hit radii are deferred (WeaponDef.ProjectileRadius
-//  is authored data for a later phase). Joins the existing partial Module class.
+//  Lib.cs: every seeded gun uses the same hit sphere, so per-weapon hit radii are
+//  deferred (WeaponDef.ProjectileRadius is authored data for a later phase).
+//  Joins the existing partial Module class.
 // =====================================================================
 
 // What a shot's analytically-resolved outcome is, decided once at fire time
@@ -28,55 +27,34 @@ public enum ShotOutcomeKind
     Base,   // enters an enemy base's radius -> base damage
 }
 
-// One-shot scheduled resolution for a fired projectile: at fire time, TryFire solves
-// (closed-form) for the first time the shot's straight-line path enters the hit radius
-// of an enemy ship/base/asteroid (or expires without hitting anything), and schedules
-// this row to fire ONCE at that moment. ResolveShot then deletes the visual Projectile
-// row and applies the precomputed outcome. This replaces per-tick projectile iteration
-// (the old Pass B) with O(1)-at-fire-time + O(1)-at-resolution work per shot.
-[SpacetimeDB.Table(
-    Accessor = "ShotResolution",
-    Scheduled = nameof(Module.ResolveShot),
-    ScheduledAt = nameof(ScheduledAt)
-)]
+// Deferred resolution for a fired projectile: at fire time, TryFire solves (closed-form)
+// for the first time the shot's straight-line path enters the hit radius of an enemy
+// ship/base/asteroid (or expires without hitting anything), and records the outcome here
+// stamped with the sim tick it lands on. SimulateTick drains the rows due each tick
+// (ResolveDueShots) inside its own transaction — replacing the old one-scheduled-reducer-
+// transaction-per-bolt lifecycle, which dominated server cost under sustained fire.
+// Ticks advance monotonically by 1 (catch-up steps included), so an exact-tick index
+// drain resolves every row exactly once.
+[SpacetimeDB.Table(Accessor = "ShotResolution")]
 public partial struct ShotResolution
 {
     [PrimaryKey]
     [AutoInc]
-    public ulong ScheduledId;
-    public ScheduleAt ScheduledAt;
-    public ulong ProjectileId;
+    public ulong ShotId;
+    [SpacetimeDB.Index.BTree]
+    public uint ResolveAtTick;   // sim tick this outcome lands on (>= fire tick + 1)
     public ShotOutcomeKind Kind;
     public ulong TargetId;   // ShipId or BaseId, depending on Kind
     public float Damage;
 }
 
-[SpacetimeDB.Table(Accessor = "Projectile", Public = true)]
-public partial struct Projectile
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong ProjectileId;
-    public byte Team;           // so friendly fire can be ignored
-    public uint SectorId;       // sector it travels in (inherited from the firing ship)
-    public float Damage;        // hull damage dealt on hit (from the firing weapon's def)
-    // Spawn position/velocity, fixed at fire time and never rewritten — the client
-    // already fire-and-forget extrapolates from these (see ProjectileView.cs) and
-    // ignores per-tick position updates, so the server derives its own current
-    // position from SpawnTick analytically (see Pass B in Lib.cs) instead of paying
-    // an Update on every live projectile every tick.
-    public float PosX;
-    public float PosY;
-    public float PosZ;
-    public float VelX;
-    public float VelY;
-    public float VelZ;
-    public uint SpawnTick;      // sim tick this projectile was fired
-    public uint ExpiresAtTick;  // sim tick at which it is culled
-    // Fired by an AI drone (PIG). PIG fire damages ships but NOT bases — drones
-    // "leave bases alone", so only players can erode a base (the win condition).
-    public bool FromPig;
-}
+// There is NO Projectile table anymore. A bolt's entire trajectory is determined at fire
+// time (muzzle, deterministic spread, weapon speed/life — all from replicated state and
+// defs), so clients SYNTHESIZE the visual bolt from the firing ship's LastFireTick
+// advancing (WorldRenderer.SpawnBoltFor mirrors TryFire's muzzle math bit-for-bit).
+// A shot therefore costs ZERO replication: no insert/delete fan-out per bolt to every
+// client — at high fire rates that was 2 broadcast row ops per shot. Hit resolution
+// stays fully server-side via ShotResolution below.
 
 public static partial class Module
 {
@@ -123,9 +101,10 @@ public static partial class Module
     // Hit resolution is now ANALYTIC: instead of simulating the bolt every tick (the old
     // Pass B), solve the closed-form "first time the shot's straight-line path enters a
     // target's hit radius" against every enemy ship/base/asteroid in the sector right now,
-    // take the earliest one, and schedule a one-shot ResolveShot for that moment. The
-    // Projectile row is still inserted for the client's purely-visual bolt (insert/extrapolate/
-    // delete — see ProjectileView.cs), but the server never iterates it again.
+    // take the earliest one, and record a ShotResolution row that SimulateTick's drain
+    // (ResolveDueShots) applies on the tick it lands. No row is written for the bolt
+    // itself — clients synthesize the visual from the ship's LastFireTick advancing,
+    // using the same deterministic (ShipId, tick) spread solved here.
     private static uint TryFire(ReducerContext ctx, in Ship ship, in ShipState state, bool firing, uint tick, uint lastFire)
     {
         if (ship.IsPod || !firing)
@@ -139,19 +118,6 @@ public static partial class Module
         Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ship.ShipId, tick);
         Vec3 mp = state.Pos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
         Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
-
-        var projectileId = ctx.Db.Projectile.Insert(new Projectile
-        {
-            ProjectileId = 0,
-            Team = ship.Team,
-            SectorId = ship.SectorId,
-            Damage = weapon.Damage,
-            PosX = mp.X, PosY = mp.Y, PosZ = mp.Z,
-            VelX = mv.X, VelY = mv.Y, VelZ = mv.Z,
-            SpawnTick = tick,
-            ExpiresAtTick = tick + weapon.ProjectileLifeTicks,
-            FromPig = ship.IsPig,
-        }).ProjectileId;
 
         float maxT = weapon.ProjectileLifeTicks * FlightModel.Dt;
         float bestT = maxT;
@@ -222,15 +188,24 @@ public static partial class Module
             }
         }
 
-        ctx.Db.ShotResolution.Insert(new ShotResolution
+        // Only HITS need a resolution row — a miss (full-life expiry or an asteroid stop)
+        // has no server-side effect, and the bolt visual is wholly client-derived. Land the
+        // outcome on the first tick at/after the analytic impact time (never this tick —
+        // the drain for `tick` already ran). Quantizing to the tick grid shifts the hit by
+        // <1 tick vs the old wall-clock scheduler, and keeps resolution inside the sim's
+        // own transaction in deterministic order.
+        if (outcome != ShotOutcomeKind.None)
         {
-            ScheduledId = 0,
-            ScheduledAt = ctx.Timestamp + TimeDuration.FromSeconds(bestT),
-            ProjectileId = projectileId,
-            Kind = outcome,
-            TargetId = targetId,
-            Damage = weapon.Damage,
-        });
+            uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
+            ctx.Db.ShotResolution.Insert(new ShotResolution
+            {
+                ShotId = 0,
+                ResolveAtTick = tick + resolveTicks,
+                Kind = outcome,
+                TargetId = targetId,
+                Damage = weapon.Damage,
+            });
+        }
 
         return tick;
     }
@@ -267,32 +242,35 @@ public static partial class Module
         return t <= maxT;
     }
 
-    // Fires once at the analytically-resolved moment for one shot (see TryFire). Deletes the
-    // now-purely-visual Projectile row and applies the precomputed outcome. Targets that no
-    // longer exist (already destroyed/docked by the time the shot would have arrived) are
-    // silently ignored.
-    [SpacetimeDB.Reducer]
-    public static void ResolveShot(ReducerContext ctx, ShotResolution sr)
+    // Apply every shot outcome that lands on `tick` (computed analytically at fire time in
+    // TryFire). Runs at the top of SimulateTick — ONE transaction resolves all due shots,
+    // instead of one scheduled reducer transaction per bolt. Targets that no longer exist
+    // (already destroyed/docked by the time the shot would have arrived) are silently ignored.
+    private static void ResolveDueShots(ReducerContext ctx, uint tick)
     {
-        ctx.Db.Projectile.ProjectileId.Delete(sr.ProjectileId);
-
-        switch (sr.Kind)
+        foreach (var sr in ctx.Db.ShotResolution.ResolveAtTick.Filter(tick).ToList())
         {
-            case ShotOutcomeKind.Ship:
-                ApplyShipDamage(ctx, sr.TargetId, sr.Damage);
-                break;
-            case ShotOutcomeKind.Base:
-                if (ctx.Db.Base.BaseId.Find(sr.TargetId) is Base b)
-                    ApplyBaseDamage(ctx, new List<Base> { b }, new Dictionary<ulong, float> { [b.BaseId] = sr.Damage });
-                break;
+            switch (sr.Kind)
+            {
+                case ShotOutcomeKind.Ship:
+                    ApplyShipDamage(ctx, sr.TargetId, sr.Damage, tick);
+                    break;
+                case ShotOutcomeKind.Base:
+                    if (ctx.Db.Base.BaseId.Find(sr.TargetId) is Base b)
+                        ApplyBaseDamage(ctx, new List<Base> { b }, new Dictionary<ulong, float> { [b.BaseId] = sr.Damage });
+                    break;
+            }
+
+            ctx.Db.ShotResolution.ShotId.Delete(sr.ShotId);
         }
     }
 
     // Apply hull damage to a single ship and resolve death (pod/PIG/player dispatch),
     // mirroring SimulateTick's per-ship damage + death pass for Pass C collisions. Used
-    // by ResolveShot for analytically-resolved shot hits, which land outside SimulateTick's
-    // own ship loop. A target that no longer exists (already destroyed/docked) is a no-op.
-    private static void ApplyShipDamage(ReducerContext ctx, ulong shipId, float dmg)
+    // by ResolveDueShots for analytically-resolved shot hits, which land outside
+    // SimulateTick's own ship loop. A target that no longer exists (already destroyed/
+    // docked) is a no-op. `tick` is the in-flight sim tick (Match.Tick is stale mid-step).
+    private static void ApplyShipDamage(ReducerContext ctx, ulong shipId, float dmg, uint tick)
     {
         if (ctx.Db.Ship.ShipId.Find(shipId) is not Ship s)
             return;
@@ -300,7 +278,6 @@ public static partial class Module
         s.Health -= dmg;
         if (s.Health <= 0f)
         {
-            uint tick = ctx.Db.Match.Id.Find(0)?.Tick ?? 0;
             if (s.IsPod)
                 KillShip(ctx, s);
             else if (s.IsPig)

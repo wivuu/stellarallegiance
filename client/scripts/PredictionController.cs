@@ -37,7 +37,7 @@ public partial class PredictionController : Node3D
 
 	// A shot the prediction step just fired, in Godot space, for the renderer to
 	// spawn an immediate ghost projectile.
-	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; }
+	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; public float LifeSec; }
 
 	private struct Entry
 	{
@@ -139,9 +139,9 @@ public partial class PredictionController : Node3D
 
 	// One fixed-dt prediction step for the given input + client tick. Returns a
 	// PredictedShot when the fire gate fires this tick (else null), so the renderer
-	// can spawn an immediate muzzle-predicted projectile. The gate mirrors the
-	// server's exactly (same tick space, FireInterval, muzzle math), so each ghost
-	// corresponds 1:1 to an authoritative Projectile the server later spawns.
+	// can spawn the bolt immediately. The gate mirrors the server's exactly (same tick
+	// space, FireInterval, muzzle math), so the local bolt matches the shot the server
+	// resolves — there is no authoritative Projectile row to wait for anymore.
 	public PredictedShot? Step(ShipInputState input, uint clientTick)
 	{
 		_prevState = _state;
@@ -159,9 +159,9 @@ public partial class PredictionController : Node3D
 			_buffer.RemoveRange(0, _buffer.Count - BufferLen);
 		_tickTimer = 0;
 
-		// Muzzle + weapon now come from data (M3): the ship's primary Weapon hardpoint and
-		// the WeaponDef it names — the SAME rows the server's TryFire reads, so each ghost
-		// corresponds 1:1 to the authoritative Projectile. No def / no weapon hardpoint (e.g.
+		// Muzzle + weapon come from data (M3): the ship's primary Weapon hardpoint and
+		// the WeaponDef it names — the SAME rows the server's TryFire reads, so the local
+		// bolt matches the shot the server resolves. No def / no weapon hardpoint (e.g.
 		// a pod) ⇒ the server won't fire either, so we predict nothing.
 		if (input.Firing
 			&& _defs.TryGetWeapon((byte)_class, out var hp, out var weapon)
@@ -183,7 +183,12 @@ public partial class PredictionController : Node3D
 			Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick);
 			Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
 			Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
-			return new PredictedShot { Pos = ShipMath.ToGodot(mp), Vel = ShipMath.ToGodot(mv) };
+			return new PredictedShot
+			{
+				Pos = ShipMath.ToGodot(mp),
+				Vel = ShipMath.ToGodot(mv),
+				LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
+			};
 		}
 		return null;
 	}

@@ -60,13 +60,13 @@
     "semantic_hash": "840f43e46d5bb113fb2a4379e19559be"
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781290306.8019447,
-    "ast_hash": "cb549e3efc27b435bc3093c086d85d9f",
+    "mtime": 1781181928.126196,
+    "ast_hash": "0cc6f112c57b4c1e4879c90da67bb285",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
-    "mtime": 1781290306.8025975,
-    "ast_hash": "15971304f7c57b9922d13c5b0060565a",
+    "mtime": 1780753450.3530416,
+    "ast_hash": "14969e69f43e4bcd4a58121e0662d38d",
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781290306.8030548,
-    "ast_hash": "19366f058328ec9b1fde084d65b3a2de",
+    "mtime": 1781181928.1265411,
+    "ast_hash": "a5874f85f3f2e2321f3113411868fd2b",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781290306.8039055,
-    "ast_hash": "c449dc85982bc34ea52dc5d4830a3677",
+    "mtime": 1781181928.1270905,
+    "ast_hash": "06a441e930a20a21982d473c7e9cf0f9",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781290306.8054316,
-    "ast_hash": "251feae923a8b85428745c910c614d11",
+    "mtime": 1781209624.0971844,
+    "ast_hash": "34ac6e5e5276f99a6471cb78df5b7b07",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781290306.8076186,
-    "ast_hash": "3dd2cc74ecb02fb032f297d6407312e3",
+    "mtime": 1781209651.9111838,
+    "ast_hash": "d8aa3df5405725dee87eda426d9cf423",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "module/spacetimedb/Weapons.cs": {
-    "mtime": 1781290306.8114393,
-    "ast_hash": "40d2766b0603ee589085d2c5134f96fd",
+    "mtime": 1781209598.6980355,
+    "ast_hash": "dbb8ea2cc417acc7f76f477abef66d40",
     "semantic_hash": ""
   },
   "client/scripts/DefRegistry.cs": {

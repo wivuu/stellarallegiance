@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using SpacetimeDB.Types;
+using StellarAllegiance.Shared;
 
 // Maps DB rows -> scene nodes. For T2 only the static world (bases + asteroids)
 // is rendered; ships/projectiles arrive in later tasks. The client never
@@ -32,11 +33,6 @@ public partial class WorldRenderer : Node3D
 	private Node3D _alephs = null!;
 	private Node3D _effects = null!;   // transient FX (explosions, hit flashes); self-freeing
 
-	// How long a predicted ghost shot lives unmatched before it's culled. Covers
-	// prediction lead + round-trip to the authoritative row (~0.2s); a never-matched
-	// ghost (rare mispredicted fire) disappears after this.
-	private const double GhostTtl = 0.6;
-
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 
 	// Floating damage bar per base, keyed by BaseId. Hidden at full health; it appears,
@@ -57,8 +53,17 @@ public partial class WorldRenderer : Node3D
 	// Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
 	private readonly Dictionary<ulong, (Node3D Node, Vector3 Axis, float Speed)> _asteroidSpins = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
-	private readonly Dictionary<ulong, ProjectileView> _projectileNodes = new();
 	private readonly Dictionary<ulong, Node3D> _alephNodes = new();
+
+	// Every live bolt, all client-synthesized (no Projectile rows exist): the local ship's
+	// from fire prediction, remote ships' from LastFireTick advancing on their row. Culled
+	// on TTL expiry (_Process) or on visually striking a ship (CheckBoltImpacts).
+	private readonly List<ProjectileView> _bolts = new();
+
+	// Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
+	// circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
+	// TTL where the SERVER's analytic solve would have stopped it on a rock.
+	private const float AsteroidCollisionScale = 0.82f;
 
 	// Sector partitioning. The world is split into sectors (see module Sector/Aleph
 	// tables); the client subscribes to everything but only SHOWS objects in the
@@ -76,17 +81,10 @@ public partial class WorldRenderer : Node3D
 	public Vector3 LocalSectorCenter =>
 		_sectors.TryGetValue(_localSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
 
-	// Client-side muzzle prediction (own shots): ghosts spawned on fire, in FIFO
-	// fire order, each handed off to the matching authoritative row as it arrives.
-	private readonly List<ProjectileView> _predictedShots = new();
 	private byte? _localTeam;
 
 	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
 	private readonly List<RemoteShip> _enemyScratch = new();
-
-	// Scratch for the per-frame client-side hit-spark pass: ids of bolts that visually struck a
-	// ship this frame, collected then consumed after iteration (no mutating the dict mid-loop).
-	private readonly List<ulong> _projHitScratch = new();
 
 	// Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
 	// VisualHitRadius of a ship's rendered centre, but not until it has travelled MuzzleClearance
@@ -228,10 +226,9 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Ship.OnInsert += OnShipInsert;
 		conn.Db.Ship.OnUpdate += OnShipUpdate;
 		conn.Db.Ship.OnDelete += OnShipDelete;
-		conn.Db.Projectile.OnInsert += OnProjectileInsert;
-		// No OnUpdate: projectiles are constant-velocity, so the client fire-and-forgets
-		// the spawn line (see ProjectileView). Per-tick position updates are ignored.
-		conn.Db.Projectile.OnDelete += OnProjectileDelete;
+		// No projectile callbacks: there is no Projectile table. Bolts are synthesized —
+		// remote ships' in OnShipUpdate (LastFireTick advanced), the local ship's from
+		// fire prediction (SpawnLocalBolt).
 		conn.Db.Match.OnInsert += (_, row) => OnMatch(row);
 		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
 		// Sectors define the boundary radius; alephs are the warp funnels. Both are
@@ -616,6 +613,10 @@ public partial class WorldRenderer : Node3D
 				}
 				break;
 			case RemoteShip rs:
+				// LastFireTick advanced → this ship fired since the last update we saw.
+				// Synthesize the bolt locally (no Projectile rows are replicated).
+				if (newRow.LastFireTick != oldRow.LastFireTick && newRow.LastFireTick != 0 && !newRow.IsPod)
+					SpawnBoltFor(newRow);
 				rs.OnAuthoritative(newRow);
 				SetNodeSector(rs, newRow.SectorId);   // a remote ship may have warped in/out
 				break;
@@ -648,10 +649,6 @@ public partial class WorldRenderer : Node3D
 		if (local)
 		{
 			LocalShip = null;
-			// Drop unmatched ghosts so a respawn's FIFO never adopts a stale one.
-			foreach (var g in _predictedShots)
-				g.QueueFree();
-			_predictedShots.Clear();
 			// Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
 			// menu reopens). A local COMBAT ship's death instead ejects an escape pod the
 			// SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
@@ -705,32 +702,49 @@ public partial class WorldRenderer : Node3D
 		return false;
 	}
 
-	// ---- Projectile -----------------------------------------------------
+	// ---- Bolts (client-synthesized projectile visuals) -------------------
 
-	private void OnProjectileInsert(EventContext ctx, Projectile row)
+	// A REMOTE ship's row showed a new LastFireTick: rebuild the shot the server fired —
+	// the exact mirror of the module's TryFire muzzle math. The spread direction is
+	// deterministic in (ShipId, fire tick) via the shared FlightModel.SpreadDirection, so
+	// every client and the server derive the same bolt from the same replicated row.
+	private void SpawnBoltFor(Ship row)
 	{
-		if (_projectileNodes.ContainsKey(row.ProjectileId))
+		if (!_defs.TryGetWeapon((byte)row.Class, out var hp, out var weapon))
 			return;
 
-		// Own shots: hand the oldest predicted ghost off to this authoritative row
-		// instead of spawning a second node (the ghost is already in flight).
-		if (_localTeam is byte lt && row.Team == lt && _predictedShots.Count > 0)
-		{
-			var ghost = _predictedShots[0];
-			_predictedShots.RemoveAt(0);
-			ghost.AttachAuthoritative(row.ProjectileId);
-			ghost.Name = $"Projectile_{row.ProjectileId}";
-			SetNodeSector(ghost, row.SectorId);
-			_projectileNodes[row.ProjectileId] = ghost;
-			return;
-		}
+		var state = ShipMath.StateFromRow(row);
 
-		var pv = new ProjectileView { Name = $"Projectile_{row.ProjectileId}" };
+		// Under server catch-up, one row update can span several sim ticks; the row's
+		// position is at LastInputTick while the shot left at LastFireTick. Rewind the
+		// ship along its (constant-velocity approximation) path to the fire tick so the
+		// muzzle sits where the ship was when it fired.
+		uint ticksPast = row.LastInputTick > row.LastFireTick
+			? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
+		Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
+
+		Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
+		Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick);
+		Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
+		Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
+
+		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), row.SectorId,
+			weapon.ProjectileLifeTicks * FlightModel.Dt, ShotMaskLeadSec());
+	}
+
+	// The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
+	// rendering as a remote bolt, no masking lead (prediction is already now-correct).
+	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, float lifeSec)
+		=> AddBolt(pos, vel, _localSector, lifeSec, 0f);
+
+	private void AddBolt(Vector3 pos, Vector3 vel, uint sector, float lifeSec, float leadSec)
+	{
+		var pv = new ProjectileView { Name = "Bolt" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(row, ShotMaskLeadSec());
-		SetNodeSector(pv, row.SectorId);
-		_projectileNodes[row.ProjectileId] = pv;
+		pv.Initialize(pos, vel, ClipBoltTtl(sector, pos, vel, lifeSec), leadSec);
+		SetNodeSector(pv, sector);
+		_bolts.Add(pv);
 	}
 
 	// How far ahead to render an enemy/remote shot to mask its ~1 RTT-late pop-in
@@ -746,16 +760,50 @@ public partial class WorldRenderer : Node3D
 		return Mathf.Clamp(oneWayMs, 0f, 250f) / 1000f;
 	}
 
-	// Spawn an immediate ghost for the local player's own shot (muzzle prediction),
-	// rendered identically to an authoritative projectile and queued in fire order.
-	public void SpawnPredictedProjectile(byte team, Vector3 pos, Vector3 vel)
+	// Clip a bolt's flight time at the first STATIC obstruction (asteroid / enemy-or-any
+	// base) along its line, so the visual stops at a rock the way the server's analytic
+	// solve does. Static geometry is fully replicated, so this is a spawn-time pass over
+	// the local caches — ships stay dynamic and are handled by the per-frame spark sweep.
+	private float ClipBoltTtl(uint sector, Vector3 pos, Vector3 vel, float ttl)
 	{
-		var pv = new ProjectileView { Name = "Projectile_predicted" };
-		_projectiles.AddChild(pv);
-		pv.AddChild(NewProjectileMesh());
-		pv.InitializePredicted(pos, vel);
-		SetNodeSector(pv, _localSector);   // own shot is in our sector; hidden if we warp away
-		_predictedShots.Add(pv);
+		var conn = _cm.Conn;
+		if (conn == null)
+			return ttl;
+		foreach (var a in conn.Db.Asteroid.Iter())
+		{
+			if (a.SectorId != sector)
+				continue;
+			ClipSphere(pos, vel, new Vector3(a.PosX, a.PosY, a.PosZ),
+				a.Radius * AsteroidCollisionScale, ref ttl);
+		}
+		float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+		foreach (var b in conn.Db.Base.Iter())
+		{
+			if (b.SectorId != sector)
+				continue;
+			ClipSphere(pos, vel, new Vector3(b.PosX, b.PosY, b.PosZ), baseR, ref ttl);
+		}
+		return ttl;
+	}
+
+	// Smallest positive entry time of the line pos+vel·t into a static sphere, if it is
+	// within the current ttl — the client-side mirror of the module's FirstEntryTime
+	// specialized to a static target.
+	private static void ClipSphere(Vector3 pos, Vector3 vel, Vector3 center, float radius, ref float ttl)
+	{
+		Vector3 d = center - pos;
+		float a = vel.LengthSquared();
+		if (a < 1e-6f)
+			return;
+		float b = -2f * d.Dot(vel);
+		float c = d.LengthSquared() - radius * radius;
+		if (c <= 0f) { ttl = 0f; return; }   // spawned inside (e.g. muzzle against the rock)
+		float disc = b * b - 4f * a * c;
+		if (disc < 0f)
+			return;
+		float t = (-b - Mathf.Sqrt(disc)) / (2f * a);
+		if (t > 0f && t < ttl)
+			ttl = t;
 	}
 
 	private MeshInstance3D NewProjectileMesh() => new MeshInstance3D
@@ -769,7 +817,7 @@ public partial class WorldRenderer : Node3D
 		CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 	};
 
-	// Cull predicted ghosts that were never matched to an authoritative row.
+	// Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
 	public override void _Process(double delta)
 	{
 		// Death-cam expiry: once the brief hold on the death point is over, pull the world
@@ -794,15 +842,13 @@ public partial class WorldRenderer : Node3D
 				node.Rotate(axis, speed * fdelta);
 		}
 
-		if (_predictedShots.Count == 0)
-			return;
-		double now = Time.GetTicksMsec() / 1000.0;
-		for (int i = _predictedShots.Count - 1; i >= 0; i--)
+		// Cull bolts whose (obstruction-clipped) flight life has elapsed.
+		for (int i = _bolts.Count - 1; i >= 0; i--)
 		{
-			if (_predictedShots[i].GhostExpired(now, GhostTtl))
+			if (_bolts[i].Expired)
 			{
-				_predictedShots[i].QueueFree();
-				_predictedShots.RemoveAt(i);
+				_bolts[i].QueueFree();
+				_bolts.RemoveAt(i);
 			}
 		}
 	}
@@ -829,18 +875,18 @@ public partial class WorldRenderer : Node3D
 
 	// Purely client-side hit sparks: flash where a rendered bolt visually meets a ship this frame,
 	// then consume the bolt so it stops on impact. Cosmetic and team-agnostic (friendly fire sparks
-	// like anything else); the server still authoritatively resolves damage and deletes the row.
-	// Only authoritative bolts are tested (own predicted ghosts haven't cleared their muzzle yet
-	// and become authoritative long before reaching a target). Visibility gates both bolt and ship
-	// to the local sector — sectors share world coordinates, so this also avoids cross-sector hits.
+	// like anything else); the server resolved the real damage analytically at fire time. The
+	// muzzle-clearance gate keeps a bolt from sparking on the ship that fired it. Visibility gates
+	// both bolt and ship to the local sector — sectors share world coordinates, so this also
+	// avoids cross-sector hits.
 	private void CheckBoltImpacts(double delta)
 	{
-		if (_projectileNodes.Count == 0 || _shipNodes.Count == 0)
+		if (_bolts.Count == 0 || _shipNodes.Count == 0)
 			return;
 
-		_projHitScratch.Clear();
-		foreach (var (id, pv) in _projectileNodes)
+		for (int i = _bolts.Count - 1; i >= 0; i--)
 		{
+			var pv = _bolts[i];
 			if (!pv.Visible)
 				continue;
 			Vector3 b = pv.GlobalPosition;
@@ -857,14 +903,12 @@ public partial class WorldRenderer : Node3D
 				if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
 				{
 					SpawnEffect(new HitFlash(), hit, _localSector);
-					_projHitScratch.Add(id);
+					pv.QueueFree();
+					_bolts.RemoveAt(i);
 					break;
 				}
 			}
 		}
-		foreach (var id in _projHitScratch)
-			if (_projectileNodes.Remove(id, out var pv))
-				pv.QueueFree();
 	}
 
 	// Closest point to p on segment [a, b], clamped to the endpoints.
@@ -875,15 +919,6 @@ public partial class WorldRenderer : Node3D
 		if (len2 < 1e-6f)
 			return a;
 		return a + ab * Mathf.Clamp((p - a).Dot(ab) / len2, 0f, 1f);
-	}
-
-	// A projectile leaving the table just frees its node. The hit SPARK is no longer driven from
-	// this server delete (its timing/position couldn't match what the player sees); it's a purely
-	// client-side effect spawned where the rendered bolt visually meets a ship (see _Process).
-	private void OnProjectileDelete(EventContext ctx, Projectile row)
-	{
-		if (_projectileNodes.Remove(row.ProjectileId, out var pv))
-			pv.QueueFree();
 	}
 
 	// Team/PIG hull material for a ship's placeholder mesh. The ShipModelLoader (M4)
