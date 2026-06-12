@@ -158,24 +158,9 @@ public static partial class Module
         var outcome = ShotOutcomeKind.None;
         ulong targetId = 0;
 
-        // Enemy ships in the same sector: closest-approach-within-hit-radius against each
-        // target's CURRENT velocity (a constant-velocity prediction — same approximation
-        // PigLead already makes for AI aim). Index seek on SectorId, not a full table scan.
-        foreach (var s in ctx.Db.Ship.SectorId.Filter(ship.SectorId))
-        {
-            if (s.Team == ship.Team) continue;
-            float r = HitRadius(s) + ProjectileRadius;
-            if (FirstEntryTime(mp, mv, new Vec3(s.PosX, s.PosY, s.PosZ), new Vec3(s.VelX, s.VelY, s.VelZ), r, bestT, out float t)
-                && t < bestT)
-            {
-                bestT = t;
-                outcome = ShotOutcomeKind.Ship;
-                targetId = s.ShipId;
-            }
-        }
-
-        // Enemy bases in the same sector (static). Both player and PIG fire erode an
-        // enemy base, mirroring the old Pass B behaviour.
+        // Enemy bases in the same sector (static, tiny table — 2 rows). Both player and PIG
+        // fire erode an enemy base, mirroring the old Pass B behaviour. Checked first so it
+        // can shrink bestT before the ray walk below.
         foreach (var b in ctx.Db.Base.Iter())
         {
             if (b.SectorId != ship.SectorId || b.Team == ship.Team) continue;
@@ -189,17 +174,51 @@ public static partial class Module
             }
         }
 
-        // Asteroids in the same sector (static, no damage — just blocks the shot).
-        // Index seek on SectorId, not a full table scan.
-        foreach (var a in ctx.Db.Asteroid.SectorId.Filter(ship.SectorId))
+        // Enemy ships and asteroids: instead of scanning every ship/asteroid in the sector,
+        // walk only the spatial-grid cells the shot's straight-line path actually crosses
+        // (CellsAlongRay) and test the candidates bucketed there (ShipGridForSector /
+        // AsteroidGridForSector — same per-sector grids PIG steering and asteroid collision
+        // already use). Ships use their CURRENT velocity as a constant-velocity prediction
+        // for the cell lookup AND the intercept solve (same approximation PigLead already
+        // makes for AI aim) — a hard maneuver after firing can shift a ship out of the
+        // sampled corridor, same caveat as the old per-shot full scan accepted.
+        var shipGrid = ShipGridForSector(ctx, tick, ship.SectorId);
+        var asteroidGrid = AsteroidGridForSector(ctx, ship.SectorId);
+        var seenShips = new HashSet<ulong>();
+        var seenAsteroids = new HashSet<ulong>();
+
+        foreach (var cell in CellsAlongRay(mp, mv, bestT))
         {
-            float r = a.Radius * AsteroidCollisionScale + ProjectileRadius;
-            if (FirstEntryTime(mp, mv, new Vec3(a.PosX, a.PosY, a.PosZ), new Vec3(0f, 0f, 0f), r, bestT, out float t)
-                && t < bestT)
+            if (shipGrid.TryGetValue(cell, out var shipsInCell))
             {
-                bestT = t;
-                outcome = ShotOutcomeKind.None;
-                targetId = 0;
+                foreach (var s in shipsInCell)
+                {
+                    if (s.Team == ship.Team || !seenShips.Add(s.ShipId)) continue;
+                    float r = HitRadius(s) + ProjectileRadius;
+                    if (FirstEntryTime(mp, mv, new Vec3(s.PosX, s.PosY, s.PosZ), new Vec3(s.VelX, s.VelY, s.VelZ), r, bestT, out float t)
+                        && t < bestT)
+                    {
+                        bestT = t;
+                        outcome = ShotOutcomeKind.Ship;
+                        targetId = s.ShipId;
+                    }
+                }
+            }
+
+            if (asteroidGrid.TryGetValue(cell, out var asteroidsInCell))
+            {
+                foreach (var a in asteroidsInCell)
+                {
+                    if (!seenAsteroids.Add(a.AsteroidId)) continue;
+                    float r = a.Radius * AsteroidCollisionScale + ProjectileRadius;
+                    if (FirstEntryTime(mp, mv, new Vec3(a.PosX, a.PosY, a.PosZ), new Vec3(0f, 0f, 0f), r, bestT, out float t)
+                        && t < bestT)
+                    {
+                        bestT = t;
+                        outcome = ShotOutcomeKind.None;
+                        targetId = 0;
+                    }
+                }
             }
         }
 

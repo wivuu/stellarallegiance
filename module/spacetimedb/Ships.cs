@@ -21,7 +21,6 @@ public partial struct Ship
     public ulong ShipId;
     public Identity Owner;
     public byte Team;           // denormalized from Player for fast sim checks
-    [SpacetimeDB.Index.BTree]
     public uint SectorId;       // which sector this ship is flying in (partitions the world)
     public ShipClass Class;
     public float PosX;

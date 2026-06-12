@@ -113,7 +113,6 @@ public partial struct Asteroid
     [PrimaryKey]
     [AutoInc]
     public ulong AsteroidId;
-    [SpacetimeDB.Index.BTree]
     public uint SectorId;       // which sector this asteroid belongs to
     public float PosX;
     public float PosY;
@@ -237,10 +236,10 @@ public static partial class Module
     private const int  MaxCatchupSteps = 8;               // cap sub-steps/call (anti-spiral)
 
     // Combat tuning (server-only; clients just render the resulting Projectile rows).
-    private const float ProjectileSpeed = 700f;      // u/s muzzle speed (added to ship velocity);
-                                                     // ~4× Scout MaxSpeed so guns out-range ships
-                                                     // under the Allegiance-native speeds (M0 calibration)
-    private const uint  ProjectileLifeTicks = 50;    // ~2.5 s lifespan, then culled
+    private const float ProjectileSpeed = 200f;      // u/s muzzle speed (added to ship velocity);
+                                                     // 700 * 0.85 — 15% slower than the original M0 calibration
+    private const uint  ProjectileLifeTicks = 16;    // ~1.45 s lifespan, then culled — combined with the
+                                                     // 15% speed cut this halves max shot range (1750u -> ~863u)
     private const float NoseOffset = 3f;             // spawn this far ahead of ship center
     private const float ProjectileRadius = 1f;       // projectile hit sphere
     private const float ShipRadius = 3f;             // ship hit / collision sphere
@@ -562,8 +561,10 @@ public static partial class Module
     private static readonly Dictionary<uint, Dictionary<(int, int, int), List<Asteroid>>> _asteroidGrid = new();
     private static readonly Dictionary<(int, int, int), List<Asteroid>> _noGrid = new();
 
-    // The grid cell index for one world coordinate.
-    private static int AsteroidCellOf(float v) => (int)MathF.Floor(v / AsteroidGridCell);
+    // The grid cell index for one world coordinate. Shared by the asteroid grid above and
+    // the per-tick ship grid below (and the shot ray-cell walk in Weapons.cs) — one uniform
+    // cell size for all spatial broad-phasing.
+    private static int GridCellOf(float v) => (int)MathF.Floor(v / AsteroidGridCell);
 
     private static Dictionary<(int, int, int), List<Asteroid>> AsteroidGridForSector(ReducerContext ctx, uint sector)
     {
@@ -574,7 +575,7 @@ public static partial class Module
             {
                 if (!_asteroidGrid.TryGetValue(a.SectorId, out var grid))
                     _asteroidGrid[a.SectorId] = grid = new Dictionary<(int, int, int), List<Asteroid>>();
-                var key = (AsteroidCellOf(a.PosX), AsteroidCellOf(a.PosY), AsteroidCellOf(a.PosZ));
+                var key = (GridCellOf(a.PosX), GridCellOf(a.PosY), GridCellOf(a.PosZ));
                 if (!grid.TryGetValue(key, out var cell))
                     grid[key] = cell = new List<Asteroid>();
                 cell.Add(a);
@@ -592,7 +593,7 @@ public static partial class Module
     private static bool HitsAsteroid(ReducerContext ctx, uint sector, float x, float y, float z, float extraRadius)
     {
         var grid = AsteroidGridForSector(ctx, sector);
-        int cx = AsteroidCellOf(x), cy = AsteroidCellOf(y), cz = AsteroidCellOf(z);
+        int cx = GridCellOf(x), cy = GridCellOf(y), cz = GridCellOf(z);
         for (int gx = cx - 1; gx <= cx + 1; gx++)
         for (int gy = cy - 1; gy <= cy + 1; gy++)
         for (int gz = cz - 1; gz <= cz + 1; gz++)
@@ -617,7 +618,7 @@ public static partial class Module
     private static Ship ResolveAsteroidCollisions(ReducerContext ctx, Ship s)
     {
         var grid = AsteroidGridForSector(ctx, s.SectorId);
-        int cx = AsteroidCellOf(s.PosX), cy = AsteroidCellOf(s.PosY), cz = AsteroidCellOf(s.PosZ);
+        int cx = GridCellOf(s.PosX), cy = GridCellOf(s.PosY), cz = GridCellOf(s.PosZ);
         for (int gx = cx - 1; gx <= cx + 1; gx++)
         for (int gy = cy - 1; gy <= cy + 1; gy++)
         for (int gz = cz - 1; gz <= cz + 1; gz++)
@@ -628,6 +629,62 @@ public static partial class Module
                 s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
         }
         return s;
+    }
+
+    // ---- Per-tick ship spatial grid (broad-phase for shot resolution) -
+    // Unlike the asteroid field, ships move every tick, so this grid is rebuilt once per
+    // SimulateTick (lazily, on the first shot fired that tick) from a single Iter() snapshot
+    // — O(ships) total, vs. the O(firing_ships x ships_in_sector) cost of re-querying per shot.
+    // TryFire then walks only the cells along EACH SHOT'S flight path (see CellsAlongRay)
+    // instead of every ship in the sector, narrowing the candidate set to roughly the shot's
+    // corridor regardless of how many ships/asteroids are elsewhere in the (large) sector.
+    private static uint _shipGridTick = uint.MaxValue;
+    private static readonly Dictionary<uint, Dictionary<(int, int, int), List<Ship>>> _shipGrid = new();
+    private static readonly Dictionary<(int, int, int), List<Ship>> _noShipGrid = new();
+
+    private static Dictionary<(int, int, int), List<Ship>> ShipGridForSector(ReducerContext ctx, uint tick, uint sector)
+    {
+        if (_shipGridTick != tick)
+        {
+            _shipGrid.Clear();
+            foreach (var s in ctx.Db.Ship.Iter())
+            {
+                if (!_shipGrid.TryGetValue(s.SectorId, out var grid))
+                    _shipGrid[s.SectorId] = grid = new Dictionary<(int, int, int), List<Ship>>();
+                var key = (GridCellOf(s.PosX), GridCellOf(s.PosY), GridCellOf(s.PosZ));
+                if (!grid.TryGetValue(key, out var cell))
+                    grid[key] = cell = new List<Ship>();
+                cell.Add(s);
+            }
+            _shipGridTick = tick;
+        }
+        return _shipGrid.TryGetValue(sector, out var g) ? g : _noShipGrid;
+    }
+
+    // Every grid cell (plus its 26 neighbours, for the same radius-coverage reason as
+    // HitsAsteroid) that a shot travelling from `start` at constant velocity `vel` passes
+    // through over [0, maxT]. Sampled at ~AsteroidGridCell intervals along the path and
+    // de-duplicated — a shot's corridor through a sector this size is a small fraction of
+    // the sector's total cells, so this is the "filter to the quadrants the shot crosses"
+    // narrowing without needing a DB-side composite index.
+    private static IEnumerable<(int, int, int)> CellsAlongRay(Vec3 start, Vec3 vel, float maxT)
+    {
+        var seen = new HashSet<(int, int, int)>();
+        float dist = vel.Length() * maxT;
+        int steps = Math.Max(1, (int)MathF.Ceiling(dist / AsteroidGridCell));
+        for (int i = 0; i <= steps; i++)
+        {
+            Vec3 p = start + vel * (maxT * i / steps);
+            int cx = GridCellOf(p.X), cy = GridCellOf(p.Y), cz = GridCellOf(p.Z);
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                var key = (cx + dx, cy + dy, cz + dz);
+                if (seen.Add(key))
+                    yield return key;
+            }
+        }
     }
 
     // ---- Lifecycle ----------------------------------------------------

@@ -135,13 +135,13 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781208549.9438114,
-    "ast_hash": "17185745aa853c81d3c1d3ee2fe61eab",
+    "mtime": 1781209624.0971844,
+    "ast_hash": "34ac6e5e5276f99a6471cb78df5b7b07",
     "semantic_hash": ""
   },
   "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781208150.2178316,
-    "ast_hash": "2146ff7360b5e07ef30a1ae5bd899714",
+    "mtime": 1781209651.9111838,
+    "ast_hash": "d8aa3df5405725dee87eda426d9cf423",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   "module/spacetimedb/Ships.cs": {
-    "mtime": 1781208544.2680862,
-    "ast_hash": "c4f4e63ac3559d13fd3b1106e65839b0",
+    "mtime": 1781209614.9986227,
+    "ast_hash": "107558e2985827ce333dda98ca97f81a",
     "semantic_hash": ""
   },
   "module/spacetimedb/Weapons.cs": {
-    "mtime": 1781208561.0193515,
-    "ast_hash": "208917685e9326d76a96f4854a3fb25e",
+    "mtime": 1781209598.6980355,
+    "ast_hash": "dbb8ea2cc417acc7f76f477abef66d40",
     "semantic_hash": ""
   },
   "client/scripts/DefRegistry.cs": {

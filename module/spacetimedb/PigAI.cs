@@ -958,7 +958,7 @@ public static partial class Module
         Vec3 steer = new Vec3(0f, 0f, 0f);
 
         var grid = AsteroidGridForSector(ctx, sector);
-        int cx = AsteroidCellOf(pos.X), cy = AsteroidCellOf(pos.Y), cz = AsteroidCellOf(pos.Z);
+        int cx = GridCellOf(pos.X), cy = GridCellOf(pos.Y), cz = GridCellOf(pos.Z);
         for (int gx = cx - 1; gx <= cx + 1; gx++)
         for (int gy = cy - 1; gy <= cy + 1; gy++)
         for (int gz = cz - 1; gz <= cz + 1; gz++)
