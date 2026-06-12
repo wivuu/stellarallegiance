@@ -278,5 +278,45 @@
     "mtime": 1781181928.1253903,
     "ast_hash": "78815890d0f96c6964c6198236d055ea",
     "semantic_hash": ""
+  },
+  "server/Net/ClientHub.cs": {
+    "mtime": 1781293772.2879517,
+    "ast_hash": "c782dfac9ad4fd405869eac7c6ff82d3",
+    "semantic_hash": ""
+  },
+  "server/Net/Protocol.cs": {
+    "mtime": 1781293666.7557275,
+    "ast_hash": "d7ab2d654474715152a4c6b52d91312f",
+    "semantic_hash": ""
+  },
+  "server/Program.cs": {
+    "mtime": 1781293717.2022133,
+    "ast_hash": "bc79b8b54b7cf0ffc8b908223ef10102",
+    "semantic_hash": ""
+  },
+  "server/Sim/Simulation.cs": {
+    "mtime": 1781293628.285326,
+    "ast_hash": "614031a2703437b907e3a232df394b1e",
+    "semantic_hash": ""
+  },
+  "server/Sim/World.cs": {
+    "mtime": 1781293551.2457829,
+    "ast_hash": "b2283828252eb571186498e02181f066",
+    "semantic_hash": ""
+  },
+  "server/SimServer.csproj": {
+    "mtime": 1781293512.7381802,
+    "ast_hash": "0cc3ebb036a0f51960a2f07feb44dff0",
+    "semantic_hash": ""
+  },
+  "tools/simbot/Program.cs": {
+    "mtime": 1781293746.8890684,
+    "ast_hash": "dbf4deff3bf20bcc1d2d54aa86b28376",
+    "semantic_hash": ""
+  },
+  "tools/simbot/SimBot.csproj": {
+    "mtime": 1781293726.1965697,
+    "ast_hash": "92735f97ca887a17ec2808de18e05640",
+    "semantic_hash": ""
   }
 }

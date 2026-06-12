@@ -898,7 +898,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 4,
+      "community": 10,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -907,7 +907,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 4,
+      "community": 10,
       "norm_label": "connectionoverlay"
     },
     {
@@ -916,7 +916,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 4,
+      "community": 10,
       "norm_label": "color"
     },
     {
@@ -925,7 +925,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 4,
+      "community": 10,
       "norm_label": "connectionmanager"
     },
     {
@@ -934,7 +934,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 4,
+      "community": 10,
       "norm_label": "label"
     },
     {
@@ -943,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 4,
+      "community": 10,
       "norm_label": "button"
     },
     {
@@ -952,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 4,
+      "community": 10,
       "norm_label": "double"
     },
     {
@@ -961,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 4,
+      "community": 10,
       "norm_label": ".init()"
     },
     {
@@ -970,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 4,
+      "community": 10,
       "norm_label": ".centered()"
     },
     {
@@ -979,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 4,
+      "community": 10,
       "norm_label": "._process()"
     },
     {
@@ -1843,7 +1843,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 4,
+      "community": 10,
       "norm_label": "control"
     },
     {
@@ -2113,7 +2113,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 4,
+      "community": 10,
       "norm_label": "minimap.cs"
     },
     {
@@ -2122,7 +2122,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 4,
+      "community": 10,
       "norm_label": "minimap"
     },
     {
@@ -2131,7 +2131,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 4,
+      "community": 10,
       "norm_label": "float"
     },
     {
@@ -2140,7 +2140,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 4,
+      "community": 10,
       "norm_label": "color"
     },
     {
@@ -2149,7 +2149,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 4,
+      "community": 10,
       "norm_label": "connectionmanager"
     },
     {
@@ -2158,7 +2158,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 4,
+      "community": 10,
       "norm_label": "worldrenderer"
     },
     {
@@ -2167,7 +2167,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L37",
       "id": "scripts_minimap_minimap_init",
-      "community": 4,
+      "community": 10,
       "norm_label": ".init()"
     },
     {
@@ -2176,7 +2176,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L45",
       "id": "scripts_minimap_minimap_process",
-      "community": 4,
+      "community": 10,
       "norm_label": "._process()"
     },
     {
@@ -2185,7 +2185,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L47",
       "id": "scripts_minimap_minimap_draw",
-      "community": 4,
+      "community": 10,
       "norm_label": "._draw()"
     },
     {
@@ -3435,7 +3435,7 @@
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L46",
-      "id": "ulong",
+      "id": "client_scripts_targetmarkers_cs_ulong",
       "community": 13,
       "norm_label": "ulong"
     },
@@ -4938,7 +4938,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L236",
-      "id": "long",
+      "id": "module_spacetimedb_lib_cs_long",
       "community": 0,
       "norm_label": "long"
     },
@@ -5091,7 +5091,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L384",
-      "id": "detrng",
+      "id": "module_spacetimedb_lib_cs_detrng",
       "community": 0,
       "norm_label": "detrng"
     },
@@ -5262,7 +5262,7 @@
       "file_type": "code",
       "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L671",
-      "id": "ienumerable",
+      "id": "module_spacetimedb_lib_cs_ienumerable",
       "community": 0,
       "norm_label": "ienumerable"
     },
@@ -6743,6 +6743,888 @@
       "norm_label": "start-client.sh script"
     },
     {
+      "label": "ClientHub.cs",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L1",
+      "id": "net_clienthub",
+      "community": 44,
+      "norm_label": "clienthub.cs"
+    },
+    {
+      "label": "ClientHub",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L14",
+      "id": "net_clienthub_clienthub",
+      "community": 44,
+      "norm_label": "clienthub"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L18",
+      "id": "server_net_clienthub_cs_int",
+      "community": 44,
+      "norm_label": "int"
+    },
+    {
+      "label": "Client",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L22",
+      "id": "net_clienthub_client",
+      "community": 44,
+      "norm_label": "client"
+    },
+    {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L25",
+      "id": "server_net_clienthub_cs_byte",
+      "community": 44,
+      "norm_label": "byte"
+    },
+    {
+      "label": "WebSocket",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L26",
+      "id": "websocket",
+      "community": 44,
+      "norm_label": "websocket"
+    },
+    {
+      "label": "Channel",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L27",
+      "id": "channel",
+      "community": 44,
+      "norm_label": "channel"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L28",
+      "id": "server_net_clienthub_cs_bool",
+      "community": 44,
+      "norm_label": "bool"
+    },
+    {
+      "label": "ulong",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L29",
+      "id": "server_net_clienthub_cs_ulong",
+      "community": 44,
+      "norm_label": "ulong"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L30",
+      "id": "server_net_clienthub_cs_list",
+      "community": 44,
+      "norm_label": "list"
+    },
+    {
+      "label": "Simulation",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L33",
+      "id": "simulation",
+      "community": 44,
+      "norm_label": "simulation"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L34",
+      "id": "concurrentdictionary",
+      "community": 44,
+      "norm_label": "concurrentdictionary"
+    },
+    {
+      "label": "long",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L37",
+      "id": "server_net_clienthub_cs_long",
+      "community": 44,
+      "norm_label": "long"
+    },
+    {
+      "label": ".TakeBytesSent()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L40",
+      "id": "net_clienthub_clienthub_takebytessent",
+      "community": 44,
+      "norm_label": ".takebytessent()"
+    },
+    {
+      "label": ".HandleConnection()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "id": "net_clienthub_clienthub_handleconnection",
+      "community": 44,
+      "norm_label": ".handleconnection()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "id": "cancellationtoken",
+      "community": 44,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "id": "task",
+      "community": 44,
+      "norm_label": "task"
+    },
+    {
+      "label": ".ReceiveLoop()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L71",
+      "id": "net_clienthub_clienthub_receiveloop",
+      "community": 44,
+      "norm_label": ".receiveloop()"
+    },
+    {
+      "label": ".SendLoop()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "id": "net_clienthub_clienthub_sendloop",
+      "community": 44,
+      "norm_label": ".sendloop()"
+    },
+    {
+      "label": ".AfterStep()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L128",
+      "id": "net_clienthub_clienthub_afterstep",
+      "community": 44,
+      "norm_label": ".afterstep()"
+    },
+    {
+      "label": ".BuildSnapshotFor()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "id": "net_clienthub_clienthub_buildsnapshotfor",
+      "community": 44,
+      "norm_label": ".buildsnapshotfor()"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "id": "server_net_clienthub_cs_ireadonlylist",
+      "community": 44,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": "ShipSim",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "id": "server_net_clienthub_cs_shipsim",
+      "community": 44,
+      "norm_label": "shipsim"
+    },
+    {
+      "label": "Protocol.cs",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L1",
+      "id": "net_protocol",
+      "community": 47,
+      "norm_label": "protocol.cs"
+    },
+    {
+      "label": "Protocol",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L10",
+      "id": "net_protocol_protocol",
+      "community": 47,
+      "norm_label": "protocol"
+    },
+    {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L13",
+      "id": "server_net_protocol_cs_byte",
+      "community": 47,
+      "norm_label": "byte"
+    },
+    {
+      "label": ".WriteVec3()",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "id": "net_protocol_protocol_writevec3",
+      "community": 47,
+      "norm_label": ".writevec3()"
+    },
+    {
+      "label": "BinaryWriter",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "id": "binarywriter",
+      "community": 47,
+      "norm_label": "binarywriter"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "id": "server_net_protocol_cs_vec3",
+      "community": 47,
+      "norm_label": "vec3"
+    },
+    {
+      "label": ".WriteShip()",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L28",
+      "id": "net_protocol_protocol_writeship",
+      "community": 47,
+      "norm_label": ".writeship()"
+    },
+    {
+      "label": "ShipSim",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L28",
+      "id": "server_net_protocol_cs_shipsim",
+      "community": 47,
+      "norm_label": "shipsim"
+    },
+    {
+      "label": ".BuildWelcome()",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L44",
+      "id": "net_protocol_protocol_buildwelcome",
+      "community": 47,
+      "norm_label": ".buildwelcome()"
+    },
+    {
+      "label": "World",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L44",
+      "id": "server_net_protocol_cs_world",
+      "community": 47,
+      "norm_label": "world"
+    },
+    {
+      "label": ".BuildYouAre()",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L80",
+      "id": "net_protocol_protocol_buildyouare",
+      "community": 47,
+      "norm_label": ".buildyouare()"
+    },
+    {
+      "label": ".BuildShipGone()",
+      "file_type": "code",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L88",
+      "id": "net_protocol_protocol_buildshipgone",
+      "community": 47,
+      "norm_label": ".buildshipgone()"
+    },
+    {
+      "label": "Program.cs",
+      "file_type": "code",
+      "source_file": "server/Program.cs",
+      "source_location": "L1",
+      "id": "server_program",
+      "community": 49,
+      "norm_label": "program.cs"
+    },
+    {
+      "label": "Simulation.cs",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L1",
+      "id": "sim_simulation",
+      "community": 42,
+      "norm_label": "simulation.cs"
+    },
+    {
+      "label": "Simulation",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L13",
+      "id": "sim_simulation_simulation",
+      "community": 42,
+      "norm_label": "simulation"
+    },
+    {
+      "label": "uint",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L15",
+      "id": "server_sim_simulation_cs_uint",
+      "community": 42,
+      "norm_label": "uint"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L17",
+      "id": "server_sim_simulation_cs_int",
+      "community": 42,
+      "norm_label": "int"
+    },
+    {
+      "label": "WeaponSpec",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L21",
+      "id": "weaponspec",
+      "community": 42,
+      "norm_label": "weaponspec"
+    },
+    {
+      "label": ".MaxHull()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L27",
+      "id": "sim_simulation_simulation_maxhull",
+      "community": 42,
+      "norm_label": ".maxhull()"
+    },
+    {
+      "label": "ShipSim",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L29",
+      "id": "sim_simulation_shipsim",
+      "community": 42,
+      "norm_label": "shipsim"
+    },
+    {
+      "label": "ulong",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L31",
+      "id": "server_sim_simulation_cs_ulong",
+      "community": 42,
+      "norm_label": "ulong"
+    },
+    {
+      "label": "byte",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L33",
+      "id": "server_sim_simulation_cs_byte",
+      "community": 42,
+      "norm_label": "byte"
+    },
+    {
+      "label": "ShipState",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L36",
+      "id": "server_sim_simulation_cs_shipstate",
+      "community": 42,
+      "norm_label": "shipstate"
+    },
+    {
+      "label": "float",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L37",
+      "id": "server_sim_simulation_cs_float",
+      "community": 42,
+      "norm_label": "float"
+    },
+    {
+      "label": "ShipInputState",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L40",
+      "id": "server_sim_simulation_cs_shipinputstate",
+      "community": 42,
+      "norm_label": "shipinputstate"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L41",
+      "id": "server_sim_simulation_cs_bool",
+      "community": 42,
+      "norm_label": "bool"
+    },
+    {
+      "label": "World",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L47",
+      "id": "server_sim_simulation_cs_world",
+      "community": 42,
+      "norm_label": "world"
+    },
+    {
+      "label": "Dictionary",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L48",
+      "id": "server_sim_simulation_cs_dictionary",
+      "community": 42,
+      "norm_label": "dictionary"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L49",
+      "id": "server_sim_simulation_cs_list",
+      "community": 42,
+      "norm_label": "list"
+    },
+    {
+      "label": "Queue",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L54",
+      "id": "queue",
+      "community": 42,
+      "norm_label": "queue"
+    },
+    {
+      "label": "object",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L57",
+      "id": "object",
+      "community": 42,
+      "norm_label": "object"
+    },
+    {
+      "label": ".EnqueueJoin()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L83",
+      "id": "sim_simulation_simulation_enqueuejoin",
+      "community": 42,
+      "norm_label": ".enqueuejoin()"
+    },
+    {
+      "label": ".EnqueueLeave()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L88",
+      "id": "sim_simulation_simulation_enqueueleave",
+      "community": 42,
+      "norm_label": ".enqueueleave()"
+    },
+    {
+      "label": ".EnqueueInput()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L93",
+      "id": "sim_simulation_simulation_enqueueinput",
+      "community": 42,
+      "norm_label": ".enqueueinput()"
+    },
+    {
+      "label": ".ShipIdOf()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L98",
+      "id": "sim_simulation_simulation_shipidof",
+      "community": 42,
+      "norm_label": ".shipidof()"
+    },
+    {
+      "label": ".Step()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L105",
+      "id": "sim_simulation_simulation_step",
+      "community": 42,
+      "norm_label": ".step()"
+    },
+    {
+      "label": ".DrainQueues()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L167",
+      "id": "sim_simulation_simulation_drainqueues",
+      "community": 42,
+      "norm_label": ".drainqueues()"
+    },
+    {
+      "label": ".Respawn()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L209",
+      "id": "sim_simulation_simulation_respawn",
+      "community": 42,
+      "norm_label": ".respawn()"
+    },
+    {
+      "label": ".Kill()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L238",
+      "id": "sim_simulation_simulation_kill",
+      "community": 42,
+      "norm_label": ".kill()"
+    },
+    {
+      "label": ".TryFire()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L247",
+      "id": "sim_simulation_simulation_tryfire",
+      "community": 42,
+      "norm_label": ".tryfire()"
+    },
+    {
+      "label": ".ResolveDueShots()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L311",
+      "id": "sim_simulation_simulation_resolvedueshots",
+      "community": 42,
+      "norm_label": ".resolvedueshots()"
+    },
+    {
+      "label": ".FirstEntryTime()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L330",
+      "id": "sim_simulation_simulation_firstentrytime",
+      "community": 42,
+      "norm_label": ".firstentrytime()"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L330",
+      "id": "server_sim_simulation_cs_vec3",
+      "community": 42,
+      "norm_label": "vec3"
+    },
+    {
+      "label": ".CellsAlongRay()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L354",
+      "id": "sim_simulation_simulation_cellsalongray",
+      "community": 42,
+      "norm_label": ".cellsalongray()"
+    },
+    {
+      "label": "IEnumerable",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L354",
+      "id": "server_sim_simulation_cs_ienumerable",
+      "community": 42,
+      "norm_label": "ienumerable"
+    },
+    {
+      "label": ".RebuildShipGrid()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L374",
+      "id": "sim_simulation_simulation_rebuildshipgrid",
+      "community": 42,
+      "norm_label": ".rebuildshipgrid()"
+    },
+    {
+      "label": ".CollideShips()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L391",
+      "id": "sim_simulation_simulation_collideships",
+      "community": 42,
+      "norm_label": ".collideships()"
+    },
+    {
+      "label": ".ResolveAsteroidCollisions()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L419",
+      "id": "sim_simulation_simulation_resolveasteroidcollisions",
+      "community": 42,
+      "norm_label": ".resolveasteroidcollisions()"
+    },
+    {
+      "label": ".ResolveStaticCollision()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L434",
+      "id": "sim_simulation_simulation_resolvestaticcollision",
+      "community": 42,
+      "norm_label": ".resolvestaticcollision()"
+    },
+    {
+      "label": ".TryWarp()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L454",
+      "id": "sim_simulation_simulation_trywarp",
+      "community": 42,
+      "norm_label": ".trywarp()"
+    },
+    {
+      "label": ".Dot()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L474",
+      "id": "sim_simulation_simulation_dot",
+      "community": 42,
+      "norm_label": ".dot()"
+    },
+    {
+      "label": "World.cs",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L1",
+      "id": "sim_world",
+      "community": 46,
+      "norm_label": "world.cs"
+    },
+    {
+      "label": "World",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L10",
+      "id": "sim_world_world",
+      "community": 46,
+      "norm_label": "world"
+    },
+    {
+      "label": "float",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L13",
+      "id": "server_sim_world_cs_float",
+      "community": 46,
+      "norm_label": "float"
+    },
+    {
+      "label": "uint",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L28",
+      "id": "server_sim_world_cs_uint",
+      "community": 46,
+      "norm_label": "uint"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L32",
+      "id": "server_sim_world_cs_int",
+      "community": 46,
+      "norm_label": "int"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L44",
+      "id": "server_sim_world_cs_list",
+      "community": 46,
+      "norm_label": "list"
+    },
+    {
+      "label": "ulong",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L49",
+      "id": "server_sim_world_cs_ulong",
+      "community": 46,
+      "norm_label": "ulong"
+    },
+    {
+      "label": "Dictionary",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L52",
+      "id": "server_sim_world_cs_dictionary",
+      "community": 46,
+      "norm_label": "dictionary"
+    },
+    {
+      "label": ".CellOf()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L55",
+      "id": "sim_world_world_cellof",
+      "community": 46,
+      "norm_label": ".cellof()"
+    },
+    {
+      "label": ".RockGrid()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "id": "sim_world_world_rockgrid",
+      "community": 46,
+      "norm_label": ".rockgrid()"
+    },
+    {
+      "label": "Rock",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "id": "rock",
+      "community": 46,
+      "norm_label": "rock"
+    },
+    {
+      "label": ".SectorRadius()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L102",
+      "id": "sim_world_world_sectorradius",
+      "community": 46,
+      "norm_label": ".sectorradius()"
+    },
+    {
+      "label": ".SeedAsteroidField()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L111",
+      "id": "sim_world_world_seedasteroidfield",
+      "community": 46,
+      "norm_label": ".seedasteroidfield()"
+    },
+    {
+      "label": "DetRng",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L111",
+      "id": "server_sim_world_cs_detrng",
+      "community": 46,
+      "norm_label": "detrng"
+    },
+    {
+      "label": ".SeedAsteroidBelt()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L140",
+      "id": "sim_world_world_seedasteroidbelt",
+      "community": 46,
+      "norm_label": ".seedasteroidbelt()"
+    },
+    {
+      "label": ".SkipShapeDraws()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "id": "sim_world_world_skipshapedraws",
+      "community": 46,
+      "norm_label": ".skipshapedraws()"
+    },
+    {
+      "label": ".RandomOuterPos()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L166",
+      "id": "sim_world_world_randomouterpos",
+      "community": 46,
+      "norm_label": ".randomouterpos()"
+    },
+    {
+      "label": "NextULong()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L182",
+      "id": "sim_world_nextulong",
+      "community": 46,
+      "norm_label": "nextulong()"
+    },
+    {
+      "label": "NextDouble()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L191",
+      "id": "sim_world_nextdouble",
+      "community": 46,
+      "norm_label": "nextdouble()"
+    },
+    {
+      "label": "NextRange()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L192",
+      "id": "sim_world_nextrange",
+      "community": 46,
+      "norm_label": "nextrange()"
+    },
+    {
+      "label": "NextInt()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L193",
+      "id": "sim_world_nextint",
+      "community": 46,
+      "norm_label": "nextint()"
+    },
+    {
+      "label": "SimServer.csproj",
+      "file_type": "code",
+      "source_file": "server/SimServer.csproj",
+      "source_location": null,
+      "id": "server_simserver",
+      "community": 15,
+      "norm_label": "simserver.csproj"
+    },
+    {
+      "label": "net8.0",
+      "file_type": "concept",
+      "source_file": "server/SimServer.csproj",
+      "source_location": null,
+      "id": "server_simserver_csproj_framework_net8_0",
+      "community": 15,
+      "norm_label": "net8.0"
+    },
+    {
+      "label": "Microsoft.NET.Sdk.Web",
+      "file_type": "concept",
+      "source_file": "server/SimServer.csproj",
+      "source_location": null,
+      "id": "sdk_microsoft_net_sdk_web",
+      "community": 15,
+      "norm_label": "microsoft.net.sdk.web"
+    },
+    {
       "label": "FlightModel.cs",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
@@ -7847,6 +8729,78 @@
       "id": "asteroid_gen_shapefield_rationale_306",
       "community": 3,
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
+    },
+    {
+      "label": "Program.cs",
+      "file_type": "code",
+      "source_file": "tools/simbot/Program.cs",
+      "source_location": "L1",
+      "id": "simbot_program",
+      "community": 50,
+      "norm_label": "program.cs"
+    },
+    {
+      "label": "SimBot.csproj",
+      "file_type": "code",
+      "source_file": "tools/simbot/SimBot.csproj",
+      "source_location": null,
+      "id": "simbot_simbot",
+      "community": 48,
+      "norm_label": "simbot.csproj"
+    },
+    {
+      "label": "net8.0",
+      "file_type": "concept",
+      "source_file": "tools/simbot/SimBot.csproj",
+      "source_location": null,
+      "id": "tools_simbot_simbot_csproj_framework_net8_0",
+      "community": 48,
+      "norm_label": "net8.0"
+    },
+    {
+      "label": "Microsoft.NET.Sdk",
+      "file_type": "concept",
+      "source_file": "tools/simbot/SimBot.csproj",
+      "source_location": null,
+      "id": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
+      "community": 48,
+      "norm_label": "microsoft.net.sdk"
+    },
+    {
+      "label": "ulong",
+      "file_type": "code",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L46",
+      "community": 13,
+      "norm_label": "ulong",
+      "id": "ulong"
+    },
+    {
+      "label": "long",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L236",
+      "community": 0,
+      "norm_label": "long",
+      "id": "long"
+    },
+    {
+      "label": "DetRng",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L384",
+      "community": 0,
+      "norm_label": "detrng",
+      "id": "detrng"
+    },
+    {
+      "label": "IEnumerable",
+      "file_type": "code",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L671",
+      "community": 0,
+      "norm_label": "ienumerable",
+      "id": "ienumerable"
     },
     {
       "label": "Projectile",
@@ -12829,9 +13783,9 @@
       "source_location": "L40",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_projectileview_projectileview_initialize",
-      "target": "client_scripts_projectileview_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_projectileview_cs_vector3"
     },
     {
       "relation": "references",
@@ -13319,9 +14273,9 @@
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L85",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_shipcontroller_shipcontroller",
-      "target": "scripts_shipcontroller_shipcontroller_inputsequal",
-      "confidence_score": 1.0
+      "target": "scripts_shipcontroller_shipcontroller_inputsequal"
     },
     {
       "relation": "method",
@@ -13412,9 +14366,9 @@
       "source_location": "L85",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_shipcontroller_shipcontroller_inputsequal",
-      "target": "client_scripts_shipcontroller_cs_shipinputstate",
-      "confidence_score": 1.0
+      "target": "client_scripts_shipcontroller_cs_shipinputstate"
     },
     {
       "relation": "references",
@@ -13445,9 +14399,9 @@
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L248",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_shipcontroller_shipcontroller_process",
-      "target": "scripts_shipcontroller_shipcontroller_inputsequal",
-      "confidence_score": 1.0
+      "target": "scripts_shipcontroller_shipcontroller_inputsequal"
     },
     {
       "relation": "calls",
@@ -14527,6 +15481,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L46",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_targetmarkers_targetmarkers",
+      "target": "client_scripts_targetmarkers_cs_ulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L43",
       "weight": 1.0,
       "context": "field",
@@ -15389,9 +16354,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L740",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_addbolt",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_addbolt"
     },
     {
       "relation": "method",
@@ -15459,9 +16424,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L767",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_clipboltttl",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_clipboltttl"
     },
     {
       "relation": "method",
@@ -15469,9 +16434,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L792",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_clipsphere",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_clipsphere"
     },
     {
       "relation": "method",
@@ -15769,9 +16734,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L711",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_spawnboltfor",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_spawnboltfor"
     },
     {
       "relation": "method",
@@ -15789,9 +16754,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L737",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_spawnlocalbolt"
     },
     {
       "relation": "method",
@@ -16029,9 +16994,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L746",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_addbolt",
-      "target": "scripts_worldrenderer_worldrenderer_setnodesector",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_setnodesector"
     },
     {
       "relation": "calls",
@@ -16249,9 +17214,9 @@
       "source_location": "L740",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_addbolt",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -16271,9 +17236,9 @@
       "source_location": "L767",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_clipboltttl",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -16282,9 +17247,9 @@
       "source_location": "L792",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_clipsphere",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -16304,9 +17269,9 @@
       "source_location": "L737",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -16920,9 +17885,9 @@
       "source_location": "L711",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnboltfor",
-      "target": "client_scripts_worldrenderer_cs_ship",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_ship"
     },
     {
       "relation": "references",
@@ -16986,9 +17951,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L619",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_onshipupdate",
-      "target": "scripts_worldrenderer_worldrenderer_spawnboltfor",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_spawnboltfor"
     },
     {
       "relation": "references",
@@ -17030,9 +17995,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L731",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnboltfor",
-      "target": "scripts_worldrenderer_worldrenderer_addbolt",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_addbolt"
     },
     {
       "relation": "calls",
@@ -17041,9 +18006,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L732",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnboltfor",
-      "target": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_shotmaskleadsec"
     },
     {
       "relation": "calls",
@@ -17052,9 +18017,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L738",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
-      "target": "scripts_worldrenderer_worldrenderer_addbolt",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_addbolt"
     },
     {
       "relation": "calls",
@@ -17063,9 +18028,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L745",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_addbolt",
-      "target": "scripts_worldrenderer_worldrenderer_clipboltttl",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_clipboltttl"
     },
     {
       "relation": "calls",
@@ -17074,9 +18039,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L744",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_addbolt",
-      "target": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_newprojectilemesh"
     },
     {
       "relation": "calls",
@@ -17096,9 +18061,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L776",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_clipboltttl",
-      "target": "scripts_worldrenderer_worldrenderer_clipsphere",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_clipsphere"
     },
     {
       "relation": "calls",
@@ -17199,6 +18164,15 @@
       "confidence_score": 1.0,
       "source": "flightmodeltest_flightmodeltest",
       "target": "shared_shared"
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "server/SimServer.csproj",
+      "weight": 1.0,
+      "source": "server_simserver",
+      "target": "shared_shared",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -18537,9 +19511,9 @@
       "source_location": "L701",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
-      "target": "hashset",
-      "confidence_score": 1.0
+      "target": "hashset"
     },
     {
       "relation": "references",
@@ -18606,6 +19580,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module",
       "target": "module_spacetimedb_lib_cs_int"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L236",
+      "weight": 1.0,
+      "context": "field",
+      "source": "spacetimedb_lib_module",
+      "target": "module_spacetimedb_lib_cs_long",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -20190,6 +21175,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L384",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_lib_module_nextasteroidshape",
+      "target": "module_spacetimedb_lib_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L364",
       "weight": 1.0,
       "context": "return_type",
@@ -20256,23 +21252,45 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L423",
+      "source_location": "L470",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_randomouterpos",
-      "target": "detrng"
+      "target": "module_spacetimedb_lib_cs_detrng",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L397",
+      "source_location": "L444",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_seedasteroidbelt",
-      "target": "detrng"
+      "target": "module_spacetimedb_lib_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L400",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "spacetimedb_lib_module_seedasteroidfield",
+      "target": "module_spacetimedb_lib_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L447",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_generatemap",
+      "target": "spacetimedb_lib_module_seedasteroidfield"
     },
     {
       "relation": "references",
@@ -20290,22 +21308,22 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "module/spacetimedb/Lib.cs",
-      "source_location": "L447",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "spacetimedb_lib_module_generatemap",
-      "target": "spacetimedb_lib_module_seedasteroidfield"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "module/spacetimedb/Lib.cs",
       "source_location": "L450",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_generatemap",
       "target": "spacetimedb_lib_module_seedasteroidbelt"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L397",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_seedasteroidbelt",
+      "target": "detrng"
     },
     {
       "relation": "calls",
@@ -20317,6 +21335,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_generatemap",
       "target": "spacetimedb_lib_module_randomouterpos"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L423",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "spacetimedb_lib_module_randomouterpos",
+      "target": "detrng"
     },
     {
       "relation": "calls",
@@ -20603,6 +21632,17 @@
       "confidence_score": 1.0,
       "source": "spacetimedb_lib_module_cellsalongray",
       "target": "ienumerable"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "module/spacetimedb/Lib.cs",
+      "source_location": "L671",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "spacetimedb_lib_module_cellsalongray",
+      "target": "module_spacetimedb_lib_cs_ienumerable",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -21830,9 +22870,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L305",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -21894,9 +22934,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L341",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_alephtofrom",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_alephtofrom"
     },
     {
       "relation": "method",
@@ -21924,9 +22964,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L316",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_buildpigscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_buildpigscratch"
     },
     {
       "relation": "method",
@@ -22244,9 +23284,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L1093",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_teambasesectorfrom",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_teambasesectorfrom"
     },
     {
       "relation": "method",
@@ -22264,9 +23304,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L332",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module",
-      "target": "spacetimedb_pigai_module_weapondamagecached",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_weapondamagecached"
     },
     {
       "relation": "calls",
@@ -22341,9 +23381,9 @@
       "source_location": "L316",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_buildpigscratch",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -22572,9 +23612,9 @@
       "source_location": "L332",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_weapondamagecached",
-      "target": "module_spacetimedb_pigai_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_reducercontext"
     },
     {
       "relation": "calls",
@@ -22627,9 +23667,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L272",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigbraintick",
-      "target": "spacetimedb_pigai_module_buildpigscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_buildpigscratch"
     },
     {
       "relation": "calls",
@@ -22682,9 +23722,9 @@
       "source_location": "L446",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_assignpigrescuers",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -22693,9 +23733,9 @@
       "source_location": "L316",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_buildpigscratch",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -22704,9 +23744,9 @@
       "source_location": "L651",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -22715,9 +23755,9 @@
       "source_location": "L1055",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigthreatscore",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -22726,9 +23766,9 @@
       "source_location": "L332",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_weapondamagecached",
-      "target": "spacetimedb_pigai_pigbrainscratch",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_pigbrainscratch"
     },
     {
       "relation": "references",
@@ -22737,9 +23777,9 @@
       "source_location": "L313",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_pigbrainscratch",
-      "target": "module_spacetimedb_pigai_cs_dictionary",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_dictionary"
     },
     {
       "relation": "references",
@@ -22748,9 +23788,9 @@
       "source_location": "L312",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_pigbrainscratch",
-      "target": "module_spacetimedb_pigai_cs_list",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_list"
     },
     {
       "relation": "references",
@@ -22759,9 +23799,9 @@
       "source_location": "L341",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_alephtofrom",
-      "target": "module_spacetimedb_pigai_cs_list",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_list"
     },
     {
       "relation": "references",
@@ -22770,9 +23810,9 @@
       "source_location": "L1093",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_teambasesectorfrom",
-      "target": "module_spacetimedb_pigai_cs_list",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_list"
     },
     {
       "relation": "calls",
@@ -22781,9 +23821,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L1067",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigthreatscore",
-      "target": "spacetimedb_pigai_module_weapondamagecached",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_weapondamagecached"
     },
     {
       "relation": "calls",
@@ -22803,9 +23843,9 @@
       "source_location": "L341",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_alephtofrom",
-      "target": "module_spacetimedb_pigai_cs_aleph",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_aleph"
     },
     {
       "relation": "calls",
@@ -22814,9 +23854,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L690",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_alephtofrom",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_alephtofrom"
     },
     {
       "relation": "references",
@@ -23133,9 +24173,9 @@
       "source_file": "module/spacetimedb/PigAI.cs",
       "source_location": "L756",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_pigdecide",
-      "target": "spacetimedb_pigai_module_teambasesectorfrom",
-      "confidence_score": 1.0
+      "target": "spacetimedb_pigai_module_teambasesectorfrom"
     },
     {
       "relation": "references",
@@ -23771,9 +24811,9 @@
       "source_location": "L1093",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "spacetimedb_pigai_module_teambasesectorfrom",
-      "target": "module_spacetimedb_pigai_cs_base",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_pigai_cs_base"
     },
     {
       "relation": "calls",
@@ -24434,9 +25474,9 @@
       "source_file": "module/spacetimedb/Weapons.cs",
       "source_location": "L249",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_weapons_module",
-      "target": "spacetimedb_weapons_module_resolvedueshots",
-      "confidence_score": 1.0
+      "target": "spacetimedb_weapons_module_resolvedueshots"
     },
     {
       "relation": "method",
@@ -24551,9 +25591,9 @@
       "source_location": "L249",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "spacetimedb_weapons_module_resolvedueshots",
-      "target": "module_spacetimedb_weapons_cs_reducercontext",
-      "confidence_score": 1.0
+      "target": "module_spacetimedb_weapons_cs_reducercontext"
     },
     {
       "relation": "references",
@@ -24639,9 +25679,9 @@
       "source_file": "module/spacetimedb/Weapons.cs",
       "source_location": "L256",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "spacetimedb_weapons_module_resolvedueshots",
-      "target": "spacetimedb_weapons_module_applyshipdamage",
-      "confidence_score": 1.0
+      "target": "spacetimedb_weapons_module_applyshipdamage"
     },
     {
       "relation": "calls",
@@ -24890,6 +25930,1660 @@
       "confidence_score": 1.0,
       "source": "scripts_start_client",
       "target": "users_erik_projects_wivuullegiance_scripts_start_client_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "net_clienthub",
+      "target": "net_clienthub_client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "net_clienthub",
+      "target": "net_clienthub_clienthub",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "concurrentdictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_afterstep",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_buildsnapshotfor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_handleconnection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_receiveloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_sendloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L40",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_takebytessent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_long",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "simulation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "channel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_bool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L25",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_byte",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L30",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_ulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "websocket",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_buildsnapshotfor",
+      "target": "net_clienthub_client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_receiveloop",
+      "target": "net_clienthub_client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_sendloop",
+      "target": "net_clienthub_client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "websocket",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "net_clienthub_clienthub_receiveloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "net_clienthub_clienthub_sendloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_receiveloop",
+      "target": "cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_sendloop",
+      "target": "cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_clienthub_clienthub_receiveloop",
+      "target": "task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_clienthub_clienthub_sendloop",
+      "target": "task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub_afterstep",
+      "target": "net_clienthub_clienthub_buildsnapshotfor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_clienthub_clienthub_buildsnapshotfor",
+      "target": "server_net_clienthub_cs_ireadonlylist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "net_clienthub_clienthub_buildsnapshotfor",
+      "target": "server_net_clienthub_cs_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "net_protocol",
+      "target": "net_protocol_protocol",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "net_protocol_protocol",
+      "target": "net_protocol_protocol_buildshipgone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "source": "net_protocol_protocol",
+      "target": "net_protocol_protocol_buildwelcome",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "net_protocol_protocol",
+      "target": "net_protocol_protocol_buildyouare",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "source": "net_protocol_protocol",
+      "target": "net_protocol_protocol_writeship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "source": "net_protocol_protocol",
+      "target": "net_protocol_protocol_writevec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_protocol_protocol",
+      "target": "server_net_protocol_cs_byte",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "net_protocol_protocol_buildwelcome",
+      "target": "net_protocol_protocol_writevec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "source": "net_protocol_protocol_writeship",
+      "target": "net_protocol_protocol_writevec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_protocol_protocol_writevec3",
+      "target": "binarywriter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_protocol_protocol_writevec3",
+      "target": "server_net_protocol_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_protocol_protocol_writeship",
+      "target": "binarywriter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_protocol_protocol_writeship",
+      "target": "server_net_protocol_cs_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/Protocol.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_protocol_protocol_buildwelcome",
+      "target": "server_net_protocol_cs_world",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "sim_simulation",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "sim_simulation",
+      "target": "sim_simulation_simulation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "object",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L56",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "queue",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_dictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L17",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_uint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L50",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_ulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "server_sim_simulation_cs_world",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_cellsalongray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L391",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_collideships",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L474",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_dot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L167",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_drainqueues",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L93",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_enqueueinput",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L83",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_enqueuejoin",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_enqueueleave",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L330",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_firstentrytime",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L238",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_kill",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_maxhull",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L374",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_rebuildshipgrid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L419",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_resolveasteroidcollisions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L311",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_resolvedueshots",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L434",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_resolvestaticcollision",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L209",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_respawn",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_shipidof",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_step",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L247",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_tryfire",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L454",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_trywarp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_simulation",
+      "target": "weaponspec",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L42",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_uint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L32",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L232",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_respawn",
+      "target": "sim_simulation_simulation_maxhull",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_bool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_byte",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_float",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L40",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_shipinputstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_shipstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L31",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_shipsim",
+      "target": "server_sim_simulation_cs_ulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L391",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_collideships",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L238",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_kill",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L419",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_resolveasteroidcollisions",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L434",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_resolvestaticcollision",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L209",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_respawn",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L247",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_tryfire",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L454",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_trywarp",
+      "target": "sim_simulation_shipsim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L93",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_enqueueinput",
+      "target": "server_sim_simulation_cs_shipinputstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L144",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_collideships",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_drainqueues",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_kill",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L113",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_rebuildshipgrid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L157",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_resolveasteroidcollisions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L112",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_resolvedueshots",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_resolvestaticcollision",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L122",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_respawn",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L130",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_tryfire",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L131",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_trywarp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L324",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_resolvedueshots",
+      "target": "sim_simulation_simulation_kill",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L276",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_tryfire",
+      "target": "sim_simulation_simulation_cellsalongray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L268",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_tryfire",
+      "target": "sim_simulation_simulation_firstentrytime",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L330",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_firstentrytime",
+      "target": "server_sim_simulation_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L335",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_firstentrytime",
+      "target": "sim_simulation_simulation_dot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_cellsalongray",
+      "target": "server_sim_simulation_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L474",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_dot",
+      "target": "server_sim_simulation_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L434",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_simulation_simulation_resolvestaticcollision",
+      "target": "server_sim_simulation_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L354",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "sim_simulation_simulation_cellsalongray",
+      "target": "server_sim_simulation_cs_ienumerable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L404",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_collideships",
+      "target": "sim_simulation_simulation_dot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L430",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_resolveasteroidcollisions",
+      "target": "sim_simulation_simulation_resolvestaticcollision",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L443",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_resolvestaticcollision",
+      "target": "sim_simulation_simulation_dot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L191",
+      "weight": 1.0,
+      "source": "sim_world",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L193",
+      "weight": 1.0,
+      "source": "sim_world",
+      "target": "sim_world_nextint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L192",
+      "weight": 1.0,
+      "source": "sim_world",
+      "target": "sim_world_nextrange",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L182",
+      "weight": 1.0,
+      "source": "sim_world",
+      "target": "sim_world_nextulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "sim_world",
+      "target": "sim_world_world",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L53",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_dictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L46",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_float",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_uint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L49",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_ulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_cellof",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L166",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_randomouterpos",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_rockgrid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L102",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_sectorradius",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L140",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_seedasteroidbelt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_seedasteroidfield",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_skipshapedraws",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "sim_world_world_rockgrid",
+      "target": "server_sim_world_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "sim_world_world_rockgrid",
+      "target": "server_sim_world_cs_dictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L99",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "sim_world_world_rockgrid",
+      "target": "rock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_world_world_seedasteroidfield",
+      "target": "server_sim_world_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L120",
+      "weight": 1.0,
+      "source": "sim_world_world_seedasteroidfield",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "source": "sim_world_world_seedasteroidfield",
+      "target": "sim_world_nextint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L134",
+      "weight": 1.0,
+      "source": "sim_world_world_seedasteroidfield",
+      "target": "sim_world_world_skipshapedraws",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L166",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_world_world_randomouterpos",
+      "target": "server_sim_world_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L140",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_world_world_seedasteroidbelt",
+      "target": "server_sim_world_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "sim_world_world_skipshapedraws",
+      "target": "server_sim_world_cs_detrng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L144",
+      "weight": 1.0,
+      "source": "sim_world_world_seedasteroidbelt",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L150",
+      "weight": 1.0,
+      "source": "sim_world_world_seedasteroidbelt",
+      "target": "sim_world_world_skipshapedraws",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "sim_world_world_skipshapedraws",
+      "target": "sim_world_nextint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L161",
+      "weight": 1.0,
+      "source": "sim_world_world_skipshapedraws",
+      "target": "sim_world_nextrange",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L168",
+      "weight": 1.0,
+      "source": "sim_world_world_randomouterpos",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L191",
+      "weight": 1.0,
+      "source": "sim_world_nextdouble",
+      "target": "sim_world_nextulong",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L193",
+      "weight": 1.0,
+      "source": "sim_world_nextint",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L192",
+      "weight": 1.0,
+      "source": "sim_world_nextrange",
+      "target": "sim_world_nextdouble",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/SimServer.csproj",
+      "weight": 1.0,
+      "source": "server_simserver",
+      "target": "sdk_microsoft_net_sdk_web",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/SimServer.csproj",
+      "weight": 1.0,
+      "source": "server_simserver",
+      "target": "server_simserver_csproj_framework_net8_0",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -26955,6 +29649,24 @@
     {
       "relation": "references",
       "confidence": "EXTRACTED",
+      "source_file": "tools/simbot/SimBot.csproj",
+      "weight": 1.0,
+      "source": "simbot_simbot",
+      "target": "tools_simbot_simbot_csproj_framework_net8_0",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/simbot/SimBot.csproj",
+      "weight": 1.0,
+      "source": "simbot_simbot",
+      "target": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
       "weight": 1.0,
@@ -27195,5 +29907,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "f707e98c7adb36c2a1d1643a46c9721c628abf59"
+  "built_at_commit": "d0eb6b7cafe084acd090922fa578d786275ee6ea"
 }

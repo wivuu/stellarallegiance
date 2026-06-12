@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Headless bot swarm for load-testing the Phase-1 sim server: N WebSocket clients
+       that join, fly, and fire at full input rate (worst case — real clients send on
+       change). Usage: dotnet run - -bots 200 [- -url ws://localhost:8090/game] -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>
