@@ -95,9 +95,12 @@ public partial class Hud : CanvasLayer
 		bool flying = ship != null;
 
 		// The Lobby overlay owns everything outside a live match. The spawn menu only
-		// appears once you're teamed in an active match and not currently flying.
+		// appears once you're in an active match and not currently flying — that's an STDB
+		// team in lobby play, or simply a live native match (dev SIM_URI play has no team).
+		// Because it keys off "not flying", it also reopens when a pod is destroyed/docked
+		// and you're awaiting your next ship.
 		bool teamedInMatch = _world.Phase == MatchPhase.Active
-			&& LocalPlayer() is Player p && p.Team is not null;
+			&& (_world.NativeMode || (LocalPlayer() is Player p && p.Team is not null));
 		_menu.Visible = teamedInMatch && !flying;
 
 		// Sector boundary: warn (and pulse) once the ship is past the radius, where the

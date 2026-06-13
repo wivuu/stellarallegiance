@@ -156,8 +156,10 @@ public partial class Lobby : Control
 		bool teamed = me is Player mp && mp.Team is not null;
 
 		// Hide entirely once you're teamed in a live match — that's when the Hud's
-		// spawn menu / flight HUD takes over.
-		bool show = phase != MatchPhase.Active || !teamed;
+		// spawn menu / flight HUD takes over. A live NATIVE match owns the screen too,
+		// even with no STDB team (dev SIM_URI play): defer to it so the lobby doesn't sit
+		// on top of the game. DisableNativeMode (match end) brings the lobby back.
+		bool show = phase != MatchPhase.Active || !(teamed || _world.NativeMode);
 		Visible = show;
 		if (!show)
 			return;

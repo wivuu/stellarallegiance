@@ -211,6 +211,42 @@ public partial struct PigSquad
     public bool Active;          // a squad is currently fielded (≥1 drone alive, or just spawned)
 }
 
+// ---- Native sim-server handoff (Phase 1c) -----------------------------
+// The 20 Hz match sim can run on the native sim server (server/); STDB keeps the lobby.
+// When a match goes Active the module mints one JoinToken per participating player
+// (derived from a shared secret — see shared/JoinTokens.cs) and clients hand it to the
+// sim server, which validates it offline. SimEndpoint advertises where to connect.
+
+// Where the native sim server lives (singleton; row absent = native mode disabled and
+// clients keep flying the in-module sim).
+[SpacetimeDB.Table(Accessor = "SimEndpoint", Public = true)]
+public partial struct SimEndpoint
+{
+    [PrimaryKey]
+    public byte Id;       // always 0
+    public string Url;    // e.g. ws://host:8090/game
+}
+
+// Per-player match credential. Public but RLS-filtered to the owning player (see
+// JoinTokenVisible), so a client only ever sees its own token.
+[SpacetimeDB.Table(Accessor = "JoinToken", Public = true)]
+public partial struct JoinToken
+{
+    [PrimaryKey]
+    public Identity Identity;
+    public byte Team;
+    public string Token;
+}
+
+// The shared secret the tokens derive from. Private: reducers + DB owner only.
+[SpacetimeDB.Table(Accessor = "SimConfig", Public = false)]
+public partial struct SimConfig
+{
+    [PrimaryKey]
+    public byte Id;       // always 0
+    public string Secret;
+}
+
 // Scheduled-reducer table that drives SimTick at a fixed interval.
 [SpacetimeDB.Table(
     Accessor = "SimTickTimer",
@@ -916,8 +952,13 @@ public static partial class Module
                 SystemTo(ctx, player.Identity,
                     "Commands:\n"
                     + "/help — show this list\n"
+                    + "/start — force-start the match now (debug; skips waiting for others to ready)\n"
                     + "/pigs on|off — toggle AI drone spawns\n"
                     + "/resign — forfeit the match for your team");
+                break;
+
+            case "start":
+                StartMatchNow(ctx, player);
                 break;
 
             case "pigs":
@@ -1021,6 +1062,72 @@ public static partial class Module
     public static readonly Filter ChatDirectVisible = new Filter.Sql(
         "SELECT * FROM ChatMessage WHERE Scope = 2 AND Recipient = :sender");
 
+    // A player may only read their OWN join token (the sim server validates it offline).
+    [SpacetimeDB.ClientVisibilityFilter]
+    public static readonly Filter JoinTokenVisible = new Filter.Sql(
+        "SELECT * FROM JoinToken WHERE Identity = :sender");
+
+    // ---- Native sim-server handoff (Phase 1c) --------------------------
+
+    // Owner-only: advertise the native sim server and install the shared token secret.
+    // Run once per deployment (e.g. `spacetime call ... set_sim_endpoint '"ws://host:8090/game"' '"<secret>"`).
+    // An empty url tears native mode down (clients fall back to the in-module sim).
+    [SpacetimeDB.Reducer]
+    public static void SetSimEndpoint(ReducerContext ctx, string url, string secret)
+    {
+        RequireOwner(ctx);
+        foreach (var e in ctx.Db.SimEndpoint.Iter().ToList())
+            ctx.Db.SimEndpoint.Id.Delete(e.Id);
+        foreach (var c in ctx.Db.SimConfig.Iter().ToList())
+            ctx.Db.SimConfig.Id.Delete(c.Id);
+        foreach (var t in ctx.Db.JoinToken.Iter().ToList())
+            ctx.Db.JoinToken.Identity.Delete(t.Identity);
+
+        if (string.IsNullOrEmpty(url))
+        {
+            Log.Info("[SimEndpoint] cleared — native sim disabled");
+            return;
+        }
+        ctx.Db.SimEndpoint.Insert(new SimEndpoint { Id = 0, Url = url });
+        ctx.Db.SimConfig.Insert(new SimConfig { Id = 0, Secret = secret });
+        Log.Info($"[SimEndpoint] native sim at {url}");
+    }
+
+    // Result writeback from the native sim server (Phase 2). When the authoritative match
+    // ends on the sim server, it POSTs this reducer (HTTP API, owner Bearer token) so STDB —
+    // which still owns the durable lobby/post-match flow — learns the winner and the existing
+    // post-match UI (RestartMatch) lights up. Owner-gated; idempotent (no-op unless a match
+    // is Active, so a duplicate POST or a manual /resign that already ended it is harmless).
+    [SpacetimeDB.Reducer]
+    public static void ReportMatchResult(ReducerContext ctx, byte winner)
+    {
+        RequireOwner(ctx);
+        if (ctx.Db.Match.Id.Find(0) is not Match m || m.Phase != MatchPhase.Active)
+            return;
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Ended, Winner = winner });
+        SystemAll(ctx, $"Team {TeamName(winner)} wins.");
+        Log.Info($"[Match] native sim reported winner: team {winner}");
+    }
+
+    // Mint (or refresh) one player's match credential. No-op when native mode is off.
+    // Token binds (identity, team) so a client can't claim another side; the sim server
+    // recomputes the same derivation from the Hello fields (shared/JoinTokens.cs).
+    private static void MintJoinToken(ReducerContext ctx, Identity identity, byte team)
+    {
+        if (ctx.Db.SimConfig.Id.Find((byte)0) is not SimConfig cfg)
+            return;
+        var row = new JoinToken
+        {
+            Identity = identity,
+            Team = team,
+            Token = JoinTokens.Compute(cfg.Secret, identity.ToString(), team),
+        };
+        if (ctx.Db.JoinToken.Identity.Find(identity) is null)
+            ctx.Db.JoinToken.Insert(row);
+        else
+            ctx.Db.JoinToken.Identity.Update(row);
+    }
+
     // SpawnShip / Respawn reducers live in Ships.cs (M2).
 
     // ---- Lobby actions ------------------------------------------------
@@ -1052,6 +1159,9 @@ public static partial class Module
 
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
+        // Joining a LIVE match: hand over credentials for the native sim server too.
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Active)
+            MintJoinToken(ctx, ctx.Sender, team);
         Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
     }
 
@@ -1109,6 +1219,8 @@ public static partial class Module
         byte team = SmallestOnlineTeam(ctx, ctx.Sender);
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
+        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Active)
+            MintJoinToken(ctx, ctx.Sender, team);
         Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
         MaybeStartMatch(ctx);
     }
@@ -1129,6 +1241,11 @@ public static partial class Module
         }
 
         ResetWorld(ctx);
+
+        // Invalidate every match credential — the next match mints fresh tokens (a stale
+        // token must not let a client rejoin the native sim across the lobby boundary).
+        foreach (var t in ctx.Db.JoinToken.Iter().ToList())
+            ctx.Db.JoinToken.Identity.Delete(t.Identity);
 
         // Prune players who left while the match was running; un-ready the rest but keep
         // their team so a rematch is one click away.
@@ -1860,6 +1977,45 @@ public static partial class Module
         Log.Info($"[Match] team {winner} wins by forfeit (enemy side left)");
     }
 
+    // Debug force-start (/start): launch immediately with whoever is ready, instead of
+    // waiting for every teamed player to ready up (MaybeStartMatch's normal gate). Readies
+    // the caller so they spawn; un-readied teammates can still hop in mid-match via JoinTeam.
+    private static void StartMatchNow(ReducerContext ctx, Player caller)
+    {
+        var match = ctx.Db.Match.Id.Find(0);
+        if (match is null || match.Value.Phase != MatchPhase.Lobby)
+        {
+            SystemTo(ctx, caller.Identity, "Can only force-start from the lobby.");
+            return;
+        }
+        if (caller.Team is null)
+        {
+            SystemTo(ctx, caller.Identity, "Pick a team first, then /start.");
+            return;
+        }
+
+        ctx.Db.Player.Identity.Update(caller with { Ready = true });
+
+        // Re-read from the DB so the caller's just-set Ready flag is included.
+        byte engaged = 0;
+        foreach (var p in ctx.Db.Player.Iter())
+            if (p.Online && p.Team is byte t && p.Ready)
+                engaged |= (byte)(1 << t);
+
+        ResetWorld(ctx);
+        foreach (var p in ctx.Db.Player.Iter().ToList())
+            if (p.Ready)
+            {
+                if (p.Team is byte pt)
+                    MintJoinToken(ctx, p.Identity, pt);
+                ctx.Db.Player.Identity.Update(p with { Ready = false });
+            }
+
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
+        SystemAll(ctx, $"{DisplayName(caller)} force-started the match.");
+        Log.Info($"[Match] force-start by {caller.Identity} -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");
+    }
+
     // Lobby -> Active once everyone who has joined a side is readied up. Solo is
     // allowed: the AI drones (PIGs) provide opposition, so one readied pilot can launch.
     private static void MaybeStartMatch(ReducerContext ctx)
@@ -1884,10 +2040,15 @@ public static partial class Module
             return;
 
         // Fresh battlefield, and consume the ready flags so the next lobby starts clean.
+        // Every participant gets a fresh native-sim credential (no-op when native is off).
         ResetWorld(ctx);
         foreach (var p in ctx.Db.Player.Iter().ToList())
             if (p.Ready)
+            {
+                if (p.Team is byte pt)
+                    MintJoinToken(ctx, p.Identity, pt);
                 ctx.Db.Player.Identity.Update(p with { Ready = false });
+            }
 
         ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
         Log.Info($"[Match] {readied} pilot(s) ready -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");

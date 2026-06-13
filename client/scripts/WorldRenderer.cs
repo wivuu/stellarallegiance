@@ -216,6 +216,104 @@ public partial class WorldRenderer : Node3D
 			_shotMaskMs = ms;
 	}
 
+	// ---- Native sim-server mode (Phase 1b/1c) ------------------------------
+	// When GameNetClient activates (SIM_URI override, or a SimEndpoint row + own
+	// JoinToken arriving from the lobby), the 20 Hz hot path — ships, tick, static
+	// world — comes from the native sim server, NOT from STDB rows (whose map is a
+	// different seed and whose Match clock is a different timeline). STDB stays
+	// connected for defs/chat/lobby; every STDB world-table callback below gates on
+	// _nativeMode at CALL time (activation can happen after the initial subscription
+	// snapshot already rendered the STDB world — so enabling also wipes it), and the
+	// Net* entry points feed the same handler bodies from snapshot frames instead.
+	private bool _nativeMode;
+
+	// True while the native sim server owns the world (between Enable/DisableNativeMode). The
+	// HUD/Lobby overlays read this to defer to the native game instead of STDB lobby/team state
+	// — in dev SIM_URI play there's no STDB team, so without this gate the lobby would sit on
+	// top of a live native match and the spawn menu would never appear.
+	public bool NativeMode => _nativeMode;
+
+	public void EnableNativeMode()
+	{
+		if (_nativeMode)
+			return;
+		_nativeMode = true;
+
+		// Drop anything the STDB subscription already rendered: the sim server's world
+		// replaces it wholesale (Welcome + snapshots repopulate via the Net* calls).
+		foreach (var group in new[] { _bases, _asteroids, _ships, _alephs })
+			foreach (var child in group.GetChildren())
+				child.QueueFree();
+		_baseNodes.Clear();
+		_baseHealthBars.Clear();
+		_asteroidNodes.Clear();
+		_asteroidSpins.Clear();
+		_shipNodes.Clear();
+		_alephNodes.Clear();
+		_sectors.Clear();
+		LocalShip = null;
+	}
+
+	// Inverse of EnableNativeMode: hand authority back to STDB when the native match ends so
+	// the durable post-match/lobby flow (driven by the STDB Match subscription + RestartMatch)
+	// resumes. Wipes the sim-server-rendered world and re-renders the static STDB world from
+	// the live subscription cache (its OnInsert callbacks already fired — and were gated out —
+	// while native mode was active, so we replay them from the cache here). Ships repopulate
+	// via the ordinary STDB callbacks on the next match.
+	public void DisableNativeMode()
+	{
+		if (!_nativeMode)
+			return;
+		_nativeMode = false;
+
+		foreach (var group in new[] { _bases, _asteroids, _ships, _alephs })
+			foreach (var child in group.GetChildren())
+				child.QueueFree();
+		_baseNodes.Clear();
+		_baseHealthBars.Clear();
+		_asteroidNodes.Clear();
+		_asteroidSpins.Clear();
+		_shipNodes.Clear();
+		_alephNodes.Clear();
+		_sectors.Clear();
+		LocalShip = null;
+
+		var conn = _cm.Conn;
+		if (conn == null)
+			return;
+		foreach (var s in conn.Db.Sector.Iter()) _sectors[s.SectorId] = s;
+		foreach (var b in conn.Db.Base.Iter()) InsertBase(b);
+		foreach (var a in conn.Db.Asteroid.Iter()) InsertAsteroid(a);
+		foreach (var g in conn.Db.Aleph.Iter()) InsertAleph(g);
+	}
+
+	// Per-snapshot match clock + phase from the sim server (Phase-2). The sim runs a single
+	// perpetual Active match that flips to Ended when a base falls; winner 255 = none.
+	public void NetSetMatch(uint tick, byte phase, byte winner)
+	{
+		ServerTick = tick;
+		Phase = (MatchPhase)phase;
+		Winner = winner == 255 ? (byte?)null : winner;
+	}
+
+	// Streamed base health (MsgBases). Bases are static nodes placed by the Welcome frame;
+	// this just drives the floating damage bar the same way the STDB OnBaseUpdate path does.
+	public void NetUpdateBaseHealth(ulong baseId, float health)
+	{
+		if (_baseHealthBars.TryGetValue(baseId, out var bar))
+			UpdateBaseHealthBar(bar, health);
+	}
+
+	public void NetInsertShip(Ship row, bool local) => InsertShip(row, local);
+	public void NetUpdateShip(Ship oldRow, Ship newRow) => UpdateShip(oldRow, newRow);
+	public void NetDeleteShip(Ship row) => DeleteShip(row);
+
+	// Static world from the Welcome frame, feeding the same bodies the STDB path uses.
+	public void NetAddSector(Sector row) { _sectors[row.SectorId] = row; }
+	public void NetAddBase(Base row) => InsertBase(row);
+	public void NetAddAsteroid(Asteroid row) => InsertAsteroid(row);
+	public void NetAddAleph(Aleph row) => InsertAleph(row);
+
 	private void OnConnected(DbConnection conn)
 	{
 		conn.Db.Base.OnInsert += OnBaseInsert;
@@ -233,14 +331,16 @@ public partial class WorldRenderer : Node3D
 		conn.Db.Match.OnUpdate += (_, _, row) => OnMatch(row);
 		// Sectors define the boundary radius; alephs are the warp funnels. Both are
 		// seeded once at Init and effectively static, but we still listen for updates.
-		conn.Db.Sector.OnInsert += (_, row) => _sectors[row.SectorId] = row;
-		conn.Db.Sector.OnUpdate += (_, _, row) => _sectors[row.SectorId] = row;
+		conn.Db.Sector.OnInsert += (_, row) => { if (!_nativeMode) _sectors[row.SectorId] = row; };
+		conn.Db.Sector.OnUpdate += (_, _, row) => { if (!_nativeMode) _sectors[row.SectorId] = row; };
 		conn.Db.Aleph.OnInsert += OnAlephInsert;
 		conn.Db.Aleph.OnDelete += OnAlephDelete;
 	}
 
 	private void OnMatch(Match row)
 	{
+		if (_nativeMode)
+			return;   // the sim server's snapshot tick is the clock (NetSetTick)
 		ServerTick = row.Tick;
 		Phase = row.Phase;
 		Winner = row.Winner;
@@ -280,6 +380,11 @@ public partial class WorldRenderer : Node3D
 
 	private void OnAlephInsert(EventContext ctx, Aleph row)
 	{
+		if (!_nativeMode) InsertAleph(row);
+	}
+
+	private void InsertAleph(Aleph row)
+	{
 		if (_alephNodes.ContainsKey(row.AlephId))
 			return;
 		var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
@@ -307,13 +412,18 @@ public partial class WorldRenderer : Node3D
 
 	private void OnAlephDelete(EventContext ctx, Aleph row)
 	{
-		if (_alephNodes.Remove(row.AlephId, out var node))
+		if (!_nativeMode && _alephNodes.Remove(row.AlephId, out var node))
 			node.QueueFree();
 	}
 
 	// ---- Base -----------------------------------------------------------
 
 	private void OnBaseInsert(EventContext ctx, Base row)
+	{
+		if (!_nativeMode) InsertBase(row);
+	}
+
+	private void InsertBase(Base row)
 	{
 		if (_baseNodes.ContainsKey(row.BaseId))
 			return;
@@ -389,6 +499,8 @@ public partial class WorldRenderer : Node3D
 	// removed — so the battlefield is whole again for the next match.
 	private void OnBaseUpdate(EventContext ctx, Base oldRow, Base newRow)
 	{
+		if (_nativeMode)
+			return;
 		if (newRow.Health <= 0f)
 		{
 			if (_baseNodes.Remove(newRow.BaseId, out var node))
@@ -400,7 +512,7 @@ public partial class WorldRenderer : Node3D
 		}
 		else if (!_baseNodes.ContainsKey(newRow.BaseId))
 		{
-			OnBaseInsert(ctx, newRow);   // restored after a restart
+			InsertBase(newRow);   // restored after a restart
 		}
 		else if (_baseHealthBars.TryGetValue(newRow.BaseId, out var bar))
 		{
@@ -410,6 +522,8 @@ public partial class WorldRenderer : Node3D
 
 	private void OnBaseDelete(EventContext ctx, Base row)
 	{
+		if (_nativeMode)
+			return;
 		if (_baseNodes.Remove(row.BaseId, out var node))
 			node.QueueFree();
 		_baseHealthBars.Remove(row.BaseId);
@@ -482,6 +596,11 @@ public partial class WorldRenderer : Node3D
 
 	private void OnAsteroidInsert(EventContext ctx, Asteroid row)
 	{
+		if (!_nativeMode) InsertAsteroid(row);
+	}
+
+	private void InsertAsteroid(Asteroid row)
+	{
 		if (_asteroidNodes.ContainsKey(row.AsteroidId))
 			return;
 
@@ -518,6 +637,8 @@ public partial class WorldRenderer : Node3D
 
 	private void OnAsteroidDelete(EventContext ctx, Asteroid row)
 	{
+		if (_nativeMode)
+			return;
 		_asteroidSpins.Remove(row.AsteroidId);
 		if (_asteroidNodes.Remove(row.AsteroidId, out var node))
 			node.QueueFree();
@@ -553,13 +674,19 @@ public partial class WorldRenderer : Node3D
 
 	private void OnShipInsert(EventContext ctx, Ship row)
 	{
+		if (_nativeMode) return;
+		// PIGs are never the local player (defensive: their Owner is the module identity,
+		// so IsLocal is already false) — always render them as interpolated remote ships.
+		InsertShip(row, IsLocal(row) && !row.IsPig);
+	}
+
+	private void InsertShip(Ship row, bool local)
+	{
 		if (_shipNodes.ContainsKey(row.ShipId))
 			return;
 
 		Node3D node;
-		// PIGs are never the local player (defensive: their Owner is the module identity,
-		// so IsLocal is already false) — always render them as interpolated remote ships.
-		if (IsLocal(row) && !row.IsPig)
+		if (local)
 		{
 			var pc = new PredictionController { Name = $"Ship_{row.ShipId}" };
 			node = pc;
@@ -594,6 +721,11 @@ public partial class WorldRenderer : Node3D
 
 	private void OnShipUpdate(EventContext ctx, Ship oldRow, Ship newRow)
 	{
+		if (!_nativeMode) UpdateShip(oldRow, newRow);
+	}
+
+	private void UpdateShip(Ship oldRow, Ship newRow)
+	{
 		if (!_shipNodes.TryGetValue(newRow.ShipId, out var node))
 			return;
 		switch (node)
@@ -624,6 +756,11 @@ public partial class WorldRenderer : Node3D
 	}
 
 	private void OnShipDelete(EventContext ctx, Ship row)
+	{
+		if (!_nativeMode) DeleteShip(row);
+	}
+
+	private void DeleteShip(Ship row)
 	{
 		if (!_shipNodes.Remove(row.ShipId, out var node))
 			return;

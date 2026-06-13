@@ -8,15 +8,20 @@ using SimServer.Sim;
 // AOI snapshots after each step. Usage: dotnet run [--port 8090] [--seed N]
 int port = 8090;
 ulong seed = 1234567;
+// Join-token secret (Phase 1c): must match what `set_sim_endpoint` installed in the
+// STDB module. Empty (default) = dev mode: credential-less Hellos accepted.
+string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
 for (int i = 0; i < args.Length - 1; i++)
 {
     if (args[i] == "--port") port = int.Parse(args[i + 1]);
     if (args[i] == "--seed") seed = ulong.Parse(args[i + 1]);
+    if (args[i] == "--secret") secret = args[i + 1];
 }
 
 var world = new World(seed);
 var sim = new Simulation(world);
-var hub = new ClientHub(sim);
+var hub = new ClientHub(sim, secret);
+var reporter = new ResultReporter();
 
 var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -56,7 +61,13 @@ var simThread = new Thread(() =>
 
         double t0 = clock.Elapsed.TotalMilliseconds;
         sim.Step();
+        if (sim.JustEnded)
+            reporter.ReportWinner(sim.Winner);   // one-shot, fire-and-forget
         hub.AfterStep();
+        // Recycle the match once the server empties out (post-match clients all dropped on
+        // lobby return), so the next handoff meets a fresh Active match.
+        if (hub.ConnectionCount == 0 && sim.ShouldResetWhenEmpty)
+            sim.ResetMatch();
         stepMs.Add(clock.Elapsed.TotalMilliseconds - t0);
 
         if (sim.Tick % 100 == 0)

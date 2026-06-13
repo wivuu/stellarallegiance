@@ -32,6 +32,7 @@ namespace SpacetimeDB.Types
             AddTable(Base = new(conn));
             AddTable(BaseDef = new(conn));
             AddTable(ChatMessage = new(conn));
+            AddTable(JoinToken = new(conn));
             AddTable(Match = new(conn));
             AddTable(Pig = new(conn));
             AddTable(PigBrainTimer = new(conn));
@@ -40,6 +41,7 @@ namespace SpacetimeDB.Types
             AddTable(Sector = new(conn));
             AddTable(Ship = new(conn));
             AddTable(ShipClassDef = new(conn));
+            AddTable(SimEndpoint = new(conn));
             AddTable(SimTickTimer = new(conn));
             AddTable(WeaponDef = new(conn));
             AddTable(WorldConfig = new(conn));
@@ -544,6 +546,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Base().ToSql(),
             new QueryBuilder().From.BaseDef().ToSql(),
             new QueryBuilder().From.ChatMessage().ToSql(),
+            new QueryBuilder().From.JoinToken().ToSql(),
             new QueryBuilder().From.Match().ToSql(),
             new QueryBuilder().From.Pig().ToSql(),
             new QueryBuilder().From.PigBrainTimer().ToSql(),
@@ -552,6 +555,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Sector().ToSql(),
             new QueryBuilder().From.Ship().ToSql(),
             new QueryBuilder().From.ShipClassDef().ToSql(),
+            new QueryBuilder().From.SimEndpoint().ToSql(),
             new QueryBuilder().From.SimTickTimer().ToSql(),
             new QueryBuilder().From.WeaponDef().ToSql(),
             new QueryBuilder().From.WorldConfig().ToSql(),
@@ -566,6 +570,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Base, BaseCols, BaseIxCols> Base() => new("base", new BaseCols("base"), new BaseIxCols("base"));
         public global::SpacetimeDB.Table<BaseDef, BaseDefCols, BaseDefIxCols> BaseDef() => new("base_def", new BaseDefCols("base_def"), new BaseDefIxCols("base_def"));
         public global::SpacetimeDB.Table<ChatMessage, ChatMessageCols, ChatMessageIxCols> ChatMessage() => new("chat_message", new ChatMessageCols("chat_message"), new ChatMessageIxCols("chat_message"));
+        public global::SpacetimeDB.Table<JoinToken, JoinTokenCols, JoinTokenIxCols> JoinToken() => new("join_token", new JoinTokenCols("join_token"), new JoinTokenIxCols("join_token"));
         public global::SpacetimeDB.Table<Match, MatchCols, MatchIxCols> Match() => new("match", new MatchCols("match"), new MatchIxCols("match"));
         public global::SpacetimeDB.Table<Pig, PigCols, PigIxCols> Pig() => new("pig", new PigCols("pig"), new PigIxCols("pig"));
         public global::SpacetimeDB.Table<PigBrainTimer, PigBrainTimerCols, PigBrainTimerIxCols> PigBrainTimer() => new("pig_brain_timer", new PigBrainTimerCols("pig_brain_timer"), new PigBrainTimerIxCols("pig_brain_timer"));
@@ -574,6 +579,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Sector, SectorCols, SectorIxCols> Sector() => new("sector", new SectorCols("sector"), new SectorIxCols("sector"));
         public global::SpacetimeDB.Table<Ship, ShipCols, ShipIxCols> Ship() => new("ship", new ShipCols("ship"), new ShipIxCols("ship"));
         public global::SpacetimeDB.Table<ShipClassDef, ShipClassDefCols, ShipClassDefIxCols> ShipClassDef() => new("ship_class_def", new ShipClassDefCols("ship_class_def"), new ShipClassDefIxCols("ship_class_def"));
+        public global::SpacetimeDB.Table<SimEndpoint, SimEndpointCols, SimEndpointIxCols> SimEndpoint() => new("sim_endpoint", new SimEndpointCols("sim_endpoint"), new SimEndpointIxCols("sim_endpoint"));
         public global::SpacetimeDB.Table<SimTickTimer, SimTickTimerCols, SimTickTimerIxCols> SimTickTimer() => new("sim_tick_timer", new SimTickTimerCols("sim_tick_timer"), new SimTickTimerIxCols("sim_tick_timer"));
         public global::SpacetimeDB.Table<WeaponDef, WeaponDefCols, WeaponDefIxCols> WeaponDef() => new("weapon_def", new WeaponDefCols("weapon_def"), new WeaponDefIxCols("weapon_def"));
         public global::SpacetimeDB.Table<WorldConfig, WorldConfigCols, WorldConfigIxCols> WorldConfig() => new("world_config", new WorldConfigCols("world_config"), new WorldConfigIxCols("world_config"));
@@ -664,11 +670,13 @@ namespace SpacetimeDB.Types
                 Reducer.LeaveTeam args => Reducers.InvokeLeaveTeam(eventContext, args),
                 Reducer.QuickJoin args => Reducers.InvokeQuickJoin(eventContext, args),
                 Reducer.RegenerateWorld args => Reducers.InvokeRegenerateWorld(eventContext, args),
+                Reducer.ReportMatchResult args => Reducers.InvokeReportMatchResult(eventContext, args),
                 Reducer.Respawn args => Reducers.InvokeRespawn(eventContext, args),
                 Reducer.RestartMatch args => Reducers.InvokeRestartMatch(eventContext, args),
                 Reducer.SendChat args => Reducers.InvokeSendChat(eventContext, args),
                 Reducer.SetName args => Reducers.InvokeSetName(eventContext, args),
                 Reducer.SetReady args => Reducers.InvokeSetReady(eventContext, args),
+                Reducer.SetSimEndpoint args => Reducers.InvokeSetSimEndpoint(eventContext, args),
                 Reducer.SpawnShip args => Reducers.InvokeSpawnShip(eventContext, args),
                 Reducer.UpsertBaseDef args => Reducers.InvokeUpsertBaseDef(eventContext, args),
                 Reducer.UpsertShipClassDef args => Reducers.InvokeUpsertShipClassDef(eventContext, args),

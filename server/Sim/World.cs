@@ -25,6 +25,7 @@ public sealed class World
     public const float BoundaryMaxDps = 60f;
     public const float AlephTriggerRadius = 18f;
     public const float WarpExitOffset = 60f;
+    public const float WarpExitJitter = 0.12f;   // per-axis random spread on the exit cone
     public const uint HomeSector = 0;
     public const uint VergeSector = 1;
     public const float CoreRadius = 2100f;
@@ -38,7 +39,11 @@ public sealed class World
 
     public readonly record struct Sector(uint Id, float Radius);
     public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
-    public readonly record struct Rock(ulong Id, uint SectorId, Vec3 Pos, float Radius);
+    // Variant/Rot* are cosmetic only (the sim ignores them) but are drawn from the same DetRng
+    // sequence the module uses, so they ride along to the client via the Welcome frame instead
+    // of leaving rocks as grey spheres. Variant is the index into Shared.AsteroidShapes.Variants.
+    public readonly record struct Rock(
+        ulong Id, uint SectorId, Vec3 Pos, float Radius, byte Variant, float RotX, float RotY, float RotZ);
     public readonly record struct Gate(ulong Id, uint SectorId, uint DestSectorId, Vec3 Pos, Vec3 PartnerPos);
 
     public readonly List<Sector> Sectors = new();
@@ -131,8 +136,8 @@ public sealed class World
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * halfY * scale);
             float pz = (float)((zc + across) * scale);
             float radius = (float)(rng.NextDouble() * 30.0 + 10.0);
-            SkipShapeDraws(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius));
+            var (variant, rx, ry, rz) = NextShape(ref rng);
+            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
     }
 
@@ -147,20 +152,22 @@ public sealed class World
             float py = (float)((rng.NextDouble() - 0.5) * 90.0 * scale);
             float pz = (float)(Math.Sin(ang) * r);
             float radius = (float)(rng.NextDouble() * 18.0 + 8.0);
-            SkipShapeDraws(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius));
+            var (variant, rx, ry, rz) = NextShape(ref rng);
+            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
     }
 
-    // The module draws variant + 3 orientation values per rock (NextAsteroidShape). The sim
-    // ignores them, but the draws must still happen so positions stay byte-identical with
-    // the module's map for the same seed (clients re-derive visuals from the seed later).
-    private static void SkipShapeDraws(ref DetRng rng)
+    // Mirror the module's NextAsteroidShape (Lib.cs): one variant index + three orientation
+    // angles, drawn in the exact same order so positions stay byte-identical with the module's
+    // map AND the cosmetic shape matches. The index count comes from the shared variant list so
+    // server draw-count and client name-lookup can never drift apart.
+    private static (byte variant, float rx, float ry, float rz) NextShape(ref DetRng rng)
     {
-        rng.NextInt(31);
-        rng.NextRange(0, Math.PI * 2.0);
-        rng.NextRange(0, Math.PI * 2.0);
-        rng.NextRange(0, Math.PI * 2.0);
+        byte variant = (byte)rng.NextInt(AsteroidShapes.Variants.Length);
+        float rx = (float)rng.NextRange(0, Math.PI * 2.0);
+        float ry = (float)rng.NextRange(0, Math.PI * 2.0);
+        float rz = (float)rng.NextRange(0, Math.PI * 2.0);
+        return (variant, rx, ry, rz);
     }
 
     private static (float, float, float) RandomOuterPos(ref DetRng rng, float sectorRadius)

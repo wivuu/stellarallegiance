@@ -85,16 +85,33 @@ public partial class RemoteShip : Node3D
 
 	public void OnAuthoritative(Ship row) => Push(row);
 
+	// Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
+	// un-initialized or transient ship state on the wire — would NaN under Normalized()
+	// (divide by ~0), and a single NaN assignment permanently poisons the node's Basis
+	// (every later read throws "must be normalized"), since a ship that then stops
+	// receiving samples never recovers. Reject non-finite/zero-length; fall back to identity.
+	private static Quaternion SafeRot(float x, float y, float z, float w)
+	{
+		var q = new Quaternion(x, y, z, w);
+		float len2 = q.LengthSquared();
+		if (!float.IsFinite(len2) || len2 < 1e-6f)
+			return Quaternion.Identity;
+		return q.Normalized();
+	}
+
+	private static bool IsFinite(Vector3 v) => v.IsFinite();
+
 	private void Push(Ship row)
 	{
+		var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
 		var s = new Sample
 		{
 			T = Time.GetTicksMsec(),
-			Pos = new Vector3(row.PosX, row.PosY, row.PosZ),
-			// Normalize defensively — synced floats can be a hair off unit length.
-			Rot = new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW).Normalized(),
+			Pos = IsFinite(pos) ? pos : Position,   // keep last good on a corrupt sample
+			Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
 		};
-		_velTarget = new Vector3(row.VelX, row.VelY, row.VelZ);
+		var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
+		_velTarget = IsFinite(vel) ? vel : Vector3.Zero;
 
 		_samples.Add(s);
 		if (_samples.Count > MaxSamples)
