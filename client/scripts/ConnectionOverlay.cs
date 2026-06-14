@@ -62,8 +62,10 @@ public partial class ConnectionOverlay : Control
 
     public override void _Process(double delta)
     {
-        // Hidden the moment we're live — the Lobby/HUD take over from here.
-        if (_cm.State == ConnectionManager.ConnState.Connected)
+        // Hidden the moment we're live — the Lobby/HUD take over from here. Also hidden while
+        // the address-input screen owns the view (no server chosen yet).
+        if (_cm.State == ConnectionManager.ConnState.Connected
+            || _cm.State == ConnectionManager.ConnState.AwaitingAddress)
         {
             Visible = false;
             _connectingFor = 0;
@@ -96,7 +98,7 @@ public partial class ConnectionOverlay : Control
                 _title.Text = "⚠  Server offline";
                 _title.AddThemeColorOverride("font_color", Offline);
                 _detail.Text = $"Couldn't reach {_cm.ServerUrl}.\n"
-                    + "Start the local server (scripts/publish-local.sh), or relaunch with --maincloud.";
+                    + "Check the server is running (scripts/run-server.sh), then Retry to enter an address.";
                 _retry.Visible = true;
                 break;
         }

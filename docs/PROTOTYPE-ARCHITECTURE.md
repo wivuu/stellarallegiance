@@ -1,5 +1,11 @@
 # Stellar Allegiance — Prototype Architecture (Complete)
 
+> **⚠ Historical.** Written when the backend was SpacetimeDB-based. SpacetimeDB has since been
+> removed: the server is a standalone authoritative sim + lobby host and the client downloads
+> defs/world/lobby over the wire (no database). References below to STDB tables, reducers, the
+> module, or join-token minting are historical. See **README.md** / **CONTRIBUTING.md** for the
+> current architecture.
+
 > **Status: COMPLETE** — All tasks T0–T10 finished (June 2026).
 > This document consolidates the original `.PLAN/` build specs into a single
 > reference for anyone reading the codebase. It does not define future work.

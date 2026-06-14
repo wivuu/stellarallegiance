@@ -1,5 +1,5 @@
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 
 // A one-shot ship-death blast, built procedurally (no assets) on the same unshaded + additive
 // + HDR-emission idiom as EngineGlow so the WorldEnvironment glow blooms it. Three layered

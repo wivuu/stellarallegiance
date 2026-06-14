@@ -1,5 +1,6 @@
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
+using StellarAllegiance.Shared;
 
 // =====================================================================
 //  BaseModelLoader.cs — CLIENT BASE MESH + HARDPOINT LOADER (Phase-1 M5)

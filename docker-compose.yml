@@ -1,0 +1,25 @@
+# Local-dev / single-box deployment of the wivuullegiance backend: the standalone native sim
+# server (the 20 Hz authoritative match AND the lobby host). It is fully self-contained — there
+# is no database; clients connect directly and download all content from the server.
+#
+# TLS: the sim server speaks plain ws:// on :8090. Production terminates TLS at the hosting
+# layer's ingress (wss://your-host/game -> sim-server:8090). This compose exposes a plain port
+# for a trusted local box only.
+#
+# First run:
+#   cp .env.example .env && edit .env   (optionally set SIM_SECRET = openssl rand -hex 32)
+#   docker compose up --build
+services:
+  sim-server:
+    build:
+      context: .                     # repo root, so ../shared resolves (see server/Dockerfile)
+      dockerfile: server/Dockerfile
+    environment:
+      # Optional shared-secret password. Leave empty for an open server (LAN/dev); set it to
+      # require every client's Hello to carry the same secret.
+      SIM_SECRET: ${SIM_SECRET:-}
+      # Set to 1 to skip the lobby ready-up and run a perpetual match (bots / benchmarking).
+      SIM_AUTOSTART: ${SIM_AUTOSTART:-}
+    ports:
+      - "${SIM_PORT:-8090}:8090"
+    restart: unless-stopped

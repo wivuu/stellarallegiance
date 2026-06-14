@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Phase-1 native sim server (see ~/.claude plan replicated-purring-duckling / HANDOFF):
+       owns the 20 Hz authoritative match simulation in plain process memory and streams
+       AOI-filtered binary snapshots over WebSocket. SpacetimeDB is no longer in the hot
+       path; it keeps lobby/defs/persistence and (later) mints join tokens for this server.
+       References the same shared deterministic FlightModel the module and Godot client
+       compile, so prediction math stays bit-identical across all three. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Latency-sensitive 20 Hz sim thread + parallel snapshot fan-out: server GC gives a
+         per-core heap so the parallel AfterStep doesn't contend on one allocator, concurrent
+         GC keeps collections off the tick thread (trims the step-time p99 jitter), and PGO
+         lets the steady-state hot path (snapshot build) re-optimize after warmup. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../shared/Shared.csproj" />
+  </ItemGroup>
+</Project>

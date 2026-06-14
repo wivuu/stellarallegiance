@@ -1,6 +1,5 @@
 using Godot;
-using SpacetimeDB;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
 // UI; the Hud's own spawn menu only appears once you're teamed in an active match and
@@ -12,6 +11,7 @@ public partial class Hud : CanvasLayer
 	private WorldRenderer _world = null!;
 	private ShipController _ship = null!;
 	private Label _label = null!;
+	private Label _sectorShips = null!;
 	private Control _menu = null!;
 	private Label _warning = null!;
 
@@ -31,7 +31,13 @@ public partial class Hud : CanvasLayer
 		AddChild(minimap);
 		minimap.Init(_cm, _world);
 
-		_label = new Label { Position = new Vector2(16, 12) };
+		// Active-ship count for the local sector, pinned to the very top-left. Hidden until a
+		// match is live (the lobby overlay owns the screen otherwise).
+		_sectorShips = new Label { Position = new Vector2(16, 12), Visible = false };
+		_sectorShips.AddThemeFontSizeOverride("font_size", 18);
+		AddChild(_sectorShips);
+
+		_label = new Label { Position = new Vector2(16, 38) };
 		_label.AddThemeFontSizeOverride("font_size", 18);
 		AddChild(_label);
 
@@ -74,14 +80,6 @@ public partial class Hud : CanvasLayer
 		conn.Init(_cm);
 	}
 
-	private Player? LocalPlayer()
-	{
-		var conn = _cm.Conn;
-		if (conn is null || _cm.LocalIdentity is not Identity id)
-			return null;
-		return conn.Db.Player.Identity.Find(id);
-	}
-
 	private Button SpawnButton(string text, ShipClass cls)
 	{
 		var b = new Button { Text = text, CustomMinimumSize = new Vector2(280, 36) };
@@ -94,11 +92,15 @@ public partial class Hud : CanvasLayer
 		var ship = _world.LocalShip;
 		bool flying = ship != null;
 
-		// The Lobby overlay owns everything outside a live match. The spawn menu only
-		// appears once you're teamed in an active match and not currently flying.
-		bool teamedInMatch = _world.Phase == MatchPhase.Active
-			&& LocalPlayer() is Player p && p.Team is not null;
+		// The Lobby overlay owns everything outside a live match. The spawn menu appears once a
+		// match is Active and you're not currently flying — keying off "not flying" means it also
+		// reopens when a pod is destroyed/docked and you're awaiting your next ship.
+		bool inMatch = _world.Phase == MatchPhase.Active;
+		bool teamedInMatch = inMatch;
 		_menu.Visible = teamedInMatch && !flying;
+		_sectorShips.Visible = inMatch;
+		if (inMatch)
+			_sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
 
 		// Sector boundary: warn (and pulse) once the ship is past the radius, where the
 		// server is eroding the hull. Distance is measured from the local sector center.

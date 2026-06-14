@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 
 // Always-on minimap in the bottom-left: a 2D node-link diagram of the sector graph.
 // Each sector is a circle; each aleph pair is a line between the two sectors it links.
@@ -46,14 +46,8 @@ public partial class Minimap : Control
 
 	public override void _Draw()
 	{
-		var conn = _cm.Conn;
-		if (conn is null)
-			return;
-
 		// Sectors, sorted by id so the ring layout is STABLE (id -> slot never changes).
-		var sectors = new List<Sector>();
-		foreach (var s in conn.Db.Sector.Iter())
-			sectors.Add(s);
+		var sectors = new List<Sector>(_world.MapSectors);
 		if (sectors.Count == 0)
 			return;
 		sectors.Sort((a, b) => a.SectorId.CompareTo(b.SectorId));
@@ -86,23 +80,23 @@ public partial class Minimap : Control
 
 		// Edges: one line per aleph PAIR (dedupe by unordered sector pair).
 		var drawn = new HashSet<long>();
-		foreach (var a in conn.Db.Aleph.Iter())
+		foreach (var (sector, dest) in _world.MapAlephLinks)
 		{
-			uint lo = a.SectorId < a.DestSectorId ? a.SectorId : a.DestSectorId;
-			uint hi = a.SectorId < a.DestSectorId ? a.DestSectorId : a.SectorId;
+			uint lo = sector < dest ? sector : dest;
+			uint hi = sector < dest ? dest : sector;
 			if (!drawn.Add(((long)lo << 32) | hi))
 				continue;
-			if (pos.TryGetValue(a.SectorId, out var p0) && pos.TryGetValue(a.DestSectorId, out var p1))
+			if (pos.TryGetValue(sector, out var p0) && pos.TryGetValue(dest, out var p1))
 				DrawLine(p0, p1, EdgeColor, 2f, true);
 		}
 
 		// Which team(s) hold a base in each sector.
 		var teams = new Dictionary<uint, (bool t0, bool t1)>();
-		foreach (var b in conn.Db.Base.Iter())
+		foreach (var (sector, team) in _world.MapBaseTeams)
 		{
-			teams.TryGetValue(b.SectorId, out var cur);
-			if (b.Team == 0) cur.t0 = true; else if (b.Team == 1) cur.t1 = true;
-			teams[b.SectorId] = cur;
+			teams.TryGetValue(sector, out var cur);
+			if (team == 0) cur.t0 = true; else if (team == 1) cur.t1 = true;
+			teams[sector] = cur;
 		}
 
 		// Nodes (drawn after edges so they sit on top of the lines).
@@ -125,7 +119,8 @@ public partial class Minimap : Control
 		}
 
 		// Current-sector name along the panel's bottom edge.
-		if (conn.Db.Sector.SectorId.Find(localSector) is Sector cs)
-			DrawString(font, panelPos + new Vector2(11, PanelH - 9), cs.Name, HorizontalAlignment.Left, PanelW - 22, 12, HaloColor);
+		string name = _world.SectorName(localSector);
+		if (!string.IsNullOrEmpty(name))
+			DrawString(font, panelPos + new Vector2(11, PanelH - 9), name, HorizontalAlignment.Left, PanelW - 22, 12, HaloColor);
 	}
 }

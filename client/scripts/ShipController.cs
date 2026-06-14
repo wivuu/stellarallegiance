@@ -1,5 +1,5 @@
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Reads local input, runs the fixed-rate (20 Hz) input/prediction loop, and
@@ -36,12 +36,27 @@ public partial class ShipController : Node
 
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
+	// Phase-1b: when GameNetClient is active (SIM_URI set), spawn + input go over the
+	// native sim socket instead of STDB reducers; everything else (prediction, defs,
+	// rendering) is unchanged. Null/inactive = pure STDB path.
+	private GameNetClient? _net;
+	private bool Native => _net is { Active: true };
 
 	private double _acc;
 	private uint _predTick;             // prediction tick, in SERVER-tick space
 	private bool _hadShip;
 	private int _stepsSinceSpawn;
 	private ShipInputState _input;
+
+	// On-change input sending: ApplyInput goes out only when the stick state differs from
+	// the last SENT input, or the keepalive window lapses. The server replays the last
+	// received input for the silent ticks (held input) — exactly what our own prediction
+	// does with an unchanged stick — so auth == prediction still holds while idle/cruise
+	// ticks cost no reducer transaction at all (~10x fewer under keyboard flight; mouse
+	// easing changes the stick every tick, so active maneuvering still sends at full rate).
+	private const uint InputKeepaliveTicks = 20;   // ~1 s at 20 Hz; also paces PingMs samples
+	private ShipInputState _lastSentInput;
+	private uint _lastSentTick;
 	private ShipClass? _spawnRequest;   // class chosen via HUD menu / 1-2 keys; cleared once flying
 	private bool _spawnPending;
 	private double _spawnRetry;
@@ -70,18 +85,32 @@ public partial class ShipController : Node
 	// Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
 	// input so the full ApplyInput -> SimTick -> reconcile loop can be checked
 	// without a human at the keyboard.
+	// Exact field compare (bools + floats sampled from the same key/stick state repeat
+	// bit-identically while unchanged, so == is the right test — no epsilon wanted).
+	private static bool InputsEqual(in ShipInputState a, in ShipInputState b) =>
+		a.Thrust == b.Thrust && a.StrafeX == b.StrafeX && a.StrafeY == b.StrafeY
+		&& a.Yaw == b.Yaw && a.Pitch == b.Pitch && a.Roll == b.Roll
+		&& a.Firing == b.Firing && a.Boost == b.Boost && a.Coast == b.Coast;
+
 	private bool _autoFly;
 	private bool _autoJoined;            // autofly QuickJoins (team + ready) once on connect
 	private bool _selfTestDone;         // autofly fires one divergence injection
 	private bool _combatTest;           // --combat-test: fly straight + fire (head-on damage check)
 
-	// Round-trip latency, measured by timing each ApplyInput against its own reducer
-	// callback (clientTick is echoed back). This is the true client→server→client
-	// round trip (network + reducer run), independent of the prediction clock. The
-	// HUD reads PingMs/JitterMs. Only sampled while flying (that's when we send input).
+	// Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
+	// (clientTick echoed back); native mode times an explicit Ping/Pong nonce (no reducer to
+	// echo). Either way it's the true client→server→client round trip, independent of the
+	// prediction clock. The HUD reads PingMs/JitterMs; both feed UpdateAdaptiveLead.
 	private readonly System.Collections.Generic.Dictionary<uint, double> _sentAt = new();
 	public float PingMs { get; private set; }
 	public float JitterMs { get; private set; }
+
+	// Native-mode ping probe: a small nonce sent on a fixed wall-clock cadence (the on-change
+	// input stream is too bursty to estimate jitter from). _sentAt holds only ping nonces in
+	// native mode and only reducer ticks in STDB mode — the two modes never coexist.
+	private uint _pingNonce;
+	private double _pingAcc;
+	private const double PingIntervalSec = 0.25;   // 4 Hz
 
 	public override void _Ready()
 	{
@@ -98,10 +127,11 @@ public partial class ShipController : Node
 			_mouseSens = sens;
 		_mouseInvert = OS.GetEnvironment("STDB_MOUSE_INVERT") is "1" or "true";
 
-		// Time ApplyInput round-trips for the latency readout. The reducer callback
-		// fires on the caller when the server commits our call, echoing clientTick.
-		_cm.Connected += conn => conn.Reducers.OnApplyInput +=
-			(_, _, _, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
+		// Latency for the adaptive lead / HUD readout is sampled in native mode via the
+		// Ping/Pong probe (the in-STDB ApplyInput reducer-ack path was removed with the sim).
+		_net = GetNodeOrNull<GameNetClient>("../GameNetClient");
+		if (_net is not null)
+			_net.Pong += OnPong;
 
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
@@ -139,15 +169,16 @@ public partial class ShipController : Node
 		// reducer once the connection is live (LocalIdentity is set on connect),
 		// retry after a short delay so an early/lost request recovers, and clear the
 		// request once the ship actually exists.
-		bool connected = _cm.LocalIdentity is not null && _cm.Conn is not null;
+		// One native connection: "connected" means the server's Welcome has landed.
+		bool connected = _cm.State == ConnectionManager.ConnState.Connected;
 		bool hasShip = _world.LocalShip != null;
 
-		// Headless autofly: the lobby now gates spawning, so QuickJoin once on connect
-		// (smallest side + ready) to drive the match to Active before requesting a ship.
-		// Two --combat-test clients split onto opposing sides server-side.
+		// Headless autofly: the server gates spawning behind the lobby ready-up, so ready up once
+		// on connect to drive the match to Active before requesting a ship (teams are balanced
+		// server-side). Run the server with --autostart for fully unattended benchmarks.
 		if (_autoFly && connected && !_autoJoined)
 		{
-			_cm.Conn!.Reducers.QuickJoin();
+			_net?.SetReady(true);
 			_autoJoined = true;
 		}
 
@@ -172,7 +203,9 @@ public partial class ShipController : Node
 		}
 		else if (connected && !_spawnPending && _spawnRequest is { } cls)
 		{
-			_cm.Conn!.Reducers.SpawnShip(cls);
+			// Spawn on the authoritative sim server (honored only while the match is Active;
+			// the request simply retries until then).
+			_net?.RequestSpawn((byte)cls);
 			_spawnPending = true;
 			_spawnRetry = 1.0;
 		}
@@ -196,6 +229,9 @@ public partial class ShipController : Node
 			_acc = 0;
 			_stepsSinceSpawn = 0;
 			_hadShip = true;
+			// Fresh ship: force the first step to send (server starts from default input).
+			_lastSentInput = default;
+			_lastSentTick = 0;
 		}
 
 		// Afterburner (Shift): a real flight input now — extra forward thrust and a
@@ -213,6 +249,19 @@ public partial class ShipController : Node
 			_input.Firing = false;
 
 		UpdateAdaptiveLead();
+		if (Native)
+		{
+			// Probe RTT on a steady cadence so the adaptive lead has live latency to size
+			// against (native mode has no reducer ack to piggyback on).
+			_pingAcc += delta;
+			if (_pingAcc >= PingIntervalSec)
+			{
+				_pingAcc = 0;
+				uint nonce = ++_pingNonce;
+				_sentAt[nonce] = Time.GetTicksMsec();
+				_net!.SendPing(nonce);
+			}
+		}
 		int lead = (int)_predTick - (int)_world.ServerTick;
 		float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);
 		_acc += delta * (1f + slew);
@@ -225,13 +274,17 @@ public partial class ShipController : Node
 
 			_predTick++;
 			_stepsSinceSpawn++;
-			_cm.Conn?.Reducers.ApplyInput(
-				_input.Thrust, _input.StrafeX, _input.StrafeY,
-				_input.Yaw, _input.Pitch, _input.Roll,
-				_input.Firing, _input.Boost, _input.Coast, _predTick);
-			_sentAt[_predTick] = Time.GetTicksMsec();
+			if (!InputsEqual(_input, _lastSentInput) || _predTick - _lastSentTick >= InputKeepaliveTicks)
+			{
+				// Gameplay is native-only now (a local ship only ever exists in native mode).
+					// The sim server's tick-stamped input ring replays this exactly at _predTick;
+					// RTT is sampled separately via the Ping/Pong probe above.
+					_net?.SendInput(_predTick, _input);
+					_lastSentInput = _input;
+					_lastSentTick = _predTick;
+			}
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
-				_world.SpawnPredictedProjectile(pc.Team, shot.Pos, shot.Vel);
+				_world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.LifeSec);
 		}
 
 		// T5 divergence injection (debug). Press P to force a misprediction and
@@ -261,13 +314,17 @@ public partial class ShipController : Node
 		_targetLead = Mathf.Clamp(desired, DefaultTargetLead, 15);
 	}
 
-	// An ApplyInput we sent has been committed by the server: the elapsed wall time
-	// is the round-trip latency. Smooth it (EWMA) and track jitter for the HUD.
-	private void OnInputAck(uint clientTick)
+	// The server echoed our ping nonce (native mode): same RTT measurement, different trigger.
+	private void OnPong(uint nonce)
 	{
-		if (!_sentAt.Remove(clientTick, out var sent))
-			return;
-		float rtt = (float)(Time.GetTicksMsec() - sent);
+		if (_sentAt.Remove(nonce, out var sent))
+			RecordRtt(sent);
+	}
+
+	// Smooth a round-trip sample (EWMA) and track its jitter for the HUD + adaptive lead.
+	private void RecordRtt(double sentMsec)
+	{
+		float rtt = (float)(Time.GetTicksMsec() - sentMsec);
 		float dev = Mathf.Abs(rtt - PingMs);
 		PingMs = PingMs <= 0f ? rtt : PingMs * 0.9f + rtt * 0.1f;
 		JitterMs = JitterMs <= 0f ? dev : JitterMs * 0.9f + dev * 0.1f;

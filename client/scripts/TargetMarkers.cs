@@ -45,7 +45,9 @@ public partial class TargetMarkers : Control
 
 	private ulong? _focused;   // ShipId of the focused enemy, or null
 	private bool _tabHeld;     // edge-detect Tab so a held key cycles once
-	private readonly List<ulong> _visible = new();   // scratch for the focus cycle
+	// Scratch for the focus cycle: visible enemies paired with their distance (px²) from
+	// screen center, sorted nearest-center-first so Tab walks outward from the crosshair.
+	private readonly List<(float CenterDist2, ulong Id)> _visible = new();
 
 	// Wired up by the Hud (which already resolves these siblings).
 	public void Init(WorldRenderer world, Camera3D camera)
@@ -62,11 +64,12 @@ public partial class TargetMarkers : Control
 		QueueRedraw();
 	}
 
-	// Tab cycles focus through the currently visible (in-front-of-camera) enemies, in
-	// a stable order (ShipId) so the cycle is predictable. Re-pressing past the last
-	// one wraps back to none → first. When the focused ship dies/leaves, focus jumps
-	// to the nearest remaining enemy so combat focus carries to the next threat (a
-	// living focus that merely drifts behind the camera is kept, not dropped).
+	// Tab cycles focus through the currently visible (in-front-of-camera) enemies,
+	// ordered by distance from screen center so the first press grabs whatever's nearest
+	// the crosshair and each repeat steps outward. Re-pressing past the last one wraps
+	// back to none → first. When the focused ship dies/leaves, focus jumps to the nearest
+	// remaining enemy so combat focus carries to the next threat (a living focus that
+	// merely drifts behind the camera is kept, not dropped).
 	private void HandleFocusCycle()
 	{
 		// While the chat box is open, Tab switches chat channel — swallow it here so it
@@ -91,11 +94,17 @@ public partial class TargetMarkers : Control
 		// below (a second call would clear it mid-use).
 		var enemies = _world.EnemyShips();
 
+		// Order the in-front enemies by how close they project to screen center, so the
+		// cycle reads as "nearest the crosshair first, then outward."
+		Vector2 screenCenter = GetViewportRect().Size * 0.5f;
 		_visible.Clear();
 		foreach (var e in enemies)
 			if (!_camera.IsPositionBehind(e.GlobalPosition))
-				_visible.Add(e.ShipId);
-		_visible.Sort();
+			{
+				float d2 = (_camera.UnprojectPosition(e.GlobalPosition) - screenCenter).LengthSquared();
+				_visible.Add((d2, e.ShipId));
+			}
+		_visible.Sort(static (a, b) => a.CenterDist2.CompareTo(b.CenterDist2));
 
 		// If the focused ship is no longer among the live enemies (it died or left),
 		// auto-target the nearest remaining enemy instead of dropping focus.
@@ -111,11 +120,20 @@ public partial class TargetMarkers : Control
 		}
 		if (_focused is not ulong cur)
 		{
-			_focused = _visible[0];
+			_focused = _visible[0].Id;
 			return;
 		}
-		int idx = _visible.IndexOf(cur);
-		_focused = idx + 1 < _visible.Count ? _visible[idx + 1] : (ulong?)null; // wrap to none
+		int idx = VisibleIndexOf(cur);
+		_focused = idx + 1 < _visible.Count ? _visible[idx + 1].Id : (ulong?)null; // wrap to none
+	}
+
+	// Index of a ShipId within the center-distance-sorted _visible list, or -1.
+	private int VisibleIndexOf(ulong id)
+	{
+		for (int i = 0; i < _visible.Count; i++)
+			if (_visible[i].Id == id)
+				return i;
+		return -1;
 	}
 
 	private static bool ContainsId(IReadOnlyList<RemoteShip> enemies, ulong id)

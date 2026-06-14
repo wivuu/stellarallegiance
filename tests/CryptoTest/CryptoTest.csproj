@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pin the pure-managed SHA-256/HMAC and the join-token derivation against known
+         answers. The module (wasi) and the native sim server both compile this same
+         shared source, so a green run here is the guarantee their tokens agree. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+  </ItemGroup>
+
+</Project>
