@@ -14,11 +14,25 @@ namespace SimServer.Net;
 // the plan wants, approximated over TCP).
 public sealed class ClientHub
 {
-    // AOI: nearest FullRateCount same-sector ships every tick; EVERY ship (all sectors)
-    // refreshed every CoarseEveryTicks so radar/minimap-style awareness stays whole.
-    private const int FullRateCount = 60;
-    private const int CoarseEveryTicks = 10;
+    // AOI is a distance LOD, not a fixed count: a same-sector ship streams at a cadence
+    // chosen by its distance from the viewer — full rate (every tick) inside FullRateRadius,
+    // every MidEveryTicks out to MidRateRadius, every CoarseEveryTicks beyond. EVERY
+    // other-sector ship also refreshes at the coarse rate so radar/minimap awareness stays
+    // whole. Tiering by distance instead of ranking the nearest N drops the per-client
+    // per-tick sort: we threshold rather than order. MaxRecords is only a worst-case backstop
+    // for a furball packed inside R1 — that rare overflow is the one path that still sorts.
+    // All tunable from the environment so the LOD can be swept without recompiling.
+    private static readonly float FullRateRadius = EnvF("SIM_FULLRATE_RADIUS", 600f);
+    private static readonly float MidRateRadius  = EnvF("SIM_MIDRATE_RADIUS", 1500f);
+    private static readonly int MidEveryTicks    = Math.Max(1, EnvI("SIM_MID_EVERY", 3));
+    private static readonly int CoarseEveryTicks = Math.Max(1, EnvI("SIM_COARSE_EVERY", 10));
+    private static readonly int MaxRecords       = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
     private const int OutboundQueueDepth = 8;
+
+    private static float EnvF(string k, float d) =>
+        float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
+    private static int EnvI(string k, int d) =>
+        int.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
 
     // One queued outbound frame. Snapshot frames are rented from ArrayPool and oversized, so
     // they carry their own length and a Pooled flag; the send loop returns them after the
@@ -62,12 +76,26 @@ public sealed class ClientHub
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
     private long _bytesSent;
+    // LOD effectiveness counters (sim thread only): total ship records streamed and how many
+    // snapshots carried them, so the bench line can report avg records/snapshot — the LOD's
+    // real fan-out, which a distance tiering makes vary with how clustered the world is.
+    private long _recordsSent;
+    private long _snapshotCount;
     // Last phase the hub broadcast, so AfterStep emits a fresh LobbyState on every transition
     // (Lobby->Active->Ended->Lobby) without polling every tick.
     private byte _lastPhase = Simulation.PhaseLobby;
 
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
+
+    // Avg ship records per snapshot since the last call (0 if none), then resets. Both
+    // counters are written and read on the sim thread only, so no interlock is needed.
+    public double TakeAvgRecordsPerSnapshot()
+    {
+        long snaps = _snapshotCount, recs = _recordsSent;
+        _snapshotCount = 0; _recordsSent = 0;
+        return snaps == 0 ? 0.0 : (double)recs / snaps;
+    }
 
     public ClientHub(Simulation sim, Backend.IAuthenticator auth, Backend.IPlayerDirectory players,
         Backend.IMatchmaker matchmaker)
@@ -321,7 +349,7 @@ public sealed class ClientHub
             if (basesFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(basesFrame));
 
-            client.Outbound.Writer.TryWrite(BuildSnapshotFor(client, ships, tick, coarse));
+            client.Outbound.Writer.TryWrite(BuildSnapshotFor(client, ships, tick));
         }
     }
 
@@ -350,7 +378,7 @@ public sealed class ClientHub
     // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).
     private const int SnapshotHeader = 9;
 
-    private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, uint tick, bool coarse)
+    private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, uint tick)
     {
         // Own ship anchors the AOI; before it exists, use the home-sector origin.
         Vec3 myPos = default;
@@ -363,6 +391,15 @@ public sealed class ClientHub
                 break;
             }
 
+        // Distance LOD cadences for this tick: a mid/coarse-shell ship is included only on
+        // ticks its cadence divides, so each viewer gets nearby ships at full rate and
+        // successively farther shells at MidEvery / CoarseEvery rate. No ranking — we just
+        // threshold on squared distance.
+        bool midTick = tick % (uint)MidEveryTicks == 0;
+        bool coarseTick = tick % (uint)CoarseEveryTicks == 0;
+        float r1sq = FullRateRadius * FullRateRadius;
+        float r2sq = MidRateRadius * MidRateRadius;
+
         var picks = client.Scratch;
         picks.Clear();
         for (int i = 0; i < ships.Count; i++)
@@ -370,13 +407,25 @@ public sealed class ClientHub
             var s = ships[i];
             if (!s.Alive) continue;
             if (s.SectorId == mySector)
-                picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
-            else if (coarse)
-                picks.Add((float.MaxValue, i));   // other-sector contact, coarse rate only
+            {
+                float d2 = (s.State.Pos - myPos).LengthSquared();
+                if (d2 <= r1sq) picks.Add((d2, i));                       // full rate
+                else if (d2 <= r2sq) { if (midTick) picks.Add((d2, i)); } // mid shell
+                else if (coarseTick) picks.Add((d2, i));                  // far same-sector
+            }
+            else if (coarseTick)
+                picks.Add((float.MaxValue, i));   // other-sector contact, coarse rate
         }
-        // Nearest-first; beyond FullRateCount only included on coarse ticks.
-        picks.Sort(static (a, b) => a.Dist2.CompareTo(b.Dist2));
-        int count = coarse ? picks.Count : Math.Min(picks.Count, FullRateCount);
+
+        // Backstop only: if a furball packs more than MaxRecords ships into the streamed set,
+        // keep the nearest and drop the rest to bound bandwidth. This is the ONLY path that
+        // sorts, and it fires solely on overflow — the common case skips ranking entirely.
+        if (picks.Count > MaxRecords)
+        {
+            picks.Sort(static (a, b) => a.Dist2.CompareTo(b.Dist2));
+            picks.RemoveRange(MaxRecords, picks.Count - MaxRecords);
+        }
+        int count = picks.Count;
 
         int len = SnapshotHeader + count * Protocol.ShipRecordSize;
         byte[] buf = ArrayPool<byte>.Shared.Rent(len);
@@ -394,6 +443,8 @@ public sealed class ClientHub
             Buffer.BlockCopy(_recordScratch, _recordOffset[picks[i].Index], buf, dst, Protocol.ShipRecordSize);
             dst += Protocol.ShipRecordSize;
         }
+        _recordsSent += count;
+        _snapshotCount++;
         return new OutFrame(buf, len, true);
     }
 }

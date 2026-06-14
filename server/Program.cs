@@ -114,9 +114,11 @@ var simThread = new Thread(() =>
             double p99 = stepMs[(int)(stepMs.Count * 0.99)];
             double max = stepMs[^1];
             double mbps = hub.TakeBytesSent() / 1e6 / (stepMs.Count / (double)Simulation.TickHz);
+            double recsPerSnap = hub.TakeAvgRecordsPerSnapshot();
             Console.WriteLine(
                 $"[Bench] tick={sim.Tick} conns={hub.ConnectionCount} ships={sim.ShipCount} " +
-                $"step p50={p50:0.00}ms p99={p99:0.00}ms max={max:0.00}ms egress={mbps:0.0}MB/s");
+                $"step p50={p50:0.00}ms p99={p99:0.00}ms max={max:0.00}ms egress={mbps:0.0}MB/s " +
+                $"recs/snap={recsPerSnap:0}");
             stepMs.Clear();
         }
     }

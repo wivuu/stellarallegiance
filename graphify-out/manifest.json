@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781443032.7471712,
-    "ast_hash": "3ad57eabfd88a03814b02c47af7e9714",
+    "mtime": 1781446142.8717196,
+    "ast_hash": "f73f32718929e24d4a523374d2699d71",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781445381.1628866,
-    "ast_hash": "ba15eecf8a49ee3fa66895bcf6bcab67",
+    "mtime": 1781446745.7865536,
+    "ast_hash": "9f20f70ecee9874044ff802fc03d20a9",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1781442040.8050022,
-    "ast_hash": "3b8a927660259d091e64993a6ea6be9f",
+    "mtime": 1781446752.034492,
+    "ast_hash": "03e659543e5c7b2514e796a2f1b0adec",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {

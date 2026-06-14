@@ -11,9 +11,26 @@ using StellarAllegiance.Shared;
 public partial class RemoteShip : Node3D
 {
 	// Render this far behind the latest sample so there are normally two samples
-	// bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07)
+	// bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07) This is the FLOOR
+	// for the adaptive delay below — nearby full-rate ships never need more.
 	private const double InterpDelayMs = 100.0;
 	private const int MaxSamples = 16;
+
+	// Adaptive interpolation. Coarse-AOI ships (beyond the server's nearest-N, or in another
+	// sector) arrive at ~1/10th the rate of full-rate ships — ~500 ms apart — so the fixed
+	// 100 ms buffer can't bracket their gaps: renderT runs past the newest sample, the ship
+	// holds, then snaps when the next coarse sample lands (the visible teleport). So instead
+	// of a fixed delay, track each ship's smoothed inter-arrival gap and render ~1.5 gaps
+	// behind, clamped to [floor, cap]. Full-rate ships sit at the 100 ms floor; coarse ships
+	// widen their buffer to span their gap and lerp smoothly across it. The extra latency is
+	// harmless — by construction these are the distant / other-sector ships the server itself
+	// deemed low-priority. As a ship crosses into the full-rate set its gap (hence delay)
+	// decays back to the floor within ~0.5 s.
+	private const double MaxInterpDelayMs = 800.0;   // cap: bounds added latency; < MaxSamples*gap
+	private const float GapDelayFactor = 1.5f;       // render this many smoothed gaps behind
+	private const float GapEmaAlpha = 0.3f;          // inter-arrival EMA responsiveness
+	// Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
+	private double _gapEma = InterpDelayMs / GapDelayFactor;
 
 	private struct Sample
 	{
@@ -113,6 +130,16 @@ public partial class RemoteShip : Node3D
 		var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
 		_velTarget = IsFinite(vel) ? vel : Vector3.Zero;
 
+		// Track the smoothed gap between successive arrivals so _Process can size the render
+		// delay to this ship's actual update rate. Reject non-positive (clock/order) and
+		// absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
+		if (_samples.Count > 0)
+		{
+			double gap = s.T - _samples[^1].T;
+			if (gap > 0.0 && gap < 4000.0)
+				_gapEma += (gap - _gapEma) * GapEmaAlpha;
+		}
+
 		_samples.Add(s);
 		if (_samples.Count > MaxSamples)
 			_samples.RemoveRange(0, _samples.Count - MaxSamples);
@@ -155,7 +182,11 @@ public partial class RemoteShip : Node3D
 			return;
 		}
 
-		double renderT = Time.GetTicksMsec() - InterpDelayMs;
+		// Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. Floor keeps nearby
+		// ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
+		// renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
+		double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
+		double renderT = Time.GetTicksMsec() - delay;
 
 		// Before our oldest sample → clamp to it.
 		if (renderT <= _samples[0].T)

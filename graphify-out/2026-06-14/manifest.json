@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1780754042.9995205,
-    "ast_hash": "360776da7afd49c2d23d37eaae67490c",
+    "mtime": 1781445432.3967664,
+    "ast_hash": "6ed5accaa70debec24addd9fe335794c",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781442006.382899,
-    "ast_hash": "3d250b0be008af72670ca6a43a469086",
+    "mtime": 1781445381.1628866,
+    "ast_hash": "ba15eecf8a49ee3fa66895bcf6bcab67",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
