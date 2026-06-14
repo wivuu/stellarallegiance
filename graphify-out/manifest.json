@@ -45,8 +45,8 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781385828.7045777,
-    "ast_hash": "319288ffbc2cc357dd4bb30723a6e9b1",
+    "mtime": 1781400155.580687,
+    "ast_hash": "8167347eee2c8e82f15792e150acc097",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781385644.7674332,
-    "ast_hash": "52489fc066ddf1bb22ebf50718e702c0",
+    "mtime": 1781399115.5700238,
+    "ast_hash": "28ea36fb56bbccb34f3a53d5a8f0f0fb",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781385815.8610697,
-    "ast_hash": "e1d40aea57c8103dca5efc49174be99e",
+    "mtime": 1781400132.0606189,
+    "ast_hash": "2cf8a46bf6abf3cee53e93e9d4d348bd",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -135,13 +135,8 @@
     "semantic_hash": "c5b90c54e317827cea0a2c453ec8b2a1"
   },
   "module/spacetimedb/Lib.cs": {
-    "mtime": 1781354921.848352,
-    "ast_hash": "6c688c8dfc4cd6825792182380204358",
-    "semantic_hash": ""
-  },
-  "module/spacetimedb/PigAI.cs": {
-    "mtime": 1781290306.8076186,
-    "ast_hash": "3dd2cc74ecb02fb032f297d6407312e3",
+    "mtime": 1781398676.934447,
+    "ast_hash": "1b863198adf5f0eef1ac26745404151f",
     "semantic_hash": ""
   },
   "module/spacetimedb/StdbModule.csproj": {
@@ -255,13 +250,8 @@
     "semantic_hash": ""
   },
   "module/spacetimedb/Ships.cs": {
-    "mtime": 1781209614.9986227,
-    "ast_hash": "107558e2985827ce333dda98ca97f81a",
-    "semantic_hash": ""
-  },
-  "module/spacetimedb/Weapons.cs": {
-    "mtime": 1781290306.8114393,
-    "ast_hash": "40d2766b0603ee589085d2c5134f96fd",
+    "mtime": 1781398496.222397,
+    "ast_hash": "25057d33f68b65f183288fe2cc136d02",
     "semantic_hash": ""
   },
   "client/scripts/DefRegistry.cs": {
@@ -280,18 +270,18 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781385504.444996,
-    "ast_hash": "f132c36dddb1ece758aef5e5ad24ff06",
+    "mtime": 1781398856.6079485,
+    "ast_hash": "e5dd88c2d97357f187c8d109582ce9fa",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1781385499.1766164,
-    "ast_hash": "bc0adfae32c4071d26f55c3917188989",
+    "mtime": 1781398824.6799648,
+    "ast_hash": "f0b3ab46ccacfc4fa771bbe0aeba04f7",
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1781351739.177679,
-    "ast_hash": "ba35b94918dee7f3500e449569af7683",
+    "mtime": 1781398899.7280464,
+    "ast_hash": "1be3e97b17bd5c8b001fdba4b0901190",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
@@ -320,13 +310,13 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1781385590.5779955,
-    "ast_hash": "3573251a242b2f0e7e38063fae87d84d",
+    "mtime": 1781398952.8379302,
+    "ast_hash": "1ba57e64054c8243901e644954049ee5",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {
-    "mtime": 1781310653.7143295,
-    "ast_hash": "5df59afad9a8f46ecb6f662a67484eb7",
+    "mtime": 1781398098.7415035,
+    "ast_hash": "d253bfae4479e74b12ff41be8dcaf8cf",
     "semantic_hash": ""
   },
   "server/Net/ResultReporter.cs": {
@@ -340,8 +330,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781360168.9592173,
-    "ast_hash": "b90148b769cc32da980c7b9ad0d58a82",
+    "mtime": 1781386125.3512824,
+    "ast_hash": "e1e020ecb2519a765587adf13046359f",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -357,6 +347,36 @@
   "shared/AsteroidShapes.cs": {
     "mtime": 1781385451.1238084,
     "ast_hash": "f841d043b8fee90f6752e3eafb07f99f",
+    "semantic_hash": ""
+  },
+  "shared/Hmac.cs": {
+    "mtime": 1781398086.1380944,
+    "ast_hash": "ad8529f18a44006ef4ecfa2ca4b3d8b4",
+    "semantic_hash": ""
+  },
+  "tests/CryptoTest/CryptoTest.csproj": {
+    "mtime": 1781398121.8038137,
+    "ast_hash": "9f8d895089c70bcd33c841ffa1a15dc6",
+    "semantic_hash": ""
+  },
+  "tests/CryptoTest/Program.cs": {
+    "mtime": 1781398145.2529733,
+    "ast_hash": "8cee789119f83fa6d15ae27153243332",
+    "semantic_hash": ""
+  },
+  "tools/authcheck/Program.cs": {
+    "mtime": 1781399345.7141204,
+    "ast_hash": "a4ec41495be3bbbd395169cc735a8639",
+    "semantic_hash": ""
+  },
+  "tools/authcheck/authcheck.csproj": {
+    "mtime": 1781399322.6267667,
+    "ast_hash": "04367de53cfa5270576211fb8b20b8a8",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1781399208.8325834,
+    "ast_hash": "fd2426f090f381ca0c8585309c526f2d",
     "semantic_hash": ""
   }
 }

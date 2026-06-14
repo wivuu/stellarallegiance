@@ -1,0 +1,44 @@
+# Local-dev / single-box deployment of the wivuullegiance backend (.PLAN/NATIVE-SIM.md step 6):
+# a self-hosted SpacetimeDB node (durable spine: accounts/lobby/chat/defs/match-results) and the
+# native sim server (the 20 Hz authoritative match). They share one network so the sim server
+# reaches STDB at http://spacetimedb:3000 for match-result writeback.
+#
+# TLS: the sim server speaks plain ws:// on :8090. Production terminates TLS at the hosting
+# layer's ingress (wss://your-host/game -> sim-server:8090) and advertises the wss:// URL via
+# `set_sim_endpoint`. This compose exposes plain ports for a trusted local box only.
+#
+# First run:
+#   cp .env.example .env && edit .env   (set SIM_SECRET = openssl rand -hex 32)
+#   docker compose up --build
+#   # then publish the module + install the endpoint/secret (see docs/DEPLOY.md):
+#   scripts/publish-local.sh
+#   spacetime call stellar-allegiance set_sim_endpoint '"ws://localhost:8090/game"' "\"$SIM_SECRET\""
+services:
+  spacetimedb:
+    image: ${STDB_IMAGE:-clockworklabs/spacetime}
+    command: ["start", "--data-dir", "/data", "--listen-addr", "0.0.0.0:3000"]
+    user: root
+    ports:
+      - "${STDB_PORT:-3000}:3000"
+    volumes:
+      - stdb-data:/data
+    restart: unless-stopped
+
+  sim-server:
+    build:
+      context: .                     # repo root, so ../shared resolves (see server/Dockerfile)
+      dockerfile: server/Dockerfile
+    environment:
+      # REQUIRED: auth is enabled only when this is set (and must match set_sim_endpoint's secret).
+      SIM_SECRET: ${SIM_SECRET:?set SIM_SECRET in .env (openssl rand -hex 32) — see .env.example}
+      STDB_HTTP: http://spacetimedb:3000
+      STDB_DB: ${STDB_DB:-stellar-allegiance}
+      STDB_TOKEN: ${STDB_TOKEN:-}
+    ports:
+      - "${SIM_PORT:-8090}:8090"
+    depends_on:
+      - spacetimedb
+    restart: unless-stopped
+
+volumes:
+  stdb-data:

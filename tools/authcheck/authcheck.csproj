@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Live credentialed-handshake check for the sim server (Part B verification). Connects a
+       real ClientWebSocket, builds the v6 Hello exactly as GameNetClient does, and verifies the
+       server accepts a valid token and rejects forged / expired / wrong-epoch ones. Reuses
+       shared/JoinTokens.cs so the token math is identical to the module's. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../shared/Shared.csproj" />
+  </ItemGroup>
+</Project>

@@ -16,14 +16,18 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process (start-client.sh reuses
     // anything on :8090) otherwise produced as garbled snapshots / EndOfStream spam.
-    public const byte Version = 5;
+    public const byte Version = 6;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
     public const int ShipRecordSize = 47;
 
     // client -> server
-    public const byte MsgHello = 1;    // u8 shipClass, u8 nameLen, utf8 name
+    // Hello v6 (credentialed): u8 cls, u8 team, u8 idLen, idBytes…, u64 matchId, i64 expiryUnix,
+    // u8 tokLen, tokBytes…  The token is an HMAC-SHA256 hex over (identity,team,matchId,expiry)
+    // minted by the STDB module (shared/JoinTokens.cs); a credential-less Hello (dev SIM_URI /
+    // bots) sends zero-length id/token. See ClientHub.ReceiveLoop for validation.
+    public const byte MsgHello = 1;
     public const byte MsgInput = 2;    // u32 tick, f32 thrust/strafeX/strafeY/yaw/pitch/roll, u8 flags
     public const byte MsgPing = 3;     // u32 nonce (echoed back as MsgPong for RTT/adaptive-lead)
 

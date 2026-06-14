@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides;
 using SimServer.Net;
 using SimServer.Sim;
 
@@ -18,6 +19,16 @@ for (int i = 0; i < args.Length - 1; i++)
     if (args[i] == "--secret") secret = args[i + 1];
 }
 
+// Auth posture: with no secret, the server accepts credential-less Hellos (bots / dev
+// SIM_URI). That is intended for local dev and benchmarking ONLY — never expose such a
+// server to untrusted clients. Production sets SIM_SECRET (>=32 random bytes) matching the
+// value installed via set_sim_endpoint, and every Hello must carry a valid HMAC join token.
+if (secret.Length == 0)
+    Console.WriteLine("[SimServer] WARNING: no --secret/SIM_SECRET set — AUTH DISABLED (dev mode). " +
+                      "Do not expose this server to untrusted networks.");
+else
+    Console.WriteLine("[SimServer] auth enabled (HMAC join tokens required).");
+
 var world = new World(seed);
 var sim = new Simulation(world);
 var hub = new ClientHub(sim, secret);
@@ -27,6 +38,17 @@ var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
 var app = builder.Build();
+// Behind the hosting layer's TLS-terminating proxy (wss:// -> ws://:8090): honour the
+// X-Forwarded-* headers so the request scheme/remote IP reflect the real client. Clear the
+// default loopback-only trust so the headers are accepted from the proxy (compose network /
+// host ingress); tighten to known proxy IPs if the sim server is ever directly reachable.
+var fwd = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+fwd.KnownNetworks.Clear();
+fwd.KnownProxies.Clear();
+app.UseForwardedHeaders(fwd);
 app.UseWebSockets();
 app.Map("/game", async context =>
 {

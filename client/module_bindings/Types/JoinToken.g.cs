@@ -17,17 +17,25 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "team")]
         public byte Team;
+        [DataMember(Name = "match_id")]
+        public ulong MatchId;
+        [DataMember(Name = "expiry")]
+        public long Expiry;
         [DataMember(Name = "token")]
         public string Token;
 
         public JoinToken(
             SpacetimeDB.Identity Identity,
             byte Team,
+            ulong MatchId,
+            long Expiry,
             string Token
         )
         {
             this.Identity = Identity;
             this.Team = Team;
+            this.MatchId = MatchId;
+            this.Expiry = Expiry;
             this.Token = Token;
         }
 

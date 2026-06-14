@@ -41,12 +41,16 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<JoinToken, SpacetimeDB.Identity> Identity { get; }
         public global::SpacetimeDB.Col<JoinToken, byte> Team { get; }
+        public global::SpacetimeDB.Col<JoinToken, ulong> MatchId { get; }
+        public global::SpacetimeDB.Col<JoinToken, long> Expiry { get; }
         public global::SpacetimeDB.Col<JoinToken, string> Token { get; }
 
         public JoinTokenCols(string tableName)
         {
             Identity = new global::SpacetimeDB.Col<JoinToken, SpacetimeDB.Identity>(tableName, "identity");
             Team = new global::SpacetimeDB.Col<JoinToken, byte>(tableName, "team");
+            MatchId = new global::SpacetimeDB.Col<JoinToken, ulong>(tableName, "match_id");
+            Expiry = new global::SpacetimeDB.Col<JoinToken, long>(tableName, "expiry");
             Token = new global::SpacetimeDB.Col<JoinToken, string>(tableName, "token");
         }
     }

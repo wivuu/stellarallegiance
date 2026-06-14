@@ -127,14 +127,11 @@ public partial class ShipController : Node
 			_mouseSens = sens;
 		_mouseInvert = OS.GetEnvironment("STDB_MOUSE_INVERT") is "1" or "true";
 
-		// Time ApplyInput round-trips for the latency readout. The reducer callback
-		// fires on the caller when the server commits our call, echoing clientTick.
-		_cm.Connected += conn => conn.Reducers.OnApplyInput +=
-			(_, _, _, _, _, _, _, _, _, _, clientTick) => OnInputAck(clientTick);
-
+		// Latency for the adaptive lead / HUD readout is sampled in native mode via the
+		// Ping/Pong probe (the in-STDB ApplyInput reducer-ack path was removed with the sim).
 		_net = GetNodeOrNull<GameNetClient>("../GameNetClient");
 		if (_net is not null)
-			_net.Pong += OnPong;   // native-mode RTT sample (see OnInputAck for the STDB path)
+			_net.Pong += OnPong;
 
 		var autoClass = ShipClass.Scout;
 		foreach (var a in OS.GetCmdlineArgs())
@@ -207,12 +204,19 @@ public partial class ShipController : Node
 		}
 		else if (connected && !_spawnPending && _spawnRequest is { } cls)
 		{
+			// Gameplay runs only on the native sim server now (the in-STDB sim was removed).
+			// Spawning therefore requires the lobby->sim handoff to have activated native mode;
+			// without it there is nothing to spawn into, so just drop the request.
 			if (Native)
+			{
 				_net!.RequestSpawn((byte)cls);
+				_spawnPending = true;
+				_spawnRetry = 1.0;
+			}
 			else
-				_cm.Conn!.Reducers.SpawnShip(cls);
-			_spawnPending = true;
-			_spawnRetry = 1.0;
+			{
+				_spawnRequest = null;
+			}
 		}
 
 		// Prediction. The prediction tick lives in SERVER-tick space and is kept a
@@ -281,23 +285,12 @@ public partial class ShipController : Node
 			_stepsSinceSpawn++;
 			if (!InputsEqual(_input, _lastSentInput) || _predTick - _lastSentTick >= InputKeepaliveTicks)
 			{
-				if (Native)
-				{
-					// Same on-change semantics; the sim server's tick-stamped input ring
-					// replays it exactly at _predTick. RTT is sampled separately via the
-					// Ping/Pong probe above, so the adaptive lead tracks the link here too.
-					_net!.SendInput(_predTick, _input);
-				}
-				else
-				{
-					_cm.Conn?.Reducers.ApplyInput(
-						_input.Thrust, _input.StrafeX, _input.StrafeY,
-						_input.Yaw, _input.Pitch, _input.Roll,
-						_input.Firing, _input.Boost, _input.Coast, _predTick);
-					_sentAt[_predTick] = Time.GetTicksMsec();
-				}
-				_lastSentInput = _input;
-				_lastSentTick = _predTick;
+				// Gameplay is native-only now (a local ship only ever exists in native mode).
+					// The sim server's tick-stamped input ring replays this exactly at _predTick;
+					// RTT is sampled separately via the Ping/Pong probe above.
+					_net?.SendInput(_predTick, _input);
+					_lastSentInput = _input;
+					_lastSentTick = _predTick;
 			}
 			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
 				_world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.LifeSec);
@@ -328,14 +321,6 @@ public partial class ShipController : Node
 		float budgetMs = PingMs + 2f * JitterMs;                  // RTT + ~2σ jitter
 		int desired = Mathf.CeilToInt(budgetMs / (FlightModel.Dt * 1000f)) + 1;
 		_targetLead = Mathf.Clamp(desired, DefaultTargetLead, 15);
-	}
-
-	// An ApplyInput we sent has been committed by the server (STDB mode): the elapsed wall
-	// time is the round trip.
-	private void OnInputAck(uint clientTick)
-	{
-		if (_sentAt.Remove(clientTick, out var sent))
-			RecordRtt(sent);
 	}
 
 	// The server echoed our ping nonce (native mode): same RTT measurement, different trigger.

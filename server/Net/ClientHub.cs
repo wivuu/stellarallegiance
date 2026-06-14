@@ -60,6 +60,11 @@ public sealed class ClientHub
     private int _nextClientId;
     private int _teamCounter;
     private long _bytesSent;
+    // Match epoch pinned from the first valid credentialed Hello, so every credential in one
+    // sim-match session must carry the same epoch — a token minted for a different STDB match
+    // (different epoch) is refused even within its 6 h expiry window. -1 = unset; reset to -1
+    // when the server empties out (a new sim match begins with a fresh epoch). See HandleConnection.
+    private long _epochPin = -1;
 
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
@@ -93,6 +98,11 @@ public sealed class ClientHub
             _clients.TryRemove(client.Id, out _);
             _sim.EnqueueLeave(client.Id);
             client.Outbound.Writer.TryComplete();
+            // Last client gone: a new sim match (Simulation.ResetMatch in Program) will begin
+            // with a fresh STDB epoch, so unpin to accept it. Benign race: a join landing in the
+            // empty window just re-pins to its own epoch.
+            if (_clients.IsEmpty)
+                Interlocked.Exchange(ref _epochPin, -1);
             try { await sendTask; } catch { /* socket torn down */ }
         }
     }
@@ -112,32 +122,52 @@ public sealed class ClientHub
             {
                 case Protocol.MsgHello:
                 {
-                    // v2 layout: u8 cls, u8 team, u8 idLen, id…, u8 tokLen, tok…
-                    // (legacy 3-byte v1 Hellos parse as zero-length credentials).
+                    // v6 layout: u8 cls, u8 team, u8 idLen, id…, u64 matchId, i64 expiry,
+                    // u8 tokLen, tok…  A credential-less Hello (dev SIM_URI / bots) sends
+                    // zero-length id/token and is accepted only when no secret is configured.
                     byte cls = result.Count > 1 ? buffer[1] : (byte)0;
                     if (cls > 2) cls = 0;
                     byte team = result.Count > 2 ? buffer[2] : (byte)0;
                     string identity = "", token = "";
-                    if (result.Count > 4)
+                    ulong matchId = 0;
+                    long expiry = 0;
+                    if (result.Count > 3)
                     {
                         int idLen = buffer[3];
-                        if (result.Count >= 5 + idLen)
+                        int o = 4 + idLen;
+                        // need: id bytes + u64 matchId + i64 expiry + u8 tokLen
+                        if (result.Count >= o + 8 + 8 + 1)
                         {
                             identity = System.Text.Encoding.UTF8.GetString(buffer, 4, idLen);
-                            int tokLen = buffer[4 + idLen];
-                            if (result.Count >= 5 + idLen + tokLen)
-                                token = System.Text.Encoding.UTF8.GetString(buffer, 5 + idLen, tokLen);
+                            matchId = BitConverter.ToUInt64(buffer, o); o += 8;
+                            expiry = BitConverter.ToInt64(buffer, o); o += 8;
+                            int tokLen = buffer[o]; o += 1;
+                            if (result.Count >= o + tokLen)
+                                token = System.Text.Encoding.UTF8.GetString(buffer, o, tokLen);
                         }
                     }
 
                     if (_secret.Length > 0)
                     {
-                        // Credentialed mode: the token must match the module's derivation
-                        // for the claimed (identity, team) — see shared/JoinTokens.cs.
-                        if (identity.Length == 0
-                            || token != JoinTokens.Compute(_secret, identity, team))
+                        // Credentialed mode. The token must be a current, unexpired HMAC the
+                        // module minted for this (identity, team, matchId, expiry); compared in
+                        // constant time so response timing can't leak the expected MAC.
+                        long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        bool ok = identity.Length > 0
+                            && expiry > nowUnix
+                            && JoinTokens.ConstantTimeEquals(
+                                token, JoinTokens.Compute(_secret, identity, team, matchId, expiry));
+                        // Pin the match epoch to the first valid join; reject tokens from a
+                        // different epoch (a replayed previous-match credential).
+                        if (ok)
                         {
-                            Console.WriteLine($"[Hub] rejected join (bad token) from client {client.Id}");
+                            long pinned = Interlocked.CompareExchange(ref _epochPin, (long)matchId, -1);
+                            if (pinned != -1 && (ulong)pinned != matchId)
+                                ok = false;
+                        }
+                        if (!ok)
+                        {
+                            Console.WriteLine($"[Hub] rejected join (bad/expired/stale token) from client {client.Id}");
                             await client.Socket.CloseAsync(
                                 WebSocketCloseStatus.PolicyViolation, "bad token", ct);
                             return;

@@ -12,6 +12,7 @@ public partial class Hud : CanvasLayer
 	private WorldRenderer _world = null!;
 	private ShipController _ship = null!;
 	private Label _label = null!;
+	private Label _sectorShips = null!;
 	private Control _menu = null!;
 	private Label _warning = null!;
 
@@ -31,7 +32,13 @@ public partial class Hud : CanvasLayer
 		AddChild(minimap);
 		minimap.Init(_cm, _world);
 
-		_label = new Label { Position = new Vector2(16, 12) };
+		// Active-ship count for the local sector, pinned to the very top-left. Hidden until a
+		// match is live (the lobby overlay owns the screen otherwise).
+		_sectorShips = new Label { Position = new Vector2(16, 12), Visible = false };
+		_sectorShips.AddThemeFontSizeOverride("font_size", 18);
+		AddChild(_sectorShips);
+
+		_label = new Label { Position = new Vector2(16, 38) };
 		_label.AddThemeFontSizeOverride("font_size", 18);
 		AddChild(_label);
 
@@ -102,6 +109,12 @@ public partial class Hud : CanvasLayer
 		bool teamedInMatch = _world.Phase == MatchPhase.Active
 			&& (_world.NativeMode || (LocalPlayer() is Player p && p.Team is not null));
 		_menu.Visible = teamedInMatch && !flying;
+
+		// Active ships in the local sector, top-left. Visible whenever a match is live.
+		bool inMatch = _world.Phase == MatchPhase.Active;
+		_sectorShips.Visible = inMatch;
+		if (inMatch)
+			_sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
 
 		// Sector boundary: warn (and pulse) once the ship is past the radius, where the
 		// server is eroding the hull. Distance is measured from the local sector center.

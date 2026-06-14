@@ -25,12 +25,8 @@ namespace SpacetimeDB.Types
         public byte EngagedTeams;
         [DataMember(Name = "seed")]
         public ulong Seed;
-        [DataMember(Name = "last_tick_micros")]
-        public long LastTickMicros;
-        [DataMember(Name = "accum_micros")]
-        public long AccumMicros;
-        [DataMember(Name = "pigs_enabled")]
-        public bool PigsEnabled;
+        [DataMember(Name = "epoch")]
+        public ulong Epoch;
 
         public Match(
             uint Id,
@@ -39,9 +35,7 @@ namespace SpacetimeDB.Types
             byte? Winner,
             byte EngagedTeams,
             ulong Seed,
-            long LastTickMicros,
-            long AccumMicros,
-            bool PigsEnabled
+            ulong Epoch
         )
         {
             this.Id = Id;
@@ -50,9 +44,7 @@ namespace SpacetimeDB.Types
             this.Winner = Winner;
             this.EngagedTeams = EngagedTeams;
             this.Seed = Seed;
-            this.LastTickMicros = LastTickMicros;
-            this.AccumMicros = AccumMicros;
-            this.PigsEnabled = PigsEnabled;
+            this.Epoch = Epoch;
         }
 
         public Match()

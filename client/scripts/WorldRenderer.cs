@@ -77,6 +77,19 @@ public partial class WorldRenderer : Node3D
 	// Local sector boundary, read by the HUD for the out-of-bounds warning. Radius 0
 	// (sector not yet known) disables the warning.
 	public uint LocalSector => _localSector;
+
+	// Number of ships currently in the local player's sector: every remote ship node tagged
+	// with this sector (each carries a "sector" meta, see SetNodeSector) plus the local ship
+	// itself (which is always in _localSector while flying; it lives in LocalShip, not _shipNodes).
+	public int ShipsInLocalSector()
+	{
+		int n = LocalShip != null ? 1 : 0;
+		foreach (var node in _shipNodes.Values)
+			if (node.HasMeta("sector") && (int)node.GetMeta("sector") == (int)_localSector)
+				n++;
+		return n;
+	}
+
 	public float LocalSectorRadius => _sectors.TryGetValue(_localSector, out var s) ? s.Radius : 0f;
 	public Vector3 LocalSectorCenter =>
 		_sectors.TryGetValue(_localSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;

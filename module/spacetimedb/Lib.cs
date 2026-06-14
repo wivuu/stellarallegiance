@@ -75,36 +75,6 @@ public partial struct ChatMessage
 
 // The Ship table + ship lifecycle (spawn/respawn/kill/pod/dock) live in Ships.cs (M2).
 
-// Per-tick input buffer. One row per (ship, tick) so SimTick can apply the EXACT
-// input the client predicted with for that tick, rather than "latest" — this makes
-// the server replay the client's input sequence and drives prediction/authority
-// divergence to zero (.PLAN/07, /99). Server-private: clients write it via
-// ApplyInput and never read it, so it isn't synced. Pruned to a short window.
-// Multi-column index on (ShipId, Tick) so SimTick can fetch the exact input row for a ship
-// and tick with a direct index lookup (ByShipTick.Filter) instead of scanning the ship's whole
-// ~InputKeep-row buffer. The single-column ShipId index is kept for the latest-before fallback
-// and for bulk delete on despawn.
-[SpacetimeDB.Table(Accessor = "ShipInput", Public = false)]
-[SpacetimeDB.Index.BTree(Accessor = "ByShipTick", Columns = ["ShipId", "Tick"])]
-public partial struct ShipInput
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong InputId;
-    [SpacetimeDB.Index.BTree]
-    public ulong ShipId;
-    public uint Tick;           // the sim tick this input is FOR (client _predTick)
-    public float Thrust;        // -1..1 forward/back
-    public float StrafeX;       // -1..1 left/right
-    public float StrafeY;       // -1..1 up/down
-    public float Yaw;           // -1..1
-    public float Pitch;         // -1..1
-    public float Roll;          // -1..1
-    public bool Firing;         // trigger held
-    public bool Boost;          // afterburner held
-    public bool Coast;          // vector lock (thrust cancels drag, holds velocity)
-}
-
 // The Base table + base content (radius/health from BaseDef) live in Bases.cs (M2).
 
 [SpacetimeDB.Table(Accessor = "Asteroid", Public = true)]
@@ -185,30 +155,11 @@ public partial struct Match
     // a map is reproducible: GenerateMap(seed) always yields the same world, and
     // RegenerateWorld(seed) rebuilds it. Init picks a random seed; clients ignore this.
     public ulong Seed;
-    // Real-time pacing so the sim runs at wall-clock speed regardless of how often
-    // the scheduler actually fires SimTick (Maincloud delivers it at ~10 Hz, local
-    // at ~20 Hz). Each call integrates `elapsed / Dt` fixed-dt sub-steps; the carry
-    // is kept here so the rate is exact over time. (Clients ignore these fields.)
-    public long LastTickMicros; // ctx.Timestamp of the previous SimTick (0 = first)
-    public long AccumMicros;    // leftover sub-tick time not yet integrated
-    // AI drones spawn only while this is true (toggled by the /pigs dev command). Default
-    // FALSE — drones stay dormant until someone runs `/pigs on`; turning it off makes
-    // SimTick despawn the field on its next pass (see Pass 0).
-    public bool PigsEnabled;
-}
-
-// Per-team PIG squad-wave timing. The drones of a side now spawn as a SQUAD (the whole
-// team's slots) rather than trickling per-slot: once a squad is fielded (Active) no new
-// drones arrive until the whole squad is wiped, then a short delay (PigSquadDelayTicks)
-// later the next squad scrambles. One row per team, created lazily by EnsurePigSlots and
-// reset by DespawnAllPigs. (See SimulatePigLifecycle in PigAI.cs.)
-[SpacetimeDB.Table(Accessor = "PigSquad", Public = true)]
-public partial struct PigSquad
-{
-    [PrimaryKey]
-    public byte Team;
-    public uint NextSquadTick;   // earliest tick the next squad may scramble (0 = ready now)
-    public bool Active;          // a squad is currently fielded (≥1 drone alive, or just spawned)
+    // Match epoch: a counter bumped every time a match goes Active (and on RestartMatch).
+    // It is folded into each minted JoinToken's signature so a token from a previous match
+    // can't be replayed against the sim server's current epoch — see MintJoinToken and
+    // shared/JoinTokens.cs. Clients ignore it; the sim server pins it from the first Hello.
+    public ulong Epoch;
 }
 
 // ---- Native sim-server handoff (Phase 1c) -----------------------------
@@ -235,7 +186,9 @@ public partial struct JoinToken
     [PrimaryKey]
     public Identity Identity;
     public byte Team;
-    public string Token;
+    public ulong MatchId;   // match epoch the token is bound to (replay guard)
+    public long Expiry;     // absolute expiry, unix seconds (the sim server enforces it)
+    public string Token;    // HMAC-SHA256 over (identity, team, MatchId, Expiry)
 }
 
 // The shared secret the tokens derive from. Private: reducers + DB owner only.
@@ -245,20 +198,6 @@ public partial struct SimConfig
     [PrimaryKey]
     public byte Id;       // always 0
     public string Secret;
-}
-
-// Scheduled-reducer table that drives SimTick at a fixed interval.
-[SpacetimeDB.Table(
-    Accessor = "SimTickTimer",
-    Scheduled = nameof(Module.SimTick),
-    ScheduledAt = nameof(ScheduledAt),
-    Public = true)]
-public partial struct SimTickTimer
-{
-    [PrimaryKey]
-    [AutoInc]
-    public ulong ScheduledId;
-    public ScheduleAt ScheduledAt;
 }
 
 public static partial class Module
@@ -574,167 +513,7 @@ public static partial class Module
         });
         ctx.Db.Aleph.AlephId.Update(alephCore with { PartnerId = alephVerge.AlephId });
         ctx.Db.Aleph.AlephId.Update(alephVerge with { PartnerId = alephCore.AlephId });
-
-        // The asteroid set just changed — drop the spatial-grid cache (see AsteroidGridForSector).
-        _asteroidGridDirty = true;
     }
-
-    // ---- Per-sector asteroid spatial grid (read cache) ----------------
-    // The asteroid field is STATIC between map regenerations (GenerateMap is its only mutator),
-    // but the AI drones each scan it every tick to steer around rocks. With the world now
-    // holding hundreds of asteroids (WorldConfig scale), re-reading the whole Asteroid table
-    // from the datastore per drone per tick was the dominant sim cost. Bucket the field ONCE
-    // into a uniform spatial grid (per sector), and a drone only examines asteroids in its own
-    // cell + the 26 neighbours — O(asteroids near the drone) instead of O(asteroids in sector).
-    // The cell is sized to the avoidance look-ahead so a 3x3x3 query provably covers a ball of
-    // that radius around the drone (a point in cell C lies >= one cell from the edge of the
-    // C±1 block). One uniform level suffices: the field is sparse and roughly uniform, so cells
-    // hold ~0-1 rocks; a deeper hierarchy (octree) would only help under heavy clustering.
-    // Server-only (PIG steering is authoritative), so the captured Iter() order needn't match a
-    // client. Reused across every drone and tick until GenerateMap invalidates it.
-    private const float AsteroidGridCell = PigAvoidLookahead;
-
-    private static bool _asteroidGridDirty = true;
-    private static readonly Dictionary<uint, Dictionary<(int, int, int), List<Asteroid>>> _asteroidGrid = new();
-    private static readonly Dictionary<(int, int, int), List<Asteroid>> _noGrid = new();
-
-    // The grid cell index for one world coordinate. Shared by the asteroid grid above and
-    // the per-tick ship grid below (and the shot ray-cell walk in Weapons.cs) — one uniform
-    // cell size for all spatial broad-phasing.
-    private static int GridCellOf(float v) => (int)MathF.Floor(v / AsteroidGridCell);
-
-    private static Dictionary<(int, int, int), List<Asteroid>> AsteroidGridForSector(ReducerContext ctx, uint sector)
-    {
-        if (_asteroidGridDirty)
-        {
-            _asteroidGrid.Clear();
-            foreach (var a in ctx.Db.Asteroid.Iter())
-            {
-                if (!_asteroidGrid.TryGetValue(a.SectorId, out var grid))
-                    _asteroidGrid[a.SectorId] = grid = new Dictionary<(int, int, int), List<Asteroid>>();
-                var key = (GridCellOf(a.PosX), GridCellOf(a.PosY), GridCellOf(a.PosZ));
-                if (!grid.TryGetValue(key, out var cell))
-                    grid[key] = cell = new List<Asteroid>();
-                cell.Add(a);
-            }
-            _asteroidGridDirty = false;
-        }
-        return _asteroidGrid.TryGetValue(sector, out var g) ? g : _noGrid;
-    }
-
-    // True if the point (x,y,z) lies within (asteroid radius + extraRadius) of ANY asteroid in
-    // its sector. Broad-phased through the spatial grid — only the rocks in the point's cell +
-    // 26 neighbours are tested. This is EQUIVALENT to scanning the whole field: the hit radius
-    // (~34u) is far below the block's guaranteed coverage (AsteroidGridCell = 160u), so every
-    // omitted asteroid is a guaranteed miss. Used by the projectile-vs-asteroid pass.
-    private static bool HitsAsteroid(ReducerContext ctx, uint sector, float x, float y, float z, float extraRadius)
-    {
-        var grid = AsteroidGridForSector(ctx, sector);
-        int cx = GridCellOf(x), cy = GridCellOf(y), cz = GridCellOf(z);
-        for (int gx = cx - 1; gx <= cx + 1; gx++)
-        for (int gy = cy - 1; gy <= cy + 1; gy++)
-        for (int gz = cz - 1; gz <= cz + 1; gz++)
-        {
-            if (!grid.TryGetValue((gx, gy, gz), out var cell))
-                continue;
-            foreach (var a in cell)
-            {
-                float rr = a.Radius * AsteroidCollisionScale + extraRadius;
-                if (Dist2(x, y, z, a.PosX, a.PosY, a.PosZ) <= rr * rr)
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    // Bounce a ship out of any asteroid it overlaps, broad-phased through the spatial grid so
-    // only nearby rocks are tested. Equivalent to resolving against the whole field: a rock the
-    // ship doesn't overlap is a no-op in ResolveCollision, and any rock it COULD overlap (within
-    // ~43u) is well inside the queried block (160u). The ship's collision push (<= a rock's
-    // radius) keeps it inside that block, so re-querying per push is unnecessary.
-    private static Ship ResolveAsteroidCollisions(ReducerContext ctx, Ship s)
-    {
-        var grid = AsteroidGridForSector(ctx, s.SectorId);
-        int cx = GridCellOf(s.PosX), cy = GridCellOf(s.PosY), cz = GridCellOf(s.PosZ);
-        for (int gx = cx - 1; gx <= cx + 1; gx++)
-        for (int gy = cy - 1; gy <= cy + 1; gy++)
-        for (int gz = cz - 1; gz <= cz + 1; gz++)
-        {
-            if (!grid.TryGetValue((gx, gy, gz), out var cell))
-                continue;
-            foreach (var a in cell)
-                s = ResolveCollision(s, a.PosX, a.PosY, a.PosZ, a.Radius * AsteroidCollisionScale);
-        }
-        return s;
-    }
-
-    // ---- Per-tick ship spatial grid (broad-phase for shot resolution) -
-    // Unlike the asteroid field, ships move every tick, so this grid is rebuilt once per
-    // SimulateTick (lazily, on the first shot fired that tick) from a single Iter() snapshot
-    // — O(ships) total, vs. the O(firing_ships x ships_in_sector) cost of re-querying per shot.
-    // TryFire then walks only the cells along EACH SHOT'S flight path (see CellsAlongRay)
-    // instead of every ship in the sector, narrowing the candidate set to roughly the shot's
-    // corridor regardless of how many ships/asteroids are elsewhere in the (large) sector.
-    private static uint _shipGridTick = uint.MaxValue;
-    private static readonly Dictionary<uint, Dictionary<(int, int, int), List<Ship>>> _shipGrid = new();
-    private static readonly Dictionary<(int, int, int), List<Ship>> _noShipGrid = new();
-
-    private static Dictionary<(int, int, int), List<Ship>> ShipGridForSector(ReducerContext ctx, uint tick, uint sector)
-    {
-        if (_shipGridTick != tick)
-        {
-            _shipGrid.Clear();
-            foreach (var s in ctx.Db.Ship.Iter())
-            {
-                if (!_shipGrid.TryGetValue(s.SectorId, out var grid))
-                    _shipGrid[s.SectorId] = grid = new Dictionary<(int, int, int), List<Ship>>();
-                var key = (GridCellOf(s.PosX), GridCellOf(s.PosY), GridCellOf(s.PosZ));
-                if (!grid.TryGetValue(key, out var cell))
-                    grid[key] = cell = new List<Ship>();
-                cell.Add(s);
-            }
-            _shipGridTick = tick;
-        }
-        return _shipGrid.TryGetValue(sector, out var g) ? g : _noShipGrid;
-    }
-
-    // Every grid cell (plus its 26 neighbours, for the same radius-coverage reason as
-    // HitsAsteroid) that a shot travelling from `start` at constant velocity `vel` passes
-    // through over [0, maxT]. Sampled at ~AsteroidGridCell intervals along the path and
-    // de-duplicated — a shot's corridor through a sector this size is a small fraction of
-    // the sector's total cells, so this is the "filter to the quadrants the shot crosses"
-    // narrowing without needing a DB-side composite index.
-    private static IEnumerable<(int, int, int)> CellsAlongRay(Vec3 start, Vec3 vel, float maxT)
-    {
-        var seen = new HashSet<(int, int, int)>();
-        float dist = vel.Length() * maxT;
-        int steps = Math.Max(1, (int)MathF.Ceiling(dist / AsteroidGridCell));
-        for (int i = 0; i <= steps; i++)
-        {
-            Vec3 p = start + vel * (maxT * i / steps);
-            int cx = GridCellOf(p.X), cy = GridCellOf(p.Y), cz = GridCellOf(p.Z);
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                var key = (cx + dx, cy + dy, cz + dz);
-                if (seen.Add(key))
-                    yield return key;
-            }
-        }
-    }
-
-    // ---- Held input (replay between buffered rows) ---------------------
-    // The input applied to each player ship on its most recent sim tick. A buffered
-    // ShipInput row now only has to exist for ticks where the stick state CHANGED (clients
-    // send on change + keepalive); on every other tick the sim replays this held value —
-    // which is exactly what the client's prediction did, so auth == prediction holds with
-    // ~10x fewer input rows/transactions. Static WASM memory like the spatial grids:
-    // survives between reducer calls, self-heals after a hot-swap via the dirty/cold
-    // re-derive scan in Pass A. _inputDirty marks ships whose buffer changed since the
-    // last derive (covers rows that arrive LATE, for ticks already simulated).
-    private static readonly Dictionary<ulong, ShipInputState> _heldInput = new();
-    private static readonly HashSet<ulong> _inputDirty = new();
 
     // ---- Lifecycle ----------------------------------------------------
 
@@ -762,7 +541,7 @@ public static partial class Module
             Winner = null,
             EngagedTeams = 0,
             Seed = seed,
-            PigsEnabled = false,
+            Epoch = 0,
         });
 
         // Two sectors sharing the world origin: the Core battlefield (bases + spawn)
@@ -778,13 +557,11 @@ public static partial class Module
         // Asteroid fields + the Core<->Verge aleph pair, all derived from the seed above.
         GenerateMap(ctx, seed);
 
-        // NOTE: SimTick is intentionally NOT scheduled here. The sim loop is
-        // started on the first client connect and stopped when the last client
-        // disconnects (see StartSim/StopSim) so an empty server burns no CPU.
-        // This is a prototype, not a persistent universe — nothing needs to
-        // advance while nobody is watching.
+        // NOTE: there is no in-module sim loop any more. The 20 Hz authoritative match runs
+        // entirely on the native sim server (server/); this module owns lobby/teams/chat/
+        // defs/the static world/match-results and mints join tokens (see .PLAN/NATIVE-SIM.md).
 
-        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {ctx.Db.Asteroid.Count} asteroids (scale {WorldConfigOrDefault(ctx).SectorScale}), 1 aleph pair, {ctx.Db.ShipClassDef.Count} ship/{ctx.Db.WeaponDef.Count} weapon/{ctx.Db.BaseDef.Count} base defs, SimTick paused until first client");
+        Log.Info($"[Init] done: 1 match, 2 sectors, 2 bases, {ctx.Db.Asteroid.Count} asteroids (scale {WorldConfigOrDefault(ctx).SectorScale}), 1 aleph pair, {ctx.Db.ShipClassDef.Count} ship/{ctx.Db.WeaponDef.Count} weapon/{ctx.Db.BaseDef.Count} base defs; native sim owns gameplay");
     }
 
     // Rebuild the asteroid field + aleph pair from an explicit seed, and record it on the
@@ -839,12 +616,9 @@ public static partial class Module
             });
             Log.Info($"[ClientConnected] new player {ctx.Sender} -> lobby");
         }
-
-        // Someone is here now — make sure the sim loop is running.
-        StartSim(ctx);
     }
 
-    // A client disconnected: mark offline and remove their live ship.
+    // A client disconnected: mark offline (the native sim owns any live ship).
     [SpacetimeDB.Reducer(ReducerKind.ClientDisconnected)]
     public static void ClientDisconnected(ReducerContext ctx)
     {
@@ -853,12 +627,6 @@ public static partial class Module
             return;
 
         var p = player.Value;
-        if (p.ShipId is ulong shipId)
-        {
-            ctx.Db.Ship.ShipId.Delete(shipId);
-            DeleteShipInputs(ctx, shipId);
-        }
-
         if (p.Team is null)
         {
             // Never committed to a side (still in the lobby, or a non-game connection like
@@ -877,11 +645,6 @@ public static partial class Module
 
         // If a whole side just emptied out, the match is over.
         EndMatchIfSideAbandoned(ctx);
-
-        // If that was the last connected client, pause the sim loop so an
-        // empty server idles at ~0 CPU instead of ticking 20 Hz forever.
-        if (!AnyOnline(ctx))
-            StopSim(ctx);
     }
 
     // ---- Player actions (called by clients) ---------------------------
@@ -953,24 +716,11 @@ public static partial class Module
                     "Commands:\n"
                     + "/help — show this list\n"
                     + "/start — force-start the match now (debug; skips waiting for others to ready)\n"
-                    + "/pigs on|off — toggle AI drone spawns\n"
                     + "/resign — forfeit the match for your team");
                 break;
 
             case "start":
                 StartMatchNow(ctx, player);
-                break;
-
-            case "pigs":
-                if (arg != "on" && arg != "off")
-                {
-                    SystemTo(ctx, player.Identity, "Usage: /pigs on|off");
-                    break;
-                }
-                bool enable = arg == "on";
-                if (ctx.Db.Match.Id.Find(0) is Match m)
-                    ctx.Db.Match.Id.Update(m with { PigsEnabled = enable });
-                SystemAll(ctx, $"{DisplayName(player)} turned AI drones {(enable ? "ON" : "OFF")}.");
                 break;
 
             case "resign":
@@ -1070,8 +820,12 @@ public static partial class Module
     // ---- Native sim-server handoff (Phase 1c) --------------------------
 
     // Owner-only: advertise the native sim server and install the shared token secret.
-    // Run once per deployment (e.g. `spacetime call ... set_sim_endpoint '"ws://host:8090/game"' '"<secret>"`).
-    // An empty url tears native mode down (clients fall back to the in-module sim).
+    // Run once per deployment — in production the URL is the TLS-terminating ingress, e.g.
+    // `spacetime call ... set_sim_endpoint '"wss://sim.example.com/game"' '"<secret>"'`
+    // (the hosting layer terminates TLS and forwards to the sim container's plain ws:// :8090;
+    // local dev uses ws://localhost:8090/game). The secret should be >=32 random bytes
+    // (`openssl rand -hex 32`) and must match the sim server's SIM_SECRET. An empty url tears
+    // native mode down (no gameplay until it's set again — the sim now lives only here).
     [SpacetimeDB.Reducer]
     public static void SetSimEndpoint(ReducerContext ctx, string url, string secret)
     {
@@ -1109,10 +863,21 @@ public static partial class Module
         Log.Info($"[Match] native sim reported winner: team {winner}");
     }
 
+    // A minted join token is valid this long (one match plus generous margin) before the
+    // sim server rejects it against its own clock — bounds the replay window of a leaked token.
+    private const long TokenTtlSeconds = 6 * 3600;
+
+    // Absolute expiry (unix seconds) for a token minted now. ctx.Timestamp is the
+    // deterministic reducer clock (microseconds since epoch).
+    private static long TokenExpiry(ReducerContext ctx) =>
+        ctx.Timestamp.MicrosecondsSinceUnixEpoch / 1_000_000 + TokenTtlSeconds;
+
     // Mint (or refresh) one player's match credential. No-op when native mode is off.
-    // Token binds (identity, team) so a client can't claim another side; the sim server
-    // recomputes the same derivation from the Hello fields (shared/JoinTokens.cs).
-    private static void MintJoinToken(ReducerContext ctx, Identity identity, byte team)
+    // The token is an HMAC-SHA256 binding identity+team+match-epoch+expiry (shared/JoinTokens.cs);
+    // the sim server recomputes the same MAC from the Hello fields and constant-time compares,
+    // so a client can't claim another side, replay a previous match's token (different epoch),
+    // or use a stale one (past expiry). The epoch + expiry ride the JoinToken row to the client.
+    private static void MintJoinToken(ReducerContext ctx, Identity identity, byte team, ulong epoch, long expiryUnix)
     {
         if (ctx.Db.SimConfig.Id.Find((byte)0) is not SimConfig cfg)
             return;
@@ -1120,15 +885,15 @@ public static partial class Module
         {
             Identity = identity,
             Team = team,
-            Token = JoinTokens.Compute(cfg.Secret, identity.ToString(), team),
+            MatchId = epoch,
+            Expiry = expiryUnix,
+            Token = JoinTokens.Compute(cfg.Secret, identity.ToString(), team, epoch, expiryUnix),
         };
         if (ctx.Db.JoinToken.Identity.Find(identity) is null)
             ctx.Db.JoinToken.Insert(row);
         else
             ctx.Db.JoinToken.Identity.Update(row);
     }
-
-    // SpawnShip / Respawn reducers live in Ships.cs (M2).
 
     // ---- Lobby actions ------------------------------------------------
 
@@ -1159,9 +924,10 @@ public static partial class Module
 
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = false, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
-        // Joining a LIVE match: hand over credentials for the native sim server too.
-        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Active)
-            MintJoinToken(ctx, ctx.Sender, team);
+        // Joining a LIVE match: hand over a credential for the native sim server too, bound
+        // to the running match's epoch so the sim server accepts it alongside the others.
+        if (ctx.Db.Match.Id.Find(0) is Match am && am.Phase == MatchPhase.Active)
+            MintJoinToken(ctx, ctx.Sender, team, am.Epoch, TokenExpiry(ctx));
         Log.Info($"[JoinTeam] {ctx.Sender} -> team {team}");
     }
 
@@ -1174,11 +940,6 @@ public static partial class Module
         if (player is null)
             return;
         var p = player.Value;
-        if (p.ShipId is ulong sid)
-        {
-            ctx.Db.Ship.ShipId.Delete(sid);
-            DeleteShipInputs(ctx, sid);
-        }
         ctx.Db.Player.Identity.Update(p with { Team = null, Ready = false, ShipId = null, ChatTeam = NoTeam });
         Log.Info($"[LeaveTeam] {ctx.Sender} -> lobby");
         EndMatchIfSideAbandoned(ctx);
@@ -1219,8 +980,8 @@ public static partial class Module
         byte team = SmallestOnlineTeam(ctx, ctx.Sender);
         ctx.Db.Player.Identity.Update(p with { Team = team, Ready = true, ChatTeam = team });
         MarkEngagedIfActive(ctx, team);
-        if (ctx.Db.Match.Id.Find(0)?.Phase == MatchPhase.Active)
-            MintJoinToken(ctx, ctx.Sender, team);
+        if (ctx.Db.Match.Id.Find(0) is Match am && am.Phase == MatchPhase.Active)
+            MintJoinToken(ctx, ctx.Sender, team, am.Epoch, TokenExpiry(ctx));
         Log.Info($"[QuickJoin] {ctx.Sender} -> team {team} (ready)");
         MaybeStartMatch(ctx);
     }
@@ -1259,547 +1020,11 @@ public static partial class Module
             ctx.Db.Player.Identity.Update(pl with { Ready = false, ShipId = null });
         }
 
-        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0, PigsEnabled = false });
+        // Bump the epoch so any token that survived (shouldn't — we cleared them above) is
+        // invalid against the next match, and reset to the lobby.
+        ctx.Db.Match.Id.Update(m with { Phase = MatchPhase.Lobby, Winner = null, EngagedTeams = 0, Epoch = m.Epoch + 1 });
         Log.Info("[RestartMatch] world reset -> Lobby");
     }
-
-    // Record the input the client produced FOR sim tick `clientTick`, stored under
-    // that tick so SimTick can apply the exact input the client predicted with.
-    // Does NOT integrate motion — that happens only in SimTick. Highest-frequency
-    // client call (~20 Hz). Overwrites if this (ship, tick) was already recorded.
-    [SpacetimeDB.Reducer]
-    public static void ApplyInput(
-        ReducerContext ctx,
-        float thrust, float strafeX, float strafeY,
-        float yaw, float pitch, float roll,
-        bool firing, bool boost, bool coast, uint clientTick)
-    {
-        var player = ctx.Db.Player.Identity.Find(ctx.Sender);
-        if (player is null || player.Value.ShipId is not ulong shipId)
-            return;
-
-        ShipInput? existing = null;
-        foreach (var r in ctx.Db.ShipInput.ByShipTick.Filter((shipId, clientTick)))
-        {
-            existing = r;
-            break;
-        }
-
-        if (existing is ShipInput e)
-        {
-            ctx.Db.ShipInput.InputId.Update(e with
-            {
-                Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
-            });
-        }
-        else
-        {
-            ctx.Db.ShipInput.Insert(new ShipInput
-            {
-                InputId = 0,
-                ShipId = shipId,
-                Tick = clientTick,
-                Thrust = thrust, StrafeX = strafeX, StrafeY = strafeY,
-                Yaw = yaw, Pitch = pitch, Roll = roll, Firing = firing, Boost = boost, Coast = coast,
-            });
-        }
-
-        // The buffer changed: make Pass A re-derive this ship's held input even if this
-        // row's tick was already simulated (a late arrival under lag).
-        _inputDirty.Add(shipId);
-
-        // Amortized per-ship prune (~once per InputKeep ticks of this ship's sending):
-        // replaces the old every-tick full-table sweep in SimulateTick. Despawn paths
-        // still clear the whole buffer via DeleteShipInputs.
-        if (clientTick % InputKeep == 0)
-        {
-            foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId).ToList())
-                if (r.Tick + InputKeep < clientTick)
-                    ctx.Db.ShipInput.InputId.Delete(r.InputId);
-        }
-    }
-
-    // ---- Scheduled simulation ----------------------------------------
-
-    [SpacetimeDB.Reducer]
-    public static void SimTick(ReducerContext ctx, SimTickTimer timer)
-    {
-        var match = ctx.Db.Match.Id.Find(0);
-        if (match is null)
-            return;
-        var m = match.Value;
-
-        // Invariant: while the sim loop runs, the AI brain loop runs too. Self-heal if they
-        // ever desync — chiefly after a hot-swap that ADDED the brain timer table to an
-        // already-running sim (StartSim seeds it only on client connect, so without this the
-        // brain wouldn't fire until a reconnect).
-        if (ctx.Db.PigBrainTimer.Count == 0)
-            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
-            {
-                ScheduledId = 0,
-                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
-            });
-
-        // Pace by REAL elapsed time, not by how often the scheduler fires us. Each
-        // call integrates as many fixed-dt steps as wall-clock time has passed since
-        // the last call, carrying the sub-step remainder so the rate is exact. This
-        // keeps the sim at wall-clock speed on Maincloud (~10 Hz scheduling → 2
-        // steps/call) and locally (~20 Hz → 1 step/call) alike, while every step is
-        // still a deterministic fixed-dt integration the client predicts against.
-        long now = ctx.Timestamp.MicrosecondsSinceUnixEpoch;
-        long elapsed = m.LastTickMicros == 0 ? DtMicros : now - m.LastTickMicros;
-        if (elapsed < 0) elapsed = 0;
-        long accum = m.AccumMicros + elapsed;
-        int steps = (int)(accum / DtMicros);
-        accum -= (long)steps * DtMicros;
-        if (steps > MaxCatchupSteps) { steps = MaxCatchupSteps; accum = 0; }
-
-        uint tick = m.Tick;
-        for (int s = 0; s < steps; s++)
-            SimulateTick(ctx, ++tick);
-
-        // Write the tick counter + timing once. Re-read so we keep any Phase/Winner
-        // change a step made (the win condition writes Match inside SimulateTick).
-        var cur = ctx.Db.Match.Id.Find(0)!.Value;
-        ctx.Db.Match.Id.Update(cur with { Tick = tick, LastTickMicros = now, AccumMicros = accum });
-
-        // Benchmark instrumentation (ai-benching): log every 100 ticks so the wall-clock
-        // gap between log lines / 100 gives the real per-tick cost of SimTick (incl.
-        // catch-up steps), independent of the host's invocation cadence.
-        if (tick % 100 < (uint)steps)
-            Log.Info($"[Bench] tick={tick} steps={steps} ships={ctx.Db.Ship.Count} pendingShots={ctx.Db.ShotResolution.Count}");
-    }
-
-    // One fixed-dt authoritative step for sim tick `tick`.
-    private static void SimulateTick(ReducerContext ctx, uint tick)
-    {
-        float dt = FlightModel.Dt;
-        var worldCfg = WorldConfigOrDefault(ctx);
-
-        // Shots whose analytic impact/expiry lands on this tick (see TryFire/ResolveDueShots
-        // in Weapons.cs) — applied before integration, where the old per-shot scheduler
-        // would have fired between sim transactions.
-        ResolveDueShots(ctx, tick);
-
-        // AI drone (PIG) lifecycle + target SELECTION no longer live here — they run in the
-        // separate, slower PigBrainTick reducer (PigAI.cs), which caches one PigDecision per
-        // live drone. This sim tick just integrates whatever ships exist and (in Pass A)
-        // re-steers each drone toward its cached decision. Drone DEATHS still happen here
-        // (Pass C / KillPig), and pods are still flown per-tick by PodThink below.
-
-        // --- Pass A: integrate every ship, fire if the trigger is held & cooled, and warp it
-        // through any aleph it flew into — all in ONE pass. Snapshot to a list first (we mutate
-        // rows while iterating), and collect the post-integration ships into `live` so the
-        // hit/collision passes below reuse it instead of re-reading the whole Ship table.
-        var live = new List<Ship>();
-        foreach (var ship in ctx.Db.Ship.Iter().ToList())
-        {
-            // PIGs are server-driven: the AI brain (PigAI.cs) synthesizes this tick's
-            // input from world state and updates the drone's behaviour row. Player ships
-            // instead replay the EXACT per-tick input the client stamped (or the most
-            // recent one with Tick <= this tick if it hasn't arrived) — matching the
-            // client's input sequence is what makes auth == prediction.
-            ShipInputState input;
-            if (ship.IsPig && ship.IsPod)
-            {
-                // A PIG pod auto-flies to the nearest friendly base, decided fresh each tick
-                // (cheap — pods aren't brained on the slower schedule).
-                input = PodThink(ctx, ship, tick);
-            }
-            else if (ship.IsPig)
-            {
-                // Combat drone: replay the decision PigBrainTick last cached for it. PigExecute
-                // cheaply re-steers/leads/fires toward that decision against current world state
-                // (the expensive target selection ran in the separate brain reducer). No row yet
-                // — just spawned, brain hasn't fired since — so coast a tick or two until it does.
-                input = ctx.Db.PigDecision.ShipId.Find(ship.ShipId) is PigDecision pd
-                    ? PigExecute(ctx, ship, pd, tick)
-                    : default;
-            }
-            else
-            {
-                // Exact hit first: the client stamped this very tick — direct index hit on
-                // (ShipId, Tick). With on-change senders this only happens on ticks where
-                // the stick state changed; in between, the held input below replays for free.
-                ShipInput? src = null;
-                foreach (var r in ctx.Db.ShipInput.ByShipTick.Filter((ship.ShipId, tick)))
-                {
-                    src = r;
-                    break;
-                }
-                if (src is ShipInput si)
-                {
-                    input = ToInputState(si);
-                    _heldInput[ship.ShipId] = input;
-                    _inputDirty.Remove(ship.ShipId);
-                }
-                else if (!_inputDirty.Contains(ship.ShipId)
-                         && _heldInput.TryGetValue(ship.ShipId, out var held))
-                {
-                    // Nothing arrived since the last derive: the stick state is unchanged —
-                    // replay it with zero datastore reads. This is the common per-tick path.
-                    input = held;
-                }
-                else
-                {
-                    // A row arrived since the last derive (possibly LATE, for a tick already
-                    // simulated), or the cache is cold (fresh spawn / module hot-swap):
-                    // re-derive as the most recent buffered input before this tick — the
-                    // same value the client predicted those ticks with.
-                    ShipInput? latest = null;
-                    foreach (var r in ctx.Db.ShipInput.ShipId.Filter(ship.ShipId))
-                    {
-                        if (r.Tick < tick && (latest is null || r.Tick > latest.Value.Tick))
-                            latest = r;
-                    }
-                    input = latest is ShipInput li ? ToInputState(li) : default;
-                    _heldInput[ship.ShipId] = input;
-                    _inputDirty.Remove(ship.ShipId);
-                }
-            }
-            // Per-ship flight stats from the class's ShipClassDef (pods resolve to the Pod
-            // def), derived once and cached; falls back to FlightModel defaults if unseeded.
-            var stats = ShipStatsFor(ctx, ClassIdOf(ship));
-
-            var state = new ShipState
-            {
-                Pos = new Vec3(ship.PosX, ship.PosY, ship.PosZ),
-                Vel = new Vec3(ship.VelX, ship.VelY, ship.VelZ),
-                Rot = new Quat(ship.RotX, ship.RotY, ship.RotZ, ship.RotW),
-                AngVel = new Vec3(ship.AngVelX, ship.AngVelY, ship.AngVelZ),
-                Mass = ship.Mass,
-                AbPower = ship.AbPower,
-            };
-
-            state = FlightModel.Integrate(state, input, stats);
-
-            // Fire control: spawn a projectile from the ship's Weapon hardpoint when held
-            // and the per-weapon cooldown has elapsed (tracked against Match.Tick). Muzzle
-            // offset/forward, damage, interval, speed, life and spread all come from the
-            // ship's ShipClassDef hardpoint + the WeaponDef it names (see Weapons.cs). Pods
-            // are unarmed — TryFire never fires them.
-            uint lastFire = TryFire(ctx, ship, state, input.Firing && !worldCfg.DebugNoFire, tick, ship.LastFireTick);
-
-            var updated = ship with
-            {
-                PosX = state.Pos.X, PosY = state.Pos.Y, PosZ = state.Pos.Z,
-                VelX = state.Vel.X, VelY = state.Vel.Y, VelZ = state.Vel.Z,
-                RotX = state.Rot.X, RotY = state.Rot.Y, RotZ = state.Rot.Z, RotW = state.Rot.W,
-                AngVelX = state.AngVel.X, AngVelY = state.AngVel.Y, AngVelZ = state.AngVel.Z,
-                AbPower = state.AbPower,
-                // Stamp with the SERVER tick (this state's integration index, since
-                // Match.Tick increments once per integration). Gives the client a
-                // shared, drift-free anchor so predicted[N] and auth[N] are the same
-                // step count. The client (ShipController) predicts in this tick space.
-                LastInputTick = tick,
-                LastFireTick = lastFire,
-            };
-
-            // Aleph warp folded into the same pass: if the freshly-integrated position is
-            // inside an aleph trigger, carry the ship THROUGH the funnel before persisting.
-            updated = TryWarp(ctx, updated);
-
-            ctx.Db.Ship.ShipId.Update(updated);
-            live.Add(updated);
-        }
-
-        // The post-integration ship set IS `live` (every ship was updated above, none
-        // spawned/deleted since) — reuse it for the hit/collision passes instead of re-reading
-        // the whole Ship table. Damage is accumulated here and applied once at the end.
-        var ships = live;
-        var bases = ctx.Db.Base.Iter().ToList();
-        // Asteroids are NOT snapshotted into a flat list — the hit/collision passes below
-        // broad-phase them through the per-sector spatial grid (HitsAsteroid /
-        // ResolveAsteroidCollisions), so a tick costs ~O(entities) instead of O(ships+projectiles
-        // × asteroids). The grid is built once and reused (invalidated only by GenerateMap).
-        var damage = new Dictionary<ulong, float>();   // shipId -> hull damage this tick
-
-        // --- Pass C: collisions, then apply all damage and kill at <= 0 health.
-        // Enemy ship-vs-ship: mutual damage + separation (pairwise; N is tiny here).
-        for (int i = 0; i < ships.Count; i++)
-        {
-            for (int j = i + 1; j < ships.Count; j++)
-            {
-                var a = ships[i];
-                var b = ships[j];
-                if (a.Team == b.Team || a.SectorId != b.SectorId) continue;
-
-                float dx = a.PosX - b.PosX, dy = a.PosY - b.PosY, dz = a.PosZ - b.PosZ;
-                float dist2 = dx * dx + dy * dy + dz * dz;
-                float minD = 2f * ShipRadius;
-                if (dist2 >= minD * minD) continue;
-
-                float dist = MathF.Sqrt(dist2);
-                float nx, ny, nz;
-                if (dist > 1e-4f) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
-                else { nx = 0f; ny = 1f; nz = 0f; }
-
-                // Mass-weighted response: heavier ships deflect less and are shoved
-                // out less. iA/iB are inverse masses (guard against a missing/zero
-                // mass with a unit fallback). With equal mass this reduces exactly to
-                // the old 50/50 split.
-                float iA = a.Mass > 0f ? 1f / a.Mass : 1f;
-                float iB = b.Mass > 0f ? 1f / b.Mass : 1f;
-                float invSum = iA + iB;
-
-                float relVn = (a.VelX - b.VelX) * nx + (a.VelY - b.VelY) * ny + (a.VelZ - b.VelZ) * nz;
-                if (relVn < 0f)
-                {
-                    // Momentum-conserving normal impulse: J = -(1+e) * relVn / (iA+iB).
-                    float jimp = -(1f + CollisionRestitution) * relVn / invSum;
-                    a.VelX += jimp * iA * nx; a.VelY += jimp * iA * ny; a.VelZ += jimp * iA * nz;
-                    b.VelX -= jimp * iB * nx; b.VelY -= jimp * iB * ny; b.VelZ -= jimp * iB * nz;
-
-                    // Damage scales with the impact's reduced mass and closing speed,
-                    // so heavier/faster collisions hurt more (both ships feel the same
-                    // mutual impulse). reducedMass = (mA*mB)/(mA+mB) = 1/(iA+iB).
-                    float reducedMass = 1f / invSum;
-                    float dmg = MathF.Min(-relVn * reducedMass * ShipShipDamageScale, MaxCollisionDamage);
-                    damage[a.ShipId] = (damage.TryGetValue(a.ShipId, out var da) ? da : 0f) + dmg;
-                    damage[b.ShipId] = (damage.TryGetValue(b.ShipId, out var db) ? db : 0f) + dmg;
-                }
-                // Mass-weighted positional separation (heavy ship moves out less).
-                float pen = minD - dist;
-                float pushA = pen * (iA / invSum);
-                float pushB = pen * (iB / invSum);
-                a.PosX += nx * pushA; a.PosY += ny * pushA; a.PosZ += nz * pushA;
-                b.PosX -= nx * pushB; b.PosY -= ny * pushB; b.PosZ -= nz * pushB;
-                ships[i] = a;
-                ships[j] = b;
-            }
-        }
-
-        // Sector lookup for the out-of-bounds check (table is tiny — a couple of rows).
-        var sectors = ctx.Db.Sector.Iter().ToList();
-
-        foreach (var s0 in ships)
-        {
-            var s = s0;
-            if (damage.TryGetValue(s.ShipId, out var d))
-                s.Health -= d;
-
-            // Sector boundary: a ship beyond its sector radius takes mounting hull
-            // damage (the "invisible boundary") until it returns to bounds or dies.
-            foreach (var sec in sectors)
-            {
-                if (sec.SectorId != s.SectorId) continue;
-                float ddx = s.PosX - sec.CenterX, ddy = s.PosY - sec.CenterY, ddz = s.PosZ - sec.CenterZ;
-                float over = MathF.Sqrt(ddx * ddx + ddy * ddy + ddz * ddz) - sec.Radius;
-                if (over > 0f)
-                {
-                    float dps = MathF.Min(BoundaryBaseDps + over * BoundaryRampDps, BoundaryMaxDps);
-                    s.Health -= dps * dt;
-                }
-                break;
-            }
-
-            // Asteroids in this SHIP's sector bounce it (broad-phased via the spatial grid).
-            s = ResolveAsteroidCollisions(ctx, s);
-
-            // Bases in this ship's sector: an ENEMY base is solid (bounce + damage); your
-            // OWN base is your dock. Fly into its core (within dockR) and you DOCK —
-            // the ship/pod despawns. For a player ship that reopens the spawn menu (a
-            // voluntary re-ship); for a player pod or a PIG pod it's "reached a friendly
-            // base" and resolves the pod. Docking ends this ship's tick, so skip the rest.
-            bool docked = false;
-            float baseR = BaseRadiusOf(ctx);
-            float dockR = baseR * DockRadiusFrac;
-            foreach (var b in bases)
-            {
-                if (b.SectorId != s.SectorId) continue;
-                if (b.Team != s.Team)
-                {
-                    s = ResolveCollision(s, b.PosX, b.PosY, b.PosZ, baseR);
-                    continue;
-                }
-                if (Dist2(s.PosX, s.PosY, s.PosZ, b.PosX, b.PosY, b.PosZ) <= dockR * dockR)
-                {
-                    DockShip(ctx, s, tick);
-                    docked = true;
-                    break;
-                }
-            }
-            if (docked)
-                continue;
-
-            if (s.Health <= 0f)
-            {
-                // A dying POD just vanishes: a player pod clears the owner's ShipId (spawn
-                // menu reappears) via KillShip; a PIG pod has no Player row so KillShip is a
-                // clean delete. Pods don't eject pods.
-                if (s.IsPod)
-                    KillShip(ctx, s);
-                // A dying PIG combat drone ejects a PIG pod and frees its slot (KillPig).
-                else if (s.IsPig)
-                    KillPig(ctx, s, tick);
-                // A dying player COMBAT ship ejects a player-piloted escape pod instead of
-                // going straight to the spawn menu (SpawnPodFor repoints Player.ShipId).
-                else
-                    SpawnPodFor(ctx, s);
-            }
-            else
-                ctx.Db.Ship.ShipId.Update(s);
-        }
-
-        // --- Rescue pass: a pod in DIRECT hull contact with a friendly non-pod ship (player
-        // OR drone) in the same sector is rescued — the same resolution as docking (player pod
-        // → spawn menu; PIG pod despawns). Reads LIVE rows because the death/dock pass above
-        // mutated the table. The tight RescueRadius (hulls touching) means rescue only happens
-        // when a teammate/drone actually flies onto the pod, not by merely passing nearby — so
-        // a pod ejected mid-dogfight isn't instantly resolved; left alone it floats home or dies.
-        // Read the live rows ONCE (the death/dock pass above mutated the table) and reuse the
-        // snapshot for both the pod scan and the friend scan, instead of re-iterating per pod.
-        var rescueShips = ctx.Db.Ship.Iter().ToList();
-        foreach (var pod in rescueShips)
-        {
-            if (!pod.IsPod)
-                continue;
-            foreach (var friend in rescueShips)
-            {
-                if (friend.IsPod || friend.Team != pod.Team || friend.SectorId != pod.SectorId)
-                    continue;
-                if (Dist2(pod.PosX, pod.PosY, pod.PosZ, friend.PosX, friend.PosY, friend.PosZ)
-                    <= RescueRadius * RescueRadius)
-                {
-                    DockShip(ctx, pod, tick);
-                    break;
-                }
-            }
-        }
-
-        // Input-buffer pruning no longer happens here: ApplyInput prunes each ship's own
-        // buffer amortized (every InputKeep-th stamped tick), and despawn paths clear it
-        // outright — the old every-tick full-table sweep was O(ships x InputKeep) rows.
-    }
-
-    // ---- Helpers ------------------------------------------------------
-
-    private static float Dist2(float ax, float ay, float az, float bx, float by, float bz)
-    {
-        float dx = ax - bx, dy = ay - by, dz = az - bz;
-        return dx * dx + dy * dy + dz * dz;
-    }
-
-    // If `ship`'s (freshly-integrated) position is inside an aleph trigger in its sector, return
-    // it carried THROUGH the funnel: same velocity/orientation magnitude (momentum carries
-    // through), but its SectorId becomes the partner's and it re-emerges just past the partner
-    // aleph so it doesn't immediately warp back. Otherwise returns `ship` unchanged. A pure
-    // transform on one ship + the (static) aleph/sector tables; the caller persists the result.
-    private static Ship TryWarp(ReducerContext ctx, Ship ship)
-    {
-        foreach (var al in ctx.Db.Aleph.Iter())
-        {
-            if (al.SectorId != ship.SectorId)
-                continue;
-            float rr = AlephTriggerRadius + ShipRadius;
-            if (Dist2(ship.PosX, ship.PosY, ship.PosZ, al.PosX, al.PosY, al.PosZ) > rr * rr)
-                continue;
-            if (ctx.Db.Aleph.AlephId.Find(al.PartnerId) is not Aleph partner)
-                break;
-
-            // Emerge OUT THE MOUTH. The funnel (AlephView) is oriented so its mouth faces
-            // toward the sector center. The ship pops out of the partner's mouth along that
-            // axis — toward the partner's sector center — far enough to clear the partner's
-            // trigger sphere (no instant re-warp).
-            //
-            // The funnel discards the ship's heading: only the RAW SPEED carries through. The
-            // exit vector is the mouth axis (partner aleph → its sector center), jittered by a
-            // small random cone so successive ships fan out instead of stacking in a line.
-            // Position and velocity share the one jittered direction so the ship travels along
-            // the axis it emerged on. Warp is server-authoritative, so this RNG never has to be
-            // reproduced by client prediction. Orientation/angular momentum are left untouched.
-            float speed = MathF.Sqrt(ship.VelX * ship.VelX + ship.VelY * ship.VelY + ship.VelZ * ship.VelZ);
-
-            // Mouth direction: from partner aleph toward its sector center.
-            var destSec = ctx.Db.Sector.SectorId.Find(al.DestSectorId);
-            float mx = (destSec?.CenterX ?? 0f) - partner.PosX;
-            float my = (destSec?.CenterY ?? 0f) - partner.PosY;
-            float mz = (destSec?.CenterZ ?? 0f) - partner.PosZ;
-            float mlen = MathF.Sqrt(mx * mx + my * my + mz * mz);
-            if (mlen < 0.001f) { mx = 0f; my = 1f; mz = 0f; mlen = 1f; } // fallback: up
-            mx /= mlen; my /= mlen; mz /= mlen;
-
-            // Jitter around the mouth axis.
-            float jx = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-            float jy = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-            float jz = (float)(ctx.Rng.NextDouble() * 2.0 - 1.0) * WarpExitJitter;
-            float ex = mx + jx;
-            float ey = my + jy;
-            float ez = mz + jz;
-            float elen = MathF.Sqrt(ex * ex + ey * ey + ez * ez);
-            ex /= elen; ey /= elen; ez /= elen;
-
-            float exit = AlephTriggerRadius + ShipRadius + WarpExitOffset;
-            Log.Info($"[Warp] ship {ship.ShipId} {al.SectorId} -> {al.DestSectorId}");
-            return ship with
-            {
-                SectorId = al.DestSectorId,
-                PosX = partner.PosX + ex * exit,
-                PosY = partner.PosY + ey * exit,
-                PosZ = partner.PosZ + ez * exit,
-                VelX = ex * speed,
-                VelY = ey * speed,
-                VelZ = ez * speed,
-            };
-        }
-        return ship;
-    }
-
-    // Resolve a ship overlapping a static sphere (asteroid / base): on inward
-    // impact apply impact-scaled damage and a damped bounce, then push the ship
-    // back to the sphere surface so it can't sink through. No-op when separated.
-    private static Ship ResolveCollision(Ship s, float cx, float cy, float cz, float radius)
-    {
-        float dx = s.PosX - cx, dy = s.PosY - cy, dz = s.PosZ - cz;
-        float dist2 = dx * dx + dy * dy + dz * dz;
-        float minD = radius + ShipRadius;
-        if (dist2 >= minD * minD)
-            return s;
-
-        float dist = MathF.Sqrt(dist2);
-        float nx, ny, nz;
-        if (dist > 1e-4f) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
-        else { nx = 0f; ny = 1f; nz = 0f; }
-
-        float vn = s.VelX * nx + s.VelY * ny + s.VelZ * nz;
-        if (vn < 0f) // moving into the obstacle
-        {
-            float dmg = MathF.Min(-vn * CollisionDamageScale, MaxCollisionDamage);
-            s.Health -= dmg;
-            float jimp = (1f + CollisionRestitution) * vn;
-            s.VelX -= jimp * nx; s.VelY -= jimp * ny; s.VelZ -= jimp * nz;
-        }
-        s.PosX = cx + nx * minD; s.PosY = cy + ny * minD; s.PosZ = cz + nz * minD;
-        return s;
-    }
-
-    // KillShip / SpawnPodFor / DockShip live in Ships.cs (M2).
-
-    private static ShipInputState ToInputState(ShipInput i) => new ShipInputState
-    {
-        Thrust = i.Thrust,
-        StrafeX = i.StrafeX,
-        StrafeY = i.StrafeY,
-        Yaw = i.Yaw,
-        Pitch = i.Pitch,
-        Roll = i.Roll,
-        Firing = i.Firing,
-        Boost = i.Boost,
-        Coast = i.Coast,
-    };
-
-    // Delete every buffered input for a ship (ShipId is an index, not the PK now), and
-    // drop its held-input cache entries (ShipIds are never recycled, but stay tidy).
-    private static void DeleteShipInputs(ReducerContext ctx, ulong shipId)
-    {
-        foreach (var r in ctx.Db.ShipInput.ShipId.Filter(shipId).ToList())
-            ctx.Db.ShipInput.InputId.Delete(r.InputId);
-        _heldInput.Remove(shipId);
-        _inputDirty.Remove(shipId);
-    }
-
-    // SpawnShipInternal lives in Ships.cs (M2).
 
     // Count online, teamed players per side, optionally excluding one identity (so a
     // player switching teams isn't counted on their old side).
@@ -1837,84 +1062,14 @@ public static partial class Module
         return best;
     }
 
-    // Tear the battlefield down to a fresh state: despawn all ships (player + drone)
-    // and their inputs, clear projectiles, reset every base to full hull. Used when a
-    // match starts and when one restarts. Players' ShipId is cleared by the caller.
+    // Reset the static world to a fresh state for a new match: every base back to full
+    // hull. (Ships/drones/shots no longer live in this module — the native sim server owns
+    // and resets the live battlefield itself.) Used when a match starts and when one restarts.
     private static void ResetWorld(ReducerContext ctx)
     {
-        DespawnAllPigs(ctx);   // deletes drone ships and resets their slots to dormant
-        foreach (var s in ctx.Db.Ship.Iter().ToList())
-        {
-            DeleteShipInputs(ctx, s.ShipId);
-            ctx.Db.Ship.ShipId.Delete(s.ShipId);
-        }
-        // Pending shot outcomes die with the battlefield (their targets are being reset).
-        foreach (var sr in ctx.Db.ShotResolution.Iter().ToList())
-            ctx.Db.ShotResolution.ShotId.Delete(sr.ShotId);
         float baseHp = BaseMaxHealthOf(ctx);
         foreach (var b in ctx.Db.Base.Iter().ToList())
             ctx.Db.Base.BaseId.Update(b with { Health = baseHp });
-    }
-
-    // True if any player connection is currently online.
-    private static bool AnyOnline(ReducerContext ctx)
-    {
-        foreach (var p in ctx.Db.Player.Iter())
-            if (p.Online)
-                return true;
-        return false;
-    }
-
-    // True if any ONLINE player is on a team (i.e. actually in the match, not a teamless
-    // observer/CLI connection). Drives the PIG combat gate: drones keep fighting while a
-    // teamed pilot is present, even between their ships, and stop when the last one leaves.
-    private static bool AnyTeamedPlayerOnline(ReducerContext ctx)
-    {
-        foreach (var p in ctx.Db.Player.Iter())
-            if (p.Online && p.Team is byte)
-                return true;
-        return false;
-    }
-
-    // Start (resume) the 20 Hz sim loop if it isn't already scheduled. Idempotent:
-    // multiple connecting clients only ever leave one timer row in place.
-    private static void StartSim(ReducerContext ctx)
-    {
-        if (ctx.Db.SimTickTimer.Count > 0)
-            return;
-
-        // Reset the real-time pacing anchor so the first tick after a pause
-        // integrates a single fixed step instead of trying to "catch up" the
-        // entire idle gap (LastTickMicros == 0 makes SimTick use one DtMicros).
-        var match = ctx.Db.Match.Id.Find(0);
-        if (match is Match m)
-            ctx.Db.Match.Id.Update(m with { LastTickMicros = 0, AccumMicros = 0 });
-
-        ctx.Db.SimTickTimer.Insert(new SimTickTimer
-        {
-            ScheduledId = 0,
-            ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / SimTickHz)),
-        });
-
-        // The AI decision loop rides the same lifecycle, but on its own slower schedule.
-        if (ctx.Db.PigBrainTimer.Count == 0)
-            ctx.Db.PigBrainTimer.Insert(new PigBrainTimer
-            {
-                ScheduledId = 0,
-                ScheduledAt = new ScheduleAt.Interval(TimeSpan.FromMilliseconds(1000.0 / PigBrainHz)),
-            });
-        Log.Info($"[Sim] resumed @ {SimTickHz}Hz (AI brain @ {PigBrainHz}Hz)");
-    }
-
-    // Stop the sim loop by removing the scheduled-timer row(s). With no rows,
-    // SimTick stops firing entirely until a client reconnects and StartSim runs.
-    private static void StopSim(ReducerContext ctx)
-    {
-        foreach (var t in ctx.Db.SimTickTimer.Iter().ToList())
-            ctx.Db.SimTickTimer.ScheduledId.Delete(t.ScheduledId);
-        foreach (var t in ctx.Db.PigBrainTimer.Iter().ToList())
-            ctx.Db.PigBrainTimer.ScheduledId.Delete(t.ScheduledId);
-        Log.Info("[Sim] paused (no clients connected)");
     }
 
     // Mark a side as having fielded a human this match, but only while one is running —
@@ -2003,15 +1158,17 @@ public static partial class Module
                 engaged |= (byte)(1 << t);
 
         ResetWorld(ctx);
+        ulong epoch = match.Value.Epoch + 1;
+        long expiry = TokenExpiry(ctx);
         foreach (var p in ctx.Db.Player.Iter().ToList())
             if (p.Ready)
             {
                 if (p.Team is byte pt)
-                    MintJoinToken(ctx, p.Identity, pt);
+                    MintJoinToken(ctx, p.Identity, pt, epoch, expiry);
                 ctx.Db.Player.Identity.Update(p with { Ready = false });
             }
 
-        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged, Epoch = epoch });
         SystemAll(ctx, $"{DisplayName(caller)} force-started the match.");
         Log.Info($"[Match] force-start by {caller.Identity} -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");
     }
@@ -2039,18 +1196,21 @@ public static partial class Module
         if (teamed == 0 || readied == 0 || readied != teamed)
             return;
 
-        // Fresh battlefield, and consume the ready flags so the next lobby starts clean.
-        // Every participant gets a fresh native-sim credential (no-op when native is off).
+        // Fresh battlefield, a new match epoch, and consume the ready flags so the next lobby
+        // starts clean. Every participant gets a fresh native-sim credential bound to this
+        // epoch (no-op when native mode is off / no secret installed).
         ResetWorld(ctx);
+        ulong epoch = match.Value.Epoch + 1;
+        long expiry = TokenExpiry(ctx);
         foreach (var p in ctx.Db.Player.Iter().ToList())
             if (p.Ready)
             {
                 if (p.Team is byte pt)
-                    MintJoinToken(ctx, p.Identity, pt);
+                    MintJoinToken(ctx, p.Identity, pt, epoch, expiry);
                 ctx.Db.Player.Identity.Update(p with { Ready = false });
             }
 
-        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged });
-        Log.Info($"[Match] {readied} pilot(s) ready -> Active (engaged sides 0b{System.Convert.ToString(engaged, 2)})");
+        ctx.Db.Match.Id.Update(match.Value with { Phase = MatchPhase.Active, Winner = null, EngagedTeams = engaged, Epoch = epoch });
+        Log.Info($"[Match] {readied} pilot(s) ready -> Active (epoch {epoch}, engaged sides 0b{System.Convert.ToString(engaged, 2)})");
     }
 }

@@ -62,6 +62,8 @@ public partial class GameNetClient : Node
 	private string _identityHex = "";
 	private byte _team;
 	private string _token = "";
+	private ulong _matchId;   // match epoch the token is bound to (from the JoinToken row)
+	private long _expiry;     // token expiry, unix seconds (from the JoinToken row)
 	private string _endpointUrl = "";
 
 	public override void _Ready()
@@ -93,6 +95,8 @@ public partial class GameNetClient : Node
 			_identityHex = id.ToString();
 			_team = row.Team;
 			_token = row.Token;
+			_matchId = row.MatchId;
+			_expiry = row.Expiry;
 			TryActivate();
 		}
 	}
@@ -139,21 +143,27 @@ public partial class GameNetClient : Node
 
 	// ---- API used by ShipController --------------------------------------
 
-	// Hello v2: class + team + identity + token. The sim server recomputes the token
-	// from (identity, team) with the shared secret — a forged team or identity fails
-	// the check. Credential-less Hello (dev SIM_URI mode) sends zero-length fields.
+	// Hello v6: class, team, identity, matchId, expiry, token. The sim server recomputes the
+	// HMAC over (identity, team, matchId, expiry) with the shared secret and constant-time
+	// compares — a forged team/identity, a replayed previous-match token (different matchId),
+	// or an expired one all fail. A credential-less Hello (dev SIM_URI mode) sends zero-length
+	// id/token (matchId/expiry are ignored when no secret is configured server-side).
+	//   layout: u8 Hello, u8 cls, u8 team, u8 idLen, id…, u64 matchId, i64 expiry, u8 tokLen, tok…
 	public void RequestSpawn(byte shipClass)
 	{
 		var id = System.Text.Encoding.UTF8.GetBytes(_identityHex);
 		var tok = System.Text.Encoding.UTF8.GetBytes(_token);
-		var f = new byte[5 + id.Length + tok.Length];
-		f[0] = 1;   // Hello
-		f[1] = shipClass;
-		f[2] = _team;
-		f[3] = (byte)id.Length;
-		id.CopyTo(f, 4);
-		f[4 + id.Length] = (byte)tok.Length;
-		tok.CopyTo(f, 5 + id.Length);
+		var f = new byte[4 + id.Length + 8 + 8 + 1 + tok.Length];
+		int o = 0;
+		f[o++] = 1;   // Hello
+		f[o++] = shipClass;
+		f[o++] = _team;
+		f[o++] = (byte)id.Length;
+		id.CopyTo(f, o); o += id.Length;
+		BitConverter.TryWriteBytes(f.AsSpan(o), _matchId); o += 8;
+		BitConverter.TryWriteBytes(f.AsSpan(o), _expiry); o += 8;
+		f[o++] = (byte)tok.Length;
+		tok.CopyTo(f, o);
 		_tx.Writer.TryWrite(f);
 	}
 
@@ -256,7 +266,7 @@ public partial class GameNetClient : Node
 	}
 
 	// Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-	private const byte ProtocolVersion = 5;
+	private const byte ProtocolVersion = 6;
 
 	private void ApplyWelcome(BinaryReader r)
 	{
