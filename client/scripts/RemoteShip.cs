@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Other players' ships (T6). The client cannot predict a remote ship (it doesn't

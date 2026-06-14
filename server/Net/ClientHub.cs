@@ -52,27 +52,51 @@ public sealed class ClientHub
     private int[] _recordOffset = new int[64];
 
     private readonly Simulation _sim;
-    // Shared join-token secret (Phase 1c). Non-empty = every Hello must carry an
-    // (identity, team, token) triple the STDB module minted; empty = dev mode, accept
-    // credential-less Hellos (bots, SIM_URI clients) with round-robin teams.
-    private readonly string _secret;
+    // Pluggable backends (server/Backend/Backends.cs): connect-time auth, player directory,
+    // matchmaker. SpacetimeDB used to own these; they're now in-process with swap-in seams.
+    private readonly Backend.IAuthenticator _auth;
+    private readonly Backend.IPlayerDirectory _players;
+    private readonly Backend.IMatchmaker _matchmaker;
+    // The pre-match lobby (team/ready/name). The sim polls ShouldStartMatch to leave the lobby.
+    private readonly Lobby _lobby = new();
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
-    private int _teamCounter;
     private long _bytesSent;
-    // Match epoch pinned from the first valid credentialed Hello, so every credential in one
-    // sim-match session must carry the same epoch — a token minted for a different STDB match
-    // (different epoch) is refused even within its 6 h expiry window. -1 = unset; reset to -1
-    // when the server empties out (a new sim match begins with a fresh epoch). See HandleConnection.
-    private long _epochPin = -1;
+    // Last phase the hub broadcast, so AfterStep emits a fresh LobbyState on every transition
+    // (Lobby->Active->Ended->Lobby) without polling every tick.
+    private byte _lastPhase = Simulation.PhaseLobby;
 
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
 
-    public ClientHub(Simulation sim, string secret)
+    public ClientHub(Simulation sim, Backend.IAuthenticator auth, Backend.IPlayerDirectory players,
+        Backend.IMatchmaker matchmaker)
     {
         _sim = sim;
-        _secret = secret;
+        _auth = auth;
+        _players = players;
+        _matchmaker = matchmaker;
+    }
+
+    // Wired to Simulation.ShouldStartMatch — polled on the sim thread each step while in the
+    // lobby. Reads thread-safe lobby state, so no sim mutation happens off the sim thread.
+    public bool ShouldStartMatch() => _matchmaker.ShouldStart(_lobby.Snapshot());
+
+    // Wired to Simulation.OnReturnToLobby — the sim cleared the match, so reset ready flags and
+    // push the fresh roster.
+    public void OnReturnToLobby()
+    {
+        _lobby.ClearReady();
+        BroadcastLobby();
+    }
+
+    // Build + fan out the current lobby roster (HasShip overlaid from the live sim).
+    private void BroadcastLobby()
+    {
+        var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner,
+            _lobby.Snapshot(id => _sim.ShipIdOf(id) != 0));
+        foreach (var c in _clients.Values)
+            c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
 
     public async Task HandleConnection(WebSocket socket, CancellationToken ct)
@@ -97,19 +121,17 @@ public sealed class ClientHub
         {
             _clients.TryRemove(client.Id, out _);
             _sim.EnqueueLeave(client.Id);
+            _lobby.Remove(client.Id);
+            _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
-            // Last client gone: a new sim match (Simulation.ResetMatch in Program) will begin
-            // with a fresh STDB epoch, so unpin to accept it. Benign race: a join landing in the
-            // empty window just re-pins to its own epoch.
-            if (_clients.IsEmpty)
-                Interlocked.Exchange(ref _epochPin, -1);
+            BroadcastLobby();   // roster shrank
             try { await sendTask; } catch { /* socket torn down */ }
         }
     }
 
     private async Task ReceiveLoop(Client client, CancellationToken ct)
     {
-        var buffer = new byte[1024];
+        var buffer = new byte[2048];
         while (!ct.IsCancellationRequested)
         {
             var result = await client.Socket.ReceiveAsync(buffer, ct);
@@ -122,70 +144,83 @@ public sealed class ClientHub
             {
                 case Protocol.MsgHello:
                 {
-                    // v6 layout: u8 cls, u8 team, u8 idLen, id…, u64 matchId, i64 expiry,
-                    // u8 tokLen, tok…  A credential-less Hello (dev SIM_URI / bots) sends
-                    // zero-length id/token and is accepted only when no secret is configured.
-                    byte cls = result.Count > 1 ? buffer[1] : (byte)0;
-                    if (cls > 2) cls = 0;
-                    byte team = result.Count > 2 ? buffer[2] : (byte)0;
-                    string identity = "", token = "";
-                    ulong matchId = 0;
-                    long expiry = 0;
-                    if (result.Count > 3)
+                    // v7 layout: u8 secretLen, secret…, u8 nameLen, name…  The secret is an
+                    // optional shared-secret password the server constant-time compares (open
+                    // when the server runs without one); name labels the lobby roster. No
+                    // class/team here — those are lobby actions, spawning is MsgSpawn.
+                    string secret = "", name = "";
+                    if (result.Count > 1)
                     {
-                        int idLen = buffer[3];
-                        int o = 4 + idLen;
-                        // need: id bytes + u64 matchId + i64 expiry + u8 tokLen
-                        if (result.Count >= o + 8 + 8 + 1)
+                        int secLen = buffer[1];
+                        int o = 2 + secLen;
+                        if (result.Count >= o + 1)
                         {
-                            identity = System.Text.Encoding.UTF8.GetString(buffer, 4, idLen);
-                            matchId = BitConverter.ToUInt64(buffer, o); o += 8;
-                            expiry = BitConverter.ToInt64(buffer, o); o += 8;
-                            int tokLen = buffer[o]; o += 1;
-                            if (result.Count >= o + tokLen)
-                                token = System.Text.Encoding.UTF8.GetString(buffer, o, tokLen);
+                            secret = System.Text.Encoding.UTF8.GetString(buffer, 2, secLen);
+                            int nameLen = buffer[o]; o += 1;
+                            if (result.Count >= o + nameLen)
+                                name = System.Text.Encoding.UTF8.GetString(buffer, o, nameLen);
                         }
                     }
 
-                    if (_secret.Length > 0)
+                    if (!_auth.Authenticate(secret))
                     {
-                        // Credentialed mode. The token must be a current, unexpired HMAC the
-                        // module minted for this (identity, team, matchId, expiry); compared in
-                        // constant time so response timing can't leak the expected MAC.
-                        long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                        bool ok = identity.Length > 0
-                            && expiry > nowUnix
-                            && JoinTokens.ConstantTimeEquals(
-                                token, JoinTokens.Compute(_secret, identity, team, matchId, expiry));
-                        // Pin the match epoch to the first valid join; reject tokens from a
-                        // different epoch (a replayed previous-match credential).
-                        if (ok)
-                        {
-                            long pinned = Interlocked.CompareExchange(ref _epochPin, (long)matchId, -1);
-                            if (pinned != -1 && (ulong)pinned != matchId)
-                                ok = false;
-                        }
-                        if (!ok)
-                        {
-                            Console.WriteLine($"[Hub] rejected join (bad/expired/stale token) from client {client.Id}");
-                            await client.Socket.CloseAsync(
-                                WebSocketCloseStatus.PolicyViolation, "bad token", ct);
-                            return;
-                        }
-                        client.Team = team;
-                    }
-                    else
-                    {
-                        // Dev mode: honor a claimed team if present, else round-robin.
-                        client.Team = identity.Length > 0
-                            ? team
-                            : (byte)(Interlocked.Increment(ref _teamCounter) % 2);
+                        Console.WriteLine($"[Hub] rejected join (bad secret) from client {client.Id}");
+                        await client.Socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "bad secret", ct);
+                        return;
                     }
 
-                    _clients[client.Id] = client;   // visible to AfterStep only once joined
-                    _sim.EnqueueJoin(client.Id, client.Team, cls);
+                    _players.OnConnect(client.Id, name);
+                    _lobby.Add(client.Id, _players.NameOf(client.Id));
+                    _clients[client.Id] = client;   // visible to AfterStep / broadcasts once joined
+                    client.Team = _lobby.TeamOf(client.Id);
+
+                    // The client downloads everything from the server: world statics, the
+                    // content defs, then the lobby roster.
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(
                         Protocol.BuildWelcome(client.Id, client.Team, _sim.World, _sim.Tick)));
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs()));
+                    BroadcastLobby();
+                    break;
+                }
+                case Protocol.MsgSpawn when result.Count >= 2:
+                {
+                    // Spawn the chosen class — honored only while a match is live. The team
+                    // comes from the lobby (authoritative), not the client.
+                    byte cls = buffer[1];
+                    if (cls > 2) cls = 0;
+                    if (_sim.IsActive)
+                    {
+                        byte team = _lobby.TeamOf(client.Id);
+                        client.Team = team;
+                        _sim.EnqueueJoin(client.Id, team, cls);
+                    }
+                    break;
+                }
+                case Protocol.MsgSetTeam when result.Count >= 2:
+                {
+                    _lobby.SetTeam(client.Id, buffer[1]);
+                    BroadcastLobby();
+                    break;
+                }
+                case Protocol.MsgSetReady when result.Count >= 2:
+                {
+                    _lobby.SetReady(client.Id, buffer[1] != 0);
+                    BroadcastLobby();
+                    break;
+                }
+                case Protocol.MsgChat when result.Count >= 4:
+                {
+                    byte scope = buffer[1];
+                    int len = BitConverter.ToUInt16(buffer, 2);
+                    if (result.Count >= 4 + len)
+                    {
+                        string text = System.Text.Encoding.UTF8.GetString(buffer, 4, len);
+                        byte fromTeam = _lobby.TeamOf(client.Id);
+                        var frame = Protocol.BuildChatRelay(scope, fromTeam, _players.NameOf(client.Id), text);
+                        foreach (var c in _clients.Values)
+                            if (scope == 0 || c.Team == fromTeam)
+                                c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+                    }
                     break;
                 }
                 case Protocol.MsgInput when result.Count >= 1 + 4 + 24 + 1:
@@ -237,6 +272,14 @@ public sealed class ClientHub
     {
         uint tick = _sim.Tick;
         var ships = _sim.Ships;
+
+        // Push a fresh lobby roster on every phase transition (Lobby->Active->Ended->Lobby)
+        // so clients flip their UI between lobby and match in lockstep with the authority.
+        if (_sim.Phase != _lastPhase)
+        {
+            _lastPhase = _sim.Phase;
+            BroadcastLobby();
+        }
 
         SerializeRecords(ships);
 

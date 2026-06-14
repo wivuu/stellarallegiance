@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.Net.WebSockets;
 
-// Bot swarm for the Phase-1 sim server. Each bot: Hello (alternating Scout/Fighter),
-// then 20 Hz Input frames — full thrust, a slow per-bot yaw weave, trigger held —
-// deliberately sent EVERY tick (worst-case ingest; real clients send on change).
-// Tracks received snapshot bytes/rate and the freshest server tick seen, so the
-// aggregate report shows both directions of the pipe under load.
+// Bot swarm for the standalone sim server (Protocol v7). Each bot: Hello (no secret/name),
+// ready-up, then — once the match is Active — a Spawn (alternating Scout/Fighter) and 20 Hz
+// Input frames (full thrust, a slow per-bot yaw weave, trigger held), deliberately sent EVERY
+// tick (worst-case ingest; real clients send on change). Run the server with --autostart so the
+// match goes live as soon as the bots ready up. Tracks received snapshot bytes/rate and the
+// freshest server tick seen, so the aggregate report shows both directions of the pipe.
 int bots = 50;
 string url = "ws://localhost:8090/game";
 int seconds = 60;
@@ -60,8 +61,13 @@ async Task RunBot(int idx, CancellationToken ct)
         await ws.ConnectAsync(new Uri(url), ct);
         Interlocked.Increment(ref connected);
 
-        // Hello: type, class (alternate Scout/Fighter), zero-length name.
-        await ws.SendAsync(new byte[] { 1, (byte)(idx % 2), 0 }, WebSocketMessageType.Binary, true, ct);
+        // Hello v7: u8 secretLen=0, u8 nameLen=0 (no password, default name). Then ready up so
+        // the matchmaker starts the match.
+        await ws.SendAsync(new byte[] { 1, 0, 0 }, WebSocketMessageType.Binary, true, ct);
+        await ws.SendAsync(new byte[] { 6, 1 }, WebSocketMessageType.Binary, true, ct);   // SetReady(true)
+
+        byte phase = 0;       // latest match phase from snapshots (1 = Active)
+        bool spawned = false; // set when our YouAre arrives
 
         var rxTask = Task.Run(async () =>
         {
@@ -71,20 +77,25 @@ async Task RunBot(int idx, CancellationToken ct)
                 var r = await ws.ReceiveAsync(buf, ct);
                 if (r.MessageType == WebSocketMessageType.Close) break;
                 Interlocked.Add(ref totalRx, r.Count);
-                if (r.Count >= 5 && buf[0] == 3)   // Snapshot: u32 tick follows
+                if (r.Count >= 1 && buf[0] == 2)   // YouAre: we have a ship
+                    spawned = true;
+                else if (r.Count >= 6 && buf[0] == 3)   // Snapshot: u32 tick, u8 phase
                 {
                     Interlocked.Increment(ref snapshots);
                     uint tick = BitConverter.ToUInt32(buf, 1);
+                    phase = buf[5];
                     lock (tickLock) if (tick > maxTick) maxTick = tick;
                 }
             }
         }, ct);
 
-        // 20 Hz input frames: thrust 1, slow sinusoidal yaw weave (per-bot phase so the
+        // 20 Hz loop: request a spawn once the match is Active (retry until our ship lands),
+        // then stream input frames: thrust 1, slow sinusoidal yaw weave (per-bot phase so the
         // swarm disperses into a furball instead of a conga line), trigger held.
         var frame = new byte[30];
         frame[0] = 2;
         uint tick = 0;
+        double lastSpawnMs = -10000;
         var sw = Stopwatch.StartNew();
         double next = 0;
         while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
@@ -92,6 +103,19 @@ async Task RunBot(int idx, CancellationToken ct)
             double now = sw.Elapsed.TotalMilliseconds;
             if (now < next) { await Task.Delay(1, ct).ContinueWith(_ => { }); continue; }
             next += 50.0;
+
+            if (!spawned)
+            {
+                // Active and shipless: ask to spawn (retry every second in case it's dropped
+                // before the match goes live). Don't send input until we have a ship.
+                if (phase == 1 && now - lastSpawnMs > 1000)
+                {
+                    await ws.SendAsync(new byte[] { 4, (byte)(idx % 2) }, WebSocketMessageType.Binary, true, ct);
+                    lastSpawnMs = now;
+                }
+                continue;
+            }
+
             tick++;
             float yaw = MathF.Sin(tick * 0.05f + idx * 0.7f) * 0.6f;
             float pitch = MathF.Sin(tick * 0.031f + idx * 1.3f) * 0.25f;

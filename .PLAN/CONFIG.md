@@ -1,5 +1,11 @@
 # Phase 1 — Allegiance flight feel + configurability & maintainability refactor
 
+> **⚠ Note (SpacetimeDB removed).** The flight-model spec below is current, but the def-storage
+> mechanism described as SpacetimeDB tables now lives in plain code at `shared/Defs.cs` and is
+> sent to the client over the wire (`MsgDefs`), not via STDB subscriptions. The determinism
+> contract (server and client derive identical `ShipStats` from the same authored f32s) is
+> unchanged.
+
 ## Context
 
 Today every ship/weapon/base tuning value is a hard-coded constant compiled into

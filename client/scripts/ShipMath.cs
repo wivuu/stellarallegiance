@@ -1,5 +1,5 @@
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Marshaling between the authoritative Ship row, the shared deterministic

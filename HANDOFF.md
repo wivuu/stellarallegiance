@@ -1,5 +1,12 @@
 # Agent Handoff — wivuullegiance
 
+> **⚠ SUPERSEDED (SpacetimeDB removed).** This handoff predates the SpacetimeDB removal:
+> there is no longer a database, module, lobby handoff, or HMAC join-token mint. The server
+> (`server/`) is now a **standalone** authoritative sim **and** lobby host; clients connect
+> directly by `ip:port` and download all content (world, defs, lobby) over the wire. Auth is an
+> optional shared-secret password. For current truth see **README.md**, **CONTRIBUTING.md**, and
+> **docs/DEPLOY.md**. The notes below are kept for history only.
+
 ## Current state
 
 T0–T3, **T4** (mechanically verified; subjective flight-feel sign-off still needs a human at

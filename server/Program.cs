@@ -1,38 +1,53 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
+using SimServer.Backend;
 using SimServer.Net;
 using SimServer.Sim;
 
-// Phase-1 sim server entry point: Kestrel hosts one WebSocket endpoint (/game); a
-// dedicated thread runs the fixed-dt 20 Hz simulation with a wall-clock accumulator
-// (the same real-time pacing contract the module's SimTick kept) and fans out
-// AOI snapshots after each step. Usage: dotnet run [--port 8090] [--seed N]
+// Standalone sim server entry point: Kestrel hosts one WebSocket endpoint (/game); a
+// dedicated thread runs the fixed-dt 20 Hz authoritative simulation with a wall-clock
+// accumulator and fans out AOI snapshots after each step. The server is the SINGLE authority
+// and also hosts the lobby (team/ready) — clients connect directly by ip:port, download all
+// content from the server, and never talk to any database.
+//   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart]
 int port = 8090;
 ulong seed = 1234567;
-// Join-token secret (Phase 1c): must match what `set_sim_endpoint` installed in the
-// STDB module. Empty (default) = dev mode: credential-less Hellos accepted.
+// Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
-for (int i = 0; i < args.Length - 1; i++)
+// Skip the lobby ready-up gate and run a perpetual match (for bots / benchmarking / dev
+// iteration). Off by default: a real game readies up in the lobby.
+bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is "1" or "true";
+for (int i = 0; i < args.Length; i++)
 {
+    if (args[i] == "--autostart") autoStart = true;
+    if (i >= args.Length - 1) continue;
     if (args[i] == "--port") port = int.Parse(args[i + 1]);
     if (args[i] == "--seed") seed = ulong.Parse(args[i + 1]);
     if (args[i] == "--secret") secret = args[i + 1];
 }
 
-// Auth posture: with no secret, the server accepts credential-less Hellos (bots / dev
-// SIM_URI). That is intended for local dev and benchmarking ONLY — never expose such a
-// server to untrusted clients. Production sets SIM_SECRET (>=32 random bytes) matching the
-// value installed via set_sim_endpoint, and every Hello must carry a valid HMAC join token.
+// Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /
+// benchmarking, but set --secret/SIM_SECRET before exposing it to untrusted networks.
 if (secret.Length == 0)
-    Console.WriteLine("[SimServer] WARNING: no --secret/SIM_SECRET set — AUTH DISABLED (dev mode). " +
-                      "Do not expose this server to untrusted networks.");
+    Console.WriteLine("[SimServer] open server (no --secret/SIM_SECRET) — do not expose to untrusted networks.");
 else
-    Console.WriteLine("[SimServer] auth enabled (HMAC join tokens required).");
+    Console.WriteLine("[SimServer] auth enabled (shared-secret password required).");
+if (autoStart)
+    Console.WriteLine("[SimServer] autostart on — perpetual match, lobby ready-up bypassed.");
+
+// Pluggable backends (server/Backend) — in-process defaults today, swap-in seams later.
+IAuthenticator auth = secret.Length == 0 ? new OpenAuthenticator() : new SharedSecretAuthenticator(secret);
+IPlayerDirectory players = new InMemoryPlayerDirectory();
+IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
+IMatchResultSink results = new LoggingMatchResultSink();
 
 var world = new World(seed);
 var sim = new Simulation(world);
-var hub = new ClientHub(sim, secret);
-var reporter = new ResultReporter();
+var hub = new ClientHub(sim, auth, players, matchmaker);
+// Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when
+// it returns to the lobby so ready flags reset. Both run on the sim thread.
+sim.ShouldStartMatch = hub.ShouldStartMatch;
+sim.OnReturnToLobby = hub.OnReturnToLobby;
 
 var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -84,7 +99,7 @@ var simThread = new Thread(() =>
         double t0 = clock.Elapsed.TotalMilliseconds;
         sim.Step();
         if (sim.JustEnded)
-            reporter.ReportWinner(sim.Winner);   // one-shot, fire-and-forget
+            results.ReportResult(sim.Winner);   // one-shot, fire-and-forget
         hub.AfterStep();
         // Recycle the match once the server empties out (post-match clients all dropped on
         // lobby return), so the next handoff meets a fresh Active match.

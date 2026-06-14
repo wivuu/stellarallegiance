@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Local-ship prediction + rollback reconciliation (.PLAN/07).

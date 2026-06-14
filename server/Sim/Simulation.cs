@@ -104,16 +104,29 @@ public sealed partial class Simulation
     // Deaths this step, drained by the hub to emit ShipGone events.
     public readonly List<ulong> DeathsThisStep = new();
 
-    // Match state (Phase-2). The scaffold runs a single perpetual match: Active from the
-    // first step, flipping to Ended the moment a base is destroyed (winner = the other
-    // team). Mirrors the module's MatchPhase (0 Lobby, 1 Active, 2 Ended) on the wire.
+    // Match lifecycle. The server is now the lobby host: it starts in Lobby, the matchmaker
+    // (ShouldStartMatch hook, polled each step) flips it to Active, a destroyed base flips it
+    // to Ended, and a few seconds later it returns to Lobby for the next match. Phase values
+    // match the snapshot wire byte (0 Lobby, 1 Active, 2 Ended).
+    public const byte PhaseLobby = 0;
     public const byte PhaseActive = 1;
     public const byte PhaseEnded = 2;
     public const byte NoWinner = 255;
-    public byte Phase { get; private set; } = PhaseActive;
+    public byte Phase { get; private set; } = PhaseLobby;
     public byte Winner { get; private set; } = NoWinner;
+    // How long the Ended result lingers before the server returns to the lobby for the next match.
+    private const uint EndedToLobbyTicks = 6 * TickHz;
+    private uint _returnToLobbyAtTick;
+
+    // Lobby integration hooks (set by Program/ClientHub; null in unit tests). ShouldStartMatch
+    // is polled every step while in Lobby — it consults the live lobby roster + the matchmaker
+    // on the calling (sim) thread, reading thread-safe lobby state, so all sim mutation stays
+    // on the sim thread. OnReturnToLobby lets the hub clear ready flags for the next match.
+    public Func<bool>? ShouldStartMatch;
+    public Action? OnReturnToLobby;
+
     // True only on the single step the match ends — Program.cs reads it to fire the
-    // one-shot result writeback to STDB.
+    // one-shot result writeback (IMatchResultSink).
     public bool JustEnded { get; private set; }
     // Set whenever a base took damage this step (or the match ended), so the hub streams
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
@@ -127,6 +140,8 @@ public sealed partial class Simulation
     public uint Tick => _tick;
     public int ShipCount => _order.Count;
     public IReadOnlyList<ShipSim> Ships => _order;
+    // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
+    public bool IsActive => Phase == PhaseActive;
 
     public Simulation(World world)
     {
@@ -169,8 +184,22 @@ public sealed partial class Simulation
         BasesChangedThisStep = false;
 
         DrainQueues(tick);
+
+        // Lobby host: poll the matchmaker while waiting in the lobby, and return to the lobby
+        // a few seconds after a match ends so the next one can be readied up.
+        if (Phase == PhaseLobby)
+        {
+            if (ShouldStartMatch?.Invoke() == true)
+                StartMatch();
+        }
+        else if (Phase == PhaseEnded && tick >= _returnToLobbyAtTick)
+        {
+            ReturnToLobby();
+        }
+
         ProcessRespawns(tick);
-        PigBrainStep(tick);          // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+        if (Phase == PhaseActive)
+            PigBrainStep(tick);      // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
         ResolveDueShots(tick);
         RebuildShipGrid();
 
@@ -301,17 +330,43 @@ public sealed partial class Simulation
         }
     }
 
-    // Restore a fresh match on an empty server (called from the loop when the last client
-    // leaves). Refills bases, clears the win state, and drops any in-flight shot so a stale
-    // resolution from the last match can't bleed into the next one.
-    public void ResetMatch()
+    // Restore a fresh lobby on an empty server (called from the loop when the last client
+    // leaves). Tears the match down to a clean Lobby so the next handoff readies up afresh.
+    public void ResetMatch() => ReturnToLobby();
+
+    // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
+    // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
+    public void StartMatch()
     {
+        if (Phase == PhaseActive) return;
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
+        BasesChangedThisStep = true;
         Phase = PhaseActive;
         Winner = NoWinner;
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        Console.WriteLine("[Sim] match started");
+    }
+
+    // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
+    // and shot ring, and lets the hub clear ready flags. Called a few seconds after a match
+    // ends and whenever the server empties out.
+    public void ReturnToLobby()
+    {
+        DespawnAllPigs();
+        foreach (var s in _order.ToArray())
+            RemoveShipNow(s);
+        _byClient.Clear();
+        _clientRespawn.Clear();
+        Array.Fill(World.BaseHealth, World.BaseMaxHealth);
+        BasesChangedThisStep = true;
+        Phase = PhaseLobby;
+        Winner = NoWinner;
+        _matchDirty = false;
+        foreach (var ring in _shotRing)
+            ring.Clear();
+        OnReturnToLobby?.Invoke();
     }
 
     // ---- Player ship lifecycle (spawn / respawn / death -> pod -> dock/rescue) ----
@@ -614,6 +669,7 @@ public sealed partial class Simulation
                     Winner = (byte)(loser == 0 ? 1 : 0);
                     Phase = PhaseEnded;
                     JustEnded = true;
+                    _returnToLobbyAtTick = tick + EndedToLobbyTicks;
                 }
             }
             else if (_ships.TryGetValue(shot.TargetShipId, out var s) && s.Alive)

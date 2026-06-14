@@ -1,110 +1,100 @@
 using System;
 using Godot;
-using SpacetimeDB;
-using SpacetimeDB.Types;
 
-// Owns the DB connection and the world subscription. Other scripts read the
-// connection + local identity from here and listen for `Connected` to register
-// their own table-row callbacks before the subscription is applied.
+// Owns "which server, and are we connected" — the front of the single native connection.
+// SpacetimeDB is gone: there is exactly one link, the WebSocket to the standalone sim server
+// (GameNetClient). If the client was launched without --host the FIRST thing the player sees
+// is the address-input screen (ServerInputOverlay); with --host ip-or-hostname:port it connects
+// straight away. GameNetClient calls the Notify* methods back as the socket's state changes.
 public partial class ConnectionManager : Node
 {
-	// Server + database are configurable so the same build can target the local
-	// dev server or Maincloud (T10) without a code edit. Defaults are the local
-	// dev server. Override with env vars before launch, e.g.:
-	//   STDB_URI=wss://maincloud.spacetimedb.com STDB_DB=stellar-allegiance godot ...
-	private const string DefaultServerUrl = "ws://localhost:3001";
-	private const string DefaultDbName    = "stellar-allegiance";
+    // Lifecycle. AwaitingAddress = showing the address-input screen; Connecting = socket
+    // opening / handshaking; Connected = Welcome received; Failed/Disconnected = link down.
+    public enum ConnState { AwaitingAddress, Connecting, Connected, Failed, Disconnected }
+    public ConnState State { get; private set; } = ConnState.AwaitingAddress;
 
-	private string _serverUrl = DefaultServerUrl;
-	private string _dbName     = DefaultDbName;
+    // The ws:// URL we're targeting, for the status overlay.
+    public string ServerUrl { get; private set; } = "";
 
-	// Connection lifecycle, surfaced so the UI can show a status overlay instead of a
-	// misleading empty lobby. `Conn` is non-null the moment the builder runs — well
-	// before the socket actually connects, and it stays non-null after a fault — so
-	// `Conn != null` is NOT "connected". Read `State` for that.
-	public enum ConnState { Connecting, Connected, Failed, Disconnected }
-	public ConnState State { get; private set; } = ConnState.Connecting;
+    private GameNetClient _net = null!;
+    private ServerInputOverlay? _input;
 
-	public DbConnection? Conn { get; private set; }
-	public Identity? LocalIdentity { get; private set; }
+    public override void _Ready()
+    {
+        _net = GetNode<GameNetClient>("../GameNetClient");
 
-	// The server we're targeting, for the status overlay's message.
-	public string ServerUrl => _serverUrl;
+        // --host ip-or-hostname:port connects immediately; otherwise show the input screen.
+        string host = "";
+        var cmd = OS.GetCmdlineArgs();
+        for (int i = 0; i < cmd.Length; i++)
+        {
+            if (cmd[i] == "--host" && i + 1 < cmd.Length) host = cmd[i + 1];
+            else if (cmd[i].StartsWith("--host=")) host = cmd[i]["--host=".Length..];
+        }
+        // SIM_URI keeps working as a dev override (full ws:// URL).
+        var simUri = OS.GetEnvironment("SIM_URI");
+        if (!string.IsNullOrEmpty(simUri)) ConnectTo(simUri);
+        else if (!string.IsNullOrEmpty(host)) ConnectTo(host);
+        else ShowInput();
+    }
 
-	// Fired once the websocket connects, BEFORE the subscription is registered,
-	// so listeners can attach OnInsert/OnDelete handlers in time for the
-	// initial row snapshot.
-	public event Action<DbConnection>? Connected;
+    // Submit handler for the address screen, and the entry point for --host.
+    public void ConnectTo(string hostOrUrl)
+    {
+        ServerUrl = ToWsUrl(hostOrUrl);
+        HideInput();
+        State = ConnState.Connecting;
+        GD.Print($"[ConnectionManager] connecting to {ServerUrl}");
+        _net.Connect(ServerUrl);
+    }
 
-	private const string MaincloudUrl = "wss://maincloud.spacetimedb.com";
+    // Retry button (ConnectionOverlay): return to the address screen so the player can fix or
+    // change the server they're pointing at.
+    public void Connect() => ShowInput();
 
-	public override void _Ready()
-	{
-		// Exported builds have no local dev server, so they default to Maincloud;
-		// the editor keeps the localhost default for local iteration.
-		if (!OS.HasFeature("editor")) _serverUrl = MaincloudUrl;
+    // ---- Called by GameNetClient as the socket state changes -------------
 
-		// Precedence: --maincloud flag, then env vars, else the default above.
-		// (The flag is the friendliest knob for a second machine / exported build.)
-		foreach (var a in OS.GetCmdlineArgs())
-			if (a == "--maincloud") _serverUrl = MaincloudUrl;
+    public void NotifyConnected()
+    {
+        State = ConnState.Connected;
+        GD.Print("[ConnectionManager] connected");
+    }
 
-		var uri = OS.GetEnvironment("STDB_URI");
-		var db  = OS.GetEnvironment("STDB_DB");
-		if (!string.IsNullOrEmpty(uri)) _serverUrl = uri;
-		if (!string.IsNullOrEmpty(db))  _dbName = db;
-		Connect();
-	}
+    public void NotifyFailed(string reason)
+    {
+        State = ConnState.Failed;
+        GD.PrintErr($"[ConnectionManager] connect failed: {reason}");
+    }
 
-	// Build (or rebuild) the connection. Split out so the status overlay's Retry button
-	// can re-attempt after a failed/lost connection without restarting the client.
-	public void Connect()
-	{
-		State = ConnState.Connecting;
-		GD.Print($"[ConnectionManager] Connecting to {_serverUrl} / {_dbName}");
+    public void NotifyDisconnected()
+    {
+        State = State == ConnState.Connected ? ConnState.Disconnected : ConnState.Failed;
+    }
 
-		Conn = DbConnection.Builder()
-			.WithUri(_serverUrl)
-			.WithDatabaseName(_dbName)
-			.OnConnect(OnConnect)
-			.OnConnectError(OnConnectError)
-			.OnDisconnect(OnDisconnect)
-			.Build();
-	}
+    // ---- Address-input screen -------------------------------------------
 
-	public override void _Process(double delta)
-	{
-		Conn?.FrameTick();
-	}
+    private void ShowInput()
+    {
+        State = ConnState.AwaitingAddress;
+        if (_input is not null) { _input.Visible = true; return; }
+        var layer = new CanvasLayer { Name = "ServerInputLayer", Layer = 100 };
+        AddChild(layer);
+        _input = new ServerInputOverlay();
+        layer.AddChild(_input);
+        _input.Init(this);
+    }
 
-	private void OnConnect(DbConnection conn, Identity identity, string token)
-	{
-		State = ConnState.Connected;
-		LocalIdentity = identity;
-		GD.Print($"[ConnectionManager] Connected — identity: {identity}");
+    private void HideInput()
+    {
+        if (_input is not null) _input.Visible = false;
+    }
 
-		// Let renderers register row callbacks first…
-		Connected?.Invoke(conn);
-
-		// …then subscribe so the initial snapshot fires those callbacks.
-		conn.SubscriptionBuilder()
-			.OnApplied(ctx => GD.Print($"[ConnectionManager] Subscription applied — bases: {ctx.Db.Base.Count}, asteroids: {ctx.Db.Asteroid.Count}, ships: {ctx.Db.Ship.Count}"))
-			.OnError((_, err) => GD.PrintErr($"[ConnectionManager] Subscription error: {err.Message}"))
-			.SubscribeToAllTables();
-	}
-
-	private void OnConnectError(Exception e)
-	{
-		State = ConnState.Failed;
-		GD.PrintErr($"[ConnectionManager] Connection error: {e.Message}");
-	}
-
-	private void OnDisconnect(DbConnection conn, Exception? e)
-	{
-		// Distinguish "never got in" from "lost a live link": if we'd connected, this is
-		// a drop; otherwise it's part of a failed attempt and Failed already covers it.
-		State = State == ConnState.Connected ? ConnState.Disconnected : ConnState.Failed;
-		LocalIdentity = null;
-		GD.Print($"[ConnectionManager] Disconnected ({(e is null ? "clean" : e.Message)})");
-	}
+    // Normalize "ip-or-hostname:port" (or a full ws:// URL) into a ws:// game endpoint.
+    private static string ToWsUrl(string input)
+    {
+        input = input.Trim();
+        if (input.StartsWith("ws://") || input.StartsWith("wss://"))
+            return input.Contains("/game") ? input : input.TrimEnd('/') + "/game";
+        return $"ws://{input}/game";
+    }
 }

@@ -1,8 +1,8 @@
-# Native sim server image (Phase-1 / .PLAN/NATIVE-SIM.md step 6).
+# Standalone native sim server image.
 #
 # IMPORTANT: the build context MUST be the repo root, because SimServer.csproj has a
-# <ProjectReference> on ../shared/Shared.csproj (the deterministic FlightModel shared with the
-# STDB module and the Godot client). Build with:
+# <ProjectReference> on ../shared/Shared.csproj (the deterministic FlightModel + content defs
+# shared with the Godot client). Build with:
 #     docker build -f server/Dockerfile -t wivuullegiance-sim .
 # or via the repo-root docker-compose.yml (which sets context: .).
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
@@ -27,8 +27,8 @@ COPY --from=build /app ./
 # Binary game socket. Behind the hosting layer's TLS-terminating ingress (wss:// -> here).
 EXPOSE 8090
 
-# Config is all via env (Program.cs / ResultReporter):
-#   SIM_SECRET  shared join-token secret (REQUIRED in production — enables auth)
-#   STDB_HTTP / STDB_DB / STDB_TOKEN   match-result writeback to STDB
+# Config is via env (see Program.cs):
+#   SIM_SECRET     optional shared-secret password (enables auth when set)
+#   SIM_AUTOSTART  set to 1 to skip the lobby ready-up (bots / benchmarking)
 # Seed/port are flags; override the command to change them.
 ENTRYPOINT ["dotnet", "SimServer.dll", "--port", "8090"]

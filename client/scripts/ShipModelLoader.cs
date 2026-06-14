@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
+using StellarAllegiance.Shared;
 
 // =====================================================================
 //  ShipModelLoader.cs — CLIENT SHIP MESH + HARDPOINT LOADER (Phase-1 M4)

@@ -1,5 +1,5 @@
 using Godot;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Reads local input, runs the fixed-rate (20 Hz) input/prediction loop, and
@@ -169,17 +169,16 @@ public partial class ShipController : Node
 		// reducer once the connection is live (LocalIdentity is set on connect),
 		// retry after a short delay so an early/lost request recovers, and clear the
 		// request once the ship actually exists.
-		// Native mode needs no STDB identity to fly (STDB is only defs/chat there), and
-		// no lobby join — the sim server spawns on Hello.
-		bool connected = Native || (_cm.LocalIdentity is not null && _cm.Conn is not null);
+		// One native connection: "connected" means the server's Welcome has landed.
+		bool connected = _cm.State == ConnectionManager.ConnState.Connected;
 		bool hasShip = _world.LocalShip != null;
 
-		// Headless autofly: the lobby gates STDB spawning, so QuickJoin once on connect
-		// (smallest side + ready) to drive the match to Active before requesting a ship.
-		// Two --combat-test clients split onto opposing sides server-side.
-		if (_autoFly && !Native && connected && !_autoJoined)
+		// Headless autofly: the server gates spawning behind the lobby ready-up, so ready up once
+		// on connect to drive the match to Active before requesting a ship (teams are balanced
+		// server-side). Run the server with --autostart for fully unattended benchmarks.
+		if (_autoFly && connected && !_autoJoined)
 		{
-			_cm.Conn!.Reducers.QuickJoin();
+			_net?.SetReady(true);
 			_autoJoined = true;
 		}
 
@@ -204,19 +203,11 @@ public partial class ShipController : Node
 		}
 		else if (connected && !_spawnPending && _spawnRequest is { } cls)
 		{
-			// Gameplay runs only on the native sim server now (the in-STDB sim was removed).
-			// Spawning therefore requires the lobby->sim handoff to have activated native mode;
-			// without it there is nothing to spawn into, so just drop the request.
-			if (Native)
-			{
-				_net!.RequestSpawn((byte)cls);
-				_spawnPending = true;
-				_spawnRetry = 1.0;
-			}
-			else
-			{
-				_spawnRequest = null;
-			}
+			// Spawn on the authoritative sim server (honored only while the match is Active;
+			// the request simply retries until then).
+			_net?.RequestSpawn((byte)cls);
+			_spawnPending = true;
+			_spawnRetry = 1.0;
 		}
 
 		// Prediction. The prediction tick lives in SERVER-tick space and is kept a

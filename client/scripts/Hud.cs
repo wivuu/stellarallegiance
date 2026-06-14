@@ -1,6 +1,5 @@
 using Godot;
-using SpacetimeDB;
-using SpacetimeDB.Types;
+using StellarAllegiance.Net;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
 // UI; the Hud's own spawn menu only appears once you're teamed in an active match and
@@ -81,14 +80,6 @@ public partial class Hud : CanvasLayer
 		conn.Init(_cm);
 	}
 
-	private Player? LocalPlayer()
-	{
-		var conn = _cm.Conn;
-		if (conn is null || _cm.LocalIdentity is not Identity id)
-			return null;
-		return conn.Db.Player.Identity.Find(id);
-	}
-
 	private Button SpawnButton(string text, ShipClass cls)
 	{
 		var b = new Button { Text = text, CustomMinimumSize = new Vector2(280, 36) };
@@ -101,17 +92,12 @@ public partial class Hud : CanvasLayer
 		var ship = _world.LocalShip;
 		bool flying = ship != null;
 
-		// The Lobby overlay owns everything outside a live match. The spawn menu only
-		// appears once you're in an active match and not currently flying — that's an STDB
-		// team in lobby play, or simply a live native match (dev SIM_URI play has no team).
-		// Because it keys off "not flying", it also reopens when a pod is destroyed/docked
-		// and you're awaiting your next ship.
-		bool teamedInMatch = _world.Phase == MatchPhase.Active
-			&& (_world.NativeMode || (LocalPlayer() is Player p && p.Team is not null));
-		_menu.Visible = teamedInMatch && !flying;
-
-		// Active ships in the local sector, top-left. Visible whenever a match is live.
+		// The Lobby overlay owns everything outside a live match. The spawn menu appears once a
+		// match is Active and you're not currently flying — keying off "not flying" means it also
+		// reopens when a pod is destroyed/docked and you're awaiting your next ship.
 		bool inMatch = _world.Phase == MatchPhase.Active;
+		bool teamedInMatch = inMatch;
+		_menu.Visible = teamedInMatch && !flying;
 		_sectorShips.Visible = inMatch;
 		if (inMatch)
 			_sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";

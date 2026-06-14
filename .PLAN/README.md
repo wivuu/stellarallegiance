@@ -1,5 +1,9 @@
 # .PLAN — Stellar Allegiance
 
+> **⚠ Note:** SpacetimeDB has been removed — the server is now a standalone authoritative sim +
+> lobby host and the client downloads everything over the wire. Roadmap items below that assume
+> an STDB backend are historical; see the repo **README.md** for the current shape.
+
 ## Prototype (COMPLETE)
 
 The two-ship prototype (T0-T10) and post-prototype polish are **finished**.
