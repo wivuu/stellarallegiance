@@ -29,10 +29,21 @@ public sealed class ClientHub
     private static readonly int MaxRecords       = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
     private const int OutboundQueueDepth = 8;
 
+    // AOI broad-phase grid cell (server/Net only — distinct from the sim's 160 u collision grid,
+    // which is far too fine for these radii). Held >= FullRateRadius so a viewer's full-rate set
+    // is always covered by its 3x3x3 (AoiCellRadius=1) cell neighborhood; AfterStep gathers
+    // candidates from those cells instead of scanning every ship in the world.
+    private static readonly float AoiGridCell = MathF.Max(FullRateRadius, EnvF("SIM_AOI_GRID_CELL", 600f));
+    private static readonly int AoiCellRadius = (int)MathF.Ceiling(FullRateRadius / AoiGridCell);
+    // Fan out per-client snapshots across cores once the connection count makes the fork/join
+    // worth it; below this, the sequential loop avoids the overhead. Tunable for measurement.
+    private static readonly int ParallelClientThreshold = Math.Max(1, EnvI("SIM_PARALLEL_THRESHOLD", 24));
+
     private static float EnvF(string k, float d) =>
         float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
     private static int EnvI(string k, int d) =>
         int.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
+    private static int CellOf(float v) => (int)MathF.Floor(v / AoiGridCell);
 
     // One queued outbound frame. Snapshot frames are rented from ArrayPool and oversized, so
     // they carry their own length and a Pooled flag; the send loop returns them after the
@@ -55,7 +66,14 @@ public sealed class ClientHub
         public WebSocket Socket = null!;
         public Channel<OutFrame> Outbound = null!;
         public ulong ShipId;
-        public List<(float Dist2, int Index)> Scratch = new();
+        // AOI anchor, cached each tick by AfterStep's sequential pre-pass (own ship pos/sector,
+        // or the home-sector origin before a ship exists) so the parallel snapshot build reads
+        // it without touching the sim's locked client→ship map.
+        public Vec3 AnchorPos;
+        public uint AnchorSector;
+        // Per-client pick scratch, pre-sized past the typical coarse-tick fan-out so it doesn't
+        // grow-and-realloc each tick. Reused every snapshot; never escapes the owning client.
+        public List<(float Dist2, int Index)> Scratch = new(256);
     }
 
     // Per-tick record scratch (sim thread only): every alive ship's quantized record is
@@ -64,6 +82,16 @@ public sealed class ClientHub
     // maps ship-list index -> byte offset in _recordScratch (-1 = dead, not serialized).
     private byte[] _recordScratch = new byte[64 * Protocol.ShipRecordSize];
     private int[] _recordOffset = new int[64];
+
+    // AOI broad-phase, rebuilt by AfterStep on plain/mid ticks (coarse ticks full-scan, so they
+    // skip it): sector -> cell -> ship-list indices. A viewer gathers same-sector candidates
+    // from its cell neighborhood (full rate) or its whole sector (mid) instead of scanning all
+    // ships. Cell lists are recycled through _cellPool so the rebuild allocates nothing steady
+    // state. _shipIndexById maps ShipId -> ship-list index for O(1) own-ship anchor lookup.
+    // Built on the sim thread before the (possibly parallel) fan-out, then only read.
+    private readonly Dictionary<uint, Dictionary<(int, int, int), List<int>>> _aoiGrid = new();
+    private readonly Stack<List<int>> _cellPool = new();
+    private readonly Dictionary<ulong, int> _shipIndexById = new();
 
     private readonly Simulation _sim;
     // Pluggable backends (server/Backend/Backends.cs): connect-time auth, player directory,
@@ -76,9 +104,10 @@ public sealed class ClientHub
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
     private long _bytesSent;
-    // LOD effectiveness counters (sim thread only): total ship records streamed and how many
-    // snapshots carried them, so the bench line can report avg records/snapshot — the LOD's
-    // real fan-out, which a distance tiering makes vary with how clustered the world is.
+    // LOD effectiveness counters: total ship records streamed and how many snapshots carried
+    // them, so the bench line can report avg records/snapshot — the LOD's real fan-out, which a
+    // distance tiering makes vary with how clustered the world is. Bumped from the snapshot
+    // build, which may run in parallel across clients, so writes go through Interlocked.
     private long _recordsSent;
     private long _snapshotCount;
     // Last phase the hub broadcast, so AfterStep emits a fresh LobbyState on every transition
@@ -88,12 +117,12 @@ public sealed class ClientHub
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
 
-    // Avg ship records per snapshot since the last call (0 if none), then resets. Both
-    // counters are written and read on the sim thread only, so no interlock is needed.
+    // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
+    // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
     public double TakeAvgRecordsPerSnapshot()
     {
-        long snaps = _snapshotCount, recs = _recordsSent;
-        _snapshotCount = 0; _recordsSent = 0;
+        long snaps = Interlocked.Exchange(ref _snapshotCount, 0);
+        long recs = Interlocked.Exchange(ref _recordsSent, 0);
         return snaps == 0 ? 0.0 : (double)recs / snaps;
     }
 
@@ -313,6 +342,12 @@ public sealed class ClientHub
 
         SerializeRecords(ships);
 
+        bool coarse = tick % (uint)CoarseEveryTicks == 0;
+        bool mid = tick % (uint)MidEveryTicks == 0;
+        // Coarse ticks full-scan every ship (all sectors), so they don't need the grid; plain
+        // and mid ticks gather from it. The id->index map is always rebuilt for anchor lookup.
+        RebuildAoiIndex(ships, buildGrid: !coarse);
+
         byte[][]? goneFrames = null;
         if (_sim.DeathsThisStep.Count > 0)
         {
@@ -321,16 +356,18 @@ public sealed class ClientHub
                 goneFrames[i] = Protocol.BuildShipGone(_sim.DeathsThisStep[i]);
         }
 
-        bool coarse = tick % CoarseEveryTicks == 0;
-
         // Stream base health when it changed (a hit landed / match ended) or on coarse
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
         byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse)
             ? Protocol.BuildBases(_sim.World)
             : null;
 
-        foreach (var client in _clients.Values)
+        // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
+        // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, and cache the AOI
+        // anchor. After this, the snapshot build reads only shared, immutable-for-the-tick state.
+        foreach (var kv in _clients)
         {
+            var client = kv.Value;
             // The client's controlled ship changes over a match (combat -> escape pod ->
             // respawn), so re-issue YouAre whenever it flips. A 0 id = dead/awaiting respawn
             // (no ship to claim); the AOI then anchors on the home-sector origin.
@@ -342,14 +379,63 @@ public sealed class ClientHub
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildYouAre(sid)));
             }
 
+            if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
+            {
+                client.AnchorPos = ships[si].State.Pos;
+                client.AnchorSector = ships[si].SectorId;
+            }
+            else
+            {
+                client.AnchorPos = default;
+                client.AnchorSector = World.HomeSector;
+            }
+
             if (goneFrames is not null)
                 foreach (var f in goneFrames)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
 
             if (basesFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(basesFrame));
+        }
 
-            client.Outbound.Writer.TryWrite(BuildSnapshotFor(client, ships, tick));
+        // Snapshot fan-out. Each client's snapshot reads only shared read-only state (the
+        // serialized records, the AOI grid, ship rows) and writes its own bounded channel, so
+        // the per-client builds are independent — parallelize across cores once the connection
+        // count makes the fork/join worth it; stay sequential for small games.
+        if (_clients.Count >= ParallelClientThreshold)
+            Parallel.ForEach(_clients, kv =>
+                kv.Value.Outbound.Writer.TryWrite(BuildSnapshotFor(kv.Value, ships, mid, coarse)));
+        else
+            foreach (var kv in _clients)
+                kv.Value.Outbound.Writer.TryWrite(BuildSnapshotFor(kv.Value, ships, mid, coarse));
+    }
+
+    // Rebuild the per-tick AOI acceleration structures on the sim thread. _shipIndexById always
+    // (cheap, needed for anchors); the sector→cell→indices grid only when buildGrid (plain/mid
+    // ticks). Cell lists are returned to _cellPool and reused so steady state allocates nothing.
+    private void RebuildAoiIndex(IReadOnlyList<Simulation.ShipSim> ships, bool buildGrid)
+    {
+        _shipIndexById.Clear();
+        if (buildGrid)
+            foreach (var sectorGrid in _aoiGrid.Values)
+            {
+                foreach (var cell in sectorGrid.Values) { cell.Clear(); _cellPool.Push(cell); }
+                sectorGrid.Clear();
+            }
+
+        for (int i = 0; i < ships.Count; i++)
+        {
+            var s = ships[i];
+            if (!s.Alive) continue;
+            _shipIndexById[s.ShipId] = i;
+            if (!buildGrid) continue;
+
+            if (!_aoiGrid.TryGetValue(s.SectorId, out var grid))
+                _aoiGrid[s.SectorId] = grid = new Dictionary<(int, int, int), List<int>>();
+            var key = (CellOf(s.State.Pos.X), CellOf(s.State.Pos.Y), CellOf(s.State.Pos.Z));
+            if (!grid.TryGetValue(key, out var cell))
+                grid[key] = cell = _cellPool.Count > 0 ? _cellPool.Pop() : new List<int>();
+            cell.Add(i);
         }
     }
 
@@ -378,43 +464,57 @@ public sealed class ClientHub
     // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).
     private const int SnapshotHeader = 9;
 
-    private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, uint tick)
+    private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, bool midTick, bool coarseTick)
     {
-        // Own ship anchors the AOI; before it exists, use the home-sector origin.
-        Vec3 myPos = default;
-        uint mySector = World.HomeSector;
-        foreach (var s in ships)
-            if (s.ShipId == client.ShipId && s.Alive)
-            {
-                myPos = s.State.Pos;
-                mySector = s.SectorId;
-                break;
-            }
-
-        // Distance LOD cadences for this tick: a mid/coarse-shell ship is included only on
-        // ticks its cadence divides, so each viewer gets nearby ships at full rate and
-        // successively farther shells at MidEvery / CoarseEvery rate. No ranking — we just
-        // threshold on squared distance.
-        bool midTick = tick % (uint)MidEveryTicks == 0;
-        bool coarseTick = tick % (uint)CoarseEveryTicks == 0;
+        // AOI anchor was cached by AfterStep's pre-pass (own ship, or home-sector origin).
+        Vec3 myPos = client.AnchorPos;
+        uint mySector = client.AnchorSector;
         float r1sq = FullRateRadius * FullRateRadius;
         float r2sq = MidRateRadius * MidRateRadius;
 
         var picks = client.Scratch;
         picks.Clear();
-        for (int i = 0; i < ships.Count; i++)
+        if (coarseTick)
         {
-            var s = ships[i];
-            if (!s.Alive) continue;
-            if (s.SectorId == mySector)
+            // Coarse keepalive: every ship, all sectors (far same-sector + other-sector contacts)
+            // — radar/minimap completeness, so this tier genuinely needs the full scan.
+            for (int i = 0; i < ships.Count; i++)
             {
-                float d2 = (s.State.Pos - myPos).LengthSquared();
-                if (d2 <= r1sq) picks.Add((d2, i));                       // full rate
-                else if (d2 <= r2sq) { if (midTick) picks.Add((d2, i)); } // mid shell
-                else if (coarseTick) picks.Add((d2, i));                  // far same-sector
+                var s = ships[i];
+                if (!s.Alive) continue;
+                if (s.SectorId == mySector) picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
+                else picks.Add((float.MaxValue, i));
             }
-            else if (coarseTick)
-                picks.Add((float.MaxValue, i));   // other-sector contact, coarse rate
+        }
+        else if (midTick)
+        {
+            // Mid shell: same-sector ships within R2. Iterate only this sector's grid cells, so
+            // other sectors' ships are skipped entirely (no full-world scan).
+            if (_aoiGrid.TryGetValue(mySector, out var grid))
+                foreach (var cell in grid.Values)
+                    foreach (int i in cell)
+                    {
+                        float d2 = (ships[i].State.Pos - myPos).LengthSquared();
+                        if (d2 <= r2sq) picks.Add((d2, i));
+                    }
+        }
+        else
+        {
+            // Full-rate only (the common tick): same-sector ships within R1, gathered from the
+            // viewer's 3x3x3 cell neighborhood (AoiCellRadius). Cell >= R1 guarantees coverage.
+            if (_aoiGrid.TryGetValue(mySector, out var grid))
+            {
+                int cx = CellOf(myPos.X), cy = CellOf(myPos.Y), cz = CellOf(myPos.Z), r = AoiCellRadius;
+                for (int gx = cx - r; gx <= cx + r; gx++)
+                for (int gy = cy - r; gy <= cy + r; gy++)
+                for (int gz = cz - r; gz <= cz + r; gz++)
+                    if (grid.TryGetValue((gx, gy, gz), out var cell))
+                        foreach (int i in cell)
+                        {
+                            float d2 = (ships[i].State.Pos - myPos).LengthSquared();
+                            if (d2 <= r1sq) picks.Add((d2, i));
+                        }
+            }
         }
 
         // Backstop only: if a furball packs more than MaxRecords ships into the streamed set,
@@ -430,7 +530,7 @@ public sealed class ClientHub
         int len = SnapshotHeader + count * Protocol.ShipRecordSize;
         byte[] buf = ArrayPool<byte>.Shared.Rent(len);
         buf[0] = Protocol.MsgSnapshot;
-        BitConverter.TryWriteBytes(buf.AsSpan(1), tick);
+        BitConverter.TryWriteBytes(buf.AsSpan(1), _sim.Tick);
         buf[5] = _sim.Phase;
         buf[6] = _sim.Winner;
         BitConverter.TryWriteBytes(buf.AsSpan(7), (ushort)count);
@@ -443,8 +543,8 @@ public sealed class ClientHub
             Buffer.BlockCopy(_recordScratch, _recordOffset[picks[i].Index], buf, dst, Protocol.ShipRecordSize);
             dst += Protocol.ShipRecordSize;
         }
-        _recordsSent += count;
-        _snapshotCount++;
+        Interlocked.Add(ref _recordsSent, count);
+        Interlocked.Increment(ref _snapshotCount);
         return new OutFrame(buf, len, true);
     }
 }

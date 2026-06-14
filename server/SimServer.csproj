@@ -10,7 +10,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Latency-sensitive 20 Hz sim thread + parallel snapshot fan-out: server GC gives a
+         per-core heap so the parallel AfterStep doesn't contend on one allocator, concurrent
+         GC keeps collections off the tick thread (trims the step-time p99 jitter), and PGO
+         lets the steady-state hot path (snapshot build) re-optimize after warmup. -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />
