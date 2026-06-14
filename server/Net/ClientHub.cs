@@ -38,6 +38,13 @@ public sealed class ClientHub
     // Fan out per-client snapshots across cores once the connection count makes the fork/join
     // worth it; below this, the sequential loop avoids the overhead. Tunable for measurement.
     private static readonly int ParallelClientThreshold = Math.Max(1, EnvI("SIM_PARALLEL_THRESHOLD", 24));
+    // Persistent snapshot worker threads pulling clients off a Channel (vs spinning up tasks per
+    // tick). Default leaves a core for the sim thread + Kestrel. 0 = no pool (sim thread builds
+    // every snapshot itself), for A/B against the threaded path.
+    private static readonly int SnapshotWorkers = Math.Max(0, EnvI("SIM_SNAPSHOT_WORKERS", Math.Max(1, Environment.ProcessorCount - 1)));
+    // Squared radii precomputed once (the LOD thresholds are constants) instead of per snapshot.
+    private static readonly float FullRateRadiusSq = FullRateRadius * FullRateRadius;
+    private static readonly float MidRateRadiusSq = MidRateRadius * MidRateRadius;
 
     private static float EnvF(string k, float d) =>
         float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
@@ -93,6 +100,27 @@ public sealed class ClientHub
     private readonly Stack<List<int>> _cellPool = new();
     private readonly Dictionary<ulong, int> _shipIndexById = new();
 
+    // Snapshot worker pool. The sim thread publishes this tick's clients to _workQueue (a
+    // lock-free MPMC channel); SnapshotWorkers persistent threads drain it in parallel, each
+    // building one client's snapshot from the shared read-only state captured in the _dispatch*
+    // fields. _fanoutPending counts items left this tick; the worker that drops it to 0 signals
+    // _fanoutDone, which the sim thread blocks on so it never advances Step() (mutating ship
+    // state these reads depend on) until every snapshot is built. The sim thread also drains
+    // while waiting, so its core isn't idle. With SnapshotWorkers=0 the whole pool is skipped.
+    private readonly Channel<Client>? _workQueue;
+    private readonly ManualResetEventSlim _fanoutDone = new(false);
+    private int _fanoutPending;
+    private IReadOnlyList<Simulation.ShipSim> _dispatchShips = System.Array.Empty<Simulation.ShipSim>();
+    private bool _dispatchMid, _dispatchCoarse;
+    // Snapshot header values captured once per tick (identical for every client) so the workers
+    // don't each re-read the sim. _aliveCount is how many ships SerializeRecords packed at the
+    // front of _recordScratch — also the body of the shared coarse snapshot.
+    private uint _dispatchTick;
+    private byte _dispatchPhase, _dispatchWinner;
+    private int _aliveCount;
+    private readonly List<Client> _dispatchList = new(256);
+    private readonly CancellationTokenSource _shutdownCts = new();
+
     private readonly Simulation _sim;
     // Pluggable backends (server/Backend/Backends.cs): connect-time auth, player directory,
     // matchmaker. SpacetimeDB used to own these; they're now in-process with swap-in seams.
@@ -133,6 +161,46 @@ public sealed class ClientHub
         _auth = auth;
         _players = players;
         _matchmaker = matchmaker;
+
+        if (SnapshotWorkers > 0)
+        {
+            // Single writer (sim thread), many readers (the workers). Sync continuations let a
+            // worker resume inline when the sim thread writes, shaving wake-up latency.
+            _workQueue = Channel.CreateUnbounded<Client>(new UnboundedChannelOptions
+            {
+                SingleWriter = true,
+                SingleReader = false,
+                AllowSynchronousContinuations = true,
+            });
+            for (int i = 0; i < SnapshotWorkers; i++)
+                new Thread(SnapshotWorkerLoop) { IsBackground = true, Name = $"SnapWorker{i}" }.Start();
+            Console.WriteLine($"[Hub] snapshot worker pool: {SnapshotWorkers} threads");
+        }
+    }
+
+    // A persistent snapshot worker: park on the channel, then drain every queued client,
+    // building its snapshot from the per-tick _dispatch* state and counting it down. Runs until
+    // process shutdown cancels the token.
+    private void SnapshotWorkerLoop()
+    {
+        var reader = _workQueue!.Reader;
+        var ct = _shutdownCts.Token;
+        try
+        {
+            while (reader.WaitToReadAsync(ct).AsTask().GetAwaiter().GetResult())
+                while (reader.TryRead(out var client))
+                    BuildAndCountDown(client);
+        }
+        catch (OperationCanceledException) { /* shutting down */ }
+    }
+
+    // Build one client's snapshot and, if it was the last outstanding item this tick, release
+    // the sim thread. Shared by the workers and the sim thread's own drain-while-waiting loop.
+    private void BuildAndCountDown(Client client)
+    {
+        client.Outbound.Writer.TryWrite(BuildSnapshotFor(client, _dispatchShips, _dispatchMid, _dispatchCoarse));
+        if (Interlocked.Decrement(ref _fanoutPending) == 0)
+            _fanoutDone.Set();
     }
 
     // Wired to Simulation.ShouldStartMatch — polled on the sim thread each step while in the
@@ -348,6 +416,11 @@ public sealed class ClientHub
         // and mid ticks gather from it. The id->index map is always rebuilt for anchor lookup.
         RebuildAoiIndex(ships, buildGrid: !coarse);
 
+        // Capture this tick's snapshot header once (identical for all clients).
+        _dispatchTick = tick;
+        _dispatchPhase = _sim.Phase;
+        _dispatchWinner = _sim.Winner;
+
         byte[][]? goneFrames = null;
         if (_sim.DeathsThisStep.Count > 0)
         {
@@ -363,8 +436,11 @@ public sealed class ClientHub
             : null;
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
-        // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, and cache the AOI
-        // anchor. After this, the snapshot build reads only shared, immutable-for-the-tick state.
+        // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
+        // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
+        // roster the fan-out hands to the workers). After this, the snapshot build reads only
+        // shared, immutable-for-the-tick state.
+        _dispatchList.Clear();
         foreach (var kv in _clients)
         {
             var client = kv.Value;
@@ -396,18 +472,55 @@ public sealed class ClientHub
 
             if (basesFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(basesFrame));
+
+            _dispatchList.Add(client);
+        }
+
+        int n = _dispatchList.Count;
+
+        // Shared coarse snapshot: on a coarse tick where every alive ship fits under MaxRecords,
+        // no client prunes, so every client's snapshot body is the identical all-ships set that
+        // SerializeRecords already packed at the front of _recordScratch. Build it ONCE and
+        // broadcast (like the bases frame) instead of re-scanning all ships per client. Falls
+        // through to the per-client path only when the cap forces nearest-N pruning (a furball).
+        if (coarse && _aliveCount <= MaxRecords && n > 0)
+        {
+            var shared = OutFrame.Whole(BuildSharedCoarseSnapshot());
+            for (int i = 0; i < n; i++)
+                _dispatchList[i].Outbound.Writer.TryWrite(shared);
+            _recordsSent += (long)_aliveCount * n;   // sim thread only here, no interlock needed
+            _snapshotCount += n;
+            return;
         }
 
         // Snapshot fan-out. Each client's snapshot reads only shared read-only state (the
         // serialized records, the AOI grid, ship rows) and writes its own bounded channel, so
-        // the per-client builds are independent — parallelize across cores once the connection
-        // count makes the fork/join worth it; stay sequential for small games.
-        if (_clients.Count >= ParallelClientThreshold)
-            Parallel.ForEach(_clients, kv =>
-                kv.Value.Outbound.Writer.TryWrite(BuildSnapshotFor(kv.Value, ships, mid, coarse)));
+        // the builds are independent. With a worker pool and enough clients, publish the roster
+        // to the pool and help drain it; otherwise build sequentially on the sim thread.
+        if (_workQueue is not null && n >= ParallelClientThreshold)
+        {
+            // Capture this tick's shared inputs for the workers, arm the barrier, then publish.
+            // _fanoutPending is set to the full count BEFORE any item is queued, so a worker that
+            // drains fast can't prematurely hit zero. The sim thread then drains alongside the
+            // workers (its core would otherwise just block) and finally waits for stragglers.
+            _dispatchShips = ships;
+            _dispatchMid = mid;
+            _dispatchCoarse = coarse;
+            _fanoutDone.Reset();
+            Volatile.Write(ref _fanoutPending, n);
+            var writer = _workQueue.Writer;
+            for (int i = 0; i < n; i++)
+                writer.TryWrite(_dispatchList[i]);
+
+            while (_workQueue.Reader.TryRead(out var client))
+                BuildAndCountDown(client);
+            _fanoutDone.Wait();
+        }
         else
-            foreach (var kv in _clients)
-                kv.Value.Outbound.Writer.TryWrite(BuildSnapshotFor(kv.Value, ships, mid, coarse));
+        {
+            for (int i = 0; i < n; i++)
+                _dispatchList[i].Outbound.Writer.TryWrite(BuildSnapshotFor(_dispatchList[i], ships, mid, coarse));
+        }
     }
 
     // Rebuild the per-tick AOI acceleration structures on the sim thread. _shipIndexById always
@@ -459,18 +572,37 @@ public sealed class ClientHub
             _recordOffset[i] = off;
             slot++;
         }
+        _aliveCount = slot;   // alive records occupy _recordScratch[0 .. slot*ShipRecordSize)
     }
 
     // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).
     private const int SnapshotHeader = 9;
+
+    // The all-ships snapshot shared by every client on an unpruned coarse tick. The body is
+    // exactly the contiguous alive-record block SerializeRecords packed, so this is one header
+    // write + one BlockCopy regardless of client count. Plain (not pooled) array: many clients
+    // hold the reference, so the send loop must not return it — GC reclaims it.
+    private byte[] BuildSharedCoarseSnapshot()
+    {
+        int count = _aliveCount;
+        int len = SnapshotHeader + count * Protocol.ShipRecordSize;
+        byte[] buf = new byte[len];
+        buf[0] = Protocol.MsgSnapshot;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), _dispatchTick);
+        buf[5] = _dispatchPhase;
+        buf[6] = _dispatchWinner;
+        BitConverter.TryWriteBytes(buf.AsSpan(7), (ushort)count);
+        Buffer.BlockCopy(_recordScratch, 0, buf, SnapshotHeader, count * Protocol.ShipRecordSize);
+        return buf;
+    }
 
     private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, bool midTick, bool coarseTick)
     {
         // AOI anchor was cached by AfterStep's pre-pass (own ship, or home-sector origin).
         Vec3 myPos = client.AnchorPos;
         uint mySector = client.AnchorSector;
-        float r1sq = FullRateRadius * FullRateRadius;
-        float r2sq = MidRateRadius * MidRateRadius;
+        float r1sq = FullRateRadiusSq;
+        float r2sq = MidRateRadiusSq;
 
         var picks = client.Scratch;
         picks.Clear();
@@ -530,9 +662,9 @@ public sealed class ClientHub
         int len = SnapshotHeader + count * Protocol.ShipRecordSize;
         byte[] buf = ArrayPool<byte>.Shared.Rent(len);
         buf[0] = Protocol.MsgSnapshot;
-        BitConverter.TryWriteBytes(buf.AsSpan(1), _sim.Tick);
-        buf[5] = _sim.Phase;
-        buf[6] = _sim.Winner;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), _dispatchTick);
+        buf[5] = _dispatchPhase;
+        buf[6] = _dispatchWinner;
         BitConverter.TryWriteBytes(buf.AsSpan(7), (ushort)count);
 
         int dst = SnapshotHeader;

@@ -1680,7 +1680,7 @@
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
       "source_location": "L45",
-      "id": "cancellationtokensource",
+      "id": "client_scripts_gamenetclient_cs_cancellationtokensource",
       "community": 51,
       "norm_label": "cancellationtokensource"
     },
@@ -5392,7 +5392,7 @@
       "label": ".EnvF()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L42",
+      "source_location": "L49",
       "id": "net_clienthub_clienthub_envf",
       "community": 44,
       "norm_label": ".envf()"
@@ -5401,7 +5401,7 @@
       "label": ".EnvI()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L44",
+      "source_location": "L51",
       "id": "net_clienthub_clienthub_envi",
       "community": 44,
       "norm_label": ".envi()"
@@ -5410,7 +5410,7 @@
       "label": ".CellOf()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L46",
+      "source_location": "L53",
       "id": "net_clienthub_clienthub_cellof",
       "community": 44,
       "norm_label": ".cellof()"
@@ -5419,7 +5419,7 @@
       "label": "Whole()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L59",
+      "source_location": "L66",
       "id": "net_clienthub_whole",
       "community": 44,
       "norm_label": "whole()"
@@ -5428,7 +5428,7 @@
       "label": "OutFrame",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L59",
+      "source_location": "L66",
       "id": "outframe",
       "community": 44,
       "norm_label": "outframe"
@@ -5437,7 +5437,7 @@
       "label": "Client",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L62",
+      "source_location": "L69",
       "id": "net_clienthub_client",
       "community": 44,
       "norm_label": "client"
@@ -5446,7 +5446,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L65",
+      "source_location": "L72",
       "id": "server_net_clienthub_cs_byte",
       "community": 44,
       "norm_label": "byte"
@@ -5455,7 +5455,7 @@
       "label": "WebSocket",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L66",
+      "source_location": "L73",
       "id": "websocket",
       "community": 44,
       "norm_label": "websocket"
@@ -5464,7 +5464,7 @@
       "label": "Channel",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L67",
+      "source_location": "L74",
       "id": "server_net_clienthub_cs_channel",
       "community": 44,
       "norm_label": "channel"
@@ -5473,7 +5473,7 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L68",
+      "source_location": "L75",
       "id": "server_net_clienthub_cs_ulong",
       "community": 44,
       "norm_label": "ulong"
@@ -5482,7 +5482,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L72",
+      "source_location": "L79",
       "id": "server_net_clienthub_cs_vec3",
       "community": 44,
       "norm_label": "vec3"
@@ -5491,7 +5491,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L73",
+      "source_location": "L80",
       "id": "server_net_clienthub_cs_uint",
       "community": 44,
       "norm_label": "uint"
@@ -5500,7 +5500,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L76",
+      "source_location": "L83",
       "id": "server_net_clienthub_cs_list",
       "community": 44,
       "norm_label": "list"
@@ -5509,7 +5509,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L92",
+      "source_location": "L99",
       "id": "server_net_clienthub_cs_dictionary",
       "community": 44,
       "norm_label": "dictionary"
@@ -5518,16 +5518,52 @@
       "label": "Stack",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L93",
+      "source_location": "L100",
       "id": "stack",
       "community": 44,
       "norm_label": "stack"
     },
     {
+      "label": "ManualResetEventSlim",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L111",
+      "id": "manualreseteventslim",
+      "community": 44,
+      "norm_label": "manualreseteventslim"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L113",
+      "id": "server_net_clienthub_cs_ireadonlylist",
+      "community": 44,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L114",
+      "id": "server_net_clienthub_cs_bool",
+      "community": 44,
+      "norm_label": "bool"
+    },
+    {
+      "label": "CancellationTokenSource",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L122",
+      "id": "server_net_clienthub_cs_cancellationtokensource",
+      "community": 44,
+      "norm_label": "cancellationtokensource"
+    },
+    {
       "label": "Simulation",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L96",
+      "source_location": "L124",
       "id": "simulation",
       "community": 44,
       "norm_label": "simulation"
@@ -5536,7 +5572,7 @@
       "label": "IAuthenticator",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L99",
+      "source_location": "L127",
       "id": "iauthenticator",
       "community": 44,
       "norm_label": "iauthenticator"
@@ -5545,7 +5581,7 @@
       "label": "IPlayerDirectory",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L100",
+      "source_location": "L128",
       "id": "iplayerdirectory",
       "community": 44,
       "norm_label": "iplayerdirectory"
@@ -5554,7 +5590,7 @@
       "label": "IMatchmaker",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L101",
+      "source_location": "L129",
       "id": "imatchmaker",
       "community": 44,
       "norm_label": "imatchmaker"
@@ -5563,7 +5599,7 @@
       "label": "Lobby",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L103",
+      "source_location": "L131",
       "id": "lobby",
       "community": 44,
       "norm_label": "lobby"
@@ -5572,7 +5608,7 @@
       "label": "ConcurrentDictionary",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L104",
+      "source_location": "L132",
       "id": "concurrentdictionary",
       "community": 44,
       "norm_label": "concurrentdictionary"
@@ -5581,7 +5617,7 @@
       "label": "long",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L106",
+      "source_location": "L134",
       "id": "long",
       "community": 44,
       "norm_label": "long"
@@ -5590,7 +5626,7 @@
       "label": ".TakeBytesSent()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L118",
+      "source_location": "L146",
       "id": "net_clienthub_clienthub_takebytessent",
       "community": 44,
       "norm_label": ".takebytessent()"
@@ -5599,16 +5635,34 @@
       "label": ".TakeAvgRecordsPerSnapshot()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L122",
+      "source_location": "L150",
       "id": "net_clienthub_clienthub_takeavgrecordspersnapshot",
       "community": 44,
       "norm_label": ".takeavgrecordspersnapshot()"
     },
     {
+      "label": ".SnapshotWorkerLoop()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L184",
+      "id": "net_clienthub_clienthub_snapshotworkerloop",
+      "community": 44,
+      "norm_label": ".snapshotworkerloop()"
+    },
+    {
+      "label": ".BuildAndCountDown()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L199",
+      "id": "net_clienthub_clienthub_buildandcountdown",
+      "community": 44,
+      "norm_label": ".buildandcountdown()"
+    },
+    {
       "label": ".ShouldStartMatch()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L140",
+      "source_location": "L208",
       "id": "net_clienthub_clienthub_shouldstartmatch",
       "community": 44,
       "norm_label": ".shouldstartmatch()"
@@ -5617,7 +5671,7 @@
       "label": ".OnReturnToLobby()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L144",
+      "source_location": "L212",
       "id": "net_clienthub_clienthub_onreturntolobby",
       "community": 44,
       "norm_label": ".onreturntolobby()"
@@ -5626,7 +5680,7 @@
       "label": ".BroadcastLobby()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L151",
+      "source_location": "L219",
       "id": "net_clienthub_clienthub_broadcastlobby",
       "community": 44,
       "norm_label": ".broadcastlobby()"
@@ -5635,7 +5689,7 @@
       "label": ".HandleConnection()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L159",
+      "source_location": "L227",
       "id": "net_clienthub_clienthub_handleconnection",
       "community": 44,
       "norm_label": ".handleconnection()"
@@ -5644,7 +5698,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L159",
+      "source_location": "L227",
       "id": "server_net_clienthub_cs_cancellationtoken",
       "community": 44,
       "norm_label": "cancellationtoken"
@@ -5653,7 +5707,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L159",
+      "source_location": "L227",
       "id": "server_net_clienthub_cs_task",
       "community": 44,
       "norm_label": "task"
@@ -5662,7 +5716,7 @@
       "label": ".ReceiveLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L191",
+      "source_location": "L259",
       "id": "net_clienthub_clienthub_receiveloop",
       "community": 44,
       "norm_label": ".receiveloop()"
@@ -5671,7 +5725,7 @@
       "label": ".SendLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L316",
+      "source_location": "L384",
       "id": "net_clienthub_clienthub_sendloop",
       "community": 44,
       "norm_label": ".sendloop()"
@@ -5680,7 +5734,7 @@
       "label": ".AfterStep()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L330",
+      "source_location": "L398",
       "id": "net_clienthub_clienthub_afterstep",
       "community": 44,
       "norm_label": ".afterstep()"
@@ -5689,25 +5743,16 @@
       "label": ".RebuildAoiIndex()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L416",
+      "source_location": "L529",
       "id": "net_clienthub_clienthub_rebuildaoiindex",
       "community": 44,
       "norm_label": ".rebuildaoiindex()"
     },
     {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L416",
-      "id": "server_net_clienthub_cs_ireadonlylist",
-      "community": 44,
-      "norm_label": "ireadonlylist"
-    },
-    {
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L416",
+      "source_location": "L529",
       "id": "server_net_clienthub_cs_shipsim",
       "community": 44,
       "norm_label": "shipsim"
@@ -5716,16 +5761,25 @@
       "label": ".SerializeRecords()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L444",
+      "source_location": "L557",
       "id": "net_clienthub_clienthub_serializerecords",
       "community": 44,
       "norm_label": ".serializerecords()"
     },
     {
+      "label": ".BuildSharedCoarseSnapshot()",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L585",
+      "id": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
+      "community": 44,
+      "norm_label": ".buildsharedcoarsesnapshot()"
+    },
+    {
       "label": ".BuildSnapshotFor()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L467",
+      "source_location": "L599",
       "id": "net_clienthub_clienthub_buildsnapshotfor",
       "community": 44,
       "norm_label": ".buildsnapshotfor()"
@@ -6825,7 +6879,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L398",
       "id": "sim_simulation_simulation_placeatbase",
-      "community": 42,
+      "community": 53,
       "norm_label": ".placeatbase()"
     },
     {
@@ -6843,7 +6897,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L446",
       "id": "sim_simulation_simulation_inputfor",
-      "community": 42,
+      "community": 53,
       "norm_label": ".inputfor()"
     },
     {
@@ -9006,6 +9060,15 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
+      "label": "CancellationTokenSource",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L45",
+      "community": 51,
+      "norm_label": "cancellationtokensource",
+      "id": "cancellationtokensource"
+    },
+    {
       "label": "LineEdit",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
@@ -9496,7 +9559,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 32,
+      "community": 5,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -9742,15 +9805,6 @@
       "community": 46,
       "norm_label": ".skipshapedraws()",
       "id": "sim_world_world_skipshapedraws"
-    },
-    {
-      "label": "bool",
-      "file_type": "code",
-      "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L28",
-      "community": 44,
-      "norm_label": "bool",
-      "id": "server_net_clienthub_cs_bool"
     },
     {
       "label": ".Respawn()",
@@ -10081,7 +10135,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L239",
-      "community": 5,
+      "community": 32,
       "norm_label": "eventcontext",
       "id": "eventcontext"
     },
@@ -13292,6 +13346,17 @@
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient",
       "target": "client_scripts_gamenetclient_cs_byte"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L46",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "client_scripts_gamenetclient_cs_cancellationtokensource"
     },
     {
       "relation": "references",
@@ -21625,6 +21690,17 @@
       "target": "long"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L108",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "manualreseteventslim"
+    },
+    {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
@@ -21648,6 +21724,26 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L190",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_buildandcountdown"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L585",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L164",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -21660,9 +21756,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L46",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "net_clienthub_clienthub_cellof",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_cellof"
     },
     {
       "relation": "method",
@@ -21710,9 +21806,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L416",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "net_clienthub_clienthub_rebuildaoiindex",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_rebuildaoiindex"
     },
     {
       "relation": "method",
@@ -21758,6 +21854,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "net_clienthub_clienthub_snapshotworkerloop"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L93",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -21778,6 +21884,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_bool"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L51",
       "weight": 1.0,
       "context": "field",
@@ -21789,12 +21906,34 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L113",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_cancellationtokensource"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L107",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_channel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L94",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "server_net_clienthub_cs_dictionary",
-      "confidence_score": 1.0
+      "target": "server_net_clienthub_cs_dictionary"
     },
     {
       "relation": "references",
@@ -21822,6 +21961,28 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L110",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L112",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_list"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L37",
       "weight": 1.0,
       "context": "field",
@@ -21844,6 +22005,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L118",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_uint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L33",
       "weight": 1.0,
       "context": "field",
@@ -21858,9 +22030,9 @@
       "source_location": "L93",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "stack",
-      "confidence_score": 1.0
+      "target": "stack"
     },
     {
       "relation": "references",
@@ -21880,9 +22052,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L507",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_buildsnapshotfor",
-      "target": "net_clienthub_clienthub_cellof",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_cellof"
     },
     {
       "relation": "calls",
@@ -21891,9 +22063,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L435",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_rebuildaoiindex",
-      "target": "net_clienthub_clienthub_cellof",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_cellof"
     },
     {
       "relation": "calls",
@@ -22012,9 +22184,9 @@
       "source_location": "L73",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_clienthub_client",
-      "target": "server_net_clienthub_cs_uint",
-      "confidence_score": 1.0
+      "target": "server_net_clienthub_cs_uint"
     },
     {
       "relation": "references",
@@ -22034,9 +22206,9 @@
       "source_location": "L72",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_clienthub_client",
-      "target": "server_net_clienthub_cs_vec3",
-      "confidence_score": 1.0
+      "target": "server_net_clienthub_cs_vec3"
     },
     {
       "relation": "references",
@@ -22048,6 +22220,17 @@
       "confidence_score": 1.0,
       "source": "net_clienthub_client",
       "target": "websocket"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L190",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_buildandcountdown",
+      "target": "net_clienthub_client"
     },
     {
       "relation": "references",
@@ -22092,6 +22275,72 @@
       "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_handleconnection",
       "target": "websocket"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_buildsnapshotfor",
+      "target": "server_net_clienthub_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L416",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_rebuildaoiindex",
+      "target": "server_net_clienthub_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L247",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_serializerecords",
+      "target": "server_net_clienthub_cs_ireadonlylist"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L183",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_snapshotworkerloop",
+      "target": "net_clienthub_clienthub_buildandcountdown"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L486",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_afterstep",
+      "target": "net_clienthub_clienthub_buildandcountdown"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L192",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_buildandcountdown",
+      "target": "net_clienthub_clienthub_buildsnapshotfor"
     },
     {
       "relation": "calls",
@@ -22296,6 +22545,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L488",
+      "weight": 1.0,
+      "source": "net_clienthub_clienthub_afterstep",
+      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L160",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -22309,9 +22569,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L349",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_afterstep",
-      "target": "net_clienthub_clienthub_rebuildaoiindex",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_rebuildaoiindex"
     },
     {
       "relation": "calls",
@@ -22330,43 +22590,10 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L416",
       "weight": 1.0,
-      "context": "parameter_type",
-      "source": "net_clienthub_clienthub_rebuildaoiindex",
-      "target": "server_net_clienthub_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L416",
-      "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_rebuildaoiindex",
-      "target": "server_net_clienthub_cs_shipsim",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L164",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "net_clienthub_clienthub_buildsnapshotfor",
-      "target": "server_net_clienthub_cs_ireadonlylist"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L247",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "net_clienthub_clienthub_serializerecords",
-      "target": "server_net_clienthub_cs_ireadonlylist"
+      "target": "server_net_clienthub_cs_shipsim"
     },
     {
       "relation": "references",
@@ -30211,5 +30438,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "7c90b7aa58ae1a4892a1b7f98f3c9a45ec1095f4"
+  "built_at_commit": "de99811f3a7ddb586d4fdb6c9139931b784ffb64"
 }

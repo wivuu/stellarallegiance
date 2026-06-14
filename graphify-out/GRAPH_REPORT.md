@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-14)
 
 ## Corpus Check
-- 62 files · ~65,421 words
+- 62 files · ~66,253 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1129 nodes · 1875 edges · 61 communities (51 shown, 10 thin omitted)
+- 1135 nodes · 1891 edges · 61 communities (51 shown, 10 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7c90b7aa`
+- Built from commit: `de99811f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -76,11 +76,11 @@
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 80 edges
 2. `Simulation` - 52 edges
-3. `GameNetClient` - 46 edges
-4. `Simulation` - 39 edges
-5. `Chat` - 35 edges
-6. `PredictionController` - 31 edges
-7. `ClientHub` - 30 edges
+3. `GameNetClient` - 47 edges
+4. `ClientHub` - 40 edges
+5. `Simulation` - 39 edges
+6. `Chat` - 35 edges
+7. `PredictionController` - 31 edges
 8. `ShipController` - 29 edges
 9. `TargetMarkers` - 28 edges
 10. `ShipSim` - 25 edges
@@ -235,7 +235,7 @@ Nodes (13): bool, byte, float, ShipClass, string, uint, ulong, Aleph (+5 more)
 
 ### Community 32 - "SpaceTimeDB Module Config"
 Cohesion: 0.47
-Nodes (3): EventContext, Projectile, Projectile
+Nodes (3): Projectile, EventContext, Projectile
 
 ### Community 41 - "Community 41"
 Cohesion: 0.22
@@ -251,7 +251,7 @@ Nodes (12): Basis, DefRegistry, HardpointDef, List, Marker3D, Material, MeshInst
 
 ### Community 44 - "Community 44"
 Cohesion: 0.07
-Nodes (32): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+24 more)
+Nodes (34): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+26 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.11
@@ -267,10 +267,10 @@ Nodes (10): BinaryWriter, List<HardpointDef>, Protocol, byte, int, IReadOnlyList
 
 ### Community 51 - "Community 51"
 Cohesion: 0.06
-Nodes (24): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, Channel, ClientWebSocket, ConnectionManager (+16 more)
+Nodes (25): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, CancellationTokenSource, Channel, ClientWebSocket (+17 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (18): Gate, PigPlan, PigState, bool, byte, Dictionary, float, int (+10 more)
 
 ### Community 56 - "Community 56"
@@ -294,7 +294,7 @@ Cohesion: 0.40
 Nodes (3): DbConnection, DbConnection, Match
 
 ## Knowledge Gaps
-- **333 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Material`, `MeshInstance3D` (+328 more)
+- **332 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Material`, `MeshInstance3D` (+327 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -302,13 +302,13 @@ Nodes (3): DbConnection, DbConnection, Match
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.138) - this node is a cross-community bridge._
+  _High betweenness centrality (0.131) - this node is a cross-community bridge._
 - **Why does `WorldRenderer` connect `AlephView World State` to `SpaceTimeDB Module Config`, `Community 65`, `Community 66`, `Community 67`, `PigAI NPC Behavior`, `Target Markers HUD`, `Community 56`, `Community 63`?**
-  _High betweenness centrality (0.120) - this node is a cross-community bridge._
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `PigAI NPC Behavior`, `Client-Side Prediction`, `Engine Glow Effects`, `Community 41`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 43`, `Dust Field Environment`, `Team Trail Effects`, `Starscape Background`?**
-  _High betweenness centrality (0.117) - this node is a cross-community bridge._
+  _High betweenness centrality (0.112) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _353 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _352 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**

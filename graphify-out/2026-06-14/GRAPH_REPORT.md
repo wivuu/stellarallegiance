@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-14)
 
 ## Corpus Check
-- 62 files · ~64,668 words
+- 62 files · ~65,923 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1123 nodes · 1864 edges · 61 communities (51 shown, 10 thin omitted)
+- 1134 nodes · 1888 edges · 61 communities (51 shown, 10 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5abb5f13`
+- Built from commit: `de99811f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -76,13 +76,13 @@
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 80 edges
 2. `Simulation` - 52 edges
-3. `GameNetClient` - 46 edges
+3. `GameNetClient` - 47 edges
 4. `Simulation` - 39 edges
-5. `Chat` - 35 edges
-6. `PredictionController` - 31 edges
-7. `ShipController` - 29 edges
-8. `TargetMarkers` - 28 edges
-9. `ClientHub` - 26 edges
+5. `ClientHub` - 38 edges
+6. `Chat` - 35 edges
+7. `PredictionController` - 31 edges
+8. `ShipController` - 29 edges
+9. `TargetMarkers` - 28 edges
 10. `ShipSim` - 25 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -250,8 +250,8 @@ Cohesion: 0.17
 Nodes (12): Basis, DefRegistry, HardpointDef, List, Marker3D, Material, MeshInstance3D, ShipClass (+4 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.08
-Nodes (28): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+20 more)
+Cohesion: 0.07
+Nodes (34): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+26 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.11
@@ -267,10 +267,10 @@ Nodes (10): BinaryWriter, List<HardpointDef>, Protocol, byte, int, IReadOnlyList
 
 ### Community 51 - "Community 51"
 Cohesion: 0.06
-Nodes (24): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, Channel, ClientWebSocket, ConnectionManager (+16 more)
+Nodes (25): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, CancellationTokenSource, Channel, ClientWebSocket (+17 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (18): Gate, PigPlan, PigState, bool, byte, Dictionary, float, int (+10 more)
 
 ### Community 56 - "Community 56"
@@ -294,7 +294,7 @@ Cohesion: 0.40
 Nodes (3): DbConnection, DbConnection, Match
 
 ## Knowledge Gaps
-- **329 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Material`, `MeshInstance3D` (+324 more)
+- **333 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Material`, `MeshInstance3D` (+328 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -302,13 +302,13 @@ Nodes (3): DbConnection, DbConnection, Match
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `TargetMarkers` connect `Target Markers HUD` to `Starscape Background`, `Connection Overlay UI`?**
-  _High betweenness centrality (0.135) - this node is a cross-community bridge._
+  _High betweenness centrality (0.131) - this node is a cross-community bridge._
 - **Why does `WorldRenderer` connect `AlephView World State` to `SpaceTimeDB Module Config`, `Community 65`, `Community 66`, `Community 67`, `PigAI NPC Behavior`, `Target Markers HUD`, `Community 56`, `Community 63`?**
-  _High betweenness centrality (0.132) - this node is a cross-community bridge._
+  _High betweenness centrality (0.115) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `PigAI NPC Behavior`, `Client-Side Prediction`, `Engine Glow Effects`, `Community 41`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 43`, `Dust Field Environment`, `Team Trail Effects`, `Starscape Background`?**
-  _High betweenness centrality (0.113) - this node is a cross-community bridge._
+  _High betweenness centrality (0.112) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _349 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _353 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
