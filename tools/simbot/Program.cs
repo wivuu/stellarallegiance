@@ -10,8 +10,14 @@ using System.Net.WebSockets;
 int bots = 50;
 string url = "ws://localhost:8090/game";
 int seconds = 60;
-for (int i = 0; i < args.Length - 1; i++)
+// Orbit mode: bots barely translate (tiny thrust + steady turn), so the swarm stays packed in
+// one sector for the whole run — sustained worst-case AOI overlap. Without it bots thrust flat
+// out and disperse, so server load decays as the fight spreads. Use orbit to find the ceiling.
+bool orbit = false;
+for (int i = 0; i < args.Length; i++)
 {
+    if (args[i] == "--orbit") orbit = true;
+    if (i >= args.Length - 1) continue;
     if (args[i] == "--bots") bots = int.Parse(args[i + 1]);
     if (args[i] == "--url") url = args[i + 1];
     if (args[i] == "--seconds") seconds = int.Parse(args[i + 1]);
@@ -117,10 +123,13 @@ async Task RunBot(int idx, CancellationToken ct)
             }
 
             tick++;
-            float yaw = MathF.Sin(tick * 0.05f + idx * 0.7f) * 0.6f;
-            float pitch = MathF.Sin(tick * 0.031f + idx * 1.3f) * 0.25f;
+            // Orbit: near-zero thrust + a steady per-bot turn keeps each ship milling in a tight
+            // knot at its spawn, so the swarm never disperses. Default: full thrust + slow weave.
+            float thrust = orbit ? 0.05f : 1f;
+            float yaw = orbit ? 1.0f : MathF.Sin(tick * 0.05f + idx * 0.7f) * 0.6f;
+            float pitch = orbit ? MathF.Sin(tick * 0.02f + idx) * 0.4f : MathF.Sin(tick * 0.031f + idx * 1.3f) * 0.25f;
             BitConverter.TryWriteBytes(frame.AsSpan(1), tick);
-            BitConverter.TryWriteBytes(frame.AsSpan(5), 1f);      // thrust
+            BitConverter.TryWriteBytes(frame.AsSpan(5), thrust);  // thrust
             BitConverter.TryWriteBytes(frame.AsSpan(9), 0f);      // strafeX
             BitConverter.TryWriteBytes(frame.AsSpan(13), 0f);     // strafeY
             BitConverter.TryWriteBytes(frame.AsSpan(17), yaw);
