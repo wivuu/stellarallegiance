@@ -200,8 +200,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781443032.7580185,
-    "ast_hash": "536f7f5537dfabbf4b5097c4eafb8f2d",
+    "mtime": 1781466534.438415,
+    "ast_hash": "a6fe6ffa630ac847995cbff004e85466",
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
@@ -240,8 +240,8 @@
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
-    "mtime": 1781443193.358477,
-    "ast_hash": "fb879064f1926cb2ae336ca130617b93",
+    "mtime": 1781463381.9799562,
+    "ast_hash": "43d380d6430e0fa3a5fca780a291f61a",
     "semantic_hash": ""
   },
   "tools/simbot/SimBot.csproj": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781400399.2934253,
-    "ast_hash": "36853105185a5aa1afed19c2a98c6a7f",
+    "mtime": 1781462958.5543504,
+    "ast_hash": "aa3a00d775bdfca929d2008d49eda74b",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -327,6 +327,36 @@
   "shared/Defs.cs": {
     "mtime": 1781441410.182747,
     "ast_hash": "1856f570c8298fbc9c3b964066b76c57",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/bake.py": {
+    "mtime": 1781466389.9363277,
+    "ast_hash": "dba910441c00c0dfe9b6a65e68f74255",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/build.sh": {
+    "mtime": 1781465985.5000353,
+    "ast_hash": "3140331c5674969c6b51714b5bf4c5b3",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/generate.py": {
+    "mtime": 1781466302.2155137,
+    "ast_hash": "d692363186f0828aa06a7a9b80cadd09",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/glb.py": {
+    "mtime": 1781466218.2381341,
+    "ast_hash": "975b703024a701ae61bf475e13a2b2d3",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/parts.py": {
+    "mtime": 1781466097.6274958,
+    "ast_hash": "5fbb843e3dd8556d04f38f5ede35df36",
+    "semantic_hash": ""
+  },
+  "tools/ship-gen/ships.yaml": {
+    "mtime": 1781466319.1439197,
+    "ast_hash": "57c4f254c6c4b309ae95da0f2577591c",
     "semantic_hash": ""
   }
 }

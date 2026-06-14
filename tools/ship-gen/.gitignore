@@ -1,0 +1,6 @@
+# Generated artifacts (GLBs, generated ship YAMLs, manifests) — never committed.
+build/
+
+# Local Python env (uv). uv.lock IS committed for reproducible builds.
+.venv/
+__pycache__/

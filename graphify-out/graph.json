@@ -727,7 +727,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L1",
       "id": "scripts_connectionmanager",
-      "community": 18,
+      "community": 16,
       "norm_label": "connectionmanager.cs"
     },
     {
@@ -736,8 +736,17 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "id": "scripts_connectionmanager_connectionmanager",
-      "community": 18,
+      "community": 16,
       "norm_label": "connectionmanager"
+    },
+    {
+      "label": "Node",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "id": "node",
+      "community": 16,
+      "norm_label": "node"
     },
     {
       "label": "GameNetClient",
@@ -745,7 +754,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L19",
       "id": "client_scripts_connectionmanager_cs_gamenetclient",
-      "community": 18,
+      "community": 16,
       "norm_label": "gamenetclient"
     },
     {
@@ -754,7 +763,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L20",
       "id": "serverinputoverlay",
-      "community": 18,
+      "community": 16,
       "norm_label": "serverinputoverlay"
     },
     {
@@ -763,7 +772,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L22",
       "id": "scripts_connectionmanager_connectionmanager_ready",
-      "community": 18,
+      "community": 16,
       "norm_label": "._ready()"
     },
     {
@@ -772,7 +781,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L42",
       "id": "scripts_connectionmanager_connectionmanager_connectto",
-      "community": 18,
+      "community": 16,
       "norm_label": ".connectto()"
     },
     {
@@ -781,7 +790,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L53",
       "id": "scripts_connectionmanager_connectionmanager_connect",
-      "community": 18,
+      "community": 16,
       "norm_label": ".connect()"
     },
     {
@@ -790,7 +799,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L57",
       "id": "scripts_connectionmanager_connectionmanager_notifyconnected",
-      "community": 18,
+      "community": 16,
       "norm_label": ".notifyconnected()"
     },
     {
@@ -799,7 +808,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L63",
       "id": "scripts_connectionmanager_connectionmanager_notifyfailed",
-      "community": 18,
+      "community": 16,
       "norm_label": ".notifyfailed()"
     },
     {
@@ -808,7 +817,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L69",
       "id": "scripts_connectionmanager_connectionmanager_notifydisconnected",
-      "community": 18,
+      "community": 16,
       "norm_label": ".notifydisconnected()"
     },
     {
@@ -817,7 +826,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L76",
       "id": "scripts_connectionmanager_connectionmanager_showinput",
-      "community": 18,
+      "community": 16,
       "norm_label": ".showinput()"
     },
     {
@@ -826,7 +835,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L87",
       "id": "scripts_connectionmanager_connectionmanager_hideinput",
-      "community": 18,
+      "community": 16,
       "norm_label": ".hideinput()"
     },
     {
@@ -835,7 +844,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L93",
       "id": "scripts_connectionmanager_connectionmanager_towsurl",
-      "community": 18,
+      "community": 16,
       "norm_label": ".towsurl()"
     },
     {
@@ -3587,7 +3596,7 @@
       "label": ".Build()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L38",
+      "source_location": "L41",
       "id": "scripts_shipmodelloader_shipmodelloader_build",
       "community": 43,
       "norm_label": ".build()"
@@ -3596,7 +3605,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L38",
+      "source_location": "L41",
       "id": "client_scripts_shipmodelloader_cs_defregistry",
       "community": 43,
       "norm_label": "defregistry"
@@ -3605,7 +3614,7 @@
       "label": "ShipClass",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L38",
+      "source_location": "L41",
       "id": "client_scripts_shipmodelloader_cs_shipclass",
       "community": 43,
       "norm_label": "shipclass"
@@ -3614,43 +3623,70 @@
       "label": "Material",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L38",
+      "source_location": "L41",
       "id": "client_scripts_shipmodelloader_cs_material",
       "community": 43,
       "norm_label": "material"
     },
     {
-      "label": "MeshInstance3D",
-      "file_type": "code",
-      "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L38",
-      "id": "client_scripts_shipmodelloader_cs_meshinstance3d",
-      "community": 43,
-      "norm_label": "meshinstance3d"
-    },
-    {
-      "label": ".AttachEngineGlow()",
-      "file_type": "code",
-      "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L57",
-      "id": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
-      "community": 43,
-      "norm_label": ".attachengineglow()"
-    },
-    {
       "label": "Node3D",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L57",
+      "source_location": "L41",
       "id": "client_scripts_shipmodelloader_cs_node3d",
       "community": 65,
       "norm_label": "node3d"
     },
     {
+      "label": ".TryLoadShipGlb()",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L66",
+      "id": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "community": 43,
+      "norm_label": ".tryloadshipglb()"
+    },
+    {
+      "label": ".GlbBaseName()",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L82",
+      "id": "scripts_shipmodelloader_shipmodelloader_glbbasename",
+      "community": 43,
+      "norm_label": ".glbbasename()"
+    },
+    {
+      "label": ".ApplyMaterialOverride()",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L91",
+      "id": "scripts_shipmodelloader_shipmodelloader_applymaterialoverride",
+      "community": 43,
+      "norm_label": ".applymaterialoverride()"
+    },
+    {
+      "label": "Node",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L91",
+      "id": "client_scripts_shipmodelloader_cs_node",
+      "community": 43,
+      "norm_label": "node"
+    },
+    {
+      "label": ".AttachEngineGlow()",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L104",
+      "id": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
+      "community": 43,
+      "norm_label": ".attachengineglow()"
+    },
+    {
       "label": ".DefId()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L115",
+      "source_location": "L162",
       "id": "scripts_shipmodelloader_shipmodelloader_defid",
       "community": 43,
       "norm_label": ".defid()"
@@ -3659,16 +3695,25 @@
       "label": ".BuildPlaceholderMesh()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L121",
+      "source_location": "L168",
       "id": "scripts_shipmodelloader_shipmodelloader_buildplaceholdermesh",
       "community": 43,
       "norm_label": ".buildplaceholdermesh()"
     },
     {
+      "label": "MeshInstance3D",
+      "file_type": "code",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L168",
+      "id": "client_scripts_shipmodelloader_cs_meshinstance3d",
+      "community": 43,
+      "norm_label": "meshinstance3d"
+    },
+    {
       "label": ".MakeMarker()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L155",
+      "source_location": "L202",
       "id": "scripts_shipmodelloader_shipmodelloader_makemarker",
       "community": 43,
       "norm_label": ".makemarker()"
@@ -3677,7 +3722,7 @@
       "label": "HardpointDef",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L155",
+      "source_location": "L202",
       "id": "client_scripts_shipmodelloader_cs_hardpointdef",
       "community": 43,
       "norm_label": "hardpointdef"
@@ -3686,7 +3731,7 @@
       "label": "Marker3D",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L155",
+      "source_location": "L202",
       "id": "client_scripts_shipmodelloader_cs_marker3d",
       "community": 43,
       "norm_label": "marker3d"
@@ -3695,7 +3740,7 @@
       "label": ".BasisFacingZ()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L169",
+      "source_location": "L216",
       "id": "scripts_shipmodelloader_shipmodelloader_basisfacingz",
       "community": 43,
       "norm_label": ".basisfacingz()"
@@ -3704,7 +3749,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L169",
+      "source_location": "L216",
       "id": "client_scripts_shipmodelloader_cs_vector3",
       "community": 43,
       "norm_label": "vector3"
@@ -3713,7 +3758,7 @@
       "label": "Basis",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L169",
+      "source_location": "L216",
       "id": "client_scripts_shipmodelloader_cs_basis",
       "community": 43,
       "norm_label": "basis"
@@ -3722,7 +3767,7 @@
       "label": ".AvgZ()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L180",
+      "source_location": "L227",
       "id": "scripts_shipmodelloader_shipmodelloader_avgz",
       "community": 43,
       "norm_label": ".avgz()"
@@ -3731,7 +3776,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L180",
+      "source_location": "L227",
       "id": "client_scripts_shipmodelloader_cs_list",
       "community": 43,
       "norm_label": "list"
@@ -4255,7 +4300,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1",
       "id": "scripts_worldrenderer",
-      "community": 1,
+      "community": 5,
       "norm_label": "worldrenderer.cs"
     },
     {
@@ -4300,7 +4345,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L44",
       "id": "scripts_worldrenderer_basehealthbar",
-      "community": 65,
+      "community": 5,
       "norm_label": "basehealthbar"
     },
     {
@@ -4318,7 +4363,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L48",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "community": 65,
+      "community": 5,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -4696,7 +4741,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L447",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 63,
+      "community": 16,
       "norm_label": "node"
     },
     {
@@ -4813,7 +4858,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L734",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 32,
+      "community": 66,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -6240,7 +6285,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L77",
       "id": "server_sim_simulation_pig_cs_shipsim",
-      "community": 53,
+      "community": 32,
       "norm_label": "shipsim"
     },
     {
@@ -6303,7 +6348,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L166",
       "id": "sim_simulation_pig_simulation_despawnallpigs",
-      "community": 42,
+      "community": 53,
       "norm_label": ".despawnallpigs()"
     },
     {
@@ -6330,7 +6375,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L263",
       "id": "sim_simulation_pig_simulation_killpigcombat",
-      "community": 42,
+      "community": 57,
       "norm_label": ".killpigcombat()"
     },
     {
@@ -6339,7 +6384,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L282",
       "id": "sim_simulation_pig_simulation_freepigpodslot",
-      "community": 42,
+      "community": 57,
       "norm_label": ".freepigpodslot()"
     },
     {
@@ -6375,7 +6420,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L432",
       "id": "sim_simulation_pig_simulation_pigexecute",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigexecute()"
     },
     {
@@ -6384,7 +6429,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L432",
       "id": "server_sim_simulation_pig_cs_shipinputstate",
-      "community": 53,
+      "community": 32,
       "norm_label": "shipinputstate"
     },
     {
@@ -6393,7 +6438,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L460",
       "id": "sim_simulation_pig_simulation_pigchaseinput",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigchaseinput()"
     },
     {
@@ -6402,7 +6447,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L523",
       "id": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigpatrolfromcenter()"
     },
     {
@@ -6411,7 +6456,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L523",
       "id": "server_sim_simulation_pig_cs_vec3",
-      "community": 53,
+      "community": 32,
       "norm_label": "vec3"
     },
     {
@@ -6420,7 +6465,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L523",
       "id": "server_sim_simulation_pig_cs_quat",
-      "community": 53,
+      "community": 32,
       "norm_label": "quat"
     },
     {
@@ -6438,7 +6483,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L538",
       "id": "sim_simulation_pig_simulation_podthink",
-      "community": 53,
+      "community": 32,
       "norm_label": ".podthink()"
     },
     {
@@ -6447,7 +6492,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L560",
       "id": "sim_simulation_pig_simulation_piglead",
-      "community": 53,
+      "community": 32,
       "norm_label": ".piglead()"
     },
     {
@@ -6456,7 +6501,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L589",
       "id": "sim_simulation_pig_simulation_pigavoidasteroids",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigavoidasteroids()"
     },
     {
@@ -6465,7 +6510,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L619",
       "id": "sim_simulation_pig_simulation_pigthreatscore",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigthreatscore()"
     },
     {
@@ -6510,7 +6555,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L659",
       "id": "sim_simulation_pig_simulation_pigsteerto",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigsteerto()"
     },
     {
@@ -6519,7 +6564,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L672",
       "id": "sim_simulation_pig_simulation_pigattackpoint",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigattackpoint()"
     },
     {
@@ -6537,7 +6582,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L707",
       "id": "sim_simulation_pig_simulation_pigaimwobble",
-      "community": 53,
+      "community": 32,
       "norm_label": ".pigaimwobble()"
     },
     {
@@ -6546,7 +6591,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L722",
       "id": "sim_simulation_pig_simulation_clamp1",
-      "community": 53,
+      "community": 32,
       "norm_label": ".clamp1()"
     },
     {
@@ -6564,7 +6609,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L724",
       "id": "sim_simulation_pig_simulation_conjugate",
-      "community": 53,
+      "community": 32,
       "norm_label": ".conjugate()"
     },
     {
@@ -6573,7 +6618,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L726",
       "id": "sim_simulation_pig_simulation_normalizeor",
-      "community": 53,
+      "community": 32,
       "norm_label": ".normalizeor()"
     },
     {
@@ -6582,7 +6627,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L732",
       "id": "sim_simulation_pig_simulation_perpendicularto",
-      "community": 53,
+      "community": 32,
       "norm_label": ".perpendicularto()"
     },
     {
@@ -6591,7 +6636,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L738",
       "id": "sim_simulation_pig_simulation_smallestpositivef",
-      "community": 53,
+      "community": 32,
       "norm_label": ".smallestpositivef()"
     },
     {
@@ -6879,7 +6924,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L398",
       "id": "sim_simulation_simulation_placeatbase",
-      "community": 53,
+      "community": 42,
       "norm_label": ".placeatbase()"
     },
     {
@@ -6897,7 +6942,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L446",
       "id": "sim_simulation_simulation_inputfor",
-      "community": 53,
+      "community": 32,
       "norm_label": ".inputfor()"
     },
     {
@@ -6906,7 +6951,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L460",
       "id": "sim_simulation_simulation_resolvedeath",
-      "community": 42,
+      "community": 57,
       "norm_label": ".resolvedeath()"
     },
     {
@@ -6915,7 +6960,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L473",
       "id": "sim_simulation_simulation_ejectplayerpod",
-      "community": 42,
+      "community": 57,
       "norm_label": ".ejectplayerpod()"
     },
     {
@@ -6924,7 +6969,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L485",
       "id": "sim_simulation_simulation_makepod",
-      "community": 42,
+      "community": 57,
       "norm_label": ".makepod()"
     },
     {
@@ -6933,7 +6978,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L516",
       "id": "sim_simulation_simulation_killpod",
-      "community": 42,
+      "community": 57,
       "norm_label": ".killpod()"
     },
     {
@@ -6942,7 +6987,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L528",
       "id": "sim_simulation_simulation_dockship",
-      "community": 42,
+      "community": 57,
       "norm_label": ".dockship()"
     },
     {
@@ -6951,7 +6996,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L537",
       "id": "sim_simulation_simulation_schedulerespawn",
-      "community": 42,
+      "community": 57,
       "norm_label": ".schedulerespawn()"
     },
     {
@@ -6978,7 +7023,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L579",
       "id": "sim_simulation_simulation_randomunitvec",
-      "community": 42,
+      "community": 58,
       "norm_label": ".randomunitvec()"
     },
     {
@@ -6987,7 +7032,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L579",
       "id": "server_sim_simulation_cs_vec3",
-      "community": 42,
+      "community": 58,
       "norm_label": "vec3"
     },
     {
@@ -6996,7 +7041,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L589",
       "id": "sim_simulation_simulation_tryfire",
-      "community": 42,
+      "community": 58,
       "norm_label": ".tryfire()"
     },
     {
@@ -7014,7 +7059,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L685",
       "id": "sim_simulation_simulation_firstentrytime",
-      "community": 42,
+      "community": 58,
       "norm_label": ".firstentrytime()"
     },
     {
@@ -7023,7 +7068,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L709",
       "id": "sim_simulation_simulation_cellsalongray",
-      "community": 42,
+      "community": 58,
       "norm_label": ".cellsalongray()"
     },
     {
@@ -7032,7 +7077,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L709",
       "id": "ienumerable",
-      "community": 42,
+      "community": 58,
       "norm_label": "ienumerable"
     },
     {
@@ -7086,7 +7131,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L842",
       "id": "sim_simulation_simulation_dot",
-      "community": 42,
+      "community": 32,
       "norm_label": ".dot()"
     },
     {
@@ -8560,7 +8605,7 @@
       "file_type": "code",
       "source_file": "tools/asteroid-gen/generate.py",
       "source_location": "L72",
-      "id": "path",
+      "id": "tools_asteroid_gen_generate_py_path",
       "community": 24,
       "norm_label": "path"
     },
@@ -9024,6 +9069,590 @@
       "norm_label": "uv-sphere direction grid with a duplicated seam column for clean uvs (y-up)."
     },
     {
+      "label": "bake.py",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L1",
+      "id": "ship_gen_bake",
+      "community": 37,
+      "norm_label": "bake.py"
+    },
+    {
+      "label": "bake_kind()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L32",
+      "id": "ship_gen_bake_bake_kind",
+      "community": 37,
+      "norm_label": "bake_kind()"
+    },
+    {
+      "label": "_tile_fbm()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L62",
+      "id": "ship_gen_bake_tile_fbm",
+      "community": 37,
+      "norm_label": "_tile_fbm()"
+    },
+    {
+      "label": "ndarray",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L62",
+      "id": "tools_ship_gen_bake_py_ndarray",
+      "community": 37,
+      "norm_label": "ndarray"
+    },
+    {
+      "label": "_panel_grooves()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L84",
+      "id": "ship_gen_bake_panel_grooves",
+      "community": 37,
+      "norm_label": "_panel_grooves()"
+    },
+    {
+      "label": "_normal_from_height()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L94",
+      "id": "ship_gen_bake_normal_from_height",
+      "community": 37,
+      "norm_label": "_normal_from_height()"
+    },
+    {
+      "label": "Image",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L94",
+      "id": "tools_ship_gen_bake_py_image",
+      "community": 37,
+      "norm_label": "image"
+    },
+    {
+      "label": "_linear_to_srgb()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L102",
+      "id": "ship_gen_bake_linear_to_srgb",
+      "community": 37,
+      "norm_label": "_linear_to_srgb()"
+    },
+    {
+      "label": "_to_img()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L107",
+      "id": "ship_gen_bake_to_img",
+      "community": 37,
+      "norm_label": "_to_img()"
+    },
+    {
+      "label": "Bake tileable PBR texture sets, one per *material kind* (not per ship).  Each ki",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L1",
+      "id": "ship_gen_bake_rationale_1",
+      "community": 37,
+      "norm_label": "bake tileable pbr texture sets, one per *material kind* (not per ship).  each ki"
+    },
+    {
+      "label": "Return (albedo, normal, orm) PIL RGB images for ``kind``, deterministic in ``see",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L33",
+      "id": "ship_gen_bake_rationale_33",
+      "community": 37,
+      "norm_label": "return (albedo, normal, orm) pil rgb images for ``kind``, deterministic in ``see"
+    },
+    {
+      "label": "Seamless fractal noise in [-1,1]: a sum of integer-frequency 2D sinusoids (perio",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L63",
+      "id": "ship_gen_bake_rationale_63",
+      "community": 37,
+      "norm_label": "seamless fractal noise in [-1,1]: a sum of integer-frequency 2d sinusoids (perio"
+    },
+    {
+      "label": "Periodic grid of thin grooves (1 in a groove, 0 on a plate), tiling at ``cells``",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L85",
+      "id": "ship_gen_bake_rationale_85",
+      "community": 37,
+      "norm_label": "periodic grid of thin grooves (1 in a groove, 0 on a plate), tiling at ``cells``"
+    },
+    {
+      "label": "build.sh",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/build.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "id": "ship_gen_build",
+      "community": 59,
+      "norm_label": "build.sh"
+    },
+    {
+      "label": "build.sh script",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/build.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "id": "users_erik_projects_wivuullegiance_tools_ship_gen_build_sh__entry",
+      "community": 59,
+      "norm_label": "build.sh script"
+    },
+    {
+      "label": "generate.py",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L1",
+      "id": "ship_gen_generate",
+      "community": 55,
+      "norm_label": "generate.py"
+    },
+    {
+      "label": "compose()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L36",
+      "id": "ship_gen_generate_compose",
+      "community": 55,
+      "norm_label": "compose()"
+    },
+    {
+      "label": "_place_hp()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L66",
+      "id": "ship_gen_generate_place_hp",
+      "community": 55,
+      "norm_label": "_place_hp()"
+    },
+    {
+      "label": "random_ship()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L83",
+      "id": "ship_gen_generate_random_ship",
+      "community": 55,
+      "norm_label": "random_ship()"
+    },
+    {
+      "label": "_load_catalog()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L142",
+      "id": "ship_gen_generate_load_catalog",
+      "community": 55,
+      "norm_label": "_load_catalog()"
+    },
+    {
+      "label": "Path",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L142",
+      "id": "tools_ship_gen_generate_py_path",
+      "community": 55,
+      "norm_label": "path"
+    },
+    {
+      "label": "_emit()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L151",
+      "id": "ship_gen_generate_emit",
+      "community": 55,
+      "norm_label": "_emit()"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L163",
+      "id": "ship_gen_generate_main",
+      "community": 55,
+      "norm_label": "main()"
+    },
+    {
+      "label": "A varied but plausible hull: fuselage + canopy + symmetric engines, optional win",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L84",
+      "id": "ship_gen_generate_rationale_84",
+      "community": 55,
+      "norm_label": "a varied but plausible hull: fuselage + canopy + symmetric engines, optional win"
+    },
+    {
+      "label": "glb.py",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L1",
+      "id": "ship_gen_glb",
+      "community": 38,
+      "norm_label": "glb.py"
+    },
+    {
+      "label": "build_glb()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L28",
+      "id": "ship_gen_glb_build_glb",
+      "community": 38,
+      "norm_label": "build_glb()"
+    },
+    {
+      "label": "_acc()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L132",
+      "id": "ship_gen_glb_acc",
+      "community": 38,
+      "norm_label": "_acc()"
+    },
+    {
+      "label": "_tangents()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L138",
+      "id": "ship_gen_glb_tangents",
+      "community": 38,
+      "norm_label": "_tangents()"
+    },
+    {
+      "label": "ndarray",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L138",
+      "id": "tools_ship_gen_glb_py_ndarray",
+      "community": 38,
+      "norm_label": "ndarray"
+    },
+    {
+      "label": "_quat_facing_z()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L170",
+      "id": "ship_gen_glb_quat_facing_z",
+      "community": 38,
+      "norm_label": "_quat_facing_z()"
+    },
+    {
+      "label": "_mat_to_quat()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L184",
+      "id": "ship_gen_glb_mat_to_quat",
+      "community": 38,
+      "norm_label": "_mat_to_quat()"
+    },
+    {
+      "label": "_pad()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L209",
+      "id": "ship_gen_glb_pad",
+      "community": 38,
+      "norm_label": "_pad()"
+    },
+    {
+      "label": "Assemble a Godot-ready GLB from placed parts + hardpoints.  One self-contained `",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L1",
+      "id": "ship_gen_glb_rationale_1",
+      "community": 38,
+      "norm_label": "assemble a godot-ready glb from placed parts + hardpoints.  one self-contained `"
+    },
+    {
+      "label": "``placed`` is a list of (mesh, kind); ``hardpoints`` a list of     {kind, index,",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L30",
+      "id": "ship_gen_glb_rationale_30",
+      "community": 38,
+      "norm_label": "``placed`` is a list of (mesh, kind); ``hardpoints`` a list of     {kind, index,"
+    },
+    {
+      "label": "Per-vertex glTF TANGENT (vec4 xyz + handedness w) derived from the UV gradient.",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L139",
+      "id": "ship_gen_glb_rationale_139",
+      "community": 38,
+      "norm_label": "per-vertex gltf tangent (vec4 xyz + handedness w) derived from the uv gradient."
+    },
+    {
+      "label": "Quaternion [x,y,z,w] for a basis whose local +Z aligns with ``forward`` (mirrors",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L171",
+      "id": "ship_gen_glb_rationale_171",
+      "community": 38,
+      "norm_label": "quaternion [x,y,z,w] for a basis whose local +z aligns with ``forward`` (mirrors"
+    },
+    {
+      "label": "parts.py",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L1",
+      "id": "ship_gen_parts",
+      "community": 18,
+      "norm_label": "parts.py"
+    },
+    {
+      "label": "_Mesh",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L34",
+      "id": "ship_gen_parts_mesh",
+      "community": 18,
+      "norm_label": "_mesh"
+    },
+    {
+      "label": ".__init__()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L35",
+      "id": "ship_gen_parts_mesh_init",
+      "community": 18,
+      "norm_label": ".__init__()"
+    },
+    {
+      "label": ".quad()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L41",
+      "id": "ship_gen_parts_mesh_quad",
+      "community": 18,
+      "norm_label": ".quad()"
+    },
+    {
+      "label": ".tri()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L71",
+      "id": "ship_gen_parts_mesh_tri",
+      "community": 18,
+      "norm_label": ".tri()"
+    },
+    {
+      "label": ".result()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L81",
+      "id": "ship_gen_parts_mesh_result",
+      "community": 18,
+      "norm_label": ".result()"
+    },
+    {
+      "label": "_box_corners()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L94",
+      "id": "ship_gen_parts_box_corners",
+      "community": 18,
+      "norm_label": "_box_corners()"
+    },
+    {
+      "label": "_box_like()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L103",
+      "id": "ship_gen_parts_box_like",
+      "community": 18,
+      "norm_label": "_box_like()"
+    },
+    {
+      "label": "box()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L120",
+      "id": "ship_gen_parts_box",
+      "community": 18,
+      "norm_label": "box()"
+    },
+    {
+      "label": "taper()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L125",
+      "id": "ship_gen_parts_taper",
+      "community": 18,
+      "norm_label": "taper()"
+    },
+    {
+      "label": "cylinder()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L131",
+      "id": "ship_gen_parts_cylinder",
+      "community": 18,
+      "norm_label": "cylinder()"
+    },
+    {
+      "label": "ellipsoid()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L186",
+      "id": "ship_gen_parts_ellipsoid",
+      "community": 18,
+      "norm_label": "ellipsoid()"
+    },
+    {
+      "label": "wedge()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L215",
+      "id": "ship_gen_parts_wedge",
+      "community": 18,
+      "norm_label": "wedge()"
+    },
+    {
+      "label": "build_part()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L249",
+      "id": "ship_gen_parts_build_part",
+      "community": 18,
+      "norm_label": "build_part()"
+    },
+    {
+      "label": "_euler_matrix()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L264",
+      "id": "ship_gen_parts_euler_matrix",
+      "community": 18,
+      "norm_label": "_euler_matrix()"
+    },
+    {
+      "label": "ndarray",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L264",
+      "id": "tools_ship_gen_parts_py_ndarray",
+      "community": 18,
+      "norm_label": "ndarray"
+    },
+    {
+      "label": "place()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L275",
+      "id": "ship_gen_parts_place",
+      "community": 18,
+      "norm_label": "place()"
+    },
+    {
+      "label": "_norm()",
+      "file_type": "code",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L304",
+      "id": "ship_gen_parts_norm",
+      "community": 18,
+      "norm_label": "_norm()"
+    },
+    {
+      "label": "Modular parametric part primitives for the spaceship generator.  Every generator",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L1",
+      "id": "ship_gen_parts_rationale_1",
+      "community": 18,
+      "norm_label": "modular parametric part primitives for the spaceship generator.  every generator"
+    },
+    {
+      "label": "Add a planar quad p0->p1->p2->p3 (CCW). If ``normal`` is None it is derived",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L42",
+      "id": "ship_gen_parts_rationale_42",
+      "community": 18,
+      "norm_label": "add a planar quad p0->p1->p2->p3 (ccw). if ``normal`` is none it is derived"
+    },
+    {
+      "label": "8 corners of a (possibly front-tapered) box: back half-extents (hx,hy) at z=-hz,",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L95",
+      "id": "ship_gen_parts_rationale_95",
+      "community": 18,
+      "norm_label": "8 corners of a (possibly front-tapered) box: back half-extents (hx,hy) at z=-hz,"
+    },
+    {
+      "label": "A rectangular box, size [x, y, z].",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L121",
+      "id": "ship_gen_parts_rationale_121",
+      "community": 18,
+      "norm_label": "a rectangular box, size [x, y, z]."
+    },
+    {
+      "label": "A frustum: a box whose +Z (front) end is scaled by ``taper`` [tx, ty]. ``[0,0]``",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L126",
+      "id": "ship_gen_parts_rationale_126",
+      "community": 18,
+      "norm_label": "a frustum: a box whose +z (front) end is scaled by ``taper`` [tx, ty]. ``[0,0]``"
+    },
+    {
+      "label": "A capped tube along Z (radius ``radius`` at the back), front radius = radius*tap",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L132",
+      "id": "ship_gen_parts_rationale_132",
+      "community": 18,
+      "norm_label": "a capped tube along z (radius ``radius`` at the back), front radius = radius*tap"
+    },
+    {
+      "label": "A sphere scaled to half-extents ``size`` [x, y, z] (cockpit canopy / escape pod)",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L187",
+      "id": "ship_gen_parts_rationale_187",
+      "community": 18,
+      "norm_label": "a sphere scaled to half-extents ``size`` [x, y, z] (cockpit canopy / escape pod)"
+    },
+    {
+      "label": "A right-triangular fin: thin along X (thickness size[0]), rising to height size[",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L216",
+      "id": "ship_gen_parts_rationale_216",
+      "community": 18,
+      "norm_label": "a right-triangular fin: thin along x (thickness size[0]), rising to height size["
+    },
+    {
+      "label": "Build the local-space mesh for one part spec (the keys other than placement are",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L250",
+      "id": "ship_gen_parts_rationale_250",
+      "community": 18,
+      "norm_label": "build the local-space mesh for one part spec (the keys other than placement are"
+    },
+    {
+      "label": "Return a copy of ``mesh`` transformed into ship-local space. ``mirror_x`` reflec",
+      "file_type": "rationale",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L276",
+      "id": "ship_gen_parts_rationale_276",
+      "community": 18,
+      "norm_label": "return a copy of ``mesh`` transformed into ship-local space. ``mirror_x`` reflec"
+    },
+    {
       "label": "Program.cs",
       "file_type": "code",
       "source_file": "tools/simbot/Program.cs",
@@ -9058,6 +9687,15 @@
       "id": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
       "community": 48,
       "norm_label": "microsoft.net.sdk"
+    },
+    {
+      "label": "Path",
+      "file_type": "code",
+      "source_file": "tools/asteroid-gen/generate.py",
+      "source_location": "L72",
+      "community": 24,
+      "norm_label": "path",
+      "id": "path"
     },
     {
       "label": "CancellationTokenSource",
@@ -9172,7 +9810,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L15",
-      "community": 18,
+      "community": 16,
       "norm_label": "string",
       "id": "client_scripts_connectionmanager_cs_string"
     },
@@ -9181,7 +9819,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
-      "community": 18,
+      "community": 16,
       "norm_label": "._process()",
       "id": "scripts_connectionmanager_connectionmanager_process"
     },
@@ -9190,7 +9828,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 18,
+      "community": 16,
       "norm_label": ".onconnect()",
       "id": "scripts_connectionmanager_connectionmanager_onconnect"
     },
@@ -9199,7 +9837,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 18,
+      "community": 16,
       "norm_label": "dbconnection",
       "id": "client_scripts_connectionmanager_cs_dbconnection"
     },
@@ -9208,7 +9846,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 18,
+      "community": 16,
       "norm_label": "identity",
       "id": "client_scripts_connectionmanager_cs_identity"
     },
@@ -9217,7 +9855,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 18,
+      "community": 16,
       "norm_label": ".onconnecterror()",
       "id": "scripts_connectionmanager_connectionmanager_onconnecterror"
     },
@@ -9226,7 +9864,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 18,
+      "community": 16,
       "norm_label": "exception",
       "id": "exception"
     },
@@ -9235,7 +9873,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L102",
-      "community": 18,
+      "community": 16,
       "norm_label": ".ondisconnect()",
       "id": "scripts_connectionmanager_connectionmanager_ondisconnect"
     },
@@ -9559,7 +10197,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 5,
+      "community": 66,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -9595,7 +10233,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L536",
-      "community": 5,
+      "community": 66,
       "norm_label": ".onbasedelete()",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete"
     },
@@ -9784,7 +10422,7 @@
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L653",
-      "community": 42,
+      "community": 58,
       "norm_label": "ienumerable",
       "id": "server_sim_simulation_cs_ienumerable"
     },
@@ -9910,7 +10548,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 32,
+      "community": 66,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -9919,7 +10557,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 32,
+      "community": 66,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -9937,7 +10575,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 32,
+      "community": 66,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -10000,7 +10638,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L893",
-      "community": 63,
+      "community": 65,
       "norm_label": "shipclass",
       "id": "client_scripts_worldrenderer_cs_shipclass"
     },
@@ -10135,7 +10773,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L239",
-      "community": 32,
+      "community": 66,
       "norm_label": "eventcontext",
       "id": "eventcontext"
     },
@@ -10144,7 +10782,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 32,
+      "community": 66,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -11694,6 +12332,16 @@
       "target": "client_scripts_worldrenderer_cs_node"
     },
     {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ConnectionManager.cs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "scripts_connectionmanager_connectionmanager",
+      "target": "node",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ConnectionManager.cs",
@@ -11833,6 +12481,36 @@
       "confidence_score": 1.0,
       "source": "scripts_connectionmanager_connectionmanager",
       "target": "serverinputoverlay"
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/DefRegistry.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "scripts_defregistry_defregistry",
+      "target": "node",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "node",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipController.cs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "scripts_shipcontroller_shipcontroller",
+      "target": "node",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -17184,6 +17862,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader",
+      "target": "scripts_shipmodelloader_shipmodelloader_applymaterialoverride",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L56",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -17244,11 +17932,31 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader",
+      "target": "scripts_shipmodelloader_shipmodelloader_glbbasename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L154",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_shipmodelloader_shipmodelloader",
       "target": "scripts_shipmodelloader_shipmodelloader_makemarker"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader",
+      "target": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -17282,6 +17990,17 @@
       "confidence_score": 1.0,
       "source": "scripts_shipmodelloader_shipmodelloader_build",
       "target": "client_scripts_shipmodelloader_cs_meshinstance3d"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_build",
+      "target": "client_scripts_shipmodelloader_cs_node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -17339,6 +18058,17 @@
       "target": "scripts_shipmodelloader_shipmodelloader_makemarker"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_build",
+      "target": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
@@ -17386,6 +18116,39 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_glbbasename",
+      "target": "client_scripts_shipmodelloader_cs_shipclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "target": "client_scripts_shipmodelloader_cs_shipclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_applymaterialoverride",
+      "target": "client_scripts_shipmodelloader_cs_material",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L120",
       "weight": 1.0,
       "context": "parameter_type",
@@ -17397,12 +18160,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L120",
+      "source_location": "L66",
       "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_shipmodelloader_shipmodelloader_buildplaceholdermesh",
-      "target": "client_scripts_shipmodelloader_cs_meshinstance3d"
+      "context": "parameter_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "target": "client_scripts_shipmodelloader_cs_material",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -17416,26 +18179,15 @@
       "target": "client_scripts_shipmodelloader_cs_node3d"
     },
     {
-      "relation": "calls",
-      "context": "call",
+      "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L103",
+      "source_location": "L66",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
-      "target": "scripts_shipmodelloader_shipmodelloader_avgz"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
-      "target": "scripts_shipmodelloader_shipmodelloader_defid"
+      "context": "return_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "target": "client_scripts_shipmodelloader_cs_node3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -17522,6 +18274,72 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawneffect",
       "target": "client_scripts_shipmodelloader_cs_node3d"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "target": "scripts_shipmodelloader_shipmodelloader_applymaterialoverride",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_tryloadshipglb",
+      "target": "scripts_shipmodelloader_shipmodelloader_glbbasename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_shipmodelloader_shipmodelloader_applymaterialoverride",
+      "target": "client_scripts_shipmodelloader_cs_node",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L103",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
+      "target": "scripts_shipmodelloader_shipmodelloader_avgz"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L63",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
+      "target": "scripts_shipmodelloader_shipmodelloader_defid"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L120",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_buildplaceholdermesh",
+      "target": "client_scripts_shipmodelloader_cs_meshinstance3d"
     },
     {
       "relation": "references",
@@ -21736,9 +22554,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L585",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot"
     },
     {
       "relation": "method",
@@ -22008,9 +22826,9 @@
       "source_location": "L118",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub",
-      "target": "server_net_clienthub_cs_uint",
-      "confidence_score": 1.0
+      "target": "server_net_clienthub_cs_uint"
     },
     {
       "relation": "references",
@@ -22547,9 +23365,9 @@
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L488",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_afterstep",
-      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
-      "confidence_score": 1.0
+      "target": "net_clienthub_clienthub_buildsharedcoarsesnapshot"
     },
     {
       "relation": "calls",
@@ -28789,6 +29607,17 @@
       "target": "path"
     },
     {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/asteroid-gen/generate.py",
+      "source_location": "L72",
+      "weight": 1.0,
+      "source": "asteroid_gen_generate_generate",
+      "target": "tools_asteroid_gen_generate_py_path",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -28809,6 +29638,17 @@
       "confidence_score": 1.0,
       "source": "asteroid_gen_generate_main",
       "target": "asteroid_gen_generate_generate"
+    },
+    {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/asteroid-gen/generate.py",
+      "source_location": "L123",
+      "weight": 1.0,
+      "source": "asteroid_gen_generate_file_info",
+      "target": "tools_asteroid_gen_generate_py_path",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -29650,6 +30490,1008 @@
       "target": "asteroid_gen_shapefield_normalize"
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_bake_kind",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L102",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_linear_to_srgb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L94",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_normal_from_height",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_panel_grooves",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_tile_fbm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L107",
+      "weight": 1.0,
+      "source": "ship_gen_bake",
+      "target": "ship_gen_bake_to_img",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "ship_gen_bake_rationale_1",
+      "target": "ship_gen_bake",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "ship_gen_bake_bake_kind",
+      "target": "ship_gen_bake_linear_to_srgb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "ship_gen_bake_bake_kind",
+      "target": "ship_gen_bake_normal_from_height",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L39",
+      "weight": 1.0,
+      "source": "ship_gen_bake_bake_kind",
+      "target": "ship_gen_bake_panel_grooves",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L38",
+      "weight": 1.0,
+      "source": "ship_gen_bake_bake_kind",
+      "target": "ship_gen_bake_tile_fbm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "ship_gen_bake_bake_kind",
+      "target": "ship_gen_bake_to_img",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "ship_gen_bake_rationale_33",
+      "target": "ship_gen_bake_bake_kind",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L63",
+      "weight": 1.0,
+      "source": "ship_gen_bake_rationale_63",
+      "target": "ship_gen_bake_tile_fbm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "ship_gen_bake_tile_fbm",
+      "target": "tools_ship_gen_bake_py_ndarray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "ship_gen_bake_panel_grooves",
+      "target": "tools_ship_gen_bake_py_ndarray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L85",
+      "weight": 1.0,
+      "source": "ship_gen_bake_rationale_85",
+      "target": "ship_gen_bake_panel_grooves",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L99",
+      "weight": 1.0,
+      "source": "ship_gen_bake_normal_from_height",
+      "target": "ship_gen_bake_to_img",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L94",
+      "weight": 1.0,
+      "source": "ship_gen_bake_normal_from_height",
+      "target": "tools_ship_gen_bake_py_image",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/bake.py",
+      "source_location": "L107",
+      "weight": 1.0,
+      "source": "ship_gen_bake_to_img",
+      "target": "tools_ship_gen_bake_py_image",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/build.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "ship_gen_build",
+      "target": "users_erik_projects_wivuullegiance_tools_ship_gen_build_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L36",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_compose",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L151",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_emit",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L142",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_load_catalog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L163",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_main",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L66",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_place_hp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L83",
+      "weight": 1.0,
+      "source": "ship_gen_generate",
+      "target": "ship_gen_generate_random_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L52",
+      "weight": 1.0,
+      "source": "ship_gen_generate_compose",
+      "target": "ship_gen_generate_place_hp",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L152",
+      "weight": 1.0,
+      "source": "ship_gen_generate_emit",
+      "target": "ship_gen_generate_compose",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L191",
+      "weight": 1.0,
+      "source": "ship_gen_generate_main",
+      "target": "ship_gen_generate_random_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "ship_gen_generate_rationale_84",
+      "target": "ship_gen_generate_random_ship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L142",
+      "weight": 1.0,
+      "source": "ship_gen_generate_load_catalog",
+      "target": "tools_ship_gen_generate_py_path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L182",
+      "weight": 1.0,
+      "source": "ship_gen_generate_main",
+      "target": "ship_gen_generate_load_catalog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "parameter_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L151",
+      "weight": 1.0,
+      "source": "ship_gen_generate_emit",
+      "target": "tools_ship_gen_generate_py_path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/generate.py",
+      "source_location": "L184",
+      "weight": 1.0,
+      "source": "ship_gen_generate_main",
+      "target": "ship_gen_generate_emit",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L132",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_acc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L28",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_build_glb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L184",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_mat_to_quat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L209",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_pad",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L170",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_quat_facing_z",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L138",
+      "weight": 1.0,
+      "source": "ship_gen_glb",
+      "target": "ship_gen_glb_tangents",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "ship_gen_glb_rationale_1",
+      "target": "ship_gen_glb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "ship_gen_glb_build_glb",
+      "target": "ship_gen_glb_acc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L108",
+      "weight": 1.0,
+      "source": "ship_gen_glb_build_glb",
+      "target": "ship_gen_glb_quat_facing_z",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L85",
+      "weight": 1.0,
+      "source": "ship_gen_glb_build_glb",
+      "target": "ship_gen_glb_tangents",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "ship_gen_glb_rationale_30",
+      "target": "ship_gen_glb_build_glb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L139",
+      "weight": 1.0,
+      "source": "ship_gen_glb_rationale_139",
+      "target": "ship_gen_glb_tangents",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L138",
+      "weight": 1.0,
+      "source": "ship_gen_glb_tangents",
+      "target": "tools_ship_gen_glb_py_ndarray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L181",
+      "weight": 1.0,
+      "source": "ship_gen_glb_quat_facing_z",
+      "target": "ship_gen_glb_mat_to_quat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/glb.py",
+      "source_location": "L171",
+      "weight": 1.0,
+      "source": "ship_gen_glb_rationale_171",
+      "target": "ship_gen_glb_quat_facing_z",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L120",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_box",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L94",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_box_corners",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L103",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_box_like",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L249",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_build_part",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L131",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_cylinder",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L186",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_ellipsoid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L264",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_euler_matrix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L34",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_mesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L304",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_norm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L275",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_place",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L125",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_taper",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L215",
+      "weight": 1.0,
+      "source": "ship_gen_parts",
+      "target": "ship_gen_parts_wedge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_1",
+      "target": "ship_gen_parts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L108",
+      "weight": 1.0,
+      "source": "ship_gen_parts_box_like",
+      "target": "ship_gen_parts_mesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L141",
+      "weight": 1.0,
+      "source": "ship_gen_parts_cylinder",
+      "target": "ship_gen_parts_mesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L203",
+      "weight": 1.0,
+      "source": "ship_gen_parts_ellipsoid",
+      "target": "ship_gen_parts_mesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "ship_gen_parts_mesh",
+      "target": "ship_gen_parts_mesh_init",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L41",
+      "weight": 1.0,
+      "source": "ship_gen_parts_mesh",
+      "target": "ship_gen_parts_mesh_quad",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L81",
+      "weight": 1.0,
+      "source": "ship_gen_parts_mesh",
+      "target": "ship_gen_parts_mesh_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "ship_gen_parts_mesh",
+      "target": "ship_gen_parts_mesh_tri",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L223",
+      "weight": 1.0,
+      "source": "ship_gen_parts_wedge",
+      "target": "ship_gen_parts_mesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L111",
+      "weight": 1.0,
+      "source": "ship_gen_parts_box_like",
+      "target": "ship_gen_parts_mesh_quad",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L42",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_42",
+      "target": "ship_gen_parts_mesh_quad",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L231",
+      "weight": 1.0,
+      "source": "ship_gen_parts_wedge",
+      "target": "ship_gen_parts_mesh_quad",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "ship_gen_parts_cylinder",
+      "target": "ship_gen_parts_mesh_tri",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L210",
+      "weight": 1.0,
+      "source": "ship_gen_parts_ellipsoid",
+      "target": "ship_gen_parts_mesh_tri",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L226",
+      "weight": 1.0,
+      "source": "ship_gen_parts_wedge",
+      "target": "ship_gen_parts_mesh_tri",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L117",
+      "weight": 1.0,
+      "source": "ship_gen_parts_box_like",
+      "target": "ship_gen_parts_mesh_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L183",
+      "weight": 1.0,
+      "source": "ship_gen_parts_cylinder",
+      "target": "ship_gen_parts_mesh_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L212",
+      "weight": 1.0,
+      "source": "ship_gen_parts_ellipsoid",
+      "target": "ship_gen_parts_mesh_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L237",
+      "weight": 1.0,
+      "source": "ship_gen_parts_wedge",
+      "target": "ship_gen_parts_mesh_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L107",
+      "weight": 1.0,
+      "source": "ship_gen_parts_box_like",
+      "target": "ship_gen_parts_box_corners",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L95",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_95",
+      "target": "ship_gen_parts_box_corners",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L122",
+      "weight": 1.0,
+      "source": "ship_gen_parts_box",
+      "target": "ship_gen_parts_box_like",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L128",
+      "weight": 1.0,
+      "source": "ship_gen_parts_taper",
+      "target": "ship_gen_parts_box_like",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L121",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_121",
+      "target": "ship_gen_parts_box",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L126",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_126",
+      "target": "ship_gen_parts_taper",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L156",
+      "weight": 1.0,
+      "source": "ship_gen_parts_cylinder",
+      "target": "ship_gen_parts_norm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L132",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_132",
+      "target": "ship_gen_parts_cylinder",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L187",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_187",
+      "target": "ship_gen_parts_ellipsoid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L216",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_216",
+      "target": "ship_gen_parts_wedge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L235",
+      "weight": 1.0,
+      "source": "ship_gen_parts_wedge",
+      "target": "ship_gen_parts_norm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L250",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_250",
+      "target": "ship_gen_parts_build_part",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L264",
+      "weight": 1.0,
+      "source": "ship_gen_parts_euler_matrix",
+      "target": "tools_ship_gen_parts_py_ndarray",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L278",
+      "weight": 1.0,
+      "source": "ship_gen_parts_place",
+      "target": "ship_gen_parts_euler_matrix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/ship-gen/parts.py",
+      "source_location": "L276",
+      "weight": 1.0,
+      "source": "ship_gen_parts_rationale_276",
+      "target": "ship_gen_parts_place",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "tools/simbot/SimBot.csproj",
@@ -30438,5 +32280,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "de99811f3a7ddb586d4fdb6c9139931b784ffb64"
+  "built_at_commit": "231b09dcecccf3b86fadcc3aa0c0645a5b8c6908"
 }

@@ -31,12 +31,21 @@ using StellarAllegiance.Shared;
 // =====================================================================
 public static class ShipModelLoader
 {
-    // Build the ship's mesh node: the procedural placeholder for `cls` plus a HP_ marker
-    // child for every hardpoint on the class's def. `mat` is the team/pig material the
+    // Build the ship's visual node. Prefers an authored GLB at res://assets/ships/<name>.glb
+    // (produced by tools/ship-gen) which carries its own mesh, baked PBR materials, and
+    // in-mesh HP_<Kind>_<Index> nodes in the same +Z-forward local frame. When no GLB is
+    // present it falls back to the procedural placeholder silhouette for `cls` plus a HP_
+    // marker child per hardpoint on the class's def. `mat` is the team/pig material the
     // caller resolved. A pod ignores `cls` for its silhouette and resolves its hardpoints
     // from the reserved pod def (DefRegistry.PodClassId), matching the stats/weapon path.
-    public static MeshInstance3D Build(DefRegistry defs, ShipClass cls, bool isPod, Material mat)
+    public static Node3D Build(DefRegistry defs, ShipClass cls, bool isPod, Material mat)
     {
+        // Authored GLB wins: it bundles geometry + baked materials + its own HP_ nodes, so we
+        // do NOT synthesize markers over it (the glb author placed them, per the data contract).
+        Node3D? glb = TryLoadShipGlb(cls, isPod, mat);
+        if (glb != null)
+            return glb;
+
         MeshInstance3D mesh = BuildPlaceholderMesh(cls, isPod, mat);
 
         // Markers are children of the mesh (the +Z-forward node), so a future .glb that
@@ -47,6 +56,44 @@ public static class ShipModelLoader
                 mesh.AddChild(MakeMarker(hp));
 
         return mesh;
+    }
+
+    // Try to load the authored ship GLB. Returns null when none exists (the common case until
+    // art lands), so Build cleanly falls back to the placeholder. The team/pig `mat` is applied
+    // as a MaterialOverride to every MeshInstance3D surface — same hull-tint-by-team contract as
+    // the placeholder. (The GLB's per-part baked materials are preserved in the asset and can be
+    // surfaced later by tinting instead of overriding; friend/foe currently reads off hull color.)
+    private static Node3D? TryLoadShipGlb(ShipClass cls, bool isPod, Material mat)
+    {
+        string path = $"res://assets/ships/{GlbBaseName(cls, isPod)}.glb";
+        if (!ResourceLoader.Exists(path))
+            return null;
+
+        var scene = GD.Load<PackedScene>(path);
+        Node3D? root = scene?.InstantiateOrNull<Node3D>();
+        if (root == null)
+            return null;
+
+        ApplyMaterialOverride(root, mat);
+        return root;
+    }
+
+    // The GLB basename per class/pod (matches tools/ship-gen/ships.yaml ship names).
+    private static string GlbBaseName(ShipClass cls, bool isPod)
+        => isPod ? "pod" : cls switch
+        {
+            ShipClass.Fighter => "fighter",
+            ShipClass.Bomber => "bomber",
+            _ => "scout",
+        };
+
+    // Recursively set the team/pig material override on every mesh surface in the loaded scene.
+    private static void ApplyMaterialOverride(Node node, Material mat)
+    {
+        if (node is MeshInstance3D mi)
+            mi.MaterialOverride = mat;
+        foreach (Node child in node.GetChildren())
+            ApplyMaterialOverride(child, mat);
     }
 
     // Attach the dynamic engine glow + team trail, reading the nozzle/anchor positions

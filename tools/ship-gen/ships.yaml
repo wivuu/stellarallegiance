@@ -1,0 +1,58 @@
+# Canonical ship catalog. The four hulls below are authored so their hardpoints
+# (kind / index / offset / forward) match shared/Defs.cs DefRegistry.ShipClasses()
+# exactly, so the GLBs are drop-in for client/assets/ships/<name>.glb:
+#
+#   NoseOffset = 3.0  -> every hull's Weapon_0 sits at z = +3.0, forward +Z.
+#   Engine nozzles point -Z (the +Z-forward convention).
+#
+# Coordinate convention: local +Z forward, +Y up, right-handed, ~1 unit = 1 m.
+# `mirror: x` duplicates a part (and its part-contributed hardpoints) across the X axis.
+
+ships:
+  # Scout: sleek cone, single main nozzle, one pinpoint cannon.
+  - name: scout
+    seed: 101
+    parts:
+      - {type: cylinder, material: hull, radius: 1.4, length: 4.5, taper: 0.0, segments: 16}
+      - {type: ellipsoid, material: cockpit, size: [0.55, 0.5, 0.9], pos: [0.0, 0.55, 0.4]}
+    hardpoints:
+      - {kind: Weapon, index: 0, offset: [0.0, 0.0, 3.0], forward: [0, 0, 1]}
+      - {kind: MainEngine, index: 0, offset: [0.0, 0.0, -2.25], forward: [0, 0, -1]}
+
+  # Fighter: chunkier hull, twin side boosters, wider-scatter cannon.
+  - name: fighter
+    seed: 102
+    parts:
+      - {type: taper, material: hull, size: [3.6, 1.6, 5.5], taper: [0.35, 0.5]}
+      - {type: ellipsoid, material: cockpit, size: [0.7, 0.55, 1.1], pos: [0.0, 0.6, 0.9]}
+      - {type: cylinder, material: engine, radius: 0.5, length: 2.2, taper: 0.85, segments: 12,
+         pos: [1.1, 0.0, -1.9], mirror: x}
+      - {type: wedge, material: hull, size: [0.18, 1.6, 2.6], rot: [0, 0, -90],
+         pos: [1.7, 0.0, -1.0], mirror: x}
+    hardpoints:
+      - {kind: Weapon, index: 0, offset: [0.0, 0.0, 3.0], forward: [0, 0, 1]}
+      - {kind: Booster, index: 0, offset: [-1.1, 0.0, -2.75], forward: [0, 0, -1]}
+      - {kind: Booster, index: 1, offset: [1.1, 0.0, -2.75], forward: [0, 0, -1]}
+
+  # Bomber: long heavy slab, twin main engines astern, slow hard-hitting cannon.
+  - name: bomber
+    seed: 103
+    parts:
+      - {type: taper, material: hull, size: [4.8, 2.2, 7.2], taper: [0.45, 0.6]}
+      - {type: ellipsoid, material: cockpit, size: [0.9, 0.7, 1.3], pos: [0.0, 0.85, 1.6]}
+      - {type: cylinder, material: engine, radius: 0.7, length: 2.6, taper: 0.9, segments: 14,
+         pos: [1.4, 0.0, -2.3], mirror: x}
+      - {type: wedge, material: hull, size: [0.22, 2.2, 3.4], rot: [0, 0, -90],
+         pos: [2.3, 0.0, -1.4], mirror: x}
+    hardpoints:
+      - {kind: Weapon, index: 0, offset: [0.0, 0.0, 3.0], forward: [0, 0, 1]}
+      - {kind: MainEngine, index: 0, offset: [-1.4, 0.0, -3.4], forward: [0, 0, -1]}
+      - {kind: MainEngine, index: 1, offset: [1.4, 0.0, -3.4], forward: [0, 0, -1]}
+
+  # Escape pod: small unarmed lifeboat (no Weapon hardpoint).
+  - name: pod
+    seed: 104
+    parts:
+      - {type: ellipsoid, material: hull, size: [1.4, 1.4, 1.4], segments: 16, rings: 10}
+    hardpoints:
+      - {kind: MainEngine, index: 0, offset: [0.0, 0.0, -2.25], forward: [0, 0, -1]}

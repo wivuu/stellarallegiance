@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781462075.005288,
-    "ast_hash": "692f452a51579ec5088239fcd5f6b70d",
+    "mtime": 1781462652.6816564,
+    "ast_hash": "e9d3a84fd2ae08da820b3730446d0279",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
