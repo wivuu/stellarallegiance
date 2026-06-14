@@ -25,8 +25,22 @@ uv run generate.py generate --seed 1 --count 20 --out build
 Output for each ship: `build/<name>.glb` (+ a generated `<name>.yaml` for the `generate`
 path) and a `build/manifest.json` (per-ship size, sha256, part/hardpoint counts).
 
-To use a ship in the client, copy its GLB into `client/assets/ships/<name>.glb`. The four
-canonical hulls (`scout`, `fighter`, `bomber`, `pod`) are already wired:
+To use a ship in the client:
+
+1. Copy its GLB into `client/assets/ships/<name>.glb`.
+2. **Import it into Godot** so `res://` can resolve it (this generates the `.glb.import`
+   sidecar + extracted textures — without it `ResourceLoader.Exists` returns false and the
+   loader silently falls back to the placeholder):
+
+   ```bash
+   # open the Godot editor once, or headless:
+   /Applications/Godot_mono.app/Contents/MacOS/Godot --headless --import --path client
+   ```
+
+   Commit the resulting `.import` sidecars and `<name>_N.png` files (same as the asteroid
+   assets); the `.godot/` cache stays gitignored.
+
+The four canonical hulls (`scout`, `fighter`, `bomber`, `pod`) are already wired:
 `client/scripts/ShipModelLoader.cs` loads `res://assets/ships/<name>.glb` when present and
 falls back to the procedural placeholder otherwise.
 
