@@ -117,6 +117,8 @@ public sealed class ClientHub
         {
             await ReceiveLoop(client, ct);
         }
+        catch (OperationCanceledException) { /* server shutting down */ }
+        catch (WebSocketException) { /* client vanished without a close handshake — normal */ }
         finally
         {
             _clients.TryRemove(client.Id, out _);
