@@ -72,6 +72,7 @@ public partial class RemoteShip : Node3D
 	// flight lights the engines, drifting/turning lets them idle.
 	private EngineGlow? _engine;
 	private float _maxSpeed = 1f;
+	private bool _canBoost;     // hull has an afterburner (AbThrust > 0); gates the synthesized plume
 
 	// PIG afterburner: drones have no input to read, so we synthesize occasional
 	// afterburner bursts when one swings onto a new heading (added realism — a
@@ -95,7 +96,10 @@ public partial class RemoteShip : Node3D
 		// leaves the harmless 1f default until the row lands — no baked tuning on the
 		// client. Pod-aware so a pod's proxy reads against its slow cap.
 		if (defs.TryGetStats((byte)row.Class, row.IsPod, out var s))
+		{
 			_maxSpeed = s.MaxSpeed;
+			_canBoost = s.AbThrust > 0f;
+		}
 		_burnCooldown = (float)GD.RandRange(1.0, 3.0);   // stagger drones' first burst roll
 		Push(row);
 	}
@@ -168,7 +172,10 @@ public partial class RemoteShip : Node3D
 		{
 			Vector3 fwd = (Quaternion * Vector3.Back).Normalized();   // ship-local +Z forward
 			float throttle = Velocity.Dot(fwd) / _maxSpeed;
-			float boost = IsPig ? PigBoost((float)delta) : Mathf.SmoothStep(0.92f, 1f, throttle);
+			// Boost-less hulls (Scout/Bomber/Pod) never light an afterburner, even at top
+			// speed or out of a hard turn — keeps remote VFX consistent with the flight model.
+			float boost = !_canBoost ? 0f
+				: IsPig ? PigBoost((float)delta) : Mathf.SmoothStep(0.92f, 1f, throttle);
 			_engine.SetThrottle(throttle, boost);
 		}
 

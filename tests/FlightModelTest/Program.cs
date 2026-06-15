@@ -122,16 +122,18 @@ static class Program
 
         // 4. Afterburner overspeed (feel #5): holding Boost ramps AbPower and
         //    raises the equilibrium to MaxSpeed*(1 + AbThrust/Thrust), then bleeds
-        //    off when released.
+        //    off when released. Tested on the Fighter — the only hull with an
+        //    afterburner (the Scout and Bomber boost was removed by design).
         {
+            var fighter = FlightModel.StatsFor(FlightModel.ClassFighter);
             var s = new ShipState { Rot = Quat.Identity };
             var boost = new ShipInputState { Thrust = 1f, Boost = true };
-            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, scout);
+            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, fighter);
             float boostSpeed = s.Vel.Length();
-            float boostCap = scout.MaxSpeed * (1f + scout.AbThrust / scout.Thrust);
-            if (boostSpeed <= scout.MaxSpeed + 0.5f || boostSpeed > boostCap + 0.5f)
+            float boostCap = fighter.MaxSpeed * (1f + fighter.AbThrust / fighter.Thrust);
+            if (boostSpeed <= fighter.MaxSpeed + 0.5f || boostSpeed > boostCap + 0.5f)
             {
-                Console.WriteLine($"FAIL: boosted speed {boostSpeed:R} not in ({scout.MaxSpeed}, {boostCap}]");
+                Console.WriteLine($"FAIL: boosted speed {boostSpeed:R} not in ({fighter.MaxSpeed}, {boostCap}]");
                 failures++;
             }
             else if (s.AbPower < 0.999f)
@@ -141,7 +143,34 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: afterburner overspeed {boostSpeed:R} in ({scout.MaxSpeed}, {boostCap:R}], AbPower={s.AbPower:R}");
+                Console.WriteLine($"PASS: afterburner overspeed {boostSpeed:R} in ({fighter.MaxSpeed}, {boostCap:R}], AbPower={s.AbPower:R}");
+            }
+        }
+
+        // 4b. No-boost hulls (design intent): the Scout, Bomber and Pod have no
+        //     afterburner, so AbThrust is 0 and holding Boost never exceeds MaxSpeed.
+        {
+            (string name, ShipStats st)[] noBoost =
+            {
+                ("Scout", FlightModel.StatsFor(FlightModel.ClassScout)),
+                ("Bomber", FlightModel.StatsFor(FlightModel.ClassBomber)),
+                ("Pod", FlightModel.StatsFor(FlightModel.ClassScout, isPod: true)),
+            };
+            foreach (var (name, st) in noBoost)
+            {
+                var s = new ShipState { Rot = Quat.Identity };
+                var boost = new ShipInputState { Thrust = 1f, Boost = true };
+                for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, st);
+                float speed = s.Vel.Length();
+                if (st.AbThrust != 0f || speed > st.MaxSpeed + 0.5f)
+                {
+                    Console.WriteLine($"FAIL: {name} should not boost — AbThrust={st.AbThrust:R}, boosted speed {speed:R} > MaxSpeed {st.MaxSpeed}");
+                    failures++;
+                }
+                else
+                {
+                    Console.WriteLine($"PASS: {name} no afterburner — boosted speed {speed:R} ~= MaxSpeed {st.MaxSpeed}");
+                }
             }
         }
 

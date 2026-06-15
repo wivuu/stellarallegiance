@@ -19,6 +19,7 @@ Archives:
 - CONFIG M5 addendum
 - Build Allegiance mesh loader (with hardpoint metadata); build a tool which converts FreeAllegiance model information into our ship/base config format.
 - Code cleanup and refactor
+- Make it so there is only 1 file per asset and the client can extract any additional things into memory or temp files as-needed rather than 4 different files per asset (i.e. base_0.png, .png.import, .glb, .glb.import)
 ---
 
 ## Roadmap (prioritized)

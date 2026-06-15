@@ -21,33 +21,67 @@ using StellarAllegiance.Shared;
 //  the glow's cosmetic scale (radius/length/range/trail width) stay keyed off the
 //  ship class — they're stand-in art, not authored content, until real meshes land.
 //
-//  FUTURE GLB CONVENTION: when a ship `<class>.glb` exists, the loader should load it
-//  in place of BuildPlaceholderMesh and read its same-named HP_<Kind>_<Index> nodes to
-//  OVERRIDE these procedural markers (the glb author places them in-mesh). The data
-//  contract — node name = HP_<Kind>_<Index>, local +Z = the hardpoint forward — is the
-//  same either way, so AttachEngineGlow and the weapon/muzzle code keep working
-//  unchanged. Turret hardpoints are carried as data + markers now; turret FIRING logic
-//  is out of scope (later phase).
+//  GLB CONVENTION (now wired, see docs/GLB-AND-HARDPOINT-FORMAT.md §4): when a ship
+//  `res://assets/ships/<class>.glb` exists it is loaded in place of BuildPlaceholderMesh,
+//  uniform-scaled (via GlbLoader) to the class's placeholder length so the fixed def
+//  hardpoints still land on the hull, keeping its own baked PBR materials (friend/foe is
+//  read from the HUD, not a hull tint). Any HP_<Kind>_<Index> node the glb author placed
+//  in-mesh OVERRIDES the equivalent def-seeded marker;
+//  the re-used Allegiance hulls carry none today, so the markers stand. The data contract
+//  — node name = HP_<Kind>_<Index>, local +Z = the hardpoint forward — is the same either
+//  way, so AttachEngineGlow and the weapon/muzzle code keep working unchanged. Turret
+//  hardpoints are carried as data + markers now; turret FIRING logic is out of scope.
 // =====================================================================
 public static class ShipModelLoader
 {
-    // Build the ship's mesh node: the procedural placeholder for `cls` plus a HP_ marker
-    // child for every hardpoint on the class's def. `mat` is the team/pig material the
-    // caller resolved. A pod ignores `cls` for its silhouette and resolves its hardpoints
-    // from the reserved pod def (DefRegistry.PodClassId), matching the stats/weapon path.
-    public static MeshInstance3D Build(DefRegistry defs, ShipClass cls, bool isPod, Material mat)
+    // Build the ship's model node: the authored `<class>.glb` hull if one is present (else the
+    // procedural placeholder for `cls`) plus a HP_ marker for every hardpoint on the class's
+    // def. `mat` is the team/pig material the caller resolved. A pod ignores `cls` for its
+    // silhouette and resolves its hardpoints from the reserved pod def (DefRegistry.PodClassId),
+    // matching the stats/weapon path.
+    //
+    // The returned node is a container in the ship's UNSCALED local frame: the visual hull is a
+    // child that may be independently scaled (an arbitrary-scale art asset is normalized to the
+    // class silhouette), while the HP_ markers stay on the container so they sit at the def's
+    // true world-unit offsets — the same frame AttachEngineGlow and PredictionController read.
+    public static Node3D Build(DefRegistry defs, ShipClass cls, bool isPod, Material mat)
     {
-        MeshInstance3D mesh = BuildPlaceholderMesh(cls, isPod, mat);
+        var root = new Node3D { Name = "ShipModel" };
 
-        // Markers are children of the mesh (the +Z-forward node), so a future .glb that
-        // replaces the mesh carries its own HP_ nodes in the same local frame.
+        Node3D hull = LoadHull(cls, isPod) ?? BuildPlaceholderMesh(cls, isPod, mat);
+        root.AddChild(hull);
+
+        // A GLB that carries its own HP_ node overrides the def-seeded marker (its author placed
+        // it in-mesh); otherwise the def marker stands. Either way the contract is identical.
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
         if (hardpoints != null)
             foreach (HardpointDef hp in hardpoints)
-                mesh.AddChild(MakeMarker(hp));
+                if (!GlbLoader.HasNode(hull, $"HP_{hp.Kind}_{hp.Index}"))
+                    root.AddChild(MakeMarker(hp));
 
-        return mesh;
+        return root;
     }
+
+    // Load `res://assets/ships/<class>.glb` (pod uses pod.glb) and ready it as a hull: scaled to
+    // the class's placeholder length, keeping the GLB's own baked PBR materials (friend/foe reads
+    // from the HUD, not a hull tint). Null when no asset exists, so Build falls back to the
+    // procedural placeholder.
+    private static Node3D? LoadHull(ShipClass cls, bool isPod)
+    {
+        string name = isPod ? "pod"
+            : cls switch { ShipClass.Fighter => "fighter", ShipClass.Bomber => "bomber", _ => "scout" };
+        Node3D? hull = GlbLoader.Load($"res://assets/ships/{name}.glb");
+        if (hull == null)
+            return null;
+        GlbLoader.NormalizeLongestAxis(hull, TargetLength(cls, isPod));
+        return hull;
+    }
+
+    // Longest local axis (world units) a loaded hull is uniform-scaled to, per class — the
+    // placeholder silhouette's length, so the fixed def muzzle (+Z≈3) and engine nozzles
+    // (−Z≈2.25–3.4) keep landing on the hull's nose/tail whatever scale the art was authored at.
+    private static float TargetLength(ShipClass cls, bool isPod) => isPod ? 2.8f
+        : cls switch { ShipClass.Fighter => 5.5f, ShipClass.Bomber => 7.2f, _ => 4.5f };
 
     // Attach the dynamic engine glow + team trail, reading the nozzle/anchor positions
     // from the class's engine hardpoints. The glow node is handed back to the ship node

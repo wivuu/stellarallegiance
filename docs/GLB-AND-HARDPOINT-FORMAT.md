@@ -120,9 +120,9 @@ keeps **no compile-time tuning fallback** — until the `MsgDefs` frame arrives 
 | **Fighter** (class 1) | `Weapon_0` @ (0,0,3) +Z; `Booster_0` @ (−1.1,0,−2.75) −Z; `Booster_1` @ (1.1,0,−2.75) −Z |
 | **Bomber** (class 2) | `Weapon_0` @ (0,0,3) +Z; `MainEngine_0` @ (−1.4,0,−3.4) −Z; `MainEngine_1` @ (1.4,0,−3.4) −Z |
 | **Pod** (class 255) | `MainEngine_0` @ (0,0,−2.25) −Z (unarmed) |
-| **Garrison base** (type 0) | `DockingEntrance_0` & `DockingExit_0` @ (0,0,R) +Z; `Light_0` @ (0,R,0); `Light_1` @ (0,−R,0) (R = base radius, 45) |
+| **Garrison base** (type 0) | `DockingEntrance_0` & `DockingExit_0` @ (0,0,R) +Z; `Light_0` @ (0,R,0); `Light_1` @ (0,−R,0) (R = base radius, 90) |
 
-`NoseOffset = 3` is the muzzle distance ahead of center; `BaseRadius = 45` matches the
+`NoseOffset = 3` is the muzzle distance ahead of center; `BaseRadius = 90` matches the
 client's render radius.
 
 ### Wire format (`Protocol.MsgDefs`)

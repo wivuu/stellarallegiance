@@ -127,7 +127,7 @@ namespace StellarAllegiance.Shared
         public const uint ProjectileLifeTicks = 16;     // ~1.45 s lifespan, then culled
         public const float ProjectileRadius = 1f;       // projectile hit sphere
         public const float NoseOffset = 3f;             // muzzle spawns this far ahead of ship center
-        public const float BaseRadius = 45f;            // matches the client's base render radius
+        public const float BaseRadius = 90f;            // matches the client's base render radius
         public const float BaseMaxHealth = 2000f;       // starting/restored base hull (win condition)
         public const float PodMaxHull = 20f;            // an ejected escape pod's (low) starting hull
 

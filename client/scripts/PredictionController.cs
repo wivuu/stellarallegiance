@@ -105,7 +105,11 @@ public partial class PredictionController : Node3D
 	// Engine-glow intensity for the afterburner. The boost's FLIGHT effect now rides
 	// in the networked ShipInput (FlightModel reads input.Boost), so this only drives
 	// the visual exhaust; ShipController sets it from the same Shift key each frame.
-	public void SetAfterburner(float boost) => _afterburner = Mathf.Clamp(boost, 0f, 1f);
+	// Gated on the hull actually HAVING an afterburner (AbThrust > 0) so a boost-less
+	// class (Scout/Bomber/Pod) shows no plume even while Shift is held — mirroring the
+	// FlightModel's own `i.Boost && st.AbThrust > 0` gate so VFX matches authority.
+	public void SetAfterburner(float boost)
+		=> _afterburner = _hasStats && _stats.AbThrust > 0f ? Mathf.Clamp(boost, 0f, 1f) : 0f;
 
 	public void Initialize(Ship row, DefRegistry defs)
 	{
