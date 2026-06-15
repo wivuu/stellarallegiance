@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781553873.9215524,
-    "ast_hash": "43bc571c704ab07f1981ab305ebaca0b",
+    "mtime": 1781554195.8606958,
+    "ast_hash": "5e5f66f4b1c549b6e694e4362d1fccd8",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781462958.5543504,
-    "ast_hash": "aa3a00d775bdfca929d2008d49eda74b",
+    "mtime": 1781554016.9540308,
+    "ast_hash": "e1e020ecb2519a765587adf13046359f",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {

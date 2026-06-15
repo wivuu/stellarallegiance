@@ -2894,7 +2894,7 @@
       "label": ".SetAfterburner()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L108",
+      "source_location": "L111",
       "id": "scripts_predictioncontroller_predictioncontroller_setafterburner",
       "community": 6,
       "norm_label": ".setafterburner()"
@@ -2903,7 +2903,7 @@
       "label": ".Initialize()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L110",
+      "source_location": "L114",
       "id": "scripts_predictioncontroller_predictioncontroller_initialize",
       "community": 6,
       "norm_label": ".initialize()"
@@ -2912,7 +2912,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L110",
+      "source_location": "L114",
       "id": "client_scripts_predictioncontroller_cs_ship",
       "community": 6,
       "norm_label": "ship"
@@ -2921,7 +2921,7 @@
       "label": ".Step()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L145",
+      "source_location": "L149",
       "id": "scripts_predictioncontroller_predictioncontroller_step",
       "community": 6,
       "norm_label": ".step()"
@@ -2930,7 +2930,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L145",
+      "source_location": "L149",
       "id": "client_scripts_predictioncontroller_cs_shipinputstate",
       "community": 6,
       "norm_label": "shipinputstate"
@@ -2939,7 +2939,7 @@
       "label": "PredictedShot",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L145",
+      "source_location": "L149",
       "id": "predictedshot",
       "community": 6,
       "norm_label": "predictedshot"
@@ -2948,7 +2948,7 @@
       "label": ".InjectDivergence()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L200",
+      "source_location": "L204",
       "id": "scripts_predictioncontroller_predictioncontroller_injectdivergence",
       "community": 6,
       "norm_label": ".injectdivergence()"
@@ -2957,7 +2957,7 @@
       "label": ".OnAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L218",
+      "source_location": "L222",
       "id": "scripts_predictioncontroller_predictioncontroller_onauthoritative",
       "community": 6,
       "norm_label": ".onauthoritative()"
@@ -2966,7 +2966,7 @@
       "label": ".HardSnapTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L272",
+      "source_location": "L276",
       "id": "scripts_predictioncontroller_predictioncontroller_hardsnapto",
       "community": 6,
       "norm_label": ".hardsnapto()"
@@ -2975,7 +2975,7 @@
       "label": ".RebaseTo()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L295",
+      "source_location": "L299",
       "id": "scripts_predictioncontroller_predictioncontroller_rebaseto",
       "community": 6,
       "norm_label": ".rebaseto()"
@@ -2984,7 +2984,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L308",
+      "source_location": "L312",
       "id": "scripts_predictioncontroller_predictioncontroller_process",
       "community": 6,
       "norm_label": "._process()"
@@ -2993,7 +2993,7 @@
       "label": ".SpringToZero()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L330",
+      "source_location": "L334",
       "id": "scripts_predictioncontroller_predictioncontroller_springtozero",
       "community": 6,
       "norm_label": ".springtozero()"
@@ -3002,7 +3002,7 @@
       "label": ".QuatToRotVec()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L337",
+      "source_location": "L341",
       "id": "scripts_predictioncontroller_predictioncontroller_quattorotvec",
       "community": 6,
       "norm_label": ".quattorotvec()"
@@ -3011,7 +3011,7 @@
       "label": ".RotVecToQuat()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L347",
+      "source_location": "L351",
       "id": "scripts_predictioncontroller_predictioncontroller_rotvectoquat",
       "community": 6,
       "norm_label": ".rotvectoquat()"
@@ -3020,7 +3020,7 @@
       "label": ".ApplyVisual()",
       "file_type": "code",
       "source_file": "client/scripts/PredictionController.cs",
-      "source_location": "L357",
+      "source_location": "L361",
       "id": "scripts_predictioncontroller_predictioncontroller_applyvisual",
       "community": 6,
       "norm_label": ".applyvisual()"
@@ -3173,7 +3173,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L83",
+      "source_location": "L75",
       "id": "client_scripts_remoteship_cs_bool",
       "community": 14,
       "norm_label": "bool"
@@ -3182,7 +3182,7 @@
       "label": ".AttachEngine()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L86",
+      "source_location": "L87",
       "id": "scripts_remoteship_remoteship_attachengine",
       "community": 14,
       "norm_label": ".attachengine()"
@@ -3191,7 +3191,7 @@
       "label": ".Initialize()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L88",
+      "source_location": "L89",
       "id": "scripts_remoteship_remoteship_initialize",
       "community": 14,
       "norm_label": ".initialize()"
@@ -3200,7 +3200,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L88",
+      "source_location": "L89",
       "id": "client_scripts_remoteship_cs_ship",
       "community": 14,
       "norm_label": "ship"
@@ -3209,7 +3209,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L88",
+      "source_location": "L89",
       "id": "client_scripts_remoteship_cs_defregistry",
       "community": 14,
       "norm_label": "defregistry"
@@ -3218,7 +3218,7 @@
       "label": ".OnAuthoritative()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L103",
+      "source_location": "L107",
       "id": "scripts_remoteship_remoteship_onauthoritative",
       "community": 14,
       "norm_label": ".onauthoritative()"
@@ -3227,7 +3227,7 @@
       "label": ".SafeRot()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L110",
+      "source_location": "L114",
       "id": "scripts_remoteship_remoteship_saferot",
       "community": 14,
       "norm_label": ".saferot()"
@@ -3236,7 +3236,7 @@
       "label": "Quaternion",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L110",
+      "source_location": "L114",
       "id": "client_scripts_remoteship_cs_quaternion",
       "community": 14,
       "norm_label": "quaternion"
@@ -3245,7 +3245,7 @@
       "label": ".IsFinite()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L119",
+      "source_location": "L123",
       "id": "scripts_remoteship_remoteship_isfinite",
       "community": 14,
       "norm_label": ".isfinite()"
@@ -3254,7 +3254,7 @@
       "label": ".Push()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L121",
+      "source_location": "L125",
       "id": "scripts_remoteship_remoteship_push",
       "community": 14,
       "norm_label": ".push()"
@@ -3263,7 +3263,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L157",
+      "source_location": "L161",
       "id": "scripts_remoteship_remoteship_process",
       "community": 14,
       "norm_label": "._process()"
@@ -3272,7 +3272,7 @@
       "label": ".PigBoost()",
       "file_type": "code",
       "source_file": "client/scripts/RemoteShip.cs",
-      "source_location": "L225",
+      "source_location": "L232",
       "id": "scripts_remoteship_remoteship_pigboost",
       "community": 14,
       "norm_label": ".pigboost()"

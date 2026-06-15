@@ -3749,7 +3749,7 @@
       "label": ".InputsEqual()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L90",
+      "source_location": "L89",
       "id": "scripts_shipcontroller_shipcontroller_inputsequal",
       "community": 8,
       "norm_label": ".inputsequal()"
@@ -3758,7 +3758,7 @@
       "label": "Dictionary<uint, double>",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L104",
+      "source_location": "L103",
       "id": "dictionary_uint_double",
       "community": 8,
       "norm_label": "dictionary<uint, double>"
@@ -3767,7 +3767,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L115",
+      "source_location": "L114",
       "id": "scripts_shipcontroller_shipcontroller_ready",
       "community": 8,
       "norm_label": "._ready()"
@@ -3776,7 +3776,7 @@
       "label": ".RequestSpawn()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L157",
+      "source_location": "L156",
       "id": "scripts_shipcontroller_shipcontroller_requestspawn",
       "community": 8,
       "norm_label": ".requestspawn()"
@@ -3785,7 +3785,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L162",
+      "source_location": "L161",
       "id": "scripts_shipcontroller_shipcontroller_process",
       "community": 8,
       "norm_label": "._process()"
@@ -3821,7 +3821,7 @@
       "label": "._Input()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L339",
+      "source_location": "L346",
       "id": "scripts_shipcontroller_shipcontroller_input",
       "community": 8,
       "norm_label": "._input()"
@@ -3830,7 +3830,7 @@
       "label": "InputEvent",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L339",
+      "source_location": "L346",
       "id": "client_scripts_shipcontroller_cs_inputevent",
       "community": 8,
       "norm_label": "inputevent"
@@ -3839,7 +3839,7 @@
       "label": ".HandleMouseCapture()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L349",
+      "source_location": "L368",
       "id": "scripts_shipcontroller_shipcontroller_handlemousecapture",
       "community": 8,
       "norm_label": ".handlemousecapture()"
@@ -3848,7 +3848,7 @@
       "label": ".Axis()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L379",
+      "source_location": "L375",
       "id": "scripts_shipcontroller_shipcontroller_axis",
       "community": 8,
       "norm_label": ".axis()"
@@ -3857,7 +3857,7 @@
       "label": "Key",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L379",
+      "source_location": "L375",
       "id": "key",
       "community": 8,
       "norm_label": "key"
@@ -3866,7 +3866,7 @@
       "label": ".ReadInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L387",
+      "source_location": "L383",
       "id": "scripts_shipcontroller_shipcontroller_readinput",
       "community": 8,
       "norm_label": ".readinput()"
@@ -3875,7 +3875,7 @@
       "label": ".AutoInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L430",
+      "source_location": "L426",
       "id": "scripts_shipcontroller_shipcontroller_autoinput",
       "community": 8,
       "norm_label": ".autoinput()"
@@ -4750,7 +4750,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L48",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "community": 65,
+      "community": 58,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -5254,7 +5254,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L755",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 19,
+      "community": 5,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -10126,7 +10126,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 58,
+      "community": 5,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -10162,7 +10162,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L536",
-      "community": 58,
+      "community": 5,
       "norm_label": ".onbasedelete()",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete"
     },
@@ -10477,7 +10477,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 19,
+      "community": 5,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -10486,7 +10486,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 19,
+      "community": 5,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -10504,7 +10504,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 19,
+      "community": 5,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -10693,7 +10693,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L239",
-      "community": 19,
+      "community": 5,
       "norm_label": "eventcontext",
       "id": "eventcontext"
     },
@@ -10702,7 +10702,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 19,
+      "community": 5,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -32185,5 +32185,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "0beb573b805f3fd8fb5baf4f999b623e65dcadf9"
+  "built_at_commit": "36b6d3212f05ba9a3bca4bf7ea63cb52e9a2868d"
 }

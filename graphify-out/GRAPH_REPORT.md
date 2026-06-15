@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-15)
 
 ## Corpus Check
-- 65 files · ~93,924 words
+- 65 files · ~93,975 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1197 nodes · 2003 edges · 67 communities (57 shown, 10 thin omitted)
+- 1197 nodes · 2003 edges · 66 communities (57 shown, 9 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0beb573b`
+- Built from commit: `36b6d321`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -34,7 +34,6 @@
 - [[_COMMUNITY_Community 16|Community 16]]
 - [[_COMMUNITY_Dust Field Environment|Dust Field Environment]]
 - [[_COMMUNITY_Ship Math Utilities|Ship Math Utilities]]
-- [[_COMMUNITY_Community 19|Community 19]]
 - [[_COMMUNITY_Flight Model Tests|Flight Model Tests]]
 - [[_COMMUNITY_Asteroid Normal Baking|Asteroid Normal Baking]]
 - [[_COMMUNITY_GLB Export Pipeline|GLB Export Pipeline]]
@@ -108,7 +107,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (67 total, 10 thin omitted)
+## Communities (66 total, 9 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -129,6 +128,10 @@ Nodes (34): _base_params(), _bumps(), _colour_params(), _crystal(), _cull(), _de
 ### Community 4 - "Connection Overlay UI"
 Cohesion: 0.17
 Nodes (10): CanvasLayer, ConnectionManager, Label, Player, ShipController, WorldRenderer, CanvasLayer, Control (+2 more)
+
+### Community 5 - "PigAI NPC Behavior"
+Cohesion: 0.26
+Nodes (6): Aleph, Aleph, EventContext, Projectile, EventContext, Projectile
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.07
@@ -181,10 +184,6 @@ Nodes (3): count, failures, models
 ### Community 18 - "Ship Math Utilities"
 Cohesion: 0.27
 Nodes (4): Quat, ShipInputState, ShipSim, Vec3
-
-### Community 19 - "Community 19"
-Cohesion: 0.47
-Nodes (3): Projectile, EventContext, Projectile
 
 ### Community 20 - "Flight Model Tests"
 Cohesion: 0.21
@@ -288,7 +287,7 @@ Nodes (25): BaseDef, DbConnection, GameNetClient, Identity, string, BaseDef, byt
 
 ### Community 58 - "Community 58"
 Cohesion: 0.29
-Nodes (5): Base, Base, Color, EventContext, BaseHealthBar
+Nodes (5): Base, Base, Color, StandardMaterial3D, BaseHealthBar
 
 ### Community 59 - "Community 59"
 Cohesion: 0.27
@@ -307,8 +306,8 @@ Cohesion: 0.29
 Nodes (3): MeshInstance3D, Vector3, MeshInstance3D
 
 ### Community 65 - "Community 65"
-Cohesion: 0.19
-Nodes (4): Ship, ShipClass, StandardMaterial3D, Node3D
+Cohesion: 0.21
+Nodes (3): Ship, ShipClass, Node3D
 
 ### Community 67 - "Community 67"
 Cohesion: 0.40
@@ -321,12 +320,12 @@ Nodes (3): Button, Button, ShipClass
 ## Knowledge Gaps
 - **349 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Marker3D`, `BaseBeacon` (+344 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 67`, `PigAI NPC Behavior`, `Community 43`, `Target Markers HUD`, `Community 19`, `Community 56`, `Community 58`, `Community 63`?**
+- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 67`, `PigAI NPC Behavior`, `Community 43`, `Target Markers HUD`, `Community 56`, `Community 58`, `Community 63`?**
   _High betweenness centrality (0.157) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 43` to `AlephView World State`, `Community 65`, `Community 37`, `Client-Side Prediction`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Starscape Background`, `Community 58`?**
   _High betweenness centrality (0.133) - this node is a cross-community bridge._
