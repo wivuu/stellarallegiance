@@ -343,9 +343,9 @@ public partial class ShipController : Node
 	}
 
 	// Capture the cursor for mouse-look while flying; release it for the spawn menu.
-	// Esc toggles release (so the OS cursor is reachable mid-flight); a click (or Esc)
-	// recaptures. Edge-detected so a held key/button doesn't thrash the mode. Skipped
-	// under --autofly (headless has no real cursor and must not grab focus).
+	// Esc always RELEASES the cursor (one-way, so the OS cursor is reachable mid-flight);
+	// a left click in the viewport recaptures it. Edge-detected so a held key/button doesn't
+	// thrash the mode. Skipped under --autofly (headless has no real cursor and must not grab focus).
 	private void HandleMouseCapture(bool flying)
 	{
 		// Chat owns the cursor while typing and the sector overview frees it for dragging;
@@ -365,13 +365,13 @@ public partial class ShipController : Node
 		{
 			if (captured) Input.MouseMode = Input.MouseModeEnum.Visible;   // free cursor for the menu
 		}
-		else if (captured)
+		else if (escPressed)
 		{
-			if (escPressed) Input.MouseMode = Input.MouseModeEnum.Visible;
+			Input.MouseMode = Input.MouseModeEnum.Visible;   // Esc always frees the cursor for the OS
 		}
-		else if (clickPressed || escPressed)
+		else if (clickPressed && !captured)
 		{
-			Input.MouseMode = Input.MouseModeEnum.Captured;
+			Input.MouseMode = Input.MouseModeEnum.Captured;   // click the viewport to re-grab mouse-look
 			_mouseDelta = Vector2.Zero;   // drop any motion from the recapture gesture
 		}
 	}
