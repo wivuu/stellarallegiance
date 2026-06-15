@@ -17,7 +17,6 @@ Archives:
 
 ## QUICKNOTES:
 - CONFIG M5 addendum
-- Sector overview with F3 toggle
 - Build Allegiance mesh loader (with hardpoint metadata); build a tool which converts FreeAllegiance model information into our ship/base config format.
 - Code cleanup and refactor
 ---
