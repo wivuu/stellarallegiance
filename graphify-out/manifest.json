@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781442487.6047611,
+    "mtime": 1781476466.6055844,
     "ast_hash": "7c5ab75b645b1478cf367d6a18219cbd",
     "semantic_hash": ""
   },
@@ -55,8 +55,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Minimap.cs": {
-    "mtime": 1781442917.7709055,
-    "ast_hash": "ffa132bf65ca75dac05f861313a9de70",
+    "mtime": 1781481958.7231894,
+    "ast_hash": "55665b1400a3ee1b7fd7f5b47cbc9a36",
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781442982.6978772,
-    "ast_hash": "85916046fc483ae610b9618e1c72361d",
+    "mtime": 1781477178.5013978,
+    "ast_hash": "68c8a9f6cf01ae41065b703dde9e01ae",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -90,13 +90,13 @@
     "semantic_hash": ""
   },
   "client/scripts/Sun.cs": {
-    "mtime": 1780766030.2042913,
-    "ast_hash": "2280892dfca65720b99510a239ec7c6f",
+    "mtime": 1781481937.388884,
+    "ast_hash": "ce2905691416829d38180bb15bc61429",
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781445432.3967664,
-    "ast_hash": "6ed5accaa70debec24addd9fe335794c",
+    "mtime": 1781477183.2903721,
+    "ast_hash": "86ad142f67594d5a5f4f3b1bad6466cf",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781442885.5398314,
-    "ast_hash": "ad4eafe78d8f1b62777b93e14373f53c",
+    "mtime": 1781481920.0727673,
+    "ast_hash": "d36b3dccdfc36ca38ef2035cc230a019",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -200,7 +200,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781443032.7580185,
+    "mtime": 1781476466.6063538,
     "ast_hash": "536f7f5537dfabbf4b5097c4eafb8f2d",
     "semantic_hash": ""
   },
@@ -240,8 +240,8 @@
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
-    "mtime": 1781443193.358477,
-    "ast_hash": "fb879064f1926cb2ae336ca130617b93",
+    "mtime": 1781463381.9799562,
+    "ast_hash": "43d380d6430e0fa3a5fca780a291f61a",
     "semantic_hash": ""
   },
   "tools/simbot/SimBot.csproj": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781400399.2934253,
-    "ast_hash": "36853105185a5aa1afed19c2a98c6a7f",
+    "mtime": 1781462958.5543504,
+    "ast_hash": "aa3a00d775bdfca929d2008d49eda74b",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -327,6 +327,11 @@
   "shared/Defs.cs": {
     "mtime": 1781441410.182747,
     "ast_hash": "1856f570c8298fbc9c3b964066b76c57",
+    "semantic_hash": ""
+  },
+  "client/scripts/SectorOverview.cs": {
+    "mtime": 1781482031.468828,
+    "ast_hash": "7203fec53eb9b8db3f02e70a9572c8cf",
     "semantic_hash": ""
   }
 }

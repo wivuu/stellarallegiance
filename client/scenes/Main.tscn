@@ -1,6 +1,7 @@
-[gd_scene load_steps=12 format=3 uid="uid://main"]
+[gd_scene load_steps=13 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SectorOverview.cs" id="11"]
 [ext_resource type="Script" path="res://scripts/DefRegistry.cs" id="9"]
 [ext_resource type="Script" path="res://scripts/GameNetClient.cs" id="10"]
 [ext_resource type="Script" path="res://scripts/WorldRenderer.cs" id="2"]
@@ -76,6 +77,9 @@ script = ExtResource("6")
 current = true
 far = 6000.0
 script = ExtResource("4")
+
+[node name="SectorOverview" type="Node3D" parent="."]
+script = ExtResource("11")
 
 [node name="Hud" type="CanvasLayer" parent="."]
 script = ExtResource("5")

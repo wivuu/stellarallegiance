@@ -107,6 +107,27 @@ public partial class WorldRenderer : Node3D
 	public Vector3 LocalSectorCenter =>
 		_sectors.TryGetValue(_localSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
 
+	// Sector overview (F3) can temporarily VIEW a sector other than the local one to
+	// inspect it. This only retargets which sector's nodes are shown (and the backdrop);
+	// gameplay state (_localSector, the HUD boundary warning, etc.) is untouched. Null =
+	// follow the local sector, which is the normal case.
+	private uint? _viewOverride;
+	public uint ViewSector => _viewOverride ?? _localSector;
+	public float ViewSectorRadius => _sectors.TryGetValue(ViewSector, out var s) ? s.Radius : 0f;
+	public Vector3 ViewSectorCenter =>
+		_sectors.TryGetValue(ViewSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
+
+	// Point the overview at a sector (null restores the local sector). Repaints the
+	// backdrop and re-evaluates every node's visibility for the new view sector.
+	public void SetViewSector(uint? sector)
+	{
+		if (_viewOverride == sector)
+			return;
+		_viewOverride = sector;
+		_starscape?.SetSector(ViewSector);
+		RefreshSectorVisibility();
+	}
+
 	private byte? _localTeam;
 
 	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
@@ -278,17 +299,17 @@ public partial class WorldRenderer : Node3D
 	private void SetNodeSector(Node3D n, uint sector)
 	{
 		n.SetMeta("sector", (int)sector);
-		n.Visible = sector == _localSector;
+		n.Visible = sector == ViewSector;
 	}
 
-	// Re-evaluate every world node's visibility against the current local sector —
-	// called when the local ship warps to a new sector.
+	// Re-evaluate every world node's visibility against the current view sector —
+	// called when the local ship warps, or when the overview retargets the view.
 	private void RefreshSectorVisibility()
 	{
 		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
 			foreach (var child in group.GetChildren())
 				if (child is Node3D n && n.HasMeta("sector"))
-					n.Visible = (int)n.GetMeta("sector") == (int)_localSector;
+					n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
 	}
 
 	// Drop a transient, self-freeing effect into the world at a sector-local position. Tagged

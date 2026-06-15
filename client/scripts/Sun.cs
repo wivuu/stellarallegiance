@@ -2,25 +2,23 @@ using Godot;
 
 // A purely cosmetic sun parked in the sky. It sits in the direction the scene's
 // DirectionalLight3D shines FROM, so the visible disc lines up with where the
-// light (and shadows) say it should be. It tracks the camera's POSITION but not
-// its rotation: anchored at a huge fixed distance, it holds the same angular spot
-// in the sky no matter where the pilot flies, and because it slides with the
-// camera you can never close the gap to it. A billboarded, additively-blended
-// emissive quad reads as a glowing star and feeds the environment's glow/bloom.
+// light (and shadows) say it should be. It tracks the ACTIVE camera's POSITION but
+// not its rotation: anchored at a huge fixed distance from whichever camera is
+// rendering (chase or the F3 overview), it holds the same angular spot in the sky
+// and stays a distant backdrop rather than a physical body you can orbit. A
+// billboarded, additively-blended emissive quad reads as a glowing star and feeds
+// the environment's glow/bloom.
 public partial class Sun : MeshInstance3D
 {
 	// Far enough to sit well beyond any sector geometry but inside the camera's
-	// far plane (6000). The quad is sized to subtend a believable stylised disc.
+	// far plane. The quad is sized to subtend a believable stylised disc.
 	private const float Distance = 4500f;
 	private const float Size = 900f;
 
-	private Camera3D _camera = null!;
 	private Vector3 _skyDir; // world-space unit vector pointing toward the sun
 
 	public override void _Ready()
 	{
-		_camera = GetNode<Camera3D>("../Camera3D");
-
 		// A DirectionalLight3D emits along its local -Z, so the light SOURCE lies in
 		// the opposite direction (+Z of its basis). Read it once: the light is static.
 		var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
@@ -33,9 +31,13 @@ public partial class Sun : MeshInstance3D
 
 	public override void _Process(double delta)
 	{
-		// Follow the camera's position only — orientation is handled by the
-		// billboard, and ignoring camera rotation keeps the sun fixed in the sky.
-		GlobalPosition = _camera.GlobalPosition + _skyDir * Distance;
+		// Anchor to whichever camera is currently rendering so the sun always sits in
+		// the sky backdrop — including the F3 overview, where following the (parked)
+		// chase camera would otherwise leave it as a physical quad sitting in the sector.
+		var cam = GetViewport().GetCamera3D();
+		if (cam == null)
+			return;
+		GlobalPosition = cam.GlobalPosition + _skyDir * Distance;
 	}
 
 	private static StandardMaterial3D BuildMaterial()

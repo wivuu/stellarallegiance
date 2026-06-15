@@ -161,8 +161,9 @@ public partial class ShipController : Node
 
 	public override void _Process(double delta)
 	{
-		// Neutral input while the chat box is open so typing never steers or fires.
-		_input = _autoFly ? AutoInput() : (Chat.Capturing ? new ShipInputState() : ReadInput(delta));
+		// Neutral input while the chat box is open or the sector overview map is up, so
+		// typing/panning never steers or fires — the ship coasts on held/neutral input.
+		_input = _autoFly ? AutoInput() : (Chat.Capturing || SectorOverview.Active ? new ShipInputState() : ReadInput(delta));
 
 		// Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
 		// the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
@@ -239,7 +240,7 @@ public partial class ShipController : Node
 		// ShipInput so the server integrates the same boost the client predicted (no
 		// reconcile storm), and still drives the engine glow. Autofly pins it on so
 		// headless runs exercise the boost + exhaust path.
-		bool boost = _autoFly || (!Chat.Capturing && Input.IsPhysicalKeyPressed(Key.Shift));
+		bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && Input.IsPhysicalKeyPressed(Key.Shift));
 		_input.Boost = boost;
 		pc.SetAfterburner(boost ? 1f : 0f);
 
@@ -347,8 +348,9 @@ public partial class ShipController : Node
 	// under --autofly (headless has no real cursor and must not grab focus).
 	private void HandleMouseCapture(bool flying)
 	{
-		// Chat owns the cursor while you're typing; don't fight it.
-		if (_autoFly || Chat.Capturing) return;
+		// Chat owns the cursor while typing and the sector overview frees it for dragging;
+		// don't fight either — they restore the capture state when they close.
+		if (_autoFly || Chat.Capturing || SectorOverview.Active) return;
 
 		bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
 		bool escPressed = esc && !_escHeld;

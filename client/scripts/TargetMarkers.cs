@@ -60,6 +60,14 @@ public partial class TargetMarkers : Control
 
 	public override void _Process(double delta)
 	{
+		// The sector overview makes its own camera current; our brackets project through
+		// the (now inactive) chase camera, so hide entirely while the map is up.
+		if (SectorOverview.Active)
+		{
+			Visible = false;
+			return;
+		}
+		Visible = true;
 		HandleFocusCycle();
 		QueueRedraw();
 	}
