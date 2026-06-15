@@ -34,6 +34,24 @@ public partial class Minimap : Control
 	private ConnectionManager _cm = null!;
 	private WorldRenderer _world = null!;
 
+	// Screen-space node centers from the last draw, so the F3 overview can hit-test
+	// clicks against the sector nodes (see TryClickSector).
+	private readonly Dictionary<uint, Vector2> _nodePos = new();
+
+	// Hit-test a viewport-space point against the drawn sector nodes. Returns the
+	// sector id of the node under the point, if any (used to retarget the F3 overview).
+	public bool TryClickSector(Vector2 point, out uint sector)
+	{
+		foreach (var (id, p) in _nodePos)
+			if (point.DistanceTo(p) <= NodeRadius + 3f)
+			{
+				sector = id;
+				return true;
+			}
+		sector = 0;
+		return false;
+	}
+
 	public void Init(ConnectionManager cm, WorldRenderer world)
 	{
 		_cm = cm;
@@ -66,7 +84,8 @@ public partial class Minimap : Control
 		// so the nodes hold their places regardless of the random aleph geometry.
 		Vector2 center = panelPos + new Vector2(PanelW * 0.5f, PanelH * 0.5f + 12f);
 		int n = sectors.Count;
-		var pos = new Dictionary<uint, Vector2>();
+		var pos = _nodePos;   // populate the field so clicks can hit-test these centers
+		pos.Clear();
 		for (int i = 0; i < n; i++)
 		{
 			Vector2 p = center;

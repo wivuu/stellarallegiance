@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781442487.6047611,
+    "mtime": 1781476466.6055844,
     "ast_hash": "7c5ab75b645b1478cf367d6a18219cbd",
     "semantic_hash": ""
   },
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781442982.6978772,
-    "ast_hash": "85916046fc483ae610b9618e1c72361d",
+    "mtime": 1781477178.5013978,
+    "ast_hash": "68c8a9f6cf01ae41065b703dde9e01ae",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781445432.3967664,
-    "ast_hash": "6ed5accaa70debec24addd9fe335794c",
+    "mtime": 1781477183.2903721,
+    "ast_hash": "86ad142f67594d5a5f4f3b1bad6466cf",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -200,7 +200,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781443032.7580185,
+    "mtime": 1781476466.6063538,
     "ast_hash": "536f7f5537dfabbf4b5097c4eafb8f2d",
     "semantic_hash": ""
   },
@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781462075.005288,
-    "ast_hash": "692f452a51579ec5088239fcd5f6b70d",
+    "mtime": 1781462652.6816564,
+    "ast_hash": "e9d3a84fd2ae08da820b3730446d0279",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
@@ -240,8 +240,8 @@
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
-    "mtime": 1781443193.358477,
-    "ast_hash": "fb879064f1926cb2ae336ca130617b93",
+    "mtime": 1781463381.9799562,
+    "ast_hash": "43d380d6430e0fa3a5fca780a291f61a",
     "semantic_hash": ""
   },
   "tools/simbot/SimBot.csproj": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781400399.2934253,
-    "ast_hash": "36853105185a5aa1afed19c2a98c6a7f",
+    "mtime": 1781462958.5543504,
+    "ast_hash": "aa3a00d775bdfca929d2008d49eda74b",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -327,6 +327,11 @@
   "shared/Defs.cs": {
     "mtime": 1781441410.182747,
     "ast_hash": "1856f570c8298fbc9c3b964066b76c57",
+    "semantic_hash": ""
+  },
+  "client/scripts/SectorOverview.cs": {
+    "mtime": 1781481520.4096525,
+    "ast_hash": "4cdcaa9b05d32365f3b8a5a50098b771",
     "semantic_hash": ""
   }
 }

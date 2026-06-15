@@ -16,14 +16,10 @@ Archives:
 ---
 
 ## QUICKNOTES:
-- We need to figure out how to load-test the system, lots of networked clients and a server running; we want
-to determine how many players we can support in a single instance, and what the bottlenecks are.
-- Determine where the bottlenecks are in the current AI implementation, and suggest optimizations
-  - Idea: 2 birds with one stone - refactor the AI to run on client-side, instead of single-threaded server ticks; a client (authorized to) can spawn multiple thinking AI drones with a command like "/spawn-drone 5" which would spawn 5 drones that run their own thinking loops on the client, and report their actions to the server. This would allow us to scale the number of AI drones with the number of clients, and reduce the load on the server.
-  - Alternative: A headless client that can spawn and run AI workers and report their actions to the server, which would allow us to scale the number of AI drones independently of the number of human clients.
-- Procedural spaceship generator - Using reusable/modular parts, be able to procedurally generate a wide variety of spaceship models with different shapes, sizes, textures, etc. An individual ship would be defined by a what parts it is made up of and defined in YAML. A build process would then take the YAML and produce a GLB file
 - CONFIG M5 addendum
-- Create a sidecar process for physics simulation. Offload all physics calculations to a separate process that can be optimized and scaled independently of the main spacetimedb module. This module should be multi-threaded and able to utilize multiple CPU cores to handle the physics calculations for a large number of ships and projectiles. The main SpacetimeDB module would send the current state of the game world to the physics process, which would then return the updated positions and velocities of all objects after applying the physics simulation for that tick. This would allow us to scale the physics simulation with the number of players and AI drones, and reduce the load on the main server process.
+- Sector overview with F3 toggle
+- Build Allegiance mesh loader (with hardpoint metadata); build a tool which converts FreeAllegiance model information into our ship/base config format.
+- Code cleanup and refactor
 ---
 
 ## Roadmap (prioritized)
