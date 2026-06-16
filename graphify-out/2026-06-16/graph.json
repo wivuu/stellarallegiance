@@ -4397,7 +4397,7 @@
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L55",
+      "source_location": "L54",
       "id": "client_scripts_targetmarkers_cs_worldrenderer",
       "community": 13,
       "norm_label": "worldrenderer"
@@ -4406,7 +4406,7 @@
       "label": "Camera3D",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L56",
+      "source_location": "L55",
       "id": "client_scripts_targetmarkers_cs_camera3d",
       "community": 13,
       "norm_label": "camera3d"
@@ -4415,7 +4415,7 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L58",
+      "source_location": "L57",
       "id": "client_scripts_targetmarkers_cs_ulong",
       "community": 13,
       "norm_label": "ulong"
@@ -4424,7 +4424,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L59",
+      "source_location": "L58",
       "id": "client_scripts_targetmarkers_cs_bool",
       "community": 13,
       "norm_label": "bool"
@@ -4433,7 +4433,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L63",
+      "source_location": "L62",
       "id": "client_scripts_targetmarkers_cs_list",
       "community": 13,
       "norm_label": "list"
@@ -4442,7 +4442,7 @@
       "label": ".Init()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L66",
+      "source_location": "L65",
       "id": "scripts_targetmarkers_targetmarkers_init",
       "community": 13,
       "norm_label": ".init()"
@@ -4451,7 +4451,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L74",
+      "source_location": "L73",
       "id": "scripts_targetmarkers_targetmarkers_process",
       "community": 13,
       "norm_label": "._process()"
@@ -4460,7 +4460,7 @@
       "label": ".TeamColor()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L88",
+      "source_location": "L87",
       "id": "scripts_targetmarkers_targetmarkers_teamcolor",
       "community": 13,
       "norm_label": ".teamcolor()"
@@ -4469,7 +4469,7 @@
       "label": ".AimReticleScreenPoint()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L95",
+      "source_location": "L94",
       "id": "scripts_targetmarkers_targetmarkers_aimreticlescreenpoint",
       "community": 13,
       "norm_label": ".aimreticlescreenpoint()"
@@ -4478,7 +4478,7 @@
       "label": "PredictionController",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L95",
+      "source_location": "L94",
       "id": "predictioncontroller",
       "community": 13,
       "norm_label": "predictioncontroller"
@@ -4487,7 +4487,7 @@
       "label": "Vector2",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L95",
+      "source_location": "L94",
       "id": "client_scripts_targetmarkers_cs_vector2",
       "community": 13,
       "norm_label": "vector2"
@@ -4496,7 +4496,7 @@
       "label": ".HandleFocusCycle()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L110",
+      "source_location": "L109",
       "id": "scripts_targetmarkers_targetmarkers_handlefocuscycle",
       "community": 13,
       "norm_label": ".handlefocuscycle()"
@@ -4505,7 +4505,7 @@
       "label": ".VisibleIndexOf()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L174",
+      "source_location": "L173",
       "id": "scripts_targetmarkers_targetmarkers_visibleindexof",
       "community": 13,
       "norm_label": ".visibleindexof()"
@@ -4514,7 +4514,7 @@
       "label": ".ContainsId()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L182",
+      "source_location": "L181",
       "id": "scripts_targetmarkers_targetmarkers_containsid",
       "community": 13,
       "norm_label": ".containsid()"
@@ -4523,7 +4523,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L182",
+      "source_location": "L181",
       "id": "client_scripts_targetmarkers_cs_ireadonlylist",
       "community": 13,
       "norm_label": "ireadonlylist"
@@ -4532,7 +4532,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L182",
+      "source_location": "L181",
       "id": "client_scripts_targetmarkers_cs_remoteship",
       "community": 13,
       "norm_label": "remoteship"
@@ -4541,7 +4541,7 @@
       "label": ".NearestEnemy()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L192",
+      "source_location": "L191",
       "id": "scripts_targetmarkers_targetmarkers_nearestenemy",
       "community": 13,
       "norm_label": ".nearestenemy()"
@@ -4550,7 +4550,7 @@
       "label": "._Draw()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L212",
+      "source_location": "L211",
       "id": "scripts_targetmarkers_targetmarkers_draw",
       "community": 13,
       "norm_label": "._draw()"
@@ -4559,7 +4559,7 @@
       "label": ".KindOf()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L272",
+      "source_location": "L271",
       "id": "scripts_targetmarkers_targetmarkers_kindof",
       "community": 13,
       "norm_label": ".kindof()"
@@ -4568,7 +4568,7 @@
       "label": "Kind",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L272",
+      "source_location": "L271",
       "id": "kind",
       "community": 13,
       "norm_label": "kind"
@@ -4577,7 +4577,7 @@
       "label": ".DrawEntity()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L284",
+      "source_location": "L283",
       "id": "scripts_targetmarkers_targetmarkers_drawentity",
       "community": 13,
       "norm_label": ".drawentity()"
@@ -4586,7 +4586,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L284",
+      "source_location": "L283",
       "id": "client_scripts_targetmarkers_cs_vector3",
       "community": 13,
       "norm_label": "vector3"
@@ -4595,7 +4595,7 @@
       "label": ".DrawClassGlyph()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L336",
+      "source_location": "L335",
       "id": "scripts_targetmarkers_targetmarkers_drawclassglyph",
       "community": 13,
       "norm_label": ".drawclassglyph()"
@@ -4604,7 +4604,7 @@
       "label": ".Hexagon()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L375",
+      "source_location": "L374",
       "id": "scripts_targetmarkers_targetmarkers_hexagon",
       "community": 13,
       "norm_label": ".hexagon()"
@@ -4613,7 +4613,7 @@
       "label": ".DrawBracket()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L387",
+      "source_location": "L386",
       "id": "scripts_targetmarkers_targetmarkers_drawbracket",
       "community": 13,
       "norm_label": ".drawbracket()"
@@ -4622,7 +4622,7 @@
       "label": ".DrawAimReticle()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L406",
+      "source_location": "L405",
       "id": "scripts_targetmarkers_targetmarkers_drawaimreticle",
       "community": 13,
       "norm_label": ".drawaimreticle()"
@@ -4631,7 +4631,7 @@
       "label": ".DrawArrow()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L419",
+      "source_location": "L418",
       "id": "scripts_targetmarkers_targetmarkers_drawarrow",
       "community": 13,
       "norm_label": ".drawarrow()"
@@ -4640,7 +4640,7 @@
       "label": ".TryLead()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L441",
+      "source_location": "L440",
       "id": "scripts_targetmarkers_targetmarkers_trylead",
       "community": 13,
       "norm_label": ".trylead()"
@@ -4649,7 +4649,7 @@
       "label": ".SmallestPositive()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L478",
+      "source_location": "L477",
       "id": "scripts_targetmarkers_targetmarkers_smallestpositive",
       "community": 13,
       "norm_label": ".smallestpositive()"

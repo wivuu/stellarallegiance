@@ -12,11 +12,11 @@ public partial class WorldRenderer : Node3D
 	// DefaultBaseTypeId); the BaseDef supplies radius/health/hardpoints.
 	private const byte DefaultBaseTypeId = 0;
 
-	// Floating damage bar above each base. BaseMaxHealth mirrors the module's win-condition
-	// hull (Lib.cs BaseMaxHealth) so the bar can show a 0..1 fraction; keep the two in sync.
+	// BaseMaxHealth mirrors the module's win-condition hull (Lib.cs BaseMaxHealth) so the
+	// damage bar can show a 0..1 fraction; keep the two in sync. The bar itself is a
+	// screen-space overlay drawn by TargetMarkers (see VisibleBaseHealth) so it never clips
+	// behind the base geometry.
 	private const float BaseMaxHealth = 2000f;
-	private const float BaseHealthBarWidth = 110f;
-	private const float BaseHealthBarHeight = 10f;
 
 	// A pod removed while a friendly non-pod ship is in (roughly) hull contact was RESCUED
 	// — picked up by a teammate/drone — not destroyed, so it should simply vanish without a
@@ -38,18 +38,13 @@ public partial class WorldRenderer : Node3D
 	// walks it and filters by Node.Visible (sector visibility), so it allocates nothing.
 	private readonly List<(Node3D Node, byte Team)> _baseList = new();
 
-	// Floating damage bar per base, keyed by BaseId. Hidden at full health; it appears,
-	// shrinks (left-anchored), and reddens as the base is hit. The parts are children of
-	// the base node so they cull/move with it; the root is screen-aligned each frame in
-	// _Process (manual billboard) so the bar always faces the camera.
-	private readonly Dictionary<ulong, BaseHealthBar> _baseHealthBars = new();
+	// Per-base health fraction (0..1), keyed by BaseId. Drives the screen-space damage bar
+	// TargetMarkers draws over each base; full-health (>= ~1) bases are skipped so the bar
+	// only appears once a base has taken a hit. Updated from MsgBases via NetUpdateBaseHealth.
+	private readonly Dictionary<ulong, float> _baseHealthFrac = new();
+	// Scratch reused by VisibleBaseHealth() so the per-frame marker pass allocates nothing.
+	private readonly List<(Vector3 Pos, float Frac)> _baseHealthScratch = new();
 
-	private sealed class BaseHealthBar
-	{
-		public Node3D Root = null!;            // screen-aligned anchor above the base
-		public MeshInstance3D Fill = null!;    // colored fill, scaled/offset by the health fraction
-		public StandardMaterial3D FillMat = null!;
-	}
 	private readonly Dictionary<ulong, Node3D> _asteroidNodes = new();
 	// Purely cosmetic lazy tumble: each rock spins slowly about a fixed pseudo-random axis,
 	// derived once from its id (stable across frames; the sim treats rocks as static spheres).
@@ -154,9 +149,6 @@ public partial class WorldRenderer : Node3D
 	private StandardMaterial3D _pigTeam0Mat = null!;
 	private StandardMaterial3D _pigTeam1Mat = null!;
 	private StandardMaterial3D _projectileMat = null!;
-	// Shared dark backdrop for the base damage bars; each bar gets its own fill material so
-	// its colour can ramp green->red independently.
-	private StandardMaterial3D _hpBarBgMat = null!;
 
 	private ShipController? _ship;   // sibling; lazily resolved for the live latency readout
 	private Starscape? _starscape;   // sibling; repaints the backdrop as the local sector changes
@@ -239,6 +231,18 @@ public partial class WorldRenderer : Node3D
 		return _baseScratch;
 	}
 
+	// Damaged bases in the currently-visible sector, as (world position, 0..1 health fraction),
+	// for the screen-space damage bar TargetMarkers draws. Full-health and out-of-sector bases
+	// are skipped. Returns a shared scratch list — read it immediately.
+	public IReadOnlyList<(Vector3 Pos, float Frac)> VisibleBaseHealth()
+	{
+		_baseHealthScratch.Clear();
+		foreach (var (id, frac) in _baseHealthFrac)
+			if (frac < 0.999f && _baseNodes.TryGetValue(id, out var node) && node.Visible)
+				_baseHealthScratch.Add((node.GlobalPosition, frac));
+		return _baseHealthScratch;
+	}
+
 	public override void _Ready()
 	{
 		_bases = new Node3D { Name = "Bases" };
@@ -280,13 +284,6 @@ public partial class WorldRenderer : Node3D
 			EmissionEnergyMultiplier = 2.5f,
 		};
 
-		_hpBarBgMat = new StandardMaterial3D
-		{
-			AlbedoColor = new Color(0.03f, 0.03f, 0.04f, 0.75f),
-			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-		};
-
 		_defs = GetNode<DefRegistry>("../DefRegistry");
 		_starscape = GetNodeOrNull<Starscape>("../Starscape");
 
@@ -309,11 +306,10 @@ public partial class WorldRenderer : Node3D
 	}
 
 	// Streamed base health (MsgBases). Bases are static nodes placed by the Welcome frame;
-	// this just drives the floating damage bar the same way the STDB OnBaseUpdate path does.
+	// this records the 0..1 fraction TargetMarkers reads for the screen-space damage bar.
 	public void NetUpdateBaseHealth(ulong baseId, float health)
 	{
-		if (_baseHealthBars.TryGetValue(baseId, out var bar))
-			UpdateBaseHealthBar(bar, health);
+		_baseHealthFrac[baseId] = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
 	}
 
 	public void NetInsertShip(Ship row, bool local) => InsertShip(row, local);
@@ -401,66 +397,12 @@ public partial class WorldRenderer : Node3D
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
 		_baseList.Add((node, row.Team));
-		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node, BaseModelLoader.Radius(_defs, DefaultBaseTypeId));
-		UpdateBaseHealthBar(_baseHealthBars[row.BaseId], row.Health);
+		NetUpdateBaseHealth(row.BaseId, row.Health);
 		_baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
 		_baseTeams.Add((row.SectorId, row.Team));
 		SetNodeSector(node, row.SectorId);
 		GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
 	}
-
-	// Build the floating damage bar (background + fill) as children of the base node, anchored
-	// just above the sphere. Returns the handle stored per base; the fill is repositioned/recoloured
-	// by UpdateBaseHealthBar and the root is screen-aligned each frame in _Process.
-	private BaseHealthBar CreateBaseHealthBar(Node3D baseNode, float baseRadius)
-	{
-		var root = new Node3D { Name = "HealthBar", Position = new Vector3(0f, baseRadius + 22f, 0f) };
-
-		var bg = new MeshInstance3D
-		{
-			Name = "Bg",
-			Mesh = new QuadMesh { Size = new Vector2(BaseHealthBarWidth, BaseHealthBarHeight) },
-			MaterialOverride = _hpBarBgMat,
-		};
-
-		var fillMat = new StandardMaterial3D
-		{
-			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-			AlbedoColor = HealthColor(1f),
-		};
-		var fill = new MeshInstance3D
-		{
-			Name = "Fill",
-			// Slightly smaller than the backdrop (a thin border) and nudged forward so it draws on top.
-			Mesh = new QuadMesh { Size = new Vector2(BaseHealthBarWidth - 4f, BaseHealthBarHeight - 4f) },
-			MaterialOverride = fillMat,
-			Position = new Vector3(0f, 0f, 0.1f),
-		};
-
-		root.AddChild(bg);
-		root.AddChild(fill);
-		baseNode.AddChild(root);
-		return new BaseHealthBar { Root = root, Fill = fill, FillMat = fillMat };
-	}
-
-	// Resize/recolour the fill to a 0..1 health fraction and hide the whole bar at full health.
-	// The fill is left-anchored: scaling X by the fraction and shifting its centre left keeps the
-	// left edge fixed so it depletes rightward.
-	private static void UpdateBaseHealthBar(BaseHealthBar bar, float health)
-	{
-		float frac = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
-		float innerWidth = BaseHealthBarWidth - 4f;
-		bar.Fill.Scale = new Vector3(frac, 1f, 1f);
-		bar.Fill.Position = new Vector3(-innerWidth * 0.5f * (1f - frac), 0f, 0.1f);
-		bar.FillMat.AlbedoColor = HealthColor(frac);
-		bar.Root.Visible = frac < 0.999f;   // only show once the base has taken a hit
-	}
-
-	// Green at full health, through yellow at half, to red when nearly destroyed.
-	private static Color HealthColor(float frac) =>
-		frac > 0.5f
-			? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
-			: new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
 
 	// ---- Asteroid -------------------------------------------------------
 
@@ -864,7 +806,6 @@ public partial class WorldRenderer : Node3D
 		}
 
 		CheckBoltImpacts(delta);
-		BillboardBaseHealthBars();
 
 		// Lazy cosmetic tumble: spin each rock slowly about its fixed pseudo-random axis.
 		if (_asteroidSpins.Count > 0)
@@ -882,26 +823,6 @@ public partial class WorldRenderer : Node3D
 				_bolts[i].QueueFree();
 				_bolts.RemoveAt(i);
 			}
-		}
-	}
-
-	// Screen-align each visible base damage bar so it always faces the camera. Copying the
-	// camera's basis (orthonormal) makes the bar's local axes match the screen — left-anchored
-	// depletion in UpdateBaseHealthBar then reads correctly from any angle. Cheap: at most a
-	// couple of bases, and only those currently damaged-and-visible are touched.
-	private void BillboardBaseHealthBars()
-	{
-		if (_baseHealthBars.Count == 0)
-			return;
-		var cam = GetViewport()?.GetCamera3D();
-		if (cam == null)
-			return;
-		var camBasis = cam.GlobalTransform.Basis;
-		foreach (var bar in _baseHealthBars.Values)
-		{
-			if (!bar.Root.IsVisibleInTree())
-				continue;
-			bar.Root.GlobalBasis = camBasis;
 		}
 	}
 

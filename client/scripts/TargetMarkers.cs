@@ -30,6 +30,12 @@ public partial class TargetMarkers : Control
 	private const float AimRadius = 8f;       // aim-reticle gunsight radius (px)
 	private const float GlyphSize = 8f;       // class-glyph radius (px)
 
+	// Screen-space base damage bar (px). Drawn directly over each damaged base's projected
+	// position so it can never clip behind the base geometry the way a world-space quad did.
+	private const float BaseBarWidth = 64f;
+	private const float BaseBarHeight = 6f;
+	private const float BaseBarYOffset = 22f;   // bar centre this many px above the base centre
+
 	// Mirror the server / PredictionController muzzle constants so the aim line and
 	// lead solution match the shots that actually get fired. ProjectileSpeed is the
 	// muzzle speed ADDED to ship velocity; NoseOffset is the muzzle's forward offset
@@ -212,18 +218,21 @@ public partial class TargetMarkers : Control
 
 	public override void _Draw()
 	{
-		var local = _world.LocalShip;
-		if (local == null)
-			return;
-
 		// Use the viewport rect (what UnprojectPosition is relative to) rather than this
 		// Control's own Size: a code-created Control under a CanvasLayer doesn't reliably
 		// resolve its rect to the viewport, which would misplace the edge-clamped arrows.
 		Vector2 view = GetViewportRect().Size;
 
-		// Bases first (drawn under the ships), then friendlies, then enemies on top.
+		// Bases first (drawn under the ships). Bases + their damage bars are drawn even when
+		// the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
 		foreach (var (pos, team) in _world.VisibleBases())
 			DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
+		foreach (var (pos, frac) in _world.VisibleBaseHealth())
+			DrawBaseHealthBar(view, pos, frac);
+
+		var local = _world.LocalShip;
+		if (local == null)
+			return;
 
 		foreach (var fr in _world.FriendlyShips())
 			DrawEntity(view, fr.GlobalPosition, KindOf(fr), TeamColor(fr.Team), focused: false, friendly: true);
@@ -332,6 +341,34 @@ public partial class TargetMarkers : Control
 		DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, color, glyphScale);
 		DrawArrow(edge, dir, color);
 	}
+
+	// Screen-space damage bar over a base: project the base centre, then draw a fixed-size
+	// pixel bar a little above it (a dark backdrop + a left-anchored fill that depletes
+	// rightward and ramps green->red). Being a 2D overlay it always draws on top, so unlike
+	// the old world-space quad it never clips behind the base from a low angle. Skipped when
+	// the base is behind the camera or its centre projects off screen.
+	private void DrawBaseHealthBar(Vector2 view, Vector3 worldPos, float frac)
+	{
+		Camera3D cam = Cam;
+		if (cam.IsPositionBehind(worldPos))
+			return;
+		Vector2 sp = cam.UnprojectPosition(worldPos);
+		if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+			return;
+
+		Vector2 topLeft = sp + new Vector2(-BaseBarWidth * 0.5f, -BaseBarYOffset);
+		// Dark backdrop with a 1px border so the bar reads against bright or dark scenery.
+		DrawRect(new Rect2(topLeft - Vector2.One, new Vector2(BaseBarWidth + 2f, BaseBarHeight + 2f)),
+			new Color(0.03f, 0.03f, 0.04f, 0.75f));
+		// Left-anchored fill, width scaled by the health fraction.
+		DrawRect(new Rect2(topLeft, new Vector2(BaseBarWidth * frac, BaseBarHeight)), HealthColor(frac));
+	}
+
+	// Green at full health, through yellow at half, to red when nearly destroyed.
+	private static Color HealthColor(float frac) =>
+		frac > 0.5f
+			? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
+			: new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
 
 	// A small filled symbol encoding the entity class, centered on p. Distinct silhouettes
 	// (square / triangle / chevron / hexagon / circle) so class reads at a glance even tiny.
