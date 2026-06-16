@@ -81,7 +81,10 @@ hardpoints (0 otherwise) and references a `WeaponDef.WeaponId`.
   anchors the `TeamTrail`. (A pod gets the trail but no glow — it's a powered-down
   lifeboat.)
 - **Light** — `BaseModelLoader` parks a self-phasing blinking `BaseBeacon` (emissive mote +
-  `OmniLight3D`) at each `Light` offset, team-tinted.
+  `OmniLight3D`) at each `Light`, team-tinted. When the loaded `base.glb` carries its own
+  `HP_Light_*` nodes the beacons follow those authored hull positions (via
+  `GlbLoader.FindHardpoints`); they fall back to the def-seeded `Light` offsets only for the
+  procedural sphere placeholder.
 - **Turret / DockingEntrance / DockingExit** — carried as data and shown as positioned
   `HP_` markers now; their gameplay logic is out of scope for the current phase.
 

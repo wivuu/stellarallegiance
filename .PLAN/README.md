@@ -16,7 +16,6 @@ Archives:
 ---
 
 ## QUICKNOTES:
-- CONFIG M5 addendum
 - Code cleanup and refactor
 ---
 

@@ -61,6 +61,27 @@ public static class GlbLoader
         return false;
     }
 
+    // Find every node whose name starts with `prefix` (e.g. "HP_Light_"), returning each node's
+    // transform relative to `hull` (hull's own transform excluded — same subtree semantics as
+    // HasNode). Lets the loaders place beacons/markers at GLB-authored hardpoints instead of
+    // def-seeded offsets. Walks the tree accumulating each node's transform, mirroring MeshAabb.
+    public static System.Collections.Generic.List<(string Name, Transform3D Local)> FindHardpoints(Node hull, string prefix)
+    {
+        var found = new System.Collections.Generic.List<(string, Transform3D)>();
+
+        void Recurse(Node node, Transform3D xform)
+        {
+            Transform3D local = node != hull && node is Node3D n3 ? xform * n3.Transform : xform;
+            if (node != hull && node.Name.ToString().StartsWith(prefix))
+                found.Add((node.Name, local));
+            foreach (Node child in node.GetChildren())
+                Recurse(child, local);
+        }
+
+        Recurse(hull, Transform3D.Identity);
+        return found;
+    }
+
     // Combined AABB of every mesh in the subtree, in `root`'s local space (root's own transform
     // is ignored — it's the freshly-instantiated, not-yet-scaled hull node). Walks the tree
     // accumulating each node's transform and expands over each mesh AABB's 8 corners.

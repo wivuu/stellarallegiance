@@ -14,7 +14,9 @@ using StellarAllegiance.Shared;
 //      data and visualizes it).
 //    - A simple blinking beacon at every Light hardpoint (the roadmap's "lighting
 //      (blinking)"): a team-tinted emissive mote + OmniLight that pulses on/off, each
-//      with its own phase so the nav lights don't strobe in lockstep.
+//      with its own phase so the nav lights don't strobe in lockstep. Beacons follow the
+//      hull's own HP_Light_* nodes when the authored base.glb carries them, falling back to
+//      the def-seeded Light offsets only for the procedural sphere placeholder.
 //
 //  Everything spatial now flows from DefRegistry (the subscribed BaseDef), so an
 //  operator's runtime UpsertBaseDef that moves a dock or a light is reflected on the
@@ -26,9 +28,10 @@ using StellarAllegiance.Shared;
 //  §4): when `res://assets/bases/base.glb` exists it is loaded in place of the sphere,
 //  uniform-scaled (via GlbLoader) to the def radius, keeping its own baked PBR materials
 //  (friend/foe is read from the HUD, not a hull tint). Any HP_<Kind>_<Index> node the glb
-//  author placed in-mesh OVERRIDES the equivalent procedural marker. The data contract —
-//  node name = HP_<Kind>_<Index>, local +Z = the hardpoint forward — is identical either
-//  way, so the markers/beacons code keeps working unchanged.
+//  author placed in-mesh OVERRIDES the equivalent procedural marker, and every HP_Light_* node
+//  gets its own blinking beacon at the authored position. The data contract — node name =
+//  HP_<Kind>_<Index>, local +Z = the hardpoint forward — is identical either way, so the
+//  markers/beacons code keeps working unchanged.
 // =====================================================================
 public static class BaseModelLoader
 {
@@ -56,13 +59,29 @@ public static class BaseModelLoader
 
 		if (def?.Hardpoints != null)
 			foreach (HardpointDef hp in def.Hardpoints)
-			{
 				// A GLB-authored HP_ node overrides the procedural marker; otherwise it stands.
 				if (!GlbLoader.HasNode(hull, $"HP_{hp.Kind}_{hp.Index}"))
 					root.AddChild(MakeMarker(hp));
+
+		// A blinking beacon at every Light hardpoint. Prefer the hull's own HP_Light_* nodes (an
+		// authored mesh places far more lights, at meaningful hull positions, than the def's
+		// placeholder pair) and fall back to the def-seeded Lights only when the hull carries none
+		// (e.g. the procedural sphere). The GLB node lives inside the uniform-scaled hull, so
+		// hull.Transform maps its local offset into the unscaled BaseModel root the beacons sit on.
+		var glbLights = GlbLoader.FindHardpoints(hull, $"HP_{HardpointKind.Light}_");
+		if (glbLights.Count > 0)
+		{
+			int i = 0;
+			foreach ((string _, Transform3D local) in glbLights)
+				root.AddChild(MakeBeacon((hull.Transform * local).Origin, team, i++));
+		}
+		else if (def?.Hardpoints != null)
+		{
+			int i = 0;
+			foreach (HardpointDef hp in def.Hardpoints)
 				if (hp.Kind == HardpointKind.Light)
-					root.AddChild(MakeBeacon(hp, team));
-			}
+					root.AddChild(MakeBeacon(new Vector3(hp.OffX, hp.OffY, hp.OffZ), team, i++));
+		}
 
 		return root;
 	}
@@ -109,13 +128,13 @@ public static class BaseModelLoader
 		};
 	}
 
-	// A blinking nav beacon parked at a Light hardpoint's offset, tinted toward the base's
+	// A blinking nav beacon parked at a Light hardpoint's local position, tinted toward the base's
 	// team hue. The node owns its blink phase so multiple lights pulse out of lockstep.
-	private static BaseBeacon MakeBeacon(HardpointDef hp, byte team)
+	private static BaseBeacon MakeBeacon(Vector3 pos, byte team, int index)
 		=> new BaseBeacon
 		{
-			Name = $"Beacon_{hp.Index}",
-			Position = new Vector3(hp.OffX, hp.OffY, hp.OffZ),
+			Name = $"Beacon_{index}",
+			Position = pos,
 			Color = team == 0 ? new Color(0.45f, 0.7f, 1f) : new Color(1f, 0.55f, 0.35f),
 		};
 
