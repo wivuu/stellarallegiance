@@ -49,6 +49,10 @@ public partial class RemoteShip : Node3D
 	public ulong ShipId { get; private set; }
 	public byte Team { get; private set; }
 
+	// Hull class (Scout/Fighter/Bomber) straight off the row. TargetMarkers uses it to pick
+	// the per-class HUD glyph; a pod (IsPod) overrides this with the pod symbol.
+	public ShipClass Class { get; private set; }
+
 	// AI combat drone (PIG) rather than a player ship — read straight off the row.
 	// TargetMarkers uses it to highlight drones distinctly on the HUD.
 	public bool IsPig { get; private set; }
@@ -90,6 +94,7 @@ public partial class RemoteShip : Node3D
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
+		Class = row.Class;
 		IsPig = row.IsPig;
 		IsPod = row.IsPod;
 		// Cosmetic throttle-proxy denominator only (engine glow), so a missing def just

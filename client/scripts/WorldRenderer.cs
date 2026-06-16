@@ -34,6 +34,9 @@ public partial class WorldRenderer : Node3D
 	private Node3D _effects = null!;   // transient FX (explosions, hit flashes); self-freeing
 
 	private readonly Dictionary<ulong, Node3D> _baseNodes = new();
+	// Parallel list of (base node, team) for the HUD off-screen indicators — VisibleBases()
+	// walks it and filters by Node.Visible (sector visibility), so it allocates nothing.
+	private readonly List<(Node3D Node, byte Team)> _baseList = new();
 
 	// Floating damage bar per base, keyed by BaseId. Hidden at full health; it appears,
 	// shrinks (left-anchored), and reddens as the base is hit. The parts are children of
@@ -130,8 +133,11 @@ public partial class WorldRenderer : Node3D
 
 	private byte? _localTeam;
 
-	// Scratch reused by EnemyShips() so the per-frame marker pass allocates nothing.
+	// Scratch reused by EnemyShips()/FriendlyShips() so the per-frame marker pass allocates nothing.
 	private readonly List<RemoteShip> _enemyScratch = new();
+	private readonly List<RemoteShip> _friendlyScratch = new();
+	// Scratch reused by VisibleBases() for the same reason.
+	private readonly List<(Vector3 Pos, byte Team)> _baseScratch = new();
 
 	// Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
 	// VisualHitRadius of a ship's rendered centre, but not until it has travelled MuzzleClearance
@@ -203,6 +209,34 @@ public partial class WorldRenderer : Node3D
 					_enemyScratch.Add(rs);
 		}
 		return _enemyScratch;
+	}
+
+	// Live friendly ship nodes (team == local team, including allied pods limping home).
+	// Returns a shared scratch list — read it immediately, don't retain it. Used by the HUD
+	// indicators to mark teammates; the local ship is a PredictionController (not in
+	// _shipNodes) so it is naturally excluded.
+	public IReadOnlyList<RemoteShip> FriendlyShips()
+	{
+		_friendlyScratch.Clear();
+		if (_localTeam is byte lt)
+		{
+			foreach (var node in _shipNodes.Values)
+				if (node is RemoteShip rs && rs.Team == lt && rs.Visible)
+					_friendlyScratch.Add(rs);
+		}
+		return _friendlyScratch;
+	}
+
+	// Bases in the currently-visible (local) sector, as (world position, team). Returns a
+	// shared scratch list — read it immediately. Mirrors the ship accessors' sector filter
+	// via Node.Visible, so off-screen base indicators only reflect the sector you're flying.
+	public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleBases()
+	{
+		_baseScratch.Clear();
+		foreach (var (node, team) in _baseList)
+			if (node.Visible)
+				_baseScratch.Add((node.GlobalPosition, team));
+		return _baseScratch;
 	}
 
 	public override void _Ready()
@@ -366,6 +400,7 @@ public partial class WorldRenderer : Node3D
 		node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
 		_bases.AddChild(node);
 		_baseNodes[row.BaseId] = node;
+		_baseList.Add((node, row.Team));
 		_baseHealthBars[row.BaseId] = CreateBaseHealthBar(node, BaseModelLoader.Radius(_defs, DefaultBaseTypeId));
 		UpdateBaseHealthBar(_baseHealthBars[row.BaseId], row.Health);
 		_baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));

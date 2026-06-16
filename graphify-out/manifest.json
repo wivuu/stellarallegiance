@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781575197.1051056,
-    "ast_hash": "bde3456d1cffd66862c4079dc3535d25",
+    "mtime": 1781620197.947384,
+    "ast_hash": "1c8080b2686705cf91988e1e10f149f7",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781482367.8436944,
-    "ast_hash": "86ad142f67594d5a5f4f3b1bad6466cf",
+    "mtime": 1781620998.3508763,
+    "ast_hash": "bf3ec4c0334d8da1c7373ef75b843d48",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781566893.5810618,
-    "ast_hash": "d36b3dccdfc36ca38ef2035cc230a019",
+    "mtime": 1781620188.9581785,
+    "ast_hash": "a08f75e1f7d8e152f9e140b88d9324cc",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {

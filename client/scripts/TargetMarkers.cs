@@ -1,26 +1,34 @@
 using System.Collections.Generic;
 using Godot;
+using StellarAllegiance.Net;
 
-// On-screen + off-screen target markers for enemy ships, plus target focus and a
-// lead-indicator reticle (the "Enemy target markers" plan item).
+// On-screen + off-screen HUD indicators for every relevant entity — friendly AND enemy
+// ships AND bases — plus enemy target focus and a lead-indicator reticle.
 //
-// While flying, every enemy ship gets a small bracket reticle when it's on screen
-// and an edge-clamped arrow pointing toward it when it's off screen (including
-// behind the camera), so you can always tell where the enemies are. Tab cycles the
-// FOCUS through the visible enemies; the focused target is drawn larger/brighter.
-// Once a target is focused and a forward firing solution exists within weapon range,
-// a lead circle marks where the target will be when a shot fired now would arrive.
+// While flying, each tracked entity gets a marker: when it's on screen, enemies draw a
+// bracket reticle (with a small class glyph) and friendlies/bases draw a subtle class
+// glyph; when it's off screen (or behind the camera) it becomes an edge-clamped arrow +
+// class glyph pinned to the viewport edge along its direction, so you always know which
+// way to turn to face it. Color is the entity's TEAM color (blue team 0 / red team 1),
+// the same palette as the 3D ship/base materials. The symbol encodes the class —
+// base / scout / fighter / bomber / pod.
+//
+// Tab cycles the FOCUS through the enemies: it locks whatever enemy is nearest the aim
+// reticle (the real firing line, which the chase camera offsets away from screen center),
+// and re-pressing while already locked steps outward to the next nearest. The focused
+// target is drawn larger/brighter, and once a forward firing solution exists within weapon
+// range a lead circle marks where to aim so a shot fired now connects.
 //
 // This is a pure overlay: it reads render transforms + the camera and draws, never
 // touching authoritative state. It is created and wired up by the Hud.
 public partial class TargetMarkers : Control
 {
-	private const float MarkerHalf = 11f;     // on-screen bracket half-extent (px)
-	private const float FocusHalf = 16f;      // focused bracket half-extent (px)
+	private const float FocusHalf = 16f;      // focused lock-bracket half-extent (px)
 	private const float ArrowSize = 13f;      // off-screen arrow half-extent (px)
 	private const float EdgeMargin = 34f;     // off-screen arrow inset from viewport edge (px)
 	private const float LeadRadius = 13f;     // lead-indicator circle radius (px)
 	private const float AimRadius = 8f;       // aim-reticle gunsight radius (px)
+	private const float GlyphSize = 8f;       // class-glyph radius (px)
 
 	// Mirror the server / PredictionController muzzle constants so the aim line and
 	// lead solution match the shots that actually get fired. ProjectileSpeed is the
@@ -32,13 +40,16 @@ public partial class TargetMarkers : Control
 	private const float MaxLeadTime = 2.5f;
 	private const float DefaultAimRange = 500f;   // where the aim reticle sits when no target is focused
 
-	private static readonly Color EnemyColor = new(1f, 0.45f, 0.38f);
 	private static readonly Color FocusColor = new(1f, 0.92f, 0.45f);
 	private static readonly Color LeadColor = new(0.5f, 1f, 0.65f);
 	private static readonly Color AimColor = new(0.6f, 0.85f, 1f);
-	// AI drones (PIGs) get their own marker color + a "PIG" tag so they read as
-	// distinct from enemy PLAYER ships (which stay EnemyColor / FocusColor).
-	private static readonly Color PigColor = new(0.95f, 0.4f, 1f);   // magenta
+	// Team palette, matching WorldRenderer's 3D ship/base materials (_team0Mat / _team1Mat)
+	// so a marker reads as the SAME color as the ship it points at — not a separate HUD tint.
+	private static readonly Color Team0Color = new(0.25f, 0.50f, 0.95f);   // blue
+	private static readonly Color Team1Color = new(0.95f, 0.30f, 0.25f);   // red
+
+	// The per-class symbol drawn at each marker. A pod overrides the hull class.
+	private enum Kind { Base, Scout, Fighter, Bomber, Pod }
 
 	private WorldRenderer _world = null!;
 	private Camera3D _camera = null!;
@@ -46,8 +57,9 @@ public partial class TargetMarkers : Control
 	private ulong? _focused;   // ShipId of the focused enemy, or null
 	private bool _tabHeld;     // edge-detect Tab so a held key cycles once
 	// Scratch for the focus cycle: visible enemies paired with their distance (px²) from
-	// screen center, sorted nearest-center-first so Tab walks outward from the crosshair.
-	private readonly List<(float CenterDist2, ulong Id)> _visible = new();
+	// the AIM RETICLE (the firing line), sorted nearest-first so Tab locks what you're
+	// pointing at and each repeat steps outward.
+	private readonly List<(float AimDist2, ulong Id)> _visible = new();
 
 	// Wired up by the Hud (which already resolves these siblings).
 	public void Init(WorldRenderer world, Camera3D camera)
@@ -72,12 +84,28 @@ public partial class TargetMarkers : Control
 		QueueRedraw();
 	}
 
-	// Tab cycles focus through the currently visible (in-front-of-camera) enemies,
-	// ordered by distance from screen center so the first press grabs whatever's nearest
-	// the crosshair and each repeat steps outward. Re-pressing past the last one wraps
-	// back to none → first. When the focused ship dies/leaves, focus jumps to the nearest
-	// remaining enemy so combat focus carries to the next threat (a living focus that
-	// merely drifts behind the camera is kept, not dropped).
+	private static Color TeamColor(byte team) => team == 0 ? Team0Color : Team1Color;
+
+	// The screen point of the aim reticle (the real firing line): the muzzle projected
+	// forward along the ship's nose. The chase camera is offset above/behind the ship, so
+	// this is NOT screen center — Tab-targeting ranks enemies by closeness to THIS point so
+	// "aim at it, press Tab" locks what's actually under your guns. Falls back to screen
+	// center if the point is somehow behind the camera.
+	private Vector2 AimReticleScreenPoint(PredictionController local)
+	{
+		Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
+		Vector3 pt = local.GlobalPosition + fwd * (NoseOffset + DefaultAimRange);
+		if (_camera.IsPositionBehind(pt))
+			return GetViewportRect().Size * 0.5f;
+		return _camera.UnprojectPosition(pt);
+	}
+
+	// Tab focus through the enemies, ranked by distance from the aim reticle. The first
+	// press (or any press that finds a different enemy nearest your guns) locks that enemy;
+	// pressing again while already locked onto the nearest steps outward to the next, and
+	// past the last wraps to none → nearest. When the focused ship dies/leaves, focus jumps
+	// to the nearest remaining enemy so combat focus carries to the next threat (a living
+	// focus that merely drifts behind the camera is kept, not dropped).
 	private void HandleFocusCycle()
 	{
 		// While the chat box is open, Tab switches chat channel — swallow it here so it
@@ -92,7 +120,8 @@ public partial class TargetMarkers : Control
 		bool pressed = tab && !_tabHeld;
 		_tabHeld = tab;
 
-		if (_world.LocalShip == null)
+		var local = _world.LocalShip;
+		if (local == null)
 		{
 			_focused = null;
 			return;
@@ -102,17 +131,17 @@ public partial class TargetMarkers : Control
 		// below (a second call would clear it mid-use).
 		var enemies = _world.EnemyShips();
 
-		// Order the in-front enemies by how close they project to screen center, so the
-		// cycle reads as "nearest the crosshair first, then outward."
-		Vector2 screenCenter = GetViewportRect().Size * 0.5f;
+		// Order the in-front enemies by how close they project to the aim reticle, so the
+		// cycle reads as "what I'm pointing at first, then outward."
+		Vector2 aimPt = AimReticleScreenPoint(local);
 		_visible.Clear();
 		foreach (var e in enemies)
 			if (!_camera.IsPositionBehind(e.GlobalPosition))
 			{
-				float d2 = (_camera.UnprojectPosition(e.GlobalPosition) - screenCenter).LengthSquared();
+				float d2 = (_camera.UnprojectPosition(e.GlobalPosition) - aimPt).LengthSquared();
 				_visible.Add((d2, e.ShipId));
 			}
-		_visible.Sort(static (a, b) => a.CenterDist2.CompareTo(b.CenterDist2));
+		_visible.Sort(static (a, b) => a.AimDist2.CompareTo(b.AimDist2));
 
 		// If the focused ship is no longer among the live enemies (it died or left),
 		// auto-target the nearest remaining enemy instead of dropping focus.
@@ -126,16 +155,21 @@ public partial class TargetMarkers : Control
 			_focused = null;
 			return;
 		}
-		if (_focused is not ulong cur)
+
+		// Aim-priority: the enemy nearest the reticle. If that isn't already our focus, lock
+		// it — this makes "point at an enemy and press Tab" reliable. If we're already on it,
+		// step outward to the next nearest (wrapping past the last to none → nearest).
+		ulong nearest = _visible[0].Id;
+		if (_focused != nearest)
 		{
-			_focused = _visible[0].Id;
+			_focused = nearest;
 			return;
 		}
-		int idx = VisibleIndexOf(cur);
-		_focused = idx + 1 < _visible.Count ? _visible[idx + 1].Id : (ulong?)null; // wrap to none
+		int idx = VisibleIndexOf(nearest);
+		_focused = idx + 1 < _visible.Count ? _visible[idx + 1].Id : (ulong?)null;
 	}
 
-	// Index of a ShipId within the center-distance-sorted _visible list, or -1.
+	// Index of a ShipId within the aim-distance-sorted _visible list, or -1.
 	private int VisibleIndexOf(ulong id)
 	{
 		for (int i = 0; i < _visible.Count; i++)
@@ -185,13 +219,21 @@ public partial class TargetMarkers : Control
 		// resolve its rect to the viewport, which would misplace the edge-clamped arrows.
 		Vector2 view = GetViewportRect().Size;
 
+		// Bases first (drawn under the ships), then friendlies, then enemies on top.
+		foreach (var (pos, team) in _world.VisibleBases())
+			DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
+
+		foreach (var fr in _world.FriendlyShips())
+			DrawEntity(view, fr.GlobalPosition, KindOf(fr), TeamColor(fr.Team), focused: false, friendly: true);
+
 		RemoteShip? focusedShip = null;
 		foreach (var e in _world.EnemyShips())
 		{
 			bool focused = _focused is ulong f && f == e.ShipId;
 			if (focused)
 				focusedShip = e;
-			DrawMarker(view, e.GlobalPosition, focused, e.IsPig);
+			Color color = focused ? FocusColor : TeamColor(e.Team);
+			DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false);
 		}
 
 		// The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
@@ -225,13 +267,22 @@ public partial class TargetMarkers : Control
 			DrawAimReticle(_camera.UnprojectPosition(reticlePoint));
 	}
 
-	// Draw one enemy marker: a corner-bracket reticle when on screen, an edge arrow
-	// pointing toward it when off screen or behind the camera. AI drones (isPig) get a
-	// distinct color and a small "PIG" tag so they're obvious among enemy players.
-	private void DrawMarker(Vector2 size, Vector3 worldPos, bool focused, bool isPig)
+	// Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class.
+	private static Kind KindOf(RemoteShip s) => s.IsPod
+		? Kind.Pod
+		: s.Class switch
+		{
+			ShipClass.Scout => Kind.Scout,
+			ShipClass.Bomber => Kind.Bomber,
+			_ => Kind.Fighter,
+		};
+
+	// Draw one entity marker. On screen: enemies get a corner bracket + class glyph (focus =
+	// larger/brighter); friendlies/bases get a subtle, dimmer class glyph. Off screen or
+	// behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn.
+	private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly)
 	{
 		Vector2 center = size * 0.5f;
-		Color color = focused ? FocusColor : (isPig ? PigColor : EnemyColor);
 
 		bool behind = _camera.IsPositionBehind(worldPos);
 		Vector2 sp = _camera.UnprojectPosition(worldPos);
@@ -240,33 +291,95 @@ public partial class TargetMarkers : Control
 		if (behind)
 			sp = center * 2f - sp;
 
-		var view = new Rect2(Vector2.Zero, size).Grow(-EdgeMargin);
-		bool onScreen = !behind && view.HasPoint(sp);
+		var viewRect = new Rect2(Vector2.Zero, size).Grow(-EdgeMargin);
+		bool onScreen = !behind && viewRect.HasPoint(sp);
 
 		if (onScreen)
 		{
-			float h = focused ? FocusHalf : MarkerHalf;
-			DrawBracket(sp, h, color, focused ? 2.5f : 1.5f);
-			if (isPig)
+			if (friendly)
 			{
-				// Small tag below the bracket so drones are unmistakable up close.
-				var font = GetThemeDefaultFont();
-				DrawString(font, sp + new Vector2(-9f, h + 12f), "PIG",
-					HorizontalAlignment.Left, -1f, 12, color);
+				// Subtle teammate / base marker: dimmer and small so it never competes with
+				// the enemy reticles or clutters the view.
+				DrawClassGlyph(sp, kind, new Color(color, 0.55f), GlyphSize * 0.85f);
+			}
+			else
+			{
+				// Enemy on screen: the same class glyph as the off-screen indicator so the
+				// marker reads identically whether it's at the edge or in view. The focused
+				// target is enlarged, recolored, and wrapped in a lock bracket (there's no
+				// edge arrow on screen to set it apart otherwise).
+				DrawClassGlyph(sp, kind, color, focused ? GlyphSize * 1.15f : GlyphSize);
+				if (focused)
+					DrawBracket(sp, FocusHalf, color, 2.5f);
 			}
 			return;
 		}
 
-		// Off screen: clamp the marker to the inset viewport edge along the ray from
-		// center, and draw an arrow pointing outward.
+		// Off screen: clamp the marker to the inset viewport edge along the ray from center,
+		// draw the class glyph there and an arrow just outside it pointing outward.
 		Vector2 dir = sp - center;
 		if (dir.LengthSquared() < 1e-4f)
 			dir = Vector2.Down;
+		dir = dir.Normalized();
 		Vector2 half = size * 0.5f - new Vector2(EdgeMargin, EdgeMargin);
 		float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f),
 								half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
 		Vector2 edge = center + dir * scale;
-		DrawArrow(edge, dir.Normalized(), color);
+		float glyphScale = focused ? GlyphSize * 1.15f : GlyphSize;
+		DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, color, glyphScale);
+		DrawArrow(edge, dir, color);
+	}
+
+	// A small filled symbol encoding the entity class, centered on p. Distinct silhouettes
+	// (square / triangle / chevron / hexagon / circle) so class reads at a glance even tiny.
+	private void DrawClassGlyph(Vector2 p, Kind kind, Color color, float r)
+	{
+		switch (kind)
+		{
+			case Kind.Base:
+				// Station: filled square with a punched-out center dot.
+				DrawRect(new Rect2(p - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), color);
+				DrawCircle(p, r * 0.4f, new Color(0f, 0f, 0f, 0.85f));
+				break;
+			case Kind.Scout:
+				// Slim upward triangle.
+				DrawColoredPolygon(new[]
+				{
+					p + new Vector2(0f, -r),
+					p + new Vector2(r * 0.8f, r * 0.7f),
+					p + new Vector2(-r * 0.8f, r * 0.7f),
+				}, color);
+				break;
+			case Kind.Fighter:
+				// Chevron / arrowhead (tip up, notched base).
+				DrawColoredPolygon(new[]
+				{
+					p + new Vector2(0f, -r),
+					p + new Vector2(r, r * 0.7f),
+					p + new Vector2(0f, r * 0.25f),
+					p + new Vector2(-r, r * 0.7f),
+				}, color);
+				break;
+			case Kind.Bomber:
+				// Heavy hexagon.
+				DrawColoredPolygon(Hexagon(p, r), color);
+				break;
+			case Kind.Pod:
+				// Small circle.
+				DrawCircle(p, r * 0.85f, color);
+				break;
+		}
+	}
+
+	private static Vector2[] Hexagon(Vector2 p, float r)
+	{
+		var pts = new Vector2[6];
+		for (int i = 0; i < 6; i++)
+		{
+			float a = Mathf.Pi / 6f + i * Mathf.Tau / 6f;   // flat-top
+			pts[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+		}
+		return pts;
 	}
 
 	// A four-corner bracket reticle centered on p.

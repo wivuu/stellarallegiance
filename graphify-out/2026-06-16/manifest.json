@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781550941.6189277,
+    "mtime": 1781575197.1045623,
     "ast_hash": "5990682f8b1f64c2a7f1fabdc02025f8",
     "semantic_hash": ""
   },
@@ -60,7 +60,7 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781553197.384187,
+    "mtime": 1781575197.1048746,
     "ast_hash": "3dcd274bd9ae87de207a1375ed45bdf9",
     "semantic_hash": ""
   },
@@ -70,12 +70,12 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781553258.8171344,
-    "ast_hash": "bde3456d1cffd66862c4079dc3535d25",
+    "mtime": 1781620197.947384,
+    "ast_hash": "1c8080b2686705cf91988e1e10f149f7",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781554195.8606958,
+    "mtime": 1781575197.1052842,
     "ast_hash": "5e5f66f4b1c549b6e694e4362d1fccd8",
     "semantic_hash": ""
   },
@@ -95,18 +95,18 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781482367.8436944,
-    "ast_hash": "86ad142f67594d5a5f4f3b1bad6466cf",
+    "mtime": 1781620541.2038188,
+    "ast_hash": "38a30387211f784b11e18ed0b2f6d31b",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
-    "mtime": 1781572770.004903,
+    "mtime": 1781575197.1057796,
     "ast_hash": "1a0e9532db3abce85b19933d11341704",
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781566893.5810618,
-    "ast_hash": "d36b3dccdfc36ca38ef2035cc230a019",
+    "mtime": 1781620188.9581785,
+    "ast_hash": "a08f75e1f7d8e152f9e140b88d9324cc",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -125,12 +125,12 @@
     "semantic_hash": "0a8a0044ec250a189c7bd91e3a0e2bca"
   },
   "scripts/export-clients.sh": {
-    "mtime": 1781568583.0365431,
+    "mtime": 1781575197.1110616,
     "ast_hash": "e63d2a2e914bce4aed0e299729ba8f41",
     "semantic_hash": ""
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781552876.4475486,
+    "mtime": 1781575197.1120687,
     "ast_hash": "51d7a4ea33a02fe968a361ee6cb6d37e",
     "semantic_hash": ""
   },
@@ -145,7 +145,7 @@
     "semantic_hash": "a2a51d25196bb00b70a5172e3d4cc058"
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1781553060.6770005,
+    "mtime": 1781575197.1123807,
     "ast_hash": "89276d5918c9f883f093084d21a878c0",
     "semantic_hash": ""
   },
@@ -200,13 +200,13 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781572741.9508047,
+    "mtime": 1781575197.105567,
     "ast_hash": "94119a27c13e233e1834429c5a6119de",
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1781552897.4111845,
-    "ast_hash": "0a08fb43e12b5bb9fcf5c72762f61392",
+    "mtime": 1781615629.011653,
+    "ast_hash": "83b528fb4e1ab103c9e08b9268bbc0fc",
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
@@ -230,7 +230,7 @@
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1781552928.7162418,
+    "mtime": 1781575197.1117067,
     "ast_hash": "45fee7f460522ac11f81df6ddd93e906",
     "semantic_hash": ""
   },
@@ -260,7 +260,7 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781557494.975293,
+    "mtime": 1781575197.111423,
     "ast_hash": "9f2ded8c3998c9676c79b825ac07e230",
     "semantic_hash": ""
   },
@@ -305,7 +305,7 @@
     "semantic_hash": ""
   },
   "scripts/run-client.sh": {
-    "mtime": 1781568553.0903044,
+    "mtime": 1781575197.1112466,
     "ast_hash": "b17dbd58e603235806d1ca99b9ef7fc8",
     "semantic_hash": ""
   },
@@ -325,7 +325,7 @@
     "semantic_hash": ""
   },
   "shared/Defs.cs": {
-    "mtime": 1781552889.682778,
+    "mtime": 1781575197.111899,
     "ast_hash": "622414e6c8871aa4552cd6679b0efd44",
     "semantic_hash": ""
   },
@@ -335,8 +335,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GlbLoader.cs": {
-    "mtime": 1781566893.5804837,
-    "ast_hash": "7f0f8536be8a233bcfb165b54ec35f93",
+    "mtime": 1781615585.3484962,
+    "ast_hash": "1c568dff8c7ecbbc2401d6760b38c65b",
     "semantic_hash": ""
   },
   "pick-assets/manifest.json": {
@@ -345,12 +345,12 @@
     "semantic_hash": ""
   },
   "scripts/godot-bin.sh": {
-    "mtime": 1781568533.8407967,
+    "mtime": 1781575197.1111407,
     "ast_hash": "ce8a158e5fa148e0f782dcdf7577078a",
     "semantic_hash": ""
   },
   "tools/godot-import.sh": {
-    "mtime": 1781568613.593134,
+    "mtime": 1781575197.1124969,
     "ast_hash": "1cf90a725b37ff0cb852ab49a8ddd154",
     "semantic_hash": ""
   }
