@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781553873.9215524,
-    "ast_hash": "43bc571c704ab07f1981ab305ebaca0b",
+    "mtime": 1781554195.8606958,
+    "ast_hash": "5e5f66f4b1c549b6e694e4362d1fccd8",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781482367.8440256,
-    "ast_hash": "d36b3dccdfc36ca38ef2035cc230a019",
+    "mtime": 1781559624.0947196,
+    "ast_hash": "4af6c4f8e6bd347c5eb870ef597da02c",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781462958.5543504,
-    "ast_hash": "aa3a00d775bdfca929d2008d49eda74b",
+    "mtime": 1781557494.975293,
+    "ast_hash": "9f2ded8c3998c9676c79b825ac07e230",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -335,8 +335,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GlbLoader.cs": {
-    "mtime": 1781552937.9120207,
-    "ast_hash": "7f0f8536be8a233bcfb165b54ec35f93",
+    "mtime": 1781559617.9197295,
+    "ast_hash": "f55ec2a9858edc0b2845bf7b1b5197ac",
     "semantic_hash": ""
   },
   "pick-assets/manifest.json": {

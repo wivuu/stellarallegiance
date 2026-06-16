@@ -204,10 +204,16 @@ hardpoint. The documented future path (see the header comments in both files):
 The def data remains the **authority** for gameplay (weapon offset used by prediction lives
 in `DefRegistry`); the GLB nodes are the *visual* placement. Author them consistently.
 
-> **Godot import gotcha:** dropping a `.glb` into `client/assets/...` is not enough — Godot
-> must import it and the `.glb.import` sidecar must be committed, or `res://` loads silently
-> fall back to the procedural mesh. The asteroid assets under
-> `client/assets/asteroids/*.glb.import` are the working example to mirror.
+> **One committed file per asset:** the `.glb` is the *only* file checked in per asset (it
+> embeds its own PNG textures). Godot still imports it the normal way — `GlbLoader` loads the
+> resulting `res://...glb` `PackedScene` — but the import artifacts it leaves on disk
+> (`.glb.import`, the extracted `_N.png`, and their `.png.import`) are **gitignored**
+> (`client/.gitignore`: `assets/**/*.import`, `assets/**/*.png`), not committed.
+>
+> Because the sidecars aren't in the repo, anything that loads `res://` assets **must run an
+> import first** or it silently falls back to the procedural placeholder
+> (`ResourceLoader.Exists` is false until then). The editor imports on open; for headless /
+> CI / export builds run `godot --headless --import --path client` before exporting.
 
 ---
 
@@ -304,8 +310,9 @@ muzzles that don't sit on the mesh feature they belong to.
 2. **Add the gameplay def** in `shared/Defs.cs` `GameContent`:
    a `ShipClassDef` (new byte `ClassId`) or `BaseDef`, with a matching `Hardpoints` list.
    Flight stats come from a `FlightModel` block; weapons reference a `WeaponDef.WeaponId`.
-3. **Ship the GLB to the client**: copy into `client/assets/...`, **import it in Godot**, and
-   **commit the `.glb.import` sidecar**.
+3. **Ship the GLB to the client**: copy the single `.glb` into `client/assets/...` and import it
+   (open the editor or `godot --headless --import --path client`). Commit only the `.glb` — the
+   regenerated `.import`/`.png` artifacts are gitignored.
 4. The defs flow server → client automatically on connect (`MsgDefs`); the client guards
    until they arrive, then renders markers/FX from them (and, once the GLB loader path is
    wired, overrides the placeholder with your mesh).

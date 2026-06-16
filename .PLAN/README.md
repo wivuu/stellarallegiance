@@ -17,9 +17,9 @@ Archives:
 
 ## QUICKNOTES:
 - CONFIG M5 addendum
-- Build Allegiance mesh loader (with hardpoint metadata); build a tool which converts FreeAllegiance model information into our ship/base config format.
 - Code cleanup and refactor
-- Make it so there is only 1 file per asset and the client can extract any additional things into memory or temp files as-needed rather than 4 different files per asset (i.e. base_0.png, .png.import, .glb, .glb.import)
+- ~~Make it so there is only 1 file per asset and the client can extract any additional things into memory or temp files as-needed rather than 4 different files per asset (i.e. base_0.png, .png.import, .glb, .glb.import)~~ DONE — only the `.glb` is committed (it embeds its textures); Godot's regenerated `.import`/`_N.png` artifacts are gitignored. Run `godot --headless --import --path client` before headless/CI exports.
+- Move the ship's team trail to a few meters behind the back of the ship, and smooth out the trail a bit so each tiny control adjustment isnt reflected in the trail so obviously. Gradient it slightly at the start so it doesnt look sharp edged at the start
 ---
 
 ## Roadmap (prioritized)

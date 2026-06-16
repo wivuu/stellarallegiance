@@ -9,8 +9,12 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# shellcheck source=scripts/godot-bin.sh
+source "${REPO_ROOT}/scripts/godot-bin.sh"
+godot_resolve || exit 1
+
 echo "[run-client] building client C# (Debug)"
 dotnet build "${REPO_ROOT}/client/wivuullegiance.csproj" -c Debug
 
 cd "${REPO_ROOT}"
-exec godot-mono --path client/ "$@"
+exec "${GODOT}" --path client/ "$@"

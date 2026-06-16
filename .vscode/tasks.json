@@ -1,0 +1,105 @@
+{
+    // Project scripts, exposed as VS Code tasks. Run them with
+    //   Cmd/Ctrl+Shift+P → "Tasks: Run Task"
+    //
+    // All tasks run through `bash`, so on Windows you need bash on PATH (ships with Git for
+    // Windows / "Git Bash"). The Godot executable is taken from the `godot.executablePath`
+    // setting (set it in your *User* settings so it isn't committed — see README → Dev setup);
+    // when empty the scripts auto-detect Godot from PATH and standard install locations.
+    "version": "2.0.0",
+    "options": {
+        "env": { "GODOT": "${config:godot.executablePath}" }
+    },
+    "tasks": [
+        {
+            "label": "Godot: import assets (if needed)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/tools/godot-import.sh"
+            ],
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Godot: reimport assets (force)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/tools/godot-import.sh",
+                "--force"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run server",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/scripts/run-server.sh"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run client",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/scripts/run-client.sh"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Export clients (all platforms)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/scripts/export-clients.sh"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Asteroid-gen: build catalog",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/tools/asteroid-gen/build.sh"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
