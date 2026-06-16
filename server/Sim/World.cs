@@ -12,7 +12,7 @@ public sealed class World
     // ---- Tuning ported from module/spacetimedb/Lib.cs (keep in sync) ----
     public const float ShipRadius = 3f;
     public const float ProjectileRadius = 1f;
-    public const float BaseRadius = 45f;
+    public const float BaseRadius = 90f;
     public const float BaseMaxHealth = 2000f;
     public const float AsteroidCollisionScale = 0.82f;
     public const float CollisionRestitution = 0.3f;

@@ -20,6 +20,8 @@ public partial class TeamTrail : Node3D
 	private const float MinSampleDist = 0.8f;   // don't pile up samples while ~stationary
 	private const float WarpDist = 200f;        // a jump this big is a warp: reset, don't draw a streak across sectors
 	private const int MaxSamples = 64;
+	private const double SmoothTau = 0.14;      // s — low-pass the anchor so tiny control wiggles don't show in the spine
+	private const float HeadFadeFrac = 0.18f;   // ribbon ramps in over this fraction of life so the head isn't hard-edged
 
 	// Set by WorldRenderer before AddChild. The team hue and the ribbon's half-width.
 	public Color TeamColor = new(0.6f, 0.8f, 1f);
@@ -27,6 +29,8 @@ public partial class TeamTrail : Node3D
 
 	private struct Sample { public Vector3 Pos; public double Time; }
 	private readonly List<Sample> _samples = new();
+	private Vector3 _smoothPos;   // low-passed anchor we actually sample from
+	private bool _hasSmooth;
 
 	private MeshInstance3D _mi = null!;
 	private ImmediateMesh _mesh = null!;
@@ -53,21 +57,31 @@ public partial class TeamTrail : Node3D
 	public override void _Process(double delta)
 	{
 		double now = Time.GetTicksMsec() / 1000.0;
-		Vector3 pos = GlobalPosition;   // rear anchor: WorldRenderer offsets this node behind the hull
+		Vector3 raw = GlobalPosition;   // rear anchor: ShipModelLoader offsets this node behind the hull
 
-		// Record a new sample once we've moved far enough (keeps the spine clean at rest).
-		if (_samples.Count == 0)
+		// Low-pass the anchor before sampling: an exponential lag toward the raw position
+		// damps the constant attitude jitter from tiny control adjustments, so the ribbon
+		// traces the ship's overall flow instead of mirroring every twitch.
+		if (!_hasSmooth)
 		{
-			_samples.Add(new Sample { Pos = pos, Time = now });
+			_smoothPos = raw;
+			_hasSmooth = true;
+		}
+		else if (raw.DistanceTo(_smoothPos) > WarpDist)
+		{
+			_smoothPos = raw;     // warp/respawn — snap the anchor and start a fresh ribbon
+			_samples.Clear();
 		}
 		else
 		{
-			float moved = pos.DistanceTo(_samples[^1].Pos);
-			if (moved > WarpDist)
-				_samples.Clear();   // warp/respawn — start a fresh ribbon
-			if (_samples.Count == 0 || moved > MinSampleDist)
-				_samples.Add(new Sample { Pos = pos, Time = now });
+			float k = 1f - Mathf.Exp(-(float)delta / (float)SmoothTau);
+			_smoothPos = _smoothPos.Lerp(raw, k);
 		}
+		Vector3 pos = _smoothPos;
+
+		// Record a new sample once we've moved far enough (keeps the spine clean at rest).
+		if (_samples.Count == 0 || pos.DistanceTo(_samples[^1].Pos) > MinSampleDist)
+			_samples.Add(new Sample { Pos = pos, Time = now });
 
 		// Age out the tail and cap the buffer.
 		_samples.RemoveAll(s => now - s.Time > TrailSeconds);
@@ -106,11 +120,14 @@ public partial class TeamTrail : Node3D
 			Vector3 side = tangent.Cross(view);
 			side = side.LengthSquared() > 1e-6f ? side.Normalized() : Vector3.Up;
 
-			// Fade + narrow with age: newest opaque & full width, oldest gone.
+			// Fade + narrow with age. The tail dissolves to nothing (tail factor), and the
+			// HEAD ramps in over its first stretch (head factor) so the ribbon emerges as a
+			// soft gradient near the ship rather than a hard-edged bar.
 			float age = (float)((now - _samples[i].Time) / TrailSeconds);
-			float life = Mathf.Clamp(1f - age, 0f, 1f);
-			float halfW = Width * 0.5f * life;
-			var col = new Color(TeamColor.R, TeamColor.G, TeamColor.B, 0.45f * life);
+			float tail = Mathf.Clamp(1f - age, 0f, 1f);
+			float head = Mathf.SmoothStep(0f, HeadFadeFrac, age);
+			float halfW = Width * 0.5f * tail * Mathf.Lerp(0.45f, 1f, head);
+			var col = new Color(TeamColor.R, TeamColor.G, TeamColor.B, 0.45f * tail * head);
 
 			_mesh.SurfaceSetColor(col);
 			_mesh.SurfaceAddVertex(p + side * halfW);

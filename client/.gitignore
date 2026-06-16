@@ -7,6 +7,13 @@
 .godot/
 *.uid
 
+# GLB import artifacts — Godot regenerates these on import (the .glb embeds its own
+# textures and is the committed source of truth). Don't track the sidecars or the
+# textures Godot extracts next to them. Run an import after adding/regenerating an
+# asset: open the editor, or `godot --headless --import --path client`.
+assets/**/*.import
+assets/**/*.png
+
 # dotenv files
 .env
 

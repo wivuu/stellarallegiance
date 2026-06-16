@@ -79,8 +79,7 @@ public partial class ShipController : Node
 	private bool _mouseInvert;
 	private Vector2 _mouseDelta;        // captured-cursor motion accumulated since last sample
 	private float _stickYaw, _stickPitch;  // persistent self-centering virtual-stick deflection (-1..1)
-	private bool _escHeld;              // edge-detect Escape (capture toggle)
-	private bool _clickHeld;            // edge-detect left click (recapture)
+	private bool _hasShip;             // mirrors _world.LocalShip != null, set each _Process for _Input's capture gate
 
 	// Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
 	// input so the full ApplyInput -> SimTick -> reconcile loop can be checked
@@ -173,6 +172,7 @@ public partial class ShipController : Node
 		// One native connection: "connected" means the server's Welcome has landed.
 		bool connected = _cm.State == ConnectionManager.ConnState.Connected;
 		bool hasShip = _world.LocalShip != null;
+		_hasShip = hasShip;   // cached for _Input's capture gate (event-driven, runs between frames)
 
 		// Headless autofly: the server gates spawning behind the lobby ready-up, so ready up once
 		// on connect to drive the match to Active before requesting a ship (teams are balanced
@@ -333,47 +333,43 @@ public partial class ShipController : Node
 		if (_sentAt.Count > 256) _sentAt.Clear();
 	}
 
-	// Accumulate raw mouse motion only while the cursor is captured; consumed (and
-	// reset) once per frame in ReadInput. Visible-cursor motion is ignored so menu
-	// interaction never steers the ship.
+	// Accumulate raw mouse motion only while the cursor is captured (consumed once per frame
+	// in ReadInput; visible-cursor motion is ignored so menu interaction never steers), AND
+	// drive the cursor capture/release transitions. Doing the MouseMode change here — in
+	// response to the real Esc/click EVENT rather than polling in _Process — keeps the OS
+	// cursor's hide/show in lockstep with the mode: on macOS a Captured set from _Process
+	// leaves a ghost cursor pinned at screen center until the next motion event.
+	//
+	// Esc always RELEASES the cursor (one-way, so the OS cursor is reachable mid-flight); a
+	// left click in the viewport recaptures it. Skipped under --autofly (headless has no real
+	// cursor) and while Chat/SectorOverview own the cursor (they restore it on close).
 	public override void _Input(InputEvent @event)
 	{
 		if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
 			_mouseDelta += mm.Relative;
-	}
 
-	// Capture the cursor for mouse-look while flying; release it for the spawn menu.
-	// Esc toggles release (so the OS cursor is reachable mid-flight); a click (or Esc)
-	// recaptures. Edge-detected so a held key/button doesn't thrash the mode. Skipped
-	// under --autofly (headless has no real cursor and must not grab focus).
-	private void HandleMouseCapture(bool flying)
-	{
-		// Chat owns the cursor while typing and the sector overview frees it for dragging;
-		// don't fight either — they restore the capture state when they close.
-		if (_autoFly || Chat.Capturing || SectorOverview.Active) return;
+		if (_autoFly || !_hasShip || Chat.Capturing || SectorOverview.Active)
+			return;
 
-		bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
-		bool escPressed = esc && !_escHeld;
-		_escHeld = esc;
-
-		bool click = Input.IsMouseButtonPressed(MouseButton.Left);
-		bool clickPressed = click && !_clickHeld;
-		_clickHeld = click;
-
-		bool captured = Input.MouseMode == Input.MouseModeEnum.Captured;
-		if (!flying)
+		if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
 		{
-			if (captured) Input.MouseMode = Input.MouseModeEnum.Visible;   // free cursor for the menu
+			Input.MouseMode = Input.MouseModeEnum.Visible;
 		}
-		else if (captured)
-		{
-			if (escPressed) Input.MouseMode = Input.MouseModeEnum.Visible;
-		}
-		else if (clickPressed || escPressed)
+		else if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }
+			&& Input.MouseMode != Input.MouseModeEnum.Captured)
 		{
 			Input.MouseMode = Input.MouseModeEnum.Captured;
 			_mouseDelta = Vector2.Zero;   // drop any motion from the recapture gesture
 		}
+	}
+
+	// Release the cursor for the spawn menu (dead / not yet spawned). The flying-state
+	// capture/release lives in _Input; this only handles the no-ship menu case each frame.
+	private void HandleMouseCapture(bool flying)
+	{
+		if (_autoFly || Chat.Capturing || SectorOverview.Active) return;
+		if (!flying && Input.MouseMode == Input.MouseModeEnum.Captured)
+			Input.MouseMode = Input.MouseModeEnum.Visible;   // free cursor for the menu
 	}
 
 	private static float Axis(Key pos, Key neg)

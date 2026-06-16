@@ -268,8 +268,8 @@ namespace StellarAllegiance.Shared
         // out-TURNS the Scout (60 vs 50 °/s); the Scout's edge is speed and snap.
         //                                 maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
         public static readonly ShipStats Scout = ShipStats.Create(
-            160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 18f, 2.0f, 1.0f);
-        // abAccel 18 → abThrust/thrust = 0.6 → boosted equilibrium ≈ 1.6× MaxSpeed.
+            160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f);
+        // abAccel 0 → no afterburner: the Scout's edge is raw speed/snap, not boost.
 
         public static readonly ShipStats Fighter = ShipStats.Create(
             100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f);
@@ -280,8 +280,8 @@ namespace StellarAllegiance.Shared
         // only rate²/(2·drift) = 25°/s² of angular accel — ~0.8-1.6 s to wind a turn
         // up or stop it. This is the hull where the rotational inertia really shows.
         public static readonly ShipStats Bomber = ShipStats.Create(
-            60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 6f, 2.0f, 1.0f);
-        // abAccel 6 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
+            60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f);
+        // abAccel 0 → no afterburner: the heavy hull lumbers at its base speed.
 
         // Escape pod (server Ship.IsPod): a slow, unarmed lifeboat ejected on ship death.
         // Full strafe/reverse (1.0) and no afterburner (AbAccel 0) — it crawls home and

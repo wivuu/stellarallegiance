@@ -22,43 +22,72 @@ using StellarAllegiance.Shared;
 //  only if the def hasn't arrived yet (defs ship in the initial subscription snapshot,
 //  before any base; the fallback mirrors the server's BaseRadiusFor).
 //
-//  FUTURE GLB CONVENTION (same as the ship loader): when a base `.glb` exists, the
-//  loader should load it in place of the sphere and read its same-named HP_<Kind>_<Index>
-//  nodes to OVERRIDE these procedural markers. The data contract — node name =
-//  HP_<Kind>_<Index>, local +Z = the hardpoint forward — is identical either way.
+//  GLB CONVENTION (now wired, same as the ship loader; see docs/GLB-AND-HARDPOINT-FORMAT.md
+//  §4): when `res://assets/bases/base.glb` exists it is loaded in place of the sphere,
+//  uniform-scaled (via GlbLoader) to the def radius, keeping its own baked PBR materials
+//  (friend/foe is read from the HUD, not a hull tint). Any HP_<Kind>_<Index> node the glb
+//  author placed in-mesh OVERRIDES the equivalent procedural marker. The data contract —
+//  node name = HP_<Kind>_<Index>, local +Z = the hardpoint forward — is identical either
+//  way, so the markers/beacons code keeps working unchanged.
 // =====================================================================
 public static class BaseModelLoader
 {
 	// The placeholder sphere radius used until a BaseDef arrives (mirror of the server's
 	// BaseRadiusFor fallback and the WorldRenderer constant it replaces).
-	public const float FallbackRadius = 45f;
+	public const float FallbackRadius = 90f;
 
-	// Build the base's mesh node: a procedural sphere sized to the type's def, plus a HP_
-	// marker child per hardpoint and a blinking beacon at each Light. `team` tints the
-	// beacons so friend/foe still reads; `mat` is the team material the caller resolved.
-	public static MeshInstance3D Build(DefRegistry defs, byte baseTypeId, byte team, Material mat)
+	// Build the base's model node: the authored `base.glb` hull if one is present (else a
+	// procedural sphere sized to the type's def), plus a HP_ marker per hardpoint and a blinking
+	// beacon at each Light. `team` tints both the hull and the beacons so friend/foe still reads;
+	// `mat` is the team material the caller resolved.
+	//
+	// Like the ship loader, the returned node is a container in the base's UNSCALED local frame:
+	// the visual hull is a child that may be independently scaled, while the markers and beacons
+	// stay on the container at the def's true world-unit offsets (the Light beacons sit on the
+	// sphere/hull surface at ±radius).
+	public static Node3D Build(DefRegistry defs, byte baseTypeId, byte team, Material mat)
 	{
 		BaseDef? def = defs.GetBaseDef(baseTypeId);
 		float radius = def?.Radius ?? FallbackRadius;
 
-		var mesh = new MeshInstance3D
+		var root = new Node3D { Name = "BaseModel" };
+		Node3D hull = LoadHull(radius) ?? BuildPlaceholderSphere(radius, mat);
+		root.AddChild(hull);
+
+		if (def?.Hardpoints != null)
+			foreach (HardpointDef hp in def.Hardpoints)
+			{
+				// A GLB-authored HP_ node overrides the procedural marker; otherwise it stands.
+				if (!GlbLoader.HasNode(hull, $"HP_{hp.Kind}_{hp.Index}"))
+					root.AddChild(MakeMarker(hp));
+				if (hp.Kind == HardpointKind.Light)
+					root.AddChild(MakeBeacon(hp, team));
+			}
+
+		return root;
+	}
+
+	// Load `res://assets/bases/base.glb` and ready it as a hull: scaled so its longest axis spans
+	// the def diameter (it visually replaces the radius-sized sphere), keeping the GLB's own baked
+	// PBR materials (friend/foe reads from the HUD, not a hull tint). Null when no asset exists,
+	// so Build falls back to the procedural sphere.
+	private static Node3D? LoadHull(float radius)
+	{
+		Node3D? hull = GlbLoader.Load("res://assets/bases/base.glb");
+		if (hull == null)
+			return null;
+		GlbLoader.NormalizeLongestAxis(hull, radius * 2f);
+		return hull;
+	}
+
+	// The procedural sphere placeholder, sized to the type's def radius. Used until a base.glb
+	// is present (and as the fallback if it fails to load).
+	private static MeshInstance3D BuildPlaceholderSphere(float radius, Material mat)
+		=> new()
 		{
 			Mesh = new SphereMesh { Radius = radius, Height = radius * 2f, RadialSegments = 32, Rings = 16 },
 			MaterialOverride = mat,
 		};
-
-		// Markers (and beacons) are children of the mesh node, so a future .glb that
-		// replaces the sphere carries its own HP_ nodes in the same local frame.
-		if (def?.Hardpoints != null)
-			foreach (HardpointDef hp in def.Hardpoints)
-			{
-				mesh.AddChild(MakeMarker(hp));
-				if (hp.Kind == HardpointKind.Light)
-					mesh.AddChild(MakeBeacon(hp, team));
-			}
-
-		return mesh;
-	}
 
 	// The radius a base of this type renders at — the def's Radius, or the placeholder
 	// fallback until the row arrives. WorldRenderer uses it to anchor the floating health

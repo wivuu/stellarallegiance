@@ -20,7 +20,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${REPO_ROOT}/client"
 OUT="${REPO_ROOT}/build"
-GODOT="${GODOT:-godot-mono}"
+
+# shellcheck source=scripts/godot-bin.sh
+source "${REPO_ROOT}/scripts/godot-bin.sh"
+godot_resolve || exit 1
 
 mkdir -p "${OUT}/mac" "${OUT}/win" "${OUT}/linux"
 
@@ -37,19 +40,25 @@ pkill -9 -f "VBCSCompiler" >/dev/null 2>&1 || true
 pkill -9 -f "MSBuild.dll" >/dev/null 2>&1 || true
 dotnet build-server shutdown >/dev/null 2>&1 || true
 
-echo "[export] macOS .app ..."
-APP="${OUT}/mac/wivuullegiance.app"
-rm -rf "${APP}"
-"${GODOT}" --headless --path "${CLIENT}" --export-release "macOS" "${APP}"
+# The macOS .app export + ad-hoc re-signing only works on macOS (codesign/ditto are
+# macOS-only). On Windows/Linux we skip it and still produce the Windows + Linux builds.
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "[export] macOS .app ..."
+  APP="${OUT}/mac/wivuullegiance.app"
+  rm -rf "${APP}"
+  "${GODOT}" --headless --path "${CLIENT}" --export-release "macOS" "${APP}"
 
-echo "[export] re-signing macOS app as plain ad-hoc (no hardened runtime) ..."
-codesign --remove-signature "${APP}" 2>/dev/null || true
-codesign --force --deep --sign - "${APP}"
-codesign --verify --deep --strict "${APP}" && echo "[export]   signature valid"
+  echo "[export] re-signing macOS app as plain ad-hoc (no hardened runtime) ..."
+  codesign --remove-signature "${APP}" 2>/dev/null || true
+  codesign --force --deep --sign - "${APP}"
+  codesign --verify --deep --strict "${APP}" && echo "[export]   signature valid"
 
-echo "[export] zipping macOS app with ditto ..."
-rm -f "${OUT}/mac/wivuullegiance-macos.zip"
-ditto -c -k --keepParent "${APP}" "${OUT}/mac/wivuullegiance-macos.zip"
+  echo "[export] zipping macOS app with ditto ..."
+  rm -f "${OUT}/mac/wivuullegiance-macos.zip"
+  ditto -c -k --keepParent "${APP}" "${OUT}/mac/wivuullegiance-macos.zip"
+else
+  echo "[export] skipping macOS build (only exportable from macOS — needs codesign/ditto)"
+fi
 
 echo "[export] Windows .exe ..."
 "${GODOT}" --headless --path "${CLIENT}" --export-release "Windows Desktop" "${OUT}/win/wivuullegiance.exe"

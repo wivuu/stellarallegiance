@@ -100,9 +100,9 @@
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
-    "mtime": 1781572770.004903,
-    "ast_hash": "1a0e9532db3abce85b19933d11341704",
-    "semantic_hash": ""
+    "mtime": 1780668592.827944,
+    "ast_hash": "fd5361bc51fc5cdb01d496ce803ddb4d",
+    "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
     "mtime": 1781566893.5810618,
@@ -125,9 +125,9 @@
     "semantic_hash": "0a8a0044ec250a189c7bd91e3a0e2bca"
   },
   "scripts/export-clients.sh": {
-    "mtime": 1781568583.0365431,
-    "ast_hash": "e63d2a2e914bce4aed0e299729ba8f41",
-    "semantic_hash": ""
+    "mtime": 1780507561.8618631,
+    "ast_hash": "49aaf2d89a761ab7815f34bd31b70747",
+    "semantic_hash": "49aaf2d89a761ab7815f34bd31b70747"
   },
   "shared/FlightModel.cs": {
     "mtime": 1781552876.4475486,
@@ -200,8 +200,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1781572741.9508047,
-    "ast_hash": "94119a27c13e233e1834429c5a6119de",
+    "mtime": 1781552332.9149249,
+    "ast_hash": "d20413e5dcab1f95a5d8f5fcf6e08a8d",
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
@@ -305,8 +305,8 @@
     "semantic_hash": ""
   },
   "scripts/run-client.sh": {
-    "mtime": 1781568553.0903044,
-    "ast_hash": "b17dbd58e603235806d1ca99b9ef7fc8",
+    "mtime": 1781443362.8672056,
+    "ast_hash": "02ed2c0261a39a799486f3db9be04ce4",
     "semantic_hash": ""
   },
   "scripts/run-server.sh": {
@@ -342,16 +342,6 @@
   "pick-assets/manifest.json": {
     "mtime": 1781549674.7597651,
     "ast_hash": "5f07cbb13757f79ad6d0aab9224bc777",
-    "semantic_hash": ""
-  },
-  "scripts/godot-bin.sh": {
-    "mtime": 1781568533.8407967,
-    "ast_hash": "ce8a158e5fa148e0f782dcdf7577078a",
-    "semantic_hash": ""
-  },
-  "tools/godot-import.sh": {
-    "mtime": 1781568613.593134,
-    "ast_hash": "1cf90a725b37ff0cb852ab49a8ddd154",
     "semantic_hash": ""
   }
 }

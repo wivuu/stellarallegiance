@@ -27,7 +27,7 @@ public sealed partial class Simulation
 
     // ---- PIG tuning (ported verbatim from the module) ----
     private const byte NumTeams = 2;
-    private const int MaxPigsPerTeam = 450;
+    private const int MaxPigsPerTeam = 5;
     private const uint PigSquadDelayTicks = 10 * TickHz;   // 10 s after a wipe before the next squad
     private const uint PigAggroWindowTicks = 3 * TickHz;   // ~3 s aggression memory
     private const float PigPatrolRadius = 400f;
