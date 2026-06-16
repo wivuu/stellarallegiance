@@ -105,8 +105,8 @@
     "semantic_hash": "fd5361bc51fc5cdb01d496ce803ddb4d"
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781559624.0947196,
-    "ast_hash": "4af6c4f8e6bd347c5eb870ef597da02c",
+    "mtime": 1781566893.5810618,
+    "ast_hash": "d36b3dccdfc36ca38ef2035cc230a019",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -335,8 +335,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GlbLoader.cs": {
-    "mtime": 1781559617.9197295,
-    "ast_hash": "f55ec2a9858edc0b2845bf7b1b5197ac",
+    "mtime": 1781566893.5804837,
+    "ast_hash": "7f0f8536be8a233bcfb165b54ec35f93",
     "semantic_hash": ""
   },
   "pick-assets/manifest.json": {

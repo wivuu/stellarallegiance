@@ -135,7 +135,10 @@ public static class ShipModelLoader
         // cluster (the average nozzle Z) so the ribbon streams off the hull's BACK — this
         // replaces the per-class hard-coded -2.25/-2.75/-3.4 anchor floats with the same
         // value derived from the seeded hardpoints. Width stays a cosmetic per-class lever.
-        float trailZ = nozzles.Count > 0 ? AvgZ(nozzles) : 0f;
+        // Pushed a few metres further back (forward is +Z) so the ribbon starts behind the
+        // exhaust rather than clipping the hull.
+        const float trailGap = 3f;
+        float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
         shipNode.AddChild(new TeamTrail
         {
             Name = "TeamTrail",

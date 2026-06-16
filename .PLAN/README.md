@@ -18,7 +18,6 @@ Archives:
 ## QUICKNOTES:
 - CONFIG M5 addendum
 - Code cleanup and refactor
-- Move the ship's team trail to a few meters behind the back of the ship, and smooth out the trail a bit so each tiny control adjustment isnt reflected in the trail so obviously. Gradient it slightly at the start so it doesnt look sharp edged at the start
 ---
 
 ## Roadmap (prioritized)

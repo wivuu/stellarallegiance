@@ -2066,25 +2066,25 @@
       "label": "GlbLoader",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L24",
+      "source_location": "L16",
       "id": "scripts_glbloader_glbloader",
       "community": 16,
       "norm_label": "glbloader"
     },
     {
-      "label": "Dictionary",
+      "label": "HashSet<string>",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L29",
-      "id": "client_scripts_glbloader_cs_dictionary",
+      "source_location": "L20",
+      "id": "hashset_string",
       "community": 16,
-      "norm_label": "dictionary"
+      "norm_label": "hashset<string>"
     },
     {
       "label": ".Load()",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L34",
+      "source_location": "L25",
       "id": "scripts_glbloader_glbloader_load",
       "community": 16,
       "norm_label": ".load()"
@@ -2093,52 +2093,16 @@
       "label": "Node3D",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L34",
+      "source_location": "L25",
       "id": "client_scripts_glbloader_cs_node3d",
       "community": 16,
       "norm_label": "node3d"
     },
     {
-      "label": ".Parse()",
-      "file_type": "code",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L45",
-      "id": "scripts_glbloader_glbloader_parse",
-      "community": 16,
-      "norm_label": ".parse()"
-    },
-    {
-      "label": "PackedScene",
-      "file_type": "code",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L45",
-      "id": "packedscene",
-      "community": 16,
-      "norm_label": "packedscene"
-    },
-    {
-      "label": ".SetOwnerRecursive()",
-      "file_type": "code",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L82",
-      "id": "scripts_glbloader_glbloader_setownerrecursive",
-      "community": 16,
-      "norm_label": ".setownerrecursive()"
-    },
-    {
-      "label": "Node",
-      "file_type": "code",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L82",
-      "id": "client_scripts_glbloader_cs_node",
-      "community": 16,
-      "norm_label": "node"
-    },
-    {
       "label": ".NormalizeLongestAxis()",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L95",
+      "source_location": "L43",
       "id": "scripts_glbloader_glbloader_normalizelongestaxis",
       "community": 16,
       "norm_label": ".normalizelongestaxis()"
@@ -2147,16 +2111,25 @@
       "label": ".HasNode()",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L106",
+      "source_location": "L54",
       "id": "scripts_glbloader_glbloader_hasnode",
       "community": 16,
       "norm_label": ".hasnode()"
     },
     {
+      "label": "Node",
+      "file_type": "code",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L54",
+      "id": "client_scripts_glbloader_cs_node",
+      "community": 16,
+      "norm_label": "node"
+    },
+    {
       "label": ".MeshAabb()",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L119",
+      "source_location": "L67",
       "id": "scripts_glbloader_glbloader_meshaabb",
       "community": 16,
       "norm_label": ".meshaabb()"
@@ -2165,7 +2138,7 @@
       "label": "Aabb",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L119",
+      "source_location": "L67",
       "id": "aabb",
       "community": 16,
       "norm_label": "aabb"
@@ -5153,7 +5126,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L469",
+      "source_location": "L468",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 69,
       "norm_label": ".findmeshinstance()"
@@ -5162,7 +5135,7 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L469",
+      "source_location": "L468",
       "id": "client_scripts_worldrenderer_cs_node",
       "community": 69,
       "norm_label": "node"
@@ -5171,7 +5144,7 @@
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L482",
+      "source_location": "L481",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 69,
       "norm_label": ".meshboundingradius()"
@@ -5180,7 +5153,7 @@
       "label": ".InsertAsteroid()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L496",
+      "source_location": "L495",
       "id": "scripts_worldrenderer_worldrenderer_insertasteroid",
       "community": 56,
       "norm_label": ".insertasteroid()"
@@ -5189,7 +5162,7 @@
       "label": ".AsteroidSpin()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L537",
+      "source_location": "L536",
       "id": "scripts_worldrenderer_worldrenderer_asteroidspin",
       "community": 56,
       "norm_label": ".asteroidspin()"
@@ -5198,7 +5171,7 @@
       "label": "Axis",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L537",
+      "source_location": "L536",
       "id": "axis",
       "community": 56,
       "norm_label": "axis"
@@ -5207,7 +5180,7 @@
       "label": "Speed",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L537",
+      "source_location": "L536",
       "id": "speed",
       "community": 56,
       "norm_label": "speed"
@@ -5216,7 +5189,7 @@
       "label": ".InsertShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L558",
+      "source_location": "L557",
       "id": "scripts_worldrenderer_worldrenderer_insertship",
       "community": 65,
       "norm_label": ".insertship()"
@@ -5225,7 +5198,7 @@
       "label": ".UpdateShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L597",
+      "source_location": "L596",
       "id": "scripts_worldrenderer_worldrenderer_updateship",
       "community": 65,
       "norm_label": ".updateship()"
@@ -5234,7 +5207,7 @@
       "label": ".DeleteShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L628",
+      "source_location": "L627",
       "id": "scripts_worldrenderer_worldrenderer_deleteship",
       "community": 65,
       "norm_label": ".deleteship()"
@@ -5243,7 +5216,7 @@
       "label": ".FriendlyRescuerNear()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L686",
+      "source_location": "L685",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
       "community": 65,
       "norm_label": ".friendlyrescuernear()"
@@ -5252,7 +5225,7 @@
       "label": ".SpawnBoltFor()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L713",
+      "source_location": "L712",
       "id": "scripts_worldrenderer_worldrenderer_spawnboltfor",
       "community": 65,
       "norm_label": ".spawnboltfor()"
@@ -5261,7 +5234,7 @@
       "label": ".SpawnLocalBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L739",
+      "source_location": "L738",
       "id": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
       "community": 63,
       "norm_label": ".spawnlocalbolt()"
@@ -5270,7 +5243,7 @@
       "label": ".AddBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L742",
+      "source_location": "L741",
       "id": "scripts_worldrenderer_worldrenderer_addbolt",
       "community": 63,
       "norm_label": ".addbolt()"
@@ -5279,7 +5252,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L756",
+      "source_location": "L755",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 56,
       "norm_label": ".shotmaskleadsec()"
@@ -5288,7 +5261,7 @@
       "label": ".ClipBoltTtl()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L769",
+      "source_location": "L768",
       "id": "scripts_worldrenderer_worldrenderer_clipboltttl",
       "community": 63,
       "norm_label": ".clipboltttl()"
@@ -5297,7 +5270,7 @@
       "label": ".ClipSphere()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L790",
+      "source_location": "L789",
       "id": "scripts_worldrenderer_worldrenderer_clipsphere",
       "community": 63,
       "norm_label": ".clipsphere()"
@@ -5306,7 +5279,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L807",
+      "source_location": "L806",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 63,
       "norm_label": ".newprojectilemesh()"
@@ -5315,7 +5288,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L819",
+      "source_location": "L818",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
@@ -5324,7 +5297,7 @@
       "label": ".BillboardBaseHealthBars()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L858",
+      "source_location": "L857",
       "id": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
       "community": 1,
       "norm_label": ".billboardbasehealthbars()"
@@ -5333,7 +5306,7 @@
       "label": ".CheckBoltImpacts()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L880",
+      "source_location": "L879",
       "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "community": 1,
       "norm_label": ".checkboltimpacts()"
@@ -5342,7 +5315,7 @@
       "label": ".ClosestPointOnSegment()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L913",
+      "source_location": "L912",
       "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "community": 1,
       "norm_label": ".closestpointonsegment()"
@@ -5351,7 +5324,7 @@
       "label": ".ShipMaterial()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L925",
+      "source_location": "L924",
       "id": "scripts_worldrenderer_worldrenderer_shipmaterial",
       "community": 65,
       "norm_label": ".shipmaterial()"
@@ -9564,13 +9537,40 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
-      "label": "HashSet<string>",
+      "label": "Dictionary",
       "file_type": "code",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L20",
+      "source_location": "L29",
       "community": 16,
-      "norm_label": "hashset<string>",
-      "id": "hashset_string"
+      "norm_label": "dictionary",
+      "id": "client_scripts_glbloader_cs_dictionary"
+    },
+    {
+      "label": ".Parse()",
+      "file_type": "code",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L45",
+      "community": 16,
+      "norm_label": ".parse()",
+      "id": "scripts_glbloader_glbloader_parse"
+    },
+    {
+      "label": "PackedScene",
+      "file_type": "code",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L45",
+      "community": 16,
+      "norm_label": "packedscene",
+      "id": "packedscene"
+    },
+    {
+      "label": ".SetOwnerRecursive()",
+      "file_type": "code",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L82",
+      "community": 16,
+      "norm_label": ".setownerrecursive()",
+      "id": "scripts_glbloader_glbloader_setownerrecursive"
     },
     {
       "label": ".ApplyMaterialOverride()",
@@ -15059,9 +15059,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_glbloader_glbloader",
-      "target": "client_scripts_glbloader_cs_dictionary",
-      "confidence_score": 1.0
+      "target": "client_scripts_glbloader_cs_dictionary"
     },
     {
       "relation": "references",
@@ -15130,9 +15130,9 @@
       "source_file": "client/scripts/GlbLoader.cs",
       "source_location": "L45",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_glbloader_glbloader",
-      "target": "scripts_glbloader_glbloader_parse",
-      "confidence_score": 1.0
+      "target": "scripts_glbloader_glbloader_parse"
     },
     {
       "relation": "method",
@@ -15140,9 +15140,9 @@
       "source_file": "client/scripts/GlbLoader.cs",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_glbloader_glbloader",
-      "target": "scripts_glbloader_glbloader_setownerrecursive",
-      "confidence_score": 1.0
+      "target": "scripts_glbloader_glbloader_setownerrecursive"
     },
     {
       "relation": "references",
@@ -15162,9 +15162,9 @@
       "source_file": "client/scripts/GlbLoader.cs",
       "source_location": "L37",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_glbloader_glbloader_load",
-      "target": "scripts_glbloader_glbloader_parse",
-      "confidence_score": 1.0
+      "target": "scripts_glbloader_glbloader_parse"
     },
     {
       "relation": "references",
@@ -15178,48 +15178,15 @@
       "target": "client_scripts_glbloader_cs_node3d"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L45",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "scripts_glbloader_glbloader_parse",
-      "target": "packedscene",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L73",
+      "source_location": "L44",
       "weight": 1.0,
-      "source": "scripts_glbloader_glbloader_parse",
-      "target": "scripts_glbloader_glbloader_setownerrecursive",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L82",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "scripts_glbloader_glbloader_setownerrecursive",
-      "target": "client_scripts_glbloader_cs_node",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L53",
-      "weight": 1.0,
-      "context": "parameter_type",
       "confidence_score": 1.0,
-      "source": "scripts_glbloader_glbloader_applymaterialoverride",
-      "target": "client_scripts_glbloader_cs_node"
+      "source": "scripts_glbloader_glbloader_normalizelongestaxis",
+      "target": "scripts_glbloader_glbloader_meshaabb"
     },
     {
       "relation": "references",
@@ -15236,6 +15203,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L53",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_glbloader_glbloader_applymaterialoverride",
+      "target": "client_scripts_glbloader_cs_node"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GlbLoader.cs",
       "source_location": "L77",
       "weight": 1.0,
       "context": "parameter_type",
@@ -15244,15 +15222,15 @@
       "target": "client_scripts_glbloader_cs_node"
     },
     {
-      "relation": "calls",
-      "context": "call",
+      "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GlbLoader.cs",
-      "source_location": "L44",
+      "source_location": "L82",
       "weight": 1.0,
+      "context": "parameter_type",
       "confidence_score": 1.0,
-      "source": "scripts_glbloader_glbloader_normalizelongestaxis",
-      "target": "scripts_glbloader_glbloader_meshaabb"
+      "source": "scripts_glbloader_glbloader_setownerrecursive",
+      "target": "client_scripts_glbloader_cs_node"
     },
     {
       "relation": "references",
@@ -31469,6 +31447,28 @@
       "confidence_score": 1.0,
       "source": "simbot_simbot",
       "target": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_glbloader_glbloader_parse",
+      "target": "packedscene"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GlbLoader.cs",
+      "source_location": "L73",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_glbloader_glbloader_parse",
+      "target": "scripts_glbloader_glbloader_setownerrecursive"
     },
     {
       "relation": "references",

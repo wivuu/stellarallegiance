@@ -1,7 +1,7 @@
 # Graph Report - wivuullegiance  (2026-06-15)
 
 ## Corpus Check
-- 65 files · ~94,342 words
+- 65 files · ~93,975 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -339,11 +339,11 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 67`, `Community 69`, `PigAI NPC Behavior`, `Target Markers HUD`, `Community 56`, `Community 58`, `Community 63`?**
-  _High betweenness centrality (0.156) - this node is a cross-community bridge._
+  _High betweenness centrality (0.155) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `Community 66`, `Community 37`, `Community 70`, `Client-Side Prediction`, `Engine Glow Effects`, `Community 41`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 43`, `Starscape Background`, `Community 58`?**
-  _High betweenness centrality (0.133) - this node is a cross-community bridge._
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
 - **Why does `Node` connect `Community 69` to `Ship Controller Input`, `Community 57`, `Community 19`, `Community 51`?**
-  _High betweenness centrality (0.106) - this node is a cross-community bridge._
+  _High betweenness centrality (0.101) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
   _371 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
