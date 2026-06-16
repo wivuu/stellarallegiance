@@ -54,6 +54,11 @@ public partial class TargetMarkers : Control
 	private WorldRenderer _world = null!;
 	private Camera3D _camera = null!;
 
+	// The camera the indicators project through: the F3 overview camera while the sector
+	// map is open (so every bracket / glyph / arrow reprojects onto the map), otherwise the
+	// flight chase camera. Resolved per-access so it follows the F3 toggle live.
+	private Camera3D Cam => SectorOverview.ActiveCamera ?? _camera;
+
 	private ulong? _focused;   // ShipId of the focused enemy, or null
 	private bool _tabHeld;     // edge-detect Tab so a held key cycles once
 	// Scratch for the focus cycle: visible enemies paired with their distance (px²) from
@@ -72,13 +77,8 @@ public partial class TargetMarkers : Control
 
 	public override void _Process(double delta)
 	{
-		// The sector overview makes its own camera current; our brackets project through
-		// the (now inactive) chase camera, so hide entirely while the map is up.
-		if (SectorOverview.Active)
-		{
-			Visible = false;
-			return;
-		}
+		// Stay visible in the F3 sector map too — the markers reproject through the overview
+		// camera (see Cam) so the same indicators track each entity over the map.
 		Visible = true;
 		HandleFocusCycle();
 		QueueRedraw();
@@ -95,9 +95,10 @@ public partial class TargetMarkers : Control
 	{
 		Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
 		Vector3 pt = local.GlobalPosition + fwd * (NoseOffset + DefaultAimRange);
-		if (_camera.IsPositionBehind(pt))
+		Camera3D cam = Cam;
+		if (cam.IsPositionBehind(pt))
 			return GetViewportRect().Size * 0.5f;
-		return _camera.UnprojectPosition(pt);
+		return cam.UnprojectPosition(pt);
 	}
 
 	// Tab focus through the enemies, ranked by distance from the aim reticle. The first
@@ -134,11 +135,12 @@ public partial class TargetMarkers : Control
 		// Order the in-front enemies by how close they project to the aim reticle, so the
 		// cycle reads as "what I'm pointing at first, then outward."
 		Vector2 aimPt = AimReticleScreenPoint(local);
+		Camera3D cam = Cam;
 		_visible.Clear();
 		foreach (var e in enemies)
-			if (!_camera.IsPositionBehind(e.GlobalPosition))
+			if (!cam.IsPositionBehind(e.GlobalPosition))
 			{
-				float d2 = (_camera.UnprojectPosition(e.GlobalPosition) - aimPt).LengthSquared();
+				float d2 = (cam.UnprojectPosition(e.GlobalPosition) - aimPt).LengthSquared();
 				_visible.Add((d2, e.ShipId));
 			}
 		_visible.Sort(static (a, b) => a.AimDist2.CompareTo(b.AimDist2));
@@ -253,9 +255,9 @@ public partial class TargetMarkers : Control
 			TryLead(muzzle, local.Velocity, focusedShip.GlobalPosition, focusedShip.Velocity, out Vector3 aimPoint, out float t))
 		{
 			aimRange = ProjectileSpeed * t;
-			if (!_camera.IsPositionBehind(aimPoint))
+			if (!Cam.IsPositionBehind(aimPoint))
 			{
-				Vector2 lp = _camera.UnprojectPosition(aimPoint);
+				Vector2 lp = Cam.UnprojectPosition(aimPoint);
 				DrawArc(lp, LeadRadius, 0f, Mathf.Tau, 28, LeadColor, 2f, true);
 				DrawLine(lp + new Vector2(-LeadRadius - 4f, 0f), lp + new Vector2(LeadRadius + 4f, 0f), LeadColor, 1f, true);
 				DrawLine(lp + new Vector2(0f, -LeadRadius - 4f), lp + new Vector2(0f, LeadRadius + 4f), LeadColor, 1f, true);
@@ -263,8 +265,8 @@ public partial class TargetMarkers : Control
 		}
 
 		Vector3 reticlePoint = muzzle + fwd * aimRange;
-		if (!_camera.IsPositionBehind(reticlePoint))
-			DrawAimReticle(_camera.UnprojectPosition(reticlePoint));
+		if (!Cam.IsPositionBehind(reticlePoint))
+			DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
 	}
 
 	// Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class.
@@ -284,8 +286,9 @@ public partial class TargetMarkers : Control
 	{
 		Vector2 center = size * 0.5f;
 
-		bool behind = _camera.IsPositionBehind(worldPos);
-		Vector2 sp = _camera.UnprojectPosition(worldPos);
+		Camera3D cam = Cam;
+		bool behind = cam.IsPositionBehind(worldPos);
+		Vector2 sp = cam.UnprojectPosition(worldPos);
 		// A point behind the camera unprojects mirrored about the center; flip it back
 		// so the edge arrow points to the correct side.
 		if (behind)

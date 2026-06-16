@@ -19,6 +19,12 @@ public partial class SectorOverview : Node3D
 {
 	public static bool Active { get; private set; }
 
+	// The overview camera while the map is open, else null. Lets the HUD's TargetMarkers
+	// reproject its entity indicators through THIS camera instead of hiding — so the same
+	// brackets / class glyphs / edge arrows appear over the map in F3.
+	public static Camera3D? ActiveCamera => Active ? _instance?._cam : null;
+	private static SectorOverview? _instance;
+
 	private const float Fov = 50f;                 // perspective FOV (deg); perspective avoids the
 	                                               // sky-shader pinch an ortho camera causes
 	private const float DefaultYawDeg = 25f;
@@ -35,11 +41,17 @@ public partial class SectorOverview : Node3D
 	private static readonly Color GridColor = new(0.25f, 0.55f, 1f, 0.35f);
 	private static readonly Color AxisColor = new(0.45f, 0.75f, 1f, 0.6f);
 	private static readonly Color BoundaryColor = new(0.5f, 0.8f, 1f, 0.85f);
+	// Altitude stems: a warm yellow that reads against the cool blue grid.
+	private static readonly Color StemColor = new(1f, 0.85f, 0.2f, 0.7f);
+	private const float StemFootTick = 6f;   // half-length of the cross drawn where a stem meets the plane
 
 	private WorldRenderer _world = null!;
 	private Camera3D _chaseCam = null!;
 	private Camera3D _cam = null!;
 	private MeshInstance3D _grid = null!;
+	private MeshInstance3D _stems = null!;          // yellow altitude lines, entity -> grid plane
+	private ImmediateMesh _stemMesh = null!;        // rebuilt each frame from live entity positions
+	private readonly System.Collections.Generic.List<Vector3> _stemPoints = new();
 	private CanvasLayer _hudLayer = null!;
 	private Label _hint = null!;
 	private Minimap? _minimap;     // resolved lazily; clicking its nodes retargets the view
@@ -53,6 +65,7 @@ public partial class SectorOverview : Node3D
 
 	public override void _Ready()
 	{
+		_instance = this;
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 		_chaseCam = GetNode<Camera3D>("../Camera3D");
 
@@ -69,6 +82,24 @@ public partial class SectorOverview : Node3D
 
 		_grid = new MeshInstance3D { Name = "SectorGrid", Visible = false };
 		AddChild(_grid);
+
+		// Yellow vertical stems from every entity down to the grid plane, so the map reads
+		// the height each ship/base sits off the Y=0 plane (an orbiting view alone hides it).
+		_stemMesh = new ImmediateMesh();
+		_stems = new MeshInstance3D
+		{
+			Name = "AltitudeStems",
+			Mesh = _stemMesh,
+			Visible = false,
+			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+			MaterialOverride = new StandardMaterial3D
+			{
+				ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+				VertexColorUseAsAlbedo = true,
+				Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+			},
+		};
+		AddChild(_stems);
 
 		_hudLayer = new CanvasLayer { Name = "OverviewHud", Layer = 2 };
 		AddChild(_hudLayer);
@@ -104,6 +135,49 @@ public partial class SectorOverview : Node3D
 		HandleKeys(delta);
 		PlaceCamera();
 		UpdateGridLod();
+		RebuildStems();
+	}
+
+	// Rebuild the yellow altitude stems from the live entity positions. One vertical line
+	// per ship/base from its world position to its foot on the grid plane (Y = sector
+	// center Y), plus a small cross at the foot so the base point reads where it meets the
+	// plane. Matches the set of entities the HUD indicators mark (ships + bases); asteroids
+	// are deliberately excluded — there can be thousands and they'd bury the map.
+	private void RebuildStems()
+	{
+		_stemPoints.Clear();
+		if (_world.LocalShip != null)
+			_stemPoints.Add(_world.LocalShip.GlobalPosition);
+		foreach (var s in _world.FriendlyShips())
+			_stemPoints.Add(s.GlobalPosition);
+		foreach (var s in _world.EnemyShips())
+			_stemPoints.Add(s.GlobalPosition);
+		foreach (var (pos, _) in _world.VisibleBases())
+			_stemPoints.Add(pos);
+
+		// ClearSurfaces then SurfaceEnd with zero verts logs an error, so bail when empty.
+		_stemMesh.ClearSurfaces();
+		if (_stemPoints.Count == 0)
+			return;
+
+		float planeY = _world.ViewSectorCenter.Y;
+		_stemMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
+		foreach (var p in _stemPoints)
+		{
+			var foot = new Vector3(p.X, planeY, p.Z);
+			StemLine(p, foot);
+			StemLine(foot + new Vector3(-StemFootTick, 0f, 0f), foot + new Vector3(StemFootTick, 0f, 0f));
+			StemLine(foot + new Vector3(0f, 0f, -StemFootTick), foot + new Vector3(0f, 0f, StemFootTick));
+		}
+		_stemMesh.SurfaceEnd();
+	}
+
+	private void StemLine(Vector3 a, Vector3 b)
+	{
+		_stemMesh.SurfaceSetColor(StemColor);
+		_stemMesh.SurfaceAddVertex(a);
+		_stemMesh.SurfaceSetColor(StemColor);
+		_stemMesh.SurfaceAddVertex(b);
 	}
 
 	// Feed the grid shader the world-units-per-pixel for the CURRENT ZOOM (measured at
@@ -143,6 +217,7 @@ public partial class SectorOverview : Node3D
 
 		Active = true;
 		_grid.Visible = true;
+		_stems.Visible = true;
 		_hint.Visible = true;
 		_cam.Current = true;
 		Input.MouseMode = Input.MouseModeEnum.Visible;   // free the cursor for dragging
@@ -153,6 +228,7 @@ public partial class SectorOverview : Node3D
 	{
 		Active = false;
 		_grid.Visible = false;
+		_stems.Visible = false;
 		_hint.Visible = false;
 		_orbitDrag = _panDrag = false;
 		_world.SetViewSector(null);   // restore the local-sector view for normal flight
