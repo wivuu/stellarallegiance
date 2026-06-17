@@ -1,13 +1,16 @@
-# Local-dev / single-box deployment of the wivuullegiance backend: the standalone native sim
-# server (the 20 Hz authoritative match AND the lobby host). It is fully self-contained — there
-# is no database; clients connect directly and download all content from the server.
+# Local-dev / single-box deployment of the wivuullegiance backend:
+#   sim-server    the 20 Hz authoritative match + lobby host (clients connect & download content)
+#   server-share  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+#   coturn        STUN/TURN for WebRTC NAT traversal (symmetric-NAT fallback)
 #
-# TLS: the sim server speaks plain ws:// on :8090. Production terminates TLS at the hosting
-# layer's ingress (wss://your-host/game -> sim-server:8090). This compose exposes a plain port
-# for a trusted local box only.
+# The sim-server is reachable two ways: directly (ws://host:8090, LAN/port-forwarded) OR via the
+# public lobby over WebRTC (set SIM_PUBLIC_NAME so it registers; clients then pick it from the
+# browser and the SDP handshake is relayed through server-share).
+#
+# TLS: the sim server speaks plain ws:// on :8090; production terminates TLS at the ingress.
 #
 # First run:
-#   cp .env.example .env && edit .env   (optionally set SIM_SECRET = openssl rand -hex 32)
+#   cp .env.example .env && edit .env
 #   docker compose up --build
 services:
   sim-server:
@@ -20,6 +23,46 @@ services:
       SIM_SECRET: ${SIM_SECRET:-}
       # Set to 1 to skip the lobby ready-up and run a perpetual match (bots / benchmarking).
       SIM_AUTOSTART: ${SIM_AUTOSTART:-}
+      # Public-lobby publishing (opt-in): set SIM_PUBLIC_NAME (3-50 chars) to register this server
+      # with the lobby below so clients can discover + WebRTC-join it. Empty = private (direct only).
+      SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
+      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-server-share:8091}
+      # Optional direct ws:// fallback advertised in the listing (host:port), if port-forwarded.
+      SIM_PUBLIC_ENDPOINT: ${SIM_PUBLIC_ENDPOINT:-}
     ports:
       - "${SIM_PORT:-8090}:8090"
+    depends_on:
+      - server-share
     restart: unless-stopped
+
+  # Public lobby: game-server registry + WebRTC signaling relay (no game traffic flows through it).
+  server-share:
+    build:
+      context: ./server-share        # self-contained (no ProjectReference)
+    environment:
+      SHARE_PORT: 8091
+      # ICE config handed to every client + game server. Point these at the coturn box's
+      # PUBLICLY reachable address in production. Empty = host-candidate / P2P only (LAN dev).
+      STUN_URL: ${STUN_URL:-}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USER: ${TURN_USER:-}
+      TURN_PASS: ${TURN_PASS:-}
+    ports:
+      - "${SHARE_PORT:-8091}:8091"
+    restart: unless-stopped
+
+  # STUN + TURN for WebRTC. Host networking so TURN can hand out reachable relay addresses and
+  # allocate the UDP relay port range. For a real deployment add --external-ip=<public-ip>.
+  coturn:
+    image: coturn/coturn:latest
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - -n
+      - --no-cli
+      - --listening-port=${TURN_PORT:-3478}
+      - --realm=wivuu
+      - --lt-cred-mech
+      - --fingerprint
+      - --user=${TURN_USER:-wivuu}:${TURN_PASS:-changeme}
+      # - --external-ip=YOUR_PUBLIC_IP   # required for TURN relay to be reachable from outside

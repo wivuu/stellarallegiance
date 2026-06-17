@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Public lobby / signaling box. A tiny stateless ASP.NET service that player-run game
+       servers register themselves with (name + session id) and that clients query to browse and
+       join. It ALSO relays the WebRTC SDP offer/answer handshake (see Signaling.cs) so a NAT'd
+       game server is reachable without port-forwarding — the actual game DataChannel is P2P
+       (or TURN-relayed via the coturn sidecar), never through this process.
+
+       Was originally a .NET-10 file-based app (single ServerShare.cs with a #:sdk header); file
+       based apps can't span multiple .cs files, so it is a normal net8.0 csproj now — same
+       toolchain/Docker pattern as server/ and shared/. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>ServerShare</RootNamespace>
+  </PropertyGroup>
+</Project>

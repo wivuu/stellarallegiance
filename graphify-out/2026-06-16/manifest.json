@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781620998.3508763,
-    "ast_hash": "bf3ec4c0334d8da1c7373ef75b843d48",
+    "mtime": 1781621928.407962,
+    "ast_hash": "bd8ebd2695dfb13f0c00802fff972a50",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781620188.9581785,
-    "ast_hash": "a08f75e1f7d8e152f9e140b88d9324cc",
+    "mtime": 1781622591.001162,
+    "ast_hash": "31fe855c5394e97e2d86c78e0bb0ad33",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -330,8 +330,8 @@
     "semantic_hash": ""
   },
   "client/scripts/SectorOverview.cs": {
-    "mtime": 1781482367.8428411,
-    "ast_hash": "7203fec53eb9b8db3f02e70a9572c8cf",
+    "mtime": 1781621418.3717592,
+    "ast_hash": "c05c0b077ed66d1fb2fb538c862f485e",
     "semantic_hash": ""
   },
   "client/scripts/GlbLoader.cs": {

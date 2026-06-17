@@ -6,11 +6,12 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 (world, content defs, live state) from it — there is no database to stand up.
 
 ```
-client/   Godot 4.6.3 (C#/.NET 8) — rendering, input, client-side prediction
-server/   .NET 8 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-shared/   deterministic FlightModel + content defs, compiled into BOTH client and server
-tools/    simbot (load bot swarm), asteroid-gen (mesh catalog)
-tests/    FlightModelTest (determinism/golden), CryptoTest
+client/        Godot 4.6.3 (C#/.NET 8) — rendering, input, client-side prediction
+server/        .NET 8 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
+server-share/  .NET 8 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
+tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
+tests/         FlightModelTest (determinism/golden), CryptoTest
 ```
 
 The client only ever **predicts**; the server is the single source of truth and reconciles
@@ -106,11 +107,32 @@ dotnet run    --project server -c Release -- --port 8090   # run the server dire
 The client reads `SIM_SECRET` (to send the password) and `PILOT_NAME` (lobby name) from the
 environment; `SIM_URI` is a dev override that connects to a full `ws://…/game` URL directly.
 
+## Public lobby & NAT traversal
+
+A player can reach a server two ways:
+
+- **Direct** — type `ip:port` on the connect screen (or `--host`). A plain WebSocket join; works
+  on a LAN or against a port-forwarded server. Unchanged from before.
+- **Public lobby** — the `server-share/` service is a small registry + WebRTC signaling relay.
+  A game server that sets `SIM_PUBLIC_NAME` registers itself there; clients fetch the list on the
+  connect screen and join the chosen server over a **WebRTC DataChannel**, with the SDP handshake
+  relayed through the lobby. This reaches **player-run servers behind a NAT without
+  port-forwarding** (P2P hole-punching, with the `coturn` TURN sidecar as fallback for symmetric
+  NATs). The same v7 binary protocol rides the DataChannel — only the transport changes.
+
+| Flag/Env | Where | Effect |
+|----------|-------|--------|
+| `SIM_PUBLIC_NAME` | server | 3-50 char name; **gates** public-lobby registration (unset = private). |
+| `PUBLIC_LOBBY` | server + client | Lobby `host:port` (default `192.168.1.101:8091`). Client also takes `--lobby`. |
+| `SIM_PUBLIC_ENDPOINT` | server | Optional direct `ws://` fallback advertised in the listing. |
+| `SHARE_PORT` | server-share | Listen port (default 8091). |
+| `STUN_URL` / `TURN_URL` / `TURN_USER` / `TURN_PASS` | server-share | ICE config handed to clients + servers. |
+
 ## Running with Docker
 
 ```bash
-cp .env.example .env        # optionally set SIM_SECRET / SIM_AUTOSTART
-docker compose up --build   # serves ws://localhost:8090/game
+cp .env.example .env        # optionally set SIM_SECRET / SIM_AUTOSTART / SIM_PUBLIC_NAME
+docker compose up --build   # sim-server (ws://localhost:8090/game) + server-share (:8091) + coturn
 ```
 
 ## Deployment

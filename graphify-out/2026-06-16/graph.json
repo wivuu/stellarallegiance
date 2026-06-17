@@ -1150,7 +1150,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L1",
       "id": "scripts_dustfield",
-      "community": 43,
+      "community": 69,
       "norm_label": "dustfield.cs"
     },
     {
@@ -1159,7 +1159,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L11",
       "id": "scripts_dustfield_dustfield",
-      "community": 43,
+      "community": 69,
       "norm_label": "dustfield"
     },
     {
@@ -1168,7 +1168,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L15",
       "id": "client_scripts_dustfield_cs_float",
-      "community": 43,
+      "community": 69,
       "norm_label": "float"
     },
     {
@@ -1177,7 +1177,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L17",
       "id": "client_scripts_dustfield_cs_worldrenderer",
-      "community": 43,
+      "community": 69,
       "norm_label": "worldrenderer"
     },
     {
@@ -1186,7 +1186,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L18",
       "id": "gpuparticles3d",
-      "community": 43,
+      "community": 69,
       "norm_label": "gpuparticles3d"
     },
     {
@@ -1195,7 +1195,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L20",
       "id": "scripts_dustfield_dustfield_ready",
-      "community": 43,
+      "community": 69,
       "norm_label": "._ready()"
     },
     {
@@ -1204,7 +1204,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L51",
       "id": "scripts_dustfield_dustfield_process",
-      "community": 43,
+      "community": 69,
       "norm_label": "._process()"
     },
     {
@@ -1213,7 +1213,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "scripts_dustfield_dustfield_radialdot",
-      "community": 43,
+      "community": 69,
       "norm_label": ".radialdot()"
     },
     {
@@ -1222,7 +1222,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "client_scripts_dustfield_cs_gradienttexture2d",
-      "community": 43,
+      "community": 69,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -1231,7 +1231,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "scripts_dustfield_dustfield_dustdrawmaterial",
-      "community": 43,
+      "community": 69,
       "norm_label": ".dustdrawmaterial()"
     },
     {
@@ -1240,7 +1240,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_texture2d",
-      "community": 43,
+      "community": 69,
       "norm_label": "texture2d"
     },
     {
@@ -1249,7 +1249,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_standardmaterial3d",
-      "community": 43,
+      "community": 69,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2167,7 +2167,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L1",
       "id": "scripts_hitflash",
-      "community": 43,
+      "community": 72,
       "norm_label": "hitflash.cs"
     },
     {
@@ -2176,7 +2176,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L8",
       "id": "scripts_hitflash_hitflash",
-      "community": 43,
+      "community": 72,
       "norm_label": "hitflash"
     },
     {
@@ -2185,7 +2185,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L10",
       "id": "client_scripts_hitflash_cs_double",
-      "community": 43,
+      "community": 72,
       "norm_label": "double"
     },
     {
@@ -2194,7 +2194,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L11",
       "id": "client_scripts_hitflash_cs_float",
-      "community": 43,
+      "community": 72,
       "norm_label": "float"
     },
     {
@@ -2203,7 +2203,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L14",
       "id": "client_scripts_hitflash_cs_gradienttexture2d",
-      "community": 43,
+      "community": 72,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -2212,7 +2212,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L16",
       "id": "client_scripts_hitflash_cs_meshinstance3d",
-      "community": 43,
+      "community": 72,
       "norm_label": "meshinstance3d"
     },
     {
@@ -2221,7 +2221,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L17",
       "id": "client_scripts_hitflash_cs_standardmaterial3d",
-      "community": 43,
+      "community": 72,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2230,7 +2230,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L20",
       "id": "scripts_hitflash_hitflash_ready",
-      "community": 43,
+      "community": 72,
       "norm_label": "._ready()"
     },
     {
@@ -2239,7 +2239,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L45",
       "id": "scripts_hitflash_hitflash_process",
-      "community": 43,
+      "community": 72,
       "norm_label": "._process()"
     },
     {
@@ -2248,7 +2248,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L60",
       "id": "scripts_hitflash_hitflash_radialdot",
-      "community": 43,
+      "community": 72,
       "norm_label": ".radialdot()"
     },
     {
@@ -3317,7 +3317,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L22",
+      "source_location": "L28",
       "id": "client_scripts_sectoroverview_cs_float",
       "community": 37,
       "norm_label": "float"
@@ -3326,7 +3326,7 @@
       "label": "Color",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L35",
+      "source_location": "L41",
       "id": "client_scripts_sectoroverview_cs_color",
       "community": 37,
       "norm_label": "color"
@@ -3335,7 +3335,7 @@
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L39",
+      "source_location": "L48",
       "id": "client_scripts_sectoroverview_cs_worldrenderer",
       "community": 37,
       "norm_label": "worldrenderer"
@@ -3344,7 +3344,7 @@
       "label": "Camera3D",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L40",
+      "source_location": "L49",
       "id": "client_scripts_sectoroverview_cs_camera3d",
       "community": 37,
       "norm_label": "camera3d"
@@ -3353,16 +3353,34 @@
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L42",
+      "source_location": "L51",
       "id": "client_scripts_sectoroverview_cs_meshinstance3d",
       "community": 37,
       "norm_label": "meshinstance3d"
     },
     {
+      "label": "ImmediateMesh",
+      "file_type": "code",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L53",
+      "id": "client_scripts_sectoroverview_cs_immediatemesh",
+      "community": 37,
+      "norm_label": "immediatemesh"
+    },
+    {
+      "label": "List<Vector3>",
+      "file_type": "code",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L54",
+      "id": "list_vector3",
+      "community": 37,
+      "norm_label": "list<vector3>"
+    },
+    {
       "label": "CanvasLayer",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L43",
+      "source_location": "L55",
       "id": "client_scripts_sectoroverview_cs_canvaslayer",
       "community": 4,
       "norm_label": "canvaslayer"
@@ -3371,7 +3389,7 @@
       "label": "Label",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L44",
+      "source_location": "L56",
       "id": "client_scripts_sectoroverview_cs_label",
       "community": 37,
       "norm_label": "label"
@@ -3380,7 +3398,7 @@
       "label": "Minimap",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L45",
+      "source_location": "L57",
       "id": "minimap",
       "community": 37,
       "norm_label": "minimap"
@@ -3389,7 +3407,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L47",
+      "source_location": "L59",
       "id": "client_scripts_sectoroverview_cs_vector3",
       "community": 37,
       "norm_label": "vector3"
@@ -3398,7 +3416,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L51",
+      "source_location": "L63",
       "id": "client_scripts_sectoroverview_cs_bool",
       "community": 37,
       "norm_label": "bool"
@@ -3407,7 +3425,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L54",
+      "source_location": "L66",
       "id": "scripts_sectoroverview_sectoroverview_ready",
       "community": 37,
       "norm_label": "._ready()"
@@ -3416,16 +3434,34 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L88",
+      "source_location": "L119",
       "id": "scripts_sectoroverview_sectoroverview_process",
       "community": 37,
       "norm_label": "._process()"
     },
     {
+      "label": ".RebuildStems()",
+      "file_type": "code",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L146",
+      "id": "scripts_sectoroverview_sectoroverview_rebuildstems",
+      "community": 37,
+      "norm_label": ".rebuildstems()"
+    },
+    {
+      "label": ".StemLine()",
+      "file_type": "code",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L175",
+      "id": "scripts_sectoroverview_sectoroverview_stemline",
+      "community": 37,
+      "norm_label": ".stemline()"
+    },
+    {
       "label": ".UpdateGridLod()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L112",
+      "source_location": "L186",
       "id": "scripts_sectoroverview_sectoroverview_updategridlod",
       "community": 37,
       "norm_label": ".updategridlod()"
@@ -3434,7 +3470,7 @@
       "label": ".Toggle()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L121",
+      "source_location": "L195",
       "id": "scripts_sectoroverview_sectoroverview_toggle",
       "community": 37,
       "norm_label": ".toggle()"
@@ -3443,7 +3479,7 @@
       "label": ".Open()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L129",
+      "source_location": "L203",
       "id": "scripts_sectoroverview_sectoroverview_open",
       "community": 37,
       "norm_label": ".open()"
@@ -3452,7 +3488,7 @@
       "label": ".Close()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L152",
+      "source_location": "L227",
       "id": "scripts_sectoroverview_sectoroverview_close",
       "community": 37,
       "norm_label": ".close()"
@@ -3461,7 +3497,7 @@
       "label": ".PlaceCamera()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L168",
+      "source_location": "L244",
       "id": "scripts_sectoroverview_sectoroverview_placecamera",
       "community": 37,
       "norm_label": ".placecamera()"
@@ -3470,7 +3506,7 @@
       "label": ".HandleKeys()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L180",
+      "source_location": "L256",
       "id": "scripts_sectoroverview_sectoroverview_handlekeys",
       "community": 37,
       "norm_label": ".handlekeys()"
@@ -3479,7 +3515,7 @@
       "label": "._Input()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L197",
+      "source_location": "L273",
       "id": "scripts_sectoroverview_sectoroverview_input",
       "community": 37,
       "norm_label": "._input()"
@@ -3488,7 +3524,7 @@
       "label": "InputEvent",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L197",
+      "source_location": "L273",
       "id": "client_scripts_sectoroverview_cs_inputevent",
       "community": 37,
       "norm_label": "inputevent"
@@ -3497,7 +3533,7 @@
       "label": ".TryMinimapClick()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L239",
+      "source_location": "L315",
       "id": "scripts_sectoroverview_sectoroverview_tryminimapclick",
       "community": 37,
       "norm_label": ".tryminimapclick()"
@@ -3506,7 +3542,7 @@
       "label": "Vector2",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L239",
+      "source_location": "L315",
       "id": "client_scripts_sectoroverview_cs_vector2",
       "community": 37,
       "norm_label": "vector2"
@@ -3515,7 +3551,7 @@
       "label": ".SwitchView()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L252",
+      "source_location": "L328",
       "id": "scripts_sectoroverview_sectoroverview_switchview",
       "community": 37,
       "norm_label": ".switchview()"
@@ -3524,7 +3560,7 @@
       "label": ".Orbit()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L271",
+      "source_location": "L347",
       "id": "scripts_sectoroverview_sectoroverview_orbit",
       "community": 37,
       "norm_label": ".orbit()"
@@ -3533,7 +3569,7 @@
       "label": ".Pan()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L278",
+      "source_location": "L354",
       "id": "scripts_sectoroverview_sectoroverview_pan",
       "community": 37,
       "norm_label": ".pan()"
@@ -3542,7 +3578,7 @@
       "label": ".Zoom()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L287",
+      "source_location": "L363",
       "id": "scripts_sectoroverview_sectoroverview_zoom",
       "community": 37,
       "norm_label": ".zoom()"
@@ -3551,7 +3587,7 @@
       "label": ".BuildGrid()",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L297",
+      "source_location": "L373",
       "id": "scripts_sectoroverview_sectoroverview_buildgrid",
       "community": 37,
       "norm_label": ".buildgrid()"
@@ -3560,7 +3596,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "client/scripts/SectorOverview.cs",
-      "source_location": "L325",
+      "source_location": "L401",
       "id": "client_scripts_sectoroverview_cs_string",
       "community": 37,
       "norm_label": "string"
@@ -4066,7 +4102,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L47",
       "id": "client_scripts_shipmodelloader_cs_node3d",
-      "community": 43,
+      "community": 65,
       "norm_label": "node3d"
     },
     {
@@ -4388,7 +4424,7 @@
       "label": "Color",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L43",
+      "source_location": "L49",
       "id": "client_scripts_targetmarkers_cs_color",
       "community": 13,
       "norm_label": "color"
@@ -4397,7 +4433,7 @@
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L54",
+      "source_location": "L60",
       "id": "client_scripts_targetmarkers_cs_worldrenderer",
       "community": 13,
       "norm_label": "worldrenderer"
@@ -4406,7 +4442,7 @@
       "label": "Camera3D",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L55",
+      "source_location": "L61",
       "id": "client_scripts_targetmarkers_cs_camera3d",
       "community": 13,
       "norm_label": "camera3d"
@@ -4415,7 +4451,7 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L57",
+      "source_location": "L68",
       "id": "client_scripts_targetmarkers_cs_ulong",
       "community": 13,
       "norm_label": "ulong"
@@ -4424,7 +4460,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L58",
+      "source_location": "L69",
       "id": "client_scripts_targetmarkers_cs_bool",
       "community": 13,
       "norm_label": "bool"
@@ -4433,7 +4469,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L62",
+      "source_location": "L73",
       "id": "client_scripts_targetmarkers_cs_list",
       "community": 13,
       "norm_label": "list"
@@ -4442,7 +4478,7 @@
       "label": ".Init()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L65",
+      "source_location": "L76",
       "id": "scripts_targetmarkers_targetmarkers_init",
       "community": 13,
       "norm_label": ".init()"
@@ -4451,7 +4487,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L73",
+      "source_location": "L84",
       "id": "scripts_targetmarkers_targetmarkers_process",
       "community": 13,
       "norm_label": "._process()"
@@ -4460,7 +4496,7 @@
       "label": ".TeamColor()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L87",
+      "source_location": "L93",
       "id": "scripts_targetmarkers_targetmarkers_teamcolor",
       "community": 13,
       "norm_label": ".teamcolor()"
@@ -4469,7 +4505,7 @@
       "label": ".AimReticleScreenPoint()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L94",
+      "source_location": "L100",
       "id": "scripts_targetmarkers_targetmarkers_aimreticlescreenpoint",
       "community": 13,
       "norm_label": ".aimreticlescreenpoint()"
@@ -4478,7 +4514,7 @@
       "label": "PredictionController",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L94",
+      "source_location": "L100",
       "id": "predictioncontroller",
       "community": 13,
       "norm_label": "predictioncontroller"
@@ -4487,7 +4523,7 @@
       "label": "Vector2",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L94",
+      "source_location": "L100",
       "id": "client_scripts_targetmarkers_cs_vector2",
       "community": 13,
       "norm_label": "vector2"
@@ -4496,7 +4532,7 @@
       "label": ".HandleFocusCycle()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L109",
+      "source_location": "L116",
       "id": "scripts_targetmarkers_targetmarkers_handlefocuscycle",
       "community": 13,
       "norm_label": ".handlefocuscycle()"
@@ -4505,7 +4541,7 @@
       "label": ".VisibleIndexOf()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L173",
+      "source_location": "L181",
       "id": "scripts_targetmarkers_targetmarkers_visibleindexof",
       "community": 13,
       "norm_label": ".visibleindexof()"
@@ -4514,7 +4550,7 @@
       "label": ".ContainsId()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L181",
+      "source_location": "L189",
       "id": "scripts_targetmarkers_targetmarkers_containsid",
       "community": 13,
       "norm_label": ".containsid()"
@@ -4523,7 +4559,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L181",
+      "source_location": "L189",
       "id": "client_scripts_targetmarkers_cs_ireadonlylist",
       "community": 13,
       "norm_label": "ireadonlylist"
@@ -4532,7 +4568,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L181",
+      "source_location": "L189",
       "id": "client_scripts_targetmarkers_cs_remoteship",
       "community": 13,
       "norm_label": "remoteship"
@@ -4541,7 +4577,7 @@
       "label": ".NearestEnemy()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L191",
+      "source_location": "L199",
       "id": "scripts_targetmarkers_targetmarkers_nearestenemy",
       "community": 13,
       "norm_label": ".nearestenemy()"
@@ -4550,7 +4586,7 @@
       "label": "._Draw()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L211",
+      "source_location": "L219",
       "id": "scripts_targetmarkers_targetmarkers_draw",
       "community": 13,
       "norm_label": "._draw()"
@@ -4559,7 +4595,7 @@
       "label": ".KindOf()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L271",
+      "source_location": "L282",
       "id": "scripts_targetmarkers_targetmarkers_kindof",
       "community": 13,
       "norm_label": ".kindof()"
@@ -4568,7 +4604,7 @@
       "label": "Kind",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L271",
+      "source_location": "L282",
       "id": "kind",
       "community": 13,
       "norm_label": "kind"
@@ -4577,7 +4613,7 @@
       "label": ".DrawEntity()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L283",
+      "source_location": "L294",
       "id": "scripts_targetmarkers_targetmarkers_drawentity",
       "community": 13,
       "norm_label": ".drawentity()"
@@ -4586,16 +4622,34 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L283",
+      "source_location": "L294",
       "id": "client_scripts_targetmarkers_cs_vector3",
       "community": 13,
       "norm_label": "vector3"
     },
     {
+      "label": ".DrawBaseHealthBar()",
+      "file_type": "code",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L350",
+      "id": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "community": 13,
+      "norm_label": ".drawbasehealthbar()"
+    },
+    {
+      "label": ".HealthColor()",
+      "file_type": "code",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L368",
+      "id": "scripts_targetmarkers_targetmarkers_healthcolor",
+      "community": 13,
+      "norm_label": ".healthcolor()"
+    },
+    {
       "label": ".DrawClassGlyph()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L335",
+      "source_location": "L375",
       "id": "scripts_targetmarkers_targetmarkers_drawclassglyph",
       "community": 13,
       "norm_label": ".drawclassglyph()"
@@ -4604,7 +4658,7 @@
       "label": ".Hexagon()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L374",
+      "source_location": "L414",
       "id": "scripts_targetmarkers_targetmarkers_hexagon",
       "community": 13,
       "norm_label": ".hexagon()"
@@ -4613,7 +4667,7 @@
       "label": ".DrawBracket()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L386",
+      "source_location": "L426",
       "id": "scripts_targetmarkers_targetmarkers_drawbracket",
       "community": 13,
       "norm_label": ".drawbracket()"
@@ -4622,7 +4676,7 @@
       "label": ".DrawAimReticle()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L405",
+      "source_location": "L445",
       "id": "scripts_targetmarkers_targetmarkers_drawaimreticle",
       "community": 13,
       "norm_label": ".drawaimreticle()"
@@ -4631,7 +4685,7 @@
       "label": ".DrawArrow()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L418",
+      "source_location": "L458",
       "id": "scripts_targetmarkers_targetmarkers_drawarrow",
       "community": 13,
       "norm_label": ".drawarrow()"
@@ -4640,7 +4694,7 @@
       "label": ".TryLead()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L440",
+      "source_location": "L480",
       "id": "scripts_targetmarkers_targetmarkers_trylead",
       "community": 13,
       "norm_label": ".trylead()"
@@ -4649,7 +4703,7 @@
       "label": ".SmallestPositive()",
       "file_type": "code",
       "source_file": "client/scripts/TargetMarkers.cs",
-      "source_location": "L477",
+      "source_location": "L517",
       "id": "scripts_targetmarkers_targetmarkers_smallestpositive",
       "community": 13,
       "norm_label": ".smallestpositive()"
@@ -4749,7 +4803,7 @@
       "file_type": "code",
       "source_file": "client/scripts/TeamTrail.cs",
       "source_location": "L36",
-      "id": "immediatemesh",
+      "id": "client_scripts_teamtrail_cs_immediatemesh",
       "community": 66,
       "norm_label": "immediatemesh"
     },
@@ -4811,7 +4865,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L17",
+      "source_location": "L19",
       "id": "client_scripts_worldrenderer_cs_float",
       "community": 1,
       "norm_label": "float"
@@ -4835,37 +4889,10 @@
       "norm_label": "list"
     },
     {
-      "label": "BaseHealthBar",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L47",
-      "id": "scripts_worldrenderer_basehealthbar",
-      "community": 58,
-      "norm_label": "basehealthbar"
-    },
-    {
-      "label": "MeshInstance3D",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L50",
-      "id": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "community": 63,
-      "norm_label": "meshinstance3d"
-    },
-    {
-      "label": "StandardMaterial3D",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L51",
-      "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "community": 65,
-      "norm_label": "standardmaterial3d"
-    },
-    {
       "label": ".SectorName()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L72",
+      "source_location": "L67",
       "id": "scripts_worldrenderer_worldrenderer_sectorname",
       "community": 1,
       "norm_label": ".sectorname()"
@@ -4874,7 +4901,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L89",
+      "source_location": "L84",
       "id": "client_scripts_worldrenderer_cs_uint",
       "community": 1,
       "norm_label": "uint"
@@ -4883,7 +4910,7 @@
       "label": ".ShipsInLocalSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L100",
+      "source_location": "L95",
       "id": "scripts_worldrenderer_worldrenderer_shipsinlocalsector",
       "community": 1,
       "norm_label": ".shipsinlocalsector()"
@@ -4892,16 +4919,25 @@
       "label": ".SetViewSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L125",
+      "source_location": "L120",
       "id": "scripts_worldrenderer_worldrenderer_setviewsector",
       "community": 65,
       "norm_label": ".setviewsector()"
     },
     {
+      "label": "StandardMaterial3D",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L144",
+      "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
+      "community": 65,
+      "norm_label": "standardmaterial3d"
+    },
+    {
       "label": "ShipController",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L161",
+      "source_location": "L153",
       "id": "client_scripts_worldrenderer_cs_shipcontroller",
       "community": 1,
       "norm_label": "shipcontroller"
@@ -4910,7 +4946,7 @@
       "label": "Starscape",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L162",
+      "source_location": "L154",
       "id": "starscape",
       "community": 1,
       "norm_label": "starscape"
@@ -4919,7 +4955,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L163",
+      "source_location": "L155",
       "id": "client_scripts_worldrenderer_cs_defregistry",
       "community": 1,
       "norm_label": "defregistry"
@@ -4928,7 +4964,7 @@
       "label": "double",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L180",
+      "source_location": "L172",
       "id": "client_scripts_worldrenderer_cs_double",
       "community": 1,
       "norm_label": "double"
@@ -4937,7 +4973,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L182",
+      "source_location": "L174",
       "id": "client_scripts_worldrenderer_cs_bool",
       "community": 1,
       "norm_label": "bool"
@@ -4946,43 +4982,43 @@
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L200",
+      "source_location": "L192",
       "id": "scripts_worldrenderer_worldrenderer_enemyships",
-      "community": 13,
+      "community": 38,
       "norm_label": ".enemyships()"
     },
     {
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L200",
+      "source_location": "L192",
       "id": "client_scripts_worldrenderer_cs_ireadonlylist",
-      "community": 13,
+      "community": 38,
       "norm_label": "ireadonlylist"
     },
     {
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L200",
+      "source_location": "L192",
       "id": "client_scripts_worldrenderer_cs_remoteship",
-      "community": 13,
+      "community": 38,
       "norm_label": "remoteship"
     },
     {
       "label": ".FriendlyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L218",
+      "source_location": "L210",
       "id": "scripts_worldrenderer_worldrenderer_friendlyships",
-      "community": 13,
+      "community": 38,
       "norm_label": ".friendlyships()"
     },
     {
       "label": ".VisibleBases()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L233",
+      "source_location": "L225",
       "id": "scripts_worldrenderer_worldrenderer_visiblebases",
       "community": 38,
       "norm_label": ".visiblebases()"
@@ -4991,7 +5027,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L233",
+      "source_location": "L225",
       "id": "client_scripts_worldrenderer_cs_vector3",
       "community": 38,
       "norm_label": "vector3"
@@ -5000,7 +5036,7 @@
       "label": "Pos",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L233",
+      "source_location": "L225",
       "id": "pos",
       "community": 38,
       "norm_label": "pos"
@@ -5009,16 +5045,34 @@
       "label": "Team",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L233",
+      "source_location": "L225",
       "id": "team",
       "community": 38,
       "norm_label": "team"
     },
     {
+      "label": ".VisibleBaseHealth()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "id": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "community": 38,
+      "norm_label": ".visiblebasehealth()"
+    },
+    {
+      "label": "Frac",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "id": "frac",
+      "community": 38,
+      "norm_label": "frac"
+    },
+    {
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L242",
+      "source_location": "L246",
       "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
       "norm_label": "._ready()"
@@ -5027,7 +5081,7 @@
       "label": ".NetSetMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L304",
+      "source_location": "L301",
       "id": "scripts_worldrenderer_worldrenderer_netsetmatch",
       "community": 1,
       "norm_label": ".netsetmatch()"
@@ -5036,7 +5090,7 @@
       "label": ".NetUpdateBaseHealth()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L313",
+      "source_location": "L310",
       "id": "scripts_worldrenderer_worldrenderer_netupdatebasehealth",
       "community": 58,
       "norm_label": ".netupdatebasehealth()"
@@ -5045,7 +5099,7 @@
       "label": ".NetInsertShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L319",
+      "source_location": "L315",
       "id": "scripts_worldrenderer_worldrenderer_netinsertship",
       "community": 65,
       "norm_label": ".netinsertship()"
@@ -5054,7 +5108,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L319",
+      "source_location": "L315",
       "id": "client_scripts_worldrenderer_cs_ship",
       "community": 65,
       "norm_label": "ship"
@@ -5063,7 +5117,7 @@
       "label": ".NetUpdateShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L320",
+      "source_location": "L316",
       "id": "scripts_worldrenderer_worldrenderer_netupdateship",
       "community": 65,
       "norm_label": ".netupdateship()"
@@ -5072,7 +5126,7 @@
       "label": ".NetDeleteShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L321",
+      "source_location": "L317",
       "id": "scripts_worldrenderer_worldrenderer_netdeleteship",
       "community": 65,
       "norm_label": ".netdeleteship()"
@@ -5081,7 +5135,7 @@
       "label": ".NetAddSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L324",
+      "source_location": "L320",
       "id": "scripts_worldrenderer_worldrenderer_netaddsector",
       "community": 1,
       "norm_label": ".netaddsector()"
@@ -5090,7 +5144,7 @@
       "label": "Sector",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L324",
+      "source_location": "L320",
       "id": "sector",
       "community": 1,
       "norm_label": "sector"
@@ -5099,7 +5153,7 @@
       "label": ".NetAddBase()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L325",
+      "source_location": "L321",
       "id": "scripts_worldrenderer_worldrenderer_netaddbase",
       "community": 58,
       "norm_label": ".netaddbase()"
@@ -5108,7 +5162,7 @@
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L325",
+      "source_location": "L321",
       "id": "base",
       "community": 58,
       "norm_label": "base"
@@ -5117,7 +5171,7 @@
       "label": ".NetAddAsteroid()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L326",
+      "source_location": "L322",
       "id": "scripts_worldrenderer_worldrenderer_netaddasteroid",
       "community": 56,
       "norm_label": ".netaddasteroid()"
@@ -5126,7 +5180,7 @@
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L326",
+      "source_location": "L322",
       "id": "asteroid",
       "community": 56,
       "norm_label": "asteroid"
@@ -5135,7 +5189,7 @@
       "label": ".NetAddAleph()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L327",
+      "source_location": "L323",
       "id": "scripts_worldrenderer_worldrenderer_netaddaleph",
       "community": 5,
       "norm_label": ".netaddaleph()"
@@ -5144,7 +5198,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L327",
+      "source_location": "L323",
       "id": "aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -5153,7 +5207,7 @@
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L333",
+      "source_location": "L329",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 65,
       "norm_label": ".setnodesector()"
@@ -5162,7 +5216,7 @@
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L341",
+      "source_location": "L337",
       "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 65,
       "norm_label": ".refreshsectorvisibility()"
@@ -5171,7 +5225,7 @@
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L352",
+      "source_location": "L348",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 65,
       "norm_label": ".spawneffect()"
@@ -5180,7 +5234,7 @@
       "label": ".InsertAleph()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L361",
+      "source_location": "L357",
       "id": "scripts_worldrenderer_worldrenderer_insertaleph",
       "community": 5,
       "norm_label": ".insertaleph()"
@@ -5189,52 +5243,16 @@
       "label": ".InsertBase()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L391",
+      "source_location": "L387",
       "id": "scripts_worldrenderer_worldrenderer_insertbase",
       "community": 58,
       "norm_label": ".insertbase()"
     },
     {
-      "label": ".CreateBaseHealthBar()",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L415",
-      "id": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "community": 58,
-      "norm_label": ".createbasehealthbar()"
-    },
-    {
-      "label": ".UpdateBaseHealthBar()",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L449",
-      "id": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "community": 58,
-      "norm_label": ".updatebasehealthbar()"
-    },
-    {
-      "label": ".HealthColor()",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L460",
-      "id": "scripts_worldrenderer_worldrenderer_healthcolor",
-      "community": 58,
-      "norm_label": ".healthcolor()"
-    },
-    {
-      "label": "Color",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L460",
-      "id": "client_scripts_worldrenderer_cs_color",
-      "community": 58,
-      "norm_label": "color"
-    },
-    {
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L475",
+      "source_location": "L417",
       "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 56,
       "norm_label": ".asteroidmesh()"
@@ -5243,7 +5261,7 @@
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L475",
+      "source_location": "L417",
       "id": "mesh",
       "community": 56,
       "norm_label": "mesh"
@@ -5252,7 +5270,7 @@
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L475",
+      "source_location": "L417",
       "id": "authoredradius",
       "community": 56,
       "norm_label": "authoredradius"
@@ -5261,7 +5279,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L503",
+      "source_location": "L445",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 63,
       "norm_label": ".findmeshinstance()"
@@ -5270,16 +5288,25 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L503",
+      "source_location": "L445",
       "id": "client_scripts_worldrenderer_cs_node",
       "community": 63,
       "norm_label": "node"
     },
     {
+      "label": "MeshInstance3D",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L445",
+      "id": "client_scripts_worldrenderer_cs_meshinstance3d",
+      "community": 63,
+      "norm_label": "meshinstance3d"
+    },
+    {
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L516",
+      "source_location": "L458",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 56,
       "norm_label": ".meshboundingradius()"
@@ -5288,7 +5315,7 @@
       "label": ".InsertAsteroid()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L530",
+      "source_location": "L472",
       "id": "scripts_worldrenderer_worldrenderer_insertasteroid",
       "community": 56,
       "norm_label": ".insertasteroid()"
@@ -5297,7 +5324,7 @@
       "label": ".AsteroidSpin()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L571",
+      "source_location": "L513",
       "id": "scripts_worldrenderer_worldrenderer_asteroidspin",
       "community": 56,
       "norm_label": ".asteroidspin()"
@@ -5306,7 +5333,7 @@
       "label": "Axis",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L571",
+      "source_location": "L513",
       "id": "axis",
       "community": 56,
       "norm_label": "axis"
@@ -5315,7 +5342,7 @@
       "label": "Speed",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L571",
+      "source_location": "L513",
       "id": "speed",
       "community": 56,
       "norm_label": "speed"
@@ -5324,7 +5351,7 @@
       "label": ".InsertShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L592",
+      "source_location": "L534",
       "id": "scripts_worldrenderer_worldrenderer_insertship",
       "community": 65,
       "norm_label": ".insertship()"
@@ -5333,7 +5360,7 @@
       "label": ".UpdateShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L631",
+      "source_location": "L573",
       "id": "scripts_worldrenderer_worldrenderer_updateship",
       "community": 65,
       "norm_label": ".updateship()"
@@ -5342,7 +5369,7 @@
       "label": ".DeleteShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L662",
+      "source_location": "L604",
       "id": "scripts_worldrenderer_worldrenderer_deleteship",
       "community": 65,
       "norm_label": ".deleteship()"
@@ -5351,7 +5378,7 @@
       "label": ".FriendlyRescuerNear()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L720",
+      "source_location": "L662",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
       "community": 65,
       "norm_label": ".friendlyrescuernear()"
@@ -5360,7 +5387,7 @@
       "label": ".SpawnBoltFor()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L747",
+      "source_location": "L689",
       "id": "scripts_worldrenderer_worldrenderer_spawnboltfor",
       "community": 65,
       "norm_label": ".spawnboltfor()"
@@ -5369,7 +5396,7 @@
       "label": ".SpawnLocalBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L773",
+      "source_location": "L715",
       "id": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
       "community": 38,
       "norm_label": ".spawnlocalbolt()"
@@ -5378,7 +5405,7 @@
       "label": ".AddBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L776",
+      "source_location": "L718",
       "id": "scripts_worldrenderer_worldrenderer_addbolt",
       "community": 38,
       "norm_label": ".addbolt()"
@@ -5387,7 +5414,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L790",
+      "source_location": "L732",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 41,
       "norm_label": ".shotmaskleadsec()"
@@ -5396,7 +5423,7 @@
       "label": ".ClipBoltTtl()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L803",
+      "source_location": "L745",
       "id": "scripts_worldrenderer_worldrenderer_clipboltttl",
       "community": 38,
       "norm_label": ".clipboltttl()"
@@ -5405,7 +5432,7 @@
       "label": ".ClipSphere()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L824",
+      "source_location": "L766",
       "id": "scripts_worldrenderer_worldrenderer_clipsphere",
       "community": 38,
       "norm_label": ".clipsphere()"
@@ -5414,7 +5441,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L841",
+      "source_location": "L783",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 63,
       "norm_label": ".newprojectilemesh()"
@@ -5423,25 +5450,16 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L853",
+      "source_location": "L795",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
     },
     {
-      "label": ".BillboardBaseHealthBars()",
-      "file_type": "code",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L892",
-      "id": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars",
-      "community": 1,
-      "norm_label": ".billboardbasehealthbars()"
-    },
-    {
       "label": ".CheckBoltImpacts()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L914",
+      "source_location": "L835",
       "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "community": 1,
       "norm_label": ".checkboltimpacts()"
@@ -5450,7 +5468,7 @@
       "label": ".ClosestPointOnSegment()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L947",
+      "source_location": "L868",
       "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "community": 1,
       "norm_label": ".closestpointonsegment()"
@@ -5459,7 +5477,7 @@
       "label": ".ShipMaterial()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L959",
+      "source_location": "L880",
       "id": "scripts_worldrenderer_worldrenderer_shipmaterial",
       "community": 65,
       "norm_label": ".shipmaterial()"
@@ -9748,6 +9766,69 @@
       "id": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
       "community": 48,
       "norm_label": "microsoft.net.sdk"
+    },
+    {
+      "label": "ImmediateMesh",
+      "file_type": "code",
+      "source_file": "client/scripts/TeamTrail.cs",
+      "source_location": "L36",
+      "community": 66,
+      "norm_label": "immediatemesh",
+      "id": "immediatemesh"
+    },
+    {
+      "label": "BaseHealthBar",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L47",
+      "community": 58,
+      "norm_label": "basehealthbar",
+      "id": "scripts_worldrenderer_basehealthbar"
+    },
+    {
+      "label": ".CreateBaseHealthBar()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L415",
+      "community": 58,
+      "norm_label": ".createbasehealthbar()",
+      "id": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+    },
+    {
+      "label": ".UpdateBaseHealthBar()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L449",
+      "community": 58,
+      "norm_label": ".updatebasehealthbar()",
+      "id": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+    },
+    {
+      "label": ".HealthColor()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L460",
+      "community": 58,
+      "norm_label": ".healthcolor()",
+      "id": "scripts_worldrenderer_worldrenderer_healthcolor"
+    },
+    {
+      "label": "Color",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L460",
+      "community": 58,
+      "norm_label": "color",
+      "id": "client_scripts_worldrenderer_cs_color"
+    },
+    {
+      "label": ".BillboardBaseHealthBars()",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L892",
+      "community": 1,
+      "norm_label": ".billboardbasehealthbars()",
+      "id": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
     },
     {
       "label": ".DrawMarker()",
@@ -17827,6 +17908,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L53",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_sectoroverview_sectoroverview",
+      "target": "client_scripts_sectoroverview_cs_immediatemesh",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L39",
       "weight": 1.0,
       "context": "field",
@@ -17903,12 +17995,34 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L54",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_sectoroverview_sectoroverview",
+      "target": "list_vector3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L45",
       "weight": 1.0,
       "context": "field",
       "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview",
       "target": "minimap"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_sectoroverview_sectoroverview",
+      "target": "scripts_sectoroverview_sectoroverview",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -18044,6 +18158,26 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L146",
+      "weight": 1.0,
+      "source": "scripts_sectoroverview_sectoroverview",
+      "target": "scripts_sectoroverview_sectoroverview_rebuildstems",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "source": "scripts_sectoroverview_sectoroverview",
+      "target": "scripts_sectoroverview_sectoroverview_stemline",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L252",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18112,6 +18246,17 @@
       "target": "client_scripts_sectoroverview_cs_vector3"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_sectoroverview_sectoroverview_stemline",
+      "target": "client_scripts_sectoroverview_cs_vector3",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -18171,6 +18316,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L138",
+      "weight": 1.0,
+      "source": "scripts_sectoroverview_sectoroverview_process",
+      "target": "scripts_sectoroverview_sectoroverview_rebuildstems",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L85",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -18187,6 +18343,17 @@
       "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview_process",
       "target": "scripts_sectoroverview_sectoroverview_updategridlod"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/SectorOverview.cs",
+      "source_location": "L168",
+      "weight": 1.0,
+      "source": "scripts_sectoroverview_sectoroverview_rebuildstems",
+      "target": "scripts_sectoroverview_sectoroverview_stemline",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -20164,6 +20331,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L350",
+      "weight": 1.0,
+      "source": "scripts_targetmarkers_targetmarkers",
+      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L209",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -20209,6 +20386,16 @@
       "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
       "target": "scripts_targetmarkers_targetmarkers_handlefocuscycle"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "source": "scripts_targetmarkers_targetmarkers",
+      "target": "scripts_targetmarkers_targetmarkers_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -20370,6 +20557,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_targetmarkers_targetmarkers_healthcolor",
+      "target": "client_scripts_targetmarkers_cs_color",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L89",
       "weight": 1.0,
       "context": "return_type",
@@ -20486,6 +20684,17 @@
       "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawarrow",
       "target": "client_scripts_targetmarkers_cs_vector2"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L350",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "target": "client_scripts_targetmarkers_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -20690,6 +20899,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L231",
+      "weight": 1.0,
+      "source": "scripts_targetmarkers_targetmarkers_draw",
+      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L226",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -20810,6 +21030,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L350",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "target": "client_scripts_targetmarkers_cs_vector3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L205",
       "weight": 1.0,
       "context": "parameter_type",
@@ -20827,6 +21058,17 @@
       "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_trylead",
       "target": "client_scripts_targetmarkers_cs_vector3"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TargetMarkers.cs",
+      "source_location": "L364",
+      "weight": 1.0,
+      "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
+      "target": "scripts_targetmarkers_targetmarkers_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -20980,6 +21222,17 @@
       "confidence_score": 1.0,
       "source": "scripts_teamtrail_teamtrail",
       "target": "client_scripts_teamtrail_cs_float"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/TeamTrail.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_teamtrail_teamtrail",
+      "target": "client_scripts_teamtrail_cs_immediatemesh",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -21883,6 +22136,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer",
+      "target": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L233",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -21912,15 +22175,15 @@
       "target": "starscape"
     },
     {
-      "relation": "references",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L49",
+      "source_location": "L128",
       "weight": 1.0,
-      "context": "field",
       "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_basehealthbar",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+      "source": "scripts_worldrenderer_worldrenderer_setviewsector",
+      "target": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility"
     },
     {
       "relation": "references",
@@ -21937,78 +22200,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L334",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L368",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_basehealthbar"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L690",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_buildshipmesh",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L355",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_findmeshinstance",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L588",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
-      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L892",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_shipmaterial",
       "target": "client_scripts_worldrenderer_cs_standardmaterial3d"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L128",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_setviewsector",
-      "target": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility"
     },
     {
       "relation": "references",
@@ -22064,6 +22261,17 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_friendlyships",
       "target": "client_scripts_worldrenderer_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "target": "client_scripts_worldrenderer_cs_ireadonlylist",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -22207,6 +22415,50 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile",
       "target": "client_scripts_worldrenderer_cs_vector3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "target": "client_scripts_worldrenderer_cs_vector3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "target": "pos",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "target": "frac",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L400",
+      "weight": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_insertbase",
+      "target": "scripts_worldrenderer_worldrenderer_netupdatebasehealth",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -23001,72 +23253,6 @@
       "target": "scripts_worldrenderer_worldrenderer_insertbase"
     },
     {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L348",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L325",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L326",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L404",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_onbaseupdate",
-      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L374",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
-      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L379",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_worldrenderer_worldrenderer_healthcolor",
-      "target": "client_scripts_worldrenderer_cs_color"
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
@@ -23147,12 +23333,56 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L355",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_findmeshinstance",
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "target": "client_scripts_worldrenderer_cs_node"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L49",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_basehealthbar",
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L690",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_buildshipmesh",
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L588",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
+      "target": "client_scripts_worldrenderer_cs_meshinstance3d"
     },
     {
       "relation": "calls",
@@ -32155,6 +32385,94 @@
     {
       "relation": "references",
       "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L334",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "target": "scripts_worldrenderer_basehealthbar"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L368",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "target": "scripts_worldrenderer_basehealthbar"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L348",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_createbasehealthbar",
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
+      "target": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L326",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onbaseinsert",
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L404",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_onbaseupdate",
+      "target": "scripts_worldrenderer_worldrenderer_updatebasehealthbar"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L374",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_updatebasehealthbar",
+      "target": "scripts_worldrenderer_worldrenderer_healthcolor"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L379",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_healthcolor",
+      "target": "client_scripts_worldrenderer_cs_color"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L205",
       "weight": 1.0,
@@ -33011,5 +33329,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "ca6c0ddb6be141d291c918fe4ae32fb83733fac3"
+  "built_at_commit": "88a518de94fbba63acd57f4caf44750c9a0e19a3"
 }

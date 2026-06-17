@@ -2,13 +2,19 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Godot;
+using SIPSorcery.Net;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+// Godot ships its own HttpClient; the signaling exchange uses the BCL one.
+using HttpClient = System.Net.Http.HttpClient;
 
 // The client's single connection to the standalone sim server (server/Net/Protocol.cs v7).
 // SpacetimeDB is gone: this one WebSocket carries EVERYTHING — the world statics (Welcome),
@@ -68,17 +74,33 @@ public partial class GameNetClient : Node
         _name = OS.GetEnvironment("PILOT_NAME") ?? "";
     }
 
-    // Called by ConnectionManager once it has resolved an address. Opens (or re-opens) the
-    // socket to the given ws:// URL.
+    // Direct join: open (or re-open) a WebSocket to the given ws:// URL (LAN / dev / typed
+    // address). Called by ConnectionManager once it has resolved an address.
     public void Connect(string uri)
+    {
+        var ct = BeginConnect($"ws {uri}");
+        _ = Task.Run(() => RunWebSocket(uri, ct));
+    }
+
+    // Public-lobby join: reach a (possibly NAT'd) server via a WebRTC DataChannel, with the SDP
+    // handshake relayed through ServerShare (shareBase = http://host:port, sessionId from the
+    // browser list). Carries the exact same protocol as the WebSocket path.
+    public void ConnectWebRtc(string shareBase, string sessionId)
+    {
+        var ct = BeginConnect($"webrtc {sessionId} via {shareBase}");
+        _ = Task.Run(() => RunWebRtc(shareBase, sessionId, ct));
+    }
+
+    // Reset per-connection state and arm a fresh cancellation token (cancelling any prior link).
+    private CancellationToken BeginConnect(string what)
     {
         _socketCts?.Cancel();
         Active = true;
         LocalShipId = 0;
         _rows.Clear();
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-        GD.Print($"[GameNet] connecting to {uri}");
-        _ = Task.Run(() => RunSocket(uri, _socketCts.Token));
+        GD.Print($"[GameNet] connecting ({what})");
+        return _socketCts.Token;
     }
 
     public override void _ExitTree()
@@ -154,7 +176,7 @@ public partial class GameNetClient : Node
 
     // ---- Socket I/O (background) ------------------------------------------
 
-    private async Task RunSocket(string uri, CancellationToken ct)
+    private async Task RunWebSocket(string uri, CancellationToken ct)
     {
         try
         {
@@ -192,6 +214,117 @@ public partial class GameNetClient : Node
             CallDeferred(nameof(OnSocketClosed));
         }
     }
+
+    // WebRTC offerer: build a peer connection + DataChannel, exchange SDP through ServerShare
+    // (non-trickle ICE so one offer/answer round trip suffices), then pump _tx -> DataChannel.
+    // Inbound frames arrive via onmessage into _rx and are applied in _Process like the WS path.
+    private async Task RunWebRtc(string shareBase, string sessionId, CancellationToken ct)
+    {
+        shareBase = shareBase.TrimEnd('/');
+        RTCPeerConnection? pc = null;
+        try
+        {
+            // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
+            var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
+            if (entry is null) throw new Exception("server not found in lobby");
+
+            pc = new RTCPeerConnection(new RTCConfiguration { iceServers = ToIceServers(entry.IceServers) });
+            var dc = await pc.createDataChannel("game");
+            var dcOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            dc.onopen += () => { CallDeferred(nameof(OnSocketOpen)); dcOpen.TrySetResult(); };
+            dc.onmessage += (_, _, data) => _rx.Enqueue(data);
+            dc.onclose += () => CallDeferred(nameof(OnSocketClosed));
+            pc.onconnectionstatechange += s =>
+            {
+                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed
+                      or RTCPeerConnectionState.disconnected)
+                {
+                    dcOpen.TrySetException(new Exception($"peer connection {s}"));
+                    CallDeferred(nameof(OnSocketClosed));
+                }
+            };
+
+            var offer = pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await WaitForIceGathering(pc, ct);
+
+            // Post the offer, get a ticket, long-poll for the server's answer.
+            using var offerResp = await Http.PostAsJsonAsync($"{shareBase}/servers/{sessionId}/connect",
+                new { sdpOffer = pc.localDescription.sdp.ToString() }, ct);
+            offerResp.EnsureSuccessStatusCode();
+            var ticket = (await offerResp.Content.ReadFromJsonAsync<TicketDto>(ct))?.Ticket;
+            if (string.IsNullOrEmpty(ticket)) throw new Exception("no signaling ticket from lobby");
+
+            string? answerSdp = null;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (answerSdp is null && DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+            {
+                using var ar = await Http.GetAsync($"{shareBase}/connect/{ticket}/answer", ct);
+                if (ar.StatusCode == HttpStatusCode.OK)
+                    answerSdp = (await ar.Content.ReadFromJsonAsync<AnswerDto>(ct))?.SdpAnswer;
+                // 204 NoContent = not ready; the GET already long-polled, so just loop.
+            }
+            if (answerSdp is null) throw new Exception("no answer from server (timeout)");
+
+            var set = pc.setRemoteDescription(
+                new RTCSessionDescriptionInit { type = RTCSdpType.answer, sdp = answerSdp });
+            if (set != SetDescriptionResultEnum.OK) throw new Exception($"bad answer ({set})");
+
+            // Wait for the DataChannel to open, then drain outbound frames into it. The foreach
+            // ends when this connection's token is cancelled (reconnect / shutdown).
+            await dcOpen.Task.WaitAsync(ct);
+            await foreach (var frame in _tx.Reader.ReadAllAsync(ct))
+                if (dc.readyState == RTCDataChannelState.open)
+                    dc.send(frame);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[GameNet] webrtc error: {e.Message}");
+            CallDeferred(nameof(OnSocketClosed));
+        }
+        finally { pc?.Dispose(); }
+    }
+
+    // Non-trickle ICE: wait (bounded) for candidate gathering so the SDP is complete in one round
+    // trip; fall through with whatever gathered if STUN/TURN is slow (host candidates suffice LAN).
+    private static async Task WaitForIceGathering(RTCPeerConnection pc, CancellationToken ct)
+    {
+        if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Handler(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
+        pc.onicegatheringstatechange += Handler;
+        try
+        {
+            if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            await tcs.Task.WaitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
+        finally { pc.onicegatheringstatechange -= Handler; }
+    }
+
+    private static List<RTCIceServer> ToIceServers(IceServerDto[]? dtos)
+    {
+        var list = new List<RTCIceServer>();
+        if (dtos is null) return list;
+        foreach (var d in dtos)
+        {
+            if (d.Urls is null || d.Urls.Length == 0) continue;
+            list.Add(new RTCIceServer { urls = string.Join(',', d.Urls), username = d.Username, credential = d.Credential });
+        }
+        return list;
+    }
+
+    // Shared HTTP client for the WebRTC signaling exchange. Web JSON defaults are case-insensitive,
+    // so these PascalCase records bind ServerShare's camelCase responses.
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private sealed record ServerEntryDto(string SessionId, string Name, IceServerDto[]? IceServers);
+    private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);
+    private sealed record TicketDto(string Ticket);
+    private sealed record AnswerDto(string SdpAnswer);
 
     private void OnSocketOpen() => SendHello();
     private void OnSocketClosed() => _cm.NotifyDisconnected();

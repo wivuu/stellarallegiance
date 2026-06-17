@@ -16,6 +16,11 @@ public partial class ConnectionManager : Node
 	// The ws:// URL we're targeting, for the status overlay.
 	public string ServerUrl { get; private set; } = "";
 
+	// Public lobby (ServerShare) base URL — where the server browser fetches its list and where
+	// WebRTC joins are signaled. Resolved from PUBLIC_LOBBY / --lobby in _Ready.
+	public string LobbyBase { get; private set; } = $"http://{DefaultLobby}";
+	private const string DefaultLobby = "192.168.1.101:8091";
+
 	private GameNetClient _net = null!;
 	private ServerInputOverlay? _input;
 
@@ -24,13 +29,20 @@ public partial class ConnectionManager : Node
 		_net = GetNode<GameNetClient>("../GameNetClient");
 
 		// --host ip-or-hostname:port connects immediately; otherwise show the input screen.
-		string host = "";
+		// --lobby host:port overrides the public-lobby address (else PUBLIC_LOBBY env, else default).
+		string host = "", lobby = "";
 		var cmd = OS.GetCmdlineArgs();
 		for (int i = 0; i < cmd.Length; i++)
 		{
 			if (cmd[i] == "--host" && i + 1 < cmd.Length) host = cmd[i + 1];
 			else if (cmd[i].StartsWith("--host=")) host = cmd[i]["--host=".Length..];
+			else if (cmd[i] == "--lobby" && i + 1 < cmd.Length) lobby = cmd[i + 1];
+			else if (cmd[i].StartsWith("--lobby=")) lobby = cmd[i]["--lobby=".Length..];
 		}
+		if (string.IsNullOrEmpty(lobby)) lobby = OS.GetEnvironment("PUBLIC_LOBBY");
+		if (string.IsNullOrEmpty(lobby)) lobby = DefaultLobby;
+		LobbyBase = lobby.StartsWith("http") ? lobby.TrimEnd('/') : $"http://{lobby}";
+
 		// SIM_URI keeps working as a dev override (full ws:// URL).
 		var simUri = OS.GetEnvironment("SIM_URI");
 		if (!string.IsNullOrEmpty(simUri)) ConnectTo(simUri);
@@ -38,7 +50,7 @@ public partial class ConnectionManager : Node
 		else ShowInput();
 	}
 
-	// Submit handler for the address screen, and the entry point for --host.
+	// Submit handler for the address screen, and the entry point for --host. Direct WebSocket join.
 	public void ConnectTo(string hostOrUrl)
 	{
 		ServerUrl = ToWsUrl(hostOrUrl);
@@ -46,6 +58,16 @@ public partial class ConnectionManager : Node
 		State = ConnState.Connecting;
 		GD.Print($"[ConnectionManager] connecting to {ServerUrl}");
 		_net.Connect(ServerUrl);
+	}
+
+	// Join a server picked from the public-lobby browser: WebRTC, signaled through LobbyBase.
+	public void ConnectToLobby(string sessionId, string displayName)
+	{
+		ServerUrl = $"webrtc://{displayName}";
+		HideInput();
+		State = ConnState.Connecting;
+		GD.Print($"[ConnectionManager] joining lobby server {displayName} ({sessionId})");
+		_net.ConnectWebRtc(LobbyBase, sessionId);
 	}
 
 	// Retry button (ConnectionOverlay): return to the address screen so the player can fix or

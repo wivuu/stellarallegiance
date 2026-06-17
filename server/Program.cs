@@ -73,7 +73,7 @@ app.Map("/game", async context =>
         return;
     }
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
-    await hub.HandleConnection(socket, context.RequestAborted);
+    await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
 });
 
 // ---- Sim loop: fixed 50 ms steps, wall-clock accumulator, bench stats ----
@@ -125,6 +125,11 @@ var simThread = new Thread(() =>
 })
 { IsBackground = true, Name = "SimLoop", Priority = ThreadPriority.AboveNormal };
 simThread.Start();
+
+// Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY
+// (ServerShare), heartbeat, and accept WebRTC joins relayed through it. No name = private (direct
+// ws:// only). Shares the server-lifetime token so it deregisters and stops on shutdown.
+LobbyRegistrar.FromEnv(hub)?.Start(cts.Token);
 
 Console.WriteLine($"[SimServer] ws://localhost:{port}/game  seed={seed}  asteroids={world.Asteroids.Count}  20 Hz");
 app.Run();

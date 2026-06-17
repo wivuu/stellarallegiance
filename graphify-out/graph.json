@@ -43,7 +43,7 @@
       "source_file": "",
       "source_location": "",
       "id": "node3d",
-      "community": 65,
+      "community": 68,
       "norm_label": "node3d"
     },
     {
@@ -763,7 +763,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L1",
       "id": "scripts_connectionmanager",
-      "community": 57,
+      "community": 59,
       "norm_label": "connectionmanager.cs"
     },
     {
@@ -772,7 +772,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "id": "scripts_connectionmanager_connectionmanager",
-      "community": 57,
+      "community": 59,
       "norm_label": "connectionmanager"
     },
     {
@@ -785,102 +785,120 @@
       "norm_label": "node"
     },
     {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "client/scripts/ConnectionManager.cs",
+      "source_location": "L22",
+      "id": "client_scripts_connectionmanager_cs_string",
+      "community": 59,
+      "norm_label": "string"
+    },
+    {
       "label": "GameNetClient",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L19",
+      "source_location": "L24",
       "id": "client_scripts_connectionmanager_cs_gamenetclient",
-      "community": 57,
+      "community": 59,
       "norm_label": "gamenetclient"
     },
     {
       "label": "ServerInputOverlay",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L20",
+      "source_location": "L25",
       "id": "serverinputoverlay",
-      "community": 57,
+      "community": 59,
       "norm_label": "serverinputoverlay"
     },
     {
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L22",
+      "source_location": "L27",
       "id": "scripts_connectionmanager_connectionmanager_ready",
-      "community": 57,
+      "community": 59,
       "norm_label": "._ready()"
     },
     {
       "label": ".ConnectTo()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L42",
+      "source_location": "L54",
       "id": "scripts_connectionmanager_connectionmanager_connectto",
-      "community": 57,
+      "community": 59,
       "norm_label": ".connectto()"
+    },
+    {
+      "label": ".ConnectToLobby()",
+      "file_type": "code",
+      "source_file": "client/scripts/ConnectionManager.cs",
+      "source_location": "L64",
+      "id": "scripts_connectionmanager_connectionmanager_connecttolobby",
+      "community": 59,
+      "norm_label": ".connecttolobby()"
     },
     {
       "label": ".Connect()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L53",
+      "source_location": "L75",
       "id": "scripts_connectionmanager_connectionmanager_connect",
-      "community": 57,
+      "community": 59,
       "norm_label": ".connect()"
     },
     {
       "label": ".NotifyConnected()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L57",
+      "source_location": "L79",
       "id": "scripts_connectionmanager_connectionmanager_notifyconnected",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifyconnected()"
     },
     {
       "label": ".NotifyFailed()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L63",
+      "source_location": "L85",
       "id": "scripts_connectionmanager_connectionmanager_notifyfailed",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifyfailed()"
     },
     {
       "label": ".NotifyDisconnected()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L69",
+      "source_location": "L91",
       "id": "scripts_connectionmanager_connectionmanager_notifydisconnected",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifydisconnected()"
     },
     {
       "label": ".ShowInput()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L76",
+      "source_location": "L98",
       "id": "scripts_connectionmanager_connectionmanager_showinput",
-      "community": 57,
+      "community": 59,
       "norm_label": ".showinput()"
     },
     {
       "label": ".HideInput()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L87",
+      "source_location": "L109",
       "id": "scripts_connectionmanager_connectionmanager_hideinput",
-      "community": 57,
+      "community": 59,
       "norm_label": ".hideinput()"
     },
     {
       "label": ".ToWsUrl()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L93",
+      "source_location": "L115",
       "id": "scripts_connectionmanager_connectionmanager_towsurl",
-      "community": 57,
+      "community": 59,
       "norm_label": ".towsurl()"
     },
     {
@@ -889,7 +907,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 59,
+      "community": 4,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -898,7 +916,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 59,
+      "community": 4,
       "norm_label": "connectionoverlay"
     },
     {
@@ -907,7 +925,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 59,
+      "community": 4,
       "norm_label": "color"
     },
     {
@@ -916,7 +934,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 59,
+      "community": 4,
       "norm_label": "connectionmanager"
     },
     {
@@ -925,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 59,
+      "community": 4,
       "norm_label": "label"
     },
     {
@@ -934,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 59,
+      "community": 4,
       "norm_label": "button"
     },
     {
@@ -943,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 59,
+      "community": 4,
       "norm_label": "double"
     },
     {
@@ -952,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 59,
+      "community": 4,
       "norm_label": ".init()"
     },
     {
@@ -961,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 59,
+      "community": 4,
       "norm_label": ".centered()"
     },
     {
@@ -970,7 +988,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 59,
+      "community": 4,
       "norm_label": "._process()"
     },
     {
@@ -1679,7 +1697,7 @@
       "label": "GameNetClient",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L22",
+      "source_location": "L28",
       "id": "scripts_gamenetclient_gamenetclient",
       "community": 51,
       "norm_label": "gamenetclient"
@@ -1688,7 +1706,7 @@
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L40",
+      "source_location": "L46",
       "id": "client_scripts_gamenetclient_cs_worldrenderer",
       "community": 51,
       "norm_label": "worldrenderer"
@@ -1697,7 +1715,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L41",
+      "source_location": "L47",
       "id": "client_scripts_gamenetclient_cs_defregistry",
       "community": 51,
       "norm_label": "defregistry"
@@ -1706,7 +1724,7 @@
       "label": "ConnectionManager",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L42",
+      "source_location": "L48",
       "id": "client_scripts_gamenetclient_cs_connectionmanager",
       "community": 51,
       "norm_label": "connectionmanager"
@@ -1715,7 +1733,7 @@
       "label": "ClientWebSocket",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L44",
+      "source_location": "L50",
       "id": "clientwebsocket",
       "community": 51,
       "norm_label": "clientwebsocket"
@@ -1724,7 +1742,7 @@
       "label": "CancellationTokenSource",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L45",
+      "source_location": "L51",
       "id": "client_scripts_gamenetclient_cs_cancellationtokensource",
       "community": 51,
       "norm_label": "cancellationtokensource"
@@ -1733,7 +1751,7 @@
       "label": "ConcurrentQueue",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L47",
+      "source_location": "L53",
       "id": "concurrentqueue",
       "community": 51,
       "norm_label": "concurrentqueue"
@@ -1742,7 +1760,7 @@
       "label": "Channel",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L50",
+      "source_location": "L56",
       "id": "client_scripts_gamenetclient_cs_channel",
       "community": 51,
       "norm_label": "channel"
@@ -1751,7 +1769,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L54",
+      "source_location": "L60",
       "id": "client_scripts_gamenetclient_cs_dictionary",
       "community": 51,
       "norm_label": "dictionary"
@@ -1760,7 +1778,7 @@
       "label": "HashSet",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L55",
+      "source_location": "L61",
       "id": "hashset",
       "community": 51,
       "norm_label": "hashset"
@@ -1769,7 +1787,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L59",
+      "source_location": "L65",
       "id": "client_scripts_gamenetclient_cs_string",
       "community": 51,
       "norm_label": "string"
@@ -1778,7 +1796,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L62",
+      "source_location": "L68",
       "id": "scripts_gamenetclient_gamenetclient_ready",
       "community": 51,
       "norm_label": "._ready()"
@@ -1787,16 +1805,43 @@
       "label": ".Connect()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L73",
+      "source_location": "L79",
       "id": "scripts_gamenetclient_gamenetclient_connect",
       "community": 51,
       "norm_label": ".connect()"
     },
     {
+      "label": ".ConnectWebRtc()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L88",
+      "id": "scripts_gamenetclient_gamenetclient_connectwebrtc",
+      "community": 51,
+      "norm_label": ".connectwebrtc()"
+    },
+    {
+      "label": ".BeginConnect()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L95",
+      "id": "scripts_gamenetclient_gamenetclient_beginconnect",
+      "community": 51,
+      "norm_label": ".beginconnect()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L95",
+      "id": "client_scripts_gamenetclient_cs_cancellationtoken",
+      "community": 51,
+      "norm_label": "cancellationtoken"
+    },
+    {
       "label": "._ExitTree()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L84",
+      "source_location": "L106",
       "id": "scripts_gamenetclient_gamenetclient_exittree",
       "community": 51,
       "norm_label": "._exittree()"
@@ -1805,7 +1850,7 @@
       "label": ".SendHello()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L93",
+      "source_location": "L115",
       "id": "scripts_gamenetclient_gamenetclient_sendhello",
       "community": 51,
       "norm_label": ".sendhello()"
@@ -1814,7 +1859,7 @@
       "label": ".RequestSpawn()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L106",
+      "source_location": "L128",
       "id": "scripts_gamenetclient_gamenetclient_requestspawn",
       "community": 51,
       "norm_label": ".requestspawn()"
@@ -1823,7 +1868,7 @@
       "label": ".SetTeam()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L111",
+      "source_location": "L133",
       "id": "scripts_gamenetclient_gamenetclient_setteam",
       "community": 51,
       "norm_label": ".setteam()"
@@ -1832,7 +1877,7 @@
       "label": ".SetReady()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L116",
+      "source_location": "L138",
       "id": "scripts_gamenetclient_gamenetclient_setready",
       "community": 51,
       "norm_label": ".setready()"
@@ -1841,7 +1886,7 @@
       "label": ".SendChat()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L121",
+      "source_location": "L143",
       "id": "scripts_gamenetclient_gamenetclient_sendchat",
       "community": 51,
       "norm_label": ".sendchat()"
@@ -1850,7 +1895,7 @@
       "label": ".SendInput()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L132",
+      "source_location": "L154",
       "id": "scripts_gamenetclient_gamenetclient_sendinput",
       "community": 51,
       "norm_label": ".sendinput()"
@@ -1859,7 +1904,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L132",
+      "source_location": "L154",
       "id": "client_scripts_gamenetclient_cs_shipinputstate",
       "community": 51,
       "norm_label": "shipinputstate"
@@ -1868,43 +1913,106 @@
       "label": ".SendPing()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L147",
+      "source_location": "L169",
       "id": "scripts_gamenetclient_gamenetclient_sendping",
       "community": 51,
       "norm_label": ".sendping()"
     },
     {
-      "label": ".RunSocket()",
+      "label": ".RunWebSocket()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L157",
-      "id": "scripts_gamenetclient_gamenetclient_runsocket",
+      "source_location": "L179",
+      "id": "scripts_gamenetclient_gamenetclient_runwebsocket",
       "community": 51,
-      "norm_label": ".runsocket()"
-    },
-    {
-      "label": "CancellationToken",
-      "file_type": "code",
-      "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L157",
-      "id": "client_scripts_gamenetclient_cs_cancellationtoken",
-      "community": 51,
-      "norm_label": "cancellationtoken"
+      "norm_label": ".runwebsocket()"
     },
     {
       "label": "Task",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L157",
+      "source_location": "L179",
       "id": "client_scripts_gamenetclient_cs_task",
       "community": 51,
       "norm_label": "task"
     },
     {
+      "label": ".RunWebRtc()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L221",
+      "id": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "community": 51,
+      "norm_label": ".runwebrtc()"
+    },
+    {
+      "label": ".WaitForIceGathering()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "id": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "community": 51,
+      "norm_label": ".waitforicegathering()"
+    },
+    {
+      "label": "RTCPeerConnection",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "id": "client_scripts_gamenetclient_cs_rtcpeerconnection",
+      "community": 51,
+      "norm_label": "rtcpeerconnection"
+    },
+    {
+      "label": ".ToIceServers()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "id": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "community": 51,
+      "norm_label": ".toiceservers()"
+    },
+    {
+      "label": "IceServerDto",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "id": "client_scripts_gamenetclient_cs_iceserverdto",
+      "community": 51,
+      "norm_label": "iceserverdto"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "id": "client_scripts_gamenetclient_cs_list",
+      "community": 51,
+      "norm_label": "list"
+    },
+    {
+      "label": "RTCIceServer",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "id": "client_scripts_gamenetclient_cs_rtciceserver",
+      "community": 51,
+      "norm_label": "rtciceserver"
+    },
+    {
+      "label": "HttpClient",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L323",
+      "id": "client_scripts_gamenetclient_cs_httpclient",
+      "community": 51,
+      "norm_label": "httpclient"
+    },
+    {
       "label": ".OnSocketOpen()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L196",
+      "source_location": "L329",
       "id": "scripts_gamenetclient_gamenetclient_onsocketopen",
       "community": 51,
       "norm_label": ".onsocketopen()"
@@ -1913,7 +2021,7 @@
       "label": ".OnSocketClosed()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L197",
+      "source_location": "L330",
       "id": "scripts_gamenetclient_gamenetclient_onsocketclosed",
       "community": 51,
       "norm_label": ".onsocketclosed()"
@@ -1922,7 +2030,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L201",
+      "source_location": "L334",
       "id": "scripts_gamenetclient_gamenetclient_process",
       "community": 51,
       "norm_label": "._process()"
@@ -1931,7 +2039,7 @@
       "label": ".Apply()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L207",
+      "source_location": "L340",
       "id": "scripts_gamenetclient_gamenetclient_apply",
       "community": 51,
       "norm_label": ".apply()"
@@ -1940,7 +2048,7 @@
       "label": ".ReadStr()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L227",
+      "source_location": "L360",
       "id": "scripts_gamenetclient_gamenetclient_readstr",
       "community": 51,
       "norm_label": ".readstr()"
@@ -1949,7 +2057,7 @@
       "label": "BinaryReader",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L227",
+      "source_location": "L360",
       "id": "binaryreader",
       "community": 51,
       "norm_label": "binaryreader"
@@ -1958,7 +2066,7 @@
       "label": ".ApplyBases()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L233",
+      "source_location": "L366",
       "id": "scripts_gamenetclient_gamenetclient_applybases",
       "community": 51,
       "norm_label": ".applybases()"
@@ -1967,7 +2075,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L241",
+      "source_location": "L374",
       "id": "client_scripts_gamenetclient_cs_byte",
       "community": 51,
       "norm_label": "byte"
@@ -1976,7 +2084,7 @@
       "label": ".ApplyWelcome()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L243",
+      "source_location": "L376",
       "id": "scripts_gamenetclient_gamenetclient_applywelcome",
       "community": 51,
       "norm_label": ".applywelcome()"
@@ -1985,25 +2093,16 @@
       "label": ".ReadHardpoints()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L301",
+      "source_location": "L434",
       "id": "scripts_gamenetclient_gamenetclient_readhardpoints",
       "community": 51,
       "norm_label": ".readhardpoints()"
     },
     {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L301",
-      "id": "client_scripts_gamenetclient_cs_list",
-      "community": 51,
-      "norm_label": "list"
-    },
-    {
       "label": "HardpointDef",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L301",
+      "source_location": "L434",
       "id": "client_scripts_gamenetclient_cs_hardpointdef",
       "community": 51,
       "norm_label": "hardpointdef"
@@ -2012,7 +2111,7 @@
       "label": ".ApplyDefs()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L316",
+      "source_location": "L449",
       "id": "scripts_gamenetclient_gamenetclient_applydefs",
       "community": 51,
       "norm_label": ".applydefs()"
@@ -2021,7 +2120,7 @@
       "label": ".ApplyLobbyState()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L364",
+      "source_location": "L497",
       "id": "scripts_gamenetclient_gamenetclient_applylobbystate",
       "community": 51,
       "norm_label": ".applylobbystate()"
@@ -2030,7 +2129,7 @@
       "label": ".ApplyChat()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L383",
+      "source_location": "L516",
       "id": "scripts_gamenetclient_gamenetclient_applychat",
       "community": 51,
       "norm_label": ".applychat()"
@@ -2039,7 +2138,7 @@
       "label": ".ApplySnapshot()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L392",
+      "source_location": "L525",
       "id": "scripts_gamenetclient_gamenetclient_applysnapshot",
       "community": 51,
       "norm_label": ".applysnapshot()"
@@ -2048,7 +2147,7 @@
       "label": ".ApplyShipGone()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L448",
+      "source_location": "L581",
       "id": "scripts_gamenetclient_gamenetclient_applyshipgone",
       "community": 51,
       "norm_label": ".applyshipgone()"
@@ -2311,7 +2410,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 62,
+      "community": 4,
       "norm_label": "control"
     },
     {
@@ -2320,7 +2419,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L18",
       "id": "scripts_hud_hud_ready",
-      "community": 68,
+      "community": 4,
       "norm_label": "._ready()"
     },
     {
@@ -2329,7 +2428,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "scripts_hud_hud_spawnbutton",
-      "community": 68,
+      "community": 4,
       "norm_label": ".spawnbutton()"
     },
     {
@@ -2338,7 +2437,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "client_scripts_hud_cs_shipclass",
-      "community": 68,
+      "community": 4,
       "norm_label": "shipclass"
     },
     {
@@ -2347,7 +2446,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "client_scripts_hud_cs_button",
-      "community": 68,
+      "community": 4,
       "norm_label": "button"
     },
     {
@@ -2536,7 +2635,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 32,
+      "community": 4,
       "norm_label": "minimap.cs"
     },
     {
@@ -2545,7 +2644,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 32,
+      "community": 4,
       "norm_label": "minimap"
     },
     {
@@ -2554,7 +2653,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 32,
+      "community": 4,
       "norm_label": "float"
     },
     {
@@ -2563,7 +2662,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 32,
+      "community": 4,
       "norm_label": "color"
     },
     {
@@ -2572,7 +2671,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 32,
+      "community": 4,
       "norm_label": "connectionmanager"
     },
     {
@@ -2581,7 +2680,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 32,
+      "community": 4,
       "norm_label": "worldrenderer"
     },
     {
@@ -2590,7 +2689,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L39",
       "id": "client_scripts_minimap_cs_dictionary",
-      "community": 32,
+      "community": 4,
       "norm_label": "dictionary"
     },
     {
@@ -2599,7 +2698,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "scripts_minimap_minimap_tryclicksector",
-      "community": 32,
+      "community": 4,
       "norm_label": ".tryclicksector()"
     },
     {
@@ -2608,7 +2707,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "client_scripts_minimap_cs_vector2",
-      "community": 32,
+      "community": 4,
       "norm_label": "vector2"
     },
     {
@@ -2617,7 +2716,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L55",
       "id": "scripts_minimap_minimap_init",
-      "community": 32,
+      "community": 4,
       "norm_label": ".init()"
     },
     {
@@ -2626,7 +2725,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L63",
       "id": "scripts_minimap_minimap_process",
-      "community": 32,
+      "community": 4,
       "norm_label": "._process()"
     },
     {
@@ -2635,7 +2734,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L65",
       "id": "scripts_minimap_minimap_draw",
-      "community": 32,
+      "community": 4,
       "norm_label": "._draw()"
     },
     {
@@ -3614,7 +3713,7 @@
       "label": "ServerInputOverlay",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L6",
+      "source_location": "L15",
       "id": "scripts_serverinputoverlay_serverinputoverlay",
       "community": 62,
       "norm_label": "serverinputoverlay"
@@ -3623,16 +3722,25 @@
       "label": "Color",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L8",
+      "source_location": "L17",
       "id": "client_scripts_serverinputoverlay_cs_color",
       "community": 62,
       "norm_label": "color"
     },
     {
+      "label": "HttpClient",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L23",
+      "id": "client_scripts_serverinputoverlay_cs_httpclient",
+      "community": 62,
+      "norm_label": "httpclient"
+    },
+    {
       "label": "ConnectionManager",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L11",
+      "source_location": "L26",
       "id": "client_scripts_serverinputoverlay_cs_connectionmanager",
       "community": 62,
       "norm_label": "connectionmanager"
@@ -3641,7 +3749,7 @@
       "label": "LineEdit",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L12",
+      "source_location": "L27",
       "id": "client_scripts_serverinputoverlay_cs_lineedit",
       "community": 62,
       "norm_label": "lineedit"
@@ -3650,25 +3758,88 @@
       "label": "Label",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L13",
+      "source_location": "L28",
       "id": "client_scripts_serverinputoverlay_cs_label",
       "community": 62,
       "norm_label": "label"
     },
     {
+      "label": "VBoxContainer",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L29",
+      "id": "vboxcontainer",
+      "community": 62,
+      "norm_label": "vboxcontainer"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L33",
+      "id": "client_scripts_serverinputoverlay_cs_list",
+      "community": 62,
+      "norm_label": "list"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L34",
+      "id": "client_scripts_serverinputoverlay_cs_string",
+      "community": 62,
+      "norm_label": "string"
+    },
+    {
       "label": ".Init()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L15",
+      "source_location": "L36",
       "id": "scripts_serverinputoverlay_serverinputoverlay_init",
       "community": 62,
       "norm_label": ".init()"
     },
     {
+      "label": ".Reload()",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L109",
+      "id": "scripts_serverinputoverlay_serverinputoverlay_reload",
+      "community": 62,
+      "norm_label": ".reload()"
+    },
+    {
+      "label": ".FetchAsync()",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L117",
+      "id": "scripts_serverinputoverlay_serverinputoverlay_fetchasync",
+      "community": 62,
+      "norm_label": ".fetchasync()"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L117",
+      "id": "client_scripts_serverinputoverlay_cs_task",
+      "community": 62,
+      "norm_label": "task"
+    },
+    {
+      "label": ".RenderServers()",
+      "file_type": "code",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L134",
+      "id": "scripts_serverinputoverlay_serverinputoverlay_renderservers",
+      "community": 62,
+      "norm_label": ".renderservers()"
+    },
+    {
       "label": ".Submit()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L63",
+      "source_location": "L171",
       "id": "scripts_serverinputoverlay_serverinputoverlay_submit",
       "community": 62,
       "norm_label": ".submit()"
@@ -3677,7 +3848,7 @@
       "label": ".Centered()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L76",
+      "source_location": "L184",
       "id": "scripts_serverinputoverlay_serverinputoverlay_centered",
       "community": 62,
       "norm_label": ".centered()"
@@ -4102,7 +4273,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L47",
       "id": "client_scripts_shipmodelloader_cs_node3d",
-      "community": 65,
+      "community": 68,
       "norm_label": "node3d"
     },
     {
@@ -4336,7 +4507,7 @@
       "source_file": "",
       "source_location": "",
       "id": "meshinstance3d",
-      "community": 63,
+      "community": 38,
       "norm_label": "meshinstance3d"
     },
     {
@@ -4840,7 +5011,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1",
       "id": "scripts_worldrenderer",
-      "community": 58,
+      "community": 68,
       "norm_label": "worldrenderer.cs"
     },
     {
@@ -5209,7 +5380,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L329",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
-      "community": 65,
+      "community": 68,
       "norm_label": ".setnodesector()"
     },
     {
@@ -5227,7 +5398,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L348",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
-      "community": 65,
+      "community": 68,
       "norm_label": ".spawneffect()"
     },
     {
@@ -5281,7 +5452,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L445",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
-      "community": 63,
+      "community": 38,
       "norm_label": ".findmeshinstance()"
     },
     {
@@ -5290,7 +5461,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L445",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 63,
+      "community": 38,
       "norm_label": "node"
     },
     {
@@ -5299,7 +5470,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L445",
       "id": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "community": 63,
+      "community": 38,
       "norm_label": "meshinstance3d"
     },
     {
@@ -5371,7 +5542,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L604",
       "id": "scripts_worldrenderer_worldrenderer_deleteship",
-      "community": 65,
+      "community": 68,
       "norm_label": ".deleteship()"
     },
     {
@@ -5380,7 +5551,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L662",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
-      "community": 65,
+      "community": 68,
       "norm_label": ".friendlyrescuernear()"
     },
     {
@@ -5416,7 +5587,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L732",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 41,
+      "community": 58,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -5443,7 +5614,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L783",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
-      "community": 63,
+      "community": 38,
       "norm_label": ".newprojectilemesh()"
     },
     {
@@ -5499,6 +5670,15 @@
       "id": "client_wivuullegiance_csproj_framework_net8_0",
       "community": 15,
       "norm_label": "net8.0"
+    },
+    {
+      "label": "SIPSorcery (10.0.9)",
+      "file_type": "code",
+      "source_file": "client/wivuullegiance.csproj",
+      "source_location": null,
+      "id": "client_wivuullegiance_csproj_nuget_sipsorcery",
+      "community": 15,
+      "norm_label": "sipsorcery (10.0.9)"
     },
     {
       "label": "Shared.csproj",
@@ -5777,6 +5957,447 @@
       "id": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry",
       "community": 36,
       "norm_label": "run-server.sh script"
+    },
+    {
+      "label": "Contracts.cs",
+      "file_type": "code",
+      "source_file": "server-share/Contracts.cs",
+      "source_location": "L1",
+      "id": "server_share_contracts",
+      "community": 75,
+      "norm_label": "contracts.cs"
+    },
+    {
+      "label": "ServerRegistry.cs",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L1",
+      "id": "server_share_serverregistry",
+      "community": 32,
+      "norm_label": "serverregistry.cs"
+    },
+    {
+      "label": "IServerRegistry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L8",
+      "id": "server_share_serverregistry_iserverregistry",
+      "community": 32,
+      "norm_label": "iserverregistry"
+    },
+    {
+      "label": ".Register()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "id": "server_share_serverregistry_iserverregistry_register",
+      "community": 32,
+      "norm_label": ".register()"
+    },
+    {
+      "label": "RegisterRequest",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "id": "registerrequest",
+      "community": 32,
+      "norm_label": "registerrequest"
+    },
+    {
+      "label": "ServerEntry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "id": "serverentry",
+      "community": 32,
+      "norm_label": "serverentry"
+    },
+    {
+      "label": ".Heartbeat()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L12",
+      "id": "server_share_serverregistry_iserverregistry_heartbeat",
+      "community": 32,
+      "norm_label": ".heartbeat()"
+    },
+    {
+      "label": ".Get()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "id": "server_share_serverregistry_iserverregistry_get",
+      "community": 32,
+      "norm_label": ".get()"
+    },
+    {
+      "label": ".ListActive()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "id": "server_share_serverregistry_iserverregistry_listactive",
+      "community": 32,
+      "norm_label": ".listactive()"
+    },
+    {
+      "label": "IReadOnlyCollection",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "id": "ireadonlycollection",
+      "community": 32,
+      "norm_label": "ireadonlycollection"
+    },
+    {
+      "label": ".Remove()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L15",
+      "id": "server_share_serverregistry_iserverregistry_remove",
+      "community": 32,
+      "norm_label": ".remove()"
+    },
+    {
+      "label": ".Exists()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L18",
+      "id": "server_share_serverregistry_iserverregistry_exists",
+      "community": 32,
+      "norm_label": ".exists()"
+    },
+    {
+      "label": "InMemoryServerRegistry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L21",
+      "id": "server_share_serverregistry_inmemoryserverregistry",
+      "community": 32,
+      "norm_label": "inmemoryserverregistry"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L23",
+      "id": "server_share_serverregistry_cs_int",
+      "community": 32,
+      "norm_label": "int"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L27",
+      "id": "server_share_serverregistry_cs_timespan",
+      "community": 32,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L29",
+      "id": "server_share_serverregistry_cs_concurrentdictionary",
+      "community": 32,
+      "norm_label": "concurrentdictionary"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L30",
+      "id": "server_share_serverregistry_cs_ireadonlylist",
+      "community": 32,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": ".NormalizeName()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L35",
+      "id": "server_share_serverregistry_inmemoryserverregistry_normalizename",
+      "community": 32,
+      "norm_label": ".normalizename()"
+    },
+    {
+      "label": ".Register()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "id": "server_share_serverregistry_inmemoryserverregistry_register",
+      "community": 32,
+      "norm_label": ".register()"
+    },
+    {
+      "label": ".Heartbeat()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L59",
+      "id": "server_share_serverregistry_inmemoryserverregistry_heartbeat",
+      "community": 32,
+      "norm_label": ".heartbeat()"
+    },
+    {
+      "label": ".Get()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L68",
+      "id": "server_share_serverregistry_inmemoryserverregistry_get",
+      "community": 32,
+      "norm_label": ".get()"
+    },
+    {
+      "label": ".ListActive()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "id": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "community": 32,
+      "norm_label": ".listactive()"
+    },
+    {
+      "label": ".Remove()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L80",
+      "id": "server_share_serverregistry_inmemoryserverregistry_remove",
+      "community": 32,
+      "norm_label": ".remove()"
+    },
+    {
+      "label": ".Exists()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L82",
+      "id": "server_share_serverregistry_inmemoryserverregistry_exists",
+      "community": 32,
+      "norm_label": ".exists()"
+    },
+    {
+      "label": ".Prune()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L88",
+      "id": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "community": 32,
+      "norm_label": ".prune()"
+    },
+    {
+      "label": "ServerShare.cs",
+      "file_type": "code",
+      "source_file": "server-share/ServerShare.cs",
+      "source_location": "L1",
+      "id": "server_share_servershare_cs_server_share_servershare",
+      "community": 76,
+      "norm_label": "servershare.cs"
+    },
+    {
+      "label": "ServerShare.csproj",
+      "file_type": "code",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_server_share_servershare",
+      "community": 74,
+      "norm_label": "servershare.csproj"
+    },
+    {
+      "label": "net8.0",
+      "file_type": "concept",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_framework_net8_0",
+      "community": 74,
+      "norm_label": "net8.0"
+    },
+    {
+      "label": "Microsoft.NET.Sdk.Web",
+      "file_type": "concept",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_sdk_microsoft_net_sdk_web",
+      "community": 74,
+      "norm_label": "microsoft.net.sdk.web"
+    },
+    {
+      "label": "Signaling.cs",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L1",
+      "id": "server_share_signaling",
+      "community": 63,
+      "norm_label": "signaling.cs"
+    },
+    {
+      "label": "SignalingRelay",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L15",
+      "id": "server_share_signaling_signalingrelay",
+      "community": 63,
+      "norm_label": "signalingrelay"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L17",
+      "id": "server_share_signaling_cs_timespan",
+      "community": 63,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "Pending",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L21",
+      "id": "server_share_signaling_pending",
+      "community": 63,
+      "norm_label": "pending"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L23",
+      "id": "server_share_signaling_cs_string",
+      "community": 63,
+      "norm_label": "string"
+    },
+    {
+      "label": "DateTimeOffset",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "id": "datetimeoffset",
+      "community": 63,
+      "norm_label": "datetimeoffset"
+    },
+    {
+      "label": "SemaphoreSlim",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "id": "semaphoreslim",
+      "community": 63,
+      "norm_label": "semaphoreslim"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L33",
+      "id": "server_share_signaling_cs_concurrentdictionary",
+      "community": 63,
+      "norm_label": "concurrentdictionary"
+    },
+    {
+      "label": ".WakeFor()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "id": "server_share_signaling_signalingrelay_wakefor",
+      "community": 63,
+      "norm_label": ".wakefor()"
+    },
+    {
+      "label": ".EnqueueOffer()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L43",
+      "id": "server_share_signaling_signalingrelay_enqueueoffer",
+      "community": 63,
+      "norm_label": ".enqueueoffer()"
+    },
+    {
+      "label": ".TakePendingAsync()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_signalingrelay_takependingasync",
+      "community": 63,
+      "norm_label": ".takependingasync()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_cancellationtoken",
+      "community": 63,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_task",
+      "community": 63,
+      "norm_label": "task"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_ireadonlylist",
+      "community": 63,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": "PendingOffer",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "pendingoffer",
+      "community": 63,
+      "norm_label": "pendingoffer"
+    },
+    {
+      "label": ".Drain()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "id": "server_share_signaling_signalingrelay_drain",
+      "community": 63,
+      "norm_label": ".drain()"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "id": "server_share_signaling_cs_list",
+      "community": 63,
+      "norm_label": "list"
+    },
+    {
+      "label": ".PostAnswer()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L77",
+      "id": "server_share_signaling_signalingrelay_postanswer",
+      "community": 63,
+      "norm_label": ".postanswer()"
+    },
+    {
+      "label": ".WaitAnswerAsync()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "id": "server_share_signaling_signalingrelay_waitanswerasync",
+      "community": 63,
+      "norm_label": ".waitanswerasync()"
+    },
+    {
+      "label": ".Prune()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L98",
+      "id": "server_share_signaling_signalingrelay_prune",
+      "community": 63,
+      "norm_label": ".prune()"
     },
     {
       "label": "Backends.cs",
@@ -6121,13 +6742,13 @@
       "norm_label": "byte"
     },
     {
-      "label": "WebSocket",
+      "label": "IClientTransport",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L73",
-      "id": "websocket",
+      "id": "server_net_clienthub_cs_iclienttransport",
       "community": 44,
-      "norm_label": "websocket"
+      "norm_label": "iclienttransport"
     },
     {
       "label": "Channel",
@@ -6278,7 +6899,7 @@
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
       "source_location": "L132",
-      "id": "concurrentdictionary",
+      "id": "server_net_clienthub_cs_concurrentdictionary",
       "community": 44,
       "norm_label": "concurrentdictionary"
     },
@@ -6403,7 +7024,7 @@
       "label": ".AfterStep()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L398",
+      "source_location": "L396",
       "id": "net_clienthub_clienthub_afterstep",
       "community": 44,
       "norm_label": ".afterstep()"
@@ -6412,7 +7033,7 @@
       "label": ".RebuildAoiIndex()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L529",
+      "source_location": "L527",
       "id": "net_clienthub_clienthub_rebuildaoiindex",
       "community": 44,
       "norm_label": ".rebuildaoiindex()"
@@ -6421,7 +7042,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L529",
+      "source_location": "L527",
       "id": "server_net_clienthub_cs_shipsim",
       "community": 44,
       "norm_label": "shipsim"
@@ -6430,7 +7051,7 @@
       "label": ".SerializeRecords()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L557",
+      "source_location": "L555",
       "id": "net_clienthub_clienthub_serializerecords",
       "community": 44,
       "norm_label": ".serializerecords()"
@@ -6439,7 +7060,7 @@
       "label": ".BuildSharedCoarseSnapshot()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L585",
+      "source_location": "L583",
       "id": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
       "community": 44,
       "norm_label": ".buildsharedcoarsesnapshot()"
@@ -6448,10 +7069,127 @@
       "label": ".BuildSnapshotFor()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L599",
+      "source_location": "L597",
       "id": "net_clienthub_clienthub_buildsnapshotfor",
       "community": 44,
       "norm_label": ".buildsnapshotfor()"
+    },
+    {
+      "label": "IClientTransport.cs",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L1",
+      "id": "net_iclienttransport",
+      "community": 73,
+      "norm_label": "iclienttransport.cs"
+    },
+    {
+      "label": "IClientTransport",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L9",
+      "id": "net_iclienttransport_iclienttransport",
+      "community": 73,
+      "norm_label": "iclienttransport"
+    },
+    {
+      "label": ".ReceiveAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "id": "net_iclienttransport_iclienttransport_receiveasync",
+      "community": 73,
+      "norm_label": ".receiveasync()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "id": "server_net_iclienttransport_cs_cancellationtoken",
+      "community": 73,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "ValueTask",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "id": "server_net_iclienttransport_cs_valuetask",
+      "community": 73,
+      "norm_label": "valuetask"
+    },
+    {
+      "label": ".SendAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "id": "net_iclienttransport_iclienttransport_sendasync",
+      "community": 73,
+      "norm_label": ".sendasync()"
+    },
+    {
+      "label": "ReadOnlyMemory",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "id": "server_net_iclienttransport_cs_readonlymemory",
+      "community": 73,
+      "norm_label": "readonlymemory"
+    },
+    {
+      "label": ".CloseAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L19",
+      "id": "net_iclienttransport_iclienttransport_closeasync",
+      "community": 73,
+      "norm_label": ".closeasync()"
+    },
+    {
+      "label": "WebSocketTransport",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L24",
+      "id": "net_iclienttransport_websockettransport",
+      "community": 73,
+      "norm_label": "websockettransport"
+    },
+    {
+      "label": "WebSocket",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L26",
+      "id": "websocket",
+      "community": 44,
+      "norm_label": "websocket"
+    },
+    {
+      "label": ".ReceiveAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L29",
+      "id": "net_iclienttransport_websockettransport_receiveasync",
+      "community": 73,
+      "norm_label": ".receiveasync()"
+    },
+    {
+      "label": ".SendAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L35",
+      "id": "net_iclienttransport_websockettransport_sendasync",
+      "community": 73,
+      "norm_label": ".sendasync()"
+    },
+    {
+      "label": ".CloseAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L38",
+      "id": "net_iclienttransport_websockettransport_closeasync",
+      "community": 73,
+      "norm_label": ".closeasync()"
     },
     {
       "label": "Lobby.cs",
@@ -6614,6 +7352,186 @@
       "id": "lobbyentry",
       "community": 28,
       "norm_label": "lobbyentry"
+    },
+    {
+      "label": "LobbyRegistrar.cs",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L1",
+      "id": "net_lobbyregistrar",
+      "community": 67,
+      "norm_label": "lobbyregistrar.cs"
+    },
+    {
+      "label": "LobbyRegistrar",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L21",
+      "id": "net_lobbyregistrar_lobbyregistrar",
+      "community": 67,
+      "norm_label": "lobbyregistrar"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L23",
+      "id": "server_net_lobbyregistrar_cs_string",
+      "community": 67,
+      "norm_label": "string"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L24",
+      "id": "server_net_lobbyregistrar_cs_timespan",
+      "community": 67,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "ClientHub",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L26",
+      "id": "server_net_lobbyregistrar_cs_clienthub",
+      "community": 67,
+      "norm_label": "clienthub"
+    },
+    {
+      "label": "HttpClient",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L27",
+      "id": "server_net_lobbyregistrar_cs_httpclient",
+      "community": 67,
+      "norm_label": "httpclient"
+    },
+    {
+      "label": "CancellationTokenSource",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L33",
+      "id": "server_net_lobbyregistrar_cs_cancellationtokensource",
+      "community": 67,
+      "norm_label": "cancellationtokensource"
+    },
+    {
+      "label": ".FromEnv()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L45",
+      "id": "net_lobbyregistrar_lobbyregistrar_fromenv",
+      "community": 67,
+      "norm_label": ".fromenv()"
+    },
+    {
+      "label": ".Start()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L65",
+      "id": "net_lobbyregistrar_lobbyregistrar_start",
+      "community": 67,
+      "norm_label": ".start()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L65",
+      "id": "server_net_lobbyregistrar_cs_cancellationtoken",
+      "community": 67,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": ".RunAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L67",
+      "id": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "community": 67,
+      "norm_label": ".runasync()"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L67",
+      "id": "server_net_lobbyregistrar_cs_task",
+      "community": 67,
+      "norm_label": "task"
+    },
+    {
+      "label": ".RegisterAndListen()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L91",
+      "id": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "community": 67,
+      "norm_label": ".registerandlisten()"
+    },
+    {
+      "label": ".Heartbeat()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L125",
+      "id": "net_lobbyregistrar_lobbyregistrar_heartbeat",
+      "community": 67,
+      "norm_label": ".heartbeat()"
+    },
+    {
+      "label": ".Deregister()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L137",
+      "id": "net_lobbyregistrar_lobbyregistrar_deregister",
+      "community": 67,
+      "norm_label": ".deregister()"
+    },
+    {
+      "label": ".ToIceServers()",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "id": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "community": 67,
+      "norm_label": ".toiceservers()"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "id": "server_net_lobbyregistrar_cs_ireadonlylist",
+      "community": 67,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": "IceServerDto",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "id": "server_net_lobbyregistrar_cs_iceserverdto",
+      "community": 67,
+      "norm_label": "iceserverdto"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "id": "server_net_lobbyregistrar_cs_list",
+      "community": 67,
+      "norm_label": "list"
+    },
+    {
+      "label": "RTCIceServer",
+      "file_type": "code",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "id": "server_net_lobbyregistrar_cs_rtciceserver",
+      "community": 67,
+      "norm_label": "rtciceserver"
     },
     {
       "label": "Protocol.cs",
@@ -6821,6 +7739,213 @@
       "id": "net_protocol_protocol_buildchatrelay",
       "community": 47,
       "norm_label": ".buildchatrelay()"
+    },
+    {
+      "label": "WebRtcListener.cs",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L1",
+      "id": "net_webrtclistener",
+      "community": 41,
+      "norm_label": "webrtclistener.cs"
+    },
+    {
+      "label": "WebRtcTransport",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L11",
+      "id": "net_webrtclistener_webrtctransport",
+      "community": 41,
+      "norm_label": "webrtctransport"
+    },
+    {
+      "label": "IClientTransport",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "id": "iclienttransport",
+      "community": 41,
+      "norm_label": "iclienttransport"
+    },
+    {
+      "label": "RTCPeerConnection",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L13",
+      "id": "server_net_webrtclistener_cs_rtcpeerconnection",
+      "community": 41,
+      "norm_label": "rtcpeerconnection"
+    },
+    {
+      "label": "RTCDataChannel",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L14",
+      "id": "rtcdatachannel",
+      "community": 41,
+      "norm_label": "rtcdatachannel"
+    },
+    {
+      "label": "Channel",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L15",
+      "id": "server_net_webrtclistener_cs_channel",
+      "community": 41,
+      "norm_label": "channel"
+    },
+    {
+      "label": ".ReceiveAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "id": "net_webrtclistener_webrtctransport_receiveasync",
+      "community": 41,
+      "norm_label": ".receiveasync()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "id": "server_net_webrtclistener_cs_cancellationtoken",
+      "community": 41,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "ValueTask",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "id": "server_net_webrtclistener_cs_valuetask",
+      "community": 41,
+      "norm_label": "valuetask"
+    },
+    {
+      "label": ".SendAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "id": "net_webrtclistener_webrtctransport_sendasync",
+      "community": 41,
+      "norm_label": ".sendasync()"
+    },
+    {
+      "label": "ReadOnlyMemory",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "id": "server_net_webrtclistener_cs_readonlymemory",
+      "community": 41,
+      "norm_label": "readonlymemory"
+    },
+    {
+      "label": ".CloseAsync()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L59",
+      "id": "net_webrtclistener_webrtctransport_closeasync",
+      "community": 41,
+      "norm_label": ".closeasync()"
+    },
+    {
+      "label": "WebRtcListener",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L72",
+      "id": "net_webrtclistener_webrtclistener",
+      "community": 41,
+      "norm_label": "webrtclistener"
+    },
+    {
+      "label": "ClientHub",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L74",
+      "id": "server_net_webrtclistener_cs_clienthub",
+      "community": 41,
+      "norm_label": "clienthub"
+    },
+    {
+      "label": "HttpClient",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L75",
+      "id": "server_net_webrtclistener_cs_httpclient",
+      "community": 41,
+      "norm_label": "httpclient"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L76",
+      "id": "server_net_webrtclistener_cs_string",
+      "community": 41,
+      "norm_label": "string"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L78",
+      "id": "server_net_webrtclistener_cs_list",
+      "community": 41,
+      "norm_label": "list"
+    },
+    {
+      "label": ".Start()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L88",
+      "id": "net_webrtclistener_webrtclistener_start",
+      "community": 41,
+      "norm_label": ".start()"
+    },
+    {
+      "label": ".RunLoop()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L90",
+      "id": "net_webrtclistener_webrtclistener_runloop",
+      "community": 41,
+      "norm_label": ".runloop()"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L90",
+      "id": "server_net_webrtclistener_cs_task",
+      "community": 41,
+      "norm_label": "task"
+    },
+    {
+      "label": ".AnswerOffer()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "id": "net_webrtclistener_webrtclistener_answeroffer",
+      "community": 41,
+      "norm_label": ".answeroffer()"
+    },
+    {
+      "label": "PendingOfferDto",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "id": "pendingofferdto",
+      "community": 41,
+      "norm_label": "pendingofferdto"
+    },
+    {
+      "label": ".WaitForIceGathering()",
+      "file_type": "code",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L175",
+      "id": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "community": 41,
+      "norm_label": ".waitforicegathering()"
     },
     {
       "label": "Program.cs",
@@ -8002,11 +9127,20 @@
       "norm_label": "net8.0"
     },
     {
+      "label": "SIPSorcery (10.0.9)",
+      "file_type": "code",
+      "source_file": "server/SimServer.csproj",
+      "source_location": null,
+      "id": "server_simserver_csproj_nuget_sipsorcery",
+      "community": 15,
+      "norm_label": "sipsorcery (10.0.9)"
+    },
+    {
       "label": "Microsoft.NET.Sdk.Web",
       "file_type": "concept",
       "source_file": "server/SimServer.csproj",
       "source_location": null,
-      "id": "sdk_microsoft_net_sdk_web",
+      "id": "server_simserver_csproj_sdk_microsoft_net_sdk_web",
       "community": 15,
       "norm_label": "microsoft.net.sdk.web"
     },
@@ -9768,6 +10902,33 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
+      "label": ".RunSocket()",
+      "file_type": "code",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L157",
+      "community": 51,
+      "norm_label": ".runsocket()",
+      "id": "scripts_gamenetclient_gamenetclient_runsocket"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L132",
+      "community": 44,
+      "norm_label": "concurrentdictionary",
+      "id": "concurrentdictionary"
+    },
+    {
+      "label": "Microsoft.NET.Sdk.Web",
+      "file_type": "concept",
+      "source_file": "server/SimServer.csproj",
+      "source_location": null,
+      "community": 15,
+      "norm_label": "microsoft.net.sdk.web",
+      "id": "sdk_microsoft_net_sdk_web"
+    },
+    {
       "label": "ImmediateMesh",
       "file_type": "code",
       "source_file": "client/scripts/TeamTrail.cs",
@@ -9781,7 +10942,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L47",
-      "community": 58,
+      "community": 68,
       "norm_label": "basehealthbar",
       "id": "scripts_worldrenderer_basehealthbar"
     },
@@ -9790,7 +10951,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L415",
-      "community": 58,
+      "community": 68,
       "norm_label": ".createbasehealthbar()",
       "id": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
     },
@@ -9808,7 +10969,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 58,
+      "community": 68,
       "norm_label": ".healthcolor()",
       "id": "scripts_worldrenderer_worldrenderer_healthcolor"
     },
@@ -9817,7 +10978,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 58,
+      "community": 68,
       "norm_label": "color",
       "id": "client_scripts_worldrenderer_cs_color"
     },
@@ -10074,20 +11235,11 @@
       "id": "client_scripts_chat_cs_player"
     },
     {
-      "label": "string",
-      "file_type": "code",
-      "source_file": "client/scripts/ConnectionManager.cs",
-      "source_location": "L15",
-      "community": 57,
-      "norm_label": "string",
-      "id": "client_scripts_connectionmanager_cs_string"
-    },
-    {
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
-      "community": 57,
+      "community": 59,
       "norm_label": "._process()",
       "id": "scripts_connectionmanager_connectionmanager_process"
     },
@@ -10096,7 +11248,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": ".onconnect()",
       "id": "scripts_connectionmanager_connectionmanager_onconnect"
     },
@@ -10105,7 +11257,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": "dbconnection",
       "id": "client_scripts_connectionmanager_cs_dbconnection"
     },
@@ -10114,7 +11266,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": "identity",
       "id": "client_scripts_connectionmanager_cs_identity"
     },
@@ -10123,7 +11275,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 57,
+      "community": 59,
       "norm_label": ".onconnecterror()",
       "id": "scripts_connectionmanager_connectionmanager_onconnecterror"
     },
@@ -10132,7 +11284,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 57,
+      "community": 59,
       "norm_label": "exception",
       "id": "exception"
     },
@@ -10141,7 +11293,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L102",
-      "community": 57,
+      "community": 59,
       "norm_label": ".ondisconnect()",
       "id": "scripts_connectionmanager_connectionmanager_ondisconnect"
     },
@@ -10420,7 +11572,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L330",
-      "community": 67,
+      "community": 1,
       "norm_label": ".onconnected()",
       "id": "scripts_worldrenderer_worldrenderer_onconnected"
     },
@@ -10429,7 +11581,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L330",
-      "community": 67,
+      "community": 1,
       "norm_label": "dbconnection",
       "id": "client_scripts_worldrenderer_cs_dbconnection"
     },
@@ -10438,7 +11590,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
-      "community": 67,
+      "community": 1,
       "norm_label": ".onmatch()",
       "id": "scripts_worldrenderer_worldrenderer_onmatch"
     },
@@ -10447,7 +11599,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L353",
-      "community": 67,
+      "community": 1,
       "norm_label": "match",
       "id": "match"
     },
@@ -10465,7 +11617,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 41,
+      "community": 58,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -10555,7 +11707,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L771",
-      "community": 65,
+      "community": 68,
       "norm_label": ".onshipdelete()",
       "id": "scripts_worldrenderer_worldrenderer_onshipdelete"
     },
@@ -10816,7 +11968,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 41,
+      "community": 58,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -10825,7 +11977,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 41,
+      "community": 58,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -10834,7 +11986,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L751",
-      "community": 63,
+      "community": 38,
       "norm_label": ".spawnpredictedprojectile()",
       "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile"
     },
@@ -10843,7 +11995,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 41,
+      "community": 58,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -10888,7 +12040,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L893",
-      "community": 63,
+      "community": 65,
       "norm_label": ".buildshipmesh()",
       "id": "scripts_worldrenderer_worldrenderer_buildshipmesh"
     },
@@ -10897,7 +12049,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L893",
-      "community": 63,
+      "community": 65,
       "norm_label": "shipclass",
       "id": "client_scripts_worldrenderer_cs_shipclass"
     },
@@ -10906,7 +12058,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L947",
-      "community": 63,
+      "community": 65,
       "norm_label": ".attachengineglow()",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow"
     },
@@ -10960,7 +12112,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 68,
+      "community": 4,
       "norm_label": "button",
       "id": "button"
     },
@@ -11023,7 +12175,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L176",
-      "community": 67,
+      "community": 1,
       "norm_label": "dbconnection",
       "id": "dbconnection"
     },
@@ -11041,7 +12193,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 41,
+      "community": 58,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -12919,6 +14071,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ConnectionManager.cs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "source": "scripts_connectionmanager_connectionmanager",
+      "target": "scripts_connectionmanager_connectionmanager_connecttolobby",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L87",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -13131,6 +14293,17 @@
       "confidence_score": 1.0,
       "source": "scripts_connectionmanager_connectionmanager_connectto",
       "target": "scripts_connectionmanager_connectionmanager_towsurl"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ConnectionManager.cs",
+      "source_location": "L67",
+      "weight": 1.0,
+      "source": "scripts_connectionmanager_connectionmanager_connecttolobby",
+      "target": "scripts_connectionmanager_connectionmanager_hideinput",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14507,6 +15680,17 @@
       "target": "client_scripts_explosioneffect_cs_color"
     },
     {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L17",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient",
+      "target": "client_scripts_gamenetclient_cs_httpclient",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GameNetClient.cs",
@@ -14625,6 +15809,17 @@
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient",
       "target": "client_scripts_gamenetclient_cs_hashset"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L323",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "client_scripts_gamenetclient_cs_httpclient",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -14807,6 +16002,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_beginconnect",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
       "source_location": "L116",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -14822,6 +16027,16 @@
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient",
       "target": "scripts_gamenetclient_gamenetclient_connect"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_connectwebrtc",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -14927,6 +16142,26 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L221",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L179",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_runwebsocket",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
       "source_location": "L121",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -14987,11 +16222,31 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
       "source_location": "L89",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient",
       "target": "scripts_gamenetclient_gamenetclient_tryactivate"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient",
+      "target": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15044,9 +16299,108 @@
       "source_file": "client/scripts/GameNetClient.cs",
       "source_location": "L81",
       "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_connect",
+      "target": "scripts_gamenetclient_gamenetclient_beginconnect",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L81",
+      "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient_connect",
       "target": "scripts_gamenetclient_gamenetclient_runsocket"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_connect",
+      "target": "scripts_gamenetclient_gamenetclient_runwebsocket",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L90",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_connectwebrtc",
+      "target": "scripts_gamenetclient_gamenetclient_beginconnect",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_connectwebrtc",
+      "target": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_gamenetclient_gamenetclient_beginconnect",
+      "target": "client_scripts_gamenetclient_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L86",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_runsocket",
+      "target": "client_scripts_gamenetclient_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L221",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "target": "client_scripts_gamenetclient_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L179",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_gamenetclient_gamenetclient_runwebsocket",
+      "target": "client_scripts_gamenetclient_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "target": "client_scripts_gamenetclient_cs_cancellationtoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15071,26 +16425,15 @@
       "target": "client_scripts_gamenetclient_cs_shipinputstate"
     },
     {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L101",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "scripts_gamenetclient_gamenetclient_activate",
-      "target": "scripts_gamenetclient_gamenetclient_runsocket"
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L86",
+      "source_location": "L179",
       "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "scripts_gamenetclient_gamenetclient_runsocket",
-      "target": "client_scripts_gamenetclient_cs_cancellationtoken"
+      "context": "return_type",
+      "source": "scripts_gamenetclient_gamenetclient_runwebsocket",
+      "target": "client_scripts_gamenetclient_cs_task",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -15102,6 +16445,105 @@
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient_runsocket",
       "target": "client_scripts_gamenetclient_cs_task"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L221",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "target": "client_scripts_gamenetclient_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "target": "client_scripts_gamenetclient_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L231",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "target": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L250",
+      "weight": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_runwebrtc",
+      "target": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L292",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_gamenetclient_gamenetclient_waitforicegathering",
+      "target": "client_scripts_gamenetclient_cs_rtcpeerconnection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "target": "client_scripts_gamenetclient_cs_iceserverdto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "target": "client_scripts_gamenetclient_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "scripts_gamenetclient_gamenetclient_toiceservers",
+      "target": "client_scripts_gamenetclient_cs_rtciceserver",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L301",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_readhardpoints",
+      "target": "client_scripts_gamenetclient_cs_list"
     },
     {
       "relation": "calls",
@@ -15333,17 +16775,6 @@
       "confidence_score": 1.0,
       "source": "scripts_gamenetclient_gamenetclient_readhardpoints",
       "target": "client_scripts_gamenetclient_cs_hardpointdef"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/GameNetClient.cs",
-      "source_location": "L301",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "scripts_gamenetclient_gamenetclient_readhardpoints",
-      "target": "client_scripts_gamenetclient_cs_list"
     },
     {
       "relation": "calls",
@@ -17911,9 +19342,9 @@
       "source_location": "L53",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview",
-      "target": "client_scripts_sectoroverview_cs_immediatemesh",
-      "confidence_score": 1.0
+      "target": "client_scripts_sectoroverview_cs_immediatemesh"
     },
     {
       "relation": "references",
@@ -17998,9 +19429,9 @@
       "source_location": "L54",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview",
-      "target": "list_vector3",
-      "confidence_score": 1.0
+      "target": "list_vector3"
     },
     {
       "relation": "references",
@@ -18160,9 +19591,9 @@
       "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L146",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview",
-      "target": "scripts_sectoroverview_sectoroverview_rebuildstems",
-      "confidence_score": 1.0
+      "target": "scripts_sectoroverview_sectoroverview_rebuildstems"
     },
     {
       "relation": "method",
@@ -18170,9 +19601,9 @@
       "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L175",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview",
-      "target": "scripts_sectoroverview_sectoroverview_stemline",
-      "confidence_score": 1.0
+      "target": "scripts_sectoroverview_sectoroverview_stemline"
     },
     {
       "relation": "method",
@@ -18252,9 +19683,9 @@
       "source_location": "L175",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview_stemline",
-      "target": "client_scripts_sectoroverview_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_sectoroverview_cs_vector3"
     },
     {
       "relation": "calls",
@@ -18318,9 +19749,9 @@
       "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L138",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview_process",
-      "target": "scripts_sectoroverview_sectoroverview_rebuildstems",
-      "confidence_score": 1.0
+      "target": "scripts_sectoroverview_sectoroverview_rebuildstems"
     },
     {
       "relation": "calls",
@@ -18351,9 +19782,9 @@
       "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L168",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_sectoroverview_sectoroverview_rebuildstems",
-      "target": "scripts_sectoroverview_sectoroverview_stemline",
-      "confidence_score": 1.0
+      "target": "scripts_sectoroverview_sectoroverview_stemline"
     },
     {
       "relation": "calls",
@@ -18554,6 +19985,17 @@
       "target": "scripts_sectoroverview_sectoroverview_zoom"
     },
     {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay",
+      "target": "client_scripts_serverinputoverlay_cs_httpclient",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ServerInputOverlay.cs",
@@ -18589,6 +20031,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "client_scripts_serverinputoverlay_cs_httpclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
       "source_location": "L13",
       "weight": 1.0,
       "context": "field",
@@ -18608,6 +20061,28 @@
       "target": "client_scripts_serverinputoverlay_cs_lineedit"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "client_scripts_serverinputoverlay_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "client_scripts_serverinputoverlay_cs_string",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ServerInputOverlay.cs",
@@ -18616,6 +20091,16 @@
       "confidence_score": 1.0,
       "source": "scripts_serverinputoverlay_serverinputoverlay",
       "target": "scripts_serverinputoverlay_serverinputoverlay_centered"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L117",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "scripts_serverinputoverlay_serverinputoverlay_fetchasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -18631,11 +20116,42 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L109",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "scripts_serverinputoverlay_serverinputoverlay_reload",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L134",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "scripts_serverinputoverlay_serverinputoverlay_renderservers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
       "source_location": "L63",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_serverinputoverlay_serverinputoverlay",
       "target": "scripts_serverinputoverlay_serverinputoverlay_submit"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_serverinputoverlay_serverinputoverlay",
+      "target": "vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -18675,11 +20191,44 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay_serverinputoverlay_init",
+      "target": "scripts_serverinputoverlay_serverinputoverlay_reload",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
       "source_location": "L45",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_serverinputoverlay_serverinputoverlay_init",
       "target": "scripts_serverinputoverlay_serverinputoverlay_submit"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "source": "scripts_serverinputoverlay_serverinputoverlay_reload",
+      "target": "scripts_serverinputoverlay_serverinputoverlay_fetchasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ServerInputOverlay.cs",
+      "source_location": "L117",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_serverinputoverlay_serverinputoverlay_fetchasync",
+      "target": "client_scripts_serverinputoverlay_cs_task",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -20333,9 +21882,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L350",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
-      "confidence_score": 1.0
+      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar"
     },
     {
       "relation": "method",
@@ -20393,9 +21942,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L368",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "scripts_targetmarkers_targetmarkers_healthcolor",
-      "confidence_score": 1.0
+      "target": "scripts_targetmarkers_targetmarkers_healthcolor"
     },
     {
       "relation": "method",
@@ -20560,9 +22109,9 @@
       "source_location": "L368",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_healthcolor",
-      "target": "client_scripts_targetmarkers_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_color"
     },
     {
       "relation": "references",
@@ -20692,9 +22241,9 @@
       "source_location": "L350",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
-      "target": "client_scripts_targetmarkers_cs_vector2",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector2"
     },
     {
       "relation": "references",
@@ -20901,9 +22450,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L231",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_draw",
-      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
-      "confidence_score": 1.0
+      "target": "scripts_targetmarkers_targetmarkers_drawbasehealthbar"
     },
     {
       "relation": "calls",
@@ -21033,9 +22582,9 @@
       "source_location": "L350",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
-      "target": "client_scripts_targetmarkers_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_targetmarkers_cs_vector3"
     },
     {
       "relation": "references",
@@ -21066,9 +22615,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L364",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawbasehealthbar",
-      "target": "scripts_targetmarkers_targetmarkers_healthcolor",
-      "confidence_score": 1.0
+      "target": "scripts_targetmarkers_targetmarkers_healthcolor"
     },
     {
       "relation": "calls",
@@ -21230,9 +22779,9 @@
       "source_location": "L36",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_teamtrail_teamtrail",
-      "target": "client_scripts_teamtrail_cs_immediatemesh",
-      "confidence_score": 1.0
+      "target": "client_scripts_teamtrail_cs_immediatemesh"
     },
     {
       "relation": "references",
@@ -22138,9 +23687,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L237",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer",
-      "target": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_visiblebasehealth"
     },
     {
       "relation": "method",
@@ -22269,9 +23818,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "target": "client_scripts_worldrenderer_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -22423,9 +23972,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "target": "client_scripts_worldrenderer_cs_vector3",
-      "confidence_score": 1.0
+      "target": "client_scripts_worldrenderer_cs_vector3"
     },
     {
       "relation": "references",
@@ -22434,9 +23983,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "target": "pos",
-      "confidence_score": 1.0
+      "target": "pos"
     },
     {
       "relation": "references",
@@ -22445,9 +23994,9 @@
       "source_location": "L237",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "target": "frac",
-      "confidence_score": 1.0
+      "target": "frac"
     },
     {
       "relation": "calls",
@@ -22456,9 +24005,9 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L400",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_insertbase",
-      "target": "scripts_worldrenderer_worldrenderer_netupdatebasehealth",
-      "confidence_score": 1.0
+      "target": "scripts_worldrenderer_worldrenderer_netupdatebasehealth"
     },
     {
       "relation": "calls",
@@ -23706,6 +25255,15 @@
       "confidence": "EXTRACTED",
       "source_file": "client/wivuullegiance.csproj",
       "weight": 1.0,
+      "source": "client_wivuullegiance_csproj_client_wivuullegiance",
+      "target": "client_wivuullegiance_csproj_nuget_sipsorcery",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "client/wivuullegiance.csproj",
+      "weight": 1.0,
       "confidence_score": 1.0,
       "source": "client_wivuullegiance_csproj_client_wivuullegiance",
       "target": "nuget_spacetimedb_clientsdk"
@@ -23951,6 +25509,702 @@
       "confidence_score": 1.0,
       "source": "scripts_run_server",
       "target": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "server_share_serverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "source": "server_share_serverregistry",
+      "target": "server_share_serverregistry_iserverregistry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_iserverregistry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_exists",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_get",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_heartbeat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_listactive",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_register",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_remove",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "server_share_serverregistry_iserverregistry_register",
+      "target": "registerrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_iserverregistry_register",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "registerrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_inmemoryserverregistry_get",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_iserverregistry_get",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "server_share_serverregistry_iserverregistry_listactive",
+      "target": "serverentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_iserverregistry_listactive",
+      "target": "ireadonlycollection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "ireadonlycollection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_concurrentdictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_int",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L30",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_ireadonlylist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_timespan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_exists",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_get",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_heartbeat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_normalizename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_register",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_remove",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "server_share_serverregistry_inmemoryserverregistry_normalizename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L70",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_get",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L76",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_exists",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerShare.csproj",
+      "weight": 1.0,
+      "source": "server_share_servershare_csproj_server_share_servershare",
+      "target": "server_share_servershare_csproj_framework_net8_0",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerShare.csproj",
+      "weight": 1.0,
+      "source": "server_share_servershare_csproj_server_share_servershare",
+      "target": "server_share_servershare_csproj_sdk_microsoft_net_sdk_web",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "server_share_signaling",
+      "target": "server_share_signaling_pending",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "server_share_signaling",
+      "target": "server_share_signaling_signalingrelay",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_cs_concurrentdictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_cs_timespan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_drain",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_enqueueoffer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L77",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_postanswer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_takependingasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_waitanswerasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_wakefor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_signaling_pending",
+      "target": "datetimeoffset",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_signaling_pending",
+      "target": "semaphoreslim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "source": "server_share_signaling_pending",
+      "target": "server_share_signaling_cs_string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_signaling_signalingrelay_wakefor",
+      "target": "semaphoreslim",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_enqueueoffer",
+      "target": "server_share_signaling_signalingrelay_wakefor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L61",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_wakefor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_enqueueoffer",
+      "target": "server_share_signaling_signalingrelay_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "pendingoffer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_ireadonlylist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L58",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_drain",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_prune",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "server_share_signaling_signalingrelay_drain",
+      "target": "pendingoffer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "server_share_signaling_signalingrelay_drain",
+      "target": "server_share_signaling_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L89",
+      "weight": 1.0,
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_signalingrelay_prune",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -24612,6 +26866,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_clienthub",
+      "target": "server_net_clienthub_cs_concurrentdictionary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L94",
       "weight": 1.0,
       "context": "field",
@@ -24854,6 +27119,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L73",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_clienthub_client",
+      "target": "server_net_clienthub_cs_iclienttransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L30",
       "weight": 1.0,
       "context": "field",
@@ -24953,12 +27229,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L44",
+      "source_location": "L227",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_handleconnection",
-      "target": "websocket"
+      "target": "server_net_clienthub_cs_iclienttransport",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25140,6 +27416,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Net/ClientHub.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "net_clienthub_clienthub_handleconnection",
+      "target": "websocket"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/ClientHub.cs",
       "source_location": "L71",
       "weight": 1.0,
       "context": "parameter_type",
@@ -25300,6 +27587,261 @@
       "confidence_score": 1.0,
       "source": "net_clienthub_clienthub_serializerecords",
       "target": "server_net_clienthub_cs_shipsim"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "net_iclienttransport",
+      "target": "net_iclienttransport_iclienttransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "source": "net_iclienttransport",
+      "target": "net_iclienttransport_websockettransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "net_iclienttransport_iclienttransport",
+      "target": "net_iclienttransport_iclienttransport_closeasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "net_iclienttransport_iclienttransport",
+      "target": "net_iclienttransport_iclienttransport_receiveasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "net_iclienttransport_iclienttransport",
+      "target": "net_iclienttransport_iclienttransport_sendasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "source": "net_iclienttransport_websockettransport",
+      "target": "net_iclienttransport_iclienttransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_iclienttransport_receiveasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_iclienttransport_receiveasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_iclienttransport_closeasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_iclienttransport_sendasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_websockettransport_closeasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_websockettransport_receiveasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_websockettransport_sendasync",
+      "target": "server_net_iclienttransport_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_iclienttransport_closeasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_iclienttransport_sendasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_websockettransport_closeasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_websockettransport_receiveasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_iclienttransport_websockettransport_sendasync",
+      "target": "server_net_iclienttransport_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_iclienttransport_sendasync",
+      "target": "server_net_iclienttransport_cs_readonlymemory",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_iclienttransport_websockettransport_sendasync",
+      "target": "server_net_iclienttransport_cs_readonlymemory",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "source": "net_iclienttransport_websockettransport",
+      "target": "net_iclienttransport_websockettransport_closeasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "net_iclienttransport_websockettransport",
+      "target": "net_iclienttransport_websockettransport_receiveasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "net_iclienttransport_websockettransport",
+      "target": "net_iclienttransport_websockettransport_sendasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/IClientTransport.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_iclienttransport_websockettransport",
+      "target": "websocket",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -25489,6 +28031,351 @@
       "confidence_score": 1.0,
       "source": "net_lobby_lobby_snapshot",
       "target": "server_net_lobby_cs_list"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_deregister",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_fromenv",
+      "target": "net_lobbyregistrar_lobbyregistrar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_heartbeat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L67",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_start",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "server_net_lobbyregistrar_cs_cancellationtokensource",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "server_net_lobbyregistrar_cs_clienthub",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "server_net_lobbyregistrar_cs_httpclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L32",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "server_net_lobbyregistrar_cs_string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_lobbyregistrar_lobbyregistrar",
+      "target": "server_net_lobbyregistrar_cs_timespan",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_fromenv",
+      "target": "server_net_lobbyregistrar_cs_clienthub",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L113",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "target": "net_lobbyregistrar_lobbyregistrar_start",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_start",
+      "target": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_start",
+      "target": "server_net_lobbyregistrar_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_heartbeat",
+      "target": "server_net_lobbyregistrar_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "target": "server_net_lobbyregistrar_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L67",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "target": "server_net_lobbyregistrar_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "target": "net_lobbyregistrar_lobbyregistrar_deregister",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L78",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "target": "net_lobbyregistrar_lobbyregistrar_heartbeat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "target": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L67",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_runasync",
+      "target": "server_net_lobbyregistrar_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_deregister",
+      "target": "server_net_lobbyregistrar_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_heartbeat",
+      "target": "server_net_lobbyregistrar_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "target": "server_net_lobbyregistrar_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "source": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
+      "target": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "target": "server_net_lobbyregistrar_cs_iceserverdto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "target": "server_net_lobbyregistrar_cs_ireadonlylist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "target": "server_net_lobbyregistrar_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/LobbyRegistrar.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "source": "net_lobbyregistrar_lobbyregistrar_toiceservers",
+      "target": "server_net_lobbyregistrar_cs_rtciceserver",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -25828,6 +28715,392 @@
       "confidence_score": 1.0,
       "source": "net_protocol_protocol_buildlobbystate",
       "target": "server_net_protocol_cs_ireadonlylist_lobbyentry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L72",
+      "weight": 1.0,
+      "source": "net_webrtclistener",
+      "target": "net_webrtclistener_webrtclistener",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "net_webrtclistener",
+      "target": "net_webrtclistener_webrtctransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "iclienttransport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "net_webrtclistener_webrtctransport_closeasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "net_webrtclistener_webrtctransport_receiveasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "net_webrtclistener_webrtctransport_sendasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "rtcdatachannel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "server_net_webrtclistener_cs_channel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtctransport",
+      "target": "server_net_webrtclistener_cs_rtcpeerconnection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "target": "server_net_webrtclistener_cs_rtcpeerconnection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtctransport_receiveasync",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtctransport_receiveasync",
+      "target": "server_net_webrtclistener_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_answeroffer",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L90",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_runloop",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_start",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtctransport_closeasync",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtctransport_sendasync",
+      "target": "server_net_webrtclistener_cs_cancellationtoken",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtctransport_closeasync",
+      "target": "server_net_webrtclistener_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtctransport_sendasync",
+      "target": "server_net_webrtclistener_cs_valuetask",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtctransport_sendasync",
+      "target": "server_net_webrtclistener_cs_readonlymemory",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "net_webrtclistener_webrtclistener_answeroffer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L90",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "net_webrtclistener_webrtclistener_runloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "net_webrtclistener_webrtclistener_start",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "server_net_webrtclistener_cs_clienthub",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L75",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "server_net_webrtclistener_cs_httpclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L78",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "server_net_webrtclistener_cs_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L77",
+      "weight": 1.0,
+      "context": "field",
+      "source": "net_webrtclistener_webrtclistener",
+      "target": "server_net_webrtclistener_cs_string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener_start",
+      "target": "net_webrtclistener_webrtclistener_runloop",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L103",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener_runloop",
+      "target": "net_webrtclistener_webrtclistener_answeroffer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L90",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtclistener_runloop",
+      "target": "server_net_webrtclistener_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtclistener_answeroffer",
+      "target": "server_net_webrtclistener_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "target": "server_net_webrtclistener_cs_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L154",
+      "weight": 1.0,
+      "source": "net_webrtclistener_webrtclistener_answeroffer",
+      "target": "net_webrtclistener_webrtclistener_waitforicegathering",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Net/WebRtcListener.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "net_webrtclistener_webrtclistener_answeroffer",
+      "target": "pendingofferdto",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -29176,6 +32449,24 @@
       "target": "server_simserver_csproj_framework_net8_0"
     },
     {
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "server/SimServer.csproj",
+      "weight": 1.0,
+      "source": "server_simserver",
+      "target": "server_simserver_csproj_nuget_sipsorcery",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/SimServer.csproj",
+      "weight": 1.0,
+      "source": "server_simserver",
+      "target": "server_simserver_csproj_sdk_microsoft_net_sdk_web",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "shared/AsteroidShapes.cs",
@@ -32383,6 +35674,17 @@
       "target": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/GameNetClient.cs",
+      "source_location": "L101",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_gamenetclient_gamenetclient_activate",
+      "target": "scripts_gamenetclient_gamenetclient_runsocket"
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
@@ -33329,5 +36631,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "88a518de94fbba63acd57f4caf44750c9a0e19a3"
+  "built_at_commit": "b685f5f21b836b97e70055c8f6ab81cfb0fecf4e"
 }
