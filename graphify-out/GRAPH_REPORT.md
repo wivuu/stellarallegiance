@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-16)
 
 ## Corpus Check
-- 75 files · ~101,241 words
+- 75 files · ~101,618 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1360 nodes · 2280 edges · 77 communities (64 shown, 13 thin omitted)
+- 1360 nodes · 2280 edges · 78 communities (65 shown, 13 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b685f5f2`
+- Built from commit: `d18f3aa2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -85,6 +85,7 @@
 - [[_COMMUNITY_Community 72|Community 72]]
 - [[_COMMUNITY_Community 73|Community 73]]
 - [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 77|Community 77]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 84 edges
@@ -116,7 +117,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (77 total, 13 thin omitted)
+## Communities (78 total, 13 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -243,8 +244,8 @@ Cohesion: 0.09
 Nodes (17): bool, Camera3D, Color, float, ImmediateMesh, InputEvent, Label, MeshInstance3D (+9 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.14
-Nodes (9): IReadOnlyList, MeshInstance3D, Node, RemoteShip, Vector3, Frac, MeshInstance3D, Pos (+1 more)
+Cohesion: 0.21
+Nodes (6): IReadOnlyList, RemoteShip, Vector3, Frac, Pos, Team
 
 ### Community 41 - "Community 41"
 Cohesion: 0.14
@@ -346,6 +347,10 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 Cohesion: 0.35
 Nodes (5): IClientTransport, WebSocketTransport, CancellationToken, ReadOnlyMemory, ValueTask
 
+### Community 77 - "Community 77"
+Cohesion: 0.40
+Nodes (3): MeshInstance3D, Node, MeshInstance3D
+
 ## Knowledge Gaps
 - **394 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Marker3D`, `BaseBeacon` (+389 more)
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -354,11 +359,11 @@ Nodes (5): IClientTransport, WebSocketTransport, CancellationToken, ReadOnlyMemo
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 68`, `PigAI NPC Behavior`, `Community 38`, `Community 56`, `Community 58`?**
+- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 68`, `PigAI NPC Behavior`, `Community 38`, `Community 77`, `Community 56`, `Community 58`?**
   _High betweenness centrality (0.139) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 68` to `AlephView World State`, `Community 66`, `Community 69`, `Client-Side Prediction`, `Community 37`, `Community 72`, `Engine Glow Effects`, `Community 43`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 55`, `Starscape Background`?**
   _High betweenness centrality (0.120) - this node is a cross-community bridge._
-- **Why does `Node` connect `Community 38` to `Ship Controller Input`, `Community 57`, `Community 59`, `Community 51`?**
+- **Why does `Node` connect `Community 77` to `Ship Controller Input`, `Community 57`, `Community 59`, `Community 51`?**
   _High betweenness centrality (0.108) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
   _414 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -17,7 +17,7 @@ cp .env.example .env
 docker compose up --build           # serves ws://localhost:8090/game
 ```
 
-For a throwaway local server with bots, run it directly: `scripts/run-server.sh --autostart`.
+For a throwaway local server with bots, run it directly: `scripts/run-server.sh --local --autostart`.
 
 ## TLS
 

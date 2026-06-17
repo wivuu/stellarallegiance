@@ -31,22 +31,26 @@ by both sides so their physics and content stay bit-identical.
 
 ## Quick start (local)
 
-Two terminals from the repo root:
+Two terminals from the repo root. For purely local dev, pass `--local` to both:
 
 ```bash
-# 1. start the server (open, port 8090, lobby ready-up)
-scripts/run-server.sh
+# 1. start the server (local-only, port 8090, lobby ready-up)
+scripts/run-server.sh --local
 
-# 2. launch the client
-scripts/run-client.sh
+# 2. launch the client (connects straight to localhost:8090)
+scripts/run-client.sh --local
 ```
 
-In the client, the first screen asks for a server address — enter `localhost:8090` and connect.
-Pick a side, ready up, and the match starts. To skip the address screen, launch with
-`scripts/run-client.sh --host localhost:8090`.
+Pick a side, ready up, and the match starts.
 
-Solo testing tip: run the server with `scripts/run-server.sh --autostart` to skip the ready-up
-gate and start a perpetual match immediately.
+**Public lobby (the default).** Without `--local`, `run-server.sh` publishes the server to the
+public lobby (`PUBLIC_LOBBY`, default `192.168.1.101:8091`) under your hostname — override the
+name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.sh` opens the **server browser** against
+that lobby so you can pick a server (or still type an address for a direct connect). See
+[Public lobby & NAT traversal](#public-lobby--nat-traversal).
+
+Solo testing tip: run the server with `scripts/run-server.sh --local --autostart` to skip the
+ready-up gate and start a perpetual match immediately.
 
 See **[QUICKSTART.md](QUICKSTART.md)** for a step-by-step walkthrough and
 **[CONTRIBUTING.md](CONTRIBUTING.md)** for project layout, building, and tests.
@@ -58,8 +62,8 @@ The repo scripts are wired up as VS Code tasks (`.vscode/tasks.json`). Run them 
 
 | Task | Script | What it does |
 |------|--------|--------------|
-| **Run server** | `scripts/run-server.sh` | Rebuild + run the sim server on :8090. |
-| **Run client** | `scripts/run-client.sh` | Rebuild + launch the Godot client. |
+| **Run server** | `scripts/run-server.sh` | Rebuild + run the sim server on :8090 (publishes to the public lobby; `--local` to stay private). |
+| **Run client** | `scripts/run-client.sh` | Rebuild + launch the Godot client (public lobby browser; `--local` for direct localhost). |
 | **Export clients (all platforms)** | `scripts/export-clients.sh` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
 | **Godot: import assets (if needed)** | `tools/godot-import.sh` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
 | **Godot: reimport assets (force)** | `tools/godot-import.sh --force` | Force a full reimport after editing a `.glb`. |
@@ -127,6 +131,9 @@ A player can reach a server two ways:
 | `SIM_PUBLIC_ENDPOINT` | server | Optional direct `ws://` fallback advertised in the listing. |
 | `SHARE_PORT` | server-share | Listen port (default 8091). |
 | `STUN_URL` / `TURN_URL` / `TURN_USER` / `TURN_PASS` | server-share | ICE config handed to clients + servers. |
+
+To **host the lobby yourself** — required ports, `coturn` setup, and production hardening — see
+[**server-share/README.md**](server-share/README.md).
 
 ## Running with Docker
 
