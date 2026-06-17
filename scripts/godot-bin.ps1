@@ -24,7 +24,25 @@ function Resolve-Godot {
         if (Get-Command $c -ErrorAction SilentlyContinue) { return $c }
     }
 
-    # 3. Standard install locations
+    # 3. VS Code user settings — godot.executablePath (used when running from a terminal,
+    #    not a VS Code task, which injects $env:GODOT via tasks.json)
+    $vscodeSettings = @(
+        (Join-Path $env:APPDATA      'Code\User\settings.json')                          # Windows
+        (Join-Path $HOME             'Library/Application Support/Code/User/settings.json') # macOS
+        (Join-Path $HOME             '.config/Code/User/settings.json')                  # Linux
+    )
+    foreach ($sp in $vscodeSettings) {
+        if (-not (Test-Path $sp)) { continue }
+        $m = Select-String -Path $sp -Pattern '"godot\.executablePath"\s*:\s*"([^"]+)"' |
+             Select-Object -First 1
+        if ($m) {
+            $p = $m.Matches[0].Groups[1].Value -replace '\\\\', '\'
+            if ($p -and (Test-Path $p)) { return $p }
+        }
+        break
+    }
+
+    # 4. Standard install locations
     $candidates = @(
         # macOS
         '/Applications/Godot_mono.app/Contents/MacOS/Godot'
