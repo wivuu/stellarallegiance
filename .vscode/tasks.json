@@ -2,9 +2,10 @@
     // Project scripts, exposed as VS Code tasks. Run them with
     //   Cmd/Ctrl+Shift+P → "Tasks: Run Task"
     //
-    // All tasks run through `bash`, so on Windows you need bash on PATH (ships with Git for
-    // Windows / "Git Bash"). The Godot executable is taken from the `godot.executablePath`
-    // setting (set it in your *User* settings so it isn't committed — see README → Dev setup);
+    // All tasks run through `pwsh` (PowerShell Core), which is cross-platform.
+    // Install it from https://aka.ms/powershell if it isn't already on your PATH.
+    // The Godot executable is taken from the `godot.executablePath` setting (set it
+    // in your *User* settings so it isn't committed — see README → Dev setup);
     // when empty the scripts auto-detect Godot from PATH and standard install locations.
     "version": "2.0.0",
     "options": {
@@ -14,9 +15,10 @@
         {
             "label": "Godot: import assets (if needed)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/godot-import.sh"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/tools/godot-import.ps1"
             ],
             "runOptions": {
                 "runOn": "folderOpen"
@@ -31,10 +33,11 @@
         {
             "label": "Godot: reimport assets (force)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/godot-import.sh",
-                "--force"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/tools/godot-import.ps1",
+                "-Force"
             ],
             "presentation": {
                 "reveal": "always",
@@ -46,9 +49,10 @@
         {
             "label": "Run server",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/run-server.sh"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/scripts/run-server.ps1"
             ],
             "isBackground": true,
             "presentation": {
@@ -61,9 +65,10 @@
         {
             "label": "Run client",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/run-client.sh"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/scripts/run-client.ps1"
             ],
             "isBackground": true,
             "presentation": {
@@ -76,9 +81,10 @@
         {
             "label": "Export clients (all platforms)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/export-clients.sh"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/scripts/export-clients.ps1"
             ],
             "presentation": {
                 "reveal": "always",
@@ -90,9 +96,10 @@
         {
             "label": "Asteroid-gen: build catalog",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/asteroid-gen/build.sh"
+                "-NonInteractive", "-File",
+                "${workspaceFolder}/tools/asteroid-gen/build.ps1"
             ],
             "presentation": {
                 "reveal": "always",

@@ -5,6 +5,7 @@ Get a match running locally in five steps.
 ### 1. Install prerequisites
 - **.NET 8 SDK** — verify with `dotnet --version` (≥ 8).
 - **Godot 4.6.3, Mono/.NET build** — the `godot-mono` binary on your PATH.
+- **PowerShell Core (`pwsh`)** — ships with Windows 11 and is available on macOS/Linux via [aka.ms/powershell](https://aka.ms/powershell). Verify with `pwsh --version` (≥ 7).
 
 ### 2. Clone and restore
 ```bash
@@ -14,15 +15,15 @@ dotnet build shared/Shared.csproj      # sanity-check the toolchain
 ```
 
 ### 3. Start the server (terminal 1)
-```bash
-scripts/run-server.sh
+```pwsh
+scripts/run-server.ps1
 ```
 It rebuilds, then listens on `ws://localhost:8090/game`. You should see
 `[SimServer] ws://localhost:8090/game … 20 Hz`.
 
 ### 4. Launch the client (terminal 2)
-```bash
-scripts/run-client.sh
+```pwsh
+scripts/run-client.ps1
 ```
 The first screen prompts for a **server address**. Enter `localhost:8090` and Connect.
 (Or skip it: `scripts/run-client.sh --host localhost:8090`.)
@@ -36,8 +37,8 @@ fill out the opposition.
 
 ### Solo / unattended
 Skip the ready-up gate and start a perpetual match immediately:
-```bash
-scripts/run-server.sh --autostart
+```pwsh
+scripts/run-server.ps1 --autostart
 ```
 
 ### Two machines
@@ -47,8 +48,8 @@ the server with `--secret <password>` and set `SIM_SECRET=<password>` in the cli
 environment.
 
 ### Load test
-```bash
-scripts/run-server.sh --autostart
+```pwsh
+scripts/run-server.ps1 --autostart
 dotnet run --project tools/simbot/SimBot.csproj -c Release -- --bots 100 --seconds 30
 ```
 
@@ -56,6 +57,7 @@ dotnet run --project tools/simbot/SimBot.csproj -c Release -- --bots 100 --secon
 - **"Server offline" on the client** — confirm the server terminal shows the `20 Hz` line and
   the address/port match. Retry returns you to the address screen.
 - **`godot-mono: command not found`** — install the Mono/.NET build of Godot 4.6.3 and put it on
-  your PATH (or run the client from the Godot editor by opening `client/`).
+  your PATH (or run the client from the Godot editor by opening `client/`), or set
+  `godot.executablePath` in VS Code User settings.
 - **Protocol mismatch warning** — the client and server were built from different revisions;
-  rebuild both (`run-server.sh` and `run-client.sh` rebuild on launch).
+  rebuild both (`run-server.ps1` and `run-client.ps1` rebuild on launch).

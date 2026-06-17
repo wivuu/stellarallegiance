@@ -15,12 +15,20 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SIM_PORT="${SIM_PORT:-8090}"
 
 # Stop whatever is already on the port so the rebuilt binary takes over cleanly.
-STALE="$(lsof -tnP -iTCP:"${SIM_PORT}" -sTCP:LISTEN 2>/dev/null || true)"
+if command -v lsof >/dev/null 2>&1; then
+  STALE="$(lsof -tnP -iTCP:"${SIM_PORT}" -sTCP:LISTEN 2>/dev/null || true)"
+else
+  STALE="$(netstat -ano 2>/dev/null | grep ":${SIM_PORT}.*LISTENING" | awk '{print $NF}' | head -1 || true)"
+fi
 if [[ -n "${STALE}" ]]; then
   echo "[run-server] stopping stale sim server on :${SIM_PORT} (pid ${STALE})"
-  kill ${STALE} 2>/dev/null || true
+  kill "${STALE}" 2>/dev/null || taskkill /PID "${STALE}" /F >/dev/null 2>&1 || true
   for _ in $(seq 1 10); do
-    lsof -tnP -iTCP:"${SIM_PORT}" -sTCP:LISTEN >/dev/null 2>&1 || break
+    if command -v lsof >/dev/null 2>&1; then
+      lsof -tnP -iTCP:"${SIM_PORT}" -sTCP:LISTEN >/dev/null 2>&1 || break
+    else
+      netstat -ano 2>/dev/null | grep -q ":${SIM_PORT}.*LISTENING" || break
+    fi
     sleep 0.5
   done
 fi

@@ -27,12 +27,12 @@ mismatch rather than misreading frames.
 
 ## Building & running
 
-```bash
+```pwsh
 dotnet build shared/Shared.csproj
 dotnet build server/SimServer.csproj -c Release
 dotnet build client/wivuullegiance.csproj
-scripts/run-server.sh        # server (rebuilds + runs)
-scripts/run-client.sh        # client (rebuilds + launches Godot)
+scripts/run-server.ps1        # server (rebuilds + runs)
+scripts/run-client.ps1        # client (rebuilds + launches Godot)
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) for the full local loop.

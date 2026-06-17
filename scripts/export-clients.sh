@@ -36,9 +36,26 @@ mkdir -p "${OUT}/mac" "${OUT}/win" "${OUT}/linux"
 # publish hanging inside a Godot headless export.
 export MSBUILDDISABLENODEREUSE=1
 export DOTNET_CLI_USE_MSBUILD_SERVER=0
-pkill -9 -f "VBCSCompiler" >/dev/null 2>&1 || true
-pkill -9 -f "MSBuild.dll" >/dev/null 2>&1 || true
+if command -v pkill >/dev/null 2>&1; then
+  pkill -9 -f "VBCSCompiler" >/dev/null 2>&1 || true
+  pkill -9 -f "MSBuild.dll" >/dev/null 2>&1 || true
+else
+  taskkill /F /IM "VBCSCompiler.exe" >/dev/null 2>&1 || true
+  taskkill /F /IM "MSBuild.exe" >/dev/null 2>&1 || true
+fi
 dotnet build-server shutdown >/dev/null 2>&1 || true
+
+zip_folder() {
+  local archive="$1" src_dir="$2"
+  if command -v zip >/dev/null 2>&1; then
+    ( cd "${src_dir}" && zip -rq "${archive}" . )
+  else
+    local win_src win_archive
+    win_src="$(cygpath -w "${src_dir}" 2>/dev/null || echo "${src_dir}")"
+    win_archive="$(cygpath -w "${archive}" 2>/dev/null || echo "${archive}")"
+    powershell -NoProfile -Command "Compress-Archive -Path '${win_src}\\*' -DestinationPath '${win_archive}' -Force"
+  fi
+}
 
 # The macOS .app export + ad-hoc re-signing only works on macOS (codesign/ditto are
 # macOS-only). On Windows/Linux we skip it and still produce the Windows + Linux builds.
@@ -65,7 +82,7 @@ echo "[export] Windows .exe ..."
 
 echo "[export] zipping Windows folder (testers need the whole folder) ..."
 rm -f "${OUT}/wivuullegiance-windows.zip"
-( cd "${OUT}/win" && zip -rq "${OUT}/wivuullegiance-windows.zip" . )
+zip_folder "${OUT}/wivuullegiance-windows.zip" "${OUT}/win"
 
 echo "[export] Linux .x86_64 ..."
 "${GODOT}" --headless --path "${CLIENT}" --export-release "Linux" "${OUT}/linux/wivuullegiance.x86_64"
@@ -73,7 +90,7 @@ chmod +x "${OUT}/linux/wivuullegiance.x86_64"
 
 echo "[export] zipping Linux folder (testers need the whole folder) ..."
 rm -f "${OUT}/wivuullegiance-linux.zip"
-( cd "${OUT}/linux" && zip -rq "${OUT}/wivuullegiance-linux.zip" . )
+zip_folder "${OUT}/wivuullegiance-linux.zip" "${OUT}/linux"
 
 echo ""
 echo "[export] done:"
