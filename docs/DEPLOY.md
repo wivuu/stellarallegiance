@@ -19,6 +19,27 @@ docker compose up --build           # serves ws://localhost:8090/game
 
 For a throwaway local server with bots, run it directly: `scripts/run-server.sh --local --autostart`.
 
+## Public lobby & NAT traversal (optional)
+
+Players can always join a server **directly** by `ip:port` (a plain WebSocket; needs a LAN or a
+public/port-forwarded host). To make servers **discoverable**, also deploy **`server-share`** — a
+tiny registry + WebRTC signaling relay (`docker compose up server-share`). Servers that set
+`SIM_PUBLIC_NAME` register there; clients browse the list.
+
+Discovery is **direct-first** and automatic:
+
+- On register, the lobby **probes the server's port** (`GET /health` from its public vantage). If
+  reachable, it advertises a direct `host:port` and clients connect **straight to the server over
+  WebSocket** — no traffic through the lobby. Forward the game port (default `8090`) for this.
+- If not reachable (NAT, no port-forward), clients join over a **WebRTC DataChannel**, hole-punching
+  with public **STUN**; only the SDP handshake is relayed. Set `STUN_URL` to override the public
+  STUN default or list fallbacks (comma-separated) — nothing to host.
+
+**There is no TURN relay** — the lobby never carries game traffic, so a symmetric-NAT client can't
+reach a NAT'd server (it can always join direct servers). Only `server-share`'s port (`8091`) needs
+to be open; put TLS in front of it and set `PUBLIC_LOBBY=https://lobby.example.com`. Full hosting
+guide: **[server-share/README.md](../server-share/README.md)**.
+
 ## TLS
 
 The sim server speaks **plain `ws://` on :8090**. Terminate TLS at the **hosting layer's ingress

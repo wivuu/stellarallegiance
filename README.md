@@ -116,30 +116,37 @@ environment; `SIM_URI` is a dev override that connects to a full `ws://…/game`
 A player can reach a server two ways:
 
 - **Direct** — type `ip:port` on the connect screen (or `--host`). A plain WebSocket join; works
-  on a LAN or against a port-forwarded server. Unchanged from before.
+  on a LAN or against a public/port-forwarded server.
 - **Public lobby** — the `server-share/` service is a small registry + WebRTC signaling relay.
-  A game server that sets `SIM_PUBLIC_NAME` registers itself there; clients fetch the list on the
-  connect screen and join the chosen server over a **WebRTC DataChannel**, with the SDP handshake
-  relayed through the lobby. This reaches **player-run servers behind a NAT without
-  port-forwarding** (P2P hole-punching, with the `coturn` TURN sidecar as fallback for symmetric
-  NATs). The same v7 binary protocol rides the DataChannel — only the transport changes.
+  A game server that sets `SIM_PUBLIC_NAME` registers itself there and clients browse the list.
+  Discovery is **direct-first**: on register, the lobby **probes the server's port** and, if it's
+  reachable, advertises a direct `host:port` so clients connect **straight to it over WebSocket**
+  (no traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back
+  to a **WebRTC DataChannel** (P2P hole-punching via public **STUN**), with only the SDP handshake
+  relayed through the lobby. The same v7 binary protocol rides both transports.
+
+**There is no TURN relay** — the lobby never carries game traffic. The trade-off is that a client
+behind a symmetric NAT can't reach a *NAT'd* server; it can always join **direct** servers, so
+hosting on a public/forwarded port gives the widest reach. All of this is automatic: forward a
+port and your server is listed as directly joinable; don't, and it's listed as WebRTC/STUN.
 
 | Flag/Env | Where | Effect |
 |----------|-------|--------|
 | `SIM_PUBLIC_NAME` | server | 3-50 char name; **gates** public-lobby registration (unset = private). |
 | `PUBLIC_LOBBY` | server + client | Lobby `host:port` (default `192.168.1.101:8091`). Client also takes `--lobby`. |
-| `SIM_PUBLIC_ENDPOINT` | server | Optional direct `ws://` fallback advertised in the listing. |
+| `SIM_PUBLIC_PORT` | server | Public-facing port the lobby probes/advertises (default = listen port). |
+| `SIM_PUBLIC_ENDPOINT` | server | Optional `host:port` the server asserts as its reachable address (for container NAT / proxy); advertised only if it answers `/health`. |
 | `SHARE_PORT` | server-share | Listen port (default 8091). |
-| `STUN_URL` / `TURN_URL` / `TURN_USER` / `TURN_PASS` | server-share | ICE config handed to clients + servers. |
+| `STUN_URL` | server-share | Public STUN URL(s) for the WebRTC fallback, comma-separated for redundancy (default Cloudflare's). |
 
-To **host the lobby yourself** — required ports, `coturn` setup, and production hardening — see
-[**server-share/README.md**](server-share/README.md).
+To **host the lobby yourself** — the single required port, the reachability probe, and production
+hardening — see [**server-share/README.md**](server-share/README.md).
 
 ## Running with Docker
 
 ```bash
 cp .env.example .env        # optionally set SIM_SECRET / SIM_AUTOSTART / SIM_PUBLIC_NAME
-docker compose up --build   # sim-server (ws://localhost:8090/game) + server-share (:8091) + coturn
+docker compose up --build   # sim-server (ws://localhost:8090/game) + server-share (:8091)
 ```
 
 ## Deployment

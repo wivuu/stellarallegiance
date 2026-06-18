@@ -1,34 +1,54 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using ServerShare;
 
-// Public lobby + WebRTC signaling box. Player-run game servers register here (name + session id)
-// and heartbeat to stay listed; clients browse the active list and join. For NAT'd servers the
-// join handshake (SDP offer/answer) is relayed through the signaling routes below — the game
-// DataChannel itself is P2P or TURN-relayed (coturn sidecar), never through this process.
+// Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
+// heartbeat to stay listed; clients browse the active list and join.
+//
+// DIRECT-FIRST discovery: at registration the lobby PROBES the server's port from its own (public)
+// vantage point (see ReachabilityProbe). If the server answers, it's directly joinable and we
+// advertise its host:port — clients connect straight to it over WebSocket, no traffic through here.
+// If it doesn't (NAT, no port-forward), the server falls back to WebRTC: clients relay the SDP
+// handshake through the signaling routes below and connect peer-to-peer using public STUN. The
+// lobby never relays game traffic (no TURN) — clients that can't hole-punch a NAT'd server can't
+// join it.
 //
 // Config (env):
 //   SHARE_PORT   listen port (default 8091)
-//   STUN_URL     STUN url handed to clients/servers (e.g. stun:lobby.example.com:3478)
-//   TURN_URL     TURN url for symmetric-NAT fallback (e.g. turn:lobby.example.com:3478)
-//   TURN_USER    TURN username      (required if TURN_URL is set)
-//   TURN_PASS    TURN credential    (required if TURN_URL is set)
+//   STUN_URL     public STUN url(s) handed to clients/servers for the WebRTC fallback. Comma- or
+//                space-separate several for redundancy. Default stun:stun.cloudflare.com:3478.
 
 int port = int.TryParse(Environment.GetEnvironmentVariable("SHARE_PORT"), out var p) ? p : 8091;
-var iceServers = BuildIceServers();
+var stunServers = BuildStunServers();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(iceServers));
+builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(stunServers));
 builder.Services.AddSingleton<SignalingRelay>();
+builder.Services.AddSingleton<ReachabilityProbe>();
 
 var app = builder.Build();
 
+// Behind a TLS-terminating proxy the registrant's real IP arrives in X-Forwarded-For; honour it so
+// the reachability probe targets the right address (cleared trust list = accept from the proxy).
+var fwd = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor };
+fwd.KnownNetworks.Clear();
+fwd.KnownProxies.Clear();
+app.UseForwardedHeaders(fwd);
+
 // ---- Registry: server discovery -------------------------------------------
 
-// Register a new server (host announces itself). 400 if the name isn't 3-50 chars.
-app.MapPost("/servers", (RegisterRequest req, IServerRegistry registry) =>
+// Register a new server (host announces itself). The lobby probes the server's advertised port and
+// records a direct host:port if it's reachable, else null (-> WebRTC/STUN). 400 on a bad name.
+app.MapPost("/servers", async (RegisterRequest req, HttpContext ctx, IServerRegistry registry, ReachabilityProbe probe, CancellationToken ct) =>
 {
-    var entry = registry.Register(req);
+    if (InMemoryServerRegistry.NormalizeName(req.Name) is null)
+        return Results.BadRequest(new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" });
+
+    var sourceIp = ctx.Connection.RemoteIpAddress?.ToString();
+    var endpoint = await probe.ResolveAsync(sourceIp, req.Port, req.PublicEndpoint, ct);
+
+    var entry = registry.Register(req, endpoint);
     return entry is null
         ? Results.BadRequest(new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" })
         : Results.Created($"/servers/{entry.SessionId}", entry);
@@ -83,24 +103,18 @@ app.MapGet("/connect/{ticket}/answer", async (string ticket, SignalingRelay rela
     return answer is null ? Results.NoContent() : Results.Ok(new AnswerResponse(answer));
 });
 
-Console.WriteLine($"[ServerShare] listening on http://0.0.0.0:{port}  ice={iceServers.Count} server(s)");
+Console.WriteLine($"[ServerShare] listening on http://0.0.0.0:{port}  stun={stunServers.Count}");
 app.Run();
 
-// ---- ICE config from env --------------------------------------------------
+// ---- STUN config from env -------------------------------------------------
 
-static IReadOnlyList<IceServer> BuildIceServers()
+// Public STUN handed to clients/servers for the WebRTC fallback. STUN_URL may list several
+// (comma/whitespace separated) — WebRTC tries them all, so a fallback or two costs nothing.
+static IReadOnlyList<IceServer> BuildStunServers()
 {
-    var list = new List<IceServer>();
-    var stun = Environment.GetEnvironmentVariable("STUN_URL");
-    if (!string.IsNullOrWhiteSpace(stun))
-        list.Add(new IceServer(new[] { stun.Trim() }));
-
-    var turn = Environment.GetEnvironmentVariable("TURN_URL");
-    if (!string.IsNullOrWhiteSpace(turn))
-        list.Add(new IceServer(
-            new[] { turn.Trim() },
-            Environment.GetEnvironmentVariable("TURN_USER"),
-            Environment.GetEnvironmentVariable("TURN_PASS")));
-
-    return list;
+    var raw = Environment.GetEnvironmentVariable("STUN_URL");
+    var urls = string.IsNullOrWhiteSpace(raw)
+        ? new[] { "stun:stun.cloudflare.com:3478" }
+        : raw.Split(new[] { ',', ';', ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    return urls.Select(u => new IceServer(new[] { u })).ToArray();
 }

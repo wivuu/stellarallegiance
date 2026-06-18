@@ -1,11 +1,17 @@
 # Local-dev / single-box deployment of the wivuullegiance backend:
 #   sim-server    the 20 Hz authoritative match + lobby host (clients connect & download content)
 #   server-share  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
-#   coturn        STUN/TURN for WebRTC NAT traversal (symmetric-NAT fallback)
 #
-# The sim-server is reachable two ways: directly (ws://host:8090, LAN/port-forwarded) OR via the
-# public lobby over WebRTC (set SIM_PUBLIC_NAME so it registers; clients then pick it from the
-# browser and the SDP handshake is relayed through server-share).
+# Discovery is DIRECT-FIRST: when a sim-server registers, the lobby probes its port and, if it's
+# reachable, advertises a direct host:port — clients then connect straight to it over WebSocket (no
+# traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back to
+# WebRTC + public STUN, with only the tiny SDP handshake relayed through server-share. There is no
+# TURN relay — clients that can't hole-punch a NAT'd server can't join it (forward a port for the
+# widest reach).
+#
+# NOTE (single-box compose): the lobby probes the sim-server's container IP here, so the advertised
+# endpoint is only reachable on this host's docker network — fine for local/dev. For a real
+# deployment run server-share on its own public box; player servers then probe from their real IP.
 #
 # TLS: the sim server speaks plain ws:// on :8090; production terminates TLS at the ingress.
 #
@@ -27,7 +33,12 @@ services:
       # with the lobby below so clients can discover + WebRTC-join it. Empty = private (direct only).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
       PUBLIC_LOBBY: ${PUBLIC_LOBBY:-server-share:8091}
-      # Optional direct ws:// fallback advertised in the listing (host:port), if port-forwarded.
+      # Public-facing port the lobby probes/advertises (default = listen port; set when a
+      # port-forward maps a different external port).
+      SIM_PUBLIC_PORT: ${SIM_PUBLIC_PORT:-}
+      # Optional host:port this server asserts as its reachable address (e.g. the host's LAN/public
+      # address when it's behind container NAT or a proxy). The lobby probes it and advertises it
+      # only if it answers /health. Unset = the lobby uses the registration source IP.
       SIM_PUBLIC_ENDPOINT: ${SIM_PUBLIC_ENDPOINT:-}
     ports:
       - "${SIM_PORT:-8090}:8090"
@@ -36,33 +47,16 @@ services:
     restart: unless-stopped
 
   # Public lobby: game-server registry + WebRTC signaling relay (no game traffic flows through it).
+  # On register it probes each server's port to decide direct-vs-WebRTC; it hands out the STUN
+  # config below for the WebRTC fallback.
   server-share:
     build:
       context: ./server-share        # self-contained (no ProjectReference)
     environment:
       SHARE_PORT: 8091
-      # ICE config handed to every client + game server. Point these at the coturn box's
-      # PUBLICLY reachable address in production. Empty = host-candidate / P2P only (LAN dev).
-      STUN_URL: ${STUN_URL:-}
-      TURN_URL: ${TURN_URL:-}
-      TURN_USER: ${TURN_USER:-}
-      TURN_PASS: ${TURN_PASS:-}
+      # Public STUN handed to clients/servers for the WebRTC fallback (covers ~80% of NATs via
+      # hole-punching). Comma-separate several to list fallbacks, e.g. "stun:a:3478,stun:b:19302".
+      STUN_URL: ${STUN_URL:-stun:stun.cloudflare.com:3478}
     ports:
       - "${SHARE_PORT:-8091}:8091"
     restart: unless-stopped
-
-  # STUN + TURN for WebRTC. Host networking so TURN can hand out reachable relay addresses and
-  # allocate the UDP relay port range. For a real deployment add --external-ip=<public-ip>.
-  coturn:
-    image: coturn/coturn:latest
-    network_mode: host
-    restart: unless-stopped
-    command:
-      - -n
-      - --no-cli
-      - --listening-port=${TURN_PORT:-3478}
-      - --realm=wivuu
-      - --lt-cred-mech
-      - --fingerprint
-      - --user=${TURN_USER:-wivuu}:${TURN_PASS:-changeme}
-      # - --external-ip=YOUR_PUBLIC_IP   # required for TURN relay to be reachable from outside

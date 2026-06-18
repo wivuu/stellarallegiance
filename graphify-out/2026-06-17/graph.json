@@ -5980,7 +5980,7 @@
       "label": "ReachabilityProbe",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L17",
+      "source_location": "L15",
       "id": "server_share_reachabilityprobe_reachabilityprobe",
       "community": 79,
       "norm_label": "reachabilityprobe"
@@ -5989,7 +5989,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L19",
+      "source_location": "L17",
       "id": "server_share_reachabilityprobe_cs_string",
       "community": 79,
       "norm_label": "string"
@@ -5998,7 +5998,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L20",
+      "source_location": "L18",
       "id": "server_share_reachabilityprobe_cs_timespan",
       "community": 79,
       "norm_label": "timespan"
@@ -6007,7 +6007,7 @@
       "label": "HttpClient",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L22",
+      "source_location": "L20",
       "id": "server_share_reachabilityprobe_cs_httpclient",
       "community": 79,
       "norm_label": "httpclient"
@@ -6016,7 +6016,7 @@
       "label": ".ResolveAsync()",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L24",
       "id": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
       "community": 79,
       "norm_label": ".resolveasync()"
@@ -6025,7 +6025,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L24",
       "id": "server_share_reachabilityprobe_cs_cancellationtoken",
       "community": 79,
       "norm_label": "cancellationtoken"
@@ -6034,7 +6034,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L24",
       "id": "server_share_reachabilityprobe_cs_task",
       "community": 79,
       "norm_label": "task"
@@ -6043,16 +6043,25 @@
       "label": ".IsReachableAsync()",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L57",
+      "source_location": "L50",
       "id": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
       "community": 79,
       "norm_label": ".isreachableasync()"
     },
     {
+      "label": ".ResolvesToAsync()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L64",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "community": 79,
+      "norm_label": ".resolvestoasync()"
+    },
+    {
       "label": ".NormalizeIp()",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L70",
+      "source_location": "L78",
       "id": "server_share_reachabilityprobe_reachabilityprobe_normalizeip",
       "community": 79,
       "norm_label": ".normalizeip()"
@@ -6061,7 +6070,7 @@
       "label": ".IsLinkLocal()",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L78",
+      "source_location": "L86",
       "id": "server_share_reachabilityprobe_reachabilityprobe_islinklocal",
       "community": 79,
       "norm_label": ".islinklocal()"
@@ -6070,7 +6079,7 @@
       "label": ".ParseHostPort()",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L83",
+      "source_location": "L91",
       "id": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
       "community": 79,
       "norm_label": ".parsehostport()"
@@ -6079,7 +6088,7 @@
       "label": "Host",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L83",
+      "source_location": "L91",
       "id": "host",
       "community": 79,
       "norm_label": "host"
@@ -6088,7 +6097,7 @@
       "label": "Port",
       "file_type": "code",
       "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L83",
+      "source_location": "L91",
       "id": "port",
       "community": 79,
       "norm_label": "port"
@@ -7492,7 +7501,7 @@
       "label": "LobbyRegistrar",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L27",
+      "source_location": "L26",
       "id": "net_lobbyregistrar_lobbyregistrar",
       "community": 67,
       "norm_label": "lobbyregistrar"
@@ -7501,7 +7510,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L29",
+      "source_location": "L28",
       "id": "server_net_lobbyregistrar_cs_string",
       "community": 67,
       "norm_label": "string"
@@ -7510,7 +7519,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L30",
+      "source_location": "L29",
       "id": "server_net_lobbyregistrar_cs_timespan",
       "community": 67,
       "norm_label": "timespan"
@@ -7519,7 +7528,7 @@
       "label": "ClientHub",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L32",
+      "source_location": "L31",
       "id": "server_net_lobbyregistrar_cs_clienthub",
       "community": 67,
       "norm_label": "clienthub"
@@ -7528,7 +7537,7 @@
       "label": "HttpClient",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L33",
+      "source_location": "L32",
       "id": "server_net_lobbyregistrar_cs_httpclient",
       "community": 67,
       "norm_label": "httpclient"
@@ -7537,7 +7546,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L36",
+      "source_location": "L35",
       "id": "server_net_lobbyregistrar_cs_int",
       "community": 67,
       "norm_label": "int"
@@ -7546,7 +7555,7 @@
       "label": "CancellationTokenSource",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L40",
+      "source_location": "L39",
       "id": "server_net_lobbyregistrar_cs_cancellationtokensource",
       "community": 67,
       "norm_label": "cancellationtokensource"
@@ -7555,7 +7564,7 @@
       "label": ".FromEnv()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L53",
+      "source_location": "L52",
       "id": "net_lobbyregistrar_lobbyregistrar_fromenv",
       "community": 67,
       "norm_label": ".fromenv()"
@@ -7564,7 +7573,7 @@
       "label": ".Start()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L78",
+      "source_location": "L77",
       "id": "net_lobbyregistrar_lobbyregistrar_start",
       "community": 67,
       "norm_label": ".start()"
@@ -7573,7 +7582,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L78",
+      "source_location": "L77",
       "id": "server_net_lobbyregistrar_cs_cancellationtoken",
       "community": 67,
       "norm_label": "cancellationtoken"
@@ -7582,7 +7591,7 @@
       "label": ".RunAsync()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L80",
+      "source_location": "L79",
       "id": "net_lobbyregistrar_lobbyregistrar_runasync",
       "community": 67,
       "norm_label": ".runasync()"
@@ -7591,7 +7600,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L80",
+      "source_location": "L79",
       "id": "server_net_lobbyregistrar_cs_task",
       "community": 67,
       "norm_label": "task"
@@ -7600,7 +7609,7 @@
       "label": ".RegisterAndListen()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L104",
+      "source_location": "L103",
       "id": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
       "community": 67,
       "norm_label": ".registerandlisten()"
@@ -7609,7 +7618,7 @@
       "label": ".Heartbeat()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L149",
+      "source_location": "L148",
       "id": "net_lobbyregistrar_lobbyregistrar_heartbeat",
       "community": 67,
       "norm_label": ".heartbeat()"
@@ -7618,7 +7627,7 @@
       "label": ".Deregister()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L161",
+      "source_location": "L160",
       "id": "net_lobbyregistrar_lobbyregistrar_deregister",
       "community": 67,
       "norm_label": ".deregister()"
@@ -7627,7 +7636,7 @@
       "label": ".ToIceServers()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "net_lobbyregistrar_lobbyregistrar_toiceservers",
       "community": 67,
       "norm_label": ".toiceservers()"
@@ -7636,7 +7645,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "server_net_lobbyregistrar_cs_ireadonlylist",
       "community": 67,
       "norm_label": "ireadonlylist"
@@ -7645,7 +7654,7 @@
       "label": "IceServerDto",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "server_net_lobbyregistrar_cs_iceserverdto",
       "community": 67,
       "norm_label": "iceserverdto"
@@ -7654,7 +7663,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "server_net_lobbyregistrar_cs_list",
       "community": 67,
       "norm_label": "list"
@@ -7663,7 +7672,7 @@
       "label": "RTCIceServer",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "server_net_lobbyregistrar_cs_rtciceserver",
       "community": 67,
       "norm_label": "rtciceserver"
@@ -11035,15 +11044,6 @@
       "id": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
       "community": 48,
       "norm_label": "microsoft.net.sdk"
-    },
-    {
-      "label": ".ResolvesToAsync()",
-      "file_type": "code",
-      "source_file": "server-share/ReachabilityProbe.cs",
-      "source_location": "L64",
-      "community": 79,
-      "norm_label": ".resolvestoasync()",
-      "id": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
     },
     {
       "label": "DateTimeOffset",
@@ -25678,9 +25678,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe"
+      "target": "server_share_reachabilityprobe_reachabilityprobe",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25689,9 +25689,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_cs_httpclient"
+      "target": "server_share_reachabilityprobe_cs_httpclient",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25700,9 +25700,9 @@
       "source_location": "L17",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_cs_string"
+      "target": "server_share_reachabilityprobe_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25711,9 +25711,9 @@
       "source_location": "L18",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_cs_timespan"
+      "target": "server_share_reachabilityprobe_cs_timespan",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25721,9 +25721,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L86",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25731,9 +25731,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L50",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25741,9 +25741,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L78",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25751,9 +25751,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L91",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25761,9 +25761,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L24",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_resolveasync"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25771,9 +25771,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L64",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25782,9 +25782,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25793,9 +25793,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_cs_task"
+      "target": "server_share_reachabilityprobe_cs_task",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25804,9 +25804,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L44",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25815,9 +25815,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L47",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25826,9 +25826,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L29",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25837,9 +25837,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L36",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25848,9 +25848,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L37",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25859,9 +25859,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25870,9 +25870,9 @@
       "source_location": "L64",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
-      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25881,9 +25881,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "server_share_reachabilityprobe_cs_task"
+      "target": "server_share_reachabilityprobe_cs_task",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25892,9 +25892,9 @@
       "source_location": "L64",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
-      "target": "server_share_reachabilityprobe_cs_task"
+      "target": "server_share_reachabilityprobe_cs_task",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25903,9 +25903,9 @@
       "source_file": "server-share/ReachabilityProbe.cs",
       "source_location": "L73",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
-      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25914,9 +25914,9 @@
       "source_location": "L91",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "host"
+      "target": "host",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25925,9 +25925,9 @@
       "source_location": "L91",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "port"
+      "target": "port",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28605,9 +28605,9 @@
       "source_location": "L35",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "net_lobbyregistrar_lobbyregistrar",
-      "target": "server_net_lobbyregistrar_cs_int"
+      "target": "server_net_lobbyregistrar_cs_int",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",

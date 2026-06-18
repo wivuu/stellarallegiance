@@ -2,11 +2,13 @@ namespace ServerShare;
 
 // ---- Wire contracts (JSON) shared by the registry + signaling routes ----
 
-// A host announcing itself. Name is the only required field (3-50 chars, validated in
-// ServerRegistry.Register). PublicEndpoint is an OPTIONAL direct ws:// fallback (host:port) for
-// LAN/port-forwarded servers; clients reach NAT'd servers over WebRTC via SessionId instead, so
-// it is usually empty. IceCandidates is legacy/unused (the live ICE handshake is in Signaling).
-public record RegisterRequest(string Name, string? PublicEndpoint, string[]? IceCandidates);
+// A host announcing itself. Name (3-50 chars, validated in ServerRegistry) and Port (the
+// public-facing port to probe/advertise) are required. PublicEndpoint is an OPTIONAL host:port the
+// server asserts as its reachable address (e.g. its host LAN/public address when it sits behind
+// container NAT or a proxy); the lobby probes it and advertises it only if it answers /health (see
+// ReachabilityProbe), so a server can't simply CLAIM to be directly joinable. When empty the lobby
+// probes the request's source IP instead. IceCandidates is legacy/unused.
+public record RegisterRequest(string Name, int Port, string? PublicEndpoint, string[]? IceCandidates);
 
 // What the registry stores and hands back. IceServers is the STUN/TURN config this box owns
 // (from its env) so every client + game server gets one consistent ICE configuration to dial.

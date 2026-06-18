@@ -65,6 +65,10 @@ fwd.KnownNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 app.UseWebSockets();
+// Lightweight reachability/health probe target: the public lobby GETs this to decide whether we
+// are directly joinable (a reachable port -> advertise direct WebSocket; else clients use WebRTC).
+// Also doubles as a container/systemd healthcheck. Not part of the game protocol.
+app.MapGet("/health", () => Results.Text("wivuu-sim"));
 app.Map("/game", async context =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
@@ -127,9 +131,13 @@ var simThread = new Thread(() =>
 simThread.Start();
 
 // Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY
-// (ServerShare), heartbeat, and accept WebRTC joins relayed through it. No name = private (direct
-// ws:// only). Shares the server-lifetime token so it deregisters and stops on shutdown.
-LobbyRegistrar.FromEnv(hub)?.Start(cts.Token);
+// (ServerShare) and heartbeat. The lobby probes our port back to decide our mode — direct WebSocket
+// if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
+// Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
+// us; shares the server-lifetime token so it deregisters and stops on shutdown.
+var registrar = LobbyRegistrar.FromEnv(hub, port);
+if (registrar is not null)
+    app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 
 Console.WriteLine($"[SimServer] ws://localhost:{port}/game  seed={seed}  asteroids={world.Asteroids.Count}  20 Hz");
 app.Run();

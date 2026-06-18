@@ -153,7 +153,10 @@ public partial class ServerInputOverlay : Control
         _listStatus.Visible = false;
         foreach (var s in servers)
         {
-            string label = string.IsNullOrEmpty(s.PublicEndpoint) ? s.Name : $"{s.Name}   ·   {s.PublicEndpoint}";
+            // The lobby probed each server: a PublicEndpoint means it's directly joinable over
+            // WebSocket; otherwise it's behind a NAT and we join over WebRTC (relayed SDP + STUN).
+            bool direct = !string.IsNullOrEmpty(s.PublicEndpoint);
+            string label = direct ? $"{s.Name}   ·   {s.PublicEndpoint}" : $"{s.Name}   ·   relayed";
             var btn = new Button
             {
                 Text = label,
@@ -162,8 +165,12 @@ public partial class ServerInputOverlay : Control
             };
             btn.AddThemeFontSizeOverride("font_size", 17);
             // Capture per-iteration values for the handler.
-            string sid = s.SessionId, name = s.Name;
-            btn.Pressed += () => _cm.ConnectToLobby(sid, name);
+            string sid = s.SessionId, name = s.Name, endpoint = s.PublicEndpoint ?? "";
+            btn.Pressed += () =>
+            {
+                if (direct) _cm.ConnectTo(endpoint);          // straight WebSocket to the server
+                else _cm.ConnectToLobby(sid, name);            // WebRTC via the lobby
+            };
             _list.AddChild(btn);
         }
     }

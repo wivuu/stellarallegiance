@@ -7,8 +7,10 @@ namespace ServerShare;
 // browse. Swap the implementation for Redis/DB later behind IServerRegistry.
 public interface IServerRegistry
 {
-    // Returns null when the name is invalid (caller maps to 400).
-    ServerEntry? Register(RegisterRequest req);
+    // Returns null when the name is invalid (caller maps to 400). publicEndpoint is the result of
+    // the lobby's reachability probe: a host:port for a directly-joinable server, or null for a
+    // NAT'd server that clients must reach over WebRTC/STUN.
+    ServerEntry? Register(RegisterRequest req, string? publicEndpoint);
     bool Heartbeat(string sessionId);
     ServerEntry? Get(string sessionId);
     IReadOnlyCollection<ServerEntry> ListActive();
@@ -29,6 +31,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     readonly ConcurrentDictionary<string, ServerEntry> _servers = new();
     readonly IReadOnlyList<IceServer> _iceServers;
 
+    // iceServers is the lobby's STUN config, handed to every server/client for the WebRTC fallback.
     public InMemoryServerRegistry(IReadOnlyList<IceServer> iceServers) => _iceServers = iceServers;
 
     // Trimmed, 3-50 chars. Returns the cleaned name, or null if invalid.
@@ -38,7 +41,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return n.Length is >= NameMin and <= NameMax ? n : null;
     }
 
-    public ServerEntry? Register(RegisterRequest req)
+    public ServerEntry? Register(RegisterRequest req, string? publicEndpoint)
     {
         var name = NormalizeName(req.Name);
         if (name is null) return null;
@@ -47,7 +50,9 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         var entry = new ServerEntry(
             SessionId: Guid.NewGuid().ToString("n"),
             Name: name,
-            PublicEndpoint: string.IsNullOrWhiteSpace(req.PublicEndpoint) ? null : req.PublicEndpoint.Trim(),
+            // Set by the lobby's reachability probe (route): a host:port for a direct join, or null
+            // for a NAT'd server clients reach over WebRTC. Not taken from the request directly.
+            PublicEndpoint: string.IsNullOrWhiteSpace(publicEndpoint) ? null : publicEndpoint.Trim(),
             RegisteredAt: now,
             LastSeen: now,
             IceServers: _iceServers);

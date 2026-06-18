@@ -1,61 +1,71 @@
-# Hosting the public lobby (`server-share` + `coturn`)
+# Hosting the public lobby (`server-share`)
 
-The **public lobby** lets player-run game servers be discovered and joined without
-port-forwarding. It is two small services that you host once, centrally:
+The **public lobby** lets player-run game servers be discovered and joined. The only thing **you**
+host is one small HTTP service:
 
-- **`server-share`** — an HTTP service that does two jobs: a **registry** (game servers announce
-  a name + session id and heartbeat; clients fetch the list) and a **WebRTC signaling relay**
-  (it forwards the SDP offer/answer between a joining client and the game server). It is
-  stateless and tiny.
-- **`coturn`** — a standard **STUN/TURN** server. STUN lets a NAT'd game server discover its own
-  public address so peers can hole-punch directly; TURN is the relay fallback for the ~10–20% of
-  networks (symmetric NATs) where hole-punching fails.
+- **`server-share`** — an HTTP service that does two jobs: a **registry** (game servers announce a
+  name + port and heartbeat; clients fetch the list) and a **WebRTC signaling relay** (it forwards
+  the SDP offer/answer between a joining client and a NAT'd game server). It is stateless and tiny,
+  and **no game traffic ever flows through it.**
+
+## How discovery works (direct-first)
+
+When a game server registers, `server-share` **probes it back** to decide how clients should join:
+
+1. **The probe.** The lobby does `GET http://<server-ip>:<port>/health` from its own (public)
+   vantage point. The sim server answers `/health` with a known token.
+2. **Reachable → direct.** The lobby advertises the server's `host:port`. Clients connect
+   **straight to it over WebSocket** — nothing touches the lobby. This is the common case: most
+   player-run servers have a public IP or a forwarded port.
+3. **Not reachable → WebRTC.** The server is behind a NAT with no port-forward. Clients join over a
+   **WebRTC DataChannel**, hole-punching with public **STUN**; only the short SDP handshake is
+   relayed through the lobby.
 
 ```
-            ┌─────────────── your hosted box (e.g. 192.168.1.101) ───────────────┐
- client ──▶ │  server-share :8091  (registry + SDP signaling, JSON only)         │
-   │        │  coturn       :3478  (STUN/TURN) + relay UDP range                  │
-   │        └────────────────────────────────────────────────────────────────────┘
-   │                                   ▲
-   └───────────────  WebRTC DataChannel (P2P, or TURN-relayed)  ──────▶ game server
+        ┌──────── your hosted box ────────┐
+client ─│  server-share :8091             │   1. probe GET /health  ─────────────────▶ game server
+   │     │  (registry + SDP signaling)     │   2a. reachable -> advertise host:port
+   │     └──────────────────────────────────┘
+   │
+   ├──── direct WebSocket (ws://host:port/game) ────────────────────────────────────▶ public server
+   └──── WebRTC DataChannel (P2P, hole-punched via STUN) ───────────────────────────▶ NAT'd server
 ```
 
-> **No game traffic flows through `server-share`.** It only relays the short SDP handshake. Game
-> packets go peer-to-peer, or through `coturn` when relaying is required. Size `coturn`
-> bandwidth for the relayed case; `server-share` only ever moves a few KB of JSON per join.
+> **There is no TURN relay.** The lobby never carries game traffic, and we don't pay to relay it.
+> The trade-off: a client behind a symmetric NAT can't reach a *NAT'd* server (hole-punching
+> fails). Such clients can always join **direct** servers, so hosting on a public/forwarded port
+> gives the widest reach.
 
 ---
 
 ## Ports & firewall
 
-Open these **inbound** on the lobby box (clients *and* game servers connect to all of them):
+Open this **one** inbound port on the lobby box:
 
 | Service | Port | Protocol | Purpose |
 |---|---|---|---|
 | `server-share` | `8091` (`SHARE_PORT`) | TCP / HTTP | registry + signaling REST API |
-| `coturn` STUN/TURN | `3478` (`TURN_PORT`) | **UDP and TCP** | candidate discovery + TURN control |
-| `coturn` relay range | `49160–49200` (recommended; see below) | **UDP** | TURN-relayed media (one alloc = one port) |
-| `coturn` TURN-over-TLS | `5349` (optional) | TCP / UDP | only if you enable `turns:` |
 
-**Player machines need no inbound ports.** Game servers and clients only make *outbound* UDP
-connections (ICE) — that is the whole point of the lobby. Do **not** port-forward `8090` on a
-player's router for the WebRTC path.
+That's the whole lobby surface — no STUN/TURN ports, because STUN is a public service and there is
+no TURN.
 
-coturn's default relay range is `49152–65535` (huge). Narrow it and open only that range:
-add `--min-port=49160 --max-port=49200` to the coturn command (≈40 concurrent relayed
-connections — raise the ceiling for more).
+**Game-server hosts:** to be **directly joinable**, a server's port (default `8090`) must be
+reachable from the internet — i.e. a public IP or a forwarded port. If it isn't, the server still
+works via WebRTC/STUN for most clients; it just can't serve symmetric-NAT clients.
+
+**Client machines need no inbound ports.**
 
 ---
 
 ## Quick start (Docker Compose)
 
-Both services are defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
+`server-share` is defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
 the sim server. To run **just the lobby** on a dedicated box:
 
 ```bash
 # on the lobby box, in the repo:
-cp .env.example .env          # set TURN_USER / TURN_PASS at minimum
-docker compose up --build server-share coturn
+cp .env.example .env          # optionally set STUN_URL
+docker compose up --build server-share
 ```
 
 Verify it is up:
@@ -65,7 +75,8 @@ curl http://<lobby-host>:8091/servers      # -> []  (empty list until a server r
 ```
 
 That `[]` means the registry is reachable. Point a game server at it (`SIM_PUBLIC_NAME` set,
-`PUBLIC_LOBBY=<lobby-host>:8091`) and the same call returns its entry.
+`PUBLIC_LOBBY=<lobby-host>:8091`); the same call then returns its entry, with a `publicEndpoint`
+if the lobby's probe found it directly reachable (else `null` → WebRTC).
 
 ---
 
@@ -76,20 +87,31 @@ Environment variables (see [`ServerShare.cs`](ServerShare.cs)):
 | Var | Default | Purpose |
 |---|---|---|
 | `SHARE_PORT` | `8091` | HTTP listen port. |
-| `STUN_URL` | — | STUN URL handed to clients/servers, e.g. `stun:lobby.example.com:3478`. |
-| `TURN_URL` | — | TURN URL for relay fallback, e.g. `turn:lobby.example.com:3478`. |
-| `TURN_USER` | — | TURN username (required if `TURN_URL` is set). |
-| `TURN_PASS` | — | TURN credential (required if `TURN_URL` is set). |
+| `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
 
-`server-share` is the **single source of truth for ICE config**: it returns `STUN_URL`/`TURN_URL`
-(with credentials) in the register response and server list, so neither clients nor game servers
-need to know the TURN details themselves. **Set `STUN_URL`/`TURN_URL` to addresses reachable from
-the public internet** (your box's public hostname/IP) — not `localhost`. Leave them empty only for
-a LAN-only deployment where host candidates suffice.
+A public STUN server is fine — there's nothing to host. It holds everything in memory (no
+database): registry entries expire 30 s after the last heartbeat; signaling tickets expire after
+60 s. Run a single instance — there is no shared state across replicas.
 
-It holds everything in memory (no database). Registry entries expire 30 s after the last
-heartbeat; signaling tickets expire after 60 s. Run a single instance — there is no shared state
-across replicas.
+### The reachability probe
+
+`server-share` decides a server's mode by `GET`ting `/health` on the address it registered from
+(see [`ReachabilityProbe.cs`](ReachabilityProbe.cs)). Notes:
+
+- By default it probes the **source IP** of the registration request (so a server behind a
+  TLS-terminating proxy needs `X-Forwarded-For` — `server-share` honours it).
+- A server may instead **assert an explicit address** via `SIM_PUBLIC_ENDPOINT` (host:port) — the
+  address clients should actually use when its source IP isn't reachable (container NAT, reverse
+  proxy). The lobby probes that directly and advertises it **only if it answers `/health` with the
+  `wivuu-sim` token**, which is what keeps the probe from being usable as an SSRF scanner (it only
+  ever "succeeds" against a real sim server; link-local/metadata targets are also refused).
+- The sim server must serve `GET /health` returning `wivuu-sim` (it does, by default, on its game
+  port).
+- **Single-box compose caveat:** if the sim server and lobby run in the same Compose project, the
+  source IP is the sim server's *container* IP (only reachable on the docker network). Set
+  `SIM_PUBLIC_ENDPOINT=<host-address>:<port>` so the lobby probes/advertises the host's reachable
+  address instead. (For a large public deployment, run `server-share` on its own box so player
+  servers probe from their real public IP and need no override.)
 
 ### Running `server-share` standalone (no Compose)
 
@@ -99,50 +121,8 @@ dotnet run --project server-share -c Release        # listens on :8091
 
 # or build the image directly (self-contained context):
 docker build -t wivuullegiance-share server-share/
-docker run -p 8091:8091 \
-  -e STUN_URL=stun:lobby.example.com:3478 \
-  -e TURN_URL=turn:lobby.example.com:3478 \
-  -e TURN_USER=wivuu -e TURN_PASS='<strong-secret>' \
-  wivuullegiance-share
+docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance-share
 ```
-
----
-
-## `coturn` configuration
-
-The Compose `coturn` service runs with `network_mode: host` so TURN can hand out reachable relay
-addresses and bind the relay UDP range. The essentials:
-
-- **`--external-ip=<public-ip>`** — **required** for TURN relay to work from outside. Set it to
-  the box's public IP. If the box is itself behind a NAT (1:1 mapping), use
-  `--external-ip=<public-ip>/<private-ip>`. (It is commented out in `docker-compose.yml` — uncomment
-  and set it.)
-- **`--listening-port=3478`** — STUN/TURN control port (`TURN_PORT`).
-- **`--min-port` / `--max-port`** — the relay UDP range (open it in the firewall; see above).
-- **`--lt-cred-mech` + `--user=USER:PASS`** — long-term credential auth. These must match the
-  `TURN_USER`/`TURN_PASS` you give `server-share`, or clients will fail TURN authentication.
-- **`--realm=wivuu`** — any realm string; just keep it stable.
-
-Example hardened command (edit the `coturn` service in `docker-compose.yml`):
-
-```yaml
-    command:
-      - -n
-      - --no-cli
-      - --listening-port=3478
-      - --min-port=49160
-      - --max-port=49200
-      - --realm=wivuu
-      - --lt-cred-mech
-      - --fingerprint
-      - --user=${TURN_USER:-wivuu}:${TURN_PASS:-changeme}
-      - --external-ip=YOUR_PUBLIC_IP
-      - --no-tcp-relay          # optional: UDP relay only
-      - --no-multicast-peers    # optional: reject relaying to multicast
-```
-
-For a LAN-only test you can skip `coturn` entirely and leave `STUN_URL`/`TURN_URL` empty —
-same-subnet peers connect on host candidates.
 
 ---
 
@@ -153,9 +133,11 @@ optional — `host:port` becomes `http://host:port`; pass `https://host` to use 
 
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
   `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.sh` this is the default (no
-  `--local`); the name defaults to the hostname.
+  `--local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
+  directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs.
 - **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.sh`
-  opens the lobby browser by default.
+  opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
+  WebRTC automatically.
 
 The repo default `192.168.1.101:8091` is a placeholder — change it (env, `.env`, or the code
 default in `ConnectionManager`/`LobbyRegistrar`) to your real lobby address before sharing builds.
@@ -169,13 +151,13 @@ default in `ConnectionManager`/`LobbyRegistrar`) to your real lobby address befo
   The client and game server both honour an `https://` prefix.
 - **The registry is unauthenticated.** Anyone who can reach `:8091` can register a server, list
   servers, or post signaling. That is fine for the intended "open public lobby", but expose only
-  `:8091` (and coturn), keep it behind your proxy, and rate-limit at the proxy if abused.
-- **Rotate TURN credentials.** The long-term `TURN_USER`/`TURN_PASS` are shared with every client.
-  Rotate them periodically; for higher security move to coturn's time-limited (REST/HMAC)
-  credentials and have `server-share` mint short-lived ones (not implemented today).
-- **Resource use.** `server-share` is negligible (stateless JSON). `coturn` relay bandwidth equals
-  the game traffic of every *relayed* session — provision accordingly if many players sit behind
-  symmetric NATs.
+  `:8091`, keep it behind your proxy, and rate-limit at the proxy if abused.
+- **Probe SSRF.** The probe only connects back to the registrant's own source IP, over `http` to
+  the fixed `/health` path, with a short timeout, and refuses link-local targets — so it can't be
+  steered at arbitrary internal hosts. The residual surface (a caller making the lobby connect to
+  its own address) is acceptable for an open lobby.
+- **Resource use.** `server-share` is negligible (stateless JSON; a few KB per join). Game traffic
+  is direct (public servers) or peer-to-peer over STUN (NAT'd servers) — none of it is the lobby's.
 
 ---
 
@@ -185,7 +167,7 @@ Registry:
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| `POST` | `/servers` | `{ name, publicEndpoint? }` | `400` if name not 3–50 chars; returns `{ sessionId, iceServers, … }`. |
+| `POST` | `/servers` | `{ name, port, publicEndpoint? }` | `400` if name not 3–50 chars. Lobby probes `port`; returns `{ sessionId, publicEndpoint, iceServers, … }` (`publicEndpoint` null = WebRTC mode). |
 | `POST` | `/servers/{sessionId}/heartbeat` | — | `204`, or `404` if expired. Send every ~10 s. |
 | `GET` | `/servers/{sessionId}` | — | one entry, or `404`. |
 | `GET` | `/servers` | — | active server list (browser view). |
