@@ -1,0 +1,46 @@
+# Standalone GAME-SERVER deploy: runs ONLY the sim-server and publishes it to the HOSTED public
+# lobby (no local lobby container). Use this to host a community game server that shows up in the
+# shared server browser.
+#
+#   docker compose -f docker-compose.server.yml up --build
+#
+# Discovery is DIRECT-FIRST: the hosted lobby probes your server's public address and, if reachable,
+# advertises a direct host:port so clients connect straight to you over WebSocket (no traffic through
+# the lobby). If it can't reach you (NAT, no port-forward), clients fall back to WebRTC + public STUN.
+# There is NO TURN relay — forward the game port for the widest reach.
+#
+# IMPORTANT (NAT / single box): the lobby probes from the public internet, but your container's
+# source IP is a private 172.x address, so by default you'd only be reachable via the WebRTC/STUN
+# fallback. To be listed as DIRECT: (a) forward the game port (default 8090) on your router, and
+# (b) set SIM_PUBLIC_ENDPOINT to your reachable public address — e.g. SIM_PUBLIC_ENDPOINT=1.2.3.4:8090,
+# or a scheme'd https://your-domain when a TLS proxy fronts you.
+#
+# TLS: the sim server speaks plain ws:// on :8090; put a TLS proxy in front for wss:// in production.
+#
+# First run:
+#   cp .env.example .env && edit .env   (set SIM_PUBLIC_NAME; set SIM_PUBLIC_ENDPOINT if NAT'd)
+#   docker compose -f docker-compose.server.yml up --build
+services:
+  sim-server:
+    build:
+      context: .                     # repo root, so ../shared resolves (see server/Dockerfile)
+      dockerfile: server/Dockerfile
+    environment:
+      # Optional shared-secret password. Leave empty for an open server (LAN/dev); set it to
+      # require every client's Hello to carry the same secret.
+      SIM_SECRET: ${SIM_SECRET:-}
+      # Set to 1 to skip the lobby ready-up and run a perpetual match (bots / benchmarking).
+      SIM_AUTOSTART: ${SIM_AUTOSTART:-}
+      # REQUIRED to be listed: 3-50 char public name. Empty = private (joinable only by direct address).
+      SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
+      # The HOSTED public lobby this server registers with.
+      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-https://wivuu-public-lobby-production.up.railway.app}
+      # Public-facing port the lobby probes/advertises (default = listen port; set when a
+      # port-forward maps a different external port).
+      SIM_PUBLIC_PORT: ${SIM_PUBLIC_PORT:-}
+      # Your reachable public address so the lobby can advertise you as DIRECT (see header). For a
+      # NAT'd / single-box host this is effectively required: host:port or https://domain.
+      SIM_PUBLIC_ENDPOINT: ${SIM_PUBLIC_ENDPOINT:-}
+    ports:
+      - "${SIM_PORT:-8090}:8090"
+    restart: unless-stopped
