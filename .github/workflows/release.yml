@@ -190,6 +190,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           path: dist
+          pattern: client-*   # only the client zips — skip the server job's .dockerbuild record
           merge-multiple: true
 
       - name: Publish Release
