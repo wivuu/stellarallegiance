@@ -15,6 +15,11 @@ public partial class Hud : CanvasLayer
 	private Control _menu = null!;
 	private Label _warning = null!;
 
+	// Previous-frame visibility, so UI sounds fire once on the transition (the spawn
+	// menu opening/closing, the sector warning first appearing) rather than every frame.
+	private bool _menuWasVisible;
+	private bool _warnWasVisible;
+
 	public override void _Ready()
 	{
 		_cm = GetNode<ConnectionManager>("../ConnectionManager");
@@ -83,6 +88,7 @@ public partial class Hud : CanvasLayer
 	private Button SpawnButton(string text, ShipClass cls)
 	{
 		var b = new Button { Text = text, CustomMinimumSize = new Vector2(280, 36) };
+		b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
 		b.Pressed += () => _ship.RequestSpawn(cls);
 		return b;
 	}
@@ -98,6 +104,12 @@ public partial class Hud : CanvasLayer
 		bool inMatch = _world.Phase == MatchPhase.Active;
 		bool teamedInMatch = inMatch;
 		_menu.Visible = teamedInMatch && !flying;
+		if (_menu.Visible != _menuWasVisible)
+		{
+			SfxManager.Instance?.PlayUi(_menu.Visible
+				? SfxManager.SfxId.MenuOpen : SfxManager.SfxId.MenuClose);
+			_menuWasVisible = _menu.Visible;
+		}
 		_sectorShips.Visible = inMatch;
 		if (inMatch)
 			_sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
@@ -123,6 +135,9 @@ public partial class Hud : CanvasLayer
 		{
 			_warning.Visible = false;
 		}
+		if (_warning.Visible && !_warnWasVisible)
+			SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiNotify);
+		_warnWasVisible = _warning.Visible;
 		// Top-left readout: the controls hint while choosing a ship (teamed, pre-spawn),
 		// the live flight stats while flying, and nothing while the lobby overlay is up.
 		_label.Text = flying

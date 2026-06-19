@@ -23,6 +23,10 @@ window/size/viewport_height=1440
 
 project/assembly_name="wivuullegiance"
 
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
+
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true

@@ -70,7 +70,7 @@ fine). Note the generated domain, e.g. `wivuu-public-lobby-production.up.railway
 railway init -n wivuu-sim-server
 railway variables --set RAILWAY_DOCKERFILE_PATH=server/Dockerfile \
   --set SIM_PUBLIC_NAME="My Server" \
-  --set PUBLIC_LOBBY=https://<lobby-domain>             # the domain from step 1
+  --set PUBLIC_LOBBY=wivuu-public-lobby-production.up.railway.app            # the domain from step 1
   # --set SIM_SECRET=...                                # optional (see Auth)
 railway up -c
 railway domain

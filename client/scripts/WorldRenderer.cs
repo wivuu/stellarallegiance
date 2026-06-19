@@ -352,6 +352,14 @@ public partial class WorldRenderer : Node3D
 		SetNodeSector(fx, sector);
 	}
 
+	// Collision SFX hook (ship↔ship / base / asteroid). DEFERRED: the client does no
+	// collision detection today — collisions are resolved server-side — so nothing
+	// calls this yet. When the server emits a collision event the client can observe,
+	// route it here with the impact's world position. Wired through the same pooled
+	// 3D path as every other discrete sound; the placeholder asset already exists.
+	private void PlayCollisionSfx(Vector3 worldPos)
+		=> SfxManager.Instance?.PlayAt(SfxManager.SfxId.Collision, worldPos);
+
 	// ---- Aleph (warp funnel) -------------------------------------------
 
 	private void InsertAleph(Aleph row)
@@ -622,6 +630,10 @@ public partial class WorldRenderer : Node3D
 			Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
 			var boom = ExplosionEffect.Create(row.Class, row.Team);
 			SpawnEffect(boom, deathPos, row.SectorId);
+			// Bigger hulls boom lower/longer; nudge pitch down for Fighters/Bombers.
+			float boomPitch = row.Class == ShipClass.Scout ? 1.05f
+				: row.Class == ShipClass.Bomber ? 0.8f : 0.9f;
+			SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, deathPos, pitch: boomPitch);
 		}
 
 		if (local)
@@ -723,6 +735,10 @@ public partial class WorldRenderer : Node3D
 		pv.Initialize(pos, vel, ClipBoltTtl(sector, pos, vel, lifeSec), leadSec);
 		SetNodeSector(pv, sector);
 		_bolts.Add(pv);
+		// Single chokepoint for every shot (local + remote), so the muzzle report
+		// fires once per bolt at the muzzle position.
+		SfxManager.Instance?.PlayAt(SfxManager.SfxId.WeaponFire, pos,
+			pitch: 0.95f + GD.Randf() * 0.1f);
 	}
 
 	// How far ahead to render an enemy/remote shot to mask its ~1 RTT-late pop-in
@@ -856,6 +872,8 @@ public partial class WorldRenderer : Node3D
 				if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
 				{
 					SpawnEffect(new HitFlash(), hit, _localSector);
+					SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit,
+						pitch: 0.92f + GD.Randf() * 0.16f);
 					pv.QueueFree();
 					_bolts.RemoveAt(i);
 					break;

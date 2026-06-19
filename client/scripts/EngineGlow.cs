@@ -61,6 +61,15 @@ public partial class EngineGlow : Node3D
 	private float _shownBoost;   // eased afterburner actually rendered
 	private float _flicker;      // small per-instance phase so engines don't pulse in lockstep
 
+	// Spatial engine audio. Both loops are children of this node, so they ride the
+	// ship's world transform for free (this covers local, remote, and AI ships —
+	// everything flows through SetThrottle). Driven off the EASED throttle/boost in
+	// _Process so the sound spools with the glow rather than snapping on input.
+	private AudioStreamPlayer3D? _engineSfx;
+	private AudioStreamPlayer3D? _boostSfx;
+	private const float EngineUnitSize = 50f;
+	private const float EngineMaxDistance = 1400f;
+
 	// Feed the current drive each frame. throttle (0..1) is forward thrust and
 	// always glows the engines; boost (0..1) is the afterburner — a SEPARATE input
 	// (the local pilot's afterburner key, a PIG's turn-burst, a remote ship near
@@ -100,7 +109,54 @@ public partial class EngineGlow : Node3D
 		AddChild(_light);
 
 		ApplyVisual(0f, 0f);   // start dark; _Process lights it once throttle is fed
+
+		BuildAudio();
 	}
+
+	// Engine hum + afterburner whoosh, both looping and parked behind the hull with
+	// the wash light. Volume/pitch are modulated every frame in _Process. Guarded:
+	// if the audio service or its streams aren't up, the ship simply runs silent.
+	private void BuildAudio()
+	{
+		var sfx = SfxManager.Instance;
+		if (sfx == null)
+			return;
+		Vector3 rear = new(0f, 0f, -PlumeLength * 0.3f);
+		var engine = sfx.GetStream(SfxManager.SfxId.EngineLoop);
+		if (engine != null)
+		{
+			_engineSfx = new AudioStreamPlayer3D
+			{
+				Stream = engine,
+				Bus = "Engines",
+				UnitSize = EngineUnitSize,
+				MaxDistance = EngineMaxDistance,
+				Position = rear,
+				VolumeDb = -80f,   // silent until throttle drives it up
+			};
+			AddChild(_engineSfx);
+			_engineSfx.Play();
+		}
+		var boost = sfx.GetStream(SfxManager.SfxId.BoosterLoop);
+		if (boost != null)
+		{
+			_boostSfx = new AudioStreamPlayer3D
+			{
+				Stream = boost,
+				Bus = "Engines",
+				UnitSize = EngineUnitSize,
+				MaxDistance = EngineMaxDistance,
+				Position = rear,
+				VolumeDb = -80f,   // silent until the afterburner fires
+			};
+			AddChild(_boostSfx);
+			_boostSfx.Play();
+		}
+	}
+
+	// Map an eased 0..1 drive level onto a playable VolumeDb, fading to silence at 0.
+	private static float DriveToDb(float level)
+		=> level <= 0.001f ? -80f : Mathf.Lerp(-26f, -2f, Mathf.Clamp(level, 0f, 1f));
 
 	private void BuildNozzle(Vector3 pos, Texture2D dot)
 	{
@@ -248,6 +304,19 @@ public partial class EngineGlow : Node3D
 		_shownBoost = EaseToward(_shownBoost, _targetBoost, dt);
 		_flicker += dt * 12f;   // slow enough that turbulence reads as flow, not a strobe
 		ApplyVisual(_shown, _shownBoost);
+
+		// Engine pitch rises with throttle; both loops fade in with their drive level
+		// (boost only audible while the afterburner is lit).
+		if (_engineSfx != null)
+		{
+			_engineSfx.VolumeDb = DriveToDb(_shown);
+			_engineSfx.PitchScale = Mathf.Lerp(0.8f, 1.4f, _shown);
+		}
+		if (_boostSfx != null)
+		{
+			_boostSfx.VolumeDb = DriveToDb(_shownBoost);
+			_boostSfx.PitchScale = Mathf.Lerp(0.9f, 1.3f, _shownBoost);
+		}
 	}
 
 	// Spool UP smoothly; cut DOWN instantly. The flame must die the frame the pilot drops
