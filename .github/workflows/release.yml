@@ -104,9 +104,12 @@ jobs:
           chmod +x build/linux/wivuullegiance.x86_64
           ( cd build/linux && zip -rq "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-linux.zip" . )
 
+      # The Windows runner's git-bash has no `zip`; use PowerShell's Compress-Archive. `build/win/*`
+      # puts the .exe + .pck + data_* at the zip root so testers extract one self-contained folder.
       - name: Package Windows
         if: matrix.name == 'Windows'
-        run: ( cd build/win && zip -rq "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-windows.zip" . )
+        shell: pwsh
+        run: Compress-Archive -Path build/win/* -DestinationPath "$env:GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-windows.zip" -Force
 
       # macOS: Godot's signing enables the hardened runtime, which SIGKILLs an un-notarized build.
       # Strip it and re-sign plain ad-hoc, then ditto-zip to preserve the signature + symlinks
