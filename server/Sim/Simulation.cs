@@ -20,7 +20,7 @@ public sealed partial class Simulation
     public const byte PodClass = 255;             // reserved "class" selecting the Pod flight profile
     private const float PodMaxHull = 20f;         // an ejected pod's low starting hull
     private const float DockRadiusFrac = 0.9f;    // dock when within this fraction of your OWN base radius
-    private static readonly float RescueRadius = World.ShipRadius * 2f;  // hull-contact pickup distance
+    private static readonly float RescueRadius = World.ShipRadius * 4f;  // pickup distance (no need to directly intersect)
     private const float PodEjectSpeed = 90f;      // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f;        // rad/s initial tumble (decays via angular drag)
 
@@ -517,7 +517,7 @@ public sealed partial class Simulation
     {
         _toRemove.Add(pod);
         if (pod.IsPig)
-            FreePigPodSlot(pod, 0u);            // destroyed: slot rejoins the next squad wave
+            FreePigPodSlot(pod, 0u, tick);      // destroyed: slot rejoins the next squad wave
         else if (pod.OwnerClientId >= 0)
             ScheduleRespawn(pod.OwnerClientId, tick + RespawnDelayTicks);
     }
@@ -529,7 +529,7 @@ public sealed partial class Simulation
     {
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
-            FreePigPodSlot(s, tick + 1u);
+            FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)
             ScheduleRespawn(s.OwnerClientId, tick + RespawnDelayTicks);
     }

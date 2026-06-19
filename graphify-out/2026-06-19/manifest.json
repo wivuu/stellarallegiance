@@ -400,13 +400,13 @@
     "semantic_hash": ""
   },
   "client/scripts/SfxManager.cs": {
-    "mtime": 1781893113.486428,
-    "ast_hash": "1e4b7253de4e896b709beb4674922db7",
+    "mtime": 1781893876.3368173,
+    "ast_hash": "042d884d7394f88840d1169dad57e284",
     "semantic_hash": ""
   },
   "tools/sfx-gen/gen_sfx.py": {
-    "mtime": 1781893113.5010061,
-    "ast_hash": "7cc20ad52f18c861116ff3b328ad036a",
+    "mtime": 1781893834.2169507,
+    "ast_hash": "0eee413b18ff0ca6a8b225ebd122c976",
     "semantic_hash": ""
   },
   "docker-compose.server.yml": {
