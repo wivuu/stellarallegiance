@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.HttpOverrides;
-using ServerShare;
+using PublicLobby;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
 // heartbeat to stay listed; clients browse the active list and join.
@@ -103,7 +103,7 @@ app.MapGet("/connect/{ticket}/answer", async (string ticket, SignalingRelay rela
     return answer is null ? Results.NoContent() : Results.Ok(new AnswerResponse(answer));
 });
 
-Console.WriteLine($"[ServerShare] listening on http://0.0.0.0:{port}  stun={stunServers.Count}");
+Console.WriteLine($"[PublicLobby] listening on http://0.0.0.0:{port}  stun={stunServers.Count}");
 app.Run();
 
 // ---- STUN config from env -------------------------------------------------

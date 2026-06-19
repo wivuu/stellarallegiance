@@ -1,16 +1,16 @@
-# Hosting the public lobby (`server-share`)
+# Hosting the public lobby (`public-lobby`)
 
 The **public lobby** lets player-run game servers be discovered and joined. The only thing **you**
 host is one small HTTP service:
 
-- **`server-share`** — an HTTP service that does two jobs: a **registry** (game servers announce a
+- **`public-lobby`** — an HTTP service that does two jobs: a **registry** (game servers announce a
   name + port and heartbeat; clients fetch the list) and a **WebRTC signaling relay** (it forwards
   the SDP offer/answer between a joining client and a NAT'd game server). It is stateless and tiny,
   and **no game traffic ever flows through it.**
 
 ## How discovery works (direct-first)
 
-When a game server registers, `server-share` **probes it back** to decide how clients should join:
+When a game server registers, `public-lobby` **probes it back** to decide how clients should join:
 
 1. **The probe.** The lobby does `GET http://<server-ip>:<port>/health` from its own (public)
    vantage point. The sim server answers `/health` with a known token.
@@ -23,7 +23,7 @@ When a game server registers, `server-share` **probes it back** to decide how cl
 
 ```
         ┌──────── your hosted box ────────┐
-client ─│  server-share :8091             │   1. probe GET /health  ─────────────────▶ game server
+client ─│  public-lobby :8091             │   1. probe GET /health  ─────────────────▶ game server
    │     │  (registry + SDP signaling)     │   2a. reachable -> advertise host:port
    │     └──────────────────────────────────┘
    │
@@ -44,7 +44,7 @@ Open this **one** inbound port on the lobby box:
 
 | Service | Port | Protocol | Purpose |
 |---|---|---|---|
-| `server-share` | `8091` (`SHARE_PORT`) | TCP / HTTP | registry + signaling REST API |
+| `public-lobby` | `8091` (`SHARE_PORT`) | TCP / HTTP | registry + signaling REST API |
 
 That's the whole lobby surface — no STUN/TURN ports, because STUN is a public service and there is
 no TURN.
@@ -59,13 +59,13 @@ works via WebRTC/STUN for most clients; it just can't serve symmetric-NAT client
 
 ## Quick start (Docker Compose)
 
-`server-share` is defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
+`public-lobby` is defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
 the sim server. To run **just the lobby** on a dedicated box:
 
 ```bash
 # on the lobby box, in the repo:
 cp .env.example .env          # optionally set STUN_URL
-docker compose up --build server-share
+docker compose up --build public-lobby
 ```
 
 Verify it is up:
@@ -80,9 +80,9 @@ if the lobby's probe found it directly reachable (else `null` → WebRTC).
 
 ---
 
-## `server-share` configuration
+## `public-lobby` configuration
 
-Environment variables (see [`ServerShare.cs`](ServerShare.cs)):
+Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 
 | Var | Default | Purpose |
 |---|---|---|
@@ -95,11 +95,11 @@ database): registry entries expire 30 s after the last heartbeat; signaling tick
 
 ### The reachability probe
 
-`server-share` decides a server's mode by `GET`ting `/health` on the address it registered from
+`public-lobby` decides a server's mode by `GET`ting `/health` on the address it registered from
 (see [`ReachabilityProbe.cs`](ReachabilityProbe.cs)). Notes:
 
 - By default it probes the **source IP** of the registration request (so a server behind a
-  TLS-terminating proxy needs `X-Forwarded-For` — `server-share` honours it).
+  TLS-terminating proxy needs `X-Forwarded-For` — `public-lobby` honours it).
 - A server may instead **assert an explicit address** via `SIM_PUBLIC_ENDPOINT` (host:port) — the
   address clients should actually use when its source IP isn't reachable (container NAT, reverse
   proxy). The lobby probes that directly and advertises it **only if it answers `/health` with the
@@ -110,18 +110,18 @@ database): registry entries expire 30 s after the last heartbeat; signaling tick
 - **Single-box compose caveat:** if the sim server and lobby run in the same Compose project, the
   source IP is the sim server's *container* IP (only reachable on the docker network). Set
   `SIM_PUBLIC_ENDPOINT=<host-address>:<port>` so the lobby probes/advertises the host's reachable
-  address instead. (For a large public deployment, run `server-share` on its own box so player
+  address instead. (For a large public deployment, run `public-lobby` on its own box so player
   servers probe from their real public IP and need no override.)
 
-### Running `server-share` standalone (no Compose)
+### Running `public-lobby` standalone (no Compose)
 
 ```bash
 # from the repo root
-dotnet run --project server-share -c Release        # listens on :8091
+dotnet run --project public-lobby -c Release        # listens on :8091
 
 # or build the image directly (self-contained context):
-docker build -t wivuullegiance-share server-share/
-docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance-share
+docker build -t wivuullegiance-public-lobby public-lobby/
+docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance-public-lobby
 ```
 
 ---
@@ -146,7 +146,7 @@ default in `ConnectionManager`/`LobbyRegistrar`) to your real lobby address befo
 
 ## Production hardening
 
-- **TLS for `server-share`.** The REST API is plain HTTP. For internet hosting, terminate TLS at a
+- **TLS for `public-lobby`.** The REST API is plain HTTP. For internet hosting, terminate TLS at a
   reverse proxy (Caddy/nginx) in front of `:8091` and set `PUBLIC_LOBBY=https://lobby.example.com`.
   The client and game server both honour an `https://` prefix.
 - **The registry is unauthenticated.** Anyone who can reach `:8091` can register a server, list
@@ -156,7 +156,7 @@ default in `ConnectionManager`/`LobbyRegistrar`) to your real lobby address befo
   the fixed `/health` path, with a short timeout, and refuses link-local targets — so it can't be
   steered at arbitrary internal hosts. The residual surface (a caller making the lobby connect to
   its own address) is acceptable for an open lobby.
-- **Resource use.** `server-share` is negligible (stateless JSON; a few KB per join). Game traffic
+- **Resource use.** `public-lobby` is negligible (stateless JSON; a few KB per join). Game traffic
   is direct (public servers) or peer-to-peer over STUN (NAT'd servers) — none of it is the lobby's.
 
 ---

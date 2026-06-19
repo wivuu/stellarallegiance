@@ -8,7 +8,7 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 ```
 client/        Godot 4.6.3 (C#/.NET 8) — rendering, input, client-side prediction
 server/        .NET 8 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-server-share/  .NET 8 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+public-lobby/  .NET 8 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
 tests/         FlightModelTest (determinism/golden), CryptoTest
@@ -117,7 +117,7 @@ A player can reach a server two ways:
 
 - **Direct** — type `ip:port` on the connect screen (or `--host`). A plain WebSocket join; works
   on a LAN or against a public/port-forwarded server.
-- **Public lobby** — the `server-share/` service is a small registry + WebRTC signaling relay.
+- **Public lobby** — the `public-lobby/` service is a small registry + WebRTC signaling relay.
   A game server that sets `SIM_PUBLIC_NAME` registers itself there and clients browse the list.
   Discovery is **direct-first**: on register, the lobby **probes the server's port** and, if it's
   reachable, advertises a direct `host:port` so clients connect **straight to it over WebSocket**
@@ -136,17 +136,17 @@ port and your server is listed as directly joinable; don't, and it's listed as W
 | `PUBLIC_LOBBY` | server + client | Lobby `host:port` (default `192.168.1.101:8091`). Client also takes `--lobby`. |
 | `SIM_PUBLIC_PORT` | server | Public-facing port the lobby probes/advertises (default = listen port). |
 | `SIM_PUBLIC_ENDPOINT` | server | Optional `host:port` the server asserts as its reachable address (for container NAT / proxy); advertised only if it answers `/health`. |
-| `SHARE_PORT` | server-share | Listen port (default 8091). |
-| `STUN_URL` | server-share | Public STUN URL(s) for the WebRTC fallback, comma-separated for redundancy (default Cloudflare's). |
+| `SHARE_PORT` | public-lobby | Listen port (default 8091). |
+| `STUN_URL` | public-lobby | Public STUN URL(s) for the WebRTC fallback, comma-separated for redundancy (default Cloudflare's). |
 
 To **host the lobby yourself** — the single required port, the reachability probe, and production
-hardening — see [**server-share/README.md**](server-share/README.md).
+hardening — see [**public-lobby/README.md**](public-lobby/README.md).
 
 ## Running with Docker
 
 ```bash
 cp .env.example .env        # optionally set SIM_SECRET / SIM_AUTOSTART / SIM_PUBLIC_NAME
-docker compose up --build   # sim-server (ws://localhost:8090/game) + server-share (:8091)
+docker compose up --build   # sim-server (ws://localhost:8090/game) + public-lobby (:8091)
 ```
 
 ## Deployment

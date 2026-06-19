@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace ServerShare;
+namespace PublicLobby;
 
 // Decides whether a registering game server is DIRECTLY joinable (has a reachable public WebSocket
 // port) or must fall back to WebRTC + STUN. The lobby is a public vantage point, so a probe from

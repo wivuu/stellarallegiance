@@ -83,7 +83,7 @@ public partial class GameNetClient : Node
     }
 
     // Public-lobby join: reach a (possibly NAT'd) server via a WebRTC DataChannel, with the SDP
-    // handshake relayed through ServerShare (shareBase = http://host:port, sessionId from the
+    // handshake relayed through the public lobby (shareBase = http://host:port, sessionId from the
     // browser list). Carries the exact same protocol as the WebSocket path.
     public void ConnectWebRtc(string shareBase, string sessionId)
     {
@@ -215,7 +215,7 @@ public partial class GameNetClient : Node
         }
     }
 
-    // WebRTC offerer: build a peer connection + DataChannel, exchange SDP through ServerShare
+    // WebRTC offerer: build a peer connection + DataChannel, exchange SDP through the public lobby
     // (non-trickle ICE so one offer/answer round trip suffices), then pump _tx -> DataChannel.
     // Inbound frames arrive via onmessage into _rx and are applied in _Process like the WS path.
     private async Task RunWebRtc(string shareBase, string sessionId, CancellationToken ct)
@@ -319,7 +319,7 @@ public partial class GameNetClient : Node
     }
 
     // Shared HTTP client for the WebRTC signaling exchange. Web JSON defaults are case-insensitive,
-    // so these PascalCase records bind ServerShare's camelCase responses.
+    // so these PascalCase records bind the public lobby's camelCase responses.
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private sealed record ServerEntryDto(string SessionId, string Name, IceServerDto[]? IceServers);
     private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);

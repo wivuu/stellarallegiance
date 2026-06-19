@@ -5816,573 +5816,6 @@
       "norm_label": "models"
     },
     {
-      "label": "Contracts.cs",
-      "file_type": "code",
-      "source_file": "public-lobby/Contracts.cs",
-      "source_location": "L1",
-      "id": "public_lobby_contracts",
-      "community": 75,
-      "norm_label": "contracts.cs"
-    },
-    {
-      "label": "PublicLobby.cs",
-      "file_type": "code",
-      "source_file": "public-lobby/PublicLobby.cs",
-      "source_location": "L1",
-      "id": "public_lobby_publiclobby_cs_public_lobby_publiclobby",
-      "community": 76,
-      "norm_label": "publiclobby.cs"
-    },
-    {
-      "label": "PublicLobby.csproj",
-      "file_type": "code",
-      "source_file": "public-lobby/PublicLobby.csproj",
-      "source_location": null,
-      "id": "public_lobby_publiclobby_csproj_public_lobby_publiclobby",
-      "community": 74,
-      "norm_label": "publiclobby.csproj"
-    },
-    {
-      "label": "net8.0",
-      "file_type": "concept",
-      "source_file": "public-lobby/PublicLobby.csproj",
-      "source_location": null,
-      "id": "public_lobby_publiclobby_csproj_framework_net8_0",
-      "community": 74,
-      "norm_label": "net8.0"
-    },
-    {
-      "label": "Microsoft.NET.Sdk.Web",
-      "file_type": "concept",
-      "source_file": "public-lobby/PublicLobby.csproj",
-      "source_location": null,
-      "id": "public_lobby_publiclobby_csproj_sdk_microsoft_net_sdk_web",
-      "community": 74,
-      "norm_label": "microsoft.net.sdk.web"
-    },
-    {
-      "label": "ReachabilityProbe.cs",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L1",
-      "id": "public_lobby_reachabilityprobe",
-      "community": 79,
-      "norm_label": "reachabilityprobe.cs"
-    },
-    {
-      "label": "ReachabilityProbe",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L17",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "community": 79,
-      "norm_label": "reachabilityprobe"
-    },
-    {
-      "label": "string",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L19",
-      "id": "public_lobby_reachabilityprobe_cs_string",
-      "community": 79,
-      "norm_label": "string"
-    },
-    {
-      "label": "TimeSpan",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L20",
-      "id": "public_lobby_reachabilityprobe_cs_timespan",
-      "community": 79,
-      "norm_label": "timespan"
-    },
-    {
-      "label": "HttpClient",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L22",
-      "id": "public_lobby_reachabilityprobe_cs_httpclient",
-      "community": 79,
-      "norm_label": "httpclient"
-    },
-    {
-      "label": ".ResolveAsync()",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "community": 79,
-      "norm_label": ".resolveasync()"
-    },
-    {
-      "label": "CancellationToken",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "id": "public_lobby_reachabilityprobe_cs_cancellationtoken",
-      "community": 79,
-      "norm_label": "cancellationtoken"
-    },
-    {
-      "label": "Task",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "id": "public_lobby_reachabilityprobe_cs_task",
-      "community": 79,
-      "norm_label": "task"
-    },
-    {
-      "label": ".IsReachableAsync()",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L57",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "community": 79,
-      "norm_label": ".isreachableasync()"
-    },
-    {
-      "label": ".NormalizeIp()",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L70",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
-      "community": 79,
-      "norm_label": ".normalizeip()"
-    },
-    {
-      "label": ".IsLinkLocal()",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L78",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
-      "community": 79,
-      "norm_label": ".islinklocal()"
-    },
-    {
-      "label": ".ParseHostPort()",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "community": 79,
-      "norm_label": ".parsehostport()"
-    },
-    {
-      "label": "Host",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "id": "host",
-      "community": 79,
-      "norm_label": "host"
-    },
-    {
-      "label": "Port",
-      "file_type": "code",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "id": "port",
-      "community": 79,
-      "norm_label": "port"
-    },
-    {
-      "label": "ServerRegistry.cs",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L1",
-      "id": "public_lobby_serverregistry",
-      "community": 32,
-      "norm_label": "serverregistry.cs"
-    },
-    {
-      "label": "IServerRegistry",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L8",
-      "id": "public_lobby_serverregistry_iserverregistry",
-      "community": 32,
-      "norm_label": "iserverregistry"
-    },
-    {
-      "label": ".Register()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "id": "public_lobby_serverregistry_iserverregistry_register",
-      "community": 32,
-      "norm_label": ".register()"
-    },
-    {
-      "label": "RegisterRequest",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "id": "registerrequest",
-      "community": 32,
-      "norm_label": "registerrequest"
-    },
-    {
-      "label": "ServerEntry",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "id": "serverentry",
-      "community": 32,
-      "norm_label": "serverentry"
-    },
-    {
-      "label": ".Heartbeat()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L14",
-      "id": "public_lobby_serverregistry_iserverregistry_heartbeat",
-      "community": 32,
-      "norm_label": ".heartbeat()"
-    },
-    {
-      "label": ".Get()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L15",
-      "id": "public_lobby_serverregistry_iserverregistry_get",
-      "community": 32,
-      "norm_label": ".get()"
-    },
-    {
-      "label": ".ListActive()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
-      "id": "public_lobby_serverregistry_iserverregistry_listactive",
-      "community": 32,
-      "norm_label": ".listactive()"
-    },
-    {
-      "label": "IReadOnlyCollection",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
-      "id": "ireadonlycollection",
-      "community": 32,
-      "norm_label": "ireadonlycollection"
-    },
-    {
-      "label": ".Remove()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L17",
-      "id": "public_lobby_serverregistry_iserverregistry_remove",
-      "community": 32,
-      "norm_label": ".remove()"
-    },
-    {
-      "label": ".Exists()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L20",
-      "id": "public_lobby_serverregistry_iserverregistry_exists",
-      "community": 32,
-      "norm_label": ".exists()"
-    },
-    {
-      "label": "InMemoryServerRegistry",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L23",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry",
-      "community": 32,
-      "norm_label": "inmemoryserverregistry"
-    },
-    {
-      "label": "int",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L25",
-      "id": "public_lobby_serverregistry_cs_int",
-      "community": 32,
-      "norm_label": "int"
-    },
-    {
-      "label": "TimeSpan",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L29",
-      "id": "public_lobby_serverregistry_cs_timespan",
-      "community": 32,
-      "norm_label": "timespan"
-    },
-    {
-      "label": "ConcurrentDictionary",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L31",
-      "id": "public_lobby_serverregistry_cs_concurrentdictionary",
-      "community": 32,
-      "norm_label": "concurrentdictionary"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L32",
-      "id": "public_lobby_serverregistry_cs_ireadonlylist",
-      "community": 32,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": ".NormalizeName()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L38",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
-      "community": 32,
-      "norm_label": ".normalizename()"
-    },
-    {
-      "label": ".Register()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L44",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "community": 32,
-      "norm_label": ".register()"
-    },
-    {
-      "label": ".Heartbeat()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L64",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
-      "community": 32,
-      "norm_label": ".heartbeat()"
-    },
-    {
-      "label": ".Get()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L73",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "community": 32,
-      "norm_label": ".get()"
-    },
-    {
-      "label": ".ListActive()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L79",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "community": 32,
-      "norm_label": ".listactive()"
-    },
-    {
-      "label": ".Remove()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L85",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_remove",
-      "community": 32,
-      "norm_label": ".remove()"
-    },
-    {
-      "label": ".Exists()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L87",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_exists",
-      "community": 32,
-      "norm_label": ".exists()"
-    },
-    {
-      "label": ".Prune()",
-      "file_type": "code",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L93",
-      "id": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "community": 32,
-      "norm_label": ".prune()"
-    },
-    {
-      "label": "Signaling.cs",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L1",
-      "id": "public_lobby_signaling",
-      "community": 63,
-      "norm_label": "signaling.cs"
-    },
-    {
-      "label": "SignalingRelay",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L15",
-      "id": "public_lobby_signaling_signalingrelay",
-      "community": 63,
-      "norm_label": "signalingrelay"
-    },
-    {
-      "label": "TimeSpan",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L17",
-      "id": "public_lobby_signaling_cs_timespan",
-      "community": 63,
-      "norm_label": "timespan"
-    },
-    {
-      "label": "Pending",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L21",
-      "id": "public_lobby_signaling_pending",
-      "community": 63,
-      "norm_label": "pending"
-    },
-    {
-      "label": "string",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L23",
-      "id": "public_lobby_signaling_cs_string",
-      "community": 63,
-      "norm_label": "string"
-    },
-    {
-      "label": "DateTimeOffset",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L27",
-      "id": "datetimeoffset",
-      "community": 63,
-      "norm_label": "datetimeoffset"
-    },
-    {
-      "label": "SemaphoreSlim",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L29",
-      "id": "semaphoreslim",
-      "community": 63,
-      "norm_label": "semaphoreslim"
-    },
-    {
-      "label": "ConcurrentDictionary",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L33",
-      "id": "public_lobby_signaling_cs_concurrentdictionary",
-      "community": 63,
-      "norm_label": "concurrentdictionary"
-    },
-    {
-      "label": ".WakeFor()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L39",
-      "id": "public_lobby_signaling_signalingrelay_wakefor",
-      "community": 63,
-      "norm_label": ".wakefor()"
-    },
-    {
-      "label": ".EnqueueOffer()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L43",
-      "id": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "community": 63,
-      "norm_label": ".enqueueoffer()"
-    },
-    {
-      "label": ".TakePendingAsync()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "id": "public_lobby_signaling_signalingrelay_takependingasync",
-      "community": 63,
-      "norm_label": ".takependingasync()"
-    },
-    {
-      "label": "CancellationToken",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "id": "public_lobby_signaling_cs_cancellationtoken",
-      "community": 63,
-      "norm_label": "cancellationtoken"
-    },
-    {
-      "label": "Task",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "id": "public_lobby_signaling_cs_task",
-      "community": 63,
-      "norm_label": "task"
-    },
-    {
-      "label": "IReadOnlyList",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "id": "public_lobby_signaling_cs_ireadonlylist",
-      "community": 63,
-      "norm_label": "ireadonlylist"
-    },
-    {
-      "label": "PendingOffer",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "id": "pendingoffer",
-      "community": 63,
-      "norm_label": "pendingoffer"
-    },
-    {
-      "label": ".Drain()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L66",
-      "id": "public_lobby_signaling_signalingrelay_drain",
-      "community": 63,
-      "norm_label": ".drain()"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L66",
-      "id": "public_lobby_signaling_cs_list",
-      "community": 63,
-      "norm_label": "list"
-    },
-    {
-      "label": ".PostAnswer()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L77",
-      "id": "public_lobby_signaling_signalingrelay_postanswer",
-      "community": 63,
-      "norm_label": ".postanswer()"
-    },
-    {
-      "label": ".WaitAnswerAsync()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L87",
-      "id": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "community": 63,
-      "norm_label": ".waitanswerasync()"
-    },
-    {
-      "label": ".Prune()",
-      "file_type": "code",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L98",
-      "id": "public_lobby_signaling_signalingrelay_prune",
-      "community": 63,
-      "norm_label": ".prune()"
-    },
-    {
       "label": "export-clients.sh",
       "file_type": "code",
       "source_file": "scripts/export-clients.sh",
@@ -6524,6 +5957,573 @@
       "id": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry",
       "community": 36,
       "norm_label": "run-server.sh script"
+    },
+    {
+      "label": "Contracts.cs",
+      "file_type": "code",
+      "source_file": "server-share/Contracts.cs",
+      "source_location": "L1",
+      "id": "server_share_contracts",
+      "community": 75,
+      "norm_label": "contracts.cs"
+    },
+    {
+      "label": "ReachabilityProbe.cs",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L1",
+      "id": "server_share_reachabilityprobe",
+      "community": 79,
+      "norm_label": "reachabilityprobe.cs"
+    },
+    {
+      "label": "ReachabilityProbe",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L17",
+      "id": "server_share_reachabilityprobe_reachabilityprobe",
+      "community": 79,
+      "norm_label": "reachabilityprobe"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L19",
+      "id": "server_share_reachabilityprobe_cs_string",
+      "community": 79,
+      "norm_label": "string"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L20",
+      "id": "server_share_reachabilityprobe_cs_timespan",
+      "community": 79,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "HttpClient",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L22",
+      "id": "server_share_reachabilityprobe_cs_httpclient",
+      "community": 79,
+      "norm_label": "httpclient"
+    },
+    {
+      "label": ".ResolveAsync()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L26",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "community": 79,
+      "norm_label": ".resolveasync()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L26",
+      "id": "server_share_reachabilityprobe_cs_cancellationtoken",
+      "community": 79,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L26",
+      "id": "server_share_reachabilityprobe_cs_task",
+      "community": 79,
+      "norm_label": "task"
+    },
+    {
+      "label": ".IsReachableAsync()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L57",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
+      "community": 79,
+      "norm_label": ".isreachableasync()"
+    },
+    {
+      "label": ".NormalizeIp()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L70",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_normalizeip",
+      "community": 79,
+      "norm_label": ".normalizeip()"
+    },
+    {
+      "label": ".IsLinkLocal()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L78",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_islinklocal",
+      "community": 79,
+      "norm_label": ".islinklocal()"
+    },
+    {
+      "label": ".ParseHostPort()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L83",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
+      "community": 79,
+      "norm_label": ".parsehostport()"
+    },
+    {
+      "label": "Host",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L83",
+      "id": "host",
+      "community": 79,
+      "norm_label": "host"
+    },
+    {
+      "label": "Port",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L83",
+      "id": "port",
+      "community": 79,
+      "norm_label": "port"
+    },
+    {
+      "label": "ServerRegistry.cs",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L1",
+      "id": "server_share_serverregistry",
+      "community": 32,
+      "norm_label": "serverregistry.cs"
+    },
+    {
+      "label": "IServerRegistry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L8",
+      "id": "server_share_serverregistry_iserverregistry",
+      "community": 32,
+      "norm_label": "iserverregistry"
+    },
+    {
+      "label": ".Register()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "id": "server_share_serverregistry_iserverregistry_register",
+      "community": 32,
+      "norm_label": ".register()"
+    },
+    {
+      "label": "RegisterRequest",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "id": "registerrequest",
+      "community": 32,
+      "norm_label": "registerrequest"
+    },
+    {
+      "label": "ServerEntry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "id": "serverentry",
+      "community": 32,
+      "norm_label": "serverentry"
+    },
+    {
+      "label": ".Heartbeat()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "id": "server_share_serverregistry_iserverregistry_heartbeat",
+      "community": 32,
+      "norm_label": ".heartbeat()"
+    },
+    {
+      "label": ".Get()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L15",
+      "id": "server_share_serverregistry_iserverregistry_get",
+      "community": 32,
+      "norm_label": ".get()"
+    },
+    {
+      "label": ".ListActive()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L16",
+      "id": "server_share_serverregistry_iserverregistry_listactive",
+      "community": 32,
+      "norm_label": ".listactive()"
+    },
+    {
+      "label": "IReadOnlyCollection",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L16",
+      "id": "ireadonlycollection",
+      "community": 32,
+      "norm_label": "ireadonlycollection"
+    },
+    {
+      "label": ".Remove()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L17",
+      "id": "server_share_serverregistry_iserverregistry_remove",
+      "community": 32,
+      "norm_label": ".remove()"
+    },
+    {
+      "label": ".Exists()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L20",
+      "id": "server_share_serverregistry_iserverregistry_exists",
+      "community": 32,
+      "norm_label": ".exists()"
+    },
+    {
+      "label": "InMemoryServerRegistry",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L23",
+      "id": "server_share_serverregistry_inmemoryserverregistry",
+      "community": 32,
+      "norm_label": "inmemoryserverregistry"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L25",
+      "id": "server_share_serverregistry_cs_int",
+      "community": 32,
+      "norm_label": "int"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L29",
+      "id": "server_share_serverregistry_cs_timespan",
+      "community": 32,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L31",
+      "id": "server_share_serverregistry_cs_concurrentdictionary",
+      "community": 32,
+      "norm_label": "concurrentdictionary"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L32",
+      "id": "server_share_serverregistry_cs_ireadonlylist",
+      "community": 32,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": ".NormalizeName()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L38",
+      "id": "server_share_serverregistry_inmemoryserverregistry_normalizename",
+      "community": 32,
+      "norm_label": ".normalizename()"
+    },
+    {
+      "label": ".Register()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L44",
+      "id": "server_share_serverregistry_inmemoryserverregistry_register",
+      "community": 32,
+      "norm_label": ".register()"
+    },
+    {
+      "label": ".Heartbeat()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L64",
+      "id": "server_share_serverregistry_inmemoryserverregistry_heartbeat",
+      "community": 32,
+      "norm_label": ".heartbeat()"
+    },
+    {
+      "label": ".Get()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L73",
+      "id": "server_share_serverregistry_inmemoryserverregistry_get",
+      "community": 32,
+      "norm_label": ".get()"
+    },
+    {
+      "label": ".ListActive()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L79",
+      "id": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "community": 32,
+      "norm_label": ".listactive()"
+    },
+    {
+      "label": ".Remove()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L85",
+      "id": "server_share_serverregistry_inmemoryserverregistry_remove",
+      "community": 32,
+      "norm_label": ".remove()"
+    },
+    {
+      "label": ".Exists()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L87",
+      "id": "server_share_serverregistry_inmemoryserverregistry_exists",
+      "community": 32,
+      "norm_label": ".exists()"
+    },
+    {
+      "label": ".Prune()",
+      "file_type": "code",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L93",
+      "id": "server_share_serverregistry_inmemoryserverregistry_prune",
+      "community": 32,
+      "norm_label": ".prune()"
+    },
+    {
+      "label": "ServerShare.cs",
+      "file_type": "code",
+      "source_file": "server-share/ServerShare.cs",
+      "source_location": "L1",
+      "id": "server_share_servershare_cs_server_share_servershare",
+      "community": 76,
+      "norm_label": "servershare.cs"
+    },
+    {
+      "label": "ServerShare.csproj",
+      "file_type": "code",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_server_share_servershare",
+      "community": 74,
+      "norm_label": "servershare.csproj"
+    },
+    {
+      "label": "net8.0",
+      "file_type": "concept",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_framework_net8_0",
+      "community": 74,
+      "norm_label": "net8.0"
+    },
+    {
+      "label": "Microsoft.NET.Sdk.Web",
+      "file_type": "concept",
+      "source_file": "server-share/ServerShare.csproj",
+      "source_location": null,
+      "id": "server_share_servershare_csproj_sdk_microsoft_net_sdk_web",
+      "community": 74,
+      "norm_label": "microsoft.net.sdk.web"
+    },
+    {
+      "label": "Signaling.cs",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L1",
+      "id": "server_share_signaling",
+      "community": 63,
+      "norm_label": "signaling.cs"
+    },
+    {
+      "label": "SignalingRelay",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L15",
+      "id": "server_share_signaling_signalingrelay",
+      "community": 63,
+      "norm_label": "signalingrelay"
+    },
+    {
+      "label": "TimeSpan",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L17",
+      "id": "server_share_signaling_cs_timespan",
+      "community": 63,
+      "norm_label": "timespan"
+    },
+    {
+      "label": "Pending",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L21",
+      "id": "server_share_signaling_pending",
+      "community": 63,
+      "norm_label": "pending"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L23",
+      "id": "server_share_signaling_cs_string",
+      "community": 63,
+      "norm_label": "string"
+    },
+    {
+      "label": "DateTimeOffset",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "id": "datetimeoffset",
+      "community": 63,
+      "norm_label": "datetimeoffset"
+    },
+    {
+      "label": "SemaphoreSlim",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "id": "semaphoreslim",
+      "community": 63,
+      "norm_label": "semaphoreslim"
+    },
+    {
+      "label": "ConcurrentDictionary",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L33",
+      "id": "server_share_signaling_cs_concurrentdictionary",
+      "community": 63,
+      "norm_label": "concurrentdictionary"
+    },
+    {
+      "label": ".WakeFor()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "id": "server_share_signaling_signalingrelay_wakefor",
+      "community": 63,
+      "norm_label": ".wakefor()"
+    },
+    {
+      "label": ".EnqueueOffer()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L43",
+      "id": "server_share_signaling_signalingrelay_enqueueoffer",
+      "community": 63,
+      "norm_label": ".enqueueoffer()"
+    },
+    {
+      "label": ".TakePendingAsync()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_signalingrelay_takependingasync",
+      "community": 63,
+      "norm_label": ".takependingasync()"
+    },
+    {
+      "label": "CancellationToken",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_cancellationtoken",
+      "community": 63,
+      "norm_label": "cancellationtoken"
+    },
+    {
+      "label": "Task",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_task",
+      "community": 63,
+      "norm_label": "task"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "server_share_signaling_cs_ireadonlylist",
+      "community": 63,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": "PendingOffer",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "id": "pendingoffer",
+      "community": 63,
+      "norm_label": "pendingoffer"
+    },
+    {
+      "label": ".Drain()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "id": "server_share_signaling_signalingrelay_drain",
+      "community": 63,
+      "norm_label": ".drain()"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "id": "server_share_signaling_cs_list",
+      "community": 63,
+      "norm_label": "list"
+    },
+    {
+      "label": ".PostAnswer()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L77",
+      "id": "server_share_signaling_signalingrelay_postanswer",
+      "community": 63,
+      "norm_label": ".postanswer()"
+    },
+    {
+      "label": ".WaitAnswerAsync()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "id": "server_share_signaling_signalingrelay_waitanswerasync",
+      "community": 63,
+      "norm_label": ".waitanswerasync()"
+    },
+    {
+      "label": ".Prune()",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L98",
+      "id": "server_share_signaling_signalingrelay_prune",
+      "community": 63,
+      "norm_label": ".prune()"
     },
     {
       "label": "Backends.cs",
@@ -11035,6 +11035,33 @@
       "id": "tools_simbot_simbot_csproj_sdk_microsoft_net_sdk",
       "community": 48,
       "norm_label": "microsoft.net.sdk"
+    },
+    {
+      "label": ".ResolvesToAsync()",
+      "file_type": "code",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L64",
+      "community": 79,
+      "norm_label": ".resolvestoasync()",
+      "id": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
+    },
+    {
+      "label": "DateTimeOffset",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "community": 63,
+      "norm_label": "datetimeoffset",
+      "id": "server_share_signaling_cs_datetimeoffset"
+    },
+    {
+      "label": "SemaphoreSlim",
+      "file_type": "code",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "community": 63,
+      "norm_label": "semaphoreslim",
+      "id": "server_share_signaling_cs_semaphoreslim"
     },
     {
       "label": ".RunSocket()",
@@ -25576,905 +25603,6 @@
       "target": "pick_assets_manifest_models"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/PublicLobby.csproj",
-      "weight": 1.0,
-      "source": "public_lobby_publiclobby_csproj_public_lobby_publiclobby",
-      "target": "public_lobby_publiclobby_csproj_framework_net8_0",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/PublicLobby.csproj",
-      "weight": 1.0,
-      "source": "public_lobby_publiclobby_csproj_public_lobby_publiclobby",
-      "target": "public_lobby_publiclobby_csproj_sdk_microsoft_net_sdk_web",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L22",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_httpclient",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L20",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_timespan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L70",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_cs_task",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L51",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L54",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L43",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L41",
-      "weight": 1.0,
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "public_lobby_reachabilityprobe_cs_task",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "host",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "port",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L8",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L20",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_exists",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_get",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L14",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_heartbeat",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_listactive",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_register",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L17",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_remove",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_serverregistry_iserverregistry_register",
-      "target": "registerrequest",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_iserverregistry_register",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "registerrequest",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L73",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_iserverregistry_get",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "public_lobby_serverregistry_iserverregistry_listactive",
-      "target": "serverentry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_iserverregistry_listactive",
-      "target": "ireadonlycollection",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "ireadonlycollection",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L31",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_concurrentdictionary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_int",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L29",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_timespan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L87",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_exists",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L73",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L64",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L79",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L38",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L93",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L44",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L85",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_remove",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L46",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L89",
-      "weight": 1.0,
-      "source": "public_lobby_serverregistry_inmemoryserverregistry_exists",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L21",
-      "weight": 1.0,
-      "source": "public_lobby_signaling",
-      "target": "public_lobby_signaling_pending",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L15",
-      "weight": 1.0,
-      "source": "public_lobby_signaling",
-      "target": "public_lobby_signaling_signalingrelay",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_cs_concurrentdictionary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_cs_timespan",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_drain",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L43",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L77",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_postanswer",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L98",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_takependingasync",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L87",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L39",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L27",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_signaling_pending",
-      "target": "datetimeoffset",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_signaling_pending",
-      "target": "public_lobby_signaling_cs_string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L29",
-      "weight": 1.0,
-      "context": "field",
-      "source": "public_lobby_signaling_pending",
-      "target": "semaphoreslim",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L39",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_signaling_signalingrelay_wakefor",
-      "target": "semaphoreslim",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L49",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L61",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L45",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "pendingoffer",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_cancellationtoken",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_ireadonlylist",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_task",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L58",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_drain",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L57",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L87",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_cs_cancellationtoken",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L87",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_cs_task",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "public_lobby_signaling_signalingrelay_drain",
-      "target": "pendingoffer",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "public_lobby_signaling_signalingrelay_drain",
-      "target": "public_lobby_signaling_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "public-lobby/Signaling.cs",
-      "source_location": "L89",
-      "weight": 1.0,
-      "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "defines",
       "confidence": "EXTRACTED",
       "source_file": "scripts/export-clients.sh",
@@ -26543,6 +25671,992 @@
       "confidence_score": 1.0,
       "source": "scripts_run_server",
       "target": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_cs_httpclient"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L17",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_cs_string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_cs_timespan"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L86",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L50",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L78",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolveasync"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_cs_task"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_islinklocal"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_parsehostport"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L50",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "target": "server_share_reachabilityprobe_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L50",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_isreachableasync",
+      "target": "server_share_reachabilityprobe_cs_task"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "target": "server_share_reachabilityprobe_cs_task"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L73",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_resolvestoasync",
+      "target": "server_share_reachabilityprobe_reachabilityprobe_normalizeip"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
+      "target": "host"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ReachabilityProbe.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_reachabilityprobe_reachabilityprobe_parsehostport",
+      "target": "port"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry",
+      "target": "server_share_serverregistry_iserverregistry"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_iserverregistry"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_exists"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_get"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_heartbeat"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_listactive"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_register"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry",
+      "target": "server_share_serverregistry_iserverregistry_remove"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry_register",
+      "target": "registerrequest"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry_register",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "registerrequest"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_get",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry_get",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry_listactive",
+      "target": "serverentry"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_iserverregistry_listactive",
+      "target": "ireadonlycollection"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "ireadonlycollection"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_concurrentdictionary"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_int"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L30",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_cs_timespan"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_exists"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_get"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_heartbeat"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_listactive"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_normalizename"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_register"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L80",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry",
+      "target": "server_share_serverregistry_inmemoryserverregistry_remove"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_register",
+      "target": "server_share_serverregistry_inmemoryserverregistry_normalizename"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L70",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_get",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L76",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_listactive",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerRegistry.cs",
+      "source_location": "L84",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_serverregistry_inmemoryserverregistry_exists",
+      "target": "server_share_serverregistry_inmemoryserverregistry_prune"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerShare.csproj",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_servershare_csproj_server_share_servershare",
+      "target": "server_share_servershare_csproj_framework_net8_0"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/ServerShare.csproj",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_servershare_csproj_server_share_servershare",
+      "target": "server_share_servershare_csproj_sdk_microsoft_net_sdk_web"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling",
+      "target": "server_share_signaling_pending"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling",
+      "target": "server_share_signaling_signalingrelay"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_cs_concurrentdictionary"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_cs_timespan"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_drain"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_enqueueoffer"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L77",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_postanswer"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_prune"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_takependingasync"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_waitanswerasync"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay",
+      "target": "server_share_signaling_signalingrelay_wakefor"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_pending",
+      "target": "datetimeoffset"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_pending",
+      "target": "semaphoreslim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_pending",
+      "target": "server_share_signaling_cs_datetimeoffset"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_pending",
+      "target": "server_share_signaling_cs_semaphoreslim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_pending",
+      "target": "server_share_signaling_cs_string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_wakefor",
+      "target": "semaphoreslim"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L49",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_enqueueoffer",
+      "target": "server_share_signaling_signalingrelay_wakefor"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L61",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_wakefor"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_wakefor",
+      "target": "server_share_signaling_cs_semaphoreslim"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_enqueueoffer",
+      "target": "server_share_signaling_signalingrelay_prune"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "pendingoffer"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_cs_task"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L58",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_drain"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_takependingasync",
+      "target": "server_share_signaling_signalingrelay_prune"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_cs_cancellationtoken"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_cs_task"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_drain",
+      "target": "pendingoffer"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_drain",
+      "target": "server_share_signaling_cs_list"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server-share/Signaling.cs",
+      "source_location": "L89",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "server_share_signaling_signalingrelay_waitanswerasync",
+      "target": "server_share_signaling_signalingrelay_prune"
     },
     {
       "relation": "contains",
@@ -36980,5 +37094,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "6355eb13249928a4eb9507903aa039a919c840f0"
+  "built_at_commit": "c8a31560e56985cb2fe2ab79a320428201798ccd"
 }

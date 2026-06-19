@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace ServerShare;
+namespace PublicLobby;
 
 // In-memory registry of active game servers. A host POSTs to register (getting a SessionId),
 // heartbeats to stay listed, and is pruned once it goes quiet. Clients GET the active list to

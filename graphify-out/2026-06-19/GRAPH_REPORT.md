@@ -1,16 +1,16 @@
-# Graph Report - wivuullegiance  (2026-06-19)
+# Graph Report - wivuullegiance  (2026-06-17)
 
 ## Corpus Check
-- 76 files · ~102,901 words
+- 76 files · ~102,880 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1375 nodes · 2300 edges · 80 communities (67 shown, 13 thin omitted)
+- 1378 nodes · 2308 edges · 80 communities (67 shown, 13 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6355eb13`
+- Built from commit: `c8a31560`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -239,7 +239,7 @@ Nodes (13): bool, byte, float, ShipClass, string, uint, ulong, Aleph (+5 more)
 
 ### Community 32 - "SpaceTimeDB Module Config"
 Cohesion: 0.13
-Nodes (9): IReadOnlyCollection, ConcurrentDictionary, int, IReadOnlyList, TimeSpan, InMemoryServerRegistry, IServerRegistry, RegisterRequest (+1 more)
+Nodes (9): IReadOnlyCollection, RegisterRequest, ConcurrentDictionary, int, IReadOnlyList, TimeSpan, InMemoryServerRegistry, IServerRegistry (+1 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.09
@@ -314,8 +314,8 @@ Cohesion: 0.17
 Nodes (10): Color, ConnectionManager, HttpClient, Label, LineEdit, List, string, Task (+2 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.15
-Nodes (12): DateTimeOffset, PendingOffer, CancellationToken, ConcurrentDictionary, IReadOnlyList, List, string, Task (+4 more)
+Cohesion: 0.14
+Nodes (14): DateTimeOffset, PendingOffer, SemaphoreSlim, CancellationToken, ConcurrentDictionary, DateTimeOffset, IReadOnlyList, List (+6 more)
 
 ### Community 65 - "Community 65"
 Cohesion: 0.21
@@ -358,11 +358,11 @@ Cohesion: 0.40
 Nodes (3): DbConnection, DbConnection, Match
 
 ### Community 79 - "Community 79"
-Cohesion: 0.21
+Cohesion: 0.23
 Nodes (8): Host, Port, CancellationToken, HttpClient, string, Task, TimeSpan, ReachabilityProbe
 
 ## Knowledge Gaps
-- **400 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Marker3D`, `BaseBeacon` (+395 more)
+- **401 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Marker3D`, `BaseBeacon` (+396 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -370,13 +370,13 @@ Nodes (8): Host, Port, CancellationToken, HttpClient, string, Task, TimeSpan, Re
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 68`, `PigAI NPC Behavior`, `Community 38`, `Community 77`, `Community 78`, `Community 56`, `Community 58`?**
-  _High betweenness centrality (0.137) - this node is a cross-community bridge._
+  _High betweenness centrality (0.129) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `Community 66`, `Community 69`, `Client-Side Prediction`, `Community 37`, `Community 72`, `Engine Glow Effects`, `Community 43`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 55`, `Starscape Background`, `Community 58`?**
-  _High betweenness centrality (0.114) - this node is a cross-community bridge._
+  _High betweenness centrality (0.113) - this node is a cross-community bridge._
 - **Why does `Node` connect `Community 77` to `Ship Controller Input`, `Community 57`, `Community 59`, `Community 51`?**
-  _High betweenness centrality (0.107) - this node is a cross-community bridge._
+  _High betweenness centrality (0.100) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _420 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _421 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**

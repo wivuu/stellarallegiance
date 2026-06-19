@@ -131,7 +131,7 @@ var simThread = new Thread(() =>
 simThread.Start();
 
 // Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY
-// (ServerShare) and heartbeat. The lobby probes our port back to decide our mode — direct WebSocket
+// (public lobby) and heartbeat. The lobby probes our port back to decide our mode — direct WebSocket
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.

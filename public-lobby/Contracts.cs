@@ -1,4 +1,4 @@
-namespace ServerShare;
+namespace PublicLobby;
 
 // ---- Wire contracts (JSON) shared by the registry + signaling routes ----
 

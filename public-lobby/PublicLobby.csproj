@@ -5,7 +5,7 @@
        game server is reachable without port-forwarding — the actual game DataChannel is P2P
        (or TURN-relayed via the coturn sidecar), never through this process.
 
-       Was originally a .NET-10 file-based app (single ServerShare.cs with a #:sdk header); file
+       Was originally a .NET-10 file-based app (single PublicLobby.cs with a #:sdk header); file
        based apps can't span multiple .cs files, so it is a normal net8.0 csproj now — same
        toolchain/Docker pattern as server/ and shared/. -->
   <PropertyGroup>
@@ -13,6 +13,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <RootNamespace>ServerShare</RootNamespace>
+    <RootNamespace>PublicLobby</RootNamespace>
   </PropertyGroup>
 </Project>

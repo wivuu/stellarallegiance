@@ -22,8 +22,8 @@ For a throwaway local server with bots, run it directly: `scripts/run-server.sh 
 ## Public lobby & NAT traversal (optional)
 
 Players can always join a server **directly** by `ip:port` (a plain WebSocket; needs a LAN or a
-public/port-forwarded host). To make servers **discoverable**, also deploy **`server-share`** — a
-tiny registry + WebRTC signaling relay (`docker compose up server-share`). Servers that set
+public/port-forwarded host). To make servers **discoverable**, also deploy **`public-lobby`** — a
+tiny registry + WebRTC signaling relay (`docker compose up public-lobby`). Servers that set
 `SIM_PUBLIC_NAME` register there; clients browse the list.
 
 Discovery is **direct-first** and automatic:
@@ -36,9 +36,9 @@ Discovery is **direct-first** and automatic:
   STUN default or list fallbacks (comma-separated) — nothing to host.
 
 **There is no TURN relay** — the lobby never carries game traffic, so a symmetric-NAT client can't
-reach a NAT'd server (it can always join direct servers). Only `server-share`'s port (`8091`) needs
+reach a NAT'd server (it can always join direct servers). Only `public-lobby`'s port (`8091`) needs
 to be open; put TLS in front of it and set `PUBLIC_LOBBY=https://lobby.example.com`. Full hosting
-guide: **[server-share/README.md](../server-share/README.md)**.
+guide: **[public-lobby/README.md](../public-lobby/README.md)**.
 
 ## TLS
 

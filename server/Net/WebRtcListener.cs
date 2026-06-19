@@ -76,7 +76,7 @@ public sealed class WebRtcTransport : IClientTransport
     }
 }
 
-// The server's WebRTC side: it is the ANSWERER. Clients (offerers) post SDP offers to ServerShare
+// The server's WebRTC side: it is the ANSWERER. Clients (offerers) post SDP offers to the public lobby
 // keyed by our SessionId; this listener long-polls /pending, builds a peer connection per offer,
 // answers it (non-trickle ICE — gather candidates into the SDP before replying), and on
 // DataChannel open hands the transport to the SAME ClientHub.HandleConnection the WebSocket path
@@ -106,7 +106,7 @@ public sealed class WebRtcListener
         {
             try
             {
-                // Long-poll ServerShare for offers addressed to us (returns promptly when one
+                // Long-poll the public lobby for offers addressed to us (returns promptly when one
                 // lands, else after the relay's max-wait).
                 var pending = await _http.GetFromJsonAsync<List<PendingOfferDto>>(
                     $"{_shareBase}/servers/{_sessionId}/pending", ct);
@@ -204,6 +204,6 @@ public sealed class WebRtcListener
         finally { pc.onicegatheringstatechange -= Handler; }
     }
 
-    // ServerShare's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
+    // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
     private sealed record PendingOfferDto(string Ticket, string SdpOffer);
 }

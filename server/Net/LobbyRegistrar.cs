@@ -4,7 +4,7 @@ using SIPSorcery.Net;
 
 namespace SimServer.Net;
 
-// Publishes this game server to the public lobby (ServerShare) so clients can discover and join
+// Publishes this game server to the public lobby (public lobby) so clients can discover and join
 // it through WebRTC — the opt-in path for player-run servers behind a NAT. Opt-in BY NAME: it
 // only registers when SIM_PUBLIC_NAME (3-50 chars) is set; with no name the server stays private
 // (direct ws://host:8090 only) and this whole subsystem is dormant.
@@ -17,7 +17,7 @@ namespace SimServer.Net;
 // entry for a clean disappearance.
 //
 // Env:
-//   PUBLIC_LOBBY          ServerShare host:port (default 192.168.1.101:8091)
+//   PUBLIC_LOBBY          public-lobby host:port (default 192.168.1.101:8091)
 //   SIM_PUBLIC_NAME       3-50 char public name; gates registration
 //   SIM_PUBLIC_PORT       public-facing port to advertise/probe (default = the listen port; set
 //                         when a port-forward maps a different external port)
@@ -187,7 +187,7 @@ public sealed class LobbyRegistrar
         return list;
     }
 
-    // ServerShare's register-response JSON (camelCase; web JSON defaults are case-insensitive).
+    // the public lobby's register-response JSON (camelCase; web JSON defaults are case-insensitive).
     // PublicEndpoint is set by the lobby's reachability probe (direct mode) or null (WebRTC mode).
     private sealed record RegisterResponseDto(string SessionId, string? PublicEndpoint, IReadOnlyList<IceServerDto>? IceServers);
     private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);

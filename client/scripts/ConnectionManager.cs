@@ -16,7 +16,7 @@ public partial class ConnectionManager : Node
 	// The ws:// URL we're targeting, for the status overlay.
 	public string ServerUrl { get; private set; } = "";
 
-	// Public lobby (ServerShare) base URL — where the server browser fetches its list and where
+	// Public lobby (public lobby) base URL — where the server browser fetches its list and where
 	// WebRTC joins are signaled. Resolved from PUBLIC_LOBBY / --lobby in _Ready.
 	public string LobbyBase { get; private set; } = $"http://{DefaultLobby}";
 	private const string DefaultLobby = "192.168.1.101:8091";

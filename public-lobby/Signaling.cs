@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace ServerShare;
+namespace PublicLobby;
 
 // Relays the WebRTC SDP handshake between a joining client (the offerer) and a game server (the
 // answerer) that can't reach each other directly. Pure store-and-forward of opaque SDP strings —

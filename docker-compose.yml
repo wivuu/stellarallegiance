@@ -1,17 +1,17 @@
 # Local-dev / single-box deployment of the wivuullegiance backend:
 #   sim-server    the 20 Hz authoritative match + lobby host (clients connect & download content)
-#   server-share  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+#   public-lobby  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
 #
 # Discovery is DIRECT-FIRST: when a sim-server registers, the lobby probes its port and, if it's
 # reachable, advertises a direct host:port — clients then connect straight to it over WebSocket (no
 # traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back to
-# WebRTC + public STUN, with only the tiny SDP handshake relayed through server-share. There is no
+# WebRTC + public STUN, with only the tiny SDP handshake relayed through public-lobby. There is no
 # TURN relay — clients that can't hole-punch a NAT'd server can't join it (forward a port for the
 # widest reach).
 #
 # NOTE (single-box compose): the lobby probes the sim-server's container IP here, so the advertised
 # endpoint is only reachable on this host's docker network — fine for local/dev. For a real
-# deployment run server-share on its own public box; player servers then probe from their real IP.
+# deployment run public-lobby on its own public box; player servers then probe from their real IP.
 #
 # TLS: the sim server speaks plain ws:// on :8090; production terminates TLS at the ingress.
 #
@@ -32,7 +32,7 @@ services:
       # Public-lobby publishing (opt-in): set SIM_PUBLIC_NAME (3-50 chars) to register this server
       # with the lobby below so clients can discover + WebRTC-join it. Empty = private (direct only).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
-      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-server-share:8091}
+      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-public-lobby:8091}
       # Public-facing port the lobby probes/advertises (default = listen port; set when a
       # port-forward maps a different external port).
       SIM_PUBLIC_PORT: ${SIM_PUBLIC_PORT:-}
@@ -43,15 +43,15 @@ services:
     ports:
       - "${SIM_PORT:-8090}:8090"
     depends_on:
-      - server-share
+      - public-lobby
     restart: unless-stopped
 
   # Public lobby: game-server registry + WebRTC signaling relay (no game traffic flows through it).
   # On register it probes each server's port to decide direct-vs-WebRTC; it hands out the STUN
   # config below for the WebRTC fallback.
-  server-share:
+  public-lobby:
     build:
-      context: ./server-share        # self-contained (no ProjectReference)
+      context: ./public-lobby        # self-contained (no ProjectReference)
     environment:
       SHARE_PORT: 8091
       # Public STUN handed to clients/servers for the WebRTC fallback (covers ~80% of NATs via

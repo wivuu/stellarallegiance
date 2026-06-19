@@ -8,7 +8,7 @@ using Godot;
 using HttpClient = System.Net.Http.HttpClient;
 
 // The first screen a player sees when the client is launched WITHOUT --host. Two ways to join:
-//   1. Pick from the PUBLIC LOBBY list (ServerShare at ConnectionManager.LobbyBase) — these join
+//   1. Pick from the PUBLIC LOBBY list (the public lobby at ConnectionManager.LobbyBase) — these join
 //      over WebRTC (works for NAT'd player-run servers), keyed by the server's SessionId.
 //   2. Type an ip-or-hostname:port for a DIRECT WebSocket join (LAN / dev / port-forwarded).
 // Either hands off to ConnectionManager, which opens the single native connection.
@@ -19,7 +19,7 @@ public partial class ServerInputOverlay : Control
     private static readonly Color Faint = new(0.6f, 0.66f, 0.78f);
 
     // Shared by the (background) list fetch; web JSON defaults are case-insensitive so this binds
-    // ServerShare's camelCase entries.
+    // the public lobby's camelCase entries.
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     private sealed record ServerDto(string SessionId, string Name, string? PublicEndpoint);
 
