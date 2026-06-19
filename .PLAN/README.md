@@ -56,16 +56,12 @@ Make the existing two-team dogfighting richer on the systems already shipped
 - **Escape pods** — Eject on ship death; pod must either die or be rescued by a teammate in order for player to respawn.
 - **Improved in-game UI** — Health/shield bars, ship status indicators,
   team scores; minimap already exists. (Per-player scores/ranks land in Phase 3.). Healthbars should be hud elements, not world-space objects -- currently base health bar casts a shadow on base for example
+- **Fog of war** - Implement a fog of war system where asteroids and enemy bases are hidden until scouted by a player from your team.
 
 ### Phase 3 — Hosting at scale
 
 Stand up many independent game servers and let players find and join them.
 
-- **Custom host game-server Docker image** — Self-contained SpacetimeDB game
-  server; clients target it via a launch arg.
-- **Multi-server / central aggregator** — Run multiple *independent*
-  SpacetimeDB instances (up to ~200 players each); a central aggregator
-  (likely a web server) lists available servers / acts as a browser.
 - **Tune prediction lead for WAN** — `STDB_LEAD` exists; playtest and commit a
   good default, ideally adaptive on measured RTT.
 - **Scores, kills/deaths & ranks** — Per-player in-match and post-match stats,
