@@ -71,9 +71,13 @@ public sealed class World
         Sectors.Add(new Sector(HomeSector, coreR));
         Sectors.Add(new Sector(VergeSector, vergeR));
 
-        // Two bases at opposite ends of the Core sector (module SeedBases positions).
-        Bases.Add(new BaseSite(1, 0, HomeSector, new Vec3(-800f, 0f, 0f)));
-        Bases.Add(new BaseSite(2, 1, HomeSector, new Vec3(800f, 0f, 0f)));
+        // Team 0 base in HomeSector, Team 1 base in VergeSector — semi-random positions
+        // derived from a dedicated RNG so the asteroid/aleph sequence is unaffected.
+        var baseRng = new DetRng(seed ^ 0xB453_BA53_B453_BA53UL);
+        Vec3 homeBasePos  = RandomBasePos(ref baseRng, 600f, 1200f);
+        Vec3 vergeBasePos = RandomBasePos(ref baseRng, 200f,  500f);
+        Bases.Add(new BaseSite(1, 0, HomeSector,  homeBasePos));
+        Bases.Add(new BaseSite(2, 1, VergeSector, vergeBasePos));
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
 
@@ -177,6 +181,14 @@ public sealed class World
         float r = (float)(sectorRadius * frac);
         float y = (float)((rng.NextDouble() - 0.5) * sectorRadius * 0.2);
         return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
+    }
+
+    private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR)
+    {
+        double ang = rng.NextDouble() * Math.PI * 2.0;
+        double r   = minR + rng.NextDouble() * (maxR - minR);
+        float  y   = (float)((rng.NextDouble() - 0.5) * 80.0);
+        return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 }
 

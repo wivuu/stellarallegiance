@@ -603,13 +603,16 @@ public sealed partial class Simulation
         ulong targetShip = 0;
         int targetBase = -1;
 
-        for (int i = 0; i < World.Bases.Count; i++)
+        if (ship.Class == FlightModel.ClassBomber)
         {
-            var b = World.Bases[i];
-            if (b.SectorId != ship.SectorId || b.Team == ship.Team) continue;
-            if (FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out float t) && t < bestT)
+            for (int i = 0; i < World.Bases.Count; i++)
             {
-                bestT = t; targetBase = i; targetShip = 0;
+                var b = World.Bases[i];
+                if (b.SectorId != ship.SectorId || b.Team == ship.Team) continue;
+                if (FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out float t) && t < bestT)
+                {
+                    bestT = t; targetBase = i; targetShip = 0;
+                }
             }
         }
 
