@@ -74,6 +74,16 @@ public partial class ConnectionManager : Node
 	// change the server they're pointing at.
 	public void Connect() => ShowInput();
 
+	// Leave button (Lobby): voluntarily drop the current server and return to the address screen
+	// so the player can pick a different one.
+	public void Leave()
+	{
+		GD.Print("[ConnectionManager] leaving server");
+		_net.Disconnect();
+		ServerUrl = "";
+		ShowInput();
+	}
+
 	// ---- Called by GameNetClient as the socket state changes -------------
 
 	public void NotifyConnected()
@@ -90,6 +100,10 @@ public partial class ConnectionManager : Node
 
 	public void NotifyDisconnected()
 	{
+		// An intentional Leave() already returned us to the address screen and tore the socket
+		// down; the resulting (deferred) socket-closed callback must NOT flip us to a "Server
+		// offline"/"Connection lost" error overlay. Only a drop we didn't ask for counts.
+		if (State == ConnState.AwaitingAddress) return;
 		State = State == ConnState.Connected ? ConnState.Disconnected : ConnState.Failed;
 	}
 

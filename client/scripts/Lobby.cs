@@ -29,6 +29,7 @@ public partial class Lobby : Control
     private Button _joinBlue = null!;
     private Button _joinRed = null!;
     private Button _ready = null!;
+    private Button _leave = null!;
 
     public void Init(ConnectionManager cm, WorldRenderer world)
     {
@@ -91,6 +92,14 @@ public partial class Lobby : Control
         _teamRow.AddChild(_joinBlue);
         _teamRow.AddChild(_joinRed);
         _teamRow.AddChild(_ready);
+
+        col.AddChild(new HSeparator());
+
+        // Always-available exit back to the server-address screen.
+        var leaveRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        col.AddChild(leaveRow);
+        _leave = MakeButton("Leave Server", () => _cm.Leave());
+        leaveRow.AddChild(_leave);
     }
 
     private LobbyPlayer? Me()

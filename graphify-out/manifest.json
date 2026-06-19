@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781875552.6819532,
-    "ast_hash": "c087e59c9e94593ad952d83492211c8c",
+    "mtime": 1781892915.7809181,
+    "ast_hash": "e4ec813b9891195a7daa0e47572667cd",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionOverlay.cs": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
-    "mtime": 1781877293.2882888,
-    "ast_hash": "4784ac004aafb92274973d297b7ca41c",
+    "mtime": 1781892493.8819733,
+    "ast_hash": "f6719597ad1decb34d09fdd660cb4489",
     "semantic_hash": ""
   },
   "client/scripts/Minimap.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781877293.2886724,
-    "ast_hash": "31fe855c5394e97e2d86c78e0bb0ad33",
+    "mtime": 1781892652.6968539,
+    "ast_hash": "dc59252414d6c86790ff7dda818b2286",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1781875552.6822278,
-    "ast_hash": "3ba0bf06dbd2ac11f6da53a988618be3",
+    "mtime": 1781892662.3682926,
+    "ast_hash": "dba9fb09b65237ce3c6679983dfd5b50",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {
@@ -300,8 +300,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ServerInputOverlay.cs": {
-    "mtime": 1781891650.5824687,
-    "ast_hash": "8c12d4145e1f6d70bce5727ab42278ef",
+    "mtime": 1781892225.0541553,
+    "ast_hash": "e56b6c55d909c8a3d96fe8c4fa64e151",
     "semantic_hash": ""
   },
   "scripts/run-client.sh": {

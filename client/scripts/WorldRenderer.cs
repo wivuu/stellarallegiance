@@ -316,6 +316,43 @@ public partial class WorldRenderer : Node3D
 	public void NetUpdateShip(Ship oldRow, Ship newRow) => UpdateShip(oldRow, newRow);
 	public void NetDeleteShip(Ship row) => DeleteShip(row);
 
+	// Tear the whole rendered world down to a blank slate — used when the player leaves a server
+	// (ConnectionManager.Leave) so nothing from the old session lingers behind the address screen,
+	// and so a fresh Welcome rebuilds cleanly rather than double-adding. Frees every world node
+	// (the local ship lives under _ships, so it goes too) and clears every cache, then resets the
+	// match/sector/team bookkeeping to its pre-connection defaults.
+	public void Reset()
+	{
+		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
+			foreach (var child in group.GetChildren())
+				child.QueueFree();
+
+		_baseNodes.Clear();
+		_baseList.Clear();
+		_baseHealthFrac.Clear();
+		_asteroidNodes.Clear();
+		_asteroidSpins.Clear();
+		_shipNodes.Clear();
+		_alephNodes.Clear();
+		_asteroidClip.Clear();
+		_baseClip.Clear();
+		_alephLinks.Clear();
+		_baseTeams.Clear();
+		_bolts.Clear();
+		_sectors.Clear();
+
+		LocalShip = null;
+		_localSector = HomeSector;
+		_viewOverride = null;
+		_localTeam = null;
+		ServerTick = 0;
+		Phase = MatchPhase.Lobby;
+		Winner = null;
+		_deathCamUntil = -1.0;
+		_pendingHomeReset = false;
+		_starscape?.SetSector(HomeSector);
+	}
+
 	// Static world from the Welcome frame, feeding the same bodies the STDB path uses.
 	public void NetAddSector(Sector row) { _sectors[row.SectorId] = row; }
 	public void NetAddBase(Base row) => InsertBase(row);
