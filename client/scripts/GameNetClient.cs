@@ -103,6 +103,21 @@ public partial class GameNetClient : Node
         return _socketCts.Token;
     }
 
+    // Voluntarily leave the current server: cancel the live socket/peer connection and drop all
+    // per-connection state so the UI falls back to the address screen. The background I/O task
+    // observes the cancelled token and tears its WebSocket / RTCPeerConnection down on its own.
+    public void Disconnect()
+    {
+        _socketCts?.Cancel();
+        Active = false;
+        LocalShipId = 0;
+        LocalClientId = 0;
+        _rows.Clear();
+        LobbyPlayers = Array.Empty<LobbyPlayer>();
+        LobbyChanged?.Invoke();
+        _world.Reset();
+    }
+
     public override void _ExitTree()
     {
         _cts.Cancel();

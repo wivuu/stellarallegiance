@@ -145,6 +145,16 @@ public sealed class ClientHub
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
 
+    // Lobby-advertised liveness fields (reported in the heartbeat to the public lobby): how many
+    // players are connected and whether we're waiting in the lobby, mid-match, or wrapping up.
+    public int PlayerCount => _clients.Count;
+    public string GameState => _sim.Phase switch
+    {
+        Simulation.PhaseActive => "in-progress",
+        Simulation.PhaseEnded  => "ended",
+        _                      => "lobby",
+    };
+
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
     public double TakeAvgRecordsPerSnapshot()

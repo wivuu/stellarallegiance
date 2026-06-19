@@ -52,36 +52,30 @@ project reference; `public-lobby/Dockerfile` matches for uniformity). `railway u
 root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
 point at its Dockerfile — no Root Directory setting needed.
 
-**1. Public-lobby project**
+Two one-liner scripts wrap the whole flow (Railway CLI installed + `railway login` first). Both are
+**idempotent** — re-running with the same project name UPDATES that project instead of creating a
+duplicate (so a server never gets advertised twice):
 
 ```bash
-railway init -n wivuu-public-lobby                      # create + link the project
-railway variables --set RAILWAY_DOCKERFILE_PATH=public-lobby/Dockerfile
-railway up -c                                           # build + deploy from the repo root
-railway domain                                          # generate its public domain
+scripts/deploy-railway-lobby.sh                 # deploy/update the public lobby (wivuu-public-lobby)
+scripts/deploy-railway-server.sh                # deploy/update a game server (wivuu-game-server)
+scripts/deploy-railway-server.sh my-other-box   # a second, differently-named server
 ```
 
-Optional env: `STUN_URL` (WebRTC fallback for *non*-Railway NAT'd servers; the public default is
-fine). Note the generated domain, e.g. `wivuu-public-lobby-production.up.railway.app`.
+The **lobby** script defaults to project `wivuu-public-lobby` (the domain baked into the
+server/client defaults); export `STUN_URL` to override the public STUN handed to WebRTC clients.
 
-**2. Game-server project** — a *separate* Railway project from the same repo:
-
-```bash
-railway init -n wivuu-sim-server
-railway variables --set RAILWAY_DOCKERFILE_PATH=server/Dockerfile \
-  --set SIM_PUBLIC_NAME="My Server" \
-  --set PUBLIC_LOBBY=wivuu-public-lobby-production.up.railway.app            # the domain from step 1
-  # --set SIM_SECRET=...                                # optional (see Auth)
-railway up -c
-railway domain
-```
-
-`SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
+The **game-server** script uses the project name as the server's public name (`SIM_PUBLIC_NAME`) and
+leaves `PUBLIC_LOBBY` unset so it registers with the default hosted lobby (export `PUBLIC_LOBBY` to
+point elsewhere). `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
 `https://<server-domain>`, so the lobby probes it over HTTPS and advertises `wss://<server-domain>` —
-clients one-click-join directly, no extra config. On Railway a server is **always direct** (joined
-over `wss://<domain>/game`): there's no UDP edge for WebRTC hole-punching, so the WebRTC/STUN
-fallback only applies to home/self-hosted NAT'd servers. Verify with
-`curl https://<lobby-domain>/servers` — the entry's `publicEndpoint` should be `wss://<server-domain>`.
+clients one-click-join directly. On a fresh deploy the Railway edge takes ~1 min to propagate; the
+server **self-heals** (re-registers until the probe succeeds), so it settles to DIRECT on its own.
+
+On Railway a server is **always direct** (joined over `wss://<domain>/game`): there's no UDP edge for
+WebRTC hole-punching, so the WebRTC/STUN fallback only applies to home/self-hosted NAT'd servers.
+Verify with `curl https://<lobby-domain>/servers` — the entry's `publicEndpoint` should be
+`wss://<server-domain>` (and listed once).
 
 ## TLS
 

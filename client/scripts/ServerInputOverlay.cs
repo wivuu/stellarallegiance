@@ -21,13 +21,15 @@ public partial class ServerInputOverlay : Control
     // Shared by the (background) list fetch; web JSON defaults are case-insensitive so this binds
     // the public lobby's camelCase entries.
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
-    private sealed record ServerDto(string SessionId, string Name, string? PublicEndpoint);
+    private sealed record ServerDto(string SessionId, string Name, string? PublicEndpoint,
+        int Players, int MaxPlayers, string? State);
 
     private ConnectionManager _cm = null!;
     private LineEdit _field = null!;
     private Label _error = null!;
     private VBoxContainer _list = null!;
     private Label _listStatus = null!;
+    private Timer _autoRefresh = null!;
 
     // Cross-thread handoff from the fetch task to RenderServers (called on the main thread).
     private List<ServerDto>? _fetched;
@@ -103,9 +105,15 @@ public partial class ServerInputOverlay : Control
         row.AddChild(connect);
 
         Reload();
+
+        // Keep the list fresh (player counts / game state change between visits): re-fetch every
+        // 10s while the browser is visible. Silent — no "Loading…" flash, the rows just update.
+        _autoRefresh = new Timer { WaitTime = 10.0, Autostart = true };
+        _autoRefresh.Timeout += () => { if (Visible) _ = FetchAsync(); };
+        AddChild(_autoRefresh);
     }
 
-    // Kick off a background fetch of the public-server list, then render on the main thread.
+    // Manual refresh (button / first load): show the loading hint and clear the stale rows.
     private void Reload()
     {
         _listStatus.Text = "Loading servers…";
@@ -156,7 +164,11 @@ public partial class ServerInputOverlay : Control
             // The lobby probed each server: a PublicEndpoint means it's directly joinable over
             // WebSocket; otherwise it's behind a NAT and we join over WebRTC (relayed SDP + STUN).
             bool direct = !string.IsNullOrEmpty(s.PublicEndpoint);
-            string label = direct ? $"{s.Name}   ·   {s.PublicEndpoint}" : $"{s.Name}   ·   relayed";
+            // Show occupancy + game state instead of the raw URL: "Name   ·   (3/32)   ·   in-progress".
+            int max = s.MaxPlayers > 0 ? s.MaxPlayers : 32;
+            string occupancy = $"({s.Players}/{max})";
+            string state = string.IsNullOrEmpty(s.State) ? "" : $"   ·   {s.State}";
+            string label = $"{s.Name}   ·   {occupancy}{state}";
             var btn = new Button
             {
                 Text = label,

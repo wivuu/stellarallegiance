@@ -63,9 +63,10 @@ app.MapPost("/servers", async (RegisterRequest req, HttpContext ctx, IServerRegi
         : Results.Created($"/servers/{entry.SessionId}", entry);
 });
 
-// Heartbeat to keep a server marked as active.
-app.MapPost("/servers/{sessionId}/heartbeat", (string sessionId, IServerRegistry registry) =>
-    registry.Heartbeat(sessionId) ? Results.NoContent() : Results.NotFound());
+// Heartbeat to keep a server marked as active; the optional body refreshes its live status
+// (player count / capacity / game state) shown in the browser. 404 => the server re-registers.
+app.MapPost("/servers/{sessionId}/heartbeat", (string sessionId, HeartbeatRequest? status, IServerRegistry registry) =>
+    registry.Heartbeat(sessionId, status) ? Results.NoContent() : Results.NotFound());
 
 // Look up a single server by session id.
 app.MapGet("/servers/{sessionId}", (string sessionId, IServerRegistry registry) =>
