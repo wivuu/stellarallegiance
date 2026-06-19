@@ -17,6 +17,7 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
+- Spatial audio system - Implement 3D spatial audio for ships, weapons, and environmental sounds to enhance immersion.
 ---
 
 ## Roadmap (prioritized)

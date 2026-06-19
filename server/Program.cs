@@ -10,7 +10,11 @@ using SimServer.Sim;
 // and also hosts the lobby (team/ready) — clients connect directly by ip:port, download all
 // content from the server, and never talk to any database.
 //   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart]
-int port = 8090;
+// Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
+// SIM_PORT (compose/self-host), else the 8090 default. A --port flag below overrides all of these.
+int port = int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
+         : int.TryParse(Environment.GetEnvironmentVariable("SIM_PORT"), out var sp) ? sp
+         : 8090;
 ulong seed = 1234567;
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
@@ -65,6 +69,10 @@ fwd.KnownNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 app.UseWebSockets();
+// Lightweight reachability/health probe target: the public lobby GETs this to decide whether we
+// are directly joinable (a reachable port -> advertise direct WebSocket; else clients use WebRTC).
+// Also doubles as a container/systemd healthcheck. Not part of the game protocol.
+app.MapGet("/health", () => Results.Text("wivuu-sim"));
 app.Map("/game", async context =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
@@ -73,7 +81,7 @@ app.Map("/game", async context =>
         return;
     }
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
-    await hub.HandleConnection(socket, context.RequestAborted);
+    await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
 });
 
 // ---- Sim loop: fixed 50 ms steps, wall-clock accumulator, bench stats ----
@@ -125,6 +133,15 @@ var simThread = new Thread(() =>
 })
 { IsBackground = true, Name = "SimLoop", Priority = ThreadPriority.AboveNormal };
 simThread.Start();
+
+// Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY
+// (public lobby) and heartbeat. The lobby probes our port back to decide our mode — direct WebSocket
+// if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
+// Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
+// us; shares the server-lifetime token so it deregisters and stops on shutdown.
+var registrar = LobbyRegistrar.FromEnv(hub, port);
+if (registrar is not null)
+    app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 
 Console.WriteLine($"[SimServer] ws://localhost:{port}/game  seed={seed}  asteroids={world.Asteroids.Count}  20 Hz");
 app.Run();
