@@ -10,13 +10,13 @@
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
-    "mtime": 1781877293.2874022,
-    "ast_hash": "ab44a0fffd75601c41a52e2152111b4e",
+    "mtime": 1781893113.4837232,
+    "ast_hash": "1168e207ff05372279ef113474db794d",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781892483.8227065,
-    "ast_hash": "95a3f6073edca75d2bac18bbc83a6a24",
+    "mtime": 1781893116.324376,
+    "ast_hash": "e4ec813b9891195a7daa0e47572667cd",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionOverlay.cs": {
@@ -30,8 +30,8 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781877293.2876759,
-    "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
+    "mtime": 1781893113.4845452,
+    "ast_hash": "cc0257cacd027d9ef96761ccb59dc649",
     "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
@@ -45,13 +45,13 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781877293.2880425,
-    "ast_hash": "dc3149c61f7b70ae28fbb69f68c29548",
+    "mtime": 1781893113.4852207,
+    "ast_hash": "013747257b0d7277324c42b155d250f3",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
-    "mtime": 1781892493.8819733,
-    "ast_hash": "f6719597ad1decb34d09fdd660cb4489",
+    "mtime": 1781893116.3248112,
+    "ast_hash": "013f4a47c22c4b9763d3171ddbf1201c",
     "semantic_hash": ""
   },
   "client/scripts/Minimap.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781892652.6968539,
-    "ast_hash": "dc59252414d6c86790ff7dda818b2286",
+    "mtime": 1781893116.3255959,
+    "ast_hash": "bd7f1aeeb17d3ebe7f57e22e0c0eba8b",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -210,7 +210,7 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781891554.8770194,
+    "mtime": 1781893116.33408,
     "ast_hash": "1d3400d4850c3ce805810833be0c087a",
     "semantic_hash": ""
   },
@@ -250,7 +250,7 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1781892662.3682926,
+    "mtime": 1781893116.3245966,
     "ast_hash": "dba9fb09b65237ce3c6679983dfd5b50",
     "semantic_hash": ""
   },
@@ -300,7 +300,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ServerInputOverlay.cs": {
-    "mtime": 1781892225.0541553,
+    "mtime": 1781893116.3253014,
     "ast_hash": "e56b6c55d909c8a3d96fe8c4fa64e151",
     "semantic_hash": ""
   },
@@ -360,7 +360,7 @@
     "semantic_hash": ""
   },
   "server/Net/LobbyRegistrar.cs": {
-    "mtime": 1781891637.8824365,
+    "mtime": 1781893116.334533,
     "ast_hash": "8a064599c2e05168efff3672671120dc",
     "semantic_hash": ""
   },
@@ -370,12 +370,12 @@
     "semantic_hash": ""
   },
   "public-lobby/Contracts.cs": {
-    "mtime": 1781891564.9166498,
+    "mtime": 1781893116.3322787,
     "ast_hash": "31ee626f1b16d18f7ac07408e77d896b",
     "semantic_hash": ""
   },
   "public-lobby/PublicLobby.cs": {
-    "mtime": 1781891584.7838225,
+    "mtime": 1781893116.332507,
     "ast_hash": "40cc8f9dbe2bac81f865959f41ae1edb",
     "semantic_hash": ""
   },
@@ -390,7 +390,7 @@
     "semantic_hash": ""
   },
   "public-lobby/ServerRegistry.cs": {
-    "mtime": 1781891579.5706513,
+    "mtime": 1781893116.333126,
     "ast_hash": "06178538cbf338e78440a1048f3d5a79",
     "semantic_hash": ""
   },
@@ -399,19 +399,29 @@
     "ast_hash": "5a747e9ed4602dee92c3bd1094a1829c",
     "semantic_hash": ""
   },
-  "scripts/deploy-railway-lobby.sh": {
-    "mtime": 1781890583.1236262,
-    "ast_hash": "662daa2b14a85da05c23a40a0ec88c55",
+  "client/scripts/SfxManager.cs": {
+    "mtime": 1781893113.486428,
+    "ast_hash": "1e4b7253de4e896b709beb4674922db7",
     "semantic_hash": ""
   },
-  "scripts/deploy-railway-server.sh": {
-    "mtime": 1781890576.3467848,
-    "ast_hash": "7b8038867dc42370c89dabbeddd8e924",
+  "tools/sfx-gen/gen_sfx.py": {
+    "mtime": 1781893113.5010061,
+    "ast_hash": "7cc20ad52f18c861116ff3b328ad036a",
     "semantic_hash": ""
   },
   "docker-compose.server.yml": {
     "mtime": 1781875552.6829512,
     "ast_hash": "29a165192c1aa9d185081f5aa8b106cd",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-railway-lobby.sh": {
+    "mtime": 1781893116.3334093,
+    "ast_hash": "662daa2b14a85da05c23a40a0ec88c55",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-railway-server.sh": {
+    "mtime": 1781893116.3336823,
+    "ast_hash": "7b8038867dc42370c89dabbeddd8e924",
     "semantic_hash": ""
   }
 }

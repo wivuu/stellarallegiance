@@ -126,6 +126,7 @@ public partial class Lobby : Control
     private static Button MakeButton(string text, System.Action onPressed)
     {
         var b = new Button { Text = text, CustomMinimumSize = new Vector2(130, 36) };
+        b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         b.Pressed += onPressed;
         return b;
     }
