@@ -3,17 +3,24 @@
 
 These are deliberately crude, license-free, reproducible placeholders so the
 audio system can be tested end-to-end before real assets exist. Replace the
-WAVs in client/assets/audio/ later; the filenames are the contract SfxManager
-loads against (keep them stable).
+.ogg files in client/assets/audio/ later; the filenames are the contract
+SfxManager loads against (keep them stable).
 
-Stdlib only (wave, struct, math, random) — no numpy. 16-bit mono PCM.
-Run:  python3 tools/sfx-gen/gen_sfx.py
+The waveforms are synthesized in pure stdlib (wave/struct/math/random — no
+numpy) to a temporary 16-bit PCM WAV, then encoded to Ogg Vorbis with ffmpeg
+(Godot imports .ogg as AudioStreamOggVorbis). ffmpeg is located on PATH, or via
+the Homebrew keg as a fallback. Run:  python3 tools/sfx-gen/gen_sfx.py
 """
 
+import glob
 import math
 import os
 import random
+import shutil
 import struct
+import subprocess
+import sys
+import tempfile
 import wave
 
 SAMPLE_RATE = 44100
@@ -99,9 +106,8 @@ def normalize(samples, peak=0.9):
     return [s * g for s in samples]
 
 
-def write_wav(name, samples):
+def _write_wav(path, samples):
     samples = normalize(samples)
-    path = os.path.join(OUT_DIR, name)
     with wave.open(path, "w") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -111,7 +117,50 @@ def write_wav(name, samples):
             v = int(max(-1.0, min(1.0, s)) * 32767)
             frames += struct.pack("<h", v)
         w.writeframesraw(bytes(frames))
-    print(f"  {name:<20} {len(samples) / SAMPLE_RATE:5.2f}s")
+
+
+def find_ffmpeg():
+    """Return (exe, env). Prefer PATH; fall back to the Homebrew keg, adding the
+    x265 lib dir to the dyld search path (the keg ffmpeg links a versioned x265
+    soname that brew's `opt` symlink may no longer point at)."""
+    env = os.environ.copy()
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe, env
+    kegs = sorted(glob.glob("/opt/homebrew/Cellar/ffmpeg/*/bin/ffmpeg"))
+    if kegs:
+        libs = sorted(glob.glob("/opt/homebrew/Cellar/x265/*/lib"))
+        if libs:
+            env["DYLD_FALLBACK_LIBRARY_PATH"] = os.pathsep.join(
+                libs + [env.get("DYLD_FALLBACK_LIBRARY_PATH", "")])
+        return kegs[-1], env
+    return None, env
+
+
+def _has_libvorbis(exe, env):
+    out = subprocess.run([exe, "-hide_banner", "-encoders"],
+                         capture_output=True, text=True, env=env).stdout
+    return "libvorbis" in out
+
+
+def write_ogg(exe, env, use_libvorbis, name, samples):
+    """Synthesize -> temp WAV -> encode Ogg Vorbis at OUT_DIR/<name>."""
+    out = os.path.join(OUT_DIR, name)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        wav = tf.name
+    try:
+        _write_wav(wav, samples)
+        if use_libvorbis:
+            codec = ["-c:a", "libvorbis", "-q:a", "5"]
+        else:
+            # ffmpeg's native vorbis encoder is experimental and only encodes
+            # stereo here, so upmix mono -> stereo and pin a bitrate.
+            codec = ["-c:a", "vorbis", "-strict", "-2", "-ac", "2", "-b:a", "112k"]
+        cmd = [exe, "-hide_banner", "-loglevel", "error", "-y", "-i", wav, *codec, out]
+        subprocess.run(cmd, check=True, env=env)
+    finally:
+        os.unlink(wav)
+    print(f"  {name:<20} {len(samples) / SAMPLE_RATE:5.2f}s  ({os.path.getsize(out)} B)")
 
 
 # ---- per-category placeholder timbres -----------------------------------------
@@ -194,26 +243,32 @@ def collision_thud():
 
 
 SOUNDS = {
-    "ambient_hum.wav": ambient_hum,
-    "engine_loop.wav": engine_loop,
-    "booster_loop.wav": booster_loop,
-    "weapon_fire.wav": weapon_fire,
-    "explosion.wav": explosion,
-    "impact.wav": impact,
-    "ui_click.wav": ui_click,
-    "ui_notify.wav": ui_notify,
-    "menu_open.wav": menu_open,
-    "menu_close.wav": menu_close,
-    "collision_thud.wav": collision_thud,
+    "ambient_hum.ogg": ambient_hum,
+    "engine_loop.ogg": engine_loop,
+    "booster_loop.ogg": booster_loop,
+    "weapon_fire.ogg": weapon_fire,
+    "explosion.ogg": explosion,
+    "impact.ogg": impact,
+    "ui_click.ogg": ui_click,
+    "ui_notify.ogg": ui_notify,
+    "menu_open.ogg": menu_open,
+    "menu_close.ogg": menu_close,
+    "collision_thud.ogg": collision_thud,
 }
 
 
 def main():
     random.seed(1)  # reproducible noise
+    exe, env = find_ffmpeg()
+    if not exe:
+        sys.exit("error: ffmpeg not found (needed to encode Ogg Vorbis). "
+                 "Install it (e.g. `brew install ffmpeg`) and re-run.")
+    use_libvorbis = _has_libvorbis(exe, env)
     os.makedirs(OUT_DIR, exist_ok=True)
     print(f"Writing placeholder SFX -> {OUT_DIR}")
+    print(f"  ffmpeg: {exe}  (encoder: {'libvorbis' if use_libvorbis else 'vorbis'})")
     for name, fn in SOUNDS.items():
-        write_wav(name, fn())
+        write_ogg(exe, env, use_libvorbis, name, fn())
     print(f"Done: {len(SOUNDS)} files.")
 
 

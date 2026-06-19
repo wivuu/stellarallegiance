@@ -13,8 +13,8 @@ using Godot;
 // Per-ship engine/booster loops live on EngineGlow (so they follow the ship);
 // EngineGlow pulls those streams from GetStream().
 //
-// Streams are placeholder synthetic WAVs (tools/sfx-gen/gen_sfx.py); the SfxId ->
-// filename map below is the contract against client/assets/audio/. Loop mode is
+// Streams are placeholder synthetic Ogg Vorbis files (tools/sfx-gen/gen_sfx.py);
+// the SfxId -> filename map below is the contract against client/assets/audio/. Loop mode is
 // set here at load time rather than via per-file .import config (those .import
 // files are gitignored, matching the GLB convention).
 //
@@ -42,17 +42,17 @@ public partial class SfxManager : Node
 
 	private static readonly Dictionary<SfxId, string> Files = new()
 	{
-		{ SfxId.AmbientHum, "ambient_hum.wav" },
-		{ SfxId.EngineLoop, "engine_loop.wav" },
-		{ SfxId.BoosterLoop, "booster_loop.wav" },
-		{ SfxId.WeaponFire, "weapon_fire.wav" },
-		{ SfxId.Explosion, "explosion.wav" },
-		{ SfxId.Impact, "impact.wav" },
-		{ SfxId.UiClick, "ui_click.wav" },
-		{ SfxId.UiNotify, "ui_notify.wav" },
-		{ SfxId.MenuOpen, "menu_open.wav" },
-		{ SfxId.MenuClose, "menu_close.wav" },
-		{ SfxId.Collision, "collision_thud.wav" },
+		{ SfxId.AmbientHum, "ambient_hum.ogg" },
+		{ SfxId.EngineLoop, "engine_loop.ogg" },
+		{ SfxId.BoosterLoop, "booster_loop.ogg" },
+		{ SfxId.WeaponFire, "weapon_fire.ogg" },
+		{ SfxId.Explosion, "explosion.ogg" },
+		{ SfxId.Impact, "impact.ogg" },
+		{ SfxId.UiClick, "ui_click.ogg" },
+		{ SfxId.UiNotify, "ui_notify.ogg" },
+		{ SfxId.MenuOpen, "menu_open.ogg" },
+		{ SfxId.MenuClose, "menu_close.ogg" },
+		{ SfxId.Collision, "collision_thud.ogg" },
 	};
 
 	// Streams that should play as seamless loops (engine bed, ambience).
@@ -125,10 +125,10 @@ public partial class SfxManager : Node
 				GD.PushWarning($"[SfxManager] missing audio asset: {file}");
 				continue;
 			}
-			// WAV imports as AudioStreamWav; flip loopers to a forward loop here so we
+			// .ogg imports as AudioStreamOggVorbis; flip loopers to loop here so we
 			// don't have to hand-maintain per-file .import loop settings.
-			if (Loops.Contains(id) && stream is AudioStreamWav wav)
-				wav.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
+			if (Loops.Contains(id) && stream is AudioStreamOggVorbis ogg)
+				ogg.Loop = true;
 			_streams[id] = stream;
 		}
 	}
