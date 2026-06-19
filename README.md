@@ -163,5 +163,12 @@ a one-project-each **Railway** recipe for the lobby + a game server).
 - [.PLAN/](.PLAN/) — roadmap (`README.md`), tuning spec (`CONFIG.md`), flight-model reference
   (`ship_movement/`). Historical build-order notes are archived under `docs/archive/`.
 
+## Third-party assets
+
+The 3D ship and station models are converted from
+[Allegiance](https://github.com/FreeAllegiance/Allegiance), originally developed by Microsoft
+and open-sourced by the FreeAllegiance project under the MIT license (copyright Microsoft
+Corporation). See [NOTICE](NOTICE) for the full license text.
+
 This repo also keeps a [graphify](https://github.com/safishamsi/graphify) knowledge graph in
 `graphify-out/` — see the graphify note in `CLAUDE.md`.
