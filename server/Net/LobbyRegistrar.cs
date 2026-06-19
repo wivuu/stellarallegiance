@@ -30,6 +30,11 @@ public sealed class LobbyRegistrar
 {
     public const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
     static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(10);
+    // When we assert a public endpoint but the lobby can't reach it yet (a PaaS domain whose edge
+    // routing/cert is still propagating in the first minute after boot), re-register on this faster
+    // cadence to re-probe until it flips to DIRECT — capped, then we settle for WebRTC/STUN.
+    static readonly TimeSpan DirectRetryEvery = TimeSpan.FromSeconds(15);
+    const int MaxDirectRetries = 8;
 
     private readonly ClientHub _hub;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -40,6 +45,8 @@ public sealed class LobbyRegistrar
 
     private string? _sessionId;
     private CancellationTokenSource? _listenerCts;
+    private bool _gotDirect;        // last registration came back DIRECT (lobby reached our endpoint)
+    private int _directRetries;     // re-register attempts spent waiting for our endpoint to go live
 
     private LobbyRegistrar(ClientHub hub, string shareBase, string name, int port, string? publicEndpoint)
     {
@@ -97,8 +104,23 @@ public sealed class LobbyRegistrar
 
             while (!ct.IsCancellationRequested)
             {
-                try { await Task.Delay(HeartbeatEvery, ct); }
+                // Self-heal the first-boot race: if we asserted a public endpoint but the lobby
+                // couldn't reach it yet, re-register on a faster cadence to re-probe until DIRECT
+                // (capped). We deregister the stale entry first so we never double-list ourselves.
+                bool retrying = _publicEndpoint is not null && !_gotDirect && _directRetries < MaxDirectRetries;
+
+                try { await Task.Delay(retrying ? DirectRetryEvery : HeartbeatEvery, ct); }
                 catch (OperationCanceledException) { break; }
+
+                if (retrying)
+                {
+                    _directRetries++;
+                    Console.WriteLine($"[Lobby] endpoint not reachable from lobby yet; re-registering ({_directRetries}/{MaxDirectRetries}).");
+                    _listenerCts?.Cancel();
+                    await Deregister();              // drop the stale entry so we don't double-list
+                    await RegisterAndListen(ct);
+                    continue;
+                }
 
                 var ok = await Heartbeat(ct);
                 if (!ok && !ct.IsCancellationRequested)
@@ -133,6 +155,7 @@ public sealed class LobbyRegistrar
             }
 
             _sessionId = entry.SessionId;
+            _gotDirect = !string.IsNullOrEmpty(entry.PublicEndpoint);
 
             // The lobby decided our mode from a reachability probe. A non-empty PublicEndpoint means
             // we're directly joinable over WebSocket — nothing more to do here. Otherwise we're
