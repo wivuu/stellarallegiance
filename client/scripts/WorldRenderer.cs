@@ -52,6 +52,8 @@ public partial class WorldRenderer : Node3D
 	private readonly Dictionary<ulong, (Node3D Node, Vector3 Axis, float Speed)> _asteroidSpins = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, Node3D> _alephNodes = new();
+	// Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
+	private readonly List<Vector3> _alephScratch = new();
 
 	// Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
 	// once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
@@ -241,6 +243,19 @@ public partial class WorldRenderer : Node3D
 			if (frac < 0.999f && _baseNodes.TryGetValue(id, out var node) && node.Visible)
 				_baseHealthScratch.Add((node.GlobalPosition, frac));
 		return _baseHealthScratch;
+	}
+
+	// Warp gates (alephs) in the currently-visible (local) sector, as world positions, for the
+	// HUD off-screen indicators. Mirrors VisibleBases()' sector filter via Node.Visible, so the
+	// markers only reflect gates in the sector you're flying. Returns a shared scratch list —
+	// read it immediately.
+	public IReadOnlyList<Vector3> VisibleAlephs()
+	{
+		_alephScratch.Clear();
+		foreach (var node in _alephNodes.Values)
+			if (node.Visible)
+				_alephScratch.Add(node.GlobalPosition);
+		return _alephScratch;
 	}
 
 	public override void _Ready()

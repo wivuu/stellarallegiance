@@ -10,13 +10,13 @@
     "semantic_hash": ""
   },
   "scripts/Chat.cs": {
-    "mtime": 1781442809.611616,
-    "ast_hash": "ab44a0fffd75601c41a52e2152111b4e",
+    "mtime": 1781896879.0668902,
+    "ast_hash": "1168e207ff05372279ef113474db794d",
     "semantic_hash": ""
   },
   "scripts/ConnectionManager.cs": {
-    "mtime": 1781575197.1045623,
-    "ast_hash": "5990682f8b1f64c2a7f1fabdc02025f8",
+    "mtime": 1781893116.324376,
+    "ast_hash": "e4ec813b9891195a7daa0e47572667cd",
     "semantic_hash": ""
   },
   "scripts/ConnectionOverlay.cs": {
@@ -30,8 +30,8 @@
     "semantic_hash": ""
   },
   "scripts/EngineGlow.cs": {
-    "mtime": 1781181928.125832,
-    "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
+    "mtime": 1781896879.0670798,
+    "ast_hash": "cc0257cacd027d9ef96761ccb59dc649",
     "semantic_hash": ""
   },
   "scripts/ExplosionEffect.cs": {
@@ -45,13 +45,13 @@
     "semantic_hash": ""
   },
   "scripts/Hud.cs": {
-    "mtime": 1781442845.6818764,
-    "ast_hash": "dc3149c61f7b70ae28fbb69f68c29548",
+    "mtime": 1781896879.0672581,
+    "ast_hash": "013747257b0d7277324c42b155d250f3",
     "semantic_hash": ""
   },
   "scripts/Lobby.cs": {
-    "mtime": 1781442759.743493,
-    "ast_hash": "4784ac004aafb92274973d297b7ca41c",
+    "mtime": 1781896879.067461,
+    "ast_hash": "013f4a47c22c4b9763d3171ddbf1201c",
     "semantic_hash": ""
   },
   "scripts/Minimap.cs": {
@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "scripts/TargetMarkers.cs": {
-    "mtime": 1781621459.232065,
-    "ast_hash": "240bf73d973bca912149dc04dd02a30e",
+    "mtime": 1781909500.143825,
+    "ast_hash": "e6e902d9a22aef1b83216f9a3f030217",
     "semantic_hash": ""
   },
   "scripts/TeamTrail.cs": {
@@ -105,13 +105,13 @@
     "semantic_hash": ""
   },
   "scripts/WorldRenderer.cs": {
-    "mtime": 1781620188.9581785,
-    "ast_hash": "a08f75e1f7d8e152f9e140b88d9324cc",
+    "mtime": 1781909480.8953495,
+    "ast_hash": "1ee19f5d40dd6ab9619b12f5f2a977ce",
     "semantic_hash": ""
   },
   "wivuullegiance.csproj": {
-    "mtime": 1781443052.3652284,
-    "ast_hash": "0379bd533d84c5922bb11f59b6716add",
+    "mtime": 1781875552.6827903,
+    "ast_hash": "38ef98881cdd397a5df6585670380d8c",
     "semantic_hash": ""
   },
   "wivuullegiance.sln": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "scripts/GameNetClient.cs": {
-    "mtime": 1781442417.5843425,
-    "ast_hash": "b1d30683f85554cd90574c3780858d46",
+    "mtime": 1781893116.3245966,
+    "ast_hash": "dba9fb09b65237ce3c6679983dfd5b50",
     "semantic_hash": ""
   },
   "scripts/GlbLoader.cs": {
@@ -150,13 +150,18 @@
     "semantic_hash": ""
   },
   "scripts/ServerInputOverlay.cs": {
-    "mtime": 1781442502.4015338,
-    "ast_hash": "8d3bb8c6309991f6ef600ba49b4bbe79",
+    "mtime": 1781893116.3253014,
+    "ast_hash": "e56b6c55d909c8a3d96fe8c4fa64e151",
     "semantic_hash": ""
   },
   "scripts/ShipModelLoader.cs": {
     "mtime": 1781575197.105567,
     "ast_hash": "94119a27c13e233e1834429c5a6119de",
+    "semantic_hash": ""
+  },
+  "scripts/SfxManager.cs": {
+    "mtime": 1781896879.0676007,
+    "ast_hash": "042d884d7394f88840d1169dad57e284",
     "semantic_hash": ""
   }
 }
