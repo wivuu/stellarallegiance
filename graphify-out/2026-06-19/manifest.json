@@ -10,12 +10,12 @@
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
-    "mtime": 1781442809.611616,
+    "mtime": 1781877293.2874022,
     "ast_hash": "ab44a0fffd75601c41a52e2152111b4e",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781875048.4550123,
+    "mtime": 1781875552.6819532,
     "ast_hash": "c087e59c9e94593ad952d83492211c8c",
     "semantic_hash": ""
   },
@@ -30,7 +30,7 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781181928.125832,
+    "mtime": 1781877293.2876759,
     "ast_hash": "57dbbfc37649ac6964f9f1ec778b0a8f",
     "semantic_hash": ""
   },
@@ -45,12 +45,12 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781442845.6818764,
+    "mtime": 1781877293.2880425,
     "ast_hash": "dc3149c61f7b70ae28fbb69f68c29548",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
-    "mtime": 1781442759.743493,
+    "mtime": 1781877293.2882888,
     "ast_hash": "4784ac004aafb92274973d297b7ca41c",
     "semantic_hash": ""
   },
@@ -105,12 +105,12 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781622591.001162,
+    "mtime": 1781877293.2886724,
     "ast_hash": "31fe855c5394e97e2d86c78e0bb0ad33",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
-    "mtime": 1781651217.3987863,
+    "mtime": 1781875552.6827903,
     "ast_hash": "38ef98881cdd397a5df6585670380d8c",
     "semantic_hash": ""
   },
@@ -210,7 +210,7 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781651312.1370356,
+    "mtime": 1781875552.698105,
     "ast_hash": "fea6b2136b096c5b69f8c5fb056f1af0",
     "semantic_hash": ""
   },
@@ -220,7 +220,7 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1781873685.4122992,
+    "mtime": 1781875552.6990564,
     "ast_hash": "1140232e15af09bb239b7a452e7f8ff5",
     "semantic_hash": ""
   },
@@ -235,7 +235,7 @@
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1781651215.122715,
+    "mtime": 1781875552.6992316,
     "ast_hash": "ec5857020a9b94002c217d83a2346137",
     "semantic_hash": ""
   },
@@ -250,7 +250,7 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1781872879.6991124,
+    "mtime": 1781875552.6822278,
     "ast_hash": "3ba0bf06dbd2ac11f6da53a988618be3",
     "semantic_hash": ""
   },
@@ -290,7 +290,7 @@
     "semantic_hash": ""
   },
   "docker-compose.yml": {
-    "mtime": 1781874808.242307,
+    "mtime": 1781875552.6831772,
     "ast_hash": "d35468e7383365856774d6ee84c39f6d",
     "semantic_hash": ""
   },
@@ -300,17 +300,17 @@
     "semantic_hash": ""
   },
   "client/scripts/ServerInputOverlay.cs": {
-    "mtime": 1781872879.697045,
+    "mtime": 1781875552.6825962,
     "ast_hash": "4392cc416867d83e4eb5734717989643",
     "semantic_hash": ""
   },
   "scripts/run-client.sh": {
-    "mtime": 1781875058.4732754,
+    "mtime": 1781875552.6974578,
     "ast_hash": "feda4e92715bd42c9c3f763657586738",
     "semantic_hash": ""
   },
   "scripts/run-server.sh": {
-    "mtime": 1781875055.0405304,
+    "mtime": 1781875552.6976378,
     "ast_hash": "eaf73471ed282af0cf8174bcdd500f16",
     "semantic_hash": ""
   },
@@ -355,48 +355,63 @@
     "semantic_hash": ""
   },
   "server/Net/IClientTransport.cs": {
-    "mtime": 1781651255.8643663,
+    "mtime": 1781875552.6983376,
     "ast_hash": "60272b13aa053740ee9033bfa6062250",
     "semantic_hash": ""
   },
   "server/Net/LobbyRegistrar.cs": {
-    "mtime": 1781875046.7185917,
-    "ast_hash": "826da171c5318cfff3d4214d55b2de65",
+    "mtime": 1781890315.404877,
+    "ast_hash": "77317e874c68e0fa4ce0ccc627999614",
     "semantic_hash": ""
   },
   "server/Net/WebRtcListener.cs": {
-    "mtime": 1781872879.6919122,
+    "mtime": 1781875552.698801,
     "ast_hash": "a4298ae0a09ef80e6608cd8976ca202e",
     "semantic_hash": ""
   },
   "public-lobby/Contracts.cs": {
-    "mtime": 1781872834.9208844,
+    "mtime": 1781875552.6960971,
     "ast_hash": "f23ca35fbde36ceaf9dd5078ee13b83c",
     "semantic_hash": ""
   },
   "public-lobby/PublicLobby.cs": {
-    "mtime": 1781873780.881622,
+    "mtime": 1781875552.6964402,
     "ast_hash": "0173f64d4ea8df0f71854ae33e888990",
     "semantic_hash": ""
   },
   "public-lobby/PublicLobby.csproj": {
-    "mtime": 1781872834.9319727,
+    "mtime": 1781875552.6965675,
     "ast_hash": "45acf05ec43ddccf9cb6cb2e44e0a3f1",
     "semantic_hash": ""
   },
   "public-lobby/ReachabilityProbe.cs": {
-    "mtime": 1781873753.337191,
+    "mtime": 1781875552.6969702,
     "ast_hash": "d71858e3bf05ceb5e8e0542a33e397f5",
     "semantic_hash": ""
   },
   "public-lobby/ServerRegistry.cs": {
-    "mtime": 1781872834.9216714,
+    "mtime": 1781875552.6971073,
     "ast_hash": "0dba8a1a55f2acb4bee9a295186e8fad",
     "semantic_hash": ""
   },
   "public-lobby/Signaling.cs": {
-    "mtime": 1781872834.9229183,
+    "mtime": 1781875552.6972954,
     "ast_hash": "5a747e9ed4602dee92c3bd1094a1829c",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-railway-lobby.sh": {
+    "mtime": 1781890583.1236262,
+    "ast_hash": "662daa2b14a85da05c23a40a0ec88c55",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-railway-server.sh": {
+    "mtime": 1781890576.3467848,
+    "ast_hash": "7b8038867dc42370c89dabbeddd8e924",
+    "semantic_hash": ""
+  },
+  "docker-compose.server.yml": {
+    "mtime": 1781875552.6829512,
+    "ast_hash": "29a165192c1aa9d185081f5aa8b106cd",
     "semantic_hash": ""
   }
 }

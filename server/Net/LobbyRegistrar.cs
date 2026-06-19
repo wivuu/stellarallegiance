@@ -20,6 +20,7 @@ namespace SimServer.Net;
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
 //                         (default https://wivuu-public-lobby-production.up.railway.app)
 //   SIM_PUBLIC_NAME       3-50 char public name; gates registration
+//   SIM_MAX_PLAYERS       capacity advertised in the lobby browser (default 32)
 //   SIM_PUBLIC_PORT       public-facing port to advertise/probe (default = the listen port; set
 //                         when a port-forward maps a different external port)
 //   SIM_PUBLIC_ENDPOINT   optional address we assert as reachable — host:port (behind container NAT
@@ -42,19 +43,21 @@ public sealed class LobbyRegistrar
     private readonly string _name;
     private readonly int _port;             // public-facing port the lobby probes/advertises
     private readonly string? _publicEndpoint;
+    private readonly int _maxPlayers;       // capacity advertised to the lobby browser
 
     private string? _sessionId;
     private CancellationTokenSource? _listenerCts;
     private bool _gotDirect;        // last registration came back DIRECT (lobby reached our endpoint)
     private int _directRetries;     // re-register attempts spent waiting for our endpoint to go live
 
-    private LobbyRegistrar(ClientHub hub, string shareBase, string name, int port, string? publicEndpoint)
+    private LobbyRegistrar(ClientHub hub, string shareBase, string name, int port, string? publicEndpoint, int maxPlayers)
     {
         _hub = hub;
         _shareBase = shareBase;
         _name = name;
         _port = port;
         _publicEndpoint = publicEndpoint;
+        _maxPlayers = maxPlayers;
     }
 
     // Builds a registrar from the environment, or returns null when no public name is set
@@ -90,8 +93,12 @@ public sealed class LobbyRegistrar
         var port = int.TryParse(Environment.GetEnvironmentVariable("SIM_PUBLIC_PORT"), out var pp) && pp is > 0 and <= 65535
             ? pp : listenPort;
 
-        Console.WriteLine($"[Lobby] publishing \"{name}\" to {shareBase} (port {port})");
-        return new LobbyRegistrar(hub, shareBase, name, port, endpoint.Length == 0 ? null : endpoint);
+        // Capacity advertised in the lobby browser (current/max). Default 32.
+        var maxPlayers = int.TryParse(Environment.GetEnvironmentVariable("SIM_MAX_PLAYERS"), out var mp) && mp > 0
+            ? mp : 32;
+
+        Console.WriteLine($"[Lobby] publishing \"{name}\" to {shareBase} (port {port}, max {maxPlayers} players)");
+        return new LobbyRegistrar(hub, shareBase, name, port, endpoint.Length == 0 ? null : endpoint, maxPlayers);
     }
 
     public void Start(CancellationToken ct) => _ = Task.Run(() => RunAsync(ct), ct);
@@ -140,7 +147,15 @@ public sealed class LobbyRegistrar
         try
         {
             using var resp = await _http.PostAsJsonAsync($"{_shareBase}/servers",
-                new { name = _name, port = _port, publicEndpoint = _publicEndpoint }, ct);
+                new
+                {
+                    name = _name,
+                    port = _port,
+                    publicEndpoint = _publicEndpoint,
+                    players = _hub.PlayerCount,
+                    maxPlayers = _maxPlayers,
+                    state = _hub.GameState,
+                }, ct);
             if (!resp.IsSuccessStatusCode)
             {
                 Console.WriteLine($"[Lobby] register failed ({(int)resp.StatusCode}).");
@@ -186,7 +201,9 @@ public sealed class LobbyRegistrar
         if (_sessionId is null) return false;
         try
         {
-            using var resp = await _http.PostAsync($"{_shareBase}/servers/{_sessionId}/heartbeat", null, ct);
+            // Report live status with each ping so the browser shows a fresh (players/max) + state.
+            using var resp = await _http.PostAsJsonAsync($"{_shareBase}/servers/{_sessionId}/heartbeat",
+                new { players = _hub.PlayerCount, maxPlayers = _maxPlayers, state = _hub.GameState }, ct);
             return resp.StatusCode != HttpStatusCode.NotFound && resp.IsSuccessStatusCode;
         }
         catch (OperationCanceledException) { throw; }

@@ -637,7 +637,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L87",
       "id": "scripts_chat_chat_onchat",
-      "community": 2,
+      "community": 83,
       "norm_label": ".onchat()"
     },
     {
@@ -646,7 +646,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L87",
       "id": "chatline",
-      "community": 2,
+      "community": 83,
       "norm_label": "chatline"
     },
     {
@@ -655,7 +655,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L100",
       "id": "scripts_chat_chat_unhandledinput",
-      "community": 2,
+      "community": 84,
       "norm_label": "._unhandledinput()"
     },
     {
@@ -664,7 +664,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L100",
       "id": "client_scripts_chat_cs_inputevent",
-      "community": 2,
+      "community": 84,
       "norm_label": "inputevent"
     },
     {
@@ -673,7 +673,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L112",
       "id": "scripts_chat_chat_input",
-      "community": 2,
+      "community": 84,
       "norm_label": "._input()"
     },
     {
@@ -682,7 +682,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L131",
       "id": "scripts_chat_chat_openinput",
-      "community": 2,
+      "community": 84,
       "norm_label": ".openinput()"
     },
     {
@@ -709,7 +709,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L160",
       "id": "scripts_chat_chat_togglechannel",
-      "community": 2,
+      "community": 84,
       "norm_label": ".togglechannel()"
     },
     {
@@ -718,7 +718,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L166",
       "id": "scripts_chat_chat_updatechip",
-      "community": 2,
+      "community": 84,
       "norm_label": ".updatechip()"
     },
     {
@@ -736,7 +736,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L198",
       "id": "scripts_chat_chat_render",
-      "community": 2,
+      "community": 83,
       "norm_label": ".render()"
     },
     {
@@ -745,7 +745,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L207",
       "id": "scripts_chat_chat_formatline",
-      "community": 2,
+      "community": 83,
       "norm_label": ".formatline()"
     },
     {
@@ -754,7 +754,7 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L216",
       "id": "scripts_chat_chat_escape",
-      "community": 2,
+      "community": 83,
       "norm_label": ".escape()"
     },
     {
@@ -763,7 +763,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L1",
       "id": "scripts_connectionmanager",
-      "community": 57,
+      "community": 59,
       "norm_label": "connectionmanager.cs"
     },
     {
@@ -772,7 +772,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L9",
       "id": "scripts_connectionmanager_connectionmanager",
-      "community": 57,
+      "community": 59,
       "norm_label": "connectionmanager"
     },
     {
@@ -790,7 +790,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L22",
       "id": "client_scripts_connectionmanager_cs_string",
-      "community": 57,
+      "community": 59,
       "norm_label": "string"
     },
     {
@@ -799,7 +799,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L24",
       "id": "client_scripts_connectionmanager_cs_gamenetclient",
-      "community": 57,
+      "community": 59,
       "norm_label": "gamenetclient"
     },
     {
@@ -808,7 +808,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L25",
       "id": "serverinputoverlay",
-      "community": 57,
+      "community": 59,
       "norm_label": "serverinputoverlay"
     },
     {
@@ -817,7 +817,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L27",
       "id": "scripts_connectionmanager_connectionmanager_ready",
-      "community": 57,
+      "community": 59,
       "norm_label": "._ready()"
     },
     {
@@ -826,7 +826,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L54",
       "id": "scripts_connectionmanager_connectionmanager_connectto",
-      "community": 57,
+      "community": 59,
       "norm_label": ".connectto()"
     },
     {
@@ -835,7 +835,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L64",
       "id": "scripts_connectionmanager_connectionmanager_connecttolobby",
-      "community": 57,
+      "community": 59,
       "norm_label": ".connecttolobby()"
     },
     {
@@ -844,7 +844,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
       "id": "scripts_connectionmanager_connectionmanager_connect",
-      "community": 57,
+      "community": 59,
       "norm_label": ".connect()"
     },
     {
@@ -853,7 +853,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L79",
       "id": "scripts_connectionmanager_connectionmanager_notifyconnected",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifyconnected()"
     },
     {
@@ -862,7 +862,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L85",
       "id": "scripts_connectionmanager_connectionmanager_notifyfailed",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifyfailed()"
     },
     {
@@ -871,7 +871,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L91",
       "id": "scripts_connectionmanager_connectionmanager_notifydisconnected",
-      "community": 57,
+      "community": 59,
       "norm_label": ".notifydisconnected()"
     },
     {
@@ -880,7 +880,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L98",
       "id": "scripts_connectionmanager_connectionmanager_showinput",
-      "community": 57,
+      "community": 59,
       "norm_label": ".showinput()"
     },
     {
@@ -889,7 +889,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L109",
       "id": "scripts_connectionmanager_connectionmanager_hideinput",
-      "community": 57,
+      "community": 59,
       "norm_label": ".hideinput()"
     },
     {
@@ -898,7 +898,7 @@
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L115",
       "id": "scripts_connectionmanager_connectionmanager_towsurl",
-      "community": 57,
+      "community": 59,
       "norm_label": ".towsurl()"
     },
     {
@@ -907,7 +907,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 10,
+      "community": 82,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -916,7 +916,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 10,
+      "community": 82,
       "norm_label": "connectionoverlay"
     },
     {
@@ -925,7 +925,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 10,
+      "community": 82,
       "norm_label": "color"
     },
     {
@@ -934,7 +934,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 10,
+      "community": 82,
       "norm_label": "connectionmanager"
     },
     {
@@ -943,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 10,
+      "community": 82,
       "norm_label": "label"
     },
     {
@@ -952,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 10,
+      "community": 82,
       "norm_label": "button"
     },
     {
@@ -961,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 10,
+      "community": 82,
       "norm_label": "double"
     },
     {
@@ -970,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 10,
+      "community": 82,
       "norm_label": ".init()"
     },
     {
@@ -979,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 10,
+      "community": 82,
       "norm_label": ".centered()"
     },
     {
@@ -988,7 +988,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 10,
+      "community": 82,
       "norm_label": "._process()"
     },
     {
@@ -2410,7 +2410,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 10,
+      "community": 82,
       "norm_label": "control"
     },
     {
@@ -2635,7 +2635,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 10,
+      "community": 81,
       "norm_label": "minimap.cs"
     },
     {
@@ -2644,7 +2644,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 10,
+      "community": 81,
       "norm_label": "minimap"
     },
     {
@@ -2653,7 +2653,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 10,
+      "community": 81,
       "norm_label": "float"
     },
     {
@@ -2662,7 +2662,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 10,
+      "community": 81,
       "norm_label": "color"
     },
     {
@@ -2671,7 +2671,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 10,
+      "community": 81,
       "norm_label": "connectionmanager"
     },
     {
@@ -2680,7 +2680,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 10,
+      "community": 81,
       "norm_label": "worldrenderer"
     },
     {
@@ -2689,7 +2689,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L39",
       "id": "client_scripts_minimap_cs_dictionary",
-      "community": 10,
+      "community": 81,
       "norm_label": "dictionary"
     },
     {
@@ -2698,7 +2698,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "scripts_minimap_minimap_tryclicksector",
-      "community": 10,
+      "community": 81,
       "norm_label": ".tryclicksector()"
     },
     {
@@ -2707,7 +2707,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "client_scripts_minimap_cs_vector2",
-      "community": 10,
+      "community": 81,
       "norm_label": "vector2"
     },
     {
@@ -2716,7 +2716,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L55",
       "id": "scripts_minimap_minimap_init",
-      "community": 10,
+      "community": 81,
       "norm_label": ".init()"
     },
     {
@@ -2725,7 +2725,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L63",
       "id": "scripts_minimap_minimap_process",
-      "community": 10,
+      "community": 81,
       "norm_label": "._process()"
     },
     {
@@ -2734,7 +2734,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L65",
       "id": "scripts_minimap_minimap_draw",
-      "community": 10,
+      "community": 81,
       "norm_label": "._draw()"
     },
     {
@@ -3740,7 +3740,7 @@
       "label": "ConnectionManager",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L26",
+      "source_location": "L27",
       "id": "client_scripts_serverinputoverlay_cs_connectionmanager",
       "community": 62,
       "norm_label": "connectionmanager"
@@ -3749,7 +3749,7 @@
       "label": "LineEdit",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L27",
+      "source_location": "L28",
       "id": "client_scripts_serverinputoverlay_cs_lineedit",
       "community": 62,
       "norm_label": "lineedit"
@@ -3758,7 +3758,7 @@
       "label": "Label",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L28",
+      "source_location": "L29",
       "id": "client_scripts_serverinputoverlay_cs_label",
       "community": 62,
       "norm_label": "label"
@@ -3767,7 +3767,7 @@
       "label": "VBoxContainer",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L29",
+      "source_location": "L30",
       "id": "vboxcontainer",
       "community": 62,
       "norm_label": "vboxcontainer"
@@ -3776,7 +3776,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L33",
+      "source_location": "L34",
       "id": "client_scripts_serverinputoverlay_cs_list",
       "community": 62,
       "norm_label": "list"
@@ -3785,7 +3785,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L34",
+      "source_location": "L35",
       "id": "client_scripts_serverinputoverlay_cs_string",
       "community": 62,
       "norm_label": "string"
@@ -3794,7 +3794,7 @@
       "label": ".Init()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L36",
+      "source_location": "L37",
       "id": "scripts_serverinputoverlay_serverinputoverlay_init",
       "community": 62,
       "norm_label": ".init()"
@@ -3803,7 +3803,7 @@
       "label": ".Reload()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L109",
+      "source_location": "L110",
       "id": "scripts_serverinputoverlay_serverinputoverlay_reload",
       "community": 62,
       "norm_label": ".reload()"
@@ -3812,7 +3812,7 @@
       "label": ".FetchAsync()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L117",
+      "source_location": "L118",
       "id": "scripts_serverinputoverlay_serverinputoverlay_fetchasync",
       "community": 62,
       "norm_label": ".fetchasync()"
@@ -3821,7 +3821,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L117",
+      "source_location": "L118",
       "id": "client_scripts_serverinputoverlay_cs_task",
       "community": 62,
       "norm_label": "task"
@@ -3830,7 +3830,7 @@
       "label": ".RenderServers()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L134",
+      "source_location": "L135",
       "id": "scripts_serverinputoverlay_serverinputoverlay_renderservers",
       "community": 62,
       "norm_label": ".renderservers()"
@@ -3839,7 +3839,7 @@
       "label": ".Submit()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L178",
+      "source_location": "L183",
       "id": "scripts_serverinputoverlay_serverinputoverlay_submit",
       "community": 62,
       "norm_label": ".submit()"
@@ -3848,7 +3848,7 @@
       "label": ".Centered()",
       "file_type": "code",
       "source_file": "client/scripts/ServerInputOverlay.cs",
-      "source_location": "L191",
+      "source_location": "L196",
       "id": "scripts_serverinputoverlay_serverinputoverlay_centered",
       "community": 62,
       "norm_label": ".centered()"
@@ -4273,7 +4273,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L47",
       "id": "client_scripts_shipmodelloader_cs_node3d",
-      "community": 69,
+      "community": 65,
       "norm_label": "node3d"
     },
     {
@@ -4336,7 +4336,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L192",
       "id": "scripts_shipmodelloader_shipmodelloader_makemarker",
-      "community": 59,
+      "community": 43,
       "norm_label": ".makemarker()"
     },
     {
@@ -4345,7 +4345,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L192",
       "id": "client_scripts_shipmodelloader_cs_hardpointdef",
-      "community": 59,
+      "community": 43,
       "norm_label": "hardpointdef"
     },
     {
@@ -4354,7 +4354,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L192",
       "id": "client_scripts_shipmodelloader_cs_marker3d",
-      "community": 59,
+      "community": 43,
       "norm_label": "marker3d"
     },
     {
@@ -4363,7 +4363,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L206",
       "id": "scripts_shipmodelloader_shipmodelloader_basisfacingz",
-      "community": 59,
+      "community": 43,
       "norm_label": ".basisfacingz()"
     },
     {
@@ -4372,7 +4372,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L206",
       "id": "client_scripts_shipmodelloader_cs_vector3",
-      "community": 59,
+      "community": 43,
       "norm_label": "vector3"
     },
     {
@@ -4381,7 +4381,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L206",
       "id": "client_scripts_shipmodelloader_cs_basis",
-      "community": 59,
+      "community": 43,
       "norm_label": "basis"
     },
     {
@@ -4390,7 +4390,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L217",
       "id": "scripts_shipmodelloader_shipmodelloader_avgz",
-      "community": 59,
+      "community": 43,
       "norm_label": ".avgz()"
     },
     {
@@ -4399,7 +4399,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L217",
       "id": "client_scripts_shipmodelloader_cs_list",
-      "community": 59,
+      "community": 43,
       "norm_label": "list"
     },
     {
@@ -5092,7 +5092,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L120",
       "id": "scripts_worldrenderer_worldrenderer_setviewsector",
-      "community": 1,
+      "community": 65,
       "norm_label": ".setviewsector()"
     },
     {
@@ -5101,7 +5101,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L144",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "community": 58,
+      "community": 65,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -5587,7 +5587,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L732",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 5,
+      "community": 85,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -6044,16 +6044,25 @@
       "label": ".Heartbeat()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L14",
+      "source_location": "L18",
       "id": "public_lobby_serverregistry_iserverregistry_heartbeat",
       "community": 32,
       "norm_label": ".heartbeat()"
     },
     {
+      "label": "HeartbeatRequest",
+      "file_type": "code",
+      "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L18",
+      "id": "heartbeatrequest",
+      "community": 32,
+      "norm_label": "heartbeatrequest"
+    },
+    {
       "label": ".Get()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L15",
+      "source_location": "L19",
       "id": "public_lobby_serverregistry_iserverregistry_get",
       "community": 32,
       "norm_label": ".get()"
@@ -6062,7 +6071,7 @@
       "label": ".ListActive()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
+      "source_location": "L20",
       "id": "public_lobby_serverregistry_iserverregistry_listactive",
       "community": 32,
       "norm_label": ".listactive()"
@@ -6071,7 +6080,7 @@
       "label": "IReadOnlyCollection",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L16",
+      "source_location": "L20",
       "id": "ireadonlycollection",
       "community": 32,
       "norm_label": "ireadonlycollection"
@@ -6080,7 +6089,7 @@
       "label": ".Remove()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L17",
+      "source_location": "L21",
       "id": "public_lobby_serverregistry_iserverregistry_remove",
       "community": 32,
       "norm_label": ".remove()"
@@ -6089,7 +6098,7 @@
       "label": ".Exists()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L20",
+      "source_location": "L24",
       "id": "public_lobby_serverregistry_iserverregistry_exists",
       "community": 32,
       "norm_label": ".exists()"
@@ -6098,7 +6107,7 @@
       "label": "InMemoryServerRegistry",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L23",
+      "source_location": "L27",
       "id": "public_lobby_serverregistry_inmemoryserverregistry",
       "community": 32,
       "norm_label": "inmemoryserverregistry"
@@ -6107,7 +6116,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L25",
+      "source_location": "L29",
       "id": "public_lobby_serverregistry_cs_int",
       "community": 32,
       "norm_label": "int"
@@ -6116,7 +6125,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L29",
+      "source_location": "L33",
       "id": "public_lobby_serverregistry_cs_timespan",
       "community": 32,
       "norm_label": "timespan"
@@ -6125,7 +6134,7 @@
       "label": "ConcurrentDictionary",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L31",
+      "source_location": "L35",
       "id": "public_lobby_serverregistry_cs_concurrentdictionary",
       "community": 32,
       "norm_label": "concurrentdictionary"
@@ -6134,7 +6143,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L32",
+      "source_location": "L36",
       "id": "public_lobby_serverregistry_cs_ireadonlylist",
       "community": 32,
       "norm_label": "ireadonlylist"
@@ -6143,7 +6152,7 @@
       "label": ".NormalizeName()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L38",
+      "source_location": "L42",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
       "community": 32,
       "norm_label": ".normalizename()"
@@ -6152,7 +6161,7 @@
       "label": ".Register()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L44",
+      "source_location": "L48",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_register",
       "community": 32,
       "norm_label": ".register()"
@@ -6161,16 +6170,25 @@
       "label": ".Heartbeat()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L64",
+      "source_location": "L71",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
       "community": 32,
       "norm_label": ".heartbeat()"
     },
     {
+      "label": ".NormalizeState()",
+      "file_type": "code",
+      "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L89",
+      "id": "public_lobby_serverregistry_inmemoryserverregistry_normalizestate",
+      "community": 32,
+      "norm_label": ".normalizestate()"
+    },
+    {
       "label": ".Get()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L73",
+      "source_location": "L95",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_get",
       "community": 32,
       "norm_label": ".get()"
@@ -6179,7 +6197,7 @@
       "label": ".ListActive()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L79",
+      "source_location": "L101",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
       "community": 32,
       "norm_label": ".listactive()"
@@ -6188,7 +6206,7 @@
       "label": ".Remove()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L85",
+      "source_location": "L107",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_remove",
       "community": 32,
       "norm_label": ".remove()"
@@ -6197,7 +6215,7 @@
       "label": ".Exists()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L87",
+      "source_location": "L109",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_exists",
       "community": 32,
       "norm_label": ".exists()"
@@ -6206,7 +6224,7 @@
       "label": ".Prune()",
       "file_type": "code",
       "source_file": "public-lobby/ServerRegistry.cs",
-      "source_location": "L93",
+      "source_location": "L115",
       "id": "public_lobby_serverregistry_inmemoryserverregistry_prune",
       "community": 32,
       "norm_label": ".prune()"
@@ -7112,7 +7130,7 @@
       "label": ".TakeAvgRecordsPerSnapshot()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L150",
+      "source_location": "L160",
       "id": "net_clienthub_clienthub_takeavgrecordspersnapshot",
       "community": 44,
       "norm_label": ".takeavgrecordspersnapshot()"
@@ -7121,7 +7139,7 @@
       "label": ".SnapshotWorkerLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L184",
+      "source_location": "L194",
       "id": "net_clienthub_clienthub_snapshotworkerloop",
       "community": 44,
       "norm_label": ".snapshotworkerloop()"
@@ -7130,7 +7148,7 @@
       "label": ".BuildAndCountDown()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L199",
+      "source_location": "L209",
       "id": "net_clienthub_clienthub_buildandcountdown",
       "community": 44,
       "norm_label": ".buildandcountdown()"
@@ -7139,7 +7157,7 @@
       "label": ".ShouldStartMatch()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L208",
+      "source_location": "L218",
       "id": "net_clienthub_clienthub_shouldstartmatch",
       "community": 44,
       "norm_label": ".shouldstartmatch()"
@@ -7148,7 +7166,7 @@
       "label": ".OnReturnToLobby()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L212",
+      "source_location": "L222",
       "id": "net_clienthub_clienthub_onreturntolobby",
       "community": 44,
       "norm_label": ".onreturntolobby()"
@@ -7157,7 +7175,7 @@
       "label": ".BroadcastLobby()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L219",
+      "source_location": "L229",
       "id": "net_clienthub_clienthub_broadcastlobby",
       "community": 44,
       "norm_label": ".broadcastlobby()"
@@ -7166,7 +7184,7 @@
       "label": ".HandleConnection()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L227",
+      "source_location": "L237",
       "id": "net_clienthub_clienthub_handleconnection",
       "community": 44,
       "norm_label": ".handleconnection()"
@@ -7175,7 +7193,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L227",
+      "source_location": "L237",
       "id": "server_net_clienthub_cs_cancellationtoken",
       "community": 44,
       "norm_label": "cancellationtoken"
@@ -7184,7 +7202,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L227",
+      "source_location": "L237",
       "id": "server_net_clienthub_cs_task",
       "community": 44,
       "norm_label": "task"
@@ -7193,7 +7211,7 @@
       "label": ".ReceiveLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L259",
+      "source_location": "L269",
       "id": "net_clienthub_clienthub_receiveloop",
       "community": 44,
       "norm_label": ".receiveloop()"
@@ -7202,7 +7220,7 @@
       "label": ".SendLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L384",
+      "source_location": "L394",
       "id": "net_clienthub_clienthub_sendloop",
       "community": 44,
       "norm_label": ".sendloop()"
@@ -7211,7 +7229,7 @@
       "label": ".AfterStep()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L396",
+      "source_location": "L406",
       "id": "net_clienthub_clienthub_afterstep",
       "community": 44,
       "norm_label": ".afterstep()"
@@ -7220,7 +7238,7 @@
       "label": ".RebuildAoiIndex()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L527",
+      "source_location": "L537",
       "id": "net_clienthub_clienthub_rebuildaoiindex",
       "community": 44,
       "norm_label": ".rebuildaoiindex()"
@@ -7229,7 +7247,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L527",
+      "source_location": "L537",
       "id": "server_net_clienthub_cs_shipsim",
       "community": 44,
       "norm_label": "shipsim"
@@ -7238,7 +7256,7 @@
       "label": ".SerializeRecords()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L555",
+      "source_location": "L565",
       "id": "net_clienthub_clienthub_serializerecords",
       "community": 44,
       "norm_label": ".serializerecords()"
@@ -7247,7 +7265,7 @@
       "label": ".BuildSharedCoarseSnapshot()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L583",
+      "source_location": "L593",
       "id": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
       "community": 44,
       "norm_label": ".buildsharedcoarsesnapshot()"
@@ -7256,7 +7274,7 @@
       "label": ".BuildSnapshotFor()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L597",
+      "source_location": "L607",
       "id": "net_clienthub_clienthub_buildsnapshotfor",
       "community": 44,
       "norm_label": ".buildsnapshotfor()"
@@ -7348,7 +7366,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L26",
       "id": "websocket",
-      "community": 73,
+      "community": 44,
       "norm_label": "websocket"
     },
     {
@@ -7553,7 +7571,7 @@
       "label": "LobbyRegistrar",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L29",
+      "source_location": "L30",
       "id": "net_lobbyregistrar_lobbyregistrar",
       "community": 67,
       "norm_label": "lobbyregistrar"
@@ -7562,7 +7580,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L31",
+      "source_location": "L32",
       "id": "server_net_lobbyregistrar_cs_string",
       "community": 67,
       "norm_label": "string"
@@ -7571,7 +7589,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L32",
+      "source_location": "L33",
       "id": "server_net_lobbyregistrar_cs_timespan",
       "community": 67,
       "norm_label": "timespan"
@@ -7580,7 +7598,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L37",
+      "source_location": "L38",
       "id": "server_net_lobbyregistrar_cs_int",
       "community": 67,
       "norm_label": "int"
@@ -7589,7 +7607,7 @@
       "label": "ClientHub",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L39",
+      "source_location": "L40",
       "id": "server_net_lobbyregistrar_cs_clienthub",
       "community": 67,
       "norm_label": "clienthub"
@@ -7598,7 +7616,7 @@
       "label": "HttpClient",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L40",
+      "source_location": "L41",
       "id": "server_net_lobbyregistrar_cs_httpclient",
       "community": 67,
       "norm_label": "httpclient"
@@ -7607,7 +7625,7 @@
       "label": "CancellationTokenSource",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L47",
+      "source_location": "L49",
       "id": "server_net_lobbyregistrar_cs_cancellationtokensource",
       "community": 67,
       "norm_label": "cancellationtokensource"
@@ -7616,7 +7634,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L48",
+      "source_location": "L50",
       "id": "server_net_lobbyregistrar_cs_bool",
       "community": 67,
       "norm_label": "bool"
@@ -7625,7 +7643,7 @@
       "label": ".FromEnv()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L62",
+      "source_location": "L65",
       "id": "net_lobbyregistrar_lobbyregistrar_fromenv",
       "community": 67,
       "norm_label": ".fromenv()"
@@ -7634,7 +7652,7 @@
       "label": ".Start()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L97",
+      "source_location": "L104",
       "id": "net_lobbyregistrar_lobbyregistrar_start",
       "community": 67,
       "norm_label": ".start()"
@@ -7643,7 +7661,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L97",
+      "source_location": "L104",
       "id": "server_net_lobbyregistrar_cs_cancellationtoken",
       "community": 67,
       "norm_label": "cancellationtoken"
@@ -7652,7 +7670,7 @@
       "label": ".RunAsync()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L99",
+      "source_location": "L106",
       "id": "net_lobbyregistrar_lobbyregistrar_runasync",
       "community": 67,
       "norm_label": ".runasync()"
@@ -7661,7 +7679,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L99",
+      "source_location": "L106",
       "id": "server_net_lobbyregistrar_cs_task",
       "community": 67,
       "norm_label": "task"
@@ -7670,7 +7688,7 @@
       "label": ".RegisterAndListen()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L138",
+      "source_location": "L145",
       "id": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
       "community": 67,
       "norm_label": ".registerandlisten()"
@@ -7679,7 +7697,7 @@
       "label": ".Heartbeat()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L184",
+      "source_location": "L199",
       "id": "net_lobbyregistrar_lobbyregistrar_heartbeat",
       "community": 67,
       "norm_label": ".heartbeat()"
@@ -7688,7 +7706,7 @@
       "label": ".Deregister()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L196",
+      "source_location": "L213",
       "id": "net_lobbyregistrar_lobbyregistrar_deregister",
       "community": 67,
       "norm_label": ".deregister()"
@@ -7697,7 +7715,7 @@
       "label": ".ToIceServers()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L208",
+      "source_location": "L225",
       "id": "net_lobbyregistrar_lobbyregistrar_toiceservers",
       "community": 67,
       "norm_label": ".toiceservers()"
@@ -7706,7 +7724,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L208",
+      "source_location": "L225",
       "id": "server_net_lobbyregistrar_cs_ireadonlylist",
       "community": 67,
       "norm_label": "ireadonlylist"
@@ -7715,7 +7733,7 @@
       "label": "IceServerDto",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L208",
+      "source_location": "L225",
       "id": "server_net_lobbyregistrar_cs_iceserverdto",
       "community": 67,
       "norm_label": "iceserverdto"
@@ -7724,7 +7742,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L208",
+      "source_location": "L225",
       "id": "server_net_lobbyregistrar_cs_list",
       "community": 67,
       "norm_label": "list"
@@ -7733,7 +7751,7 @@
       "label": "RTCIceServer",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L208",
+      "source_location": "L225",
       "id": "server_net_lobbyregistrar_cs_rtciceserver",
       "community": 67,
       "norm_label": "rtciceserver"
@@ -11381,7 +11399,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L109",
-      "community": 2,
+      "community": 83,
       "norm_label": ".onchatinsert()",
       "id": "scripts_chat_chat_onchatinsert"
     },
@@ -11390,7 +11408,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L109",
-      "community": 2,
+      "community": 83,
       "norm_label": "eventcontext",
       "id": "client_scripts_chat_cs_eventcontext"
     },
@@ -11399,7 +11417,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L109",
-      "community": 2,
+      "community": 83,
       "norm_label": "chatmessage",
       "id": "chatmessage"
     },
@@ -11408,7 +11426,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L265",
-      "community": 2,
+      "community": 84,
       "norm_label": ".localteam()",
       "id": "scripts_chat_chat_localteam"
     },
@@ -11417,7 +11435,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L267",
-      "community": 2,
+      "community": 83,
       "norm_label": ".senderteam()",
       "id": "scripts_chat_chat_senderteam"
     },
@@ -11426,7 +11444,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L267",
-      "community": 2,
+      "community": 83,
       "norm_label": "identity",
       "id": "client_scripts_chat_cs_identity"
     },
@@ -11435,7 +11453,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L273",
-      "community": 2,
+      "community": 84,
       "norm_label": ".localplayer()",
       "id": "scripts_chat_chat_localplayer"
     },
@@ -11444,7 +11462,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L273",
-      "community": 2,
+      "community": 84,
       "norm_label": "player",
       "id": "client_scripts_chat_cs_player"
     },
@@ -11453,7 +11471,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L75",
-      "community": 57,
+      "community": 59,
       "norm_label": "._process()",
       "id": "scripts_connectionmanager_connectionmanager_process"
     },
@@ -11462,7 +11480,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": ".onconnect()",
       "id": "scripts_connectionmanager_connectionmanager_onconnect"
     },
@@ -11471,7 +11489,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": "dbconnection",
       "id": "client_scripts_connectionmanager_cs_dbconnection"
     },
@@ -11480,7 +11498,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L80",
-      "community": 57,
+      "community": 59,
       "norm_label": "identity",
       "id": "client_scripts_connectionmanager_cs_identity"
     },
@@ -11489,7 +11507,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 57,
+      "community": 59,
       "norm_label": ".onconnecterror()",
       "id": "scripts_connectionmanager_connectionmanager_onconnecterror"
     },
@@ -11498,7 +11516,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L96",
-      "community": 57,
+      "community": 59,
       "norm_label": "exception",
       "id": "exception"
     },
@@ -11507,7 +11525,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ConnectionManager.cs",
       "source_location": "L102",
-      "community": 57,
+      "community": 59,
       "norm_label": ".ondisconnect()",
       "id": "scripts_connectionmanager_connectionmanager_ondisconnect"
     },
@@ -11768,7 +11786,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L276",
-      "community": 56,
+      "community": 5,
       "norm_label": ".disablenativemode()",
       "id": "scripts_worldrenderer_worldrenderer_disablenativemode"
     },
@@ -11831,7 +11849,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 5,
+      "community": 85,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -12182,7 +12200,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 5,
+      "community": 85,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -12191,7 +12209,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 5,
+      "community": 85,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -12209,7 +12227,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 5,
+      "community": 85,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -12236,7 +12254,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L154",
-      "community": 59,
+      "community": 43,
       "norm_label": "marker3d",
       "id": "marker3d"
     },
@@ -12272,7 +12290,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L947",
-      "community": 65,
+      "community": 77,
       "norm_label": ".attachengineglow()",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow"
     },
@@ -12398,7 +12416,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L239",
-      "community": 5,
+      "community": 58,
       "norm_label": "eventcontext",
       "id": "eventcontext"
     },
@@ -12407,7 +12425,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 5,
+      "community": 85,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -26111,6 +26129,28 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "public_lobby_serverregistry_iserverregistry_heartbeat",
+      "target": "heartbeatrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
+      "target": "heartbeatrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L16",
       "weight": 1.0,
       "context": "return_type",
@@ -26227,6 +26267,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L89",
+      "weight": 1.0,
+      "source": "public_lobby_serverregistry_inmemoryserverregistry",
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizestate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L93",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -26263,6 +26313,28 @@
       "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
       "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizestate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ServerRegistry.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizestate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -26613,9 +26685,9 @@
       "source_file": "scripts/deploy-railway-lobby.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_deploy_railway_lobby",
-      "target": "users_erik_projects_wivuullegiance_scripts_deploy_railway_lobby_sh__entry",
-      "confidence_score": 1.0
+      "target": "users_erik_projects_wivuullegiance_scripts_deploy_railway_lobby_sh__entry"
     },
     {
       "relation": "contains",
@@ -26623,9 +26695,9 @@
       "source_file": "scripts/deploy-railway-server.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_deploy_railway_server",
-      "target": "users_erik_projects_wivuullegiance_scripts_deploy_railway_server_sh__entry",
-      "confidence_score": 1.0
+      "target": "users_erik_projects_wivuullegiance_scripts_deploy_railway_server_sh__entry"
     },
     {
       "relation": "defines",
@@ -28611,9 +28683,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "net_lobbyregistrar_lobbyregistrar",
-      "target": "server_net_lobbyregistrar_cs_bool",
-      "confidence_score": 1.0
+      "target": "server_net_lobbyregistrar_cs_bool"
     },
     {
       "relation": "references",
@@ -37144,5 +37216,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "d9803146c77df6f0e8e6a931fc266fdae64f7d34"
+  "built_at_commit": "62613c0570ea51c155ffb64535c53d9fb9ac29ff"
 }

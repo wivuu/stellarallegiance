@@ -11,7 +11,11 @@ public interface IServerRegistry
     // the lobby's reachability probe: a host:port for a directly-joinable server, or null for a
     // NAT'd server that clients must reach over WebRTC/STUN.
     ServerEntry? Register(RegisterRequest req, string? publicEndpoint);
-    bool Heartbeat(string sessionId);
+
+    // Refresh liveness (LastSeen) and, when status is given, the live player count / capacity /
+    // game state shown in the browser. Returns false if the session isn't registered (-> 404,
+    // prompting the server to re-register).
+    bool Heartbeat(string sessionId, HeartbeatRequest? status = null);
     ServerEntry? Get(string sessionId);
     IReadOnlyCollection<ServerEntry> ListActive();
     bool Remove(string sessionId);
@@ -55,19 +59,37 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             PublicEndpoint: string.IsNullOrWhiteSpace(publicEndpoint) ? null : publicEndpoint.Trim(),
             RegisteredAt: now,
             LastSeen: now,
-            IceServers: _iceServers);
+            IceServers: _iceServers,
+            Players: Math.Max(0, req.Players),
+            MaxPlayers: Math.Max(0, req.MaxPlayers),
+            State: NormalizeState(req.State));
 
         _servers[entry.SessionId] = entry;
         return entry;
     }
 
-    public bool Heartbeat(string sessionId)
+    public bool Heartbeat(string sessionId, HeartbeatRequest? status = null)
     {
         if (!_servers.TryGetValue(sessionId, out var existing))
             return false;
 
-        _servers[sessionId] = existing with { LastSeen = DateTimeOffset.UtcNow };
+        var updated = existing with { LastSeen = DateTimeOffset.UtcNow };
+        if (status is not null)
+            updated = updated with
+            {
+                Players = Math.Max(0, status.Players),
+                MaxPlayers = Math.Max(0, status.MaxPlayers),
+                State = NormalizeState(status.State) ?? existing.State,
+            };
+        _servers[sessionId] = updated;
         return true;
+    }
+
+    // Trim and cap a reported game-state label so a server can't bloat the list payload.
+    static string? NormalizeState(string? state)
+    {
+        var s = state?.Trim();
+        return string.IsNullOrEmpty(s) ? null : (s.Length > 20 ? s[..20] : s);
     }
 
     public ServerEntry? Get(string sessionId)
