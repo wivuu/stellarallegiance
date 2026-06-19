@@ -38,7 +38,7 @@ fill out the opposition.
 
 ### Public lobby
 Without `--local`, `run-server.sh` publishes the server to the public lobby (`PUBLIC_LOBBY`,
-default `192.168.1.101:8091`) and `run-client.sh` opens a browser of the servers listed there —
+default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.sh` opens a browser of the servers listed there —
 including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.
 
 ### Solo / unattended

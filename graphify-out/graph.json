@@ -907,7 +907,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 10,
+      "community": 80,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -916,7 +916,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 10,
+      "community": 80,
       "norm_label": "connectionoverlay"
     },
     {
@@ -925,7 +925,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 10,
+      "community": 80,
       "norm_label": "color"
     },
     {
@@ -934,7 +934,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 10,
+      "community": 80,
       "norm_label": "connectionmanager"
     },
     {
@@ -943,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 10,
+      "community": 80,
       "norm_label": "label"
     },
     {
@@ -952,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 10,
+      "community": 80,
       "norm_label": "button"
     },
     {
@@ -961,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 10,
+      "community": 80,
       "norm_label": "double"
     },
     {
@@ -970,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 10,
+      "community": 80,
       "norm_label": ".init()"
     },
     {
@@ -979,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 10,
+      "community": 80,
       "norm_label": ".centered()"
     },
     {
@@ -988,7 +988,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 10,
+      "community": 80,
       "norm_label": "._process()"
     },
     {
@@ -2410,7 +2410,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 10,
+      "community": 80,
       "norm_label": "control"
     },
     {
@@ -2419,7 +2419,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L18",
       "id": "scripts_hud_hud_ready",
-      "community": 4,
+      "community": 82,
       "norm_label": "._ready()"
     },
     {
@@ -2428,7 +2428,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "scripts_hud_hud_spawnbutton",
-      "community": 4,
+      "community": 82,
       "norm_label": ".spawnbutton()"
     },
     {
@@ -2437,7 +2437,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "client_scripts_hud_cs_shipclass",
-      "community": 4,
+      "community": 82,
       "norm_label": "shipclass"
     },
     {
@@ -2446,7 +2446,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L83",
       "id": "client_scripts_hud_cs_button",
-      "community": 4,
+      "community": 82,
       "norm_label": "button"
     },
     {
@@ -2635,7 +2635,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 10,
+      "community": 68,
       "norm_label": "minimap.cs"
     },
     {
@@ -2644,7 +2644,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 10,
+      "community": 68,
       "norm_label": "minimap"
     },
     {
@@ -2653,7 +2653,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 10,
+      "community": 68,
       "norm_label": "float"
     },
     {
@@ -2662,7 +2662,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 10,
+      "community": 68,
       "norm_label": "color"
     },
     {
@@ -2671,7 +2671,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 10,
+      "community": 68,
       "norm_label": "connectionmanager"
     },
     {
@@ -2680,7 +2680,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 10,
+      "community": 68,
       "norm_label": "worldrenderer"
     },
     {
@@ -2689,7 +2689,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L39",
       "id": "client_scripts_minimap_cs_dictionary",
-      "community": 10,
+      "community": 68,
       "norm_label": "dictionary"
     },
     {
@@ -2698,7 +2698,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "scripts_minimap_minimap_tryclicksector",
-      "community": 10,
+      "community": 68,
       "norm_label": ".tryclicksector()"
     },
     {
@@ -2707,7 +2707,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "client_scripts_minimap_cs_vector2",
-      "community": 10,
+      "community": 68,
       "norm_label": "vector2"
     },
     {
@@ -2716,7 +2716,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L55",
       "id": "scripts_minimap_minimap_init",
-      "community": 10,
+      "community": 68,
       "norm_label": ".init()"
     },
     {
@@ -2725,7 +2725,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L63",
       "id": "scripts_minimap_minimap_process",
-      "community": 10,
+      "community": 68,
       "norm_label": "._process()"
     },
     {
@@ -2734,7 +2734,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L65",
       "id": "scripts_minimap_minimap_draw",
-      "community": 10,
+      "community": 68,
       "norm_label": "._draw()"
     },
     {
@@ -5587,7 +5587,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L732",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 68,
+      "community": 81,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -5873,7 +5873,7 @@
       "label": "ReachabilityProbe",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L17",
+      "source_location": "L23",
       "id": "public_lobby_reachabilityprobe_reachabilityprobe",
       "community": 79,
       "norm_label": "reachabilityprobe"
@@ -5882,7 +5882,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L19",
+      "source_location": "L25",
       "id": "public_lobby_reachabilityprobe_cs_string",
       "community": 79,
       "norm_label": "string"
@@ -5891,7 +5891,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L20",
+      "source_location": "L26",
       "id": "public_lobby_reachabilityprobe_cs_timespan",
       "community": 79,
       "norm_label": "timespan"
@@ -5900,7 +5900,7 @@
       "label": "HttpClient",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L22",
+      "source_location": "L28",
       "id": "public_lobby_reachabilityprobe_cs_httpclient",
       "community": 79,
       "norm_label": "httpclient"
@@ -5909,7 +5909,7 @@
       "label": ".ResolveAsync()",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L32",
       "id": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
       "community": 79,
       "norm_label": ".resolveasync()"
@@ -5918,7 +5918,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L32",
       "id": "public_lobby_reachabilityprobe_cs_cancellationtoken",
       "community": 79,
       "norm_label": "cancellationtoken"
@@ -5927,7 +5927,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L26",
+      "source_location": "L32",
       "id": "public_lobby_reachabilityprobe_cs_task",
       "community": 79,
       "norm_label": "task"
@@ -5936,7 +5936,7 @@
       "label": ".IsReachableAsync()",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L57",
+      "source_location": "L72",
       "id": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
       "community": 79,
       "norm_label": ".isreachableasync()"
@@ -5945,7 +5945,7 @@
       "label": ".NormalizeIp()",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L70",
+      "source_location": "L86",
       "id": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
       "community": 79,
       "norm_label": ".normalizeip()"
@@ -5954,25 +5954,25 @@
       "label": ".IsLinkLocal()",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L78",
+      "source_location": "L94",
       "id": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
       "community": 79,
       "norm_label": ".islinklocal()"
     },
     {
-      "label": ".ParseHostPort()",
+      "label": ".ParseEndpoint()",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
-      "id": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
+      "source_location": "L102",
+      "id": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint",
       "community": 79,
-      "norm_label": ".parsehostport()"
+      "norm_label": ".parseendpoint()"
     },
     {
       "label": "Host",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
+      "source_location": "L102",
       "id": "host",
       "community": 79,
       "norm_label": "host"
@@ -5981,10 +5981,19 @@
       "label": "Port",
       "file_type": "code",
       "source_file": "public-lobby/ReachabilityProbe.cs",
-      "source_location": "L83",
+      "source_location": "L102",
       "id": "port",
       "community": 79,
       "norm_label": "port"
+    },
+    {
+      "label": "Secure",
+      "file_type": "code",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L102",
+      "id": "secure",
+      "community": 79,
+      "norm_label": "secure"
     },
     {
       "label": "ServerRegistry.cs",
@@ -7492,7 +7501,7 @@
       "label": "LobbyRegistrar",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L27",
+      "source_location": "L29",
       "id": "net_lobbyregistrar_lobbyregistrar",
       "community": 67,
       "norm_label": "lobbyregistrar"
@@ -7501,7 +7510,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L29",
+      "source_location": "L31",
       "id": "server_net_lobbyregistrar_cs_string",
       "community": 67,
       "norm_label": "string"
@@ -7510,7 +7519,7 @@
       "label": "TimeSpan",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L30",
+      "source_location": "L32",
       "id": "server_net_lobbyregistrar_cs_timespan",
       "community": 67,
       "norm_label": "timespan"
@@ -7519,7 +7528,7 @@
       "label": "ClientHub",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L32",
+      "source_location": "L34",
       "id": "server_net_lobbyregistrar_cs_clienthub",
       "community": 67,
       "norm_label": "clienthub"
@@ -7528,7 +7537,7 @@
       "label": "HttpClient",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L33",
+      "source_location": "L35",
       "id": "server_net_lobbyregistrar_cs_httpclient",
       "community": 67,
       "norm_label": "httpclient"
@@ -7537,7 +7546,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L36",
+      "source_location": "L38",
       "id": "server_net_lobbyregistrar_cs_int",
       "community": 67,
       "norm_label": "int"
@@ -7546,7 +7555,7 @@
       "label": "CancellationTokenSource",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L40",
+      "source_location": "L42",
       "id": "server_net_lobbyregistrar_cs_cancellationtokensource",
       "community": 67,
       "norm_label": "cancellationtokensource"
@@ -7555,7 +7564,7 @@
       "label": ".FromEnv()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L53",
+      "source_location": "L55",
       "id": "net_lobbyregistrar_lobbyregistrar_fromenv",
       "community": 67,
       "norm_label": ".fromenv()"
@@ -7564,7 +7573,7 @@
       "label": ".Start()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L78",
+      "source_location": "L90",
       "id": "net_lobbyregistrar_lobbyregistrar_start",
       "community": 67,
       "norm_label": ".start()"
@@ -7573,7 +7582,7 @@
       "label": "CancellationToken",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L78",
+      "source_location": "L90",
       "id": "server_net_lobbyregistrar_cs_cancellationtoken",
       "community": 67,
       "norm_label": "cancellationtoken"
@@ -7582,7 +7591,7 @@
       "label": ".RunAsync()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L80",
+      "source_location": "L92",
       "id": "net_lobbyregistrar_lobbyregistrar_runasync",
       "community": 67,
       "norm_label": ".runasync()"
@@ -7591,7 +7600,7 @@
       "label": "Task",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L80",
+      "source_location": "L92",
       "id": "server_net_lobbyregistrar_cs_task",
       "community": 67,
       "norm_label": "task"
@@ -7600,7 +7609,7 @@
       "label": ".RegisterAndListen()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L104",
+      "source_location": "L116",
       "id": "net_lobbyregistrar_lobbyregistrar_registerandlisten",
       "community": 67,
       "norm_label": ".registerandlisten()"
@@ -7609,7 +7618,7 @@
       "label": ".Heartbeat()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L149",
+      "source_location": "L161",
       "id": "net_lobbyregistrar_lobbyregistrar_heartbeat",
       "community": 67,
       "norm_label": ".heartbeat()"
@@ -7618,7 +7627,7 @@
       "label": ".Deregister()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L161",
+      "source_location": "L173",
       "id": "net_lobbyregistrar_lobbyregistrar_deregister",
       "community": 67,
       "norm_label": ".deregister()"
@@ -7627,7 +7636,7 @@
       "label": ".ToIceServers()",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L185",
       "id": "net_lobbyregistrar_lobbyregistrar_toiceservers",
       "community": 67,
       "norm_label": ".toiceservers()"
@@ -7636,7 +7645,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L185",
       "id": "server_net_lobbyregistrar_cs_ireadonlylist",
       "community": 67,
       "norm_label": "ireadonlylist"
@@ -7645,7 +7654,7 @@
       "label": "IceServerDto",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L185",
       "id": "server_net_lobbyregistrar_cs_iceserverdto",
       "community": 67,
       "norm_label": "iceserverdto"
@@ -7654,7 +7663,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L185",
       "id": "server_net_lobbyregistrar_cs_list",
       "community": 67,
       "norm_label": "list"
@@ -7663,7 +7672,7 @@
       "label": "RTCIceServer",
       "file_type": "code",
       "source_file": "server/Net/LobbyRegistrar.cs",
-      "source_location": "L173",
+      "source_location": "L185",
       "id": "server_net_lobbyregistrar_cs_rtciceserver",
       "community": 67,
       "norm_label": "rtciceserver"
@@ -11037,6 +11046,15 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
+      "label": ".ParseHostPort()",
+      "file_type": "code",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L83",
+      "community": 79,
+      "norm_label": ".parsehostport()",
+      "id": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport"
+    },
+    {
       "label": ".RunSocket()",
       "file_type": "code",
       "source_file": "client/scripts/GameNetClient.cs",
@@ -11752,7 +11770,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 68,
+      "community": 81,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -12103,7 +12121,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 68,
+      "community": 81,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -12112,7 +12130,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 68,
+      "community": 81,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -12130,7 +12148,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 68,
+      "community": 81,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -12247,7 +12265,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 4,
+      "community": 82,
       "norm_label": "button",
       "id": "button"
     },
@@ -12328,7 +12346,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 68,
+      "community": 81,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -25580,18 +25598,18 @@
       "confidence": "EXTRACTED",
       "source_file": "public-lobby/PublicLobby.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_publiclobby_csproj_public_lobby_publiclobby",
-      "target": "public_lobby_publiclobby_csproj_framework_net8_0",
-      "confidence_score": 1.0
+      "target": "public_lobby_publiclobby_csproj_framework_net8_0"
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "public-lobby/PublicLobby.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_publiclobby_csproj_public_lobby_publiclobby",
-      "target": "public_lobby_publiclobby_csproj_sdk_microsoft_net_sdk_web",
-      "confidence_score": 1.0
+      "target": "public_lobby_publiclobby_csproj_sdk_microsoft_net_sdk_web"
     },
     {
       "relation": "contains",
@@ -25599,9 +25617,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe"
     },
     {
       "relation": "references",
@@ -25610,9 +25628,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_httpclient",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_httpclient"
     },
     {
       "relation": "references",
@@ -25621,9 +25639,9 @@
       "source_location": "L19",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_string",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_string"
     },
     {
       "relation": "references",
@@ -25632,9 +25650,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_cs_timespan",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_timespan"
     },
     {
       "relation": "method",
@@ -25642,9 +25660,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L78",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal"
     },
     {
       "relation": "method",
@@ -25652,9 +25670,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L57",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync"
     },
     {
       "relation": "method",
@@ -25662,9 +25680,19 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L70",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L102",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "public_lobby_reachabilityprobe_reachabilityprobe",
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint"
     },
     {
       "relation": "method",
@@ -25672,9 +25700,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L83",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport"
     },
     {
       "relation": "method",
@@ -25682,9 +25710,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L26",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync"
     },
     {
       "relation": "references",
@@ -25693,9 +25721,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken"
     },
     {
       "relation": "references",
@@ -25704,9 +25732,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_cs_task",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_task"
     },
     {
       "relation": "calls",
@@ -25715,9 +25743,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L51",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_islinklocal"
     },
     {
       "relation": "calls",
@@ -25726,9 +25754,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L54",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync"
     },
     {
       "relation": "calls",
@@ -25737,9 +25765,20 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L43",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_normalizeip"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint"
     },
     {
       "relation": "calls",
@@ -25748,9 +25787,9 @@
       "source_file": "public-lobby/ReachabilityProbe.cs",
       "source_location": "L41",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_resolveasync",
-      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport"
     },
     {
       "relation": "references",
@@ -25759,9 +25798,9 @@
       "source_location": "L57",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_cancellationtoken"
     },
     {
       "relation": "references",
@@ -25770,9 +25809,42 @@
       "source_location": "L57",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_isreachableasync",
-      "target": "public_lobby_reachabilityprobe_cs_task",
-      "confidence_score": 1.0
+      "target": "public_lobby_reachabilityprobe_cs_task"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L102",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint",
+      "target": "host"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L102",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint",
+      "target": "port"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "public-lobby/ReachabilityProbe.cs",
+      "source_location": "L102",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "public_lobby_reachabilityprobe_reachabilityprobe_parseendpoint",
+      "target": "secure"
     },
     {
       "relation": "references",
@@ -25781,9 +25853,9 @@
       "source_location": "L83",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "host",
-      "confidence_score": 1.0
+      "target": "host"
     },
     {
       "relation": "references",
@@ -25792,9 +25864,9 @@
       "source_location": "L83",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_reachabilityprobe_reachabilityprobe_parsehostport",
-      "target": "port",
-      "confidence_score": 1.0
+      "target": "port"
     },
     {
       "relation": "contains",
@@ -25802,9 +25874,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry"
     },
     {
       "relation": "contains",
@@ -25812,9 +25884,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L8",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry"
     },
     {
       "relation": "implements",
@@ -25822,9 +25894,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry"
     },
     {
       "relation": "method",
@@ -25832,9 +25904,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L20",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_exists",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_exists"
     },
     {
       "relation": "method",
@@ -25842,9 +25914,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L15",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_get",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_get"
     },
     {
       "relation": "method",
@@ -25852,9 +25924,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L14",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_heartbeat",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_heartbeat"
     },
     {
       "relation": "method",
@@ -25862,9 +25934,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L16",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_listactive",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_listactive"
     },
     {
       "relation": "method",
@@ -25872,9 +25944,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_register",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_register"
     },
     {
       "relation": "method",
@@ -25882,9 +25954,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry",
-      "target": "public_lobby_serverregistry_iserverregistry_remove",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_iserverregistry_remove"
     },
     {
       "relation": "references",
@@ -25893,9 +25965,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry_register",
-      "target": "registerrequest",
-      "confidence_score": 1.0
+      "target": "registerrequest"
     },
     {
       "relation": "references",
@@ -25904,9 +25976,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry_register",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25915,9 +25987,9 @@
       "source_location": "L44",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "registerrequest",
-      "confidence_score": 1.0
+      "target": "registerrequest"
     },
     {
       "relation": "references",
@@ -25926,9 +25998,9 @@
       "source_location": "L73",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25937,9 +26009,9 @@
       "source_location": "L79",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25948,9 +26020,9 @@
       "source_location": "L44",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25959,9 +26031,9 @@
       "source_location": "L15",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry_get",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25970,9 +26042,9 @@
       "source_location": "L16",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry_listactive",
-      "target": "serverentry",
-      "confidence_score": 1.0
+      "target": "serverentry"
     },
     {
       "relation": "references",
@@ -25981,9 +26053,9 @@
       "source_location": "L16",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_iserverregistry_listactive",
-      "target": "ireadonlycollection",
-      "confidence_score": 1.0
+      "target": "ireadonlycollection"
     },
     {
       "relation": "references",
@@ -25992,9 +26064,9 @@
       "source_location": "L79",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "ireadonlycollection",
-      "confidence_score": 1.0
+      "target": "ireadonlycollection"
     },
     {
       "relation": "references",
@@ -26003,9 +26075,9 @@
       "source_location": "L31",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_concurrentdictionary",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_cs_concurrentdictionary"
     },
     {
       "relation": "references",
@@ -26014,9 +26086,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_int",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_cs_int"
     },
     {
       "relation": "references",
@@ -26025,9 +26097,9 @@
       "source_location": "L32",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -26036,9 +26108,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_cs_timespan",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_cs_timespan"
     },
     {
       "relation": "method",
@@ -26046,9 +26118,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L87",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_exists",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_exists"
     },
     {
       "relation": "method",
@@ -26056,9 +26128,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L73",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_get"
     },
     {
       "relation": "method",
@@ -26066,9 +26138,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_heartbeat"
     },
     {
       "relation": "method",
@@ -26076,9 +26148,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L79",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_listactive"
     },
     {
       "relation": "method",
@@ -26086,9 +26158,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L38",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename"
     },
     {
       "relation": "method",
@@ -26096,9 +26168,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L93",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune"
     },
     {
       "relation": "method",
@@ -26106,9 +26178,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L44",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_register"
     },
     {
       "relation": "method",
@@ -26116,9 +26188,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L85",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_remove",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_remove"
     },
     {
       "relation": "calls",
@@ -26127,9 +26199,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L46",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_register",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_normalizename"
     },
     {
       "relation": "calls",
@@ -26138,9 +26210,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L75",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_get",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune"
     },
     {
       "relation": "calls",
@@ -26149,9 +26221,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L81",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_listactive",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune"
     },
     {
       "relation": "calls",
@@ -26160,9 +26232,9 @@
       "source_file": "public-lobby/ServerRegistry.cs",
       "source_location": "L89",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_serverregistry_inmemoryserverregistry_exists",
-      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_serverregistry_inmemoryserverregistry_prune"
     },
     {
       "relation": "contains",
@@ -26170,9 +26242,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L21",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling",
-      "target": "public_lobby_signaling_pending",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_pending"
     },
     {
       "relation": "contains",
@@ -26180,9 +26252,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L15",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling",
-      "target": "public_lobby_signaling_signalingrelay",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay"
     },
     {
       "relation": "references",
@@ -26191,9 +26263,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_cs_concurrentdictionary",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_concurrentdictionary"
     },
     {
       "relation": "references",
@@ -26202,9 +26274,9 @@
       "source_location": "L19",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_cs_timespan",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_timespan"
     },
     {
       "relation": "method",
@@ -26212,9 +26284,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L66",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_drain",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_drain"
     },
     {
       "relation": "method",
@@ -26222,9 +26294,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L43",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_enqueueoffer"
     },
     {
       "relation": "method",
@@ -26232,9 +26304,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L77",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_postanswer",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_postanswer"
     },
     {
       "relation": "method",
@@ -26242,9 +26314,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L98",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_prune"
     },
     {
       "relation": "method",
@@ -26252,9 +26324,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L55",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_takependingasync",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_takependingasync"
     },
     {
       "relation": "method",
@@ -26262,9 +26334,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L87",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_waitanswerasync"
     },
     {
       "relation": "method",
@@ -26272,9 +26344,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L39",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_wakefor"
     },
     {
       "relation": "references",
@@ -26283,9 +26355,9 @@
       "source_location": "L27",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_pending",
-      "target": "datetimeoffset",
-      "confidence_score": 1.0
+      "target": "datetimeoffset"
     },
     {
       "relation": "references",
@@ -26294,9 +26366,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_pending",
-      "target": "public_lobby_signaling_cs_string",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_string"
     },
     {
       "relation": "references",
@@ -26305,9 +26377,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_pending",
-      "target": "semaphoreslim",
-      "confidence_score": 1.0
+      "target": "semaphoreslim"
     },
     {
       "relation": "references",
@@ -26316,9 +26388,9 @@
       "source_location": "L39",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_wakefor",
-      "target": "semaphoreslim",
-      "confidence_score": 1.0
+      "target": "semaphoreslim"
     },
     {
       "relation": "calls",
@@ -26327,9 +26399,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L49",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_wakefor"
     },
     {
       "relation": "calls",
@@ -26338,9 +26410,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L61",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_wakefor",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_wakefor"
     },
     {
       "relation": "calls",
@@ -26349,9 +26421,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L45",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_enqueueoffer",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_prune"
     },
     {
       "relation": "references",
@@ -26360,9 +26432,9 @@
       "source_location": "L55",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "pendingoffer",
-      "confidence_score": 1.0
+      "target": "pendingoffer"
     },
     {
       "relation": "references",
@@ -26371,9 +26443,9 @@
       "source_location": "L55",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_cancellationtoken",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_cancellationtoken"
     },
     {
       "relation": "references",
@@ -26382,9 +26454,9 @@
       "source_location": "L55",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_ireadonlylist",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_ireadonlylist"
     },
     {
       "relation": "references",
@@ -26393,9 +26465,9 @@
       "source_location": "L55",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_cs_task",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_task"
     },
     {
       "relation": "calls",
@@ -26404,9 +26476,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L58",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_drain",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_drain"
     },
     {
       "relation": "calls",
@@ -26415,9 +26487,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L57",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_takependingasync",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_prune"
     },
     {
       "relation": "references",
@@ -26426,9 +26498,9 @@
       "source_location": "L87",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_cs_cancellationtoken",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_cancellationtoken"
     },
     {
       "relation": "references",
@@ -26437,9 +26509,9 @@
       "source_location": "L87",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_cs_task",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_task"
     },
     {
       "relation": "references",
@@ -26448,9 +26520,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "context": "generic_arg",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_drain",
-      "target": "pendingoffer",
-      "confidence_score": 1.0
+      "target": "pendingoffer"
     },
     {
       "relation": "references",
@@ -26459,9 +26531,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_drain",
-      "target": "public_lobby_signaling_cs_list",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_cs_list"
     },
     {
       "relation": "calls",
@@ -26470,9 +26542,9 @@
       "source_file": "public-lobby/Signaling.cs",
       "source_location": "L89",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "public_lobby_signaling_signalingrelay_waitanswerasync",
-      "target": "public_lobby_signaling_signalingrelay_prune",
-      "confidence_score": 1.0
+      "target": "public_lobby_signaling_signalingrelay_prune"
     },
     {
       "relation": "defines",
@@ -36980,5 +37052,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "6355eb13249928a4eb9507903aa039a919c840f0"
+  "built_at_commit": "64667c29951a7a4416b4a741ad780dd702425cdf"
 }

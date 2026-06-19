@@ -119,8 +119,8 @@ database): registry entries expire 30 s after the last heartbeat; signaling tick
 # from the repo root
 dotnet run --project public-lobby -c Release        # listens on :8091
 
-# or build the image directly (self-contained context):
-docker build -t wivuullegiance-public-lobby public-lobby/
+# or build the image directly (built from the repo root, like the sim server):
+docker build -f public-lobby/Dockerfile -t wivuullegiance-public-lobby .
 docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance-public-lobby
 ```
 
@@ -128,8 +128,9 @@ docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance
 
 ## Pointing servers and clients at the lobby
 
-Both read **`PUBLIC_LOBBY`** (`host:port`, default `192.168.1.101:8091`). A scheme prefix is
-optional — `host:port` becomes `http://host:port`; pass `https://host` to use TLS (see below).
+Both read **`PUBLIC_LOBBY`** (default `https://wivuu-public-lobby-production.up.railway.app`). A
+scheme prefix is optional — a bare `host:port` becomes `http://host:port`; pass `https://host` to
+use TLS (see below).
 
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
   `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.sh` this is the default (no
@@ -139,8 +140,9 @@ optional — `host:port` becomes `http://host:port`; pass `https://host` to use 
   opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
   WebRTC automatically.
 
-The repo default `192.168.1.101:8091` is a placeholder — change it (env, `.env`, or the code
-default in `ConnectionManager`/`LobbyRegistrar`) to your real lobby address before sharing builds.
+The repo default is the hosted lobby at `https://wivuu-public-lobby-production.up.railway.app`;
+override it (env, `.env`, or the code default in `ConnectionManager`/`LobbyRegistrar`) to point at
+your own lobby before sharing builds.
 
 ---
 

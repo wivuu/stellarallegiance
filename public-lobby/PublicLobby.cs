@@ -17,7 +17,11 @@ using PublicLobby;
 //   STUN_URL     public STUN url(s) handed to clients/servers for the WebRTC fallback. Comma- or
 //                space-separate several for redundancy. Default stun:stun.cloudflare.com:3478.
 
-int port = int.TryParse(Environment.GetEnvironmentVariable("SHARE_PORT"), out var p) ? p : 8091;
+// Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
+// SHARE_PORT (compose/self-host), else the 8091 default.
+int port = int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
+         : int.TryParse(Environment.GetEnvironmentVariable("SHARE_PORT"), out var p) ? p
+         : 8091;
 var stunServers = BuildStunServers();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +39,11 @@ var fwd = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XFor
 fwd.KnownNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
+
+// Liveness endpoint for a PaaS healthcheck (Railway). Distinct token from the sim server's
+// "wivuu-sim" so an endpoint accidentally pointed here can't be mistaken for a game server by the
+// reachability probe.
+app.MapGet("/health", () => Results.Text("public-lobby"));
 
 // ---- Registry: server discovery -------------------------------------------
 

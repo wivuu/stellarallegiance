@@ -18,8 +18,8 @@ public partial class ConnectionManager : Node
 
 	// Public lobby (public lobby) base URL — where the server browser fetches its list and where
 	// WebRTC joins are signaled. Resolved from PUBLIC_LOBBY / --lobby in _Ready.
-	public string LobbyBase { get; private set; } = $"http://{DefaultLobby}";
-	private const string DefaultLobby = "192.168.1.101:8091";
+	public string LobbyBase { get; private set; } = DefaultLobby;
+	private const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
 
 	private GameNetClient _net = null!;
 	private ServerInputOverlay? _input;

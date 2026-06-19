@@ -30,5 +30,6 @@ EXPOSE 8090
 # Config is via env (see Program.cs):
 #   SIM_SECRET     optional shared-secret password (enables auth when set)
 #   SIM_AUTOSTART  set to 1 to skip the lobby ready-up (bots / benchmarking)
-# Seed/port are flags; override the command to change them.
-ENTRYPOINT ["dotnet", "SimServer.dll", "--port", "8090"]
+#   PORT/SIM_PORT  listen port (PORT wins; default 8090). A PaaS (Railway) injects PORT.
+# Seed is a flag; append --seed/--port to override the command.
+ENTRYPOINT ["dotnet", "SimServer.dll"]

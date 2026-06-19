@@ -10,7 +10,11 @@ using SimServer.Sim;
 // and also hosts the lobby (team/ready) — clients connect directly by ip:port, download all
 // content from the server, and never talk to any database.
 //   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart]
-int port = 8090;
+// Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
+// SIM_PORT (compose/self-host), else the 8090 default. A --port flag below overrides all of these.
+int port = int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
+         : int.TryParse(Environment.GetEnvironmentVariable("SIM_PORT"), out var sp) ? sp
+         : 8090;
 ulong seed = 1234567;
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";

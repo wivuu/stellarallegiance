@@ -51,7 +51,8 @@ services:
   # config below for the WebRTC fallback.
   public-lobby:
     build:
-      context: ./public-lobby        # self-contained (no ProjectReference)
+      context: .                     # repo root, so it builds uniformly with sim-server / railway up
+      dockerfile: public-lobby/Dockerfile
     environment:
       SHARE_PORT: 8091
       # Public STUN handed to clients/servers for the WebRTC fallback (covers ~80% of NATs via

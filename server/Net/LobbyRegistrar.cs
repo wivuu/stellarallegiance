@@ -17,16 +17,18 @@ namespace SimServer.Net;
 // entry for a clean disappearance.
 //
 // Env:
-//   PUBLIC_LOBBY          public-lobby host:port (default 192.168.1.101:8091)
+//   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
+//                         (default https://wivuu-public-lobby-production.up.railway.app)
 //   SIM_PUBLIC_NAME       3-50 char public name; gates registration
 //   SIM_PUBLIC_PORT       public-facing port to advertise/probe (default = the listen port; set
 //                         when a port-forward maps a different external port)
-//   SIM_PUBLIC_ENDPOINT   optional host:port we assert as our reachable address (e.g. the host's
-//                         LAN/public address when we're behind container NAT or a proxy); the lobby
-//                         probes it and advertises it only if it answers /health
+//   SIM_PUBLIC_ENDPOINT   optional address we assert as reachable — host:port (behind container NAT
+//                         / a proxy) or a scheme'd https://domain (a PaaS HTTPS edge); the lobby
+//                         probes it and advertises it only if it answers /health. Defaults to
+//                         https://$RAILWAY_PUBLIC_DOMAIN on Railway.
 public sealed class LobbyRegistrar
 {
-    public const string DefaultLobby = "192.168.1.101:8091";
+    public const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
     static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(10);
 
     private readonly ClientHub _hub;
@@ -65,6 +67,16 @@ public sealed class LobbyRegistrar
         if (lobby.Length == 0) lobby = DefaultLobby;
         var shareBase = lobby.StartsWith("http") ? lobby.TrimEnd('/') : $"http://{lobby}";
         var endpoint = (Environment.GetEnvironmentVariable("SIM_PUBLIC_ENDPOINT") ?? "").Trim();
+
+        // On a PaaS that fronts us with an HTTPS edge (Railway sets RAILWAY_PUBLIC_DOMAIN), our
+        // reachable address is wss://<domain> on 443 — assert it so the lobby probes/advertises that
+        // (our container source IP + listen port aren't directly reachable, and WebRTC has no UDP
+        // edge there anyway). An explicit SIM_PUBLIC_ENDPOINT still wins.
+        if (endpoint.Length == 0)
+        {
+            var railway = (Environment.GetEnvironmentVariable("RAILWAY_PUBLIC_DOMAIN") ?? "").Trim();
+            if (railway.Length > 0) endpoint = $"https://{railway}";
+        }
 
         // Advertise/probe the public-facing port — usually the listen port, but a port-forward may
         // map a different external port, so allow an override.

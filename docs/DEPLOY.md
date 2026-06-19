@@ -40,6 +40,49 @@ reach a NAT'd server (it can always join direct servers). Only `public-lobby`'s 
 to be open; put TLS in front of it and set `PUBLIC_LOBBY=https://lobby.example.com`. Full hosting
 guide: **[public-lobby/README.md](../public-lobby/README.md)**.
 
+## Railway (two separate projects)
+
+Deploy the lobby and a game server as **two separate Railway projects from this same repo** — they
+talk only over their public HTTPS domains (separate projects don't share private networking), so a
+community can run one centralized lobby (or one per community) while members independently host
+game servers. Both services honor Railway's injected `PORT`.
+
+Both Dockerfiles build from the **repo root** (`server/Dockerfile` needs it for the `shared/`
+project reference; `public-lobby/Dockerfile` matches for uniformity). `railway up` tars the git
+root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
+point at its Dockerfile — no Root Directory setting needed.
+
+**1. Public-lobby project**
+
+```bash
+railway init -n wivuu-public-lobby                      # create + link the project
+railway variables --set RAILWAY_DOCKERFILE_PATH=public-lobby/Dockerfile
+railway up -c                                           # build + deploy from the repo root
+railway domain                                          # generate its public domain
+```
+
+Optional env: `STUN_URL` (WebRTC fallback for *non*-Railway NAT'd servers; the public default is
+fine). Note the generated domain, e.g. `wivuu-public-lobby-production.up.railway.app`.
+
+**2. Game-server project** — a *separate* Railway project from the same repo:
+
+```bash
+railway init -n wivuu-sim-server
+railway variables --set RAILWAY_DOCKERFILE_PATH=server/Dockerfile \
+  --set SIM_PUBLIC_NAME="My Server" \
+  --set PUBLIC_LOBBY=https://<lobby-domain>             # the domain from step 1
+  # --set SIM_SECRET=...                                # optional (see Auth)
+railway up -c
+railway domain
+```
+
+`SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
+`https://<server-domain>`, so the lobby probes it over HTTPS and advertises `wss://<server-domain>` —
+clients one-click-join directly, no extra config. On Railway a server is **always direct** (joined
+over `wss://<domain>/game`): there's no UDP edge for WebRTC hole-punching, so the WebRTC/STUN
+fallback only applies to home/self-hosted NAT'd servers. Verify with
+`curl https://<lobby-domain>/servers` — the entry's `publicEndpoint` should be `wss://<server-domain>`.
+
 ## TLS
 
 The sim server speaks **plain `ws://` on :8090**. Terminate TLS at the **hosting layer's ingress

@@ -2,7 +2,8 @@
 # Build and run the standalone authoritative sim server (server/). It hosts the lobby and the
 # 20 Hz match; clients connect directly by ip:port and download all content from it.
 #
-# By DEFAULT it publishes itself to the public lobby (PUBLIC_LOBBY, default 192.168.1.101:8091)
+# By DEFAULT it publishes itself to the hosted public lobby (PUBLIC_LOBBY, default
+# https://wivuu-public-lobby-production.up.railway.app)
 # so clients can discover and WebRTC-join it; pass --local to stay private (direct ws:// only,
 # no lobby registration).
 #
@@ -37,7 +38,7 @@ if [[ "${LOCAL}" == "1" ]]; then
   echo "[run-server] --local: private (not registering with the public lobby)"
 else
   # Public: default the lobby + a name (hostname, trimmed to the 50-char cap) so it registers.
-  : "${PUBLIC_LOBBY:=192.168.1.101:8091}"
+  : "${PUBLIC_LOBBY:=https://wivuu-public-lobby-production.up.railway.app}"
   : "${SIM_PUBLIC_NAME:=$(hostname | cut -c1-50)}"
   export PUBLIC_LOBBY SIM_PUBLIC_NAME
   echo "[run-server] publishing to public lobby ${PUBLIC_LOBBY} as \"${SIM_PUBLIC_NAME}\" (use --local to stay private)"

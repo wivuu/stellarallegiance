@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build and launch the Godot client. By DEFAULT it opens the server browser pointed at the public
-# lobby (PUBLIC_LOBBY, default 192.168.1.101:8091) so you can pick a server; pass --local to skip
+# lobby (PUBLIC_LOBBY, default https://wivuu-public-lobby-production.up.railway.app) so you can pick
+# a server; pass --local to skip
 # the browser and connect straight to localhost. Builds the client C# fresh so godot-mono can't
 # launch a stale assembly against a rebuilt server (silent protocol skew). Other args pass through
 # to Godot.
@@ -28,7 +29,7 @@ if [[ "${LOCAL}" == "1" ]]; then
   echo "[run-client] --local: connecting directly to localhost:${SIM_PORT:-8090}"
   set -- --host "localhost:${SIM_PORT:-8090}" "$@"
 else
-  : "${PUBLIC_LOBBY:=192.168.1.101:8091}"
+  : "${PUBLIC_LOBBY:=https://wivuu-public-lobby-production.up.railway.app}"
   export PUBLIC_LOBBY
   echo "[run-client] public lobby ${PUBLIC_LOBBY} server browser (use --local for direct localhost)"
 fi
