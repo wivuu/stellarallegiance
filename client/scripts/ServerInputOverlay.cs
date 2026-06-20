@@ -25,6 +25,7 @@ public partial class ServerInputOverlay : Control
         int Players, int MaxPlayers, string? State);
 
     private ConnectionManager _cm = null!;
+    private LineEdit _name = null!;
     private LineEdit _field = null!;
     private Label _error = null!;
     private VBoxContainer _list = null!;
@@ -56,6 +57,21 @@ public partial class ServerInputOverlay : Control
         center.AddChild(col);
 
         col.AddChild(Centered("STELLAR ALLEGIANCE", 38));
+
+        // ---- Pilot name (persisted; pre-filled from the last run) ----
+        col.AddChild(Centered("Pilot name", 16));
+        _name = new LineEdit
+        {
+            PlaceholderText = "your callsign",
+            Text = UserPrefs.PilotName,
+            MaxLength = UserPrefs.MaxNameLength,
+            CustomMinimumSize = new Vector2(0, 40),
+        };
+        _name.AddThemeFontSizeOverride("font_size", 18);
+        // Enter in the name field re-confirms and connects to the typed direct address.
+        _name.TextSubmitted += _ => Submit();
+        col.AddChild(_name);
+        _name.GrabFocus();
 
         // ---- Public server list ----
         var header = new HBoxContainer();
@@ -180,6 +196,7 @@ public partial class ServerInputOverlay : Control
             string sid = s.SessionId, name = s.Name, endpoint = s.PublicEndpoint ?? "";
             btn.Pressed += () =>
             {
+                CommitName();
                 if (direct) _cm.ConnectTo(endpoint);          // straight WebSocket to the server
                 else _cm.ConnectToLobby(sid, name);            // WebRTC via the lobby
             };
@@ -197,7 +214,17 @@ public partial class ServerInputOverlay : Control
             return;
         }
         _error.Visible = false;
+        CommitName();
         _cm.ConnectTo(text);
+    }
+
+    // Persist the typed pilot name and hand it to the net client before any join. Empty is allowed
+    // (the server falls back to a Pilot{id} default), so this never blocks connecting.
+    private void CommitName()
+    {
+        string name = UserPrefs.Clamp(_name.Text);
+        UserPrefs.SetPilotName(name);
+        _cm.SetPilotName(name);
     }
 
     private static Label Centered(string text, int size)

@@ -111,6 +111,34 @@ public partial class RemoteShip : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
+	// Floating pilot nameplate (other players only — the local ship is a PredictionController and
+	// never gets one). Created lazily the first time a non-empty name resolves; PIGs/pods that never
+	// resolve a name never allocate one. Billboarded + fixed screen size so it stays readable at any
+	// range and orientation, no depth test so the hull never clips it.
+	private Label3D? _nameplate;
+	private string _pilotName = "";
+
+	public void SetPilotName(string name)
+	{
+		name ??= "";
+		if (name == _pilotName) return;   // cheap: skip churn when the roster re-broadcasts unchanged
+		_pilotName = name;
+
+		if (name.Length == 0)
+		{
+			if (_nameplate is not null) _nameplate.Visible = false;
+			return;
+		}
+
+		if (_nameplate is null)
+		{
+			_nameplate = Nameplate.Create(Team);
+			AddChild(_nameplate);
+		}
+		_nameplate.Text = name;
+		_nameplate.Visible = true;
+	}
+
 	public void Initialize(Ship row, DefRegistry defs, uint serverTick)
 	{
 		ShipId = row.ShipId;

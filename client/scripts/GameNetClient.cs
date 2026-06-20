@@ -71,8 +71,16 @@ public partial class GameNetClient : Node
         _defs = GetNode<DefRegistry>("../DefRegistry");
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _secret = OS.GetEnvironment("SIM_SECRET") ?? "";
-        _name = OS.GetEnvironment("PILOT_NAME") ?? "";
+        // Name resolution: a value set from the start screen (SetPilotName) wins; otherwise fall
+        // back to the saved pref, then the PILOT_NAME env (dev / --host launches that skip the
+        // overlay), then the server's Pilot{id} default for an empty name.
+        _name = UserPrefs.PilotName;
+        if (string.IsNullOrEmpty(_name)) _name = OS.GetEnvironment("PILOT_NAME") ?? "";
     }
+
+    // Set the pilot name typed on the start screen (via ConnectionManager). Takes effect on the
+    // next connect's Hello frame; the overlay always commits before calling ConnectTo.
+    public void SetPilotName(string name) => _name = UserPrefs.Clamp(name);
 
     // Direct join: open (or re-open) a WebSocket to the given ws:// URL (LAN / dev / typed
     // address). Called by ConnectionManager once it has resolved an address.
@@ -386,7 +394,7 @@ public partial class GameNetClient : Node
     }
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-    private const byte ProtocolVersion = 7;
+    private const byte ProtocolVersion = 8;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -522,9 +530,13 @@ public partial class GameNetClient : Node
             byte team = r.ReadByte();
             bool ready = r.ReadByte() != 0;
             bool hasShip = r.ReadByte() != 0;
-            list.Add(new LobbyPlayer(id, name, team, ready, hasShip));
+            ulong shipId = r.ReadUInt64();
+            list.Add(new LobbyPlayer(id, name, team, ready, hasShip, shipId));
         }
         LobbyPlayers = list;
+        // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
+        // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
+        _world.NetApplyPilotNames(list);
         LobbyChanged?.Invoke();
     }
 

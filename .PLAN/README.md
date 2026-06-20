@@ -17,7 +17,8 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- Spatial audio system - Implement 3D spatial audio for ships, weapons, and environmental sounds to enhance immersion.
+- When ship exits aleph, they should be facing forwards (out of the aleph) -- reorient the ship
+- When flying straight forward and shooting, I can hear the bullets hitting my own ship. Bullets should not be able to hit own ship, in case hardpoint is embedded in mesh or the prediction logic is slightly off
 ---
 
 ## Roadmap (prioritized)

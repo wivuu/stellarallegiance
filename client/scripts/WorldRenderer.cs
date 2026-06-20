@@ -331,6 +331,32 @@ public partial class WorldRenderer : Node3D
 	public void NetUpdateShip(Ship oldRow, Ship newRow) => UpdateShip(oldRow, newRow);
 	public void NetDeleteShip(Ship row) => DeleteShip(row);
 
+	// ShipId -> pilot name, rebuilt from each MsgLobbyState roster. The roster is the only source of
+	// names (snapshots carry no identity); it's sent on every roster change including spawn/death, so
+	// this stays current. PIG/pod ships with no roster row simply aren't in the map -> no nameplate.
+	private readonly Dictionary<ulong, string> _pilotNames = new();
+
+	// Apply the latest roster to live ship nodes. Called by GameNetClient whenever the roster lands —
+	// which may be a frame after a ship's first snapshot (so InsertShip couldn't resolve the name
+	// yet) and again across respawns (the pilot's ShipId changes). Remote ships only; the local
+	// ship (a PredictionController) gets no nameplate.
+	public void NetApplyPilotNames(IReadOnlyList<LobbyPlayer> roster)
+	{
+		_pilotNames.Clear();
+		foreach (var p in roster)
+			if (p.ShipId != 0 && !string.IsNullOrEmpty(p.Name))
+				_pilotNames[p.ShipId] = p.Name;
+
+		foreach (var (shipId, node) in _shipNodes)
+		{
+			string nm = _pilotNames.TryGetValue(shipId, out var n) ? n : "";
+			// Remote ships always show their pilot's name; the local ship (a PredictionController)
+			// carries its own name too but only reveals it in the F3 overview.
+			if (node is RemoteShip rs) rs.SetPilotName(nm);
+			else if (node is PredictionController pc) pc.SetPilotName(nm);
+		}
+	}
+
 	// Tear the whole rendered world down to a blank slate — used when the player leaves a server
 	// (ConnectionManager.Leave) so nothing from the old session lingers behind the address screen,
 	// and so a fresh Welcome rebuilds cleanly rather than double-adding. Frees every world node
@@ -355,6 +381,7 @@ public partial class WorldRenderer : Node3D
 		_baseTeams.Clear();
 		_bolts.Clear();
 		_sectors.Clear();
+		_pilotNames.Clear();
 
 		LocalShip = null;
 		_localSector = HomeSector;
@@ -605,6 +632,8 @@ public partial class WorldRenderer : Node3D
 			pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
 			ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
 			pc.Initialize(row, _defs);
+			if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
+				pc.SetPilotName(localPilot);
 			LocalShip = pc;
 			_localTeam = row.Team;
 			// Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
@@ -626,6 +655,8 @@ public partial class WorldRenderer : Node3D
 		rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
 		ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
 		rs.Initialize(row, _defs, ServerTick);
+		if (_pilotNames.TryGetValue(row.ShipId, out var pilot))
+			rs.SetPilotName(pilot);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
 	}
