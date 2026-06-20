@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781575197.1048746,
-    "ast_hash": "3dcd274bd9ae87de207a1375ed45bdf9",
+    "mtime": 1781958814.2459052,
+    "ast_hash": "3b5f8cafc934588f119c265f37de900d",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781957625.489425,
-    "ast_hash": "dba23270b5d9c70ef944d1f10393905e",
+    "mtime": 1781958795.7994664,
+    "ast_hash": "61457e31dfa6efd51d526ea10d03c600",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781957649.848052,
-    "ast_hash": "41e8e794c0e1dc7a682763e5a5c9516d",
+    "mtime": 1781958831.0321412,
+    "ast_hash": "4b3c2c59ce636d84d59f6c6b1163d0cf",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781957556.4731135,
-    "ast_hash": "9e7d0dcae51aceb66376647019f2e017",
+    "mtime": 1781958239.7221246,
+    "ast_hash": "32de82beedfd4bf05b6acbc93bd0b4fd",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
@@ -6137,6 +6137,11 @@
   "client/scripts/UserPrefs.cs": {
     "mtime": 1781957490.123298,
     "ast_hash": "bc2a4de7f45d34d22f06f4fd34ae6903",
+    "semantic_hash": ""
+  },
+  "client/scripts/Nameplate.cs": {
+    "mtime": 1781958787.0069084,
+    "ast_hash": "d660f66b90d1f63bef3321f63072d43b",
     "semantic_hash": ""
   }
 }

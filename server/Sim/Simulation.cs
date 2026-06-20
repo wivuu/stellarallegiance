@@ -838,8 +838,23 @@ public sealed partial class Simulation
             s.SectorId = g.DestSectorId;
             s.State.Pos = g.PartnerPos + e * exit;
             s.State.Vel = e * speed;
+            // Emerge facing out of the aleph: point ship-local forward (+Z) along the
+            // exit direction and drop any residual spin, so the ship comes through
+            // pointed the way it's travelling instead of keeping its pre-warp heading.
+            s.State.Rot = LookRotationZ(e);
+            s.State.AngVel = default;
             return;
         }
+    }
+
+    // Shortest-arc rotation that aligns ship-local forward (+Z) with `dir` (unit),
+    // with minimal roll. a=(0,0,1): cross(a,dir)=(-dir.Y,dir.X,0), dot(a,dir)=dir.Z.
+    private static Quat LookRotationZ(Vec3 dir)
+    {
+        float d = dir.Z;
+        // Antiparallel (facing -Z): the formula degenerates; spin 180° about X instead.
+        if (d < -0.99999f) return new Quat(1f, 0f, 0f, 0f);
+        return new Quat(-dir.Y, dir.X, 0f, 1f + d).Normalized();
     }
 
     private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
