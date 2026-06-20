@@ -15,7 +15,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1781957508.7418356,
+    "mtime": 1781959279.8635397,
     "ast_hash": "cdc744071312fb838df2621acc2a038f",
     "semantic_hash": ""
   },
@@ -60,7 +60,7 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781958814.2459052,
+    "mtime": 1781959279.864973,
     "ast_hash": "3b5f8cafc934588f119c265f37de900d",
     "semantic_hash": ""
   },
@@ -70,7 +70,7 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781958795.7994664,
+    "mtime": 1781959279.865292,
     "ast_hash": "61457e31dfa6efd51d526ea10d03c600",
     "semantic_hash": ""
   },
@@ -105,7 +105,7 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781958831.0321412,
+    "mtime": 1781959279.8661175,
     "ast_hash": "4b3c2c59ce636d84d59f6c6b1163d0cf",
     "semantic_hash": ""
   },
@@ -210,12 +210,12 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1781958239.7221246,
+    "mtime": 1781959279.8719776,
     "ast_hash": "32de82beedfd4bf05b6acbc93bd0b4fd",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1781957587.1867387,
+    "mtime": 1781959279.8726733,
     "ast_hash": "a3257a46c0f565e8646cbff5ea372bac",
     "semantic_hash": ""
   },
@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1781908323.5641263,
-    "ast_hash": "6bcfe1a3cb9fdf65e2b8eecb359f9427",
+    "mtime": 1781959384.1116176,
+    "ast_hash": "c5d983855f214898967104cf33e295fc",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
@@ -250,7 +250,7 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1781957602.3105512,
+    "mtime": 1781959279.8637667,
     "ast_hash": "2ebc0d1111c90d47b349db835ea202f0",
     "semantic_hash": ""
   },
@@ -295,12 +295,12 @@
     "semantic_hash": ""
   },
   "client/scripts/NetTypes.cs": {
-    "mtime": 1781957608.4404266,
+    "mtime": 1781959279.8646245,
     "ast_hash": "5eea8dea4d60a7b7e713e4f489cf9efb",
     "semantic_hash": ""
   },
   "client/scripts/ServerInputOverlay.cs": {
-    "mtime": 1781957531.9347095,
+    "mtime": 1781959279.8656104,
     "ast_hash": "ad56d55ce9cd4cb4fe4662f44a232b04",
     "semantic_hash": ""
   },
@@ -320,7 +320,7 @@
     "semantic_hash": ""
   },
   "server/Net/Lobby.cs": {
-    "mtime": 1781957550.661582,
+    "mtime": 1781959279.872391,
     "ast_hash": "ee278053b8229292a42e583447f03616",
     "semantic_hash": ""
   },
@@ -6135,13 +6135,13 @@
     "semantic_hash": ""
   },
   "client/scripts/UserPrefs.cs": {
-    "mtime": 1781957490.123298,
+    "mtime": 1781959279.8658674,
     "ast_hash": "bc2a4de7f45d34d22f06f4fd34ae6903",
     "semantic_hash": ""
   },
   "client/scripts/Nameplate.cs": {
-    "mtime": 1781958787.0069084,
-    "ast_hash": "d660f66b90d1f63bef3321f63072d43b",
+    "mtime": 1781959279.8642635,
+    "ast_hash": "0f0d29f5aba8e0a096ca656058be7994",
     "semantic_hash": ""
   }
 }
