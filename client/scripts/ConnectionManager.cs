@@ -50,6 +50,10 @@ public partial class ConnectionManager : Node
 		else ShowInput();
 	}
 
+	// Hand the pilot name the player typed on the start screen to the net client so the next
+	// connect's Hello carries it. The overlay calls this before either ConnectTo/ConnectToLobby.
+	public void SetPilotName(string name) => _net.SetPilotName(name);
+
 	// Submit handler for the address screen, and the entry point for --host. Direct WebSocket join.
 	public void ConnectTo(string hostOrUrl)
 	{

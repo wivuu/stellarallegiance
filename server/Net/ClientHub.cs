@@ -229,7 +229,7 @@ public sealed class ClientHub
     private void BroadcastLobby()
     {
         var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner,
-            _lobby.Snapshot(id => _sim.ShipIdOf(id) != 0));
+            _lobby.Snapshot(id => _sim.ShipIdOf(id)));
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
@@ -449,6 +449,11 @@ public sealed class ClientHub
         // roster the fan-out hands to the workers). After this, the snapshot build reads only
         // shared, immutable-for-the-tick state.
         _dispatchList.Clear();
+        // A spawn/death/respawn is processed by the sim a tick or more AFTER MsgSpawn enqueued it,
+        // so the controlled-ship id only becomes known here. Whenever one flips, the lobby roster's
+        // ShipId is stale, so re-broadcast it once after the pass — that roster is how every client
+        // maps a snapshot ship back to its pilot for the in-world nameplate (and the HasShip flag).
+        bool rosterDirty = false;
         foreach (var kv in _clients)
         {
             var client = kv.Value;
@@ -459,6 +464,7 @@ public sealed class ClientHub
             if (sid != client.ShipId)
             {
                 client.ShipId = sid;
+                rosterDirty = true;
                 if (sid != 0)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildYouAre(sid)));
             }
@@ -483,6 +489,10 @@ public sealed class ClientHub
 
             _dispatchList.Add(client);
         }
+
+        // Publish the corrected roster (ShipId now known for any ship that just spawned/changed).
+        if (rosterDirty)
+            BroadcastLobby();
 
         int n = _dispatchList.Count;
 

@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 7;
+    public const byte Version = 8;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
@@ -274,6 +274,7 @@ public static class Protocol
             w.Write(e.Team);
             w.Write((byte)(e.Ready ? 1 : 0));
             w.Write((byte)(e.HasShip ? 1 : 0));
+            w.Write(e.ShipId);   // controlled ship (0 = not flying); client maps it to the nameplate
         }
         w.Flush();
         return ms.ToArray();

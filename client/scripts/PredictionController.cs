@@ -102,6 +102,32 @@ public partial class PredictionController : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
+	// The local player's own nameplate. Unlike remote ships (always labelled), the local ship's
+	// label is shown ONLY while the F3 sector overview is open — in normal chase flight you don't
+	// want your own name floating in front of you. Created lazily once a name resolves; _Process
+	// toggles its visibility from SectorOverview.Active.
+	private Label3D? _nameplate;
+	private string _pilotName = "";
+
+	public void SetPilotName(string name)
+	{
+		name ??= "";
+		if (name == _pilotName) return;
+		_pilotName = name;
+		if (name.Length == 0)
+		{
+			if (_nameplate is not null) _nameplate.Visible = false;
+			return;
+		}
+		if (_nameplate is null)
+		{
+			_nameplate = Nameplate.Create(Team);
+			_nameplate.Visible = false;   // visibility is driven by the F3 overview in _Process
+			AddChild(_nameplate);
+		}
+		_nameplate.Text = name;
+	}
+
 	// Engine-glow intensity for the afterburner. The boost's FLIGHT effect now rides
 	// in the networked ShipInput (FlightModel reads input.Boost), so this only drives
 	// the visual exhaust; ShipController sets it from the same Shift key each frame.
@@ -325,6 +351,10 @@ public partial class PredictionController : Node3D
 
 		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
 		_engine?.SetThrottle(_throttle, _afterburner);
+
+		// Show the local nameplate only in the F3 sector overview.
+		if (_nameplate is not null)
+			_nameplate.Visible = SectorOverview.Active && _pilotName.Length > 0;
 	}
 
 	// Semi-implicit critically-damped (ζ=1) spring driving offset x and its
