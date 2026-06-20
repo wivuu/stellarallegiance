@@ -8,6 +8,15 @@ using StellarAllegiance.Shared;
 // delay and INTERPOLATES between them — standard snapshot interpolation. This
 // trades ~100 ms of latency for smooth motion despite 20 Hz (~18.7 Hz here)
 // authoritative updates. No forward extrapolation (.PLAN/07).
+//
+// Samples are placed on the SERVER-TICK timeline (tick × MsPerTick), NOT on client
+// arrival time. The server emits state on an exactly uniform tick cadence, but the
+// packets arrive jittered by the network; timestamping by arrival makes the interp
+// segments uneven in duration while the playback clock sweeps uniformly, so the
+// rendered speed wobbles frame-to-frame — visible as choppy motion, worst when
+// pacing a teammate at matched velocity (their relative motion should be dead
+// steady). Stamping by tick makes every segment uniform; the playback clock then
+// rides a smoothed wall→server offset (filters arrival jitter, still tracks drift).
 public partial class RemoteShip : Node3D
 {
 	// Render this far behind the latest sample so there are normally two samples
@@ -32,9 +41,21 @@ public partial class RemoteShip : Node3D
 	// Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
 	private double _gapEma = InterpDelayMs / GapDelayFactor;
 
+	// Server-tick → server-time conversion. The sim integrates at a fixed dt, so a tick
+	// number maps to an exact server-time stamp; samples live on this jitter-free axis.
+	private const double MsPerTick = FlightModel.Dt * 1000.0;
+
+	// Playback clock = wall clock minus a smoothed (wall − server) offset, kept `delay`
+	// behind the newest sample. The EMA absorbs per-packet arrival jitter (so the clock
+	// advances smoothly with wall time) while still tracking slow client/server clock
+	// drift. Small alpha ⇒ heavy jitter rejection over the ~18 Hz arrival rate.
+	private const float ClockOffsetAlpha = 0.05f;
+	private double _clockOffset;        // smoothed (wall ms − server ms)
+	private bool _haveClockOffset;
+
 	private struct Sample
 	{
-		public double T;        // client arrival time (ms)
+		public double T;        // server-time stamp (ms) = serverTick * MsPerTick
 		public Vector3 Pos;
 		public Quaternion Rot;
 	}
@@ -90,7 +111,7 @@ public partial class RemoteShip : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-	public void Initialize(Ship row, DefRegistry defs)
+	public void Initialize(Ship row, DefRegistry defs, uint serverTick)
 	{
 		ShipId = row.ShipId;
 		Team = row.Team;
@@ -106,10 +127,10 @@ public partial class RemoteShip : Node3D
 			_canBoost = s.AbThrust > 0f;
 		}
 		_burnCooldown = (float)GD.RandRange(1.0, 3.0);   // stagger drones' first burst roll
-		Push(row);
+		Push(row, serverTick);
 	}
 
-	public void OnAuthoritative(Ship row) => Push(row);
+	public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
 
 	// Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
 	// un-initialized or transient ship state on the wire — would NaN under Normalized()
@@ -127,25 +148,39 @@ public partial class RemoteShip : Node3D
 
 	private static bool IsFinite(Vector3 v) => v.IsFinite();
 
-	private void Push(Ship row)
+	private void Push(Ship row, uint serverTick)
 	{
+		double serverMs = serverTick * MsPerTick;
+
+		// Reject stale/out-of-order frames (a reordered or duplicate packet on the unreliable
+		// WebRTC channel): the segment search below assumes _samples is chronological by T, and
+		// a backward stamp would corrupt it. Newest-only is fine — we never extrapolate.
+		if (_samples.Count > 0 && serverMs <= _samples[^1].T)
+			return;
+
+		// Smoothed wall→server offset so _Process can map wall time onto the server timeline
+		// without inheriting this packet's arrival jitter. Seed from the first sample.
+		double offset = Time.GetTicksMsec() - serverMs;
+		if (!_haveClockOffset) { _clockOffset = offset; _haveClockOffset = true; }
+		else _clockOffset += (offset - _clockOffset) * ClockOffsetAlpha;
+
 		var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
 		var s = new Sample
 		{
-			T = Time.GetTicksMsec(),
+			T = serverMs,
 			Pos = IsFinite(pos) ? pos : Position,   // keep last good on a corrupt sample
 			Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
 		};
 		var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
 		_velTarget = IsFinite(vel) ? vel : Vector3.Zero;
 
-		// Track the smoothed gap between successive arrivals so _Process can size the render
-		// delay to this ship's actual update rate. Reject non-positive (clock/order) and
+		// Track the smoothed gap between successive samples (now in jitter-free server time, so
+		// this is the ship's true update cadence) to size the render delay below. Reject
 		// absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
 		if (_samples.Count > 0)
 		{
-			double gap = s.T - _samples[^1].T;
-			if (gap > 0.0 && gap < 4000.0)
+			double gap = s.T - _samples[^1].T;   // > 0 by the stale guard above
+			if (gap < 4000.0)
 				_gapEma += (gap - _gapEma) * GapEmaAlpha;
 		}
 
@@ -198,7 +233,10 @@ public partial class RemoteShip : Node3D
 		// ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
 		// renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
 		double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
-		double renderT = Time.GetTicksMsec() - delay;
+		// Map wall time onto the server timeline via the smoothed offset, then render `delay`
+		// behind. The offset filtered out the arrival jitter, so renderT sweeps the uniformly
+		// tick-spaced samples at a steady rate — uniform interp segments, smooth motion.
+		double renderT = (Time.GetTicksMsec() - _clockOffset) - delay;
 
 		// Before our oldest sample → clamp to it.
 		if (renderT <= _samples[0].T)

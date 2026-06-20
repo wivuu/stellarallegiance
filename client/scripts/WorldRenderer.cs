@@ -625,7 +625,7 @@ public partial class WorldRenderer : Node3D
 		_ships.AddChild(rs);
 		rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
 		ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
-		rs.Initialize(row, _defs);
+		rs.Initialize(row, _defs, ServerTick);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
 	}
@@ -655,7 +655,7 @@ public partial class WorldRenderer : Node3D
 				// Synthesize the bolt locally (no Projectile rows are replicated).
 				if (newRow.LastFireTick != oldRow.LastFireTick && newRow.LastFireTick != 0 && !newRow.IsPod)
 					SpawnBoltFor(newRow);
-				rs.OnAuthoritative(newRow);
+				rs.OnAuthoritative(newRow, ServerTick);
 				SetNodeSector(rs, newRow.SectorId);   // a remote ship may have warped in/out
 				break;
 		}

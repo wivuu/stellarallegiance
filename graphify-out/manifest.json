@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
-    "mtime": 1781620197.947384,
-    "ast_hash": "1c8080b2686705cf91988e1e10f149f7",
+    "mtime": 1781914011.8672938,
+    "ast_hash": "392409398f3f8fd4f5c4db854b6c0d69",
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1781621928.407962,
-    "ast_hash": "bd8ebd2695dfb13f0c00802fff972a50",
+    "mtime": 1781909500.143825,
+    "ast_hash": "e6e902d9a22aef1b83216f9a3f030217",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781896879.0678306,
-    "ast_hash": "bd7f1aeeb17d3ebe7f57e22e0c0eba8b",
+    "mtime": 1781914020.6196797,
+    "ast_hash": "55e2d69d9a4d470acd02a3816c8c8c64",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -6127,6 +6127,11 @@
   "pick-assets/sound-effects/xafter.ogg": {
     "mtime": 1781895530.5171905,
     "ast_hash": "b8e9a8f218a53d5cb3763b1826bb9a2b",
+    "semantic_hash": ""
+  },
+  ".github/workflows/release.yml": {
+    "mtime": 1781913741.270256,
+    "ast_hash": "9ac3a7671ffea9af81ca87a3bbee441b",
     "semantic_hash": ""
   }
 }
