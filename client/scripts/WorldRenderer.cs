@@ -800,21 +800,21 @@ public partial class WorldRenderer : Node3D
 		Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
 		Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
 
-		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), row.SectorId,
+		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), ShipMath.ToGodot(shotDir), row.SectorId,
 			weapon.ProjectileLifeTicks * FlightModel.Dt, row.ShipId, ShotMaskLeadSec());
 	}
 
 	// The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
 	// rendering as a remote bolt, no masking lead (prediction is already now-correct).
-	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, float lifeSec)
-		=> AddBolt(pos, vel, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
+	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec)
+		=> AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
 
-	private void AddBolt(Vector3 pos, Vector3 vel, uint sector, float lifeSec, ulong ownerShipId, float leadSec)
+	private void AddBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, uint sector, float lifeSec, ulong ownerShipId, float leadSec)
 	{
 		var pv = new ProjectileView { Name = "Bolt" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(pos, vel, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
+		pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
 		SetNodeSector(pv, sector);
 		_bolts.Add(pv);
 		// Single chokepoint for every shot (local + remote), so the muzzle report

@@ -1,7 +1,7 @@
 # Graph Report - wivuullegiance  (2026-06-20)
 
 ## Corpus Check
-- 81 files · ~110,540 words
+- 81 files · ~110,493 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -302,8 +302,8 @@ Cohesion: 0.13
 Nodes (11): byte, ConnectionManager, DbConnection, Dictionary, HardpointDef, List, ShipStats, WeaponDef (+3 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.29
-Nodes (6): Base, Base, EventContext, Projectile, EventContext, Projectile
+Cohesion: 0.24
+Nodes (7): Base, Base, Color, EventContext, Projectile, EventContext, Projectile
 
 ### Community 59 - "Community 59"
 Cohesion: 0.13
@@ -342,8 +342,8 @@ Cohesion: 0.20
 Nodes (7): float, GradientTexture2D, StandardMaterial3D, Texture2D, WorldRenderer, GpuParticles3D, DustField
 
 ### Community 71 - "Community 71"
-Cohesion: 0.24
-Nodes (5): Node3D, Color, StandardMaterial3D, Node3D, BaseHealthBar
+Cohesion: 0.31
+Nodes (4): Node3D, StandardMaterial3D, Node3D, BaseHealthBar
 
 ### Community 72 - "Community 72"
 Cohesion: 0.22

@@ -18,6 +18,7 @@ public partial class ProjectileView : Node3D
 {
 	private Vector3 _pos;
 	private Vector3 _vel;
+	private Vector3 _aimDir;  // normalized muzzle/shot direction, used only to orient the tracer
 	private double _t0;       // seconds, when _pos/_vel were sampled (spawn)
 	private float _ttlSec;    // flight life (already obstruction-clipped by the spawner)
 
@@ -38,15 +39,20 @@ public partial class ProjectileView : Node3D
 	public Vector3 Velocity => _vel;
 	public ulong OwnerShipId { get; private set; }
 
-	public void Initialize(Vector3 pos, Vector3 vel, float ttlSec, ulong ownerShipId, float renderLeadSec = 0f)
+	public void Initialize(Vector3 pos, Vector3 vel, Vector3 aimDir, float ttlSec, ulong ownerShipId, float renderLeadSec = 0f)
 	{
 		_pos = pos;
 		_vel = vel;
+		// Orient the tracer along the fired direction (velocity in the firing ship's frame),
+		// not the absolute velocity. Absolute velocity inherits the ship's strafe, so a bolt
+		// fired while flying sideways would yaw the cylinder off-axis — fall back to it only
+		// if no aim direction was supplied.
+		_aimDir = aimDir.LengthSquared() > 1e-6f ? aimDir.Normalized() : vel.Normalized();
 		_ttlSec = ttlSec;
 		_renderLeadSec = renderLeadSec;
 		OwnerShipId = ownerShipId;
 		_t0 = Time.GetTicksMsec() / 1000.0;
-		OrientAlongVelocity();
+		OrientAlongAim();
 		Position = pos + vel * renderLeadSec;   // honour the lead immediately (no 1-frame muzzle pop)
 	}
 
@@ -55,12 +61,12 @@ public partial class ProjectileView : Node3D
 	public bool Expired =>
 		Time.GetTicksMsec() / 1000.0 - _t0 + _renderLeadSec >= _ttlSec;
 
-	// Aim the bolt's local +Z down its velocity so the cylinder tracer points where it
-	// flies. Velocity is constant (fire-and-forget), so this is set once, never per frame.
-	private void OrientAlongVelocity()
+	// Aim the bolt's local +Z down the fired direction so the cylinder tracer points where
+	// the gun aimed (not skewed by the ship's strafe). Set once at spawn, never per frame.
+	private void OrientAlongAim()
 	{
-		if (_vel.LengthSquared() > 1e-6f)
-			Quaternion = new Quaternion(Vector3.Back, _vel.Normalized());
+		if (_aimDir.LengthSquared() > 1e-6f)
+			Quaternion = new Quaternion(Vector3.Back, _aimDir);
 	}
 
 	public override void _Process(double delta)
