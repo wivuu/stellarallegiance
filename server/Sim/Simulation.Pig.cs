@@ -684,7 +684,14 @@ public sealed partial class Simulation
             {
                 foreach (var b in World.Bases)
                     if (b.Team == me.Team)
-                        return PigSteerTo(me, myPos, myRot, b.Pos, 1f);
+                    {
+                        // Aim at the entry-bay mouth (on the doorway axis, inside the dock core)
+                        // so the now-solid hull funnels the pod through the bay instead of
+                        // bouncing it off. Without a model, BaseEntryAxis is zero → the base
+                        // center, the pre-hull target.
+                        Vec3 aim = b.Pos + World.BaseEntryAxis * (World.BaseRadius * 0.5f);
+                        return PigSteerTo(me, myPos, myRot, aim, 1f);
+                    }
             }
         }
         return default;

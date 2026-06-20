@@ -1,4 +1,5 @@
 using StellarAllegiance.Shared;
+using SimServer.Assets;
 
 namespace SimServer.Sim;
 
@@ -53,6 +54,19 @@ public sealed class World
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
 
+    // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
+    // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
+    // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
+    public readonly SimModel? BaseModel;
+    public readonly ConvexHull? BaseHull;     // base hull in WORLD units (base is identity-oriented)
+    public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay
+    public readonly Vec3 BaseEntryAxis;       // entry-bay doorway cone axis (from DockingEntrance)
+    public readonly Dictionary<ulong, RockBody> RockBodies = new();
+
+    // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
+    // and the uniform scale mapping authored units → this rock's collision size.
+    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale);
+
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
     private static readonly Dictionary<(int, int, int), List<Rock>> NoGrid = new();
@@ -103,6 +117,63 @@ public sealed class World
                 grid[key] = cell = new List<Rock>();
             cell.Add(r);
         }
+
+        // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
+        (BaseModel, BaseHull, BaseExitDir, BaseEntryAxis) = LoadBase();
+        LoadRockBodies();
+    }
+
+    // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
+    // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
+    private static (SimModel?, ConvexHull?, Vec3, Vec3) LoadBase()
+    {
+        var model = SimAssets.TryLoad("bases/base.glb");
+        if (model is null) return (null, null, default, default);
+        float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
+        ConvexHull hull = model.Hull.Scaled(ws);
+        Vec3 exitDir = model.FirstHardpoint("HP_DockingExit") is { } ex ? Normalize(ex.Pos) : new Vec3(0f, 0f, 1f);
+        Vec3 sum = default;
+        int n = 0;
+        foreach (var hp in model.Hardpoints)
+            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal)) { sum += hp.Pos; n++; }
+        Vec3 entryAxis = n > 0 ? Normalize(sum) : exitDir;
+        return (model, hull, exitDir, entryAxis);
+    }
+
+    // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
+    // scale + rotation. Rocks whose variant GLB is missing stay sphere-collided (no body added).
+    private void LoadRockBodies()
+    {
+        if (Asteroids.Count == 0) return;
+        var variants = new Dictionary<byte, SimModel?>();
+        foreach (var r in Asteroids)
+        {
+            if (!variants.TryGetValue(r.Variant, out var vm))
+            {
+                string name = AsteroidShapes.NameForIndex(r.Variant);
+                vm = string.IsNullOrEmpty(name) ? null : SimAssets.TryLoad($"asteroids/{name}.glb");
+                variants[r.Variant] = vm;
+            }
+            if (vm is null || vm.Hull.BoundingRadius <= 1e-3f) continue;
+            float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
+            RockBodies[r.Id] = new RockBody(vm.Hull, RockRotation(r.RotX, r.RotY, r.RotZ), scale);
+        }
+    }
+
+    private static Vec3 Normalize(Vec3 v)
+    {
+        float l = v.Length();
+        return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
+    }
+
+    // Godot Node3D.Rotation Euler is YXZ order; the client applies (RotX,RotY,RotZ) that way,
+    // so the server builds q = qY · qX · qZ to collide each rock as it visually renders.
+    private static Quat RockRotation(float rx, float ry, float rz)
+    {
+        Quat qx = Quat.FromRotationVector(new Vec3(rx, 0f, 0f));
+        Quat qy = Quat.FromRotationVector(new Vec3(0f, ry, 0f));
+        Quat qz = Quat.FromRotationVector(new Vec3(0f, 0f, rz));
+        return (qy * qx * qz).Normalized();
     }
 
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>
