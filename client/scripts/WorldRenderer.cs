@@ -137,11 +137,10 @@ public partial class WorldRenderer : Node3D
 	private readonly List<(Vector3 Pos, byte Team)> _baseScratch = new();
 
 	// Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
-	// VisualHitRadius of a ship's rendered centre, but not until it has travelled MuzzleClearance
-	// from its spawn — so a shot never sparks on the ship that fired it. Team-agnostic by design
-	// (friendly fire sparks too). Tune to taste against the ship silhouette size.
+	// VisualHitRadius of a ship's rendered centre. The firing ship is excluded by bolt OwnerShipId
+	// (see CheckBoltImpacts), so a shot never sparks on its own hull; otherwise team-agnostic by
+	// design (friendly fire sparks too). Tune to taste against the ship silhouette size.
 	private const float VisualHitRadius = 5f;
-	private const float MuzzleClearance = 10f;
 
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
@@ -801,21 +800,21 @@ public partial class WorldRenderer : Node3D
 		Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
 		Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
 
-		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), row.SectorId,
-			weapon.ProjectileLifeTicks * FlightModel.Dt, ShotMaskLeadSec());
+		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), ShipMath.ToGodot(shotDir), row.SectorId,
+			weapon.ProjectileLifeTicks * FlightModel.Dt, row.ShipId, ShotMaskLeadSec());
 	}
 
 	// The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
 	// rendering as a remote bolt, no masking lead (prediction is already now-correct).
-	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, float lifeSec)
-		=> AddBolt(pos, vel, _localSector, lifeSec, 0f);
+	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec)
+		=> AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
 
-	private void AddBolt(Vector3 pos, Vector3 vel, uint sector, float lifeSec, float leadSec)
+	private void AddBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, uint sector, float lifeSec, ulong ownerShipId, float leadSec)
 	{
 		var pv = new ProjectileView { Name = "Bolt" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(pos, vel, ClipBoltTtl(sector, pos, vel, lifeSec), leadSec);
+		pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
 		SetNodeSector(pv, sector);
 		_bolts.Add(pv);
 		// Single chokepoint for every shot (local + remote), so the muzzle report
@@ -942,12 +941,14 @@ public partial class WorldRenderer : Node3D
 			if (!pv.Visible)
 				continue;
 			Vector3 b = pv.GlobalPosition;
-			// Don't let a shot spark on the ship that fired it: ignore until it has left the muzzle.
-			if (b.DistanceSquaredTo(pv.SpawnPos) < MuzzleClearance * MuzzleClearance)
-				continue;
 			Vector3 a = b - pv.Velocity * (float)delta;   // swept path across this frame
-			foreach (var ship in _shipNodes.Values)
+			foreach (var (shipId, ship) in _shipNodes)
 			{
+				// Never spark on the firing ship. Skipping by owner id (rather than a static
+				// muzzle-distance gate) holds even when the ship flies forward with its own
+				// bolt — flying straight while shooting no longer sparks on your own hull.
+				if (shipId == pv.OwnerShipId)
+					continue;
 				if (!ship.Visible)
 					continue;
 				Vector3 c = ship.GlobalPosition;

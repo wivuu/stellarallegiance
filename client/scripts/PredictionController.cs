@@ -37,7 +37,7 @@ public partial class PredictionController : Node3D
 
 	// A shot the prediction step just fired, in Godot space, for the renderer to
 	// spawn an immediate ghost projectile.
-	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; public float LifeSec; }
+	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; public Vector3 Dir; public float LifeSec; }
 
 	private struct Entry
 	{
@@ -217,6 +217,7 @@ public partial class PredictionController : Node3D
 			{
 				Pos = ShipMath.ToGodot(mp),
 				Vel = ShipMath.ToGodot(mv),
+				Dir = ShipMath.ToGodot(shotDir),   // fired direction, for tracer orientation (not skewed by strafe)
 				LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
 			};
 		}

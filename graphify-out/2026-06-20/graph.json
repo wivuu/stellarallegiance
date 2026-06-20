@@ -925,7 +925,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 62,
+      "community": 10,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -934,7 +934,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 62,
+      "community": 10,
       "norm_label": "connectionoverlay"
     },
     {
@@ -943,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 62,
+      "community": 10,
       "norm_label": "color"
     },
     {
@@ -952,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 62,
+      "community": 10,
       "norm_label": "connectionmanager"
     },
     {
@@ -961,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 62,
+      "community": 10,
       "norm_label": "label"
     },
     {
@@ -970,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 62,
+      "community": 10,
       "norm_label": "button"
     },
     {
@@ -979,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 62,
+      "community": 10,
       "norm_label": "double"
     },
     {
@@ -988,7 +988,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 62,
+      "community": 10,
       "norm_label": ".init()"
     },
     {
@@ -997,7 +997,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 62,
+      "community": 10,
       "norm_label": ".centered()"
     },
     {
@@ -1006,7 +1006,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 62,
+      "community": 10,
       "norm_label": "._process()"
     },
     {
@@ -1051,7 +1051,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "scripts_defregistry_defregistry_load",
-      "community": 57,
+      "community": 77,
       "norm_label": ".load()"
     },
     {
@@ -1060,7 +1060,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "client_scripts_defregistry_cs_ireadonlylist",
-      "community": 57,
+      "community": 77,
       "norm_label": "ireadonlylist"
     },
     {
@@ -1069,7 +1069,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "shipclassdef",
-      "community": 57,
+      "community": 77,
       "norm_label": "shipclassdef"
     },
     {
@@ -1087,7 +1087,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "basedef",
-      "community": 57,
+      "community": 77,
       "norm_label": "basedef"
     },
     {
@@ -1096,7 +1096,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "worldconfig",
-      "community": 57,
+      "community": 77,
       "norm_label": "worldconfig"
     },
     {
@@ -1159,7 +1159,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L101",
       "id": "scripts_defregistry_defregistry_trygetshipdef",
-      "community": 57,
+      "community": 77,
       "norm_label": ".trygetshipdef()"
     },
     {
@@ -1177,7 +1177,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L108",
       "id": "scripts_defregistry_defregistry_getbasedef",
-      "community": 57,
+      "community": 77,
       "norm_label": ".getbasedef()"
     },
     {
@@ -2419,7 +2419,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L1",
       "id": "scripts_hud",
-      "community": 62,
+      "community": 37,
       "norm_label": "hud.cs"
     },
     {
@@ -2428,7 +2428,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L8",
       "id": "scripts_hud_hud",
-      "community": 62,
+      "community": 37,
       "norm_label": "hud"
     },
     {
@@ -2437,7 +2437,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L10",
       "id": "client_scripts_hud_cs_connectionmanager",
-      "community": 62,
+      "community": 37,
       "norm_label": "connectionmanager"
     },
     {
@@ -2446,7 +2446,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L11",
       "id": "client_scripts_hud_cs_worldrenderer",
-      "community": 62,
+      "community": 37,
       "norm_label": "worldrenderer"
     },
     {
@@ -2455,7 +2455,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L12",
       "id": "client_scripts_hud_cs_shipcontroller",
-      "community": 62,
+      "community": 37,
       "norm_label": "shipcontroller"
     },
     {
@@ -2464,7 +2464,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L13",
       "id": "client_scripts_hud_cs_label",
-      "community": 62,
+      "community": 37,
       "norm_label": "label"
     },
     {
@@ -2473,7 +2473,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 62,
+      "community": 10,
       "norm_label": "control"
     },
     {
@@ -2482,7 +2482,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L20",
       "id": "client_scripts_hud_cs_bool",
-      "community": 62,
+      "community": 37,
       "norm_label": "bool"
     },
     {
@@ -2491,7 +2491,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L23",
       "id": "scripts_hud_hud_ready",
-      "community": 62,
+      "community": 37,
       "norm_label": "._ready()"
     },
     {
@@ -2500,7 +2500,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L88",
       "id": "scripts_hud_hud_spawnbutton",
-      "community": 62,
+      "community": 37,
       "norm_label": ".spawnbutton()"
     },
     {
@@ -2509,7 +2509,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L88",
       "id": "client_scripts_hud_cs_shipclass",
-      "community": 62,
+      "community": 37,
       "norm_label": "shipclass"
     },
     {
@@ -2518,7 +2518,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L88",
       "id": "client_scripts_hud_cs_button",
-      "community": 62,
+      "community": 37,
       "norm_label": "button"
     },
     {
@@ -2527,7 +2527,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L96",
       "id": "scripts_hud_hud_process",
-      "community": 62,
+      "community": 37,
       "norm_label": "._process()"
     },
     {
@@ -2707,7 +2707,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 62,
+      "community": 10,
       "norm_label": "minimap.cs"
     },
     {
@@ -2716,7 +2716,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 62,
+      "community": 10,
       "norm_label": "minimap"
     },
     {
@@ -2725,7 +2725,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 62,
+      "community": 10,
       "norm_label": "float"
     },
     {
@@ -2734,7 +2734,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 62,
+      "community": 10,
       "norm_label": "color"
     },
     {
@@ -2743,7 +2743,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 62,
+      "community": 10,
       "norm_label": "connectionmanager"
     },
     {
@@ -2752,7 +2752,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 62,
+      "community": 10,
       "norm_label": "worldrenderer"
     },
     {
@@ -2761,7 +2761,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L39",
       "id": "client_scripts_minimap_cs_dictionary",
-      "community": 62,
+      "community": 10,
       "norm_label": "dictionary"
     },
     {
@@ -2770,7 +2770,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "scripts_minimap_minimap_tryclicksector",
-      "community": 62,
+      "community": 10,
       "norm_label": ".tryclicksector()"
     },
     {
@@ -2779,7 +2779,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "client_scripts_minimap_cs_vector2",
-      "community": 62,
+      "community": 10,
       "norm_label": "vector2"
     },
     {
@@ -2788,7 +2788,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L55",
       "id": "scripts_minimap_minimap_init",
-      "community": 62,
+      "community": 10,
       "norm_label": ".init()"
     },
     {
@@ -2797,7 +2797,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L63",
       "id": "scripts_minimap_minimap_process",
-      "community": 62,
+      "community": 10,
       "norm_label": "._process()"
     },
     {
@@ -2806,7 +2806,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L65",
       "id": "scripts_minimap_minimap_draw",
-      "community": 62,
+      "community": 10,
       "norm_label": "._draw()"
     },
     {
@@ -3344,7 +3344,7 @@
       "label": ".Initialize()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L40",
+      "source_location": "L41",
       "id": "scripts_projectileview_projectileview_initialize",
       "community": 55,
       "norm_label": ".initialize()"
@@ -3353,7 +3353,7 @@
       "label": ".OrientAlongVelocity()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L59",
+      "source_location": "L60",
       "id": "scripts_projectileview_projectileview_orientalongvelocity",
       "community": 55,
       "norm_label": ".orientalongvelocity()"
@@ -3362,7 +3362,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
-      "source_location": "L65",
+      "source_location": "L66",
       "id": "scripts_projectileview_projectileview_process",
       "community": 55,
       "norm_label": "._process()"
@@ -3661,7 +3661,7 @@
       "source_file": "client/scripts/SectorOverview.cs",
       "source_location": "L55",
       "id": "client_scripts_sectoroverview_cs_canvaslayer",
-      "community": 62,
+      "community": 37,
       "norm_label": "canvaslayer"
     },
     {
@@ -4057,7 +4057,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L1",
       "id": "scripts_sfxmanager",
-      "community": 57,
+      "community": 62,
       "norm_label": "sfxmanager.cs"
     },
     {
@@ -4066,7 +4066,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L24",
       "id": "scripts_sfxmanager_sfxmanager",
-      "community": 57,
+      "community": 62,
       "norm_label": "sfxmanager"
     },
     {
@@ -4075,7 +4075,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L43",
       "id": "client_scripts_sfxmanager_cs_dictionary",
-      "community": 57,
+      "community": 62,
       "norm_label": "dictionary"
     },
     {
@@ -4084,7 +4084,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L59",
       "id": "client_scripts_sfxmanager_cs_hashset",
-      "community": 57,
+      "community": 62,
       "norm_label": "hashset"
     },
     {
@@ -4093,7 +4093,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L64",
       "id": "client_scripts_sfxmanager_cs_int",
-      "community": 57,
+      "community": 62,
       "norm_label": "int"
     },
     {
@@ -4102,7 +4102,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L66",
       "id": "client_scripts_sfxmanager_cs_string",
-      "community": 57,
+      "community": 62,
       "norm_label": "string"
     },
     {
@@ -4111,7 +4111,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L69",
       "id": "client_scripts_sfxmanager_cs_list",
-      "community": 57,
+      "community": 62,
       "norm_label": "list"
     },
     {
@@ -4120,7 +4120,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L71",
       "id": "audiostreamplayer",
-      "community": 57,
+      "community": 62,
       "norm_label": "audiostreamplayer"
     },
     {
@@ -4129,7 +4129,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L75",
       "id": "scripts_sfxmanager_sfxmanager_entertree",
-      "community": 57,
+      "community": 62,
       "norm_label": "._entertree()"
     },
     {
@@ -4138,7 +4138,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L77",
       "id": "scripts_sfxmanager_sfxmanager_exittree",
-      "community": 57,
+      "community": 62,
       "norm_label": "._exittree()"
     },
     {
@@ -4147,7 +4147,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L83",
       "id": "scripts_sfxmanager_sfxmanager_ready",
-      "community": 57,
+      "community": 62,
       "norm_label": "._ready()"
     },
     {
@@ -4156,7 +4156,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L118",
       "id": "scripts_sfxmanager_sfxmanager_loadstreams",
-      "community": 57,
+      "community": 62,
       "norm_label": ".loadstreams()"
     },
     {
@@ -4165,7 +4165,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L138",
       "id": "scripts_sfxmanager_sfxmanager_getstream",
-      "community": 57,
+      "community": 62,
       "norm_label": ".getstream()"
     },
     {
@@ -4174,7 +4174,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L138",
       "id": "sfxid",
-      "community": 57,
+      "community": 62,
       "norm_label": "sfxid"
     },
     {
@@ -4183,7 +4183,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L138",
       "id": "audiostream",
-      "community": 57,
+      "community": 62,
       "norm_label": "audiostream"
     },
     {
@@ -4192,7 +4192,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L143",
       "id": "scripts_sfxmanager_sfxmanager_playat",
-      "community": 57,
+      "community": 62,
       "norm_label": ".playat()"
     },
     {
@@ -4201,7 +4201,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L143",
       "id": "client_scripts_sfxmanager_cs_vector3",
-      "community": 57,
+      "community": 62,
       "norm_label": "vector3"
     },
     {
@@ -4210,7 +4210,7 @@
       "source_file": "client/scripts/SfxManager.cs",
       "source_location": "L157",
       "id": "scripts_sfxmanager_sfxmanager_playui",
-      "community": 57,
+      "community": 62,
       "norm_label": ".playui()"
     },
     {
@@ -4408,7 +4408,7 @@
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L346",
       "id": "scripts_shipcontroller_shipcontroller_input",
-      "community": 8,
+      "community": 80,
       "norm_label": "._input()"
     },
     {
@@ -4417,7 +4417,7 @@
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L346",
       "id": "client_scripts_shipcontroller_cs_inputevent",
-      "community": 8,
+      "community": 80,
       "norm_label": "inputevent"
     },
     {
@@ -5522,7 +5522,7 @@
       "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L146",
+      "source_location": "L145",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
       "community": 71,
       "norm_label": "standardmaterial3d"
@@ -5531,7 +5531,7 @@
       "label": "ShipController",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L155",
+      "source_location": "L154",
       "id": "client_scripts_worldrenderer_cs_shipcontroller",
       "community": 1,
       "norm_label": "shipcontroller"
@@ -5540,7 +5540,7 @@
       "label": "Starscape",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L156",
+      "source_location": "L155",
       "id": "starscape",
       "community": 1,
       "norm_label": "starscape"
@@ -5549,7 +5549,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L157",
+      "source_location": "L156",
       "id": "client_scripts_worldrenderer_cs_defregistry",
       "community": 1,
       "norm_label": "defregistry"
@@ -5558,7 +5558,7 @@
       "label": "double",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L174",
+      "source_location": "L173",
       "id": "client_scripts_worldrenderer_cs_double",
       "community": 1,
       "norm_label": "double"
@@ -5567,7 +5567,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L176",
+      "source_location": "L175",
       "id": "client_scripts_worldrenderer_cs_bool",
       "community": 1,
       "norm_label": "bool"
@@ -5576,7 +5576,7 @@
       "label": ".EnemyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L194",
+      "source_location": "L193",
       "id": "scripts_worldrenderer_worldrenderer_enemyships",
       "community": 13,
       "norm_label": ".enemyships()"
@@ -5585,7 +5585,7 @@
       "label": "IReadOnlyList",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L194",
+      "source_location": "L193",
       "id": "client_scripts_worldrenderer_cs_ireadonlylist",
       "community": 38,
       "norm_label": "ireadonlylist"
@@ -5594,7 +5594,7 @@
       "label": "RemoteShip",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L194",
+      "source_location": "L193",
       "id": "client_scripts_worldrenderer_cs_remoteship",
       "community": 38,
       "norm_label": "remoteship"
@@ -5603,7 +5603,7 @@
       "label": ".FriendlyShips()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L212",
+      "source_location": "L211",
       "id": "scripts_worldrenderer_worldrenderer_friendlyships",
       "community": 38,
       "norm_label": ".friendlyships()"
@@ -5612,7 +5612,7 @@
       "label": ".VisibleBases()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L227",
+      "source_location": "L226",
       "id": "scripts_worldrenderer_worldrenderer_visiblebases",
       "community": 38,
       "norm_label": ".visiblebases()"
@@ -5621,7 +5621,7 @@
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L227",
+      "source_location": "L226",
       "id": "client_scripts_worldrenderer_cs_vector3",
       "community": 38,
       "norm_label": "vector3"
@@ -5630,7 +5630,7 @@
       "label": "Pos",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L227",
+      "source_location": "L226",
       "id": "pos",
       "community": 38,
       "norm_label": "pos"
@@ -5639,7 +5639,7 @@
       "label": "Team",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L227",
+      "source_location": "L226",
       "id": "team",
       "community": 38,
       "norm_label": "team"
@@ -5648,7 +5648,7 @@
       "label": ".VisibleBaseHealth()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L239",
+      "source_location": "L238",
       "id": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
       "community": 38,
       "norm_label": ".visiblebasehealth()"
@@ -5657,7 +5657,7 @@
       "label": "Frac",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L239",
+      "source_location": "L238",
       "id": "frac",
       "community": 38,
       "norm_label": "frac"
@@ -5666,7 +5666,7 @@
       "label": ".VisibleAlephs()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L252",
+      "source_location": "L251",
       "id": "scripts_worldrenderer_worldrenderer_visiblealephs",
       "community": 38,
       "norm_label": ".visiblealephs()"
@@ -5675,7 +5675,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L261",
+      "source_location": "L260",
       "id": "scripts_worldrenderer_worldrenderer_ready",
       "community": 1,
       "norm_label": "._ready()"
@@ -5684,7 +5684,7 @@
       "label": ".NetSetMatch()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L316",
+      "source_location": "L315",
       "id": "scripts_worldrenderer_worldrenderer_netsetmatch",
       "community": 1,
       "norm_label": ".netsetmatch()"
@@ -5693,7 +5693,7 @@
       "label": ".NetUpdateBaseHealth()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L325",
+      "source_location": "L324",
       "id": "scripts_worldrenderer_worldrenderer_netupdatebasehealth",
       "community": 58,
       "norm_label": ".netupdatebasehealth()"
@@ -5702,7 +5702,7 @@
       "label": ".NetInsertShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L330",
+      "source_location": "L329",
       "id": "scripts_worldrenderer_worldrenderer_netinsertship",
       "community": 65,
       "norm_label": ".netinsertship()"
@@ -5711,7 +5711,7 @@
       "label": "Ship",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L330",
+      "source_location": "L329",
       "id": "client_scripts_worldrenderer_cs_ship",
       "community": 65,
       "norm_label": "ship"
@@ -5720,7 +5720,7 @@
       "label": ".NetUpdateShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L331",
+      "source_location": "L330",
       "id": "scripts_worldrenderer_worldrenderer_netupdateship",
       "community": 65,
       "norm_label": ".netupdateship()"
@@ -5729,7 +5729,7 @@
       "label": ".NetDeleteShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L332",
+      "source_location": "L331",
       "id": "scripts_worldrenderer_worldrenderer_netdeleteship",
       "community": 71,
       "norm_label": ".netdeleteship()"
@@ -5738,7 +5738,7 @@
       "label": ".NetApplyPilotNames()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L343",
+      "source_location": "L342",
       "id": "scripts_worldrenderer_worldrenderer_netapplypilotnames",
       "community": 38,
       "norm_label": ".netapplypilotnames()"
@@ -5747,7 +5747,7 @@
       "label": "LobbyPlayer",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L343",
+      "source_location": "L342",
       "id": "client_scripts_worldrenderer_cs_lobbyplayer",
       "community": 38,
       "norm_label": "lobbyplayer"
@@ -5756,7 +5756,7 @@
       "label": ".Reset()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L365",
+      "source_location": "L364",
       "id": "scripts_worldrenderer_worldrenderer_reset",
       "community": 1,
       "norm_label": ".reset()"
@@ -5765,7 +5765,7 @@
       "label": ".NetAddSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L399",
+      "source_location": "L398",
       "id": "scripts_worldrenderer_worldrenderer_netaddsector",
       "community": 1,
       "norm_label": ".netaddsector()"
@@ -5774,7 +5774,7 @@
       "label": "Sector",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L399",
+      "source_location": "L398",
       "id": "sector",
       "community": 1,
       "norm_label": "sector"
@@ -5783,7 +5783,7 @@
       "label": ".NetAddBase()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L400",
+      "source_location": "L399",
       "id": "scripts_worldrenderer_worldrenderer_netaddbase",
       "community": 58,
       "norm_label": ".netaddbase()"
@@ -5792,7 +5792,7 @@
       "label": "Base",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L400",
+      "source_location": "L399",
       "id": "base",
       "community": 58,
       "norm_label": "base"
@@ -5801,7 +5801,7 @@
       "label": ".NetAddAsteroid()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L401",
+      "source_location": "L400",
       "id": "scripts_worldrenderer_worldrenderer_netaddasteroid",
       "community": 56,
       "norm_label": ".netaddasteroid()"
@@ -5810,7 +5810,7 @@
       "label": "Asteroid",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L401",
+      "source_location": "L400",
       "id": "asteroid",
       "community": 56,
       "norm_label": "asteroid"
@@ -5819,7 +5819,7 @@
       "label": ".NetAddAleph()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L402",
+      "source_location": "L401",
       "id": "scripts_worldrenderer_worldrenderer_netaddaleph",
       "community": 5,
       "norm_label": ".netaddaleph()"
@@ -5828,7 +5828,7 @@
       "label": "Aleph",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L402",
+      "source_location": "L401",
       "id": "aleph",
       "community": 5,
       "norm_label": "aleph"
@@ -5837,7 +5837,7 @@
       "label": ".SetNodeSector()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L408",
+      "source_location": "L407",
       "id": "scripts_worldrenderer_worldrenderer_setnodesector",
       "community": 65,
       "norm_label": ".setnodesector()"
@@ -5846,7 +5846,7 @@
       "label": ".RefreshSectorVisibility()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L416",
+      "source_location": "L415",
       "id": "scripts_worldrenderer_worldrenderer_refreshsectorvisibility",
       "community": 65,
       "norm_label": ".refreshsectorvisibility()"
@@ -5855,7 +5855,7 @@
       "label": ".SpawnEffect()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L427",
+      "source_location": "L426",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
       "community": 71,
       "norm_label": ".spawneffect()"
@@ -5864,7 +5864,7 @@
       "label": ".PlayCollisionSfx()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L439",
+      "source_location": "L438",
       "id": "scripts_worldrenderer_worldrenderer_playcollisionsfx",
       "community": 38,
       "norm_label": ".playcollisionsfx()"
@@ -5873,7 +5873,7 @@
       "label": ".InsertAleph()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L444",
+      "source_location": "L443",
       "id": "scripts_worldrenderer_worldrenderer_insertaleph",
       "community": 5,
       "norm_label": ".insertaleph()"
@@ -5882,7 +5882,7 @@
       "label": ".InsertBase()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L474",
+      "source_location": "L473",
       "id": "scripts_worldrenderer_worldrenderer_insertbase",
       "community": 58,
       "norm_label": ".insertbase()"
@@ -5891,7 +5891,7 @@
       "label": ".AsteroidMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L504",
+      "source_location": "L503",
       "id": "scripts_worldrenderer_worldrenderer_asteroidmesh",
       "community": 56,
       "norm_label": ".asteroidmesh()"
@@ -5900,7 +5900,7 @@
       "label": "Mesh",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L504",
+      "source_location": "L503",
       "id": "mesh",
       "community": 56,
       "norm_label": "mesh"
@@ -5909,7 +5909,7 @@
       "label": "AuthoredRadius",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L504",
+      "source_location": "L503",
       "id": "authoredradius",
       "community": 56,
       "norm_label": "authoredradius"
@@ -5918,7 +5918,7 @@
       "label": ".FindMeshInstance()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L532",
+      "source_location": "L531",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
       "community": 69,
       "norm_label": ".findmeshinstance()"
@@ -5927,7 +5927,7 @@
       "label": "Node",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L532",
+      "source_location": "L531",
       "id": "client_scripts_worldrenderer_cs_node",
       "community": 69,
       "norm_label": "node"
@@ -5936,7 +5936,7 @@
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L532",
+      "source_location": "L531",
       "id": "client_scripts_worldrenderer_cs_meshinstance3d",
       "community": 69,
       "norm_label": "meshinstance3d"
@@ -5945,7 +5945,7 @@
       "label": ".MeshBoundingRadius()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L545",
+      "source_location": "L544",
       "id": "scripts_worldrenderer_worldrenderer_meshboundingradius",
       "community": 56,
       "norm_label": ".meshboundingradius()"
@@ -5954,7 +5954,7 @@
       "label": ".InsertAsteroid()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L559",
+      "source_location": "L558",
       "id": "scripts_worldrenderer_worldrenderer_insertasteroid",
       "community": 56,
       "norm_label": ".insertasteroid()"
@@ -5963,7 +5963,7 @@
       "label": ".AsteroidSpin()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L600",
+      "source_location": "L599",
       "id": "scripts_worldrenderer_worldrenderer_asteroidspin",
       "community": 56,
       "norm_label": ".asteroidspin()"
@@ -5972,7 +5972,7 @@
       "label": "Axis",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L600",
+      "source_location": "L599",
       "id": "axis",
       "community": 56,
       "norm_label": "axis"
@@ -5981,7 +5981,7 @@
       "label": "Speed",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L600",
+      "source_location": "L599",
       "id": "speed",
       "community": 56,
       "norm_label": "speed"
@@ -5990,7 +5990,7 @@
       "label": ".InsertShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L621",
+      "source_location": "L620",
       "id": "scripts_worldrenderer_worldrenderer_insertship",
       "community": 65,
       "norm_label": ".insertship()"
@@ -5999,7 +5999,7 @@
       "label": ".UpdateShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L664",
+      "source_location": "L663",
       "id": "scripts_worldrenderer_worldrenderer_updateship",
       "community": 65,
       "norm_label": ".updateship()"
@@ -6008,7 +6008,7 @@
       "label": ".DeleteShip()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L695",
+      "source_location": "L694",
       "id": "scripts_worldrenderer_worldrenderer_deleteship",
       "community": 71,
       "norm_label": ".deleteship()"
@@ -6017,7 +6017,7 @@
       "label": ".FriendlyRescuerNear()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L757",
+      "source_location": "L756",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
       "community": 71,
       "norm_label": ".friendlyrescuernear()"
@@ -6026,7 +6026,7 @@
       "label": ".SpawnBoltFor()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L784",
+      "source_location": "L783",
       "id": "scripts_worldrenderer_worldrenderer_spawnboltfor",
       "community": 65,
       "norm_label": ".spawnboltfor()"
@@ -6035,7 +6035,7 @@
       "label": ".SpawnLocalBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L810",
+      "source_location": "L809",
       "id": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
       "community": 38,
       "norm_label": ".spawnlocalbolt()"
@@ -6044,7 +6044,7 @@
       "label": ".AddBolt()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L813",
+      "source_location": "L812",
       "id": "scripts_worldrenderer_worldrenderer_addbolt",
       "community": 38,
       "norm_label": ".addbolt()"
@@ -6053,7 +6053,7 @@
       "label": ".ShotMaskLeadSec()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L831",
+      "source_location": "L830",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
       "community": 58,
       "norm_label": ".shotmaskleadsec()"
@@ -6062,7 +6062,7 @@
       "label": ".ClipBoltTtl()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L844",
+      "source_location": "L843",
       "id": "scripts_worldrenderer_worldrenderer_clipboltttl",
       "community": 38,
       "norm_label": ".clipboltttl()"
@@ -6071,7 +6071,7 @@
       "label": ".ClipSphere()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L865",
+      "source_location": "L864",
       "id": "scripts_worldrenderer_worldrenderer_clipsphere",
       "community": 38,
       "norm_label": ".clipsphere()"
@@ -6080,7 +6080,7 @@
       "label": ".NewProjectileMesh()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L882",
+      "source_location": "L881",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
       "community": 69,
       "norm_label": ".newprojectilemesh()"
@@ -6089,7 +6089,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L894",
+      "source_location": "L893",
       "id": "scripts_worldrenderer_worldrenderer_process",
       "community": 1,
       "norm_label": "._process()"
@@ -6098,7 +6098,7 @@
       "label": ".CheckBoltImpacts()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L934",
+      "source_location": "L933",
       "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
       "community": 1,
       "norm_label": ".checkboltimpacts()"
@@ -6107,7 +6107,7 @@
       "label": ".ClosestPointOnSegment()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L969",
+      "source_location": "L970",
       "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
       "community": 1,
       "norm_label": ".closestpointonsegment()"
@@ -6116,7 +6116,7 @@
       "label": ".ShipMaterial()",
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L981",
+      "source_location": "L982",
       "id": "scripts_worldrenderer_worldrenderer_shipmaterial",
       "community": 65,
       "norm_label": ".shipmaterial()"
@@ -8788,7 +8788,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L201",
       "id": "sim_simulation_pig_simulation_despawnallpigs",
-      "community": 53,
+      "community": 42,
       "norm_label": ".despawnallpigs()"
     },
     {
@@ -8815,7 +8815,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L309",
       "id": "sim_simulation_pig_simulation_killpigcombat",
-      "community": 42,
+      "community": 53,
       "norm_label": ".killpigcombat()"
     },
     {
@@ -9481,7 +9481,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L446",
       "id": "sim_simulation_simulation_inputfor",
-      "community": 42,
+      "community": 53,
       "norm_label": ".inputfor()"
     },
     {
@@ -9665,12 +9665,30 @@
       "norm_label": ".trywarp()"
     },
     {
+      "label": ".LookRotationZ()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "id": "sim_simulation_simulation_lookrotationz",
+      "community": 42,
+      "norm_label": ".lookrotationz()"
+    },
+    {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "id": "server_sim_simulation_cs_quat",
+      "community": 42,
+      "norm_label": "quat"
+    },
+    {
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L845",
+      "source_location": "L860",
       "id": "sim_simulation_simulation_dot",
-      "community": 42,
+      "community": 53,
       "norm_label": ".dot()"
     },
     {
@@ -11966,7 +11984,7 @@
       "file_type": "code",
       "source_file": "",
       "source_location": "",
-      "community": 62,
+      "community": 37,
       "norm_label": "canvaslayer",
       "id": "canvaslayer"
     },
@@ -12191,7 +12209,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L123",
-      "community": 57,
+      "community": 77,
       "norm_label": "shipclassdef",
       "id": "client_scripts_defregistry_cs_shipclassdef"
     },
@@ -12200,7 +12218,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L131",
-      "community": 57,
+      "community": 77,
       "norm_label": "basedef",
       "id": "client_scripts_defregistry_cs_basedef"
     },
@@ -12290,7 +12308,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 62,
+      "community": 37,
       "norm_label": ".localplayer()",
       "id": "scripts_hud_hud_localplayer"
     },
@@ -12299,7 +12317,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 62,
+      "community": 37,
       "norm_label": "player",
       "id": "client_scripts_hud_cs_player"
     },
@@ -12929,7 +12947,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L14",
-      "community": 62,
+      "community": 37,
       "norm_label": "label",
       "id": "label"
     },
@@ -12938,7 +12956,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
-      "community": 62,
+      "community": 37,
       "norm_label": "control",
       "id": "control"
     },
@@ -12947,7 +12965,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 62,
+      "community": 37,
       "norm_label": "button",
       "id": "button"
     },
@@ -12974,7 +12992,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
       "source_location": "L273",
-      "community": 8,
+      "community": 80,
       "norm_label": "inputevent",
       "id": "inputevent"
     },
@@ -18879,9 +18897,9 @@
       "source_file": "client/scripts/Nameplate.cs",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_nameplate",
-      "target": "scripts_nameplate_nameplate",
-      "confidence_score": 1.0
+      "target": "scripts_nameplate_nameplate"
     },
     {
       "relation": "method",
@@ -18889,9 +18907,9 @@
       "source_file": "client/scripts/Nameplate.cs",
       "source_location": "L9",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_nameplate_nameplate",
-      "target": "scripts_nameplate_nameplate_create",
-      "confidence_score": 1.0
+      "target": "scripts_nameplate_nameplate_create"
     },
     {
       "relation": "method",
@@ -18899,9 +18917,9 @@
       "source_file": "client/scripts/Nameplate.cs",
       "source_location": "L26",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_nameplate_nameplate",
-      "target": "scripts_nameplate_nameplate_teamcolor",
-      "confidence_score": 1.0
+      "target": "scripts_nameplate_nameplate_teamcolor"
     },
     {
       "relation": "references",
@@ -18910,9 +18928,9 @@
       "source_location": "L9",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_nameplate_nameplate_create",
-      "target": "client_scripts_nameplate_cs_label3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_nameplate_cs_label3d"
     },
     {
       "relation": "calls",
@@ -18921,9 +18939,9 @@
       "source_file": "client/scripts/Nameplate.cs",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_nameplate_nameplate_create",
-      "target": "scripts_nameplate_nameplate_teamcolor",
-      "confidence_score": 1.0
+      "target": "scripts_nameplate_nameplate_teamcolor"
     },
     {
       "relation": "references",
@@ -18932,9 +18950,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scripts_nameplate_nameplate_teamcolor",
-      "target": "client_scripts_nameplate_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_nameplate_cs_color"
     },
     {
       "relation": "contains",
@@ -19299,9 +19317,9 @@
       "source_location": "L109",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_predictioncontroller_predictioncontroller",
-      "target": "client_scripts_predictioncontroller_cs_label3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_predictioncontroller_cs_label3d"
     },
     {
       "relation": "references",
@@ -19365,9 +19383,9 @@
       "source_location": "L110",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_predictioncontroller_predictioncontroller",
-      "target": "client_scripts_predictioncontroller_cs_string",
-      "confidence_score": 1.0
+      "target": "client_scripts_predictioncontroller_cs_string"
     },
     {
       "relation": "references",
@@ -19538,9 +19556,9 @@
       "source_file": "client/scripts/PredictionController.cs",
       "source_location": "L112",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_predictioncontroller_predictioncontroller",
-      "target": "scripts_predictioncontroller_predictioncontroller_setpilotname",
-      "confidence_score": 1.0
+      "target": "scripts_predictioncontroller_predictioncontroller_setpilotname"
     },
     {
       "relation": "method",
@@ -20088,9 +20106,9 @@
       "source_location": "L118",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_remoteship_remoteship",
-      "target": "client_scripts_remoteship_cs_label3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_remoteship_cs_label3d"
     },
     {
       "relation": "references",
@@ -33277,6 +33295,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_lookrotationz"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L430",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -34158,6 +34186,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_lookrotationz",
+      "target": "server_sim_simulation_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L434",
       "weight": 1.0,
       "context": "parameter_type",
@@ -34263,6 +34302,28 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolvestaticcollision",
       "target": "sim_simulation_simulation_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L844",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_trywarp",
+      "target": "sim_simulation_simulation_lookrotationz"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_lookrotationz",
+      "target": "server_sim_simulation_cs_quat"
     },
     {
       "relation": "contains",
@@ -39078,5 +39139,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "513bdfd079585b451ac1b2d1bf728402d8e96dcf"
+  "built_at_commit": "04c45c35db2a146074f6c828da6f7312dfd8f76b"
 }
