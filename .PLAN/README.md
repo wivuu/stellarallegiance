@@ -17,7 +17,6 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- When flying straight forward and shooting, I can hear the bullets hitting my own ship. Bullets should not be able to hit own ship, in case hardpoint is embedded in mesh or the prediction logic is slightly off
 - Implement client-update mechanism that checks for new releases
   - Ban old game servers from appearing in public server list.
 ---

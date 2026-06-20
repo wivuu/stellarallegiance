@@ -29,21 +29,22 @@ public partial class ProjectileView : Node3D
 	// ship's own predicted shots and on localhost (no measurable latency).
 	private float _renderLeadSec;
 
-	// Constant flight velocity (world u/s) and spawn point, read by WorldRenderer's
-	// client-side hit-spark pass. It sweeps the bolt across each frame (so a fast shot
-	// can't tunnel through a ship) and ignores ships until the bolt has cleared its
-	// muzzle, so a shot never sparks on the ship that fired it. Team is deliberately not
-	// tracked — friendly fire sparks like any other.
+	// Constant flight velocity (world u/s), read by WorldRenderer's client-side hit-spark
+	// pass — it sweeps the bolt across each frame (so a fast shot can't tunnel through a
+	// ship). OwnerShipId is the ship that fired this bolt; the hit-spark pass skips it
+	// outright so a shot never sparks on its own hull — a static muzzle-distance gate can't
+	// do that once the firing ship flies forward with the bolt. Team is otherwise not
+	// tracked: friendly fire sparks like any other.
 	public Vector3 Velocity => _vel;
-	public Vector3 SpawnPos { get; private set; }
+	public ulong OwnerShipId { get; private set; }
 
-	public void Initialize(Vector3 pos, Vector3 vel, float ttlSec, float renderLeadSec = 0f)
+	public void Initialize(Vector3 pos, Vector3 vel, float ttlSec, ulong ownerShipId, float renderLeadSec = 0f)
 	{
 		_pos = pos;
 		_vel = vel;
 		_ttlSec = ttlSec;
 		_renderLeadSec = renderLeadSec;
-		SpawnPos = pos;
+		OwnerShipId = ownerShipId;
 		_t0 = Time.GetTicksMsec() / 1000.0;
 		OrientAlongVelocity();
 		Position = pos + vel * renderLeadSec;   // honour the lead immediately (no 1-frame muzzle pop)
