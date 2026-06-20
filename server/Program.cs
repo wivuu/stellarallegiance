@@ -91,7 +91,6 @@ var simThread = new Thread(() =>
     double dtMs = 1000.0 / Simulation.TickHz;
     var clock = Stopwatch.StartNew();
     double next = clock.Elapsed.TotalMilliseconds;
-    var stepMs = new List<double>(128);
 
     while (!cts.IsCancellationRequested)
     {
@@ -113,22 +112,6 @@ var simThread = new Thread(() =>
         // lobby return), so the next handoff meets a fresh Active match.
         if (hub.ConnectionCount == 0 && sim.ShouldResetWhenEmpty)
             sim.ResetMatch();
-        stepMs.Add(clock.Elapsed.TotalMilliseconds - t0);
-
-        if (sim.Tick % 100 == 0)
-        {
-            stepMs.Sort();
-            double p50 = stepMs[stepMs.Count / 2];
-            double p99 = stepMs[(int)(stepMs.Count * 0.99)];
-            double max = stepMs[^1];
-            double mbps = hub.TakeBytesSent() / 1e6 / (stepMs.Count / (double)Simulation.TickHz);
-            double recsPerSnap = hub.TakeAvgRecordsPerSnapshot();
-            Console.WriteLine(
-                $"[Bench] tick={sim.Tick} conns={hub.ConnectionCount} ships={sim.ShipCount} " +
-                $"step p50={p50:0.00}ms p99={p99:0.00}ms max={max:0.00}ms egress={mbps:0.0}MB/s " +
-                $"recs/snap={recsPerSnap:0}");
-            stepMs.Clear();
-        }
     }
 })
 { IsBackground = true, Name = "SimLoop", Priority = ThreadPriority.AboveNormal };
