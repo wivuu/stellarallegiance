@@ -45,8 +45,8 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781896879.0672581,
-    "ast_hash": "013747257b0d7277324c42b155d250f3",
+    "mtime": 1781969472.5780997,
+    "ast_hash": "3725f0eb268e54ff78810b80b9db12c4",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -60,12 +60,12 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781960199.1505704,
+    "mtime": 1781960326.039076,
     "ast_hash": "0b888cbeba2a51876bc1696a04482bfb",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
-    "mtime": 1781960179.9638338,
+    "mtime": 1781960326.0392668,
     "ast_hash": "56328864bbfd320b3bb4a75620764d71",
     "semantic_hash": ""
   },
@@ -75,7 +75,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781960203.742159,
+    "mtime": 1781960326.0394585,
     "ast_hash": "9694aa2e67efb6fae9f889e63559a421",
     "semantic_hash": ""
   },
@@ -105,7 +105,7 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781960190.4995751,
+    "mtime": 1781960326.0397065,
     "ast_hash": "bc5b048d023c7104ed1934fe875a715e",
     "semantic_hash": ""
   },
@@ -6142,6 +6142,11 @@
   "client/scripts/Nameplate.cs": {
     "mtime": 1781959279.8642635,
     "ast_hash": "0f0d29f5aba8e0a096ca656058be7994",
+    "semantic_hash": ""
+  },
+  "client/scripts/VelocityIndicator.cs": {
+    "mtime": 1781969467.881314,
+    "ast_hash": "148dcbbfc1976b5bc36185f479fafff9",
     "semantic_hash": ""
   }
 }

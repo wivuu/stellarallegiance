@@ -60,13 +60,13 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781959279.864973,
-    "ast_hash": "3b5f8cafc934588f119c265f37de900d",
+    "mtime": 1781960199.1505704,
+    "ast_hash": "0b888cbeba2a51876bc1696a04482bfb",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
-    "mtime": 1781959899.8077767,
-    "ast_hash": "fcba877af4bb24bfcdfbb94957ba49f3",
+    "mtime": 1781960179.9638338,
+    "ast_hash": "56328864bbfd320b3bb4a75620764d71",
     "semantic_hash": ""
   },
   "client/scripts/RemoteShip.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781575197.1052842,
-    "ast_hash": "5e5f66f4b1c549b6e694e4362d1fccd8",
+    "mtime": 1781960203.742159,
+    "ast_hash": "9694aa2e67efb6fae9f889e63559a421",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781959890.903784,
-    "ast_hash": "ac354386077c9fda938c32d02333bb56",
+    "mtime": 1781960190.4995751,
+    "ast_hash": "bc5b048d023c7104ed1934fe875a715e",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
