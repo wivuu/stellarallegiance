@@ -31,6 +31,11 @@ public partial class Hud : CanvasLayer
 		AddChild(markers);
 		markers.Init(_world, GetNode<Camera3D>("../Camera3D"));
 
+		// Prograde velocity marker (direction of travel, not aim). Drawn under the text/menu.
+		var velo = new VelocityIndicator { Name = "VelocityIndicator" };
+		AddChild(velo);
+		velo.Init(_world, GetNode<Camera3D>("../Camera3D"));
+
 		// Always-on sector minimap, bottom-left.
 		var minimap = new Minimap { Name = "Minimap" };
 		AddChild(minimap);
