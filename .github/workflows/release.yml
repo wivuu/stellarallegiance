@@ -1,0 +1,223 @@
+name: Release
+
+# Pushing a version tag (e.g. v1.2.3) builds the Godot client for all three desktop platforms,
+# publishes the native sim-server image to GHCR, and attaches the client zips to a GitHub Release.
+# Version = tag minus the leading "v". Tags containing "-" (e.g. v1.2.0-rc1) publish as a
+# pre-release and do NOT move the :latest image tag.
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GODOT_VERSION: 4.6.3
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_CLI_USE_MSBUILD_SERVER: 0
+  MSBUILDDISABLENODEREUSE: 1
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Godot client — Linux / macOS / Windows. Mirrors build-godot-client.yml's proven setup, then
+  # packages release-named zips (macOS re-signed ad-hoc per scripts/export-clients.sh).
+  # ---------------------------------------------------------------------------------------------
+  client:
+    name: Client (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            preset: Linux
+            platform: linux
+            output_path: build/linux/wivuullegiance.x86_64
+          - name: macOS
+            os: macos-latest
+            preset: macOS
+            platform: macos
+            output_path: build/mac/wivuullegiance.app
+          - name: Windows
+            os: windows-latest
+            preset: Windows Desktop
+            platform: windows
+            output_path: build/win/wivuullegiance.exe
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: true
+          include-templates: true
+          cache: true
+
+      - name: Restore client dependencies
+        run: dotnet restore client/wivuullegiance.csproj
+
+      - name: Generate Godot C# solution
+        # Godot headless can SIGSEGV (exit 139) during shutdown on the Windows runner *after* a
+        # successful build+import (the C# assembly is already written). Tolerate only that code;
+        # the export step below is the real gate. Any other non-zero code still fails.
+        run: |
+          ec=0
+          godot --headless --path client --build-solutions --quit || ec=$?
+          echo "build-solutions exit: $ec"
+          if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
+
+      - name: Create export directory
+        run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"
+
+      - name: Export ${{ matrix.name }} client
+        # Same shutdown-segfault tolerance, but require the artifact to actually exist so a real
+        # export failure (missing assembly, bad preset) still fails the job.
+        run: |
+          ec=0
+          godot --headless --path client --export-release "${{ matrix.preset }}" "$GITHUB_WORKSPACE/${{ matrix.output_path }}" || ec=$?
+          echo "export exit: $ec"
+          test -e "$GITHUB_WORKSPACE/${{ matrix.output_path }}" || { echo "::error::export produced no output at ${{ matrix.output_path }}"; exit 1; }
+
+      # Linux & Windows ship as the WHOLE export folder zipped — the executable needs its sibling
+      # .pck and data_* dir (see scripts/export-clients.sh).
+      - name: Package Linux
+        if: matrix.name == 'Linux'
+        run: |
+          chmod +x build/linux/wivuullegiance.x86_64
+          ( cd build/linux && zip -rq "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-linux.zip" . )
+
+      # The Windows runner's git-bash has no `zip`; use PowerShell's Compress-Archive. `build/win/*`
+      # puts the .exe + .pck + data_* at the zip root so testers extract one self-contained folder.
+      - name: Package Windows
+        if: matrix.name == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path build/win/* -DestinationPath "$env:GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-windows.zip" -Force
+
+      # macOS: Godot's signing enables the hardened runtime, which SIGKILLs an un-notarized build.
+      # Strip it and re-sign plain ad-hoc, then ditto-zip to preserve the signature + symlinks
+      # (verbatim from scripts/export-clients.sh:51-58). Testers still clear quarantine once.
+      - name: Package macOS
+        if: matrix.name == 'macOS'
+        run: |
+          APP=build/mac/wivuullegiance.app
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP" && echo "signature valid"
+          ditto -c -k --keepParent "$APP" "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-macos.zip"
+
+      - name: Upload ${{ matrix.name }} zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-${{ matrix.platform }}
+          path: wivuullegiance-${{ steps.version.outputs.version }}-${{ matrix.platform }}.zip
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # Native sim-server image -> GHCR. Context MUST be repo root (server/Dockerfile references
+  # ../shared/Shared.csproj).
+  # ---------------------------------------------------------------------------------------------
+  server-image:
+    name: Server image (GHCR)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/wivuullegiance-sim
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ---------------------------------------------------------------------------------------------
+  # Publish the GitHub Release with the client zips attached.
+  # ---------------------------------------------------------------------------------------------
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [client, server-image]
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download client zips
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: client-*   # only the client zips — skip the server job's .dockerbuild record
+          merge-multiple: true
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Client downloads
+
+            Pick your platform below. Unzip and run.
+
+            - **macOS** — ad-hoc signed (not notarized). After unzipping, clear quarantine once:
+              `xattr -dr com.apple.quarantine wivuullegiance.app`, then launch.
+            - **Windows / Linux** — keep the whole unzipped folder together (the executable needs
+              its sibling `.pck` and `data_*` directory).
+
+            On first launch you can browse the public lobby or enter a server address directly.
+
+            ## Self-hosting a game server
+
+            Run the published image (pairs with `docker-compose.server.yml` in the repo):
+
+            ```
+            docker pull ghcr.io/${{ github.repository_owner }}/wivuullegiance-sim:${{ steps.version.outputs.version }}
+            ```
+
+            Set `SIM_PUBLIC_NAME` to be listed in the public server browser. See
+            `docker-compose.server.yml` for the full env/NAT configuration.
