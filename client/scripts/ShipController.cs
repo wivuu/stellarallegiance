@@ -410,10 +410,10 @@ public partial class ShipController : Node
 			// S = weak reverse. Yaw/Pitch/Roll are commanded turn-RATE fractions.
 			Thrust  = Axis(Key.W, Key.S),       // forward throttle / reverse
 			StrafeX = Axis(Key.A, Key.D),       // strafe right / left
-			StrafeY = Axis(Key.E, Key.C),       // strafe up / down
+			StrafeY = Axis(Key.Z, Key.C),       // strafe up / down
 			Yaw     = Mathf.Clamp(Axis(Key.Left, Key.Right) + _stickYaw, -1f, 1f),
 			Pitch   = Mathf.Clamp(Axis(Key.Up, Key.Down) + _stickPitch, -1f, 1f),
-			Roll    = Axis(Key.Q, Key.Z),       // roll left / right (moved off E)
+			Roll    = Axis(Key.Q, Key.E),       // roll left / right
 			Firing  = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
 			Coast   = Input.IsPhysicalKeyPressed(Key.X),   // vector lock: hold velocity
 		};
