@@ -427,10 +427,16 @@ public sealed partial class Simulation
 
         Vec3 outward;
         Quat rot;
+        Vec3 spawnPos;
         if (World.BaseHull is not null)
         {
+            // Catapult out of the exit cone: start at its base disc (the DockingExit hardpoint) and
+            // fling along the cone axis toward the tip, nudged out by `clearance` so the ship clears
+            // the bay mouth. (The cone base sits at the hull surface, so any residual overlap is a
+            // benign outward pop — ApplyBounce never damages a ship already moving outward.)
             outward = World.BaseExitDir;
             rot = LookRotationZ(outward);
+            spawnPos = basePos + World.BaseExitPos + outward * clearance;
         }
         else
         {
@@ -438,13 +444,13 @@ public sealed partial class Simulation
             outward = dirLen > 1e-3f ? basePos * (-1f / dirLen) : new Vec3(0f, 0f, 1f);
             float yaw = MathF.Atan2(-basePos.X, -basePos.Z);
             rot = new Quat(0f, MathF.Sin(yaw * 0.5f), 0f, MathF.Cos(yaw * 0.5f));
+            spawnPos = basePos + outward * (World.BaseRadius + clearance);
         }
-        float offset = World.BaseRadius + clearance;
 
         s.SectorId = sector;
         s.State = new ShipState
         {
-            Pos = basePos + outward * offset,
+            Pos = spawnPos,
             Vel = outward * LaunchSpeed,   // catapult out of the bay instead of drifting
             Rot = rot,
             AngVel = default,

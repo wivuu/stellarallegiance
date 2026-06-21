@@ -60,7 +60,8 @@ public sealed class World
     // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
     public readonly SimModel? BaseModel;
     public readonly ConvexHull? BaseHull;     // base hull in WORLD units (base is identity-oriented)
-    public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay
+    public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay (cone base → tip)
+    public readonly Vec3 BaseExitPos;         // exit cone's base disc (the DockingExit hardpoint), base-local world units
     public readonly Vec3 BaseEntryAxis;       // mean entrance direction (from DockingEntrance), for AI aim
     public readonly Vec3 BaseDoorCenter;      // local centroid of the entrance hardpoints (AI aim target)
     // Docking cone base-discs: one per DockingEntrance hardpoint, in base-local units (offset from
@@ -148,7 +149,7 @@ public sealed class World
         }
 
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseExitDir, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
+        (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies();
     }
@@ -174,13 +175,25 @@ public sealed class World
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
     // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
-    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
+    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
     {
         var model = SimAssets.TryLoad("bases/base.glb");
-        if (model is null) return (null, null, default, default, default, Array.Empty<(Vec3, Vec3)>());
+        if (model is null) return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
-        Vec3 exitDir = model.FirstHardpoint("HP_DockingExit") is { } ex ? Normalize(ex.Pos) : new Vec3(0f, 0f, 1f);
+        // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
+        // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
+        Vec3 exitDir, exitPos;
+        if (model.FirstHardpoint("HP_DockingExit") is { } ex)
+        {
+            exitPos = ex.Pos * ws;
+            exitDir = Normalize(ex.Pos);
+        }
+        else
+        {
+            exitPos = default;
+            exitDir = new Vec3(0f, 0f, 1f);
+        }
 
         // Entrance hardpoints in base-local world units (authored * ws): their mean direction is the
         // AI-aim axis, their centroid is the AI-aim point, and each one is a docking cone base-disc
@@ -196,7 +209,7 @@ public sealed class World
         var discs = new (Vec3, Vec3)[entrances.Count];
         for (int i = 0; i < entrances.Count; i++)
             discs[i] = (entrances[i], Normalize(entrances[i]));
-        return (model, hull, exitDir, entryAxis, doorCenter, discs);
+        return (model, hull, exitDir, exitPos, entryAxis, doorCenter, discs);
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's

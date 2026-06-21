@@ -64,7 +64,18 @@ public static class SelfTest
         bool discNormalsUnit = true;
         foreach (var (_, n) in world.BaseDockDiscs) if (MathF.Abs(n.Length() - 1f) > 1e-3f) discNormalsUnit = false;
         Check("world: dock disc normals are unit", discNormalsUnit);
-        Console.WriteLine($"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}");
+        Console.WriteLine($"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}");
+
+        // Ships catapult from the exit cone's base disc along the axis (PlaceAtBase). The cone base
+        // is a launch-bay mouth ~on the hull surface, so the spawn point (base + ShipRadius along the
+        // axis) must not be deeply embedded — any residual overlap is a tiny, damage-free outward pop.
+        Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
+        Check("world: exit cone base near hull surface (sphere just grazes)",
+            world.BaseExitPos.LengthSquared() > 1f);   // a real hardpoint, not the (0,0,0) fallback
+        Vec3 spawn = world.BaseExitPos + world.BaseExitDir * World.ShipRadius;
+        world.BaseHull!.ResolveSphere(spawn, World.ShipRadius, out _, out float spawnPen);
+        Check($"world: spawn point clears the bay mouth (penetration {spawnPen:0.##} < ShipRadius)",
+            spawnPen < World.ShipRadius);
 
         TestShipHulls(world);
     }
