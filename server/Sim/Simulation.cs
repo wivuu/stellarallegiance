@@ -130,6 +130,9 @@ public sealed partial class Simulation
     // the in-memory equivalent of the module's ShotResolution table.
     private readonly List<PendingShot>[] _shotRing;
 
+    // Reused across CellsAlongRay calls (hot path per bolt) to avoid per-call allocation.
+    private readonly HashSet<(int, int, int)> _rayCells = new();
+
     // Per-tick ship spatial grid for shot broad-phase (module ShipGridForSector).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<ShipSim>>> _shipGrid = new();
 
@@ -411,8 +414,12 @@ public sealed partial class Simulation
     public void ReturnToLobby()
     {
         DespawnAllPigs();
-        foreach (var s in _order.ToArray())
-            RemoveShipNow(s);
+        foreach (var s in _order)
+        {
+            _ships.Remove(s.ShipId);
+            DeathsThisStep.Add(s.ShipId);
+        }
+        _order.Clear();
         _byClient.Clear();
         _clientRespawn.Clear();
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
@@ -832,9 +839,9 @@ public sealed partial class Simulation
         return t <= maxT;
     }
 
-    private static IEnumerable<(int, int, int)> CellsAlongRay(Vec3 start, Vec3 vel, float maxT)
+    private IEnumerable<(int, int, int)> CellsAlongRay(Vec3 start, Vec3 vel, float maxT)
     {
-        var seen = new HashSet<(int, int, int)>();
+        _rayCells.Clear();
         float dist = vel.Length() * maxT;
         int steps = Math.Max(1, (int)MathF.Ceiling(dist / World.GridCell));
         for (int i = 0; i <= steps; i++)
@@ -846,7 +853,7 @@ public sealed partial class Simulation
             for (int dz = -1; dz <= 1; dz++)
             {
                 var key = (cx + dx, cy + dy, cz + dz);
-                if (seen.Add(key))
+                if (_rayCells.Add(key))
                     yield return key;
             }
         }

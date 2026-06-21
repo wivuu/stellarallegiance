@@ -20,6 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
+- HUD health/shield bars should be true HUD elements, not world-space objects (the base
+  health bar currently casts a shadow on the base).
 ---
 
 ## Roadmap (prioritized)

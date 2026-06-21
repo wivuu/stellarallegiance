@@ -38,6 +38,11 @@ public partial class Minimap : Control
 	// clicks against the sector nodes (see TryClickSector).
 	private readonly Dictionary<uint, Vector2> _nodePos = new();
 
+	// Reused across draws to avoid per-frame allocation.
+	private readonly List<Sector> _sectorsBuf = new();
+	private readonly HashSet<long> _drawnEdges = new();
+	private readonly Dictionary<uint, (bool t0, bool t1)> _teams = new();
+
 	// Hit-test a viewport-space point against the drawn sector nodes. Returns the
 	// sector id of the node under the point, if any (used to retarget the F3 overview).
 	public bool TryClickSector(Vector2 point, out uint sector)
@@ -65,10 +70,12 @@ public partial class Minimap : Control
 	public override void _Draw()
 	{
 		// Sectors, sorted by id so the ring layout is STABLE (id -> slot never changes).
-		var sectors = new List<Sector>(_world.MapSectors);
-		if (sectors.Count == 0)
+		_sectorsBuf.Clear();
+		_sectorsBuf.AddRange(_world.MapSectors);
+		if (_sectorsBuf.Count == 0)
 			return;
-		sectors.Sort((a, b) => a.SectorId.CompareTo(b.SectorId));
+		_sectorsBuf.Sort(static (a, b) => a.SectorId.CompareTo(b.SectorId));
+		var sectors = _sectorsBuf;
 
 		// Panel anchored to the viewport's bottom-left.
 		Vector2 view = GetViewportRect().Size;
@@ -98,24 +105,24 @@ public partial class Minimap : Control
 		}
 
 		// Edges: one line per aleph PAIR (dedupe by unordered sector pair).
-		var drawn = new HashSet<long>();
+		_drawnEdges.Clear();
 		foreach (var (sector, dest) in _world.MapAlephLinks)
 		{
 			uint lo = sector < dest ? sector : dest;
 			uint hi = sector < dest ? dest : sector;
-			if (!drawn.Add(((long)lo << 32) | hi))
+			if (!_drawnEdges.Add(((long)lo << 32) | hi))
 				continue;
 			if (pos.TryGetValue(sector, out var p0) && pos.TryGetValue(dest, out var p1))
 				DrawLine(p0, p1, EdgeColor, 2f, true);
 		}
 
 		// Which team(s) hold a base in each sector.
-		var teams = new Dictionary<uint, (bool t0, bool t1)>();
+		_teams.Clear();
 		foreach (var (sector, team) in _world.MapBaseTeams)
 		{
-			teams.TryGetValue(sector, out var cur);
+			_teams.TryGetValue(sector, out var cur);
 			if (team == 0) cur.t0 = true; else if (team == 1) cur.t1 = true;
-			teams[sector] = cur;
+			_teams[sector] = cur;
 		}
 
 		// Nodes (drawn after edges so they sit on top of the lines).
@@ -124,7 +131,7 @@ public partial class Minimap : Control
 		{
 			Vector2 p = pos[s.SectorId];
 			Color fill = Neutral;
-			if (teams.TryGetValue(s.SectorId, out var tp))
+			if (_teams.TryGetValue(s.SectorId, out var tp))
 				fill = tp.t0 && tp.t1 ? Disputed : tp.t0 ? Team0 : tp.t1 ? Team1 : Neutral;
 
 			if (s.SectorId == localSector)

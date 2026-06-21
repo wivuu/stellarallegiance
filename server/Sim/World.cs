@@ -131,10 +131,8 @@ public sealed class World
         SeedAsteroidBelt(ref rng, VergeSector, vergeCount, SectorScale, ref rockId);
 
         // One linked aleph pair, placed toward the outer reaches of each sector.
-        var (cx, cy, cz) = RandomOuterPos(ref rng, coreR);
-        var (vx, vy, vz) = RandomOuterPos(ref rng, vergeR);
-        var corePos = new Vec3(cx, cy, cz);
-        var vergePos = new Vec3(vx, vy, vz);
+        var corePos = RandomOuterPos(ref rng, coreR);
+        var vergePos = RandomOuterPos(ref rng, vergeR);
         Alephs.Add(new Gate(1, HomeSector, VergeSector, corePos, vergePos));
         Alephs.Add(new Gate(2, VergeSector, HomeSector, vergePos, corePos));
 
@@ -319,13 +317,13 @@ public sealed class World
         return (variant, rx, ry, rz);
     }
 
-    private static (float, float, float) RandomOuterPos(ref DetRng rng, float sectorRadius)
+    private static Vec3 RandomOuterPos(ref DetRng rng, float sectorRadius)
     {
         double ang = rng.NextDouble() * Math.PI * 2.0;
         double frac = 0.6 + 0.3 * Math.Sqrt(rng.NextDouble());
         float r = (float)(sectorRadius * frac);
         float y = (float)((rng.NextDouble() - 0.5) * sectorRadius * 0.2);
-        return ((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
+        return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 
     private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR)

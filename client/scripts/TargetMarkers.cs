@@ -72,6 +72,12 @@ public partial class TargetMarkers : Control
 
 	private ulong? _focused;   // ShipId of the focused enemy, or null
 	private bool _tabHeld;     // edge-detect Tab so a held key cycles once
+
+	// Reusable scratch arrays for DrawColoredPolygon — Godot copies on call so sequential
+	// reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
+	private readonly Vector2[] _poly3 = new Vector2[3];   // Scout tri + off-screen arrow
+	private readonly Vector2[] _poly4 = new Vector2[4];   // Fighter chevron
+	private readonly Vector2[] _poly6 = new Vector2[6];   // Bomber hexagon
 	// Scratch for the focus cycle: visible enemies paired with their distance (px²) from
 	// the AIM RETICLE (the firing line), sorted nearest-first so Tab locks what you're
 	// pointing at and each repeat steps outward.
@@ -393,26 +399,27 @@ public partial class TargetMarkers : Control
 				break;
 			case Kind.Scout:
 				// Slim upward triangle.
-				DrawColoredPolygon(new[]
-				{
-					p + new Vector2(0f, -r),
-					p + new Vector2(r * 0.8f, r * 0.7f),
-					p + new Vector2(-r * 0.8f, r * 0.7f),
-				}, color);
+				_poly3[0] = p + new Vector2(0f, -r);
+				_poly3[1] = p + new Vector2(r * 0.8f, r * 0.7f);
+				_poly3[2] = p + new Vector2(-r * 0.8f, r * 0.7f);
+				DrawColoredPolygon(_poly3, color);
 				break;
 			case Kind.Fighter:
 				// Chevron / arrowhead (tip up, notched base).
-				DrawColoredPolygon(new[]
-				{
-					p + new Vector2(0f, -r),
-					p + new Vector2(r, r * 0.7f),
-					p + new Vector2(0f, r * 0.25f),
-					p + new Vector2(-r, r * 0.7f),
-				}, color);
+				_poly4[0] = p + new Vector2(0f, -r);
+				_poly4[1] = p + new Vector2(r, r * 0.7f);
+				_poly4[2] = p + new Vector2(0f, r * 0.25f);
+				_poly4[3] = p + new Vector2(-r, r * 0.7f);
+				DrawColoredPolygon(_poly4, color);
 				break;
 			case Kind.Bomber:
 				// Heavy hexagon.
-				DrawColoredPolygon(Hexagon(p, r), color);
+				for (int i = 0; i < 6; i++)
+				{
+					float a = Mathf.Pi / 6f + i * Mathf.Tau / 6f;
+					_poly6[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+				}
+				DrawColoredPolygon(_poly6, color);
 				break;
 			case Kind.Pod:
 				// Small circle.
@@ -425,17 +432,6 @@ public partial class TargetMarkers : Control
 				DrawArc(p, r * 0.5f, 0f, Mathf.Tau, 16, color, 1.4f, true);
 				break;
 		}
-	}
-
-	private static Vector2[] Hexagon(Vector2 p, float r)
-	{
-		var pts = new Vector2[6];
-		for (int i = 0; i < 6; i++)
-		{
-			float a = Mathf.Pi / 6f + i * Mathf.Tau / 6f;   // flat-top
-			pts[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-		}
-		return pts;
 	}
 
 	// A four-corner bracket reticle centered on p.
@@ -474,13 +470,10 @@ public partial class TargetMarkers : Control
 	private void DrawArrow(Vector2 p, Vector2 dir, Color color)
 	{
 		Vector2 perp = new(-dir.Y, dir.X);
-		Vector2[] pts =
-		{
-			p + dir * ArrowSize,
-			p - dir * ArrowSize * 0.5f + perp * ArrowSize * 0.6f,
-			p - dir * ArrowSize * 0.5f - perp * ArrowSize * 0.6f,
-		};
-		DrawColoredPolygon(pts, color);
+		_poly3[0] = p + dir * ArrowSize;
+		_poly3[1] = p - dir * ArrowSize * 0.5f + perp * ArrowSize * 0.6f;
+		_poly3[2] = p - dir * ArrowSize * 0.5f - perp * ArrowSize * 0.6f;
+		DrawColoredPolygon(_poly3, color);
 	}
 
 	// Solve the constant-velocity intercept in the SHOOTER's frame and return the world

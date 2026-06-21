@@ -398,8 +398,4 @@ void fragment() {
 		return shader;
 	}
 
-	public override void _Process(double delta)
-	{
-		// No rotation needed — the shader handles all animation via TIME
-	}
 }
