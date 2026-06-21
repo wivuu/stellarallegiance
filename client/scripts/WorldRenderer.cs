@@ -782,7 +782,8 @@ public partial class WorldRenderer : Node3D
 	// every client and the server derive the same bolt from the same replicated row.
 	private void SpawnBoltFor(Ship row)
 	{
-		if (!_defs.TryGetWeapon((byte)row.Class, out var hp, out var weapon))
+		var mounts = _defs.WeaponMounts((byte)row.Class);
+		if (mounts.Count == 0)
 			return;
 
 		var state = ShipMath.StateFromRow(row);
@@ -795,13 +796,19 @@ public partial class WorldRenderer : Node3D
 			? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
 		Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
 
-		Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
-		Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick);
-		Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
-		Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
+		// One bolt per weapon hardpoint (the Fighter's twin cannons), each from its own muzzle
+		// offset and with its own barrel-seeded scatter — the exact mirror of the server's TryFire.
+		for (byte barrel = 0; barrel < mounts.Count; barrel++)
+		{
+			var (hp, weapon) = mounts[barrel];
+			Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
+			Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
+			Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
+			Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
 
-		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), ShipMath.ToGodot(shotDir), row.SectorId,
-			weapon.ProjectileLifeTicks * FlightModel.Dt, row.ShipId, ShotMaskLeadSec());
+			AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), ShipMath.ToGodot(shotDir), row.SectorId,
+				weapon.ProjectileLifeTicks * FlightModel.Dt, row.ShipId, ShotMaskLeadSec());
+		}
 	}
 
 	// The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same

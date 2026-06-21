@@ -284,7 +284,7 @@ public partial class ShipController : Node
 					_lastSentInput = _input;
 					_lastSentTick = _predTick;
 			}
-			if (pc.Step(_input, _predTick) is PredictionController.PredictedShot shot)
+			foreach (var shot in pc.Step(_input, _predTick))
 				_world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec);
 		}
 

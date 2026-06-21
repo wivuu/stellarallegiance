@@ -30,9 +30,40 @@ public sealed partial class Simulation
     private static readonly WeaponSpec[] Weapons =
     {
         new(4f, 4u, 200f, 16u, FlightModel.ScoutSpread),     // Scout
-        new(10f, 8u, 200f, 16u, FlightModel.FighterSpread),  // Fighter
+        new(10f, 4u, 200f, 16u, FlightModel.FighterSpread),  // Fighter (twin guns; cycles as fast as the Scout)
         new(22f, 14u, 200f, 16u, FlightModel.BomberSpread),  // Bomber
     };
+
+    // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
+    // fires along. Single-sourced from the authored ShipClassDef hardpoints so the server's
+    // hit-detection muzzles match the bolts the client renders from the same defs.
+    private readonly record struct Muzzle(Vec3 Off, Vec3 Dir);
+
+    // Per-class weapon muzzles, indexed by ClassId. A class with several Weapon hardpoints
+    // (the Fighter's twin cannons) fires one bolt from EACH muzzle every fire tick; the array
+    // for a class is in hardpoint declaration order, which fixes each muzzle's barrel index so
+    // the per-barrel spread seed (FlightModel.SpreadDirection) matches the client.
+    private static readonly Muzzle[][] ClassMuzzles = BuildMuzzles();
+
+    private static Muzzle[][] BuildMuzzles()
+    {
+        var defs = GameContent.ShipClasses();
+        int max = 0;
+        foreach (var d in defs)
+            if (d.ClassId != GameContent.PodClassId && d.ClassId > max) max = d.ClassId;
+        var table = new Muzzle[max + 1][];
+        for (int i = 0; i < table.Length; i++) table[i] = System.Array.Empty<Muzzle>();
+        foreach (var d in defs)
+        {
+            if (d.ClassId == GameContent.PodClassId) continue;
+            var list = new List<Muzzle>();
+            foreach (var h in d.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon)
+                    list.Add(new Muzzle(new Vec3(h.OffX, h.OffY, h.OffZ), new Vec3(h.DirX, h.DirY, h.DirZ)));
+            table[d.ClassId] = list.ToArray();
+        }
+        return table;
+    }
     private static float MaxHull(byte cls) => cls switch { 2 => 240f, 1 => 120f, _ => 60f };
 
     public sealed class ShipSim
@@ -635,11 +666,26 @@ public sealed partial class Simulation
         if (tick - ship.LastFireTick < w.IntervalTicks && ship.LastFireTick != 0)
             return;
 
-        Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
-        Vec3 shotDir = FlightModel.SpreadDirection(fwd, w.SpreadRad, ship.ShipId, tick);
-        Vec3 mp = ship.State.Pos + fwd * World.NoseOffset;
-        Vec3 mv = shotDir * w.Speed + ship.State.Vel;
+        var muzzles = ship.Class < ClassMuzzles.Length ? ClassMuzzles[ship.Class] : System.Array.Empty<Muzzle>();
+        if (muzzles.Length == 0)
+            return;   // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
         ship.LastFireTick = tick;
+
+        // One bolt per muzzle, in hardpoint order (the Fighter's twin cannons fire together).
+        for (byte barrel = 0; barrel < muzzles.Length; barrel++)
+            FireBolt(ship, tick, w, muzzles[barrel], barrel);
+    }
+
+    // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
+    // first hull/base/rock it enters, and queue the damage at the impact tick. The bolt direction
+    // is seeded by (ShipId, fire tick, barrel), so the client renders the same bolt from the same
+    // muzzle and the per-barrel scatter agrees on both sides.
+    private void FireBolt(ShipSim ship, uint tick, in WeaponSpec w, in Muzzle muzzle, byte barrel)
+    {
+        Vec3 fwd = ship.State.Rot.Rotate(muzzle.Dir);
+        Vec3 shotDir = FlightModel.SpreadDirection(fwd, w.SpreadRad, ship.ShipId, tick, barrel);
+        Vec3 mp = ship.State.Pos + ship.State.Rot.Rotate(muzzle.Off);
+        Vec3 mv = shotDir * w.Speed + ship.State.Vel;
 
         float maxT = w.LifeTicks * FlightModel.Dt;
         float bestT = maxT;

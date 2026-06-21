@@ -69,28 +69,19 @@ public partial class DefRegistry : Node
 
     // ---- Weapons / hardpoints --------------------------------------------
 
-    // Resolve a ship class's primary Weapon hardpoint and the WeaponDef it fires (mirror of the
-    // server). False when the class has no def, carries no Weapon hardpoint (e.g. a pod), or the
-    // named weapon is missing — in every case the ship simply doesn't fire.
-    public bool TryGetWeapon(byte classId, out HardpointDef hp, out WeaponDef weapon)
+    // Every Weapon hardpoint on a class paired with the WeaponDef it fires, in hardpoint
+    // declaration order (the Fighter's twin cannons → two mounts). The list index is the barrel
+    // index, matching the server's per-muzzle TryFire, so rendered bolts line up with the
+    // authoritative shots. Empty when the class has no def or carries no firing weapon hardpoint
+    // (e.g. a pod) — in that case the ship simply doesn't fire.
+    public List<(HardpointDef hp, WeaponDef weapon)> WeaponMounts(byte classId)
     {
-        hp = null!;
-        weapon = null!;
-        if (!_ships.TryGetValue(classId, out var def) || def.Hardpoints is null)
-            return false;
-        foreach (var h in def.Hardpoints)
-        {
-            if (h.Kind != HardpointKind.Weapon)
-                continue;
-            if (_weapons.TryGetValue(h.WeaponId, out var w))
-            {
-                hp = h;
-                weapon = w;
-                return true;
-            }
-            return false;   // a Weapon hardpoint naming a missing def: don't fire
-        }
-        return false;       // no Weapon hardpoint on this class
+        var mounts = new List<(HardpointDef, WeaponDef)>();
+        if (_ships.TryGetValue(classId, out var def) && def.Hardpoints is not null)
+            foreach (var h in def.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon && _weapons.TryGetValue(h.WeaponId, out var w))
+                    mounts.Add((h, w));
+        return mounts;
     }
 
     // A class's full hardpoint list (engines/turrets/lights/docking + weapons), for the ship-mesh
