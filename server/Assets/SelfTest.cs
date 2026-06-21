@@ -60,7 +60,11 @@ public static class SelfTest
         Approx("world: EntryAxis is unit", world.BaseEntryAxis.Length(), 1f, 1e-3f);
         Check("world: rock bodies built", world.RockBodies.Count > 0);
         Approx("world: base hull longest axis ~ 2R", world.BaseHull!.LongestAxis, World.BaseRadius * 2f, World.BaseRadius * 0.05f);
-        Console.WriteLine($"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), EntryAxis=({F(world.BaseEntryAxis)}); rocks with hulls: {world.RockBodies.Count}");
+        Check("world: dock discs built (>=1)", world.BaseDockDiscs.Length >= 1);
+        bool discNormalsUnit = true;
+        foreach (var (_, n) in world.BaseDockDiscs) if (MathF.Abs(n.Length() - 1f) > 1e-3f) discNormalsUnit = false;
+        Check("world: dock disc normals are unit", discNormalsUnit);
+        Console.WriteLine($"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}");
     }
 
     private static void Check(string name, bool ok)

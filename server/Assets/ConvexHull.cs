@@ -58,6 +58,12 @@ public sealed class ConvexHull
     // least penetration and how deep the sphere is (≥0). Mirrors ResolveStaticCollision's
     // "nearest face" resolution; approximate near edges/corners, which is fine for bounce.
     public bool ResolveSphere(Vec3 center, float radius, out Vec3 normal, out float penetration)
+        => ResolveSphere(center, radius, out normal, out penetration, out _);
+
+    // Overload that also reports the index of the contact face (the face of least penetration). The
+    // base docking gate uses it: a sphere whose contact face is the bay-cap doorway docks instead of
+    // bouncing (the user's "intersect the plane at the entrance hardpoint → docked" rule).
+    public bool ResolveSphere(Vec3 center, float radius, out Vec3 normal, out float penetration, out int faceIndex)
     {
         float maxDist = float.NegativeInfinity;
         int best = -1;
@@ -68,10 +74,11 @@ public sealed class ConvexHull
         }
         if (best < 0 || maxDist > radius)
         {
-            normal = default; penetration = 0f; return false;
+            normal = default; penetration = 0f; faceIndex = -1; return false;
         }
         normal = Planes[best].N;
         penetration = radius - maxDist;
+        faceIndex = best;
         return true;
     }
 

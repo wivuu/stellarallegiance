@@ -21,9 +21,7 @@ public sealed partial class Simulation
     public const byte PodClass = 255;             // reserved "class" selecting the Pod flight profile
     private const float PodMaxHull = 20f;         // an ejected pod's low starting hull
     private const float DockRadiusFrac = 0.9f;    // dock when within this fraction of your OWN base radius
-    // A friendly base's hull is solid EXCEPT inside this cone around the entry-bay axis: a ship
-    // whose direction-from-base-center aligns within ~60° of BaseEntryAxis may fly in to dock.
-    private const float EntryConeCosThreshold = 0.5f;   // cos(60°) — forgiving doorway
+    private const float LaunchSpeed = 80f;        // u/s catapult out of the docking-exit hardpoint on spawn
     private static readonly float RescueRadius = World.ShipRadius * 4f;  // pickup distance (no need to directly intersect)
     private const float PodEjectSpeed = 90f;      // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f;        // rad/s initial tumble (decays via angular drag)
@@ -258,23 +256,31 @@ public sealed partial class Simulation
                     ResolveBaseCollision(s, b.Pos);   // enemy base: fully solid hull
                     continue;
                 }
-                // Own base: dock at the core. With a loaded hull the rest of the base is solid
-                // EXCEPT inside the entry-bay cone (fly in to dock); without a model it stays
-                // pass-through (the pre-hull behavior) so docking can't be blocked.
-                float dockR = World.BaseRadius * DockRadiusFrac;
+                // Own base: with a loaded hull you dock ONLY by flying your ship into a docking cone's
+                // base disc (the green debug cones) — the rest of the base is a solid hull that bounces
+                // you. Without a model, fall back to the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
-                if (d.LengthSquared() <= dockR * dockR)
+                if (World.BaseHull is ConvexHull baseHull)
                 {
-                    DockShip(s, tick);
-                    docked = true;
-                    break;
+                    if (IntersectsDockDisc(d))
+                    {
+                        DockShip(s, tick);   // intersected an entrance cone's base disc
+                        docked = true;
+                        break;
+                    }
+                    // Base is identity-oriented at scale 1, so its local frame == world (offset by center).
+                    if (baseHull.ResolveSphere(d, World.ShipRadius, out Vec3 bn, out float bpen, out _))
+                        ApplyBounce(s, bn, bpen);   // solid shell everywhere else
                 }
-                if (World.BaseHull is not null)
+                else
                 {
-                    float dl = d.Length();
-                    bool inBay = dl > 1e-3f && Dot(d * (1f / dl), World.BaseEntryAxis) >= EntryConeCosThreshold;
-                    if (!inBay)
-                        ResolveBaseCollision(s, b.Pos);
+                    float dockR = World.BaseRadius * DockRadiusFrac;
+                    if (d.LengthSquared() <= dockR * dockR)
+                    {
+                        DockShip(s, tick);
+                        docked = true;
+                        break;
+                    }
                 }
             }
             if (docked)
@@ -439,7 +445,7 @@ public sealed partial class Simulation
         s.State = new ShipState
         {
             Pos = basePos + outward * offset,
-            Vel = default,
+            Vel = outward * LaunchSpeed,   // catapult out of the bay instead of drifting
             Rot = rot,
             AngVel = default,
             Mass = s.State.Mass,
@@ -860,13 +866,42 @@ public sealed partial class Simulation
         Vec3 n = rot.Rotate(localN);   // rotation preserves length; uniform scale doesn't tilt normals
         float nl = n.Length();
         n = nl > 1e-6f ? n * (1f / nl) : new Vec3(0f, 1f, 0f);
-        float vn = Dot(s.State.Vel, n);
+        ApplyBounce(s, n, pen * scale);   // penetration is in local units → ×scale to world
+    }
+
+    // True when the ship sphere intersects a docking cone's base disc (the green debug cones): the
+    // ship center is at/just inside the disc plane and within the disc radius laterally. `d` is the
+    // ship position relative to the base center (disc Pos/Normal are in that same base-local frame).
+    // The inward slack (−DockDiscRadius) keeps a fast ship from tunneling through the thin disc plane
+    // in one tick; lateral uses radius+ShipRadius so the ship's hull (not just its center) must reach
+    // the disc. This is the ONLY way to dock at a hull base — everything else is the solid shell.
+    private bool IntersectsDockDisc(Vec3 d)
+    {
+        var discs = World.BaseDockDiscs;
+        float r = World.DockDiscRadius + World.ShipRadius;
+        for (int i = 0; i < discs.Length; i++)
+        {
+            Vec3 rel = d - discs[i].Pos;
+            float along = Dot(rel, discs[i].Normal);
+            if (along > World.ShipRadius || along < -World.DockDiscRadius) continue;
+            Vec3 lateral = rel - discs[i].Normal * along;
+            if (lateral.LengthSquared() <= r * r) return true;
+        }
+        return false;
+    }
+
+    // Bounce a ship off a contact: damp + reflect inbound velocity along the world-space contact
+    // normal and push out of penetration. Shared by ResolveHullCollision (asteroids, enemy base) and
+    // the friendly-base solid-shell branch (identity transform → normal/penetration already world).
+    private static void ApplyBounce(ShipSim s, Vec3 worldNormal, float worldPenetration)
+    {
+        float vn = Dot(s.State.Vel, worldNormal);
         if (vn < 0f)
         {
             s.Health -= MathF.Min(-vn * World.CollisionDamageScale, World.MaxCollisionDamage);
-            s.State.Vel -= n * ((1f + World.CollisionRestitution) * vn);
+            s.State.Vel -= worldNormal * ((1f + World.CollisionRestitution) * vn);
         }
-        s.State.Pos += n * (pen * scale);   // penetration is in local units → ×scale to world
+        s.State.Pos += worldNormal * worldPenetration;
     }
 
     // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the

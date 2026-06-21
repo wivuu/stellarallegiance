@@ -14,6 +14,7 @@ public sealed class World
     public const float ShipRadius = 3f;
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = 90f;
+    public const float DockDiscRadius = 9f;      // docking cone base-disc radius (sync w/ client BaseModelLoader.DebugConeRadius)
     public const float BaseMaxHealth = 2000f;
     public const float AsteroidCollisionScale = 0.82f;
     public const float CollisionRestitution = 0.3f;
@@ -60,7 +61,12 @@ public sealed class World
     public readonly SimModel? BaseModel;
     public readonly ConvexHull? BaseHull;     // base hull in WORLD units (base is identity-oriented)
     public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay
-    public readonly Vec3 BaseEntryAxis;       // entry-bay doorway cone axis (from DockingEntrance)
+    public readonly Vec3 BaseEntryAxis;       // mean entrance direction (from DockingEntrance), for AI aim
+    public readonly Vec3 BaseDoorCenter;      // local centroid of the entrance hardpoints (AI aim target)
+    // Docking cone base-discs: one per DockingEntrance hardpoint, in base-local units (offset from
+    // base center). Pos = the hardpoint (= the cone's base), Normal = radial-outward (the cone axis).
+    // A ship docks ONLY by intersecting one of these discs; the rest of the base is a solid hull.
+    public readonly (Vec3 Pos, Vec3 Normal)[] BaseDockDiscs;
     public readonly Dictionary<ulong, RockBody> RockBodies = new();
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
@@ -119,25 +125,35 @@ public sealed class World
         }
 
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseExitDir, BaseEntryAxis) = LoadBase();
+        (BaseModel, BaseHull, BaseExitDir, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
     }
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
     // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
-    private static (SimModel?, ConvexHull?, Vec3, Vec3) LoadBase()
+    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
     {
         var model = SimAssets.TryLoad("bases/base.glb");
-        if (model is null) return (null, null, default, default);
+        if (model is null) return (null, null, default, default, default, Array.Empty<(Vec3, Vec3)>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         Vec3 exitDir = model.FirstHardpoint("HP_DockingExit") is { } ex ? Normalize(ex.Pos) : new Vec3(0f, 0f, 1f);
-        Vec3 sum = default;
-        int n = 0;
+
+        // Entrance hardpoints in base-local world units (authored * ws): their mean direction is the
+        // AI-aim axis, their centroid is the AI-aim point, and each one is a docking cone base-disc
+        // (Pos = the hardpoint, Normal = radial-outward = the cone axis the client renders).
+        var entrances = new List<Vec3>();
         foreach (var hp in model.Hardpoints)
-            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal)) { sum += hp.Pos; n++; }
-        Vec3 entryAxis = n > 0 ? Normalize(sum) : exitDir;
-        return (model, hull, exitDir, entryAxis);
+            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal)) entrances.Add(hp.Pos * ws);
+        Vec3 sum = default;
+        foreach (var p in entrances) sum += p;
+        Vec3 entryAxis = entrances.Count > 0 ? Normalize(sum) : exitDir;
+        Vec3 doorCenter = entrances.Count > 0 ? sum * (1f / entrances.Count) : default;
+
+        var discs = new (Vec3, Vec3)[entrances.Count];
+        for (int i = 0; i < entrances.Count; i++)
+            discs[i] = (entrances[i], Normalize(entrances[i]));
+        return (model, hull, exitDir, entryAxis, doorCenter, discs);
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
@@ -165,6 +181,8 @@ public sealed class World
         float l = v.Length();
         return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
     }
+
+    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     // Godot Node3D.Rotation Euler is YXZ order; the client applies (RotX,RotY,RotZ) that way,
     // so the server builds q = qY · qX · qZ to collide each rock as it visually renders.

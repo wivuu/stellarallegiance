@@ -43,7 +43,7 @@
       "source_file": "",
       "source_location": "",
       "id": "node3d",
-      "community": 65,
+      "community": 72,
       "norm_label": "node3d"
     },
     {
@@ -182,10 +182,19 @@
       "norm_label": "float"
     },
     {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L47",
+      "id": "client_scripts_basemodelloader_cs_bool",
+      "community": 45,
+      "norm_label": "bool"
+    },
+    {
       "label": ".Build()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L51",
+      "source_location": "L60",
       "id": "scripts_basemodelloader_basemodelloader_build",
       "community": 45,
       "norm_label": ".build()"
@@ -194,7 +203,7 @@
       "label": "DefRegistry",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L51",
+      "source_location": "L60",
       "id": "client_scripts_basemodelloader_cs_defregistry",
       "community": 45,
       "norm_label": "defregistry"
@@ -203,7 +212,7 @@
       "label": "Material",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L51",
+      "source_location": "L60",
       "id": "client_scripts_basemodelloader_cs_material",
       "community": 45,
       "norm_label": "material"
@@ -212,7 +221,7 @@
       "label": "Node3D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L51",
+      "source_location": "L60",
       "id": "client_scripts_basemodelloader_cs_node3d",
       "community": 45,
       "norm_label": "node3d"
@@ -221,7 +230,7 @@
       "label": ".LoadHull()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L93",
+      "source_location": "L115",
       "id": "scripts_basemodelloader_basemodelloader_loadhull",
       "community": 45,
       "norm_label": ".loadhull()"
@@ -230,7 +239,7 @@
       "label": ".BuildPlaceholderSphere()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L104",
+      "source_location": "L126",
       "id": "scripts_basemodelloader_basemodelloader_buildplaceholdersphere",
       "community": 45,
       "norm_label": ".buildplaceholdersphere()"
@@ -239,7 +248,7 @@
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L104",
+      "source_location": "L126",
       "id": "client_scripts_basemodelloader_cs_meshinstance3d",
       "community": 45,
       "norm_label": "meshinstance3d"
@@ -248,7 +257,7 @@
       "label": ".Radius()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L114",
+      "source_location": "L136",
       "id": "scripts_basemodelloader_basemodelloader_radius",
       "community": 45,
       "norm_label": ".radius()"
@@ -257,7 +266,7 @@
       "label": ".MakeMarker()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L120",
+      "source_location": "L142",
       "id": "scripts_basemodelloader_basemodelloader_makemarker",
       "community": 45,
       "norm_label": ".makemarker()"
@@ -266,7 +275,7 @@
       "label": "HardpointDef",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L120",
+      "source_location": "L142",
       "id": "client_scripts_basemodelloader_cs_hardpointdef",
       "community": 45,
       "norm_label": "hardpointdef"
@@ -275,34 +284,52 @@
       "label": "Marker3D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L120",
+      "source_location": "L142",
       "id": "client_scripts_basemodelloader_cs_marker3d",
       "community": 45,
       "norm_label": "marker3d"
     },
     {
-      "label": ".MakeBeacon()",
+      "label": ".MakeHardpointCone()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L133",
-      "id": "scripts_basemodelloader_basemodelloader_makebeacon",
+      "source_location": "L157",
+      "id": "scripts_basemodelloader_basemodelloader_makehardpointcone",
       "community": 45,
-      "norm_label": ".makebeacon()"
+      "norm_label": ".makehardpointcone()"
     },
     {
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L133",
+      "source_location": "L157",
       "id": "client_scripts_basemodelloader_cs_vector3",
       "community": 45,
       "norm_label": "vector3"
     },
     {
+      "label": "Color",
+      "file_type": "code",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L157",
+      "id": "client_scripts_basemodelloader_cs_color",
+      "community": 45,
+      "norm_label": "color"
+    },
+    {
+      "label": ".MakeBeacon()",
+      "file_type": "code",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L197",
+      "id": "scripts_basemodelloader_basemodelloader_makebeacon",
+      "community": 45,
+      "norm_label": ".makebeacon()"
+    },
+    {
       "label": "BaseBeacon",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L133",
+      "source_location": "L197",
       "id": "basebeacon",
       "community": 45,
       "norm_label": "basebeacon"
@@ -311,7 +338,7 @@
       "label": ".BasisFacingZ()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L145",
+      "source_location": "L209",
       "id": "scripts_basemodelloader_basemodelloader_basisfacingz",
       "community": 45,
       "norm_label": ".basisfacingz()"
@@ -320,7 +347,7 @@
       "label": "Basis",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L145",
+      "source_location": "L209",
       "id": "client_scripts_basemodelloader_cs_basis",
       "community": 45,
       "norm_label": "basis"
@@ -329,25 +356,16 @@
       "label": "BaseBeacon",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L161",
+      "source_location": "L225",
       "id": "scripts_basemodelloader_basebeacon",
       "community": 45,
       "norm_label": "basebeacon"
     },
     {
-      "label": "Color",
-      "file_type": "code",
-      "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L164",
-      "id": "client_scripts_basemodelloader_cs_color",
-      "community": 45,
-      "norm_label": "color"
-    },
-    {
       "label": "OmniLight3D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L171",
+      "source_location": "L235",
       "id": "client_scripts_basemodelloader_cs_omnilight3d",
       "community": 45,
       "norm_label": "omnilight3d"
@@ -356,7 +374,7 @@
       "label": "StandardMaterial3D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L172",
+      "source_location": "L236",
       "id": "client_scripts_basemodelloader_cs_standardmaterial3d",
       "community": 45,
       "norm_label": "standardmaterial3d"
@@ -365,7 +383,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L175",
+      "source_location": "L239",
       "id": "scripts_basemodelloader_basebeacon_ready",
       "community": 45,
       "norm_label": "._ready()"
@@ -374,7 +392,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L211",
+      "source_location": "L275",
       "id": "scripts_basemodelloader_basebeacon_process",
       "community": 45,
       "norm_label": "._process()"
@@ -383,7 +401,7 @@
       "label": ".ApplyBlink()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L221",
+      "source_location": "L285",
       "id": "scripts_basemodelloader_basebeacon_applyblink",
       "community": 45,
       "norm_label": ".applyblink()"
@@ -392,7 +410,7 @@
       "label": ".RadialDot()",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L229",
+      "source_location": "L293",
       "id": "scripts_basemodelloader_basebeacon_radialdot",
       "community": 45,
       "norm_label": ".radialdot()"
@@ -401,7 +419,7 @@
       "label": "GradientTexture2D",
       "file_type": "code",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L229",
+      "source_location": "L293",
       "id": "client_scripts_basemodelloader_cs_gradienttexture2d",
       "community": 45,
       "norm_label": "gradienttexture2d"
@@ -781,7 +799,7 @@
       "source_file": "",
       "source_location": "",
       "id": "node",
-      "community": 57,
+      "community": 62,
       "norm_label": "node"
     },
     {
@@ -925,7 +943,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L1",
       "id": "scripts_connectionoverlay",
-      "community": 4,
+      "community": 88,
       "norm_label": "connectionoverlay.cs"
     },
     {
@@ -934,7 +952,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "id": "scripts_connectionoverlay_connectionoverlay",
-      "community": 4,
+      "community": 88,
       "norm_label": "connectionoverlay"
     },
     {
@@ -943,7 +961,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L10",
       "id": "client_scripts_connectionoverlay_cs_color",
-      "community": 4,
+      "community": 88,
       "norm_label": "color"
     },
     {
@@ -952,7 +970,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L13",
       "id": "client_scripts_connectionoverlay_cs_connectionmanager",
-      "community": 4,
+      "community": 88,
       "norm_label": "connectionmanager"
     },
     {
@@ -961,7 +979,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L14",
       "id": "client_scripts_connectionoverlay_cs_label",
-      "community": 4,
+      "community": 88,
       "norm_label": "label"
     },
     {
@@ -970,7 +988,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L16",
       "id": "client_scripts_connectionoverlay_cs_button",
-      "community": 4,
+      "community": 88,
       "norm_label": "button"
     },
     {
@@ -979,7 +997,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L17",
       "id": "client_scripts_connectionoverlay_cs_double",
-      "community": 4,
+      "community": 88,
       "norm_label": "double"
     },
     {
@@ -988,7 +1006,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L19",
       "id": "scripts_connectionoverlay_connectionoverlay_init",
-      "community": 4,
+      "community": 88,
       "norm_label": ".init()"
     },
     {
@@ -997,7 +1015,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L56",
       "id": "scripts_connectionoverlay_connectionoverlay_centered",
-      "community": 4,
+      "community": 88,
       "norm_label": ".centered()"
     },
     {
@@ -1006,7 +1024,7 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L63",
       "id": "scripts_connectionoverlay_connectionoverlay_process",
-      "community": 4,
+      "community": 88,
       "norm_label": "._process()"
     },
     {
@@ -1015,7 +1033,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L1",
       "id": "scripts_defregistry",
-      "community": 57,
+      "community": 62,
       "norm_label": "defregistry.cs"
     },
     {
@@ -1024,7 +1042,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L21",
       "id": "scripts_defregistry_defregistry",
-      "community": 57,
+      "community": 62,
       "norm_label": "defregistry"
     },
     {
@@ -1033,7 +1051,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L25",
       "id": "client_scripts_defregistry_cs_byte",
-      "community": 57,
+      "community": 62,
       "norm_label": "byte"
     },
     {
@@ -1042,7 +1060,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L27",
       "id": "client_scripts_defregistry_cs_dictionary",
-      "community": 57,
+      "community": 62,
       "norm_label": "dictionary"
     },
     {
@@ -1051,7 +1069,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "scripts_defregistry_defregistry_load",
-      "community": 77,
+      "community": 62,
       "norm_label": ".load()"
     },
     {
@@ -1060,7 +1078,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "client_scripts_defregistry_cs_ireadonlylist",
-      "community": 77,
+      "community": 62,
       "norm_label": "ireadonlylist"
     },
     {
@@ -1069,7 +1087,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "shipclassdef",
-      "community": 77,
+      "community": 62,
       "norm_label": "shipclassdef"
     },
     {
@@ -1078,7 +1096,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "weapondef",
-      "community": 71,
+      "community": 62,
       "norm_label": "weapondef"
     },
     {
@@ -1087,7 +1105,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "basedef",
-      "community": 77,
+      "community": 62,
       "norm_label": "basedef"
     },
     {
@@ -1096,7 +1114,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "worldconfig",
-      "community": 77,
+      "community": 62,
       "norm_label": "worldconfig"
     },
     {
@@ -1105,7 +1123,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
       "id": "scripts_defregistry_defregistry_trygetstats",
-      "community": 57,
+      "community": 62,
       "norm_label": ".trygetstats()"
     },
     {
@@ -1114,7 +1132,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
       "id": "client_scripts_defregistry_cs_shipstats",
-      "community": 57,
+      "community": 62,
       "norm_label": "shipstats"
     },
     {
@@ -1123,7 +1141,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L75",
       "id": "scripts_defregistry_defregistry_trygetweapon",
-      "community": 71,
+      "community": 62,
       "norm_label": ".trygetweapon()"
     },
     {
@@ -1132,7 +1150,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L75",
       "id": "client_scripts_defregistry_cs_hardpointdef",
-      "community": 71,
+      "community": 62,
       "norm_label": "hardpointdef"
     },
     {
@@ -1141,7 +1159,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L98",
       "id": "scripts_defregistry_defregistry_gethardpoints",
-      "community": 71,
+      "community": 62,
       "norm_label": ".gethardpoints()"
     },
     {
@@ -1150,7 +1168,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L98",
       "id": "client_scripts_defregistry_cs_list",
-      "community": 71,
+      "community": 62,
       "norm_label": "list"
     },
     {
@@ -1159,7 +1177,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L101",
       "id": "scripts_defregistry_defregistry_trygetshipdef",
-      "community": 77,
+      "community": 62,
       "norm_label": ".trygetshipdef()"
     },
     {
@@ -1168,7 +1186,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L104",
       "id": "scripts_defregistry_defregistry_getweapon",
-      "community": 71,
+      "community": 62,
       "norm_label": ".getweapon()"
     },
     {
@@ -1177,7 +1195,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L108",
       "id": "scripts_defregistry_defregistry_getbasedef",
-      "community": 77,
+      "community": 62,
       "norm_label": ".getbasedef()"
     },
     {
@@ -1186,7 +1204,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L1",
       "id": "scripts_dustfield",
-      "community": 25,
+      "community": 77,
       "norm_label": "dustfield.cs"
     },
     {
@@ -1195,7 +1213,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L11",
       "id": "scripts_dustfield_dustfield",
-      "community": 25,
+      "community": 77,
       "norm_label": "dustfield"
     },
     {
@@ -1204,7 +1222,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L15",
       "id": "client_scripts_dustfield_cs_float",
-      "community": 25,
+      "community": 77,
       "norm_label": "float"
     },
     {
@@ -1213,7 +1231,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L17",
       "id": "client_scripts_dustfield_cs_worldrenderer",
-      "community": 25,
+      "community": 77,
       "norm_label": "worldrenderer"
     },
     {
@@ -1222,7 +1240,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L18",
       "id": "gpuparticles3d",
-      "community": 25,
+      "community": 77,
       "norm_label": "gpuparticles3d"
     },
     {
@@ -1231,7 +1249,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L20",
       "id": "scripts_dustfield_dustfield_ready",
-      "community": 25,
+      "community": 77,
       "norm_label": "._ready()"
     },
     {
@@ -1240,7 +1258,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L51",
       "id": "scripts_dustfield_dustfield_process",
-      "community": 25,
+      "community": 77,
       "norm_label": "._process()"
     },
     {
@@ -1249,7 +1267,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "scripts_dustfield_dustfield_radialdot",
-      "community": 25,
+      "community": 77,
       "norm_label": ".radialdot()"
     },
     {
@@ -1258,7 +1276,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "client_scripts_dustfield_cs_gradienttexture2d",
-      "community": 25,
+      "community": 77,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -1267,7 +1285,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "scripts_dustfield_dustfield_dustdrawmaterial",
-      "community": 25,
+      "community": 77,
       "norm_label": ".dustdrawmaterial()"
     },
     {
@@ -1276,7 +1294,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_texture2d",
-      "community": 25,
+      "community": 77,
       "norm_label": "texture2d"
     },
     {
@@ -1285,7 +1303,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_standardmaterial3d",
-      "community": 25,
+      "community": 77,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2329,7 +2347,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L1",
       "id": "scripts_hitflash",
-      "community": 25,
+      "community": 86,
       "norm_label": "hitflash.cs"
     },
     {
@@ -2338,7 +2356,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L8",
       "id": "scripts_hitflash_hitflash",
-      "community": 25,
+      "community": 86,
       "norm_label": "hitflash"
     },
     {
@@ -2347,7 +2365,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L10",
       "id": "client_scripts_hitflash_cs_double",
-      "community": 25,
+      "community": 86,
       "norm_label": "double"
     },
     {
@@ -2356,7 +2374,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L11",
       "id": "client_scripts_hitflash_cs_float",
-      "community": 25,
+      "community": 86,
       "norm_label": "float"
     },
     {
@@ -2365,7 +2383,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L14",
       "id": "client_scripts_hitflash_cs_gradienttexture2d",
-      "community": 25,
+      "community": 86,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -2374,7 +2392,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L16",
       "id": "client_scripts_hitflash_cs_meshinstance3d",
-      "community": 25,
+      "community": 86,
       "norm_label": "meshinstance3d"
     },
     {
@@ -2383,7 +2401,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L17",
       "id": "client_scripts_hitflash_cs_standardmaterial3d",
-      "community": 25,
+      "community": 86,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2392,7 +2410,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L20",
       "id": "scripts_hitflash_hitflash_ready",
-      "community": 25,
+      "community": 86,
       "norm_label": "._ready()"
     },
     {
@@ -2401,7 +2419,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L45",
       "id": "scripts_hitflash_hitflash_process",
-      "community": 25,
+      "community": 86,
       "norm_label": "._process()"
     },
     {
@@ -2410,7 +2428,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L60",
       "id": "scripts_hitflash_hitflash_radialdot",
-      "community": 25,
+      "community": 86,
       "norm_label": ".radialdot()"
     },
     {
@@ -2473,7 +2491,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L15",
       "id": "client_scripts_hud_cs_control",
-      "community": 4,
+      "community": 88,
       "norm_label": "control"
     },
     {
@@ -2491,7 +2509,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L23",
       "id": "scripts_hud_hud_ready",
-      "community": 70,
+      "community": 89,
       "norm_label": "._ready()"
     },
     {
@@ -2500,7 +2518,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L93",
       "id": "scripts_hud_hud_spawnbutton",
-      "community": 70,
+      "community": 89,
       "norm_label": ".spawnbutton()"
     },
     {
@@ -2509,7 +2527,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L93",
       "id": "client_scripts_hud_cs_shipclass",
-      "community": 70,
+      "community": 89,
       "norm_label": "shipclass"
     },
     {
@@ -2518,7 +2536,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L93",
       "id": "client_scripts_hud_cs_button",
-      "community": 70,
+      "community": 89,
       "norm_label": "button"
     },
     {
@@ -2707,7 +2725,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L1",
       "id": "scripts_minimap",
-      "community": 4,
+      "community": 80,
       "norm_label": "minimap.cs"
     },
     {
@@ -2716,7 +2734,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "id": "scripts_minimap_minimap",
-      "community": 4,
+      "community": 80,
       "norm_label": "minimap"
     },
     {
@@ -2725,7 +2743,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L16",
       "id": "client_scripts_minimap_cs_float",
-      "community": 4,
+      "community": 80,
       "norm_label": "float"
     },
     {
@@ -2734,7 +2752,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L23",
       "id": "client_scripts_minimap_cs_color",
-      "community": 4,
+      "community": 80,
       "norm_label": "color"
     },
     {
@@ -2743,7 +2761,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L34",
       "id": "client_scripts_minimap_cs_connectionmanager",
-      "community": 4,
+      "community": 80,
       "norm_label": "connectionmanager"
     },
     {
@@ -2752,7 +2770,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L35",
       "id": "client_scripts_minimap_cs_worldrenderer",
-      "community": 4,
+      "community": 80,
       "norm_label": "worldrenderer"
     },
     {
@@ -2761,7 +2779,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L39",
       "id": "client_scripts_minimap_cs_dictionary",
-      "community": 4,
+      "community": 80,
       "norm_label": "dictionary"
     },
     {
@@ -2770,7 +2788,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "scripts_minimap_minimap_tryclicksector",
-      "community": 4,
+      "community": 80,
       "norm_label": ".tryclicksector()"
     },
     {
@@ -2779,7 +2797,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L43",
       "id": "client_scripts_minimap_cs_vector2",
-      "community": 4,
+      "community": 80,
       "norm_label": "vector2"
     },
     {
@@ -2788,7 +2806,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L55",
       "id": "scripts_minimap_minimap_init",
-      "community": 4,
+      "community": 80,
       "norm_label": ".init()"
     },
     {
@@ -2797,7 +2815,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L63",
       "id": "scripts_minimap_minimap_process",
-      "community": 4,
+      "community": 80,
       "norm_label": "._process()"
     },
     {
@@ -2806,7 +2824,7 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L65",
       "id": "scripts_minimap_minimap_draw",
-      "community": 4,
+      "community": 80,
       "norm_label": "._draw()"
     },
     {
@@ -4633,7 +4651,7 @@
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L47",
       "id": "client_scripts_shipmodelloader_cs_node3d",
-      "community": 25,
+      "community": 72,
       "norm_label": "node3d"
     },
     {
@@ -5434,79 +5452,106 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L1",
       "id": "scripts_velocityindicator",
-      "community": 4,
+      "community": 81,
       "norm_label": "velocityindicator.cs"
     },
     {
       "label": "VelocityIndicator",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L13",
+      "source_location": "L15",
       "id": "scripts_velocityindicator_velocityindicator",
-      "community": 4,
+      "community": 81,
       "norm_label": "velocityindicator"
     },
     {
       "label": "float",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L15",
+      "source_location": "L17",
       "id": "client_scripts_velocityindicator_cs_float",
-      "community": 4,
+      "community": 81,
       "norm_label": "float"
     },
     {
       "label": "Color",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L19",
+      "source_location": "L22",
       "id": "client_scripts_velocityindicator_cs_color",
-      "community": 4,
+      "community": 81,
       "norm_label": "color"
     },
     {
       "label": "WorldRenderer",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L21",
+      "source_location": "L24",
       "id": "client_scripts_velocityindicator_cs_worldrenderer",
-      "community": 4,
+      "community": 81,
       "norm_label": "worldrenderer"
     },
     {
       "label": "Camera3D",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L22",
+      "source_location": "L25",
       "id": "client_scripts_velocityindicator_cs_camera3d",
-      "community": 4,
+      "community": 81,
       "norm_label": "camera3d"
+    },
+    {
+      "label": "Vector2",
+      "file_type": "code",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L31",
+      "id": "client_scripts_velocityindicator_cs_vector2",
+      "community": 81,
+      "norm_label": "vector2"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L32",
+      "id": "client_scripts_velocityindicator_cs_bool",
+      "community": 81,
+      "norm_label": "bool"
     },
     {
       "label": ".Init()",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L29",
+      "source_location": "L35",
       "id": "scripts_velocityindicator_velocityindicator_init",
-      "community": 4,
+      "community": 81,
       "norm_label": ".init()"
     },
     {
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L37",
+      "source_location": "L43",
       "id": "scripts_velocityindicator_velocityindicator_process",
-      "community": 4,
+      "community": 81,
       "norm_label": "._process()"
+    },
+    {
+      "label": ".TryGetTarget()",
+      "file_type": "code",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L59",
+      "id": "scripts_velocityindicator_velocityindicator_trygettarget",
+      "community": 81,
+      "norm_label": ".trygettarget()"
     },
     {
       "label": "._Draw()",
       "file_type": "code",
       "source_file": "client/scripts/VelocityIndicator.cs",
-      "source_location": "L39",
+      "source_location": "L86",
       "id": "scripts_velocityindicator_velocityindicator_draw",
-      "community": 4,
+      "community": 81,
       "norm_label": "._draw()"
     },
     {
@@ -5515,7 +5560,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1",
       "id": "scripts_worldrenderer",
-      "community": 58,
+      "community": 72,
       "norm_label": "worldrenderer.cs"
     },
     {
@@ -5605,7 +5650,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L145",
       "id": "client_scripts_worldrenderer_cs_standardmaterial3d",
-      "community": 58,
+      "community": 72,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -5712,7 +5757,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L226",
-      "id": "pos",
+      "id": "client_scripts_worldrenderer_cs_pos",
       "community": 38,
       "norm_label": "pos"
     },
@@ -5812,7 +5857,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L331",
       "id": "scripts_worldrenderer_worldrenderer_netdeleteship",
-      "community": 65,
+      "community": 72,
       "norm_label": ".netdeleteship()"
     },
     {
@@ -5938,7 +5983,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L426",
       "id": "scripts_worldrenderer_worldrenderer_spawneffect",
-      "community": 65,
+      "community": 72,
       "norm_label": ".spawneffect()"
     },
     {
@@ -6010,7 +6055,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L531",
       "id": "client_scripts_worldrenderer_cs_node",
-      "community": 57,
+      "community": 69,
       "norm_label": "node"
     },
     {
@@ -6091,7 +6136,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L694",
       "id": "scripts_worldrenderer_worldrenderer_deleteship",
-      "community": 65,
+      "community": 72,
       "norm_label": ".deleteship()"
     },
     {
@@ -6100,7 +6145,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L756",
       "id": "scripts_worldrenderer_worldrenderer_friendlyrescuernear",
-      "community": 65,
+      "community": 72,
       "norm_label": ".friendlyrescuernear()"
     },
     {
@@ -6136,7 +6181,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L830",
       "id": "scripts_worldrenderer_worldrenderer_shotmaskleadsec",
-      "community": 65,
+      "community": 58,
       "norm_label": ".shotmaskleadsec()"
     },
     {
@@ -7152,6 +7197,690 @@
       "id": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry",
       "community": 36,
       "norm_label": "run-server.sh script"
+    },
+    {
+      "label": "ConvexHull.cs",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L1",
+      "id": "assets_convexhull",
+      "community": 57,
+      "norm_label": "convexhull.cs"
+    },
+    {
+      "label": "ConvexHull",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L22",
+      "id": "assets_convexhull_convexhull",
+      "community": 57,
+      "norm_label": "convexhull"
+    },
+    {
+      "label": ".FromPlanes()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L43",
+      "id": "assets_convexhull_convexhull_fromplanes",
+      "community": 57,
+      "norm_label": ".fromplanes()"
+    },
+    {
+      "label": "Plane",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L43",
+      "id": "plane",
+      "community": 57,
+      "norm_label": "plane"
+    },
+    {
+      "label": ".Scaled()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L47",
+      "id": "assets_convexhull_convexhull_scaled",
+      "community": 57,
+      "norm_label": ".scaled()"
+    },
+    {
+      "label": ".ResolveSphere()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L60",
+      "id": "assets_convexhull_convexhull_resolvesphere",
+      "community": 57,
+      "norm_label": ".resolvesphere()"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L60",
+      "id": "server_assets_convexhull_cs_vec3",
+      "community": 57,
+      "norm_label": "vec3"
+    },
+    {
+      "label": ".RayEntry()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L87",
+      "id": "assets_convexhull_convexhull_rayentry",
+      "community": 57,
+      "norm_label": ".rayentry()"
+    },
+    {
+      "label": ".Build()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L112",
+      "id": "assets_convexhull_convexhull_build",
+      "community": 57,
+      "norm_label": ".build()"
+    },
+    {
+      "label": "IReadOnlyList",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L112",
+      "id": "server_assets_convexhull_cs_ireadonlylist",
+      "community": 57,
+      "norm_label": "ireadonlylist"
+    },
+    {
+      "label": ".ReduceToExtremes()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L139",
+      "id": "assets_convexhull_convexhull_reducetoextremes",
+      "community": 57,
+      "norm_label": ".reducetoextremes()"
+    },
+    {
+      "label": ".FibonacciSphere()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L162",
+      "id": "assets_convexhull_convexhull_fibonaccisphere",
+      "community": 57,
+      "norm_label": ".fibonaccisphere()"
+    },
+    {
+      "label": ".TryQuickHull()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L176",
+      "id": "assets_convexhull_convexhull_tryquickhull",
+      "community": 57,
+      "norm_label": ".tryquickhull()"
+    },
+    {
+      "label": ".SeedTetra()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L236",
+      "id": "assets_convexhull_convexhull_seedtetra",
+      "community": 57,
+      "norm_label": ".seedtetra()"
+    },
+    {
+      "label": ".MakeFace()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L293",
+      "id": "assets_convexhull_convexhull_makeface",
+      "community": 57,
+      "norm_label": ".makeface()"
+    },
+    {
+      "label": "Face",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L293",
+      "id": "face",
+      "community": 57,
+      "norm_label": "face"
+    },
+    {
+      "label": ".BoxPlanes()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L303",
+      "id": "assets_convexhull_convexhull_boxplanes",
+      "community": 57,
+      "norm_label": ".boxplanes()"
+    },
+    {
+      "label": ".Bump()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L310",
+      "id": "assets_convexhull_convexhull_bump",
+      "community": 57,
+      "norm_label": ".bump()"
+    },
+    {
+      "label": "Dictionary",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L310",
+      "id": "server_assets_convexhull_cs_dictionary",
+      "community": 57,
+      "norm_label": "dictionary"
+    },
+    {
+      "label": ".Dot()",
+      "file_type": "code",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L316",
+      "id": "assets_convexhull_convexhull_dot",
+      "community": 57,
+      "norm_label": ".dot()"
+    },
+    {
+      "label": "GlbReader.cs",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L1",
+      "id": "assets_glbreader",
+      "community": 43,
+      "norm_label": "glbreader.cs"
+    },
+    {
+      "label": "GlbModel",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L22",
+      "id": "assets_glbreader_glbmodel",
+      "community": 43,
+      "norm_label": "glbmodel"
+    },
+    {
+      "label": "List",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L25",
+      "id": "server_assets_glbreader_cs_list",
+      "community": 43,
+      "norm_label": "list"
+    },
+    {
+      "label": "GlbReader",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L30",
+      "id": "assets_glbreader_glbreader",
+      "community": 43,
+      "norm_label": "glbreader"
+    },
+    {
+      "label": "uint",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L32",
+      "id": "server_assets_glbreader_cs_uint",
+      "community": 43,
+      "norm_label": "uint"
+    },
+    {
+      "label": ".Read()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L36",
+      "id": "assets_glbreader_glbreader_read",
+      "community": 43,
+      "norm_label": ".read()"
+    },
+    {
+      "label": ".Walk()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "id": "assets_glbreader_glbreader_walk",
+      "community": 43,
+      "norm_label": ".walk()"
+    },
+    {
+      "label": "Mat4",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "id": "mat4",
+      "community": 43,
+      "norm_label": "mat4"
+    },
+    {
+      "label": "JsonElement",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "id": "jsonelement",
+      "community": 43,
+      "norm_label": "jsonelement"
+    },
+    {
+      "label": ".AddMeshVertices()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "id": "assets_glbreader_glbreader_addmeshvertices",
+      "community": 43,
+      "norm_label": ".addmeshvertices()"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "id": "server_assets_glbreader_cs_vec3",
+      "community": 43,
+      "norm_label": "vec3"
+    },
+    {
+      "label": ".LocalMatrix()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L139",
+      "id": "assets_glbreader_glbreader_localmatrix",
+      "community": 43,
+      "norm_label": ".localmatrix()"
+    },
+    {
+      "label": ".Children()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L154",
+      "id": "assets_glbreader_glbreader_children",
+      "community": 43,
+      "norm_label": ".children()"
+    },
+    {
+      "label": "IEnumerable",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L154",
+      "id": "server_assets_glbreader_cs_ienumerable",
+      "community": 43,
+      "norm_label": "ienumerable"
+    },
+    {
+      "label": ".GetArray()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L163",
+      "id": "assets_glbreader_glbreader_getarray",
+      "community": 43,
+      "norm_label": ".getarray()"
+    },
+    {
+      "label": ".GetInt()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L166",
+      "id": "assets_glbreader_glbreader_getint",
+      "community": 43,
+      "norm_label": ".getint()"
+    },
+    {
+      "label": ".GetString()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L169",
+      "id": "assets_glbreader_glbreader_getstring",
+      "community": 43,
+      "norm_label": ".getstring()"
+    },
+    {
+      "label": ".ReadVec3()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L172",
+      "id": "assets_glbreader_glbreader_readvec3",
+      "community": 43,
+      "norm_label": ".readvec3()"
+    },
+    {
+      "label": ".ReadQuat()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L181",
+      "id": "assets_glbreader_glbreader_readquat",
+      "community": 43,
+      "norm_label": ".readquat()"
+    },
+    {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L181",
+      "id": "server_assets_glbreader_cs_quat",
+      "community": 43,
+      "norm_label": "quat"
+    },
+    {
+      "label": ".Normalize()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L190",
+      "id": "assets_glbreader_glbreader_normalize",
+      "community": 43,
+      "norm_label": ".normalize()"
+    },
+    {
+      "label": "Trs()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L207",
+      "id": "assets_glbreader_trs",
+      "community": 43,
+      "norm_label": "trs()"
+    },
+    {
+      "label": "TransformPoint()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L237",
+      "id": "assets_glbreader_transformpoint",
+      "community": 43,
+      "norm_label": "transformpoint()"
+    },
+    {
+      "label": "TransformDir()",
+      "file_type": "code",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L242",
+      "id": "assets_glbreader_transformdir",
+      "community": 43,
+      "norm_label": "transformdir()"
+    },
+    {
+      "label": "SelfTest.cs",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L1",
+      "id": "assets_selftest",
+      "community": 85,
+      "norm_label": "selftest.cs"
+    },
+    {
+      "label": "SelfTest",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L10",
+      "id": "assets_selftest_selftest",
+      "community": 85,
+      "norm_label": "selftest"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L12",
+      "id": "server_assets_selftest_cs_int",
+      "community": 85,
+      "norm_label": "int"
+    },
+    {
+      "label": ".Run()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L14",
+      "id": "assets_selftest_selftest_run",
+      "community": 85,
+      "norm_label": ".run()"
+    },
+    {
+      "label": ".TestCubeHull()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L22",
+      "id": "assets_selftest_selftest_testcubehull",
+      "community": 85,
+      "norm_label": ".testcubehull()"
+    },
+    {
+      "label": ".TestWorldModels()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L49",
+      "id": "assets_selftest_selftest_testworldmodels",
+      "community": 85,
+      "norm_label": ".testworldmodels()"
+    },
+    {
+      "label": ".Check()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L70",
+      "id": "assets_selftest_selftest_check",
+      "community": 85,
+      "norm_label": ".check()"
+    },
+    {
+      "label": ".Approx()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L76",
+      "id": "assets_selftest_selftest_approx",
+      "community": 85,
+      "norm_label": ".approx()"
+    },
+    {
+      "label": ".F()",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L83",
+      "id": "assets_selftest_selftest_f",
+      "community": 85,
+      "norm_label": ".f()"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L83",
+      "id": "server_assets_selftest_cs_vec3",
+      "community": 85,
+      "norm_label": "vec3"
+    },
+    {
+      "label": "SimAssets.cs",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L1",
+      "id": "assets_simassets",
+      "community": 87,
+      "norm_label": "simassets.cs"
+    },
+    {
+      "label": "SimAssets",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L15",
+      "id": "assets_simassets_simassets",
+      "community": 87,
+      "norm_label": "simassets"
+    },
+    {
+      "label": "object",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L17",
+      "id": "server_assets_simassets_cs_object",
+      "community": 87,
+      "norm_label": "object"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L18",
+      "id": "server_assets_simassets_cs_bool",
+      "community": 87,
+      "norm_label": "bool"
+    },
+    {
+      "label": "string",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L19",
+      "id": "server_assets_simassets_cs_string",
+      "community": 87,
+      "norm_label": "string"
+    },
+    {
+      "label": ".TryLoad()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L47",
+      "id": "assets_simassets_simassets_tryload",
+      "community": 87,
+      "norm_label": ".tryload()"
+    },
+    {
+      "label": "SimModel",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L47",
+      "id": "server_assets_simassets_cs_simmodel",
+      "community": 87,
+      "norm_label": "simmodel"
+    },
+    {
+      "label": ".Resolve()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L57",
+      "id": "assets_simassets_simassets_resolve",
+      "community": 87,
+      "norm_label": ".resolve()"
+    },
+    {
+      "label": ".IsAssetsDir()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L83",
+      "id": "assets_simassets_simassets_isassetsdir",
+      "community": 87,
+      "norm_label": ".isassetsdir()"
+    },
+    {
+      "label": "SimModel.cs",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L1",
+      "id": "assets_simmodel",
+      "community": 71,
+      "norm_label": "simmodel.cs"
+    },
+    {
+      "label": "SimModel",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L18",
+      "id": "assets_simmodel_simmodel",
+      "community": 71,
+      "norm_label": "simmodel"
+    },
+    {
+      "label": ".FirstHardpoint()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "id": "assets_simmodel_simmodel_firsthardpoint",
+      "community": 71,
+      "norm_label": ".firsthardpoint()"
+    },
+    {
+      "label": "Name",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "id": "name",
+      "community": 71,
+      "norm_label": "name"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "id": "server_assets_simmodel_cs_vec3",
+      "community": 71,
+      "norm_label": "vec3"
+    },
+    {
+      "label": "Pos",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "id": "server_assets_simmodel_cs_pos",
+      "community": 71,
+      "norm_label": "pos"
+    },
+    {
+      "label": "Forward",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "id": "forward",
+      "community": 71,
+      "norm_label": "forward"
+    },
+    {
+      "label": "SimModelCache",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L41",
+      "id": "assets_simmodel_simmodelcache",
+      "community": 71,
+      "norm_label": "simmodelcache"
+    },
+    {
+      "label": "uint",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L43",
+      "id": "server_assets_simmodel_cs_uint",
+      "community": 71,
+      "norm_label": "uint"
+    },
+    {
+      "label": "int",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L44",
+      "id": "server_assets_simmodel_cs_int",
+      "community": 71,
+      "norm_label": "int"
+    },
+    {
+      "label": ".Load()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L47",
+      "id": "assets_simmodel_simmodelcache_load",
+      "community": 71,
+      "norm_label": ".load()"
+    },
+    {
+      "label": ".TryRead()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L69",
+      "id": "assets_simmodel_simmodelcache_tryread",
+      "community": 71,
+      "norm_label": ".tryread()"
+    },
+    {
+      "label": ".Write()",
+      "file_type": "code",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L104",
+      "id": "assets_simmodel_simmodelcache_write",
+      "community": 71,
+      "norm_label": ".write()"
     },
     {
       "label": "Backends.cs",
@@ -8815,7 +9544,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L81",
       "id": "server_sim_simulation_pig_cs_shipsim",
-      "community": 43,
+      "community": 53,
       "norm_label": "shipsim"
     },
     {
@@ -8923,7 +9652,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L387",
       "id": "sim_simulation_pig_simulation_pigdecide",
-      "community": 72,
+      "community": 53,
       "norm_label": ".pigdecide()"
     },
     {
@@ -8932,7 +9661,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L387",
       "id": "pigplan",
-      "community": 72,
+      "community": 53,
       "norm_label": "pigplan"
     },
     {
@@ -8950,7 +9679,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L403",
       "id": "pigcontext",
-      "community": 72,
+      "community": 53,
       "norm_label": "pigcontext"
     },
     {
@@ -8959,7 +9688,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L461",
       "id": "sim_simulation_pig_simulation_tryrescue",
-      "community": 72,
+      "community": 53,
       "norm_label": ".tryrescue()"
     },
     {
@@ -8968,7 +9697,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L472",
       "id": "sim_simulation_pig_simulation_trychaselockedtarget",
-      "community": 72,
+      "community": 53,
       "norm_label": ".trychaselockedtarget()"
     },
     {
@@ -8977,7 +9706,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L486",
       "id": "sim_simulation_pig_simulation_trychaseenemybomber",
-      "community": 72,
+      "community": 53,
       "norm_label": ".trychaseenemybomber()"
     },
     {
@@ -8986,7 +9715,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L494",
       "id": "sim_simulation_pig_simulation_trychaseenemy",
-      "community": 72,
+      "community": 53,
       "norm_label": ".trychaseenemy()"
     },
     {
@@ -8995,7 +9724,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L504",
       "id": "sim_simulation_pig_simulation_makechaseplan",
-      "community": 72,
+      "community": 53,
       "norm_label": ".makechaseplan()"
     },
     {
@@ -9004,7 +9733,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L514",
       "id": "sim_simulation_pig_simulation_tryattackbase",
-      "community": 72,
+      "community": 53,
       "norm_label": ".tryattackbase()"
     },
     {
@@ -9013,7 +9742,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L539",
       "id": "sim_simulation_pig_simulation_trywanderaleph",
-      "community": 72,
+      "community": 53,
       "norm_label": ".trywanderaleph()"
     },
     {
@@ -9022,7 +9751,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L559",
       "id": "sim_simulation_pig_simulation_makepatrolplan",
-      "community": 72,
+      "community": 53,
       "norm_label": ".makepatrolplan()"
     },
     {
@@ -9031,7 +9760,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L566",
       "id": "sim_simulation_pig_simulation_pigexecute",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigexecute()"
     },
     {
@@ -9040,7 +9769,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L566",
       "id": "server_sim_simulation_pig_cs_shipinputstate",
-      "community": 43,
+      "community": 53,
       "norm_label": "shipinputstate"
     },
     {
@@ -9049,7 +9778,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L594",
       "id": "sim_simulation_pig_simulation_pigchaseinput",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigchaseinput()"
     },
     {
@@ -9058,7 +9787,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L657",
       "id": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigpatrolfromcenter()"
     },
     {
@@ -9067,7 +9796,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L657",
       "id": "server_sim_simulation_pig_cs_vec3",
-      "community": 43,
+      "community": 53,
       "norm_label": "vec3"
     },
     {
@@ -9076,7 +9805,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L657",
       "id": "server_sim_simulation_pig_cs_quat",
-      "community": 43,
+      "community": 53,
       "norm_label": "quat"
     },
     {
@@ -9094,41 +9823,41 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L672",
       "id": "sim_simulation_pig_simulation_podthink",
-      "community": 43,
+      "community": 53,
       "norm_label": ".podthink()"
     },
     {
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L694",
+      "source_location": "L700",
       "id": "sim_simulation_pig_simulation_piglead",
-      "community": 43,
+      "community": 53,
       "norm_label": ".piglead()"
     },
     {
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L723",
+      "source_location": "L729",
       "id": "sim_simulation_pig_simulation_pigavoidasteroids",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigavoidasteroids()"
     },
     {
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L753",
+      "source_location": "L759",
       "id": "sim_simulation_pig_simulation_pigthreatscore",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigthreatscore()"
     },
     {
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L773",
+      "source_location": "L779",
       "id": "sim_simulation_pig_simulation_teambasesector",
       "community": 53,
       "norm_label": ".teambasesector()"
@@ -9137,7 +9866,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L780",
+      "source_location": "L786",
       "id": "sim_simulation_pig_simulation_enemyinsector",
       "community": 53,
       "norm_label": ".enemyinsector()"
@@ -9146,7 +9875,7 @@
       "label": ".EnemyBaseExists()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L787",
+      "source_location": "L793",
       "id": "sim_simulation_pig_simulation_enemybaseexists",
       "community": 53,
       "norm_label": ".enemybaseexists()"
@@ -9155,43 +9884,43 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L794",
+      "source_location": "L800",
       "id": "sim_simulation_pig_simulation_alephto",
-      "community": 72,
+      "community": 53,
       "norm_label": ".alephto()"
     },
     {
       "label": "Gate",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L794",
+      "source_location": "L800",
       "id": "gate",
-      "community": 72,
+      "community": 53,
       "norm_label": "gate"
     },
     {
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L801",
+      "source_location": "L807",
       "id": "sim_simulation_pig_simulation_pigsteerto",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigsteerto()"
     },
     {
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L814",
+      "source_location": "L820",
       "id": "sim_simulation_pig_simulation_pigattackpoint",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigattackpoint()"
     },
     {
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L838",
+      "source_location": "L844",
       "id": "sim_simulation_pig_simulation_pigaimskill",
       "community": 53,
       "norm_label": ".pigaimskill()"
@@ -9200,25 +9929,25 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L849",
+      "source_location": "L855",
       "id": "sim_simulation_pig_simulation_pigaimwobble",
-      "community": 43,
+      "community": 53,
       "norm_label": ".pigaimwobble()"
     },
     {
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L864",
+      "source_location": "L870",
       "id": "sim_simulation_pig_simulation_clamp1",
-      "community": 43,
+      "community": 53,
       "norm_label": ".clamp1()"
     },
     {
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L865",
+      "source_location": "L871",
       "id": "sim_simulation_pig_simulation_clamp01",
       "community": 53,
       "norm_label": ".clamp01()"
@@ -9227,36 +9956,36 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L866",
+      "source_location": "L872",
       "id": "sim_simulation_pig_simulation_conjugate",
-      "community": 43,
+      "community": 53,
       "norm_label": ".conjugate()"
     },
     {
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L868",
+      "source_location": "L874",
       "id": "sim_simulation_pig_simulation_normalizeor",
-      "community": 43,
+      "community": 53,
       "norm_label": ".normalizeor()"
     },
     {
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L874",
+      "source_location": "L880",
       "id": "sim_simulation_pig_simulation_perpendicularto",
-      "community": 43,
+      "community": 53,
       "norm_label": ".perpendicularto()"
     },
     {
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L880",
+      "source_location": "L886",
       "id": "sim_simulation_pig_simulation_smallestpositivef",
-      "community": 43,
+      "community": 53,
       "norm_label": ".smallestpositivef()"
     },
     {
@@ -9272,7 +10001,7 @@
       "label": "Simulation",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L13",
+      "source_location": "L14",
       "id": "sim_simulation_simulation",
       "community": 42,
       "norm_label": "simulation"
@@ -9281,7 +10010,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L15",
+      "source_location": "L16",
       "id": "server_sim_simulation_cs_uint",
       "community": 42,
       "norm_label": "uint"
@@ -9290,7 +10019,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L17",
+      "source_location": "L18",
       "id": "server_sim_simulation_cs_int",
       "community": 42,
       "norm_label": "int"
@@ -9299,7 +10028,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L20",
+      "source_location": "L21",
       "id": "server_sim_simulation_cs_byte",
       "community": 42,
       "norm_label": "byte"
@@ -9308,7 +10037,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L21",
+      "source_location": "L22",
       "id": "server_sim_simulation_cs_float",
       "community": 42,
       "norm_label": "float"
@@ -9317,7 +10046,7 @@
       "label": "WeaponSpec",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L29",
+      "source_location": "L31",
       "id": "weaponspec",
       "community": 42,
       "norm_label": "weaponspec"
@@ -9326,7 +10055,7 @@
       "label": ".MaxHull()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L35",
+      "source_location": "L37",
       "id": "sim_simulation_simulation_maxhull",
       "community": 42,
       "norm_label": ".maxhull()"
@@ -9335,7 +10064,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L37",
+      "source_location": "L39",
       "id": "sim_simulation_shipsim",
       "community": 42,
       "norm_label": "shipsim"
@@ -9344,7 +10073,7 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L39",
+      "source_location": "L41",
       "id": "server_sim_simulation_cs_ulong",
       "community": 42,
       "norm_label": "ulong"
@@ -9353,7 +10082,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L44",
+      "source_location": "L46",
       "id": "server_sim_simulation_cs_shipstate",
       "community": 42,
       "norm_label": "shipstate"
@@ -9362,7 +10091,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L48",
+      "source_location": "L50",
       "id": "server_sim_simulation_cs_shipinputstate",
       "community": 42,
       "norm_label": "shipinputstate"
@@ -9371,7 +10100,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L49",
+      "source_location": "L51",
       "id": "server_sim_simulation_cs_bool",
       "community": 42,
       "norm_label": "bool"
@@ -9380,7 +10109,7 @@
       "label": "World",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L67",
+      "source_location": "L69",
       "id": "server_sim_simulation_cs_world",
       "community": 42,
       "norm_label": "world"
@@ -9389,7 +10118,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L68",
+      "source_location": "L70",
       "id": "server_sim_simulation_cs_dictionary",
       "community": 42,
       "norm_label": "dictionary"
@@ -9398,7 +10127,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L69",
+      "source_location": "L71",
       "id": "server_sim_simulation_cs_list",
       "community": 42,
       "norm_label": "list"
@@ -9407,7 +10136,7 @@
       "label": "Random",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L76",
+      "source_location": "L78",
       "id": "random",
       "community": 42,
       "norm_label": "random"
@@ -9416,7 +10145,7 @@
       "label": "Queue",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L79",
+      "source_location": "L81",
       "id": "queue",
       "community": 42,
       "norm_label": "queue"
@@ -9425,7 +10154,7 @@
       "label": "object",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L82",
+      "source_location": "L84",
       "id": "server_sim_simulation_cs_object",
       "community": 42,
       "norm_label": "object"
@@ -9434,7 +10163,7 @@
       "label": "Func",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L125",
+      "source_location": "L127",
       "id": "server_sim_simulation_cs_func",
       "community": 42,
       "norm_label": "func"
@@ -9443,7 +10172,7 @@
       "label": "Action",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L126",
+      "source_location": "L128",
       "id": "server_sim_simulation_cs_action",
       "community": 42,
       "norm_label": "action"
@@ -9452,7 +10181,7 @@
       "label": ".EnqueueJoin()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L156",
+      "source_location": "L158",
       "id": "sim_simulation_simulation_enqueuejoin",
       "community": 42,
       "norm_label": ".enqueuejoin()"
@@ -9461,7 +10190,7 @@
       "label": ".EnqueueLeave()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L161",
+      "source_location": "L163",
       "id": "sim_simulation_simulation_enqueueleave",
       "community": 42,
       "norm_label": ".enqueueleave()"
@@ -9470,7 +10199,7 @@
       "label": ".EnqueueInput()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L166",
+      "source_location": "L168",
       "id": "sim_simulation_simulation_enqueueinput",
       "community": 42,
       "norm_label": ".enqueueinput()"
@@ -9479,7 +10208,7 @@
       "label": ".ShipIdOf()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L171",
+      "source_location": "L173",
       "id": "sim_simulation_simulation_shipidof",
       "community": 28,
       "norm_label": ".shipidof()"
@@ -9488,7 +10217,7 @@
       "label": ".Step()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L178",
+      "source_location": "L180",
       "id": "sim_simulation_simulation_step",
       "community": 42,
       "norm_label": ".step()"
@@ -9497,7 +10226,7 @@
       "label": ".DrainQueues()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L292",
+      "source_location": "L313",
       "id": "sim_simulation_simulation_drainqueues",
       "community": 42,
       "norm_label": ".drainqueues()"
@@ -9506,7 +10235,7 @@
       "label": ".ResetMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L335",
+      "source_location": "L356",
       "id": "sim_simulation_simulation_resetmatch",
       "community": 42,
       "norm_label": ".resetmatch()"
@@ -9515,7 +10244,7 @@
       "label": ".StartMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L339",
+      "source_location": "L360",
       "id": "sim_simulation_simulation_startmatch",
       "community": 42,
       "norm_label": ".startmatch()"
@@ -9524,7 +10253,7 @@
       "label": ".ReturnToLobby()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L355",
+      "source_location": "L376",
       "id": "sim_simulation_simulation_returntolobby",
       "community": 42,
       "norm_label": ".returntolobby()"
@@ -9533,7 +10262,7 @@
       "label": ".SpawnCombatShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L376",
+      "source_location": "L397",
       "id": "sim_simulation_simulation_spawncombatship",
       "community": 42,
       "norm_label": ".spawncombatship()"
@@ -9542,16 +10271,16 @@
       "label": ".PlaceAtBase()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L398",
+      "source_location": "L421",
       "id": "sim_simulation_simulation_placeatbase",
-      "community": 53,
+      "community": 42,
       "norm_label": ".placeatbase()"
     },
     {
       "label": ".ProcessRespawns()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L427",
+      "source_location": "L461",
       "id": "sim_simulation_simulation_processrespawns",
       "community": 42,
       "norm_label": ".processrespawns()"
@@ -9560,7 +10289,7 @@
       "label": ".InputFor()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L446",
+      "source_location": "L480",
       "id": "sim_simulation_simulation_inputfor",
       "community": 42,
       "norm_label": ".inputfor()"
@@ -9569,7 +10298,7 @@
       "label": ".ResolveDeath()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L460",
+      "source_location": "L494",
       "id": "sim_simulation_simulation_resolvedeath",
       "community": 42,
       "norm_label": ".resolvedeath()"
@@ -9578,7 +10307,7 @@
       "label": ".EjectPlayerPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L473",
+      "source_location": "L507",
       "id": "sim_simulation_simulation_ejectplayerpod",
       "community": 42,
       "norm_label": ".ejectplayerpod()"
@@ -9587,7 +10316,7 @@
       "label": ".MakePod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L485",
+      "source_location": "L519",
       "id": "sim_simulation_simulation_makepod",
       "community": 42,
       "norm_label": ".makepod()"
@@ -9596,7 +10325,7 @@
       "label": ".KillPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L516",
+      "source_location": "L550",
       "id": "sim_simulation_simulation_killpod",
       "community": 42,
       "norm_label": ".killpod()"
@@ -9605,7 +10334,7 @@
       "label": ".DockShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L528",
+      "source_location": "L562",
       "id": "sim_simulation_simulation_dockship",
       "community": 42,
       "norm_label": ".dockship()"
@@ -9614,7 +10343,7 @@
       "label": ".ScheduleRespawn()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L537",
+      "source_location": "L571",
       "id": "sim_simulation_simulation_schedulerespawn",
       "community": 42,
       "norm_label": ".schedulerespawn()"
@@ -9623,7 +10352,7 @@
       "label": ".RemoveShipNow()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L546",
+      "source_location": "L580",
       "id": "sim_simulation_simulation_removeshipnow",
       "community": 42,
       "norm_label": ".removeshipnow()"
@@ -9632,7 +10361,7 @@
       "label": ".ApplyStructural()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L555",
+      "source_location": "L589",
       "id": "sim_simulation_simulation_applystructural",
       "community": 42,
       "norm_label": ".applystructural()"
@@ -9641,34 +10370,34 @@
       "label": ".RandomUnitVec()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L579",
+      "source_location": "L613",
       "id": "sim_simulation_simulation_randomunitvec",
-      "community": 80,
+      "community": 42,
       "norm_label": ".randomunitvec()"
     },
     {
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L579",
+      "source_location": "L613",
       "id": "server_sim_simulation_cs_vec3",
-      "community": 80,
+      "community": 42,
       "norm_label": "vec3"
     },
     {
       "label": ".TryFire()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L589",
+      "source_location": "L623",
       "id": "sim_simulation_simulation_tryfire",
-      "community": 80,
+      "community": 42,
       "norm_label": ".tryfire()"
     },
     {
       "label": ".ResolveDueShots()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L656",
+      "source_location": "L699",
       "id": "sim_simulation_simulation_resolvedueshots",
       "community": 42,
       "norm_label": ".resolvedueshots()"
@@ -9677,34 +10406,34 @@
       "label": ".FirstEntryTime()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L688",
+      "source_location": "L731",
       "id": "sim_simulation_simulation_firstentrytime",
-      "community": 80,
+      "community": 42,
       "norm_label": ".firstentrytime()"
     },
     {
       "label": ".CellsAlongRay()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L712",
+      "source_location": "L755",
       "id": "sim_simulation_simulation_cellsalongray",
-      "community": 80,
+      "community": 42,
       "norm_label": ".cellsalongray()"
     },
     {
       "label": "IEnumerable",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L712",
-      "id": "ienumerable",
-      "community": 80,
+      "source_location": "L755",
+      "id": "server_sim_simulation_cs_ienumerable",
+      "community": 42,
       "norm_label": "ienumerable"
     },
     {
       "label": ".RebuildShipGrid()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L732",
+      "source_location": "L775",
       "id": "sim_simulation_simulation_rebuildshipgrid",
       "community": 42,
       "norm_label": ".rebuildshipgrid()"
@@ -9713,7 +10442,7 @@
       "label": ".CollideShips()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L749",
+      "source_location": "L792",
       "id": "sim_simulation_simulation_collideships",
       "community": 42,
       "norm_label": ".collideships()"
@@ -9722,16 +10451,70 @@
       "label": ".ResolveAsteroidCollisions()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L777",
+      "source_location": "L820",
       "id": "sim_simulation_simulation_resolveasteroidcollisions",
       "community": 42,
       "norm_label": ".resolveasteroidcollisions()"
     },
     {
+      "label": ".ResolveBaseCollision()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L846",
+      "id": "sim_simulation_simulation_resolvebasecollision",
+      "community": 42,
+      "norm_label": ".resolvebasecollision()"
+    },
+    {
+      "label": ".ResolveHullCollision()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L857",
+      "id": "sim_simulation_simulation_resolvehullcollision",
+      "community": 42,
+      "norm_label": ".resolvehullcollision()"
+    },
+    {
+      "label": "ConvexHull",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L857",
+      "id": "server_sim_simulation_cs_convexhull",
+      "community": 42,
+      "norm_label": "convexhull"
+    },
+    {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L857",
+      "id": "server_sim_simulation_cs_quat",
+      "community": 42,
+      "norm_label": "quat"
+    },
+    {
+      "label": ".ApplyBounce()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L875",
+      "id": "sim_simulation_simulation_applybounce",
+      "community": 42,
+      "norm_label": ".applybounce()"
+    },
+    {
+      "label": ".HullRayEntry()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L888",
+      "id": "sim_simulation_simulation_hullrayentry",
+      "community": 42,
+      "norm_label": ".hullrayentry()"
+    },
+    {
       "label": ".ResolveStaticCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L792",
+      "source_location": "L900",
       "id": "sim_simulation_simulation_resolvestaticcollision",
       "community": 42,
       "norm_label": ".resolvestaticcollision()"
@@ -9740,7 +10523,7 @@
       "label": ".TryWarp()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L815",
+      "source_location": "L923",
       "id": "sim_simulation_simulation_trywarp",
       "community": 42,
       "norm_label": ".trywarp()"
@@ -9749,27 +10532,18 @@
       "label": ".LookRotationZ()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L852",
+      "source_location": "L960",
       "id": "sim_simulation_simulation_lookrotationz",
       "community": 42,
       "norm_label": ".lookrotationz()"
     },
     {
-      "label": "Quat",
-      "file_type": "code",
-      "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L852",
-      "id": "server_sim_simulation_cs_quat",
-      "community": 42,
-      "norm_label": "quat"
-    },
-    {
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L860",
+      "source_location": "L968",
       "id": "sim_simulation_simulation_dot",
-      "community": 43,
+      "community": 42,
       "norm_label": ".dot()"
     },
     {
@@ -9785,7 +10559,7 @@
       "label": "World",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L10",
+      "source_location": "L11",
       "id": "sim_world_world",
       "community": 46,
       "norm_label": "world"
@@ -9794,7 +10568,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L13",
+      "source_location": "L14",
       "id": "server_sim_world_cs_float",
       "community": 46,
       "norm_label": "float"
@@ -9803,7 +10577,7 @@
       "label": "uint",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L29",
+      "source_location": "L30",
       "id": "server_sim_world_cs_uint",
       "community": 46,
       "norm_label": "uint"
@@ -9812,7 +10586,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L33",
+      "source_location": "L34",
       "id": "server_sim_world_cs_int",
       "community": 46,
       "norm_label": "int"
@@ -9821,7 +10595,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L49",
+      "source_location": "L50",
       "id": "server_sim_world_cs_list",
       "community": 46,
       "norm_label": "list"
@@ -9830,16 +10604,52 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L54",
+      "source_location": "L55",
       "id": "server_sim_world_cs_ulong",
       "community": 46,
       "norm_label": "ulong"
     },
     {
+      "label": "SimModel",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L60",
+      "id": "server_sim_world_cs_simmodel",
+      "community": 46,
+      "norm_label": "simmodel"
+    },
+    {
+      "label": "ConvexHull",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L61",
+      "id": "server_sim_world_cs_convexhull",
+      "community": 46,
+      "norm_label": "convexhull"
+    },
+    {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L62",
+      "id": "server_sim_world_cs_vec3",
+      "community": 46,
+      "norm_label": "vec3"
+    },
+    {
+      "label": "bool",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L65",
+      "id": "server_sim_world_cs_bool",
+      "community": 46,
+      "norm_label": "bool"
+    },
+    {
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L57",
+      "source_location": "L66",
       "id": "server_sim_world_cs_dictionary",
       "community": 46,
       "norm_label": "dictionary"
@@ -9848,16 +10658,79 @@
       "label": ".CellOf()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L60",
+      "source_location": "L76",
       "id": "sim_world_world_cellof",
       "community": 46,
       "norm_label": ".cellof()"
     },
     {
+      "label": ".LoadBase()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L130",
+      "id": "sim_world_world_loadbase",
+      "community": 46,
+      "norm_label": ".loadbase()"
+    },
+    {
+      "label": ".DoorFaces()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "id": "sim_world_world_doorfaces",
+      "community": 46,
+      "norm_label": ".doorfaces()"
+    },
+    {
+      "label": ".LoadRockBodies()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L193",
+      "id": "sim_world_world_loadrockbodies",
+      "community": 46,
+      "norm_label": ".loadrockbodies()"
+    },
+    {
+      "label": ".Normalize()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L211",
+      "id": "sim_world_world_normalize",
+      "community": 46,
+      "norm_label": ".normalize()"
+    },
+    {
+      "label": ".Dot()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L217",
+      "id": "sim_world_world_dot",
+      "community": 46,
+      "norm_label": ".dot()"
+    },
+    {
+      "label": ".RockRotation()",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L221",
+      "id": "sim_world_world_rockrotation",
+      "community": 46,
+      "norm_label": ".rockrotation()"
+    },
+    {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L221",
+      "id": "server_sim_world_cs_quat",
+      "community": 46,
+      "norm_label": "quat"
+    },
+    {
       "label": ".RockGrid()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L108",
+      "source_location": "L229",
       "id": "sim_world_world_rockgrid",
       "community": 46,
       "norm_label": ".rockgrid()"
@@ -9866,7 +10739,7 @@
       "label": "Rock",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L108",
+      "source_location": "L229",
       "id": "rock",
       "community": 46,
       "norm_label": "rock"
@@ -9875,7 +10748,7 @@
       "label": ".SectorRadius()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L111",
+      "source_location": "L232",
       "id": "sim_world_world_sectorradius",
       "community": 46,
       "norm_label": ".sectorradius()"
@@ -9884,7 +10757,7 @@
       "label": ".SeedAsteroidField()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L120",
+      "source_location": "L241",
       "id": "sim_world_world_seedasteroidfield",
       "community": 46,
       "norm_label": ".seedasteroidfield()"
@@ -9893,7 +10766,7 @@
       "label": "DetRng",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L120",
+      "source_location": "L241",
       "id": "detrng",
       "community": 46,
       "norm_label": "detrng"
@@ -9902,7 +10775,7 @@
       "label": ".SeedAsteroidBelt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L149",
+      "source_location": "L270",
       "id": "sim_world_world_seedasteroidbelt",
       "community": 46,
       "norm_label": ".seedasteroidbelt()"
@@ -9911,7 +10784,7 @@
       "label": ".NextShape()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L168",
+      "source_location": "L289",
       "id": "sim_world_world_nextshape",
       "community": 46,
       "norm_label": ".nextshape()"
@@ -9920,7 +10793,7 @@
       "label": "variant",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L168",
+      "source_location": "L289",
       "id": "variant",
       "community": 46,
       "norm_label": "variant"
@@ -9929,7 +10802,7 @@
       "label": "rx",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L168",
+      "source_location": "L289",
       "id": "rx",
       "community": 46,
       "norm_label": "rx"
@@ -9938,7 +10811,7 @@
       "label": "ry",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L168",
+      "source_location": "L289",
       "id": "ry",
       "community": 46,
       "norm_label": "ry"
@@ -9947,7 +10820,7 @@
       "label": "rz",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L168",
+      "source_location": "L289",
       "id": "rz",
       "community": 46,
       "norm_label": "rz"
@@ -9956,7 +10829,7 @@
       "label": ".RandomOuterPos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L177",
+      "source_location": "L298",
       "id": "sim_world_world_randomouterpos",
       "community": 46,
       "norm_label": ".randomouterpos()"
@@ -9965,25 +10838,16 @@
       "label": ".RandomBasePos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L186",
+      "source_location": "L307",
       "id": "sim_world_world_randombasepos",
       "community": 46,
       "norm_label": ".randombasepos()"
     },
     {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "server/Sim/World.cs",
-      "source_location": "L186",
-      "id": "server_sim_world_cs_vec3",
-      "community": 46,
-      "norm_label": "vec3"
-    },
-    {
       "label": "NextULong()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L201",
+      "source_location": "L322",
       "id": "sim_world_nextulong",
       "community": 46,
       "norm_label": "nextulong()"
@@ -9992,7 +10856,7 @@
       "label": "NextDouble()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L210",
+      "source_location": "L331",
       "id": "sim_world_nextdouble",
       "community": 46,
       "norm_label": "nextdouble()"
@@ -10001,7 +10865,7 @@
       "label": "NextRange()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L211",
+      "source_location": "L332",
       "id": "sim_world_nextrange",
       "community": 46,
       "norm_label": "nextrange()"
@@ -10010,7 +10874,7 @@
       "label": "NextInt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L212",
+      "source_location": "L333",
       "id": "sim_world_nextint",
       "community": 46,
       "norm_label": "nextint()"
@@ -11809,6 +12673,24 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
+      "label": "Pos",
+      "file_type": "code",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L226",
+      "community": 38,
+      "norm_label": "pos",
+      "id": "pos"
+    },
+    {
+      "label": "IEnumerable",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L712",
+      "community": 42,
+      "norm_label": "ienumerable",
+      "id": "ienumerable"
+    },
+    {
       "label": ".OrientAlongVelocity()",
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
@@ -11894,7 +12776,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L47",
-      "community": 58,
+      "community": 72,
       "norm_label": "basehealthbar",
       "id": "scripts_worldrenderer_basehealthbar"
     },
@@ -11903,7 +12785,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L415",
-      "community": 58,
+      "community": 72,
       "norm_label": ".createbasehealthbar()",
       "id": "scripts_worldrenderer_worldrenderer_createbasehealthbar"
     },
@@ -11921,7 +12803,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 58,
+      "community": 72,
       "norm_label": ".healthcolor()",
       "id": "scripts_worldrenderer_worldrenderer_healthcolor"
     },
@@ -11930,7 +12812,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 58,
+      "community": 72,
       "norm_label": "color",
       "id": "client_scripts_worldrenderer_cs_color"
     },
@@ -12254,7 +13136,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L34",
-      "community": 57,
+      "community": 62,
       "norm_label": "connectionmanager",
       "id": "client_scripts_defregistry_cs_connectionmanager"
     },
@@ -12263,7 +13145,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L46",
-      "community": 57,
+      "community": 62,
       "norm_label": "._ready()",
       "id": "scripts_defregistry_defregistry_ready"
     },
@@ -12272,7 +13154,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
-      "community": 57,
+      "community": 62,
       "norm_label": ".onconnected()",
       "id": "scripts_defregistry_defregistry_onconnected"
     },
@@ -12281,7 +13163,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
-      "community": 57,
+      "community": 62,
       "norm_label": "dbconnection",
       "id": "client_scripts_defregistry_cs_dbconnection"
     },
@@ -12290,7 +13172,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L97",
-      "community": 71,
+      "community": 62,
       "norm_label": "weapondef",
       "id": "client_scripts_defregistry_cs_weapondef"
     },
@@ -12299,7 +13181,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L123",
-      "community": 77,
+      "community": 62,
       "norm_label": "shipclassdef",
       "id": "client_scripts_defregistry_cs_shipclassdef"
     },
@@ -12308,7 +13190,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L131",
-      "community": 77,
+      "community": 62,
       "norm_label": "basedef",
       "id": "client_scripts_defregistry_cs_basedef"
     },
@@ -12569,7 +13451,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L394",
-      "community": 5,
+      "community": 58,
       "norm_label": "eventcontext",
       "id": "client_scripts_worldrenderer_cs_eventcontext"
     },
@@ -12605,7 +13487,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L536",
-      "community": 5,
+      "community": 58,
       "norm_label": ".onbasedelete()",
       "id": "scripts_worldrenderer_worldrenderer_onbasedelete"
     },
@@ -12659,7 +13541,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L771",
-      "community": 65,
+      "community": 72,
       "norm_label": ".onshipdelete()",
       "id": "scripts_worldrenderer_worldrenderer_onshipdelete"
     },
@@ -12776,18 +13658,9 @@
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L334",
-      "community": 72,
+      "community": 53,
       "norm_label": "pigplan",
       "id": "server_sim_simulation_pig_cs_pigplan"
-    },
-    {
-      "label": "IEnumerable",
-      "file_type": "code",
-      "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L653",
-      "community": 80,
-      "norm_label": "ienumerable",
-      "id": "server_sim_simulation_cs_ienumerable"
     },
     {
       "label": ".Mix()",
@@ -12911,7 +13784,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 5,
+      "community": 58,
       "norm_label": ".onprojectileinsert()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectileinsert"
     },
@@ -12920,7 +13793,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L710",
-      "community": 5,
+      "community": 58,
       "norm_label": "projectile",
       "id": "client_scripts_worldrenderer_cs_projectile"
     },
@@ -12938,7 +13811,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L883",
-      "community": 5,
+      "community": 58,
       "norm_label": ".onprojectiledelete()",
       "id": "scripts_worldrenderer_worldrenderer_onprojectiledelete"
     },
@@ -13010,7 +13883,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L74",
-      "community": 57,
+      "community": 62,
       "norm_label": ".statsfor()",
       "id": "scripts_defregistry_defregistry_statsfor"
     },
@@ -13055,7 +13928,7 @@
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L84",
-      "community": 70,
+      "community": 89,
       "norm_label": "button",
       "id": "button"
     },
@@ -13127,7 +14000,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L239",
-      "community": 5,
+      "community": 58,
       "norm_label": "eventcontext",
       "id": "eventcontext"
     },
@@ -13136,7 +14009,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L537",
-      "community": 5,
+      "community": 58,
       "norm_label": "projectile",
       "id": "projectile"
     },
@@ -13758,6 +14631,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "field",
+      "source": "scripts_basemodelloader_basemodelloader",
+      "target": "client_scripts_basemodelloader_cs_bool",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
       "source_location": "L33",
       "weight": 1.0,
       "context": "field",
@@ -13814,6 +14698,16 @@
       "confidence_score": 1.0,
       "source": "scripts_basemodelloader_basemodelloader",
       "target": "scripts_basemodelloader_basemodelloader_makebeacon"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L157",
+      "weight": 1.0,
+      "source": "scripts_basemodelloader_basemodelloader",
+      "target": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -13928,6 +14822,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L103",
+      "weight": 1.0,
+      "source": "scripts_basemodelloader_basemodelloader_build",
+      "target": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
       "source_location": "L54",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -13992,6 +14897,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L157",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "target": "client_scripts_basemodelloader_cs_node3d",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
       "source_location": "L84",
       "weight": 1.0,
       "context": "return_type",
@@ -14047,12 +14963,45 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L84",
+      "source_location": "L157",
       "weight": 1.0,
-      "context": "return_type",
+      "context": "parameter_type",
+      "source": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "target": "client_scripts_basemodelloader_cs_color",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L157",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "target": "client_scripts_basemodelloader_cs_vector3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "source": "scripts_basemodelloader_basemodelloader_makehardpointcone",
+      "target": "scripts_basemodelloader_basemodelloader_basisfacingz",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L96",
+      "weight": 1.0,
+      "context": "parameter_type",
       "confidence_score": 1.0,
-      "source": "scripts_basemodelloader_basemodelloader_makebeacon",
-      "target": "basebeacon"
+      "source": "scripts_basemodelloader_basemodelloader_basisfacingz",
+      "target": "client_scripts_basemodelloader_cs_vector3"
     },
     {
       "relation": "references",
@@ -14069,12 +15018,23 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L96",
+      "source_location": "L115",
       "weight": 1.0,
-      "context": "parameter_type",
+      "context": "field",
       "confidence_score": 1.0,
-      "source": "scripts_basemodelloader_basemodelloader_basisfacingz",
-      "target": "client_scripts_basemodelloader_cs_vector3"
+      "source": "scripts_basemodelloader_basebeacon",
+      "target": "client_scripts_basemodelloader_cs_color"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/BaseModelLoader.cs",
+      "source_location": "L84",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "scripts_basemodelloader_basemodelloader_makebeacon",
+      "target": "basebeacon"
     },
     {
       "relation": "references",
@@ -14086,17 +15046,6 @@
       "confidence_score": 1.0,
       "source": "scripts_basemodelloader_basemodelloader_basisfacingz",
       "target": "client_scripts_basemodelloader_cs_basis"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "client/scripts/BaseModelLoader.cs",
-      "source_location": "L115",
-      "weight": 1.0,
-      "context": "field",
-      "confidence_score": 1.0,
-      "source": "scripts_basemodelloader_basebeacon",
-      "target": "client_scripts_basemodelloader_cs_color"
     },
     {
       "relation": "references",
@@ -18397,9 +19346,9 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "client_scripts_hud_cs_control",
-      "confidence_score": 1.0
+      "target": "client_scripts_hud_cs_control"
     },
     {
       "relation": "calls",
@@ -24462,9 +25411,20 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator",
-      "target": "scripts_velocityindicator_velocityindicator",
-      "confidence_score": 1.0
+      "target": "scripts_velocityindicator_velocityindicator"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L32",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_velocityindicator_velocityindicator",
+      "target": "client_scripts_velocityindicator_cs_bool"
     },
     {
       "relation": "references",
@@ -24473,9 +25433,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "client_scripts_velocityindicator_cs_camera3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_camera3d"
     },
     {
       "relation": "references",
@@ -24484,9 +25444,9 @@
       "source_location": "L19",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "client_scripts_velocityindicator_cs_color",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_color"
     },
     {
       "relation": "references",
@@ -24495,9 +25455,20 @@
       "source_location": "L17",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "client_scripts_velocityindicator_cs_float",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_float"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L31",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "scripts_velocityindicator_velocityindicator",
+      "target": "client_scripts_velocityindicator_cs_vector2"
     },
     {
       "relation": "references",
@@ -24506,9 +25477,9 @@
       "source_location": "L21",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "client_scripts_velocityindicator_cs_worldrenderer",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_worldrenderer"
     },
     {
       "relation": "method",
@@ -24516,9 +25487,9 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L39",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "scripts_velocityindicator_velocityindicator_draw",
-      "confidence_score": 1.0
+      "target": "scripts_velocityindicator_velocityindicator_draw"
     },
     {
       "relation": "method",
@@ -24526,9 +25497,9 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L29",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "scripts_velocityindicator_velocityindicator_init",
-      "confidence_score": 1.0
+      "target": "scripts_velocityindicator_velocityindicator_init"
     },
     {
       "relation": "method",
@@ -24536,9 +25507,19 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L37",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "scripts_velocityindicator_velocityindicator_process",
-      "confidence_score": 1.0
+      "target": "scripts_velocityindicator_velocityindicator_process"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_velocityindicator_velocityindicator",
+      "target": "scripts_velocityindicator_velocityindicator_trygettarget"
     },
     {
       "relation": "references",
@@ -24547,9 +25528,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator_init",
-      "target": "client_scripts_velocityindicator_cs_worldrenderer",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_worldrenderer"
     },
     {
       "relation": "references",
@@ -24558,9 +25539,31 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator_init",
-      "target": "client_scripts_velocityindicator_cs_camera3d",
-      "confidence_score": 1.0
+      "target": "client_scripts_velocityindicator_cs_camera3d"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "scripts_velocityindicator_velocityindicator_trygettarget",
+      "target": "client_scripts_velocityindicator_cs_vector2"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/VelocityIndicator.cs",
+      "source_location": "L46",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_velocityindicator_velocityindicator_process",
+      "target": "scripts_velocityindicator_velocityindicator_trygettarget"
     },
     {
       "relation": "contains",
@@ -25593,6 +26596,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L226",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_visiblebases",
+      "target": "client_scripts_worldrenderer_cs_pos"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L233",
       "weight": 1.0,
       "context": "generic_arg",
@@ -25747,12 +26761,12 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "client/scripts/WorldRenderer.cs",
-      "source_location": "L237",
+      "source_location": "L238",
       "weight": 1.0,
       "context": "generic_arg",
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
-      "target": "pos"
+      "target": "client_scripts_worldrenderer_cs_pos"
     },
     {
       "relation": "references",
@@ -25764,6 +26778,17 @@
       "confidence_score": 1.0,
       "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
       "target": "frac"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/WorldRenderer.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "scripts_worldrenderer_worldrenderer_visiblebasehealth",
+      "target": "pos"
     },
     {
       "relation": "calls",
@@ -28314,6 +29339,1590 @@
       "confidence_score": 1.0,
       "source": "scripts_run_server",
       "target": "users_erik_projects_wivuullegiance_scripts_run_server_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull",
+      "target": "assets_convexhull_convexhull"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L296",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_boxplanes"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "assets_convexhull_convexhull"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L303",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_bump"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L155",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_fibonaccisphere"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_fromplanes",
+      "target": "assets_convexhull_convexhull"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L286",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_makeface"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L80",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_rayentry"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_reducetoextremes"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_resolvesphere"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_scaled",
+      "target": "assets_convexhull_convexhull"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L229",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_seedtetra"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull",
+      "target": "assets_convexhull_convexhull_tryquickhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_fromplanes",
+      "target": "plane"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L296",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_boxplanes",
+      "target": "plane"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "plane"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_resolvesphere",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_resolvesphere",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L296",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_boxplanes",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L309",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_dot",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L155",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_fibonaccisphere",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L286",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_makeface",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L80",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_rayentry",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_reducetoextremes",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L229",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_seedtetra",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "server_assets_convexhull_cs_vec3"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L87",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_rayentry",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "assets_convexhull_convexhull_boxplanes"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L125",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "assets_convexhull_convexhull_reducetoextremes"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L127",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "assets_convexhull_convexhull_tryquickhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_build",
+      "target": "server_assets_convexhull_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L286",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_makeface",
+      "target": "server_assets_convexhull_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_reducetoextremes",
+      "target": "server_assets_convexhull_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L229",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_seedtetra",
+      "target": "server_assets_convexhull_cs_ireadonlylist"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "server_assets_convexhull_cs_ireadonlylist"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L144",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_reducetoextremes",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L135",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_reducetoextremes",
+      "target": "assets_convexhull_convexhull_fibonaccisphere"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L205",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "assets_convexhull_convexhull_bump"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L196",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L181",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "assets_convexhull_convexhull_makeface"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_tryquickhull",
+      "target": "assets_convexhull_convexhull_seedtetra"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L271",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_seedtetra",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L291",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_makeface",
+      "target": "assets_convexhull_convexhull_dot"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L286",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_makeface",
+      "target": "face"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/ConvexHull.cs",
+      "source_location": "L303",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_convexhull_convexhull_bump",
+      "target": "server_assets_convexhull_cs_dictionary"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader",
+      "target": "assets_glbreader_glbmodel"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L30",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader",
+      "target": "assets_glbreader_glbreader"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L242",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader",
+      "target": "assets_glbreader_transformdir"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader",
+      "target": "assets_glbreader_transformpoint"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader",
+      "target": "assets_glbreader_trs"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbmodel",
+      "target": "server_assets_glbreader_cs_list"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_read",
+      "target": "assets_glbreader_glbmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "server_assets_glbreader_cs_list"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_addmeshvertices"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L154",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_children"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_getarray"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L166",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_getint"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_getstring"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L139",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_localmatrix"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L190",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_normalize"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_read"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L181",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_readquat"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L172",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_readvec3"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "assets_glbreader_glbreader_walk"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader",
+      "target": "server_assets_glbreader_cs_uint"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L72",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_read",
+      "target": "assets_glbreader_glbreader_children"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L63",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_read",
+      "target": "assets_glbreader_glbreader_getarray"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L77",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_read",
+      "target": "assets_glbreader_glbreader_walk"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbreader_addmeshvertices"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L100",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbreader_children"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbreader_getstring"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L86",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbreader_localmatrix"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L92",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_glbreader_normalize"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L92",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_transformdir"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "assets_glbreader_transformpoint"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L82",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_walk",
+      "target": "mat4"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "mat4"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L139",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_localmatrix",
+      "target": "mat4"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_trs",
+      "target": "mat4"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L154",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_children",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_getarray",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L166",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_getint",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_getstring",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L139",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_localmatrix",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L181",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_readquat",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L172",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_readvec3",
+      "target": "jsonelement"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "assets_glbreader_glbreader_getint"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L115",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "assets_glbreader_glbreader_getstring"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "assets_glbreader_transformpoint"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_addmeshvertices",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L190",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_normalize",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L172",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_readvec3",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L242",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_transformdir",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L237",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_transformpoint",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_trs",
+      "target": "server_assets_glbreader_cs_vec3"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_localmatrix",
+      "target": "assets_glbreader_glbreader_readquat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_localmatrix",
+      "target": "assets_glbreader_glbreader_readvec3"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L151",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_localmatrix",
+      "target": "assets_glbreader_trs"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L154",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_children",
+      "target": "server_assets_glbreader_cs_ienumerable"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L181",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_glbreader_readquat",
+      "target": "server_assets_glbreader_cs_quat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/GlbReader.cs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_glbreader_trs",
+      "target": "server_assets_glbreader_cs_quat"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest",
+      "target": "assets_selftest_selftest"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L72",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_approx"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_check"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L79",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_f"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_run"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_testcubehull"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L49",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "assets_selftest_selftest_testworldmodels"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L12",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest",
+      "target": "server_assets_selftest_cs_int"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_run",
+      "target": "assets_selftest_selftest_testcubehull"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_run",
+      "target": "assets_selftest_selftest_testworldmodels"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L32",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_testcubehull",
+      "target": "assets_selftest_selftest_approx"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L31",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_testcubehull",
+      "target": "assets_selftest_selftest_check"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_testworldmodels",
+      "target": "assets_selftest_selftest_approx"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_testworldmodels",
+      "target": "assets_selftest_selftest_check"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L63",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_testworldmodels",
+      "target": "assets_selftest_selftest_f"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SelfTest.cs",
+      "source_location": "L79",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_selftest_selftest_f",
+      "target": "server_assets_selftest_cs_vec3"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L12",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simassets",
+      "target": "assets_simassets_simassets"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "assets_simassets_simassets_isassetsdir"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L45",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "assets_simassets_simassets_resolve"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "assets_simassets_simassets_tryload"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L15",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "server_assets_simassets_cs_bool"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L14",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "server_assets_simassets_cs_object"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets",
+      "target": "server_assets_simassets_cs_string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets_tryload",
+      "target": "server_assets_simassets_cs_simmodel"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimAssets.cs",
+      "source_location": "L48",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simassets_simassets_resolve",
+      "target": "assets_simassets_simassets_isassetsdir"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel",
+      "target": "assets_simmodel_simmodel"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel",
+      "target": "assets_simmodel_simmodelcache"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodel",
+      "target": "assets_simmodel_simmodel_firsthardpoint"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache_load",
+      "target": "assets_simmodel_simmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L69",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache_tryread",
+      "target": "assets_simmodel_simmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache_write",
+      "target": "assets_simmodel_simmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodel_firsthardpoint",
+      "target": "forward"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodel_firsthardpoint",
+      "target": "name"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodel_firsthardpoint",
+      "target": "server_assets_simmodel_cs_pos"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodel_firsthardpoint",
+      "target": "server_assets_simmodel_cs_vec3"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache",
+      "target": "assets_simmodel_simmodelcache_load"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L69",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache",
+      "target": "assets_simmodel_simmodelcache_tryread"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L104",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache",
+      "target": "assets_simmodel_simmodelcache_write"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache",
+      "target": "server_assets_simmodel_cs_int"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache",
+      "target": "server_assets_simmodel_cs_uint"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L53",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache_load",
+      "target": "assets_simmodel_simmodelcache_tryread"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Assets/SimModel.cs",
+      "source_location": "L63",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "assets_simmodel_simmodelcache_load",
+      "target": "assets_simmodel_simmodelcache_write"
     },
     {
       "relation": "contains",
@@ -33371,6 +35980,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L875",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_applybounce"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L500",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -33476,6 +36095,16 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
       "target": "sim_simulation_simulation_firstentrytime"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L874",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_hullrayentry"
     },
     {
       "relation": "method",
@@ -33611,6 +36240,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L840",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_resolvebasecollision"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L405",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -33626,6 +36265,16 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
       "target": "sim_simulation_simulation_resolvedueshots"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L851",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_resolvehullcollision"
     },
     {
       "relation": "method",
@@ -33852,6 +36501,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L875",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_applybounce",
+      "target": "sim_simulation_shipsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L391",
       "weight": 1.0,
       "context": "parameter_type",
@@ -33962,11 +36622,33 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L840",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvebasecollision",
+      "target": "sim_simulation_shipsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L405",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolvedeath",
+      "target": "sim_simulation_shipsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L851",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
       "target": "sim_simulation_shipsim"
     },
     {
@@ -34051,6 +36733,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L282",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_applybounce"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L242",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -34078,6 +36771,17 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_step",
       "target": "sim_simulation_simulation_dockship"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L275",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_dot"
     },
     {
       "relation": "calls",
@@ -34144,6 +36848,17 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_step",
       "target": "sim_simulation_simulation_resolveasteroidcollisions"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L258",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_step",
+      "target": "sim_simulation_simulation_resolvebasecollision"
     },
     {
       "relation": "calls",
@@ -34293,6 +37008,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L427",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_placeatbase",
+      "target": "sim_simulation_simulation_lookrotationz"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L412",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -34369,6 +37095,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L875",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_applybounce",
+      "target": "server_sim_simulation_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L354",
       "weight": 1.0,
       "context": "parameter_type",
@@ -34402,11 +37139,44 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L874",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_hullrayentry",
+      "target": "server_sim_simulation_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L852",
       "weight": 1.0,
       "context": "parameter_type",
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_lookrotationz",
+      "target": "server_sim_simulation_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L840",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvebasecollision",
+      "target": "server_sim_simulation_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L851",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
       "target": "server_sim_simulation_cs_vec3"
     },
     {
@@ -34441,6 +37211,17 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_tryfire",
       "target": "sim_simulation_simulation_firstentrytime"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L641",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_tryfire",
+      "target": "sim_simulation_simulation_hullrayentry"
     },
     {
       "relation": "calls",
@@ -34502,11 +37283,132 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L832",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolveasteroidcollisions",
+      "target": "sim_simulation_simulation_resolvehullcollision"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L430",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolveasteroidcollisions",
       "target": "sim_simulation_simulation_resolvestaticcollision"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L843",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvebasecollision",
+      "target": "sim_simulation_simulation_resolvehullcollision"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L845",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvebasecollision",
+      "target": "sim_simulation_simulation_resolvestaticcollision"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L851",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
+      "target": "server_sim_simulation_cs_convexhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L851",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
+      "target": "server_sim_simulation_cs_quat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L869",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
+      "target": "sim_simulation_simulation_applybounce"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L863",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_resolvehullcollision",
+      "target": "sim_simulation_simulation_dot"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L874",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_hullrayentry",
+      "target": "server_sim_simulation_cs_convexhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L874",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_hullrayentry",
+      "target": "server_sim_simulation_cs_quat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L852",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_lookrotationz",
+      "target": "server_sim_simulation_cs_quat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L877",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_simulation_applybounce",
+      "target": "sim_simulation_simulation_dot"
     },
     {
       "relation": "calls",
@@ -34529,17 +37431,6 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_trywarp",
       "target": "sim_simulation_simulation_lookrotationz"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L852",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_simulation_lookrotationz",
-      "target": "server_sim_simulation_cs_quat"
     },
     {
       "relation": "contains",
@@ -34595,6 +37486,28 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_bool"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L61",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_convexhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
       "source_location": "L53",
       "weight": 1.0,
       "context": "field",
@@ -34639,6 +37552,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_simmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
       "source_location": "L29",
       "weight": 1.0,
       "context": "field",
@@ -34658,6 +37582,17 @@
       "target": "server_sim_world_cs_ulong"
     },
     {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L63",
+      "weight": 1.0,
+      "context": "field",
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
@@ -34671,11 +37606,61 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_doorfaces"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L184",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_dot"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_loadbase"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L145",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_loadrockbodies"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
       "source_location": "L164",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "sim_world_world",
       "target": "sim_world_world_nextshape"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_normalize"
     },
     {
       "relation": "method",
@@ -34706,6 +37691,16 @@
       "confidence_score": 1.0,
       "source": "sim_world_world",
       "target": "sim_world_world_rockgrid"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L171",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world",
+      "target": "sim_world_world_rockrotation"
     },
     {
       "relation": "method",
@@ -34751,6 +37746,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_doorfaces",
+      "target": "server_sim_world_cs_list"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
       "source_location": "L99",
       "weight": 1.0,
       "context": "generic_arg",
@@ -34762,12 +37768,166 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/World.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "server_sim_world_cs_simmodel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_doorfaces",
+      "target": "server_sim_world_cs_convexhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "server_sim_world_cs_convexhull"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L158",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_doorfaces",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L184",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_dot",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_normalize",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L186",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_randombasepos",
+      "target": "server_sim_world_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
       "source_location": "L99",
       "weight": 1.0,
       "context": "return_type",
       "confidence_score": 1.0,
       "source": "sim_world_world_rockgrid",
       "target": "server_sim_world_cs_dictionary"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L148",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "sim_world_world_doorfaces"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L151",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "sim_world_world_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L134",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadbase",
+      "target": "sim_world_world_normalize"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L170",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world_doorfaces",
+      "target": "sim_world_world_dot"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L159",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_world_world_loadrockbodies",
+      "target": "sim_world_world_rockrotation"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/World.cs",
+      "source_location": "L171",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_world_world_rockrotation",
+      "target": "server_sim_world_cs_quat"
     },
     {
       "relation": "references",
@@ -35076,17 +38236,6 @@
       "confidence_score": 1.0,
       "source": "sim_world_world_randomouterpos",
       "target": "sim_world_nextdouble"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/World.cs",
-      "source_location": "L186",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_world_world_randombasepos",
-      "target": "server_sim_world_cs_vec3"
     },
     {
       "relation": "calls",
@@ -39366,5 +42515,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "87855d645dcfc55b9da8c272e9fde5ee01ea940b"
+  "built_at_commit": "eadb314a94fcfbbc27ca81eea1da5abfe0ec32ff"
 }

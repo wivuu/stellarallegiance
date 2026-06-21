@@ -39,6 +39,16 @@ public static class BaseModelLoader
 	// BaseRadiusFor fallback and the WorldRenderer constant it replaces).
 	public const float FallbackRadius = 90f;
 
+	// DEBUG: render a faint cone at each docking hardpoint so the dock geometry is visible against the
+	// rendered hull. The server reads these same GLB nodes and treats each green cone's BASE DISC
+	// (radius DebugConeRadius, at the hardpoint, facing outward) as the only place a ship can dock —
+	// fly your ship into a green disc to dock; the rest of the base is a solid hull. Flip to false to
+	// hide. Entry = green, exit = magenta; each cone points radially outward from the base center.
+	// DebugConeRadius MUST match the server's World.DockDiscRadius.
+	public const bool ShowHardpointDebug = false;
+	private const float DebugConeRadius = 9f;
+	private const float DebugConeHeight = 34f;
+
 	// Build the base's model node: the authored `base.glb` hull if one is present (else a
 	// procedural sphere sized to the type's def), plus a HP_ marker per hardpoint and a blinking
 	// beacon at each Light. `team` tints both the hull and the beacons so friend/foe still reads;
@@ -81,6 +91,19 @@ public static class BaseModelLoader
 			foreach (HardpointDef hp in def.Hardpoints)
 				if (hp.Kind == HardpointKind.Light)
 					root.AddChild(MakeBeacon(new Vector3(hp.OffX, hp.OffY, hp.OffZ), team, i++));
+		}
+
+		// DEBUG visualization of the docking hardpoints (entry = green, exit = magenta). Read from
+		// the hull's own HP_ nodes — the exact positions the server scales by the same world scale
+		// Each green cone's base disc IS the dock zone, so this shows exactly where you must fly to
+		// dock. hull.Transform maps the GLB-local node into the unscaled
+		// BaseModel root the cones sit on, same as the beacons above.
+		if (ShowHardpointDebug)
+		{
+			foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingEntrance"))
+				root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(0.2f, 1f, 0.35f), name));
+			foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingExit"))
+				root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(1f, 0.25f, 0.95f), name));
 		}
 
 		return root;
@@ -126,6 +149,49 @@ public static class BaseModelLoader
 			Name = $"HP_{hp.Kind}_{hp.Index}",
 			Transform = new Transform3D(basis, pos),
 		};
+	}
+
+	// DEBUG cone parked at a docking hardpoint, pointing radially outward from the base center (the
+	// server's exitDir/entryAxis convention). Bright, unshaded, double-sided and shadow-free so it
+	// reads clearly from any angle while troubleshooting the dock geometry. Position is in the
+	// unscaled BaseModel root frame (true world units), matching MakeMarker/MakeBeacon.
+	private static Node3D MakeHardpointCone(Vector3 pos, Color color, string name)
+	{
+		Vector3 outward = pos.LengthSquared() > 1e-6f ? pos.Normalized() : Vector3.Forward;
+		var node = new Node3D
+		{
+			Name = $"DebugHP_{name}",
+			Transform = new Transform3D(BasisFacingZ(outward), pos),
+		};
+		var mat = new StandardMaterial3D
+		{
+			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+			AlbedoColor = new Color(color.R, color.G, color.B, 0.1f),  // 90% transparent
+			EmissionEnabled = true,
+			Emission = color,
+			EmissionEnergyMultiplier = 0.6f,
+			CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+		};
+		var cone = new MeshInstance3D
+		{
+			Mesh = new CylinderMesh
+			{
+				TopRadius = 0f,
+				BottomRadius = DebugConeRadius,
+				Height = DebugConeHeight,
+				RadialSegments = 16,
+			},
+			MaterialOverride = mat,
+			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+			// CylinderMesh runs along +Y; rotate so its tip points along the node's +Z (outward),
+			// then push it out so the base sits at the hardpoint and the tip points away from the hull.
+			Transform = new Transform3D(Basis.Identity, Vector3.Zero)
+				.RotatedLocal(Vector3.Right, Mathf.Pi / 2f)
+				.Translated(new Vector3(0f, 0f, DebugConeHeight * 0.5f)),
+		};
+		node.AddChild(cone);
+		return node;
 	}
 
 	// A blinking nav beacon parked at a Light hardpoint's local position, tinted toward the base's
