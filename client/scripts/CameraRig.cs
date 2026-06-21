@@ -15,12 +15,30 @@ public partial class CameraRig : Camera3D
 	// does) makes the view flip when you pitch toward vertical.
 	private static readonly Basis FaceForward = new Basis(Vector3.Up, Mathf.Pi);
 
+	// Scroll-wheel zoom: multiply ChaseOffset to dolly the camera straight back
+	// along its current framing. 1.0 is the tightest shot (the baseline offset
+	// above); the wheel only ever widens out from there.
+	private const float MinZoom = 1f;     // closest (default ChaseOffset)
+	private const float MaxZoom = 8f;     // widest pull-back
+	private const float ZoomStep = 1.15f; // per wheel notch (matches SectorOverview feel)
+	private float _zoom = MinZoom;
+
 	private WorldRenderer _world = null!;
 
 	public override void _Ready()
 	{
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 		Far = 6000f;
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		if (@event is not InputEventMouseButton mb || !mb.Pressed) return;
+		switch (mb.ButtonIndex)
+		{
+			case MouseButton.WheelDown:   _zoom = Mathf.Max(MinZoom, _zoom / ZoomStep); break; // narrower
+			case MouseButton.WheelUp: _zoom = Mathf.Min(MaxZoom, _zoom * ZoomStep); break; // wider
+		}
 	}
 
 	public override void _Process(double delta)
@@ -34,7 +52,7 @@ public partial class CameraRig : Camera3D
 			if (_world.DeathCamActive)
 			{
 				Transform3D d = _world.DeathCamShipTransform;
-				GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * ChaseOffset);
+				GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * (ChaseOffset * _zoom));
 				return;
 			}
 			GlobalPosition = OverviewPos;
@@ -49,6 +67,6 @@ public partial class CameraRig : Camera3D
 		// the ship's orientation means rolling/pitching to any attitude (including
 		// straight up) keeps the controls and view consistent — true 6DOF.
 		Transform3D t = ship.GlobalTransform;
-		GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis * ChaseOffset);
+		GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis * (ChaseOffset * _zoom));
 	}
 }

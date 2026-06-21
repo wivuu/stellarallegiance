@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781960326.039076,
-    "ast_hash": "0b888cbeba2a51876bc1696a04482bfb",
+    "mtime": 1782043969.5263085,
+    "ast_hash": "6e630de15530ef5f1e177570dfe5a292",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781970116.525145,
-    "ast_hash": "6cfd72981ee3e472a413dad5dbd8a23c",
+    "mtime": 1782043975.6637104,
+    "ast_hash": "ddbccab7e9bee3809309e9b867ded92b",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781960326.0397065,
-    "ast_hash": "bc5b048d023c7104ed1934fe875a715e",
+    "mtime": 1782043920.239747,
+    "ast_hash": "771b5dbd8e9d59cf7a7157b15e0bb298",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "shared/FlightModel.cs": {
-    "mtime": 1781575197.1120687,
-    "ast_hash": "51d7a4ea33a02fe968a361ee6cb6d37e",
+    "mtime": 1782043831.920442,
+    "ast_hash": "f42fd4e46cfcd5070fd14878be799447",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
@@ -195,17 +195,17 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "client/scripts/DefRegistry.cs": {
-    "mtime": 1781442546.965734,
-    "ast_hash": "35a420abf3d0f8ce4f515d9a3f856229",
+    "mtime": 1782043905.1498687,
+    "ast_hash": "d9b9fedaff4a833939a31911d31feb64",
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
-    "mtime": 1782043123.8830156,
+    "mtime": 1782043489.7203026,
     "ast_hash": "732340f5c97543c511f4f8bcd5586737",
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1782001318.8415017,
+    "mtime": 1782043489.7160413,
     "ast_hash": "804e02ef46133e3ed6ccf3594364b192",
     "semantic_hash": ""
   },
@@ -220,22 +220,22 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1781982835.5460272,
+    "mtime": 1782043489.7347853,
     "ast_hash": "04580a9c620cab1bb0c6c0ed88c5e6e7",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782043115.9031348,
-    "ast_hash": "d3fc389b4c9b3d93710a11aa6c082d0f",
+    "mtime": 1782043890.17087,
+    "ast_hash": "08a7321d191df9b6047ee82e6fdd3a57",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782042015.82744,
+    "mtime": 1782043489.7357252,
     "ast_hash": "d9736ee3e4db4edc959a99da5246458c",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1782001545.4609725,
+    "mtime": 1782043489.7360063,
     "ast_hash": "574b276ab5cf73e4247bcd3d6c34994f",
     "semantic_hash": ""
   },
@@ -260,7 +260,7 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1782043202.941625,
+    "mtime": 1782043489.7351491,
     "ast_hash": "8e9febd171f7623fe3ee1d24226aabb0",
     "semantic_hash": ""
   },
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "shared/Defs.cs": {
-    "mtime": 1781575197.111899,
-    "ast_hash": "622414e6c8871aa4552cd6679b0efd44",
+    "mtime": 1782043821.3290482,
+    "ast_hash": "2f77f0ffad7468765db1a6beff3d7996",
     "semantic_hash": ""
   },
   "client/scripts/SectorOverview.cs": {
@@ -6150,27 +6150,27 @@
     "semantic_hash": ""
   },
   "server/Assets/ConvexHull.cs": {
-    "mtime": 1781995087.0319724,
+    "mtime": 1782043489.7333727,
     "ast_hash": "5acdea5d1ff9b520b08845875ac1f16d",
     "semantic_hash": ""
   },
   "server/Assets/GlbReader.cs": {
-    "mtime": 1781976278.9112356,
+    "mtime": 1782043489.7335634,
     "ast_hash": "bc6c7a304b59859882db084a9fb4ed8d",
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782042104.5731843,
+    "mtime": 1782043489.733819,
     "ast_hash": "f235fe89482e7cc09277f1fb7310a2e6",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
-    "mtime": 1781984443.0902255,
+    "mtime": 1782043489.7339828,
     "ast_hash": "17779f24c462c3a3c8ccf6332f5e5ee8",
     "semantic_hash": ""
   },
   "server/Assets/SimModel.cs": {
-    "mtime": 1781976792.5954566,
+    "mtime": 1782043489.734218,
     "ast_hash": "cdb4fece3b71c30abaa7b83c7d847e11",
     "semantic_hash": ""
   }
