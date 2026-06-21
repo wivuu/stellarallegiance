@@ -1,5 +1,11 @@
 # Stellar Allegiance (wivuullegiance)
 
+> [!CAUTION]
+> This is 'Slopllegiance' it is a functional prototype Allegiance-style game written by Claude under supervision
+> It is not a finished game, expect bugs, and expect the code to be rough and unpolished - no pride in ownership here - this is slop.
+> If this demonstrates anything it's that 1. Allegiance can be resurrected with modern tools, and 2. SOTA LLMs are capable of getting quite far in generating functional game code.
+
+
 A 3D multiplayer space-combat game: a **Godot client** rendering and predicting flight, and a
 **standalone .NET sim server** that runs the authoritative 20 Hz simulation *and* hosts the
 lobby. Clients connect directly to a server by `ip:port` and download everything they need
