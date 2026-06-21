@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "client/scripts/CameraRig.cs": {
-    "mtime": 1782044189.8088503,
-    "ast_hash": "b1df3036785b3d6ebe7c5a9b4468d24b",
+    "mtime": 1782045481.002257,
+    "ast_hash": "2da827d668821a3d68e5fc37d0403d78",
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
@@ -30,8 +30,8 @@
     "semantic_hash": "0119cebd52c7b7e59ffb768881a98abe"
   },
   "client/scripts/EngineGlow.cs": {
-    "mtime": 1781896879.0670798,
-    "ast_hash": "cc0257cacd027d9ef96761ccb59dc649",
+    "mtime": 1782047229.6284833,
+    "ast_hash": "7fd9854ba3c80603c5e0b876dd5a5dc4",
     "semantic_hash": ""
   },
   "client/scripts/ExplosionEffect.cs": {
@@ -220,13 +220,13 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782043489.7347853,
-    "ast_hash": "04580a9c620cab1bb0c6c0ed88c5e6e7",
+    "mtime": 1782044592.188499,
+    "ast_hash": "dcc5f620c85e8626102be46cd8937a8e",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782043890.17087,
-    "ast_hash": "08a7321d191df9b6047ee82e6fdd3a57",
+    "mtime": 1782044476.6720436,
+    "ast_hash": "bcabc2f5f97bd2776d491e227d9d4a0b",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {

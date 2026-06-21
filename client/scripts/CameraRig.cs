@@ -19,7 +19,7 @@ public partial class CameraRig : Camera3D
 	// along its current framing. 1.0 is the tightest shot (the baseline offset
 	// above); the wheel only ever widens out from there.
 	private const float MinZoom = 1f;     // closest (default ChaseOffset)
-	private const float MaxZoom = 8f;     // widest pull-back
+	private const float MaxZoom = 24f;     // widest pull-back
 	private const float ZoomStep = 1.15f; // per wheel notch (matches SectorOverview feel)
 	private float _zoom = MinZoom;
 
