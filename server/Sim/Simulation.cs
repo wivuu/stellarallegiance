@@ -14,7 +14,6 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     public const uint TickHz = 20;
-    private const uint RespawnDelayTicks = 3 * TickHz;
     private const int ShotRingSize = 64;          // > max ProjectileLifeTicks
 
     // ---- Escape pods + docking (ported from module Lib.cs) ----
@@ -551,34 +550,38 @@ public sealed partial class Simulation
         return pod;
     }
 
-    // A pod resolved by reaching 0 health: a player pod schedules the owner's respawn; a PIG
-    // pod frees its slot. Pods never eject pods.
+    // A pod resolved by reaching 0 health: a player pod returns its owner to the spawn menu; a
+    // PIG pod frees its slot. Pods never eject pods.
     private void KillPod(ShipSim pod, uint tick)
     {
         _toRemove.Add(pod);
         if (pod.IsPig)
             FreePigPodSlot(pod, 0u, tick);      // destroyed: slot rejoins the next squad wave
         else if (pod.OwnerClientId >= 0)
-            ScheduleRespawn(pod.OwnerClientId, tick + RespawnDelayTicks);
+            ClearClientShip(pod.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
     }
 
     // A ship/pod reached its OWN base (voluntary dock, pod flew home, or rescue): a clean
-    // resolution — no pod ejection, no respawn penalty. Player ship/pod -> scheduled respawn;
-    // PIG pod -> slot freed with an immediate respawn so the drone rejoins the wave.
+    // resolution — no pod ejection. A player is returned to the spawn menu and relaunches on
+    // demand (no auto-respawn); a PIG pod frees its slot with an immediate respawn so the drone
+    // rejoins the wave.
     private void DockShip(ShipSim s, uint tick)
     {
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)
-            ScheduleRespawn(s.OwnerClientId, tick + RespawnDelayTicks);
+            ClearClientShip(s.OwnerClientId);   // player: wait for a manual relaunch (spawn menu)
     }
 
-    private void ScheduleRespawn(int clientId, uint atTick)
+    // A player lost their live ship (docked safely, or their escape pod was destroyed). Drop the
+    // ship binding so the client's spawn menu reopens, but DON'T schedule a respawn: the player
+    // chooses when (and which class) to relaunch by sending MsgSpawn. Replaces the old timed
+    // auto-respawn so a dock no longer flings you straight back out.
+    private void ClearClientShip(int clientId)
     {
-        _byClient.Remove(clientId);            // no live ship until the respawn fires
-        if (_clientInfo.ContainsKey(clientId)) // still connected
-            _clientRespawn[clientId] = atTick;
+        _byClient.Remove(clientId);
+        _clientRespawn.Remove(clientId);
     }
 
     // Remove a ship from the world immediately (used at join-drain time, before the step's

@@ -7652,7 +7652,7 @@
       "label": ".TestShipHulls()",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L74",
+      "source_location": "L85",
       "id": "assets_selftest_selftest_testshiphulls",
       "community": 85,
       "norm_label": ".testshiphulls()"
@@ -7661,7 +7661,7 @@
       "label": "World",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L74",
+      "source_location": "L85",
       "id": "server_assets_selftest_cs_world",
       "community": 85,
       "norm_label": "world"
@@ -7670,7 +7670,7 @@
       "label": ".Check()",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L97",
+      "source_location": "L108",
       "id": "assets_selftest_selftest_check",
       "community": 85,
       "norm_label": ".check()"
@@ -7679,7 +7679,7 @@
       "label": ".Approx()",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L103",
+      "source_location": "L114",
       "id": "assets_selftest_selftest_approx",
       "community": 85,
       "norm_label": ".approx()"
@@ -7688,7 +7688,7 @@
       "label": ".F()",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L110",
+      "source_location": "L121",
       "id": "assets_selftest_selftest_f",
       "community": 85,
       "norm_label": ".f()"
@@ -7697,7 +7697,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Assets/SelfTest.cs",
-      "source_location": "L110",
+      "source_location": "L121",
       "id": "server_assets_selftest_cs_vec3",
       "community": 85,
       "norm_label": "vec3"
@@ -10298,7 +10298,7 @@
       "label": ".ProcessRespawns()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L461",
+      "source_location": "L467",
       "id": "sim_simulation_simulation_processrespawns",
       "community": 42,
       "norm_label": ".processrespawns()"
@@ -10307,7 +10307,7 @@
       "label": ".InputFor()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L480",
+      "source_location": "L486",
       "id": "sim_simulation_simulation_inputfor",
       "community": 42,
       "norm_label": ".inputfor()"
@@ -10316,7 +10316,7 @@
       "label": ".ResolveDeath()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L494",
+      "source_location": "L500",
       "id": "sim_simulation_simulation_resolvedeath",
       "community": 42,
       "norm_label": ".resolvedeath()"
@@ -10325,7 +10325,7 @@
       "label": ".EjectPlayerPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L507",
+      "source_location": "L513",
       "id": "sim_simulation_simulation_ejectplayerpod",
       "community": 42,
       "norm_label": ".ejectplayerpod()"
@@ -10334,7 +10334,7 @@
       "label": ".MakePod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L519",
+      "source_location": "L525",
       "id": "sim_simulation_simulation_makepod",
       "community": 42,
       "norm_label": ".makepod()"
@@ -10343,7 +10343,7 @@
       "label": ".KillPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L550",
+      "source_location": "L556",
       "id": "sim_simulation_simulation_killpod",
       "community": 42,
       "norm_label": ".killpod()"
@@ -10352,7 +10352,7 @@
       "label": ".DockShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L562",
+      "source_location": "L568",
       "id": "sim_simulation_simulation_dockship",
       "community": 42,
       "norm_label": ".dockship()"
@@ -10361,7 +10361,7 @@
       "label": ".ScheduleRespawn()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L571",
+      "source_location": "L577",
       "id": "sim_simulation_simulation_schedulerespawn",
       "community": 42,
       "norm_label": ".schedulerespawn()"
@@ -10370,7 +10370,7 @@
       "label": ".RemoveShipNow()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L580",
+      "source_location": "L586",
       "id": "sim_simulation_simulation_removeshipnow",
       "community": 42,
       "norm_label": ".removeshipnow()"
@@ -10379,7 +10379,7 @@
       "label": ".ApplyStructural()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L589",
+      "source_location": "L595",
       "id": "sim_simulation_simulation_applystructural",
       "community": 42,
       "norm_label": ".applystructural()"
@@ -10388,7 +10388,7 @@
       "label": ".RandomUnitVec()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L613",
+      "source_location": "L619",
       "id": "sim_simulation_simulation_randomunitvec",
       "community": 42,
       "norm_label": ".randomunitvec()"
@@ -10397,7 +10397,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L613",
+      "source_location": "L619",
       "id": "server_sim_simulation_cs_vec3",
       "community": 42,
       "norm_label": "vec3"
@@ -10406,7 +10406,7 @@
       "label": ".TryFire()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L623",
+      "source_location": "L629",
       "id": "sim_simulation_simulation_tryfire",
       "community": 42,
       "norm_label": ".tryfire()"
@@ -10415,7 +10415,7 @@
       "label": ".ResolveDueShots()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L719",
+      "source_location": "L725",
       "id": "sim_simulation_simulation_resolvedueshots",
       "community": 42,
       "norm_label": ".resolvedueshots()"
@@ -10424,7 +10424,7 @@
       "label": ".FirstEntryTime()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L751",
+      "source_location": "L757",
       "id": "sim_simulation_simulation_firstentrytime",
       "community": 42,
       "norm_label": ".firstentrytime()"
@@ -10433,7 +10433,7 @@
       "label": ".CellsAlongRay()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L775",
+      "source_location": "L781",
       "id": "sim_simulation_simulation_cellsalongray",
       "community": 42,
       "norm_label": ".cellsalongray()"
@@ -10442,7 +10442,7 @@
       "label": "IEnumerable",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L775",
+      "source_location": "L781",
       "id": "server_sim_simulation_cs_ienumerable",
       "community": 42,
       "norm_label": "ienumerable"
@@ -10451,7 +10451,7 @@
       "label": ".RebuildShipGrid()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L795",
+      "source_location": "L801",
       "id": "sim_simulation_simulation_rebuildshipgrid",
       "community": 42,
       "norm_label": ".rebuildshipgrid()"
@@ -10460,7 +10460,7 @@
       "label": ".CollideShips()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L817",
+      "source_location": "L823",
       "id": "sim_simulation_simulation_collideships",
       "community": 42,
       "norm_label": ".collideships()"
@@ -10469,7 +10469,7 @@
       "label": ".ShipSphereContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L837",
+      "source_location": "L843",
       "id": "sim_simulation_simulation_shipspherecontact",
       "community": 42,
       "norm_label": ".shipspherecontact()"
@@ -10478,7 +10478,7 @@
       "label": ".ShipHullContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L852",
+      "source_location": "L858",
       "id": "sim_simulation_simulation_shiphullcontact",
       "community": 42,
       "norm_label": ".shiphullcontact()"
@@ -10487,7 +10487,7 @@
       "label": "ShipBody",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L852",
+      "source_location": "L858",
       "id": "server_sim_simulation_cs_shipbody",
       "community": 42,
       "norm_label": "shipbody"
@@ -10496,7 +10496,7 @@
       "label": ".ResolveShipImpulse()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L881",
+      "source_location": "L887",
       "id": "sim_simulation_simulation_resolveshipimpulse",
       "community": 42,
       "norm_label": ".resolveshipimpulse()"
@@ -10505,7 +10505,7 @@
       "label": ".ResolveAsteroidCollisions()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L901",
+      "source_location": "L907",
       "id": "sim_simulation_simulation_resolveasteroidcollisions",
       "community": 42,
       "norm_label": ".resolveasteroidcollisions()"
@@ -10514,7 +10514,7 @@
       "label": ".ResolveBaseCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L927",
+      "source_location": "L933",
       "id": "sim_simulation_simulation_resolvebasecollision",
       "community": 42,
       "norm_label": ".resolvebasecollision()"
@@ -10523,7 +10523,7 @@
       "label": ".ResolveHullCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L938",
+      "source_location": "L944",
       "id": "sim_simulation_simulation_resolvehullcollision",
       "community": 42,
       "norm_label": ".resolvehullcollision()"
@@ -10532,7 +10532,7 @@
       "label": "ConvexHull",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L938",
+      "source_location": "L944",
       "id": "server_sim_simulation_cs_convexhull",
       "community": 42,
       "norm_label": "convexhull"
@@ -10541,7 +10541,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L938",
+      "source_location": "L944",
       "id": "server_sim_simulation_cs_quat",
       "community": 42,
       "norm_label": "quat"
@@ -10550,7 +10550,7 @@
       "label": ".SphereVsHull()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L948",
+      "source_location": "L954",
       "id": "sim_simulation_simulation_spherevshull",
       "community": 42,
       "norm_label": ".spherevshull()"
@@ -10559,7 +10559,7 @@
       "label": ".IntersectsDockDisc()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L972",
+      "source_location": "L978",
       "id": "sim_simulation_simulation_intersectsdockdisc",
       "community": 42,
       "norm_label": ".intersectsdockdisc()"
@@ -10568,7 +10568,7 @@
       "label": ".ApplyBounce()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L990",
+      "source_location": "L996",
       "id": "sim_simulation_simulation_applybounce",
       "community": 42,
       "norm_label": ".applybounce()"
@@ -10577,7 +10577,7 @@
       "label": ".HullRayEntry()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1003",
+      "source_location": "L1009",
       "id": "sim_simulation_simulation_hullrayentry",
       "community": 42,
       "norm_label": ".hullrayentry()"
@@ -10586,7 +10586,7 @@
       "label": ".ResolveStaticCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1015",
+      "source_location": "L1021",
       "id": "sim_simulation_simulation_resolvestaticcollision",
       "community": 42,
       "norm_label": ".resolvestaticcollision()"
@@ -10595,7 +10595,7 @@
       "label": ".TryWarp()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1038",
+      "source_location": "L1044",
       "id": "sim_simulation_simulation_trywarp",
       "community": 42,
       "norm_label": ".trywarp()"
@@ -10604,7 +10604,7 @@
       "label": ".LookRotationZ()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1075",
+      "source_location": "L1081",
       "id": "sim_simulation_simulation_lookrotationz",
       "community": 42,
       "norm_label": ".lookrotationz()"
@@ -10613,7 +10613,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1083",
+      "source_location": "L1089",
       "id": "sim_simulation_simulation_dot",
       "community": 42,
       "norm_label": ".dot()"
@@ -10712,7 +10712,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L70",
+      "source_location": "L71",
       "id": "server_sim_world_cs_dictionary",
       "community": 46,
       "norm_label": "dictionary"
@@ -10721,7 +10721,7 @@
       "label": "ShipBody",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L83",
+      "source_location": "L84",
       "id": "server_sim_world_cs_shipbody",
       "community": 46,
       "norm_label": "shipbody"
@@ -10730,7 +10730,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L88",
+      "source_location": "L89",
       "id": "server_sim_world_cs_string",
       "community": 46,
       "norm_label": "string"
@@ -10739,7 +10739,7 @@
       "label": ".ShipHull()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L96",
+      "source_location": "L97",
       "id": "sim_world_world_shiphull",
       "community": 46,
       "norm_label": ".shiphull()"
@@ -10748,7 +10748,7 @@
       "label": ".CellOf()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L103",
+      "source_location": "L104",
       "id": "sim_world_world_cellof",
       "community": 46,
       "norm_label": ".cellof()"
@@ -10757,7 +10757,7 @@
       "label": ".LoadShipBodies()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L159",
+      "source_location": "L160",
       "id": "sim_world_world_loadshipbodies",
       "community": 46,
       "norm_label": ".loadshipbodies()"
@@ -10766,7 +10766,7 @@
       "label": ".LoadShipHull()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L167",
+      "source_location": "L168",
       "id": "sim_world_world_loadshiphull",
       "community": 46,
       "norm_label": ".loadshiphull()"
@@ -10775,7 +10775,7 @@
       "label": ".LoadBase()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L177",
+      "source_location": "L178",
       "id": "sim_world_world_loadbase",
       "community": 46,
       "norm_label": ".loadbase()"
@@ -10784,7 +10784,7 @@
       "label": ".LoadRockBodies()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L204",
+      "source_location": "L217",
       "id": "sim_world_world_loadrockbodies",
       "community": 46,
       "norm_label": ".loadrockbodies()"
@@ -10793,7 +10793,7 @@
       "label": ".Normalize()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L222",
+      "source_location": "L235",
       "id": "sim_world_world_normalize",
       "community": 46,
       "norm_label": ".normalize()"
@@ -10802,7 +10802,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L228",
+      "source_location": "L241",
       "id": "sim_world_world_dot",
       "community": 46,
       "norm_label": ".dot()"
@@ -10811,7 +10811,7 @@
       "label": ".RockRotation()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L232",
+      "source_location": "L245",
       "id": "sim_world_world_rockrotation",
       "community": 46,
       "norm_label": ".rockrotation()"
@@ -10820,7 +10820,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L232",
+      "source_location": "L245",
       "id": "server_sim_world_cs_quat",
       "community": 46,
       "norm_label": "quat"
@@ -10829,7 +10829,7 @@
       "label": ".RockGrid()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L240",
+      "source_location": "L253",
       "id": "sim_world_world_rockgrid",
       "community": 46,
       "norm_label": ".rockgrid()"
@@ -10838,7 +10838,7 @@
       "label": "Rock",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L240",
+      "source_location": "L253",
       "id": "rock",
       "community": 46,
       "norm_label": "rock"
@@ -10847,7 +10847,7 @@
       "label": ".SectorRadius()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L243",
+      "source_location": "L256",
       "id": "sim_world_world_sectorradius",
       "community": 46,
       "norm_label": ".sectorradius()"
@@ -10856,7 +10856,7 @@
       "label": ".SeedAsteroidField()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L252",
+      "source_location": "L265",
       "id": "sim_world_world_seedasteroidfield",
       "community": 46,
       "norm_label": ".seedasteroidfield()"
@@ -10865,7 +10865,7 @@
       "label": "DetRng",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L252",
+      "source_location": "L265",
       "id": "detrng",
       "community": 46,
       "norm_label": "detrng"
@@ -10874,7 +10874,7 @@
       "label": ".SeedAsteroidBelt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L281",
+      "source_location": "L294",
       "id": "sim_world_world_seedasteroidbelt",
       "community": 46,
       "norm_label": ".seedasteroidbelt()"
@@ -10883,7 +10883,7 @@
       "label": ".NextShape()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L300",
+      "source_location": "L313",
       "id": "sim_world_world_nextshape",
       "community": 46,
       "norm_label": ".nextshape()"
@@ -10892,7 +10892,7 @@
       "label": "variant",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L300",
+      "source_location": "L313",
       "id": "variant",
       "community": 46,
       "norm_label": "variant"
@@ -10901,7 +10901,7 @@
       "label": "rx",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L300",
+      "source_location": "L313",
       "id": "rx",
       "community": 46,
       "norm_label": "rx"
@@ -10910,7 +10910,7 @@
       "label": "ry",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L300",
+      "source_location": "L313",
       "id": "ry",
       "community": 46,
       "norm_label": "ry"
@@ -10919,7 +10919,7 @@
       "label": "rz",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L300",
+      "source_location": "L313",
       "id": "rz",
       "community": 46,
       "norm_label": "rz"
@@ -10928,7 +10928,7 @@
       "label": ".RandomOuterPos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L309",
+      "source_location": "L322",
       "id": "sim_world_world_randomouterpos",
       "community": 46,
       "norm_label": ".randomouterpos()"
@@ -10937,7 +10937,7 @@
       "label": ".RandomBasePos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L318",
+      "source_location": "L331",
       "id": "sim_world_world_randombasepos",
       "community": 46,
       "norm_label": ".randombasepos()"
@@ -10946,7 +10946,7 @@
       "label": "NextULong()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L333",
+      "source_location": "L346",
       "id": "sim_world_nextulong",
       "community": 46,
       "norm_label": "nextulong()"
@@ -10955,7 +10955,7 @@
       "label": "NextDouble()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L342",
+      "source_location": "L355",
       "id": "sim_world_nextdouble",
       "community": 46,
       "norm_label": "nextdouble()"
@@ -10964,7 +10964,7 @@
       "label": "NextRange()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L343",
+      "source_location": "L356",
       "id": "sim_world_nextrange",
       "community": 46,
       "norm_label": "nextrange()"
@@ -10973,7 +10973,7 @@
       "label": "NextInt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L344",
+      "source_location": "L357",
       "id": "sim_world_nextint",
       "community": 46,
       "norm_label": "nextint()"
@@ -30662,9 +30662,9 @@
       "source_file": "server/Assets/SelfTest.cs",
       "source_location": "L74",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "assets_selftest_selftest",
-      "target": "assets_selftest_selftest_testshiphulls",
-      "confidence_score": 1.0
+      "target": "assets_selftest_selftest_testshiphulls"
     },
     {
       "relation": "method",
@@ -30771,9 +30771,9 @@
       "source_file": "server/Assets/SelfTest.cs",
       "source_location": "L69",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "assets_selftest_selftest_testworldmodels",
-      "target": "assets_selftest_selftest_testshiphulls",
-      "confidence_score": 1.0
+      "target": "assets_selftest_selftest_testshiphulls"
     },
     {
       "relation": "calls",
@@ -30782,9 +30782,9 @@
       "source_file": "server/Assets/SelfTest.cs",
       "source_location": "L87",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "assets_selftest_selftest_testshiphulls",
-      "target": "assets_selftest_selftest_approx",
-      "confidence_score": 1.0
+      "target": "assets_selftest_selftest_approx"
     },
     {
       "relation": "calls",
@@ -30793,9 +30793,9 @@
       "source_file": "server/Assets/SelfTest.cs",
       "source_location": "L84",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "assets_selftest_selftest_testshiphulls",
-      "target": "assets_selftest_selftest_check",
-      "confidence_score": 1.0
+      "target": "assets_selftest_selftest_check"
     },
     {
       "relation": "references",
@@ -30804,9 +30804,9 @@
       "source_location": "L74",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "assets_selftest_selftest_testshiphulls",
-      "target": "server_assets_selftest_cs_world",
-      "confidence_score": 1.0
+      "target": "server_assets_selftest_cs_world"
     },
     {
       "relation": "references",
@@ -36463,9 +36463,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L881",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
-      "target": "sim_simulation_simulation_resolveshipimpulse",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_resolveshipimpulse"
     },
     {
       "relation": "method",
@@ -36513,9 +36513,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L852",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
-      "target": "sim_simulation_simulation_shiphullcontact",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_shiphullcontact"
     },
     {
       "relation": "method",
@@ -36533,9 +36533,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L837",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
-      "target": "sim_simulation_simulation_shipspherecontact",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_shipspherecontact"
     },
     {
       "relation": "method",
@@ -36553,9 +36553,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L948",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
-      "target": "sim_simulation_simulation_spherevshull",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_spherevshull"
     },
     {
       "relation": "method",
@@ -36879,9 +36879,9 @@
       "source_location": "L881",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolveshipimpulse",
-      "target": "sim_simulation_shipsim",
-      "confidence_score": 1.0
+      "target": "sim_simulation_shipsim"
     },
     {
       "relation": "references",
@@ -36912,9 +36912,9 @@
       "source_location": "L852",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shiphullcontact",
-      "target": "sim_simulation_shipsim",
-      "confidence_score": 1.0
+      "target": "sim_simulation_shipsim"
     },
     {
       "relation": "references",
@@ -36923,9 +36923,9 @@
       "source_location": "L837",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shipspherecontact",
-      "target": "sim_simulation_shipsim",
-      "confidence_score": 1.0
+      "target": "sim_simulation_shipsim"
     },
     {
       "relation": "references",
@@ -37462,9 +37462,9 @@
       "source_location": "L881",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolveshipimpulse",
-      "target": "server_sim_simulation_cs_vec3",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_vec3"
     },
     {
       "relation": "references",
@@ -37484,9 +37484,9 @@
       "source_location": "L852",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shiphullcontact",
-      "target": "server_sim_simulation_cs_vec3",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_vec3"
     },
     {
       "relation": "references",
@@ -37495,9 +37495,9 @@
       "source_location": "L837",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shipspherecontact",
-      "target": "server_sim_simulation_cs_vec3",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_vec3"
     },
     {
       "relation": "references",
@@ -37506,9 +37506,9 @@
       "source_location": "L948",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_spherevshull",
-      "target": "server_sim_simulation_cs_vec3",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_vec3"
     },
     {
       "relation": "calls",
@@ -37605,9 +37605,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L833",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_collideships",
-      "target": "sim_simulation_simulation_resolveshipimpulse",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_resolveshipimpulse"
     },
     {
       "relation": "calls",
@@ -37616,9 +37616,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L828",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_collideships",
-      "target": "sim_simulation_simulation_shiphullcontact",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_shiphullcontact"
     },
     {
       "relation": "calls",
@@ -37627,9 +37627,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L826",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_collideships",
-      "target": "sim_simulation_simulation_shipspherecontact",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_shipspherecontact"
     },
     {
       "relation": "references",
@@ -37638,9 +37638,9 @@
       "source_location": "L852",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shiphullcontact",
-      "target": "server_sim_simulation_cs_shipbody",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_shipbody"
     },
     {
       "relation": "calls",
@@ -37649,9 +37649,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L865",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_shiphullcontact",
-      "target": "sim_simulation_simulation_spherevshull",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_spherevshull"
     },
     {
       "relation": "calls",
@@ -37660,9 +37660,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L887",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolveshipimpulse",
-      "target": "sim_simulation_simulation_dot",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_dot"
     },
     {
       "relation": "calls",
@@ -37759,9 +37759,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L940",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolvehullcollision",
-      "target": "sim_simulation_simulation_spherevshull",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_spherevshull"
     },
     {
       "relation": "references",
@@ -37781,9 +37781,9 @@
       "source_location": "L948",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_spherevshull",
-      "target": "server_sim_simulation_cs_convexhull",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_convexhull"
     },
     {
       "relation": "references",
@@ -37814,9 +37814,9 @@
       "source_location": "L948",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_spherevshull",
-      "target": "server_sim_simulation_cs_quat",
-      "confidence_score": 1.0
+      "target": "server_sim_simulation_cs_quat"
     },
     {
       "relation": "calls",
@@ -37985,9 +37985,9 @@
       "source_location": "L84",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "sim_world_world",
-      "target": "server_sim_world_cs_shipbody",
-      "confidence_score": 1.0
+      "target": "server_sim_world_cs_shipbody"
     },
     {
       "relation": "references",
@@ -38007,9 +38007,9 @@
       "source_location": "L88",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "sim_world_world",
-      "target": "server_sim_world_cs_string",
-      "confidence_score": 1.0
+      "target": "server_sim_world_cs_string"
     },
     {
       "relation": "references",
@@ -38100,9 +38100,9 @@
       "source_file": "server/Sim/World.cs",
       "source_location": "L159",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_world_world",
-      "target": "sim_world_world_loadshipbodies",
-      "confidence_score": 1.0
+      "target": "sim_world_world_loadshipbodies"
     },
     {
       "relation": "method",
@@ -38110,9 +38110,9 @@
       "source_file": "server/Sim/World.cs",
       "source_location": "L167",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_world_world",
-      "target": "sim_world_world_loadshiphull",
-      "confidence_score": 1.0
+      "target": "sim_world_world_loadshiphull"
     },
     {
       "relation": "method",
@@ -38210,9 +38210,9 @@
       "source_file": "server/Sim/World.cs",
       "source_location": "L96",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_world_world",
-      "target": "sim_world_world_shiphull",
-      "confidence_score": 1.0
+      "target": "sim_world_world_shiphull"
     },
     {
       "relation": "method",
@@ -38352,9 +38352,9 @@
       "source_location": "L159",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "sim_world_world_loadshipbodies",
-      "target": "server_sim_world_cs_shipbody",
-      "confidence_score": 1.0
+      "target": "server_sim_world_cs_shipbody"
     },
     {
       "relation": "references",
@@ -38363,9 +38363,9 @@
       "source_location": "L167",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "sim_world_world_loadshiphull",
-      "target": "server_sim_world_cs_shipbody",
-      "confidence_score": 1.0
+      "target": "server_sim_world_cs_shipbody"
     },
     {
       "relation": "references",
@@ -38374,9 +38374,9 @@
       "source_location": "L96",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "sim_world_world_shiphull",
-      "target": "server_sim_world_cs_shipbody",
-      "confidence_score": 1.0
+      "target": "server_sim_world_cs_shipbody"
     },
     {
       "relation": "calls",
@@ -38385,9 +38385,9 @@
       "source_file": "server/Sim/World.cs",
       "source_location": "L163",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_world_world_loadshipbodies",
-      "target": "sim_world_world_loadshiphull",
-      "confidence_score": 1.0
+      "target": "sim_world_world_loadshiphull"
     },
     {
       "relation": "calls",
@@ -43041,5 +43041,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "b522002c9581c08ac660cd763c1468d86feafda2"
+  "built_at_commit": "89d68e3d14aef2649ebfba6496ff49b573082e4a"
 }

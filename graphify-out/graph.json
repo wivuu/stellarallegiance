@@ -799,7 +799,7 @@
       "source_file": "",
       "source_location": "",
       "id": "node",
-      "community": 70,
+      "community": 62,
       "norm_label": "node"
     },
     {
@@ -1033,7 +1033,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L1",
       "id": "scripts_defregistry",
-      "community": 70,
+      "community": 62,
       "norm_label": "defregistry.cs"
     },
     {
@@ -1042,7 +1042,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L21",
       "id": "scripts_defregistry_defregistry",
-      "community": 70,
+      "community": 62,
       "norm_label": "defregistry"
     },
     {
@@ -1051,7 +1051,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L25",
       "id": "client_scripts_defregistry_cs_byte",
-      "community": 70,
+      "community": 62,
       "norm_label": "byte"
     },
     {
@@ -1060,7 +1060,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L27",
       "id": "client_scripts_defregistry_cs_dictionary",
-      "community": 70,
+      "community": 62,
       "norm_label": "dictionary"
     },
     {
@@ -1069,7 +1069,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "scripts_defregistry_defregistry_load",
-      "community": 72,
+      "community": 62,
       "norm_label": ".load()"
     },
     {
@@ -1078,7 +1078,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "client_scripts_defregistry_cs_ireadonlylist",
-      "community": 72,
+      "community": 62,
       "norm_label": "ireadonlylist"
     },
     {
@@ -1087,7 +1087,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "shipclassdef",
-      "community": 72,
+      "community": 62,
       "norm_label": "shipclassdef"
     },
     {
@@ -1096,7 +1096,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "weapondef",
-      "community": 81,
+      "community": 62,
       "norm_label": "weapondef"
     },
     {
@@ -1105,7 +1105,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "basedef",
-      "community": 72,
+      "community": 62,
       "norm_label": "basedef"
     },
     {
@@ -1114,7 +1114,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L37",
       "id": "worldconfig",
-      "community": 72,
+      "community": 62,
       "norm_label": "worldconfig"
     },
     {
@@ -1123,7 +1123,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
       "id": "scripts_defregistry_defregistry_trygetstats",
-      "community": 70,
+      "community": 62,
       "norm_label": ".trygetstats()"
     },
     {
@@ -1132,7 +1132,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
       "id": "client_scripts_defregistry_cs_shipstats",
-      "community": 70,
+      "community": 62,
       "norm_label": "shipstats"
     },
     {
@@ -1141,7 +1141,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L75",
       "id": "scripts_defregistry_defregistry_trygetweapon",
-      "community": 81,
+      "community": 62,
       "norm_label": ".trygetweapon()"
     },
     {
@@ -1150,7 +1150,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L75",
       "id": "client_scripts_defregistry_cs_hardpointdef",
-      "community": 81,
+      "community": 62,
       "norm_label": "hardpointdef"
     },
     {
@@ -1159,7 +1159,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L98",
       "id": "scripts_defregistry_defregistry_gethardpoints",
-      "community": 81,
+      "community": 62,
       "norm_label": ".gethardpoints()"
     },
     {
@@ -1168,7 +1168,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L98",
       "id": "client_scripts_defregistry_cs_list",
-      "community": 81,
+      "community": 62,
       "norm_label": "list"
     },
     {
@@ -1177,7 +1177,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L101",
       "id": "scripts_defregistry_defregistry_trygetshipdef",
-      "community": 72,
+      "community": 62,
       "norm_label": ".trygetshipdef()"
     },
     {
@@ -1186,7 +1186,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L104",
       "id": "scripts_defregistry_defregistry_getweapon",
-      "community": 81,
+      "community": 62,
       "norm_label": ".getweapon()"
     },
     {
@@ -1195,7 +1195,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L108",
       "id": "scripts_defregistry_defregistry_getbasedef",
-      "community": 72,
+      "community": 62,
       "norm_label": ".getbasedef()"
     },
     {
@@ -1204,7 +1204,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L1",
       "id": "scripts_dustfield",
-      "community": 77,
+      "community": 25,
       "norm_label": "dustfield.cs"
     },
     {
@@ -1213,7 +1213,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L11",
       "id": "scripts_dustfield_dustfield",
-      "community": 77,
+      "community": 25,
       "norm_label": "dustfield"
     },
     {
@@ -1222,7 +1222,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L15",
       "id": "client_scripts_dustfield_cs_float",
-      "community": 77,
+      "community": 25,
       "norm_label": "float"
     },
     {
@@ -1231,7 +1231,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L17",
       "id": "client_scripts_dustfield_cs_worldrenderer",
-      "community": 77,
+      "community": 25,
       "norm_label": "worldrenderer"
     },
     {
@@ -1240,7 +1240,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L18",
       "id": "gpuparticles3d",
-      "community": 77,
+      "community": 25,
       "norm_label": "gpuparticles3d"
     },
     {
@@ -1249,7 +1249,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L20",
       "id": "scripts_dustfield_dustfield_ready",
-      "community": 77,
+      "community": 25,
       "norm_label": "._ready()"
     },
     {
@@ -1258,7 +1258,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L51",
       "id": "scripts_dustfield_dustfield_process",
-      "community": 77,
+      "community": 25,
       "norm_label": "._process()"
     },
     {
@@ -1267,7 +1267,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "scripts_dustfield_dustfield_radialdot",
-      "community": 77,
+      "community": 25,
       "norm_label": ".radialdot()"
     },
     {
@@ -1276,7 +1276,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L74",
       "id": "client_scripts_dustfield_cs_gradienttexture2d",
-      "community": 77,
+      "community": 25,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -1285,7 +1285,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "scripts_dustfield_dustfield_dustdrawmaterial",
-      "community": 77,
+      "community": 25,
       "norm_label": ".dustdrawmaterial()"
     },
     {
@@ -1294,7 +1294,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_texture2d",
-      "community": 77,
+      "community": 25,
       "norm_label": "texture2d"
     },
     {
@@ -1303,7 +1303,7 @@
       "source_file": "client/scripts/DustField.cs",
       "source_location": "L108",
       "id": "client_scripts_dustfield_cs_standardmaterial3d",
-      "community": 77,
+      "community": 25,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2347,7 +2347,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L1",
       "id": "scripts_hitflash",
-      "community": 86,
+      "community": 25,
       "norm_label": "hitflash.cs"
     },
     {
@@ -2356,7 +2356,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L8",
       "id": "scripts_hitflash_hitflash",
-      "community": 86,
+      "community": 25,
       "norm_label": "hitflash"
     },
     {
@@ -2365,7 +2365,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L10",
       "id": "client_scripts_hitflash_cs_double",
-      "community": 86,
+      "community": 25,
       "norm_label": "double"
     },
     {
@@ -2374,7 +2374,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L11",
       "id": "client_scripts_hitflash_cs_float",
-      "community": 86,
+      "community": 25,
       "norm_label": "float"
     },
     {
@@ -2383,7 +2383,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L14",
       "id": "client_scripts_hitflash_cs_gradienttexture2d",
-      "community": 86,
+      "community": 25,
       "norm_label": "gradienttexture2d"
     },
     {
@@ -2392,7 +2392,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L16",
       "id": "client_scripts_hitflash_cs_meshinstance3d",
-      "community": 86,
+      "community": 25,
       "norm_label": "meshinstance3d"
     },
     {
@@ -2401,7 +2401,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L17",
       "id": "client_scripts_hitflash_cs_standardmaterial3d",
-      "community": 86,
+      "community": 25,
       "norm_label": "standardmaterial3d"
     },
     {
@@ -2410,7 +2410,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L20",
       "id": "scripts_hitflash_hitflash_ready",
-      "community": 86,
+      "community": 25,
       "norm_label": "._ready()"
     },
     {
@@ -2419,7 +2419,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L45",
       "id": "scripts_hitflash_hitflash_process",
-      "community": 86,
+      "community": 25,
       "norm_label": "._process()"
     },
     {
@@ -2428,7 +2428,7 @@
       "source_file": "client/scripts/HitFlash.cs",
       "source_location": "L60",
       "id": "scripts_hitflash_hitflash_radialdot",
-      "community": 86,
+      "community": 25,
       "norm_label": ".radialdot()"
     },
     {
@@ -3319,7 +3319,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L1",
       "id": "scripts_projectileview",
-      "community": 55,
+      "community": 25,
       "norm_label": "projectileview.cs"
     },
     {
@@ -3328,7 +3328,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L17",
       "id": "scripts_projectileview_projectileview",
-      "community": 55,
+      "community": 25,
       "norm_label": "projectileview"
     },
     {
@@ -3337,7 +3337,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L19",
       "id": "client_scripts_projectileview_cs_vector3",
-      "community": 55,
+      "community": 25,
       "norm_label": "vector3"
     },
     {
@@ -3346,7 +3346,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L22",
       "id": "client_scripts_projectileview_cs_double",
-      "community": 55,
+      "community": 25,
       "norm_label": "double"
     },
     {
@@ -3355,7 +3355,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L23",
       "id": "client_scripts_projectileview_cs_float",
-      "community": 55,
+      "community": 25,
       "norm_label": "float"
     },
     {
@@ -3364,7 +3364,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L42",
       "id": "scripts_projectileview_projectileview_initialize",
-      "community": 55,
+      "community": 25,
       "norm_label": ".initialize()"
     },
     {
@@ -3373,7 +3373,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L66",
       "id": "scripts_projectileview_projectileview_orientalongaim",
-      "community": 55,
+      "community": 25,
       "norm_label": ".orientalongaim()"
     },
     {
@@ -3382,7 +3382,7 @@
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L72",
       "id": "scripts_projectileview_projectileview_process",
-      "community": 55,
+      "community": 25,
       "norm_label": "._process()"
     },
     {
@@ -4685,7 +4685,7 @@
       "label": ".DefId()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L152",
+      "source_location": "L153",
       "id": "scripts_shipmodelloader_shipmodelloader_defid",
       "community": 25,
       "norm_label": ".defid()"
@@ -4694,7 +4694,7 @@
       "label": ".BuildPlaceholderMesh()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L158",
+      "source_location": "L159",
       "id": "scripts_shipmodelloader_shipmodelloader_buildplaceholdermesh",
       "community": 25,
       "norm_label": ".buildplaceholdermesh()"
@@ -4703,7 +4703,7 @@
       "label": "MeshInstance3D",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L158",
+      "source_location": "L159",
       "id": "client_scripts_shipmodelloader_cs_meshinstance3d",
       "community": 25,
       "norm_label": "meshinstance3d"
@@ -4712,72 +4712,72 @@
       "label": ".MakeMarker()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L192",
+      "source_location": "L193",
       "id": "scripts_shipmodelloader_shipmodelloader_makemarker",
-      "community": 80,
+      "community": 25,
       "norm_label": ".makemarker()"
     },
     {
       "label": "HardpointDef",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L192",
+      "source_location": "L193",
       "id": "client_scripts_shipmodelloader_cs_hardpointdef",
-      "community": 80,
+      "community": 25,
       "norm_label": "hardpointdef"
     },
     {
       "label": "Marker3D",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L192",
+      "source_location": "L193",
       "id": "client_scripts_shipmodelloader_cs_marker3d",
-      "community": 80,
+      "community": 25,
       "norm_label": "marker3d"
     },
     {
       "label": ".BasisFacingZ()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L206",
+      "source_location": "L207",
       "id": "scripts_shipmodelloader_shipmodelloader_basisfacingz",
-      "community": 80,
+      "community": 25,
       "norm_label": ".basisfacingz()"
     },
     {
       "label": "Vector3",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L206",
+      "source_location": "L207",
       "id": "client_scripts_shipmodelloader_cs_vector3",
-      "community": 80,
+      "community": 25,
       "norm_label": "vector3"
     },
     {
       "label": "Basis",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L206",
+      "source_location": "L207",
       "id": "client_scripts_shipmodelloader_cs_basis",
-      "community": 80,
+      "community": 25,
       "norm_label": "basis"
     },
     {
       "label": ".AvgZ()",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L217",
+      "source_location": "L218",
       "id": "scripts_shipmodelloader_shipmodelloader_avgz",
-      "community": 80,
+      "community": 25,
       "norm_label": ".avgz()"
     },
     {
       "label": "List",
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
-      "source_location": "L217",
+      "source_location": "L218",
       "id": "client_scripts_shipmodelloader_cs_list",
-      "community": 80,
+      "community": 25,
       "norm_label": "list"
     },
     {
@@ -8581,7 +8581,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L1",
       "id": "net_iclienttransport",
-      "community": 90,
+      "community": 44,
       "norm_label": "iclienttransport.cs"
     },
     {
@@ -8590,7 +8590,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L9",
       "id": "net_iclienttransport_iclienttransport",
-      "community": 90,
+      "community": 44,
       "norm_label": "iclienttransport"
     },
     {
@@ -8599,7 +8599,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "net_iclienttransport_iclienttransport_receiveasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".receiveasync()"
     },
     {
@@ -8608,7 +8608,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "server_net_iclienttransport_cs_cancellationtoken",
-      "community": 90,
+      "community": 44,
       "norm_label": "cancellationtoken"
     },
     {
@@ -8617,7 +8617,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "server_net_iclienttransport_cs_valuetask",
-      "community": 90,
+      "community": 44,
       "norm_label": "valuetask"
     },
     {
@@ -8626,7 +8626,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L16",
       "id": "net_iclienttransport_iclienttransport_sendasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".sendasync()"
     },
     {
@@ -8635,7 +8635,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L16",
       "id": "server_net_iclienttransport_cs_readonlymemory",
-      "community": 90,
+      "community": 44,
       "norm_label": "readonlymemory"
     },
     {
@@ -8644,7 +8644,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L19",
       "id": "net_iclienttransport_iclienttransport_closeasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".closeasync()"
     },
     {
@@ -8653,7 +8653,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L24",
       "id": "net_iclienttransport_websockettransport",
-      "community": 90,
+      "community": 44,
       "norm_label": "websockettransport"
     },
     {
@@ -8671,7 +8671,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L29",
       "id": "net_iclienttransport_websockettransport_receiveasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".receiveasync()"
     },
     {
@@ -8680,7 +8680,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L35",
       "id": "net_iclienttransport_websockettransport_sendasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".sendasync()"
     },
     {
@@ -8689,7 +8689,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L38",
       "id": "net_iclienttransport_websockettransport_closeasync",
-      "community": 90,
+      "community": 44,
       "norm_label": ".closeasync()"
     },
     {
@@ -9575,10 +9575,19 @@
       "norm_label": "pigstate"
     },
     {
+      "label": "Vec3",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L88",
+      "id": "server_sim_simulation_pig_cs_vec3",
+      "community": 53,
+      "norm_label": "vec3"
+    },
+    {
       "label": "List",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L121",
+      "source_location": "L127",
       "id": "server_sim_simulation_pig_cs_list",
       "community": 53,
       "norm_label": "list"
@@ -9587,7 +9596,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L122",
+      "source_location": "L128",
       "id": "server_sim_simulation_pig_cs_dictionary",
       "community": 53,
       "norm_label": "dictionary"
@@ -9596,7 +9605,7 @@
       "label": ".PigBrainStep()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L131",
+      "source_location": "L137",
       "id": "sim_simulation_pig_simulation_pigbrainstep",
       "community": 53,
       "norm_label": ".pigbrainstep()"
@@ -9605,7 +9614,7 @@
       "label": ".EnsurePigSlots()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L174",
+      "source_location": "L180",
       "id": "sim_simulation_pig_simulation_ensurepigslots",
       "community": 53,
       "norm_label": ".ensurepigslots()"
@@ -9614,7 +9623,7 @@
       "label": ".DespawnAllPigs()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L201",
+      "source_location": "L207",
       "id": "sim_simulation_pig_simulation_despawnallpigs",
       "community": 42,
       "norm_label": ".despawnallpigs()"
@@ -9623,7 +9632,7 @@
       "label": ".SimulatePigLifecycle()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L221",
+      "source_location": "L227",
       "id": "sim_simulation_pig_simulation_simulatepiglifecycle",
       "community": 53,
       "norm_label": ".simulatepiglifecycle()"
@@ -9632,7 +9641,7 @@
       "label": ".SpawnPig()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L281",
+      "source_location": "L287",
       "id": "sim_simulation_pig_simulation_spawnpig",
       "community": 53,
       "norm_label": ".spawnpig()"
@@ -9641,25 +9650,25 @@
       "label": ".KillPigCombat()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L309",
+      "source_location": "L316",
       "id": "sim_simulation_pig_simulation_killpigcombat",
-      "community": 53,
+      "community": 42,
       "norm_label": ".killpigcombat()"
     },
     {
       "label": ".FreePigPodSlot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L329",
+      "source_location": "L336",
       "id": "sim_simulation_pig_simulation_freepigpodslot",
-      "community": 53,
+      "community": 42,
       "norm_label": ".freepigpodslot()"
     },
     {
       "label": ".AssignPigRescuers()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L346",
+      "source_location": "L353",
       "id": "sim_simulation_pig_simulation_assignpigrescuers",
       "community": 53,
       "norm_label": ".assignpigrescuers()"
@@ -9668,7 +9677,7 @@
       "label": ".PigDecide()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L387",
+      "source_location": "L394",
       "id": "sim_simulation_pig_simulation_pigdecide",
       "community": 53,
       "norm_label": ".pigdecide()"
@@ -9677,7 +9686,7 @@
       "label": "PigPlan",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L387",
+      "source_location": "L394",
       "id": "pigplan",
       "community": 53,
       "norm_label": "pigplan"
@@ -9686,7 +9695,7 @@
       "label": ".GatherPigContext()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L403",
+      "source_location": "L410",
       "id": "sim_simulation_pig_simulation_gatherpigcontext",
       "community": 53,
       "norm_label": ".gatherpigcontext()"
@@ -9695,7 +9704,7 @@
       "label": "PigContext",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L403",
+      "source_location": "L410",
       "id": "pigcontext",
       "community": 53,
       "norm_label": "pigcontext"
@@ -9704,7 +9713,7 @@
       "label": ".TryRescue()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L461",
+      "source_location": "L468",
       "id": "sim_simulation_pig_simulation_tryrescue",
       "community": 53,
       "norm_label": ".tryrescue()"
@@ -9713,7 +9722,7 @@
       "label": ".TryChaseLockedTarget()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L472",
+      "source_location": "L479",
       "id": "sim_simulation_pig_simulation_trychaselockedtarget",
       "community": 53,
       "norm_label": ".trychaselockedtarget()"
@@ -9722,7 +9731,7 @@
       "label": ".TryChaseEnemyBomber()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L486",
+      "source_location": "L493",
       "id": "sim_simulation_pig_simulation_trychaseenemybomber",
       "community": 53,
       "norm_label": ".trychaseenemybomber()"
@@ -9731,7 +9740,7 @@
       "label": ".TryChaseEnemy()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L494",
+      "source_location": "L501",
       "id": "sim_simulation_pig_simulation_trychaseenemy",
       "community": 53,
       "norm_label": ".trychaseenemy()"
@@ -9740,7 +9749,7 @@
       "label": ".MakeChasePlan()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L504",
+      "source_location": "L511",
       "id": "sim_simulation_pig_simulation_makechaseplan",
       "community": 53,
       "norm_label": ".makechaseplan()"
@@ -9749,7 +9758,7 @@
       "label": ".TryAttackBase()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L514",
+      "source_location": "L521",
       "id": "sim_simulation_pig_simulation_tryattackbase",
       "community": 53,
       "norm_label": ".tryattackbase()"
@@ -9758,7 +9767,7 @@
       "label": ".TryWanderAleph()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L539",
+      "source_location": "L546",
       "id": "sim_simulation_pig_simulation_trywanderaleph",
       "community": 53,
       "norm_label": ".trywanderaleph()"
@@ -9767,16 +9776,25 @@
       "label": ".MakePatrolPlan()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L559",
+      "source_location": "L571",
       "id": "sim_simulation_pig_simulation_makepatrolplan",
       "community": 53,
       "norm_label": ".makepatrolplan()"
     },
     {
+      "label": ".RandomPatrolPoint()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L591",
+      "id": "sim_simulation_pig_simulation_randompatrolpoint",
+      "community": 53,
+      "norm_label": ".randompatrolpoint()"
+    },
+    {
       "label": ".PigExecute()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L566",
+      "source_location": "L603",
       "id": "sim_simulation_pig_simulation_pigexecute",
       "community": 53,
       "norm_label": ".pigexecute()"
@@ -9785,7 +9803,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L566",
+      "source_location": "L603",
       "id": "server_sim_simulation_pig_cs_shipinputstate",
       "community": 53,
       "norm_label": "shipinputstate"
@@ -9794,43 +9812,16 @@
       "label": ".PigChaseInput()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L594",
+      "source_location": "L631",
       "id": "sim_simulation_pig_simulation_pigchaseinput",
       "community": 53,
       "norm_label": ".pigchaseinput()"
     },
     {
-      "label": ".PigPatrolFromCenter()",
-      "file_type": "code",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L657",
-      "id": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "community": 53,
-      "norm_label": ".pigpatrolfromcenter()"
-    },
-    {
-      "label": "Vec3",
-      "file_type": "code",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L657",
-      "id": "server_sim_simulation_pig_cs_vec3",
-      "community": 53,
-      "norm_label": "vec3"
-    },
-    {
-      "label": "Quat",
-      "file_type": "code",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L657",
-      "id": "server_sim_simulation_pig_cs_quat",
-      "community": 53,
-      "norm_label": "quat"
-    },
-    {
       "label": ".IsAggressive()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L667",
+      "source_location": "L694",
       "id": "sim_simulation_pig_simulation_isaggressive",
       "community": 53,
       "norm_label": ".isaggressive()"
@@ -9839,7 +9830,7 @@
       "label": ".PodThink()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L672",
+      "source_location": "L699",
       "id": "sim_simulation_pig_simulation_podthink",
       "community": 53,
       "norm_label": ".podthink()"
@@ -9848,7 +9839,7 @@
       "label": ".PigLead()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L700",
+      "source_location": "L727",
       "id": "sim_simulation_pig_simulation_piglead",
       "community": 53,
       "norm_label": ".piglead()"
@@ -9857,7 +9848,7 @@
       "label": ".PigAvoidAsteroids()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L729",
+      "source_location": "L756",
       "id": "sim_simulation_pig_simulation_pigavoidasteroids",
       "community": 53,
       "norm_label": ".pigavoidasteroids()"
@@ -9866,7 +9857,7 @@
       "label": ".PigThreatScore()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L759",
+      "source_location": "L786",
       "id": "sim_simulation_pig_simulation_pigthreatscore",
       "community": 53,
       "norm_label": ".pigthreatscore()"
@@ -9875,7 +9866,7 @@
       "label": ".TeamBaseSector()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L779",
+      "source_location": "L806",
       "id": "sim_simulation_pig_simulation_teambasesector",
       "community": 53,
       "norm_label": ".teambasesector()"
@@ -9884,7 +9875,7 @@
       "label": ".EnemyInSector()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L786",
+      "source_location": "L813",
       "id": "sim_simulation_pig_simulation_enemyinsector",
       "community": 53,
       "norm_label": ".enemyinsector()"
@@ -9893,7 +9884,7 @@
       "label": ".EnemyBaseExists()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L793",
+      "source_location": "L820",
       "id": "sim_simulation_pig_simulation_enemybaseexists",
       "community": 53,
       "norm_label": ".enemybaseexists()"
@@ -9902,7 +9893,7 @@
       "label": ".AlephTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L800",
+      "source_location": "L827",
       "id": "sim_simulation_pig_simulation_alephto",
       "community": 53,
       "norm_label": ".alephto()"
@@ -9911,7 +9902,7 @@
       "label": "Gate",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L800",
+      "source_location": "L827",
       "id": "gate",
       "community": 53,
       "norm_label": "gate"
@@ -9920,16 +9911,25 @@
       "label": ".PigSteerTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L807",
+      "source_location": "L834",
       "id": "sim_simulation_pig_simulation_pigsteerto",
       "community": 53,
       "norm_label": ".pigsteerto()"
     },
     {
+      "label": "Quat",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L834",
+      "id": "server_sim_simulation_pig_cs_quat",
+      "community": 53,
+      "norm_label": "quat"
+    },
+    {
       "label": ".PigAttackPoint()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L820",
+      "source_location": "L847",
       "id": "sim_simulation_pig_simulation_pigattackpoint",
       "community": 53,
       "norm_label": ".pigattackpoint()"
@@ -9938,7 +9938,7 @@
       "label": ".PigAimSkill()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L844",
+      "source_location": "L871",
       "id": "sim_simulation_pig_simulation_pigaimskill",
       "community": 53,
       "norm_label": ".pigaimskill()"
@@ -9947,7 +9947,7 @@
       "label": ".PigAimWobble()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L855",
+      "source_location": "L882",
       "id": "sim_simulation_pig_simulation_pigaimwobble",
       "community": 53,
       "norm_label": ".pigaimwobble()"
@@ -9956,7 +9956,7 @@
       "label": ".Clamp1()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L870",
+      "source_location": "L897",
       "id": "sim_simulation_pig_simulation_clamp1",
       "community": 53,
       "norm_label": ".clamp1()"
@@ -9965,7 +9965,7 @@
       "label": ".Clamp01()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L871",
+      "source_location": "L898",
       "id": "sim_simulation_pig_simulation_clamp01",
       "community": 53,
       "norm_label": ".clamp01()"
@@ -9974,7 +9974,7 @@
       "label": ".Conjugate()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L872",
+      "source_location": "L899",
       "id": "sim_simulation_pig_simulation_conjugate",
       "community": 53,
       "norm_label": ".conjugate()"
@@ -9983,7 +9983,7 @@
       "label": ".NormalizeOr()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L874",
+      "source_location": "L901",
       "id": "sim_simulation_pig_simulation_normalizeor",
       "community": 53,
       "norm_label": ".normalizeor()"
@@ -9992,7 +9992,7 @@
       "label": ".PerpendicularTo()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L880",
+      "source_location": "L907",
       "id": "sim_simulation_pig_simulation_perpendicularto",
       "community": 53,
       "norm_label": ".perpendicularto()"
@@ -10001,7 +10001,7 @@
       "label": ".SmallestPositiveF()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L886",
+      "source_location": "L913",
       "id": "sim_simulation_pig_simulation_smallestpositivef",
       "community": 53,
       "norm_label": ".smallestpositivef()"
@@ -10037,7 +10037,7 @@
       "label": "int",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L18",
+      "source_location": "L17",
       "id": "server_sim_simulation_cs_int",
       "community": 42,
       "norm_label": "int"
@@ -10046,7 +10046,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L21",
+      "source_location": "L20",
       "id": "server_sim_simulation_cs_byte",
       "community": 42,
       "norm_label": "byte"
@@ -10055,7 +10055,7 @@
       "label": "float",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L22",
+      "source_location": "L21",
       "id": "server_sim_simulation_cs_float",
       "community": 42,
       "norm_label": "float"
@@ -10064,7 +10064,7 @@
       "label": "WeaponSpec",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L31",
+      "source_location": "L30",
       "id": "weaponspec",
       "community": 42,
       "norm_label": "weaponspec"
@@ -10073,7 +10073,7 @@
       "label": ".MaxHull()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L37",
+      "source_location": "L36",
       "id": "sim_simulation_simulation_maxhull",
       "community": 42,
       "norm_label": ".maxhull()"
@@ -10082,7 +10082,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L39",
+      "source_location": "L38",
       "id": "sim_simulation_shipsim",
       "community": 42,
       "norm_label": "shipsim"
@@ -10091,7 +10091,7 @@
       "label": "ulong",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L41",
+      "source_location": "L40",
       "id": "server_sim_simulation_cs_ulong",
       "community": 42,
       "norm_label": "ulong"
@@ -10100,7 +10100,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L46",
+      "source_location": "L45",
       "id": "server_sim_simulation_cs_shipstate",
       "community": 42,
       "norm_label": "shipstate"
@@ -10109,7 +10109,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L50",
+      "source_location": "L49",
       "id": "server_sim_simulation_cs_shipinputstate",
       "community": 42,
       "norm_label": "shipinputstate"
@@ -10118,7 +10118,7 @@
       "label": "bool",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L51",
+      "source_location": "L50",
       "id": "server_sim_simulation_cs_bool",
       "community": 42,
       "norm_label": "bool"
@@ -10127,7 +10127,7 @@
       "label": "World",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L69",
+      "source_location": "L68",
       "id": "server_sim_simulation_cs_world",
       "community": 42,
       "norm_label": "world"
@@ -10136,7 +10136,7 @@
       "label": "Dictionary",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L70",
+      "source_location": "L69",
       "id": "server_sim_simulation_cs_dictionary",
       "community": 42,
       "norm_label": "dictionary"
@@ -10145,7 +10145,7 @@
       "label": "List",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L71",
+      "source_location": "L70",
       "id": "server_sim_simulation_cs_list",
       "community": 42,
       "norm_label": "list"
@@ -10154,7 +10154,7 @@
       "label": "Random",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L78",
+      "source_location": "L77",
       "id": "random",
       "community": 42,
       "norm_label": "random"
@@ -10163,7 +10163,7 @@
       "label": "Queue",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L81",
+      "source_location": "L80",
       "id": "queue",
       "community": 42,
       "norm_label": "queue"
@@ -10172,7 +10172,7 @@
       "label": "object",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L84",
+      "source_location": "L83",
       "id": "server_sim_simulation_cs_object",
       "community": 42,
       "norm_label": "object"
@@ -10181,7 +10181,7 @@
       "label": "Func",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L127",
+      "source_location": "L126",
       "id": "server_sim_simulation_cs_func",
       "community": 42,
       "norm_label": "func"
@@ -10190,7 +10190,7 @@
       "label": "Action",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L128",
+      "source_location": "L127",
       "id": "server_sim_simulation_cs_action",
       "community": 42,
       "norm_label": "action"
@@ -10199,7 +10199,7 @@
       "label": ".EnqueueJoin()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L158",
+      "source_location": "L157",
       "id": "sim_simulation_simulation_enqueuejoin",
       "community": 42,
       "norm_label": ".enqueuejoin()"
@@ -10208,7 +10208,7 @@
       "label": ".EnqueueLeave()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L163",
+      "source_location": "L162",
       "id": "sim_simulation_simulation_enqueueleave",
       "community": 42,
       "norm_label": ".enqueueleave()"
@@ -10217,7 +10217,7 @@
       "label": ".EnqueueInput()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L168",
+      "source_location": "L167",
       "id": "sim_simulation_simulation_enqueueinput",
       "community": 42,
       "norm_label": ".enqueueinput()"
@@ -10226,7 +10226,7 @@
       "label": ".ShipIdOf()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L173",
+      "source_location": "L172",
       "id": "sim_simulation_simulation_shipidof",
       "community": 28,
       "norm_label": ".shipidof()"
@@ -10235,7 +10235,7 @@
       "label": ".Step()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L180",
+      "source_location": "L179",
       "id": "sim_simulation_simulation_step",
       "community": 42,
       "norm_label": ".step()"
@@ -10244,7 +10244,7 @@
       "label": ".DrainQueues()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L313",
+      "source_location": "L312",
       "id": "sim_simulation_simulation_drainqueues",
       "community": 42,
       "norm_label": ".drainqueues()"
@@ -10253,7 +10253,7 @@
       "label": ".ResetMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L356",
+      "source_location": "L355",
       "id": "sim_simulation_simulation_resetmatch",
       "community": 42,
       "norm_label": ".resetmatch()"
@@ -10262,7 +10262,7 @@
       "label": ".StartMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L360",
+      "source_location": "L359",
       "id": "sim_simulation_simulation_startmatch",
       "community": 42,
       "norm_label": ".startmatch()"
@@ -10271,7 +10271,7 @@
       "label": ".ReturnToLobby()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L376",
+      "source_location": "L375",
       "id": "sim_simulation_simulation_returntolobby",
       "community": 42,
       "norm_label": ".returntolobby()"
@@ -10280,7 +10280,7 @@
       "label": ".SpawnCombatShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L397",
+      "source_location": "L396",
       "id": "sim_simulation_simulation_spawncombatship",
       "community": 42,
       "norm_label": ".spawncombatship()"
@@ -10289,7 +10289,7 @@
       "label": ".PlaceAtBase()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L421",
+      "source_location": "L420",
       "id": "sim_simulation_simulation_placeatbase",
       "community": 42,
       "norm_label": ".placeatbase()"
@@ -10298,7 +10298,7 @@
       "label": ".ProcessRespawns()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L467",
+      "source_location": "L466",
       "id": "sim_simulation_simulation_processrespawns",
       "community": 42,
       "norm_label": ".processrespawns()"
@@ -10307,16 +10307,16 @@
       "label": ".InputFor()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L486",
+      "source_location": "L485",
       "id": "sim_simulation_simulation_inputfor",
-      "community": 42,
+      "community": 53,
       "norm_label": ".inputfor()"
     },
     {
       "label": ".ResolveDeath()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L500",
+      "source_location": "L499",
       "id": "sim_simulation_simulation_resolvedeath",
       "community": 42,
       "norm_label": ".resolvedeath()"
@@ -10325,7 +10325,7 @@
       "label": ".EjectPlayerPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L513",
+      "source_location": "L512",
       "id": "sim_simulation_simulation_ejectplayerpod",
       "community": 42,
       "norm_label": ".ejectplayerpod()"
@@ -10334,7 +10334,7 @@
       "label": ".MakePod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L525",
+      "source_location": "L524",
       "id": "sim_simulation_simulation_makepod",
       "community": 42,
       "norm_label": ".makepod()"
@@ -10343,7 +10343,7 @@
       "label": ".KillPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L556",
+      "source_location": "L555",
       "id": "sim_simulation_simulation_killpod",
       "community": 42,
       "norm_label": ".killpod()"
@@ -10358,19 +10358,19 @@
       "norm_label": ".dockship()"
     },
     {
-      "label": ".ScheduleRespawn()",
+      "label": ".ClearClientShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L577",
-      "id": "sim_simulation_simulation_schedulerespawn",
+      "source_location": "L581",
+      "id": "sim_simulation_simulation_clearclientship",
       "community": 42,
-      "norm_label": ".schedulerespawn()"
+      "norm_label": ".clearclientship()"
     },
     {
       "label": ".RemoveShipNow()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L586",
+      "source_location": "L589",
       "id": "sim_simulation_simulation_removeshipnow",
       "community": 42,
       "norm_label": ".removeshipnow()"
@@ -10379,7 +10379,7 @@
       "label": ".ApplyStructural()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L595",
+      "source_location": "L598",
       "id": "sim_simulation_simulation_applystructural",
       "community": 42,
       "norm_label": ".applystructural()"
@@ -10388,7 +10388,7 @@
       "label": ".RandomUnitVec()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L619",
+      "source_location": "L622",
       "id": "sim_simulation_simulation_randomunitvec",
       "community": 42,
       "norm_label": ".randomunitvec()"
@@ -10397,7 +10397,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L619",
+      "source_location": "L622",
       "id": "server_sim_simulation_cs_vec3",
       "community": 42,
       "norm_label": "vec3"
@@ -10406,7 +10406,7 @@
       "label": ".TryFire()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L629",
+      "source_location": "L632",
       "id": "sim_simulation_simulation_tryfire",
       "community": 42,
       "norm_label": ".tryfire()"
@@ -10415,7 +10415,7 @@
       "label": ".ResolveDueShots()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L725",
+      "source_location": "L728",
       "id": "sim_simulation_simulation_resolvedueshots",
       "community": 42,
       "norm_label": ".resolvedueshots()"
@@ -10424,7 +10424,7 @@
       "label": ".FirstEntryTime()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L757",
+      "source_location": "L760",
       "id": "sim_simulation_simulation_firstentrytime",
       "community": 42,
       "norm_label": ".firstentrytime()"
@@ -10433,7 +10433,7 @@
       "label": ".CellsAlongRay()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L781",
+      "source_location": "L784",
       "id": "sim_simulation_simulation_cellsalongray",
       "community": 42,
       "norm_label": ".cellsalongray()"
@@ -10442,7 +10442,7 @@
       "label": "IEnumerable",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L781",
+      "source_location": "L784",
       "id": "server_sim_simulation_cs_ienumerable",
       "community": 42,
       "norm_label": "ienumerable"
@@ -10451,7 +10451,7 @@
       "label": ".RebuildShipGrid()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L801",
+      "source_location": "L804",
       "id": "sim_simulation_simulation_rebuildshipgrid",
       "community": 42,
       "norm_label": ".rebuildshipgrid()"
@@ -10460,7 +10460,7 @@
       "label": ".CollideShips()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L823",
+      "source_location": "L826",
       "id": "sim_simulation_simulation_collideships",
       "community": 42,
       "norm_label": ".collideships()"
@@ -10469,7 +10469,7 @@
       "label": ".ShipSphereContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L843",
+      "source_location": "L846",
       "id": "sim_simulation_simulation_shipspherecontact",
       "community": 42,
       "norm_label": ".shipspherecontact()"
@@ -10478,7 +10478,7 @@
       "label": ".ShipHullContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L858",
+      "source_location": "L861",
       "id": "sim_simulation_simulation_shiphullcontact",
       "community": 42,
       "norm_label": ".shiphullcontact()"
@@ -10487,7 +10487,7 @@
       "label": "ShipBody",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L858",
+      "source_location": "L861",
       "id": "server_sim_simulation_cs_shipbody",
       "community": 42,
       "norm_label": "shipbody"
@@ -10496,7 +10496,7 @@
       "label": ".ResolveShipImpulse()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L887",
+      "source_location": "L890",
       "id": "sim_simulation_simulation_resolveshipimpulse",
       "community": 42,
       "norm_label": ".resolveshipimpulse()"
@@ -10505,7 +10505,7 @@
       "label": ".ResolveAsteroidCollisions()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L907",
+      "source_location": "L910",
       "id": "sim_simulation_simulation_resolveasteroidcollisions",
       "community": 42,
       "norm_label": ".resolveasteroidcollisions()"
@@ -10514,7 +10514,7 @@
       "label": ".ResolveBaseCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L933",
+      "source_location": "L936",
       "id": "sim_simulation_simulation_resolvebasecollision",
       "community": 42,
       "norm_label": ".resolvebasecollision()"
@@ -10523,7 +10523,7 @@
       "label": ".ResolveHullCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L944",
+      "source_location": "L947",
       "id": "sim_simulation_simulation_resolvehullcollision",
       "community": 42,
       "norm_label": ".resolvehullcollision()"
@@ -10532,7 +10532,7 @@
       "label": "ConvexHull",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L944",
+      "source_location": "L947",
       "id": "server_sim_simulation_cs_convexhull",
       "community": 42,
       "norm_label": "convexhull"
@@ -10541,7 +10541,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L944",
+      "source_location": "L947",
       "id": "server_sim_simulation_cs_quat",
       "community": 42,
       "norm_label": "quat"
@@ -10550,7 +10550,7 @@
       "label": ".SphereVsHull()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L954",
+      "source_location": "L957",
       "id": "sim_simulation_simulation_spherevshull",
       "community": 42,
       "norm_label": ".spherevshull()"
@@ -10559,7 +10559,7 @@
       "label": ".IntersectsDockDisc()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L978",
+      "source_location": "L981",
       "id": "sim_simulation_simulation_intersectsdockdisc",
       "community": 42,
       "norm_label": ".intersectsdockdisc()"
@@ -10568,7 +10568,7 @@
       "label": ".ApplyBounce()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L996",
+      "source_location": "L999",
       "id": "sim_simulation_simulation_applybounce",
       "community": 42,
       "norm_label": ".applybounce()"
@@ -10577,7 +10577,7 @@
       "label": ".HullRayEntry()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1009",
+      "source_location": "L1012",
       "id": "sim_simulation_simulation_hullrayentry",
       "community": 42,
       "norm_label": ".hullrayentry()"
@@ -10586,7 +10586,7 @@
       "label": ".ResolveStaticCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1021",
+      "source_location": "L1024",
       "id": "sim_simulation_simulation_resolvestaticcollision",
       "community": 42,
       "norm_label": ".resolvestaticcollision()"
@@ -10595,7 +10595,7 @@
       "label": ".TryWarp()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1044",
+      "source_location": "L1047",
       "id": "sim_simulation_simulation_trywarp",
       "community": 42,
       "norm_label": ".trywarp()"
@@ -10604,7 +10604,7 @@
       "label": ".LookRotationZ()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1081",
+      "source_location": "L1084",
       "id": "sim_simulation_simulation_lookrotationz",
       "community": 42,
       "norm_label": ".lookrotationz()"
@@ -10613,7 +10613,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1089",
+      "source_location": "L1092",
       "id": "sim_simulation_simulation_dot",
       "community": 42,
       "norm_label": ".dot()"
@@ -12772,6 +12772,24 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
+      "label": ".PigPatrolFromCenter()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L657",
+      "community": 53,
+      "norm_label": ".pigpatrolfromcenter()",
+      "id": "sim_simulation_pig_simulation_pigpatrolfromcenter"
+    },
+    {
+      "label": ".ScheduleRespawn()",
+      "file_type": "code",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L577",
+      "community": 42,
+      "norm_label": ".schedulerespawn()",
+      "id": "sim_simulation_simulation_schedulerespawn"
+    },
+    {
       "label": "bool",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
@@ -12812,7 +12830,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L60",
-      "community": 55,
+      "community": 25,
       "norm_label": ".orientalongvelocity()",
       "id": "scripts_projectileview_projectileview_orientalongvelocity"
     },
@@ -13253,7 +13271,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L34",
-      "community": 70,
+      "community": 62,
       "norm_label": "connectionmanager",
       "id": "client_scripts_defregistry_cs_connectionmanager"
     },
@@ -13262,7 +13280,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L46",
-      "community": 70,
+      "community": 62,
       "norm_label": "._ready()",
       "id": "scripts_defregistry_defregistry_ready"
     },
@@ -13271,7 +13289,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
-      "community": 70,
+      "community": 62,
       "norm_label": ".onconnected()",
       "id": "scripts_defregistry_defregistry_onconnected"
     },
@@ -13280,7 +13298,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L52",
-      "community": 70,
+      "community": 62,
       "norm_label": "dbconnection",
       "id": "client_scripts_defregistry_cs_dbconnection"
     },
@@ -13289,7 +13307,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L97",
-      "community": 81,
+      "community": 62,
       "norm_label": "weapondef",
       "id": "client_scripts_defregistry_cs_weapondef"
     },
@@ -13298,7 +13316,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L123",
-      "community": 72,
+      "community": 62,
       "norm_label": "shipclassdef",
       "id": "client_scripts_defregistry_cs_shipclassdef"
     },
@@ -13307,7 +13325,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L131",
-      "community": 72,
+      "community": 62,
       "norm_label": "basedef",
       "id": "client_scripts_defregistry_cs_basedef"
     },
@@ -13865,7 +13883,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L40",
-      "community": 55,
+      "community": 25,
       "norm_label": "projectile",
       "id": "client_scripts_projectileview_cs_projectile"
     },
@@ -13874,7 +13892,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L55",
-      "community": 55,
+      "community": 25,
       "norm_label": ".initializepredicted()",
       "id": "scripts_projectileview_projectileview_initializepredicted"
     },
@@ -13883,7 +13901,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L78",
-      "community": 55,
+      "community": 25,
       "norm_label": ".attachauthoritative()",
       "id": "scripts_projectileview_projectileview_attachauthoritative"
     },
@@ -13892,7 +13910,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ProjectileView.cs",
       "source_location": "L84",
-      "community": 55,
+      "community": 25,
       "norm_label": ".ghostexpired()",
       "id": "scripts_projectileview_projectileview_ghostexpired"
     },
@@ -13955,7 +13973,7 @@
       "file_type": "code",
       "source_file": "client/scripts/ShipModelLoader.cs",
       "source_location": "L154",
-      "community": 80,
+      "community": 25,
       "norm_label": "marker3d",
       "id": "marker3d"
     },
@@ -14000,7 +14018,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L74",
-      "community": 70,
+      "community": 62,
       "norm_label": ".statsfor()",
       "id": "scripts_defregistry_defregistry_statsfor"
     },
@@ -23855,6 +23873,17 @@
       "confidence_score": 1.0,
       "source": "scripts_shipmodelloader_shipmodelloader_loadhull",
       "target": "scripts_shipmodelloader_shipmodelloader_targetlength"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/scripts/ShipModelLoader.cs",
+      "source_location": "L114",
+      "weight": 1.0,
+      "source": "scripts_shipmodelloader_shipmodelloader_attachengineglow",
+      "target": "scripts_shipmodelloader_shipmodelloader_targetlength",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -34436,6 +34465,16 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L591",
+      "weight": 1.0,
+      "source": "sim_simulation_pig_simulation",
+      "target": "sim_simulation_pig_simulation_randompatrolpoint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L186",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -34602,6 +34641,17 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "context": "field",
+      "source": "sim_simulation_pig_pigslot",
+      "target": "server_sim_simulation_pig_cs_vec3",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L235",
       "weight": 1.0,
       "context": "parameter_type",
@@ -34751,6 +34801,116 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_pig_simulation_podthink",
       "target": "server_sim_simulation_pig_cs_shipsim"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L726",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_normalizeor",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L732",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_perpendicularto",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L707",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigaimwobble",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L672",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigattackpoint",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L589",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigavoidasteroids",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L560",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_piglead",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L523",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L659",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigsteerto",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L619",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigthreatscore",
+      "target": "server_sim_simulation_pig_cs_vec3"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L591",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "sim_simulation_pig_simulation_randompatrolpoint",
+      "target": "server_sim_simulation_pig_cs_vec3",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -35358,6 +35518,17 @@
       "target": "sim_simulation_pig_simulation_alephto"
     },
     {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L581",
+      "weight": 1.0,
+      "source": "sim_simulation_pig_simulation_makepatrolplan",
+      "target": "sim_simulation_pig_simulation_randompatrolpoint",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.Pig.cs",
@@ -35567,160 +35738,6 @@
       "target": "sim_simulation_pig_simulation_piglead"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L523",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "target": "server_sim_simulation_pig_cs_quat"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L523",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L530",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
-      "target": "sim_simulation_pig_simulation_pigsteerto"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L726",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_normalizeor",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L732",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_perpendicularto",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L707",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigaimwobble",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L672",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigattackpoint",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L589",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigavoidasteroids",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L560",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_piglead",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L659",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigsteerto",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L619",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigthreatscore",
-      "target": "server_sim_simulation_pig_cs_vec3"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L724",
-      "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_conjugate",
-      "target": "server_sim_simulation_pig_cs_quat"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L672",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigattackpoint",
-      "target": "server_sim_simulation_pig_cs_quat"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "server/Sim/Simulation.Pig.cs",
-      "source_location": "L659",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "confidence_score": 1.0,
-      "source": "sim_simulation_pig_simulation_pigsteerto",
-      "target": "server_sim_simulation_pig_cs_quat"
-    },
-    {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
@@ -35879,6 +35896,28 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L530",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
+      "target": "sim_simulation_pig_simulation_pigsteerto"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L659",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigsteerto",
+      "target": "server_sim_simulation_pig_cs_quat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L666",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -35906,6 +35945,39 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_pig_simulation_pigsteerto",
       "target": "sim_simulation_pig_simulation_normalizeor"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L724",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_conjugate",
+      "target": "server_sim_simulation_pig_cs_quat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L672",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigattackpoint",
+      "target": "server_sim_simulation_pig_cs_quat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.Pig.cs",
+      "source_location": "L523",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "sim_simulation_pig_simulation_pigpatrolfromcenter",
+      "target": "server_sim_simulation_pig_cs_quat"
     },
     {
       "relation": "calls",
@@ -36176,6 +36248,16 @@
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
       "target": "sim_simulation_simulation_cellsalongray"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L581",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation",
+      "target": "sim_simulation_simulation_clearclientship",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -37328,11 +37410,33 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L561",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_killpod",
+      "target": "sim_simulation_simulation_clearclientship",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
       "source_location": "L467",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "sim_simulation_simulation_killpod",
       "target": "sim_simulation_simulation_schedulerespawn"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/Sim/Simulation.cs",
+      "source_location": "L574",
+      "weight": 1.0,
+      "source": "sim_simulation_simulation_dockship",
+      "target": "sim_simulation_simulation_clearclientship",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -43041,5 +43145,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "89d68e3d14aef2649ebfba6496ff49b573082e4a"
+  "built_at_commit": "fb481bb4afeb4d12e31a959d300fb9db5f03c4f1"
 }
