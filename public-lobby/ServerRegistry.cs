@@ -62,7 +62,8 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             IceServers: _iceServers,
             Players: Math.Max(0, req.Players),
             MaxPlayers: Math.Max(0, req.MaxPlayers),
-            State: NormalizeState(req.State));
+            State: NormalizeState(req.State),
+            ProtocolVersion: Math.Max(0, req.ProtocolVersion));
 
         _servers[entry.SessionId] = entry;
         return entry;

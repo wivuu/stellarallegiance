@@ -75,8 +75,17 @@ app.MapGet("/servers/{sessionId}", (string sessionId, IServerRegistry registry) 
     return entry is null ? Results.NotFound() : Results.Ok(entry);
 });
 
-// List all currently active servers (the lobby/browser view).
-app.MapGet("/servers", (IServerRegistry registry) => Results.Ok(registry.ListActive()));
+// List currently active servers (the lobby/browser view). The optional ?protocol=N query filters to
+// servers on that wire-protocol version, so a client only ever sees servers it can actually
+// handshake with (it passes its own GameNetClient.ProtocolVersion). Omitted or <=0 returns all —
+// keeps curl/browser/debugging unfiltered and stays backward-compatible with older clients.
+app.MapGet("/servers", (IServerRegistry registry, int? protocol) =>
+{
+    var active = registry.ListActive();
+    if (protocol is > 0)
+        active = [.. active.Where(s => s.ProtocolVersion == protocol)];
+    return Results.Ok(active);
+});
 
 // Explicitly remove a server (graceful host shutdown).
 app.MapDelete("/servers/{sessionId}", (string sessionId, IServerRegistry registry) =>

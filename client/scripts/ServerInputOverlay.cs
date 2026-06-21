@@ -32,6 +32,10 @@ public partial class ServerInputOverlay : Control
     private Label _listStatus = null!;
     private Timer _autoRefresh = null!;
 
+    // "A newer build exists" nudge — hidden until the startup check (UpdateChecker) finds one.
+    private RichTextLabel _updateBanner = null!;
+    private UpdateChecker.UpdateInfo? _update;
+
     // Cross-thread handoff from the fetch task to RenderServers (called on the main thread).
     private List<ServerDto>? _fetched;
     private string? _fetchError;
@@ -55,6 +59,20 @@ public partial class ServerInputOverlay : Control
         var col = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         col.AddThemeConstantOverride("separation", 12);
         center.AddChild(col);
+
+        // Update nudge: sits at the very top, hidden until CheckUpdateAsync finds a newer release.
+        // BBCode link opens the GitHub release page in the player's browser (OS.ShellOpen).
+        _updateBanner = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            Visible = false,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        };
+        _updateBanner.AddThemeFontSizeOverride("normal_font_size", 15);
+        _updateBanner.MetaClicked += meta => OS.ShellOpen(meta.AsString());
+        col.AddChild(_updateBanner);
 
         col.AddChild(Centered("STELLAR ALLEGIANCE", 38));
 
@@ -127,6 +145,25 @@ public partial class ServerInputOverlay : Control
         _autoRefresh = new Timer { WaitTime = 10.0, Autostart = true };
         _autoRefresh.Timeout += () => { if (Visible) _ = FetchAsync(); };
         AddChild(_autoRefresh);
+
+        // One-shot, fire-and-forget: ask GitHub whether a newer client release is out.
+        _ = CheckUpdateAsync();
+    }
+
+    // Best-effort startup update check; surfaces the banner only if a newer stable release exists.
+    private async Task CheckUpdateAsync()
+    {
+        _update = await UpdateChecker.CheckAsync();
+        if (_update is not null) CallDeferred(nameof(ShowUpdateBanner));
+    }
+
+    private void ShowUpdateBanner()
+    {
+        if (_update is null) return;
+        _updateBanner.Text =
+            $"[center][color=#9fe6a0]A new version ({_update.Version}) is available — " +
+            $"[url={_update.Url}]download[/url][/color][/center]";
+        _updateBanner.Visible = true;
     }
 
     // Manual refresh (button / first load): show the loading hint and clear the stale rows.
@@ -142,7 +179,9 @@ public partial class ServerInputOverlay : Control
     {
         try
         {
-            var json = await Http.GetStringAsync($"{_cm.LobbyBase}/servers");
+            // Filter to our wire protocol so the browser only shows servers we can actually join
+            // (a mismatch would otherwise be rejected at the handshake, after the player clicks).
+            var json = await Http.GetStringAsync($"{_cm.LobbyBase}/servers?protocol={GameNetClient.ProtocolVersion}");
             _fetched = JsonSerializer.Deserialize<List<ServerDto>>(json,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
             _fetchError = null;

@@ -58,6 +58,14 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # Bake the release version into the client binary so its startup update check knows what it is
+      # (BuildInfo.Version ships as the "0.0.0-dev" sentinel; replace it with this tag's version).
+      # sed -i.bak is portable across the BSD (macOS) and GNU (Linux/Windows-bash) runners.
+      - name: Stamp client version
+        run: |
+          sed -i.bak "s/0.0.0-dev/${{ steps.version.outputs.version }}/" client/scripts/BuildInfo.cs
+          rm -f client/scripts/BuildInfo.cs.bak
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:

@@ -394,7 +394,8 @@ public partial class GameNetClient : Node
     }
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-    private const byte ProtocolVersion = 8;
+    // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
+    public const byte ProtocolVersion = 8;
 
     private void ApplyWelcome(BinaryReader r)
     {
