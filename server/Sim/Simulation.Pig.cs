@@ -27,7 +27,7 @@ public sealed partial class Simulation
 
     // ---- PIG tuning (ported verbatim from the module) ----
     private const byte NumTeams = 2;
-    private const int MaxPigsPerTeam = 150;
+    private const int MaxPigsPerTeam = 5;
     private const uint PigSquadDelayTicks = 10 * TickHz;   // 10 s after a wipe before the next squad
     private const uint PigAggroWindowTicks = 3 * TickHz;   // ~3 s aggression memory
     private const float PigPatrolReachFrac = 0.7f;   // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
