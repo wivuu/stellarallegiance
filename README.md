@@ -1,7 +1,7 @@
 # Stellar Allegiance (wivuullegiance)
 
 > [!CAUTION]
-> This is 'Slopllegiance' it is a functional prototype Allegiance-style game written by Claude under supervision
+> This is 'Slopllegiance'. it is a functional prototype Allegiance-style game written by Claude under supervision.
 > It is not a finished game, expect bugs, and expect the code to be rough and unpolished - no pride in ownership here - this is slop.
 > If this demonstrates anything it's that 
 > 1. Allegiance can be re-platformed as a modern crossplatform game, and 
