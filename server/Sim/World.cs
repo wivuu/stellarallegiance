@@ -73,6 +73,29 @@ public sealed class World
     // and the uniform scale mapping authored units → this rock's collision size.
     public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale);
 
+    // Per-class ship collision hulls, loaded from the same GLBs the client renders and pre-scaled
+    // to the client's per-class silhouette length (ShipModelLoader.TargetLength), so the hull a
+    // bolt or another ship tests against matches what the player sees. The hull lives in the ship's
+    // local frame at the ship's pose (center = Pos, rotation = Rot); BoundingRadius is its
+    // world-space bounding sphere for broad-phase. Null when a class GLB is absent — the sim then
+    // falls back to the ShipRadius sphere for that class (like asteroids/bases do without a model).
+    public readonly record struct ShipBody(ConvexHull Hull, float BoundingRadius);
+    private readonly ShipBody?[] _shipHulls;   // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
+    private readonly ShipBody? _podHull;
+
+    // Client ShipModelLoader.TargetLength, mirrored here so the server collision hull is scaled to
+    // the exact visual silhouette length the client uniform-scales each GLB to. Keep in sync.
+    private static readonly (string Name, float TargetLen)[] ShipClassAssets =
+    {
+        ("scout", 4.5f), ("fighter", 5.5f), ("bomber", 7.2f),
+    };
+    private const float PodTargetLength = 2.8f;
+
+    // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
+    // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
+    public ShipBody? ShipHull(byte cls, bool isPod)
+        => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
+
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
     private static readonly Dictionary<(int, int, int), List<Rock>> NoGrid = new();
@@ -127,6 +150,26 @@ public sealed class World
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
         (BaseModel, BaseHull, BaseExitDir, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
+        (_shipHulls, _podHull) = LoadShipBodies();
+    }
+
+    // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the
+    // client's silhouette length (longestAxis → TargetLen), so the world-frame hull matches the
+    // rendered ship. A missing/degenerate GLB leaves that class on the sphere fallback.
+    private static (ShipBody?[], ShipBody?) LoadShipBodies()
+    {
+        var classes = new ShipBody?[ShipClassAssets.Length];
+        for (int i = 0; i < ShipClassAssets.Length; i++)
+            classes[i] = LoadShipHull($"ships/{ShipClassAssets[i].Name}.glb", ShipClassAssets[i].TargetLen);
+        return (classes, LoadShipHull("ships/pod.glb", PodTargetLength));
+    }
+
+    private static ShipBody? LoadShipHull(string relPath, float targetLen)
+    {
+        var model = SimAssets.TryLoad(relPath);
+        if (model is null || model.LongestAxis <= 1e-3f) return null;
+        float ws = targetLen / model.LongestAxis;
+        return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
     }
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation

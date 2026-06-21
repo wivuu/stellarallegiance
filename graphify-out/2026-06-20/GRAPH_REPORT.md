@@ -1,11 +1,11 @@
 # Graph Report - wivuullegiance  (2026-06-20)
 
 ## Corpus Check
-- 87 files · ~118,041 words
+- 87 files · ~118,049 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1560 nodes · 2660 edges · 89 communities (73 shown, 16 thin omitted)
+- 1561 nodes · 2664 edges · 87 communities (71 shown, 16 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -96,13 +96,11 @@
 - [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
-- [[_COMMUNITY_Community 88|Community 88]]
-- [[_COMMUNITY_Community 89|Community 89]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 88 edges
-2. `GameNetClient` - 57 edges
-3. `Simulation` - 57 edges
+2. `Simulation` - 58 edges
+3. `GameNetClient` - 57 edges
 4. `Simulation` - 49 edges
 5. `ClientHub` - 41 edges
 6. `SectorOverview` - 40 edges
@@ -129,7 +127,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (89 total, 16 thin omitted)
+## Communities (87 total, 16 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -148,8 +146,8 @@ Cohesion: 0.10
 Nodes (34): _base_params(), _bumps(), _colour_params(), _crystal(), _cull(), _detail_params(), eval_base(), _eval_shape() (+26 more)
 
 ### Community 4 - "Connection Overlay UI"
-Cohesion: 0.16
-Nodes (11): Color, ConnectionManager, HttpClient, Label, LineEdit, List, string, Task (+3 more)
+Cohesion: 0.05
+Nodes (32): Button, Color, ConnectionManager, double, Label, Control, Color, ConnectionManager (+24 more)
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.06
@@ -220,8 +218,8 @@ Cohesion: 0.42
 Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main(), _opts(), _sizes(), Path
 
 ### Community 25 - "Starscape Background"
-Cohesion: 0.17
-Nodes (12): Basis, DefRegistry, HardpointDef, List, Marker3D, Material, MeshInstance3D, ShipClass (+4 more)
+Cohesion: 0.35
+Nodes (6): DefRegistry, Material, MeshInstance3D, ShipClass, Material, ShipModelLoader
 
 ### Community 26 - "Community 26"
 Cohesion: 0.19
@@ -252,8 +250,8 @@ Cohesion: 0.12
 Nodes (10): HeartbeatRequest, IReadOnlyCollection, ConcurrentDictionary, int, IReadOnlyList, TimeSpan, InMemoryServerRegistry, IServerRegistry (+2 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.09
-Nodes (17): bool, Camera3D, Color, float, ImmediateMesh, InputEvent, Label, MeshInstance3D (+9 more)
+Cohesion: 0.06
+Nodes (31): Button, CanvasLayer, bool, Button, ConnectionManager, Label, Player, ShipClass (+23 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.16
@@ -320,8 +318,8 @@ Cohesion: 0.29
 Nodes (4): int, uint, HmacSha256, Sha256
 
 ### Community 62 - "Community 62"
-Cohesion: 0.05
-Nodes (27): AudioStream, AudioStreamPlayer, BaseDef, BaseDef, byte, ConnectionManager, DbConnection, Dictionary (+19 more)
+Cohesion: 0.13
+Nodes (10): AudioStream, AudioStreamPlayer, Dictionary, HashSet, int, List, string, Vector3 (+2 more)
 
 ### Community 63 - "Community 63"
 Cohesion: 0.15
@@ -340,28 +338,28 @@ Cohesion: 0.33
 Nodes (4): int, string, ConfigFile, UserPrefs
 
 ### Community 69 - "Community 69"
-Cohesion: 0.28
-Nodes (4): MeshInstance3D, Node, ShipClass, MeshInstance3D
+Cohesion: 0.17
+Nodes (7): Color, MeshInstance3D, ShipClass, StandardMaterial3D, MeshInstance3D, Node3D, BaseHealthBar
 
 ### Community 70 - "Community 70"
-Cohesion: 0.15
-Nodes (11): CanvasLayer, bool, ConnectionManager, Label, Player, ShipController, WorldRenderer, CanvasLayer (+3 more)
+Cohesion: 0.17
+Nodes (8): byte, ConnectionManager, DbConnection, Dictionary, ShipStats, Node, Node, DefRegistry
 
 ### Community 71 - "Community 71"
 Cohesion: 0.22
 Nodes (8): SimModel, SimModelCache, Forward, Name, int, Pos, uint, Vec3
 
 ### Community 72 - "Community 72"
-Cohesion: 0.24
-Nodes (5): Node3D, Color, StandardMaterial3D, Node3D, BaseHealthBar
+Cohesion: 0.22
+Nodes (6): BaseDef, BaseDef, IReadOnlyList, ShipClassDef, ShipClassDef, WorldConfig
 
 ### Community 73 - "Community 73"
 Cohesion: 0.40
 Nodes (3): Color, Label3D, Nameplate
 
 ### Community 77 - "Community 77"
-Cohesion: 0.20
-Nodes (7): float, GradientTexture2D, StandardMaterial3D, Texture2D, WorldRenderer, GpuParticles3D, DustField
+Cohesion: 0.18
+Nodes (8): float, GradientTexture2D, StandardMaterial3D, Texture2D, WorldRenderer, Node3D, GpuParticles3D, DustField
 
 ### Community 78 - "Community 78"
 Cohesion: 0.40
@@ -372,12 +370,12 @@ Cohesion: 0.20
 Nodes (9): Host, Port, CancellationToken, HttpClient, string, Task, TimeSpan, ReachabilityProbe (+1 more)
 
 ### Community 80 - "Community 80"
-Cohesion: 0.20
-Nodes (7): Color, ConnectionManager, Dictionary, float, Vector2, WorldRenderer, Minimap
+Cohesion: 0.22
+Nodes (6): Basis, HardpointDef, List, Marker3D, Vector3, Marker3D
 
 ### Community 81 - "Community 81"
-Cohesion: 0.23
-Nodes (7): bool, Camera3D, Color, float, Vector2, WorldRenderer, VelocityIndicator
+Cohesion: 0.33
+Nodes (4): HardpointDef, List, WeaponDef, WeaponDef
 
 ### Community 85 - "Community 85"
 Cohesion: 0.36
@@ -391,14 +389,6 @@ Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D,
 Cohesion: 0.25
 Nodes (5): SimAssets, bool, object, SimModel, string
 
-### Community 88 - "Community 88"
-Cohesion: 0.24
-Nodes (7): Button, Color, ConnectionManager, double, Label, Control, ConnectionOverlay
-
-### Community 89 - "Community 89"
-Cohesion: 0.40
-Nodes (3): Button, Button, ShipClass
-
 ## Knowledge Gaps
 - **444 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+439 more)
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -407,12 +397,12 @@ Nodes (3): Button, Button, ShipClass
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 69`, `Community 38`, `Community 72`, `Target Markers HUD`, `Community 78`, `Community 56`, `Community 58`?**
-  _High betweenness centrality (0.095) - this node is a cross-community bridge._
-- **Why does `Node3D` connect `Community 72` to `AlephView World State`, `Community 66`, `Community 65`, `Community 37`, `Client-Side Prediction`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 77`, `Community 45`, `Remote Ship Networked`, `Community 86`, `Community 55`, `Starscape Background`?**
-  _High betweenness centrality (0.086) - this node is a cross-community bridge._
-- **Why does `Control` connect `Community 88` to `Chat System`, `Connection Overlay UI`, `Community 70`, `Lobby UI`, `Target Markers HUD`, `Community 80`, `Community 81`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
+- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 69`, `Community 38`, `PigAI NPC Behavior`, `Community 77`, `Target Markers HUD`, `Community 78`, `Community 56`, `Community 58`?**
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Hit Flash Effect`, `Connection Overlay UI`, `Community 37`?**
+  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+- **Why does `Node3D` connect `Community 77` to `AlephView World State`, `Community 66`, `Community 65`, `Community 37`, `Client-Side Prediction`, `Community 69`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 86`, `Community 55`, `Starscape Background`?**
+  _High betweenness centrality (0.085) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
   _464 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**

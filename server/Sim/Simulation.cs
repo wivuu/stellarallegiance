@@ -662,10 +662,30 @@ public sealed partial class Simulation
                 foreach (var s in shipsInCell)
                 {
                     if (s.Team == ship.Team || !s.Alive) continue;
-                    float r = World.ShipRadius + World.ProjectileRadius;
-                    if (FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
+                    var body = World.ShipHull(s.Class, s.IsPod);
+                    if (body is World.ShipBody sb)
                     {
-                        bestT = t; targetShip = s.ShipId; targetBase = -1;
+                        // Bounding-sphere pre-test (accounts for the ship's drift via its velocity),
+                        // then the ship's convex hull. The hull is static at the ship's current pose
+                        // for the bolt's short flight; the ship's linear drift is folded into the ray
+                        // by using the bolt-relative velocity (mv − ship velocity), exactly as the
+                        // sphere FirstEntryTime uses the relative velocity.
+                        float br = sb.BoundingRadius + World.ProjectileRadius;
+                        if (!FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, br, bestT, out _)) continue;
+                        Vec3 vrel = mv - s.State.Vel;
+                        if (HullRayEntry(sb.Hull, s.State.Pos, s.State.Rot, 1f, mp, vrel, World.ProjectileRadius, bestT, out float th)
+                            && th < bestT)
+                        {
+                            bestT = th; targetShip = s.ShipId; targetBase = -1;
+                        }
+                    }
+                    else
+                    {
+                        float r = World.ShipRadius + World.ProjectileRadius;
+                        if (FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
+                        {
+                            bestT = t; targetShip = s.ShipId; targetBase = -1;
+                        }
                     }
                 }
             }
@@ -789,15 +809,77 @@ public sealed partial class Simulation
 
     // ---- Collisions (module Pass C, mass-weighted) ------------------------
 
+    // Enemy ship-vs-ship contact. With both ships' GLB hulls loaded the contact is resolved as a
+    // ShipRadius sphere against the OTHER ship's convex hull (the same kernel asteroids/bases use),
+    // so a long bomber or a wide fighter collides on its real silhouette; without hulls it falls
+    // back to the legacy equal-radius sphere overlap. Either way the resolution is the module's
+    // mass-weighted impulse + inverse-mass-split push-out along the contact normal n (b → a).
     private void CollideShips(ShipSim a, ShipSim b)
+    {
+        var ha = World.ShipHull(a.Class, a.IsPod);
+        var hb = World.ShipHull(b.Class, b.IsPod);
+
+        Vec3 n;
+        float pen;
+        if (ha is null && hb is null)
+        {
+            if (!ShipSphereContact(a, b, out n, out pen)) return;
+        }
+        else if (!ShipHullContact(a, b, ha, hb, out n, out pen))
+        {
+            return;
+        }
+
+        ResolveShipImpulse(a, b, n, pen);
+    }
+
+    // Legacy equal-radius sphere overlap. n points b → a (the separation axis), pen is the overlap.
+    private static bool ShipSphereContact(ShipSim a, ShipSim b, out Vec3 n, out float pen)
     {
         Vec3 d = a.State.Pos - b.State.Pos;
         float dist2 = d.LengthSquared();
         float minD = 2f * World.ShipRadius;
-        if (dist2 >= minD * minD) return;
-
+        if (dist2 >= minD * minD) { n = default; pen = 0f; return false; }
         float dist = MathF.Sqrt(dist2);
-        Vec3 n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+        n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+        pen = minD - dist;
+        return true;
+    }
+
+    // Hull-aware contact: each ship's center, as a ShipRadius sphere, tested against the other's
+    // hull; the deeper of the two contacts wins (the convex analogue of the sphere overlap). n is
+    // oriented b → a so the shared impulse step pushes them apart correctly.
+    private static bool ShipHullContact(ShipSim a, ShipSim b, World.ShipBody? ha, World.ShipBody? hb,
+        out Vec3 n, out float pen)
+    {
+        n = default; pen = 0f;
+
+        // Broad-phase: the two world bounding spheres (hull bound, or ShipRadius without a hull).
+        float ra = ha?.BoundingRadius ?? World.ShipRadius;
+        float rb = hb?.BoundingRadius ?? World.ShipRadius;
+        float bound = ra + rb;
+        if ((a.State.Pos - b.State.Pos).LengthSquared() >= bound * bound) return false;
+
+        // a's center vs b's hull → normal already points out of b toward a (= b → a).
+        if (hb is World.ShipBody bbody &&
+            SphereVsHull(a.State.Pos, World.ShipRadius, bbody.Hull, b.State.Pos, b.State.Rot, 1f, out Vec3 nB, out float pB))
+        {
+            n = nB; pen = pB;
+        }
+        // b's center vs a's hull → normal points out of a toward b (a → b); negate to b → a.
+        if (ha is World.ShipBody abody &&
+            SphereVsHull(b.State.Pos, World.ShipRadius, abody.Hull, a.State.Pos, a.State.Rot, 1f, out Vec3 nA, out float pA)
+            && pA > pen)
+        {
+            n = nA * -1f; pen = pA;
+        }
+        return pen > 0f;
+    }
+
+    // Module-identical mass-weighted bounce: restitution impulse + collision damage when closing,
+    // and an inverse-mass-split positional correction along n (which points b → a).
+    private static void ResolveShipImpulse(ShipSim a, ShipSim b, Vec3 n, float pen)
+    {
         float iA = a.State.Mass > 0f ? 1f / a.State.Mass : 1f;
         float iB = b.State.Mass > 0f ? 1f / b.State.Mass : 1f;
         float invSum = iA + iB;
@@ -812,7 +894,6 @@ public sealed partial class Simulation
             a.Health -= dmg;
             b.Health -= dmg;
         }
-        float pen = minD - dist;
         a.State.Pos += n * (pen * (iA / invSum));
         b.State.Pos -= n * (pen * (iB / invSum));
     }
@@ -852,21 +933,34 @@ public sealed partial class Simulation
     }
 
     // Sphere-vs-convex-hull bounce (the convex analogue of ResolveStaticCollision). The hull is
-    // in its own authored frame at (center, rot, uniform scale); we map the ship sphere into that
-    // frame, resolve against the nearest face, and map the push-out/normal back to world.
+    // in its own authored frame at (center, rot, uniform scale); SphereVsHull maps the ship sphere
+    // into that frame, resolves against the nearest face, and maps the contact back to world.
     private static void ResolveHullCollision(ShipSim s, ConvexHull hull, Vec3 center, Quat rot, float scale)
     {
-        if (scale <= 1e-6f) return;
+        if (SphereVsHull(s.State.Pos, World.ShipRadius, hull, center, rot, scale, out Vec3 n, out float pen))
+            ApplyBounce(s, n, pen);
+    }
+
+    // Sphere(center=spherePos, radius) vs a convex hull placed at (center, rot, uniform scale). On
+    // contact returns the WORLD outward normal (out of the hull toward the sphere) and the world
+    // penetration depth. The shared kernel behind every hull bounce — asteroids, bases, and
+    // (treating each ship as a ShipRadius sphere) ship-vs-ship.
+    private static bool SphereVsHull(Vec3 spherePos, float radius, ConvexHull hull,
+        Vec3 center, Quat rot, float scale, out Vec3 worldNormal, out float worldPenetration)
+    {
+        worldNormal = default; worldPenetration = 0f;
+        if (scale <= 1e-6f) return false;
         float inv = 1f / scale;
         Quat rotInv = rot.Conjugate();
-        Vec3 localP = rotInv.Rotate(s.State.Pos - center) * inv;
-        float localR = World.ShipRadius * inv;
-        if (!hull.ResolveSphere(localP, localR, out Vec3 localN, out float pen)) return;
+        Vec3 localP = rotInv.Rotate(spherePos - center) * inv;
+        float localR = radius * inv;
+        if (!hull.ResolveSphere(localP, localR, out Vec3 localN, out float pen)) return false;
 
         Vec3 n = rot.Rotate(localN);   // rotation preserves length; uniform scale doesn't tilt normals
         float nl = n.Length();
-        n = nl > 1e-6f ? n * (1f / nl) : new Vec3(0f, 1f, 0f);
-        ApplyBounce(s, n, pen * scale);   // penetration is in local units → ×scale to world
+        worldNormal = nl > 1e-6f ? n * (1f / nl) : new Vec3(0f, 1f, 0f);
+        worldPenetration = pen * scale;   // penetration is in local units → ×scale to world
+        return true;
     }
 
     // True when the ship sphere intersects a docking cone's base disc (the green debug cones): the

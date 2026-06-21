@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1781995555.4264934,
-    "ast_hash": "b5a95a231938fc0790ac7c15131eb563",
+    "mtime": 1781997304.3276477,
+    "ast_hash": "3e4021bcf17bff4da993bf20821c01ad",
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1781995142.040854,
-    "ast_hash": "94904a23a42ca28789ffff37c2321c55",
+    "mtime": 1781997256.4879134,
+    "ast_hash": "7ea86ad3684379bb523cec2663fa2eb8",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1781995120.8269951,
-    "ast_hash": "2a09041ccb5c0b301081c7b313dee314",
+    "mtime": 1781997236.1607172,
+    "ast_hash": "5f9427f7f044ddf6649de1a80edf33bf",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -6160,8 +6160,8 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1781995150.5345361,
-    "ast_hash": "5c6e6adf24d9ccee72157fac1e1e63b2",
+    "mtime": 1781997264.0465257,
+    "ast_hash": "c3ac4495d4098318bfcea565be3eab56",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
