@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "client/scripts/CameraRig.cs": {
-    "mtime": 1782044189.8088503,
-    "ast_hash": "b1df3036785b3d6ebe7c5a9b4468d24b",
+    "mtime": 1782044376.8416545,
+    "ast_hash": "e059672fd5d07acf9c5ef0010c67588d",
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
@@ -220,13 +220,13 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782043489.7347853,
-    "ast_hash": "04580a9c620cab1bb0c6c0ed88c5e6e7",
+    "mtime": 1782044489.1810167,
+    "ast_hash": "4b48963ef0422a52b886260b19765b99",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782043890.17087,
-    "ast_hash": "08a7321d191df9b6047ee82e6fdd3a57",
+    "mtime": 1782044476.6720436,
+    "ast_hash": "bcabc2f5f97bd2776d491e227d9d4a0b",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {

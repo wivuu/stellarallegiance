@@ -109,6 +109,12 @@ app.Map("/game", async context =>
 
 // ---- Sim loop: fixed 50 ms steps, wall-clock accumulator, bench stats ----
 var cts = new CancellationTokenSource();
+// Empty-server idle reset: once the last client disconnects, give a short grace window (for
+// quick reconnects / page refreshes), then tear the match down to a clean idle lobby. The
+// server then sits idle — no ships, no PIGs, matchmaker waiting — until players rejoin and
+// ready up. Wall-clock so it's independent of how many ticks the (now empty) sim runs.
+const double EmptyResetMs = 5_000;   // end + reset within 5 s of the server going empty
+double? emptySinceMs = null;
 var simThread = new Thread(() =>
 {
     double dtMs = 1000.0 / Simulation.TickHz;
@@ -131,10 +137,19 @@ var simThread = new Thread(() =>
         if (sim.JustEnded)
             results.ReportResult(sim.Winner);   // one-shot, fire-and-forget
         hub.AfterStep();
-        // Recycle the match once the server empties out (post-match clients all dropped on
-        // lobby return), so the next handoff meets a fresh Active match.
-        if (hub.ConnectionCount == 0 && sim.ShouldResetWhenEmpty)
-            sim.ResetMatch();
+        // Recycle the match once the server has been empty for the grace window: end whatever
+        // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
+        // spell (not every tick); reconnecting before the window elapses cancels the reset.
+        if (hub.ConnectionCount == 0)
+        {
+            emptySinceMs ??= now;
+            if (now - emptySinceMs.Value >= EmptyResetMs && !sim.IsIdle)
+                sim.ResetMatch();
+        }
+        else
+        {
+            emptySinceMs = null;
+        }
     }
 })
 { IsBackground = true, Name = "SimLoop", Priority = ThreadPriority.AboveNormal };

@@ -163,11 +163,15 @@ public sealed partial class Simulation
     // Set whenever a base took damage this step (or the match ended), so the hub streams
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
-    // Latches once a match has been touched (base damaged / ended). Program.cs resets the
-    // match when the server empties out, so the NEXT lobby handoff meets a fresh Active
-    // match instead of a stale Ended one — the scaffold runs perpetual back-to-back matches.
+    // Latches once a match has been touched (base damaged / ended); cleared when a match
+    // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
+    // whether the sim still has a live/finished match to tear down.
     private bool _matchDirty;
-    public bool ShouldResetWhenEmpty => _matchDirty;
+    // True when the sim is already a clean idle lobby — no match running and no ships left.
+    // The sim loop resets an emptied-out server to this state after a grace window, then the
+    // server sits idle here (matchmaker won't start a match until players rejoin and ready up).
+    // Reading it keeps that reset idempotent: it fires once per empty spell, not every tick.
+    public bool IsIdle => Phase == PhaseLobby && _order.Count == 0 && !_matchDirty;
 
     public uint Tick => _tick;
     public int ShipCount => _order.Count;
@@ -381,8 +385,9 @@ public sealed partial class Simulation
         }
     }
 
-    // Restore a fresh lobby on an empty server (called from the loop when the last client
-    // leaves). Tears the match down to a clean Lobby so the next handoff readies up afresh.
+    // Restore a fresh lobby on an empty server (called from the sim loop a grace period after
+    // the last client leaves). Tears the match down to a clean idle Lobby so the next handoff
+    // readies up afresh, and the server sits idle until then.
     public void ResetMatch() => ReturnToLobby();
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale

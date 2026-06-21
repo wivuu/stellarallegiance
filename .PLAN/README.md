@@ -19,6 +19,7 @@ Archives:
 - Code cleanup and refactor
 - Implement client-update mechanism that checks for new releases
   - Ban old game servers from appearing in public server list.
+- Improve the booster effect to look more like a cohesive plume of smoke rather than individual particles/sprites.
 ---
 
 ## Roadmap (prioritized)

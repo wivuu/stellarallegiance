@@ -10271,7 +10271,7 @@
       "label": ".EnqueueJoin()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L188",
+      "source_location": "L192",
       "id": "sim_simulation_simulation_enqueuejoin",
       "community": 42,
       "norm_label": ".enqueuejoin()"
@@ -10280,7 +10280,7 @@
       "label": ".EnqueueLeave()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L193",
+      "source_location": "L197",
       "id": "sim_simulation_simulation_enqueueleave",
       "community": 42,
       "norm_label": ".enqueueleave()"
@@ -10289,7 +10289,7 @@
       "label": ".EnqueueInput()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L198",
+      "source_location": "L202",
       "id": "sim_simulation_simulation_enqueueinput",
       "community": 42,
       "norm_label": ".enqueueinput()"
@@ -10298,7 +10298,7 @@
       "label": ".ShipIdOf()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L203",
+      "source_location": "L207",
       "id": "sim_simulation_simulation_shipidof",
       "community": 28,
       "norm_label": ".shipidof()"
@@ -10307,7 +10307,7 @@
       "label": ".Step()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L210",
+      "source_location": "L214",
       "id": "sim_simulation_simulation_step",
       "community": 42,
       "norm_label": ".step()"
@@ -10316,7 +10316,7 @@
       "label": ".DrainQueues()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L343",
+      "source_location": "L347",
       "id": "sim_simulation_simulation_drainqueues",
       "community": 42,
       "norm_label": ".drainqueues()"
@@ -10325,7 +10325,7 @@
       "label": ".ResetMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L386",
+      "source_location": "L391",
       "id": "sim_simulation_simulation_resetmatch",
       "community": 42,
       "norm_label": ".resetmatch()"
@@ -10334,7 +10334,7 @@
       "label": ".StartMatch()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L390",
+      "source_location": "L395",
       "id": "sim_simulation_simulation_startmatch",
       "community": 42,
       "norm_label": ".startmatch()"
@@ -10343,7 +10343,7 @@
       "label": ".ReturnToLobby()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L406",
+      "source_location": "L411",
       "id": "sim_simulation_simulation_returntolobby",
       "community": 42,
       "norm_label": ".returntolobby()"
@@ -10352,7 +10352,7 @@
       "label": ".SpawnCombatShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L427",
+      "source_location": "L432",
       "id": "sim_simulation_simulation_spawncombatship",
       "community": 42,
       "norm_label": ".spawncombatship()"
@@ -10361,7 +10361,7 @@
       "label": ".PlaceAtBase()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L451",
+      "source_location": "L456",
       "id": "sim_simulation_simulation_placeatbase",
       "community": 42,
       "norm_label": ".placeatbase()"
@@ -10370,7 +10370,7 @@
       "label": ".ProcessRespawns()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L497",
+      "source_location": "L502",
       "id": "sim_simulation_simulation_processrespawns",
       "community": 42,
       "norm_label": ".processrespawns()"
@@ -10379,7 +10379,7 @@
       "label": ".InputFor()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L516",
+      "source_location": "L521",
       "id": "sim_simulation_simulation_inputfor",
       "community": 42,
       "norm_label": ".inputfor()"
@@ -10388,7 +10388,7 @@
       "label": ".ResolveDeath()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L530",
+      "source_location": "L535",
       "id": "sim_simulation_simulation_resolvedeath",
       "community": 42,
       "norm_label": ".resolvedeath()"
@@ -10397,7 +10397,7 @@
       "label": ".EjectPlayerPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L543",
+      "source_location": "L548",
       "id": "sim_simulation_simulation_ejectplayerpod",
       "community": 42,
       "norm_label": ".ejectplayerpod()"
@@ -10406,7 +10406,7 @@
       "label": ".MakePod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L555",
+      "source_location": "L560",
       "id": "sim_simulation_simulation_makepod",
       "community": 42,
       "norm_label": ".makepod()"
@@ -10415,7 +10415,7 @@
       "label": ".KillPod()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L586",
+      "source_location": "L591",
       "id": "sim_simulation_simulation_killpod",
       "community": 42,
       "norm_label": ".killpod()"
@@ -10424,7 +10424,7 @@
       "label": ".DockShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L599",
+      "source_location": "L604",
       "id": "sim_simulation_simulation_dockship",
       "community": 42,
       "norm_label": ".dockship()"
@@ -10433,7 +10433,7 @@
       "label": ".ClearClientShip()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L612",
+      "source_location": "L617",
       "id": "sim_simulation_simulation_clearclientship",
       "community": 42,
       "norm_label": ".clearclientship()"
@@ -10442,7 +10442,7 @@
       "label": ".RemoveShipNow()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L620",
+      "source_location": "L625",
       "id": "sim_simulation_simulation_removeshipnow",
       "community": 42,
       "norm_label": ".removeshipnow()"
@@ -10451,7 +10451,7 @@
       "label": ".ApplyStructural()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L629",
+      "source_location": "L634",
       "id": "sim_simulation_simulation_applystructural",
       "community": 42,
       "norm_label": ".applystructural()"
@@ -10460,7 +10460,7 @@
       "label": ".RandomUnitVec()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L653",
+      "source_location": "L658",
       "id": "sim_simulation_simulation_randomunitvec",
       "community": 42,
       "norm_label": ".randomunitvec()"
@@ -10469,7 +10469,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L653",
+      "source_location": "L658",
       "id": "server_sim_simulation_cs_vec3",
       "community": 42,
       "norm_label": "vec3"
@@ -10478,7 +10478,7 @@
       "label": ".TryFire()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L663",
+      "source_location": "L668",
       "id": "sim_simulation_simulation_tryfire",
       "community": 42,
       "norm_label": ".tryfire()"
@@ -10487,7 +10487,7 @@
       "label": ".FireBolt()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L683",
+      "source_location": "L688",
       "id": "sim_simulation_simulation_firebolt",
       "community": 42,
       "norm_label": ".firebolt()"
@@ -10496,7 +10496,7 @@
       "label": ".ResolveDueShots()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L774",
+      "source_location": "L779",
       "id": "sim_simulation_simulation_resolvedueshots",
       "community": 42,
       "norm_label": ".resolvedueshots()"
@@ -10505,7 +10505,7 @@
       "label": ".FirstEntryTime()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L806",
+      "source_location": "L811",
       "id": "sim_simulation_simulation_firstentrytime",
       "community": 42,
       "norm_label": ".firstentrytime()"
@@ -10514,7 +10514,7 @@
       "label": ".CellsAlongRay()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L830",
+      "source_location": "L835",
       "id": "sim_simulation_simulation_cellsalongray",
       "community": 42,
       "norm_label": ".cellsalongray()"
@@ -10523,7 +10523,7 @@
       "label": "IEnumerable",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L830",
+      "source_location": "L835",
       "id": "server_sim_simulation_cs_ienumerable",
       "community": 42,
       "norm_label": "ienumerable"
@@ -10532,7 +10532,7 @@
       "label": ".RebuildShipGrid()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L850",
+      "source_location": "L855",
       "id": "sim_simulation_simulation_rebuildshipgrid",
       "community": 42,
       "norm_label": ".rebuildshipgrid()"
@@ -10541,7 +10541,7 @@
       "label": ".CollideShips()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L872",
+      "source_location": "L877",
       "id": "sim_simulation_simulation_collideships",
       "community": 42,
       "norm_label": ".collideships()"
@@ -10550,7 +10550,7 @@
       "label": ".ShipSphereContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L892",
+      "source_location": "L897",
       "id": "sim_simulation_simulation_shipspherecontact",
       "community": 42,
       "norm_label": ".shipspherecontact()"
@@ -10559,7 +10559,7 @@
       "label": ".ShipHullContact()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L907",
+      "source_location": "L912",
       "id": "sim_simulation_simulation_shiphullcontact",
       "community": 42,
       "norm_label": ".shiphullcontact()"
@@ -10568,7 +10568,7 @@
       "label": "ShipBody",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L907",
+      "source_location": "L912",
       "id": "server_sim_simulation_cs_shipbody",
       "community": 42,
       "norm_label": "shipbody"
@@ -10577,7 +10577,7 @@
       "label": ".ResolveShipImpulse()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L936",
+      "source_location": "L941",
       "id": "sim_simulation_simulation_resolveshipimpulse",
       "community": 42,
       "norm_label": ".resolveshipimpulse()"
@@ -10586,7 +10586,7 @@
       "label": ".ResolveAsteroidCollisions()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L956",
+      "source_location": "L961",
       "id": "sim_simulation_simulation_resolveasteroidcollisions",
       "community": 42,
       "norm_label": ".resolveasteroidcollisions()"
@@ -10595,7 +10595,7 @@
       "label": ".ResolveBaseCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L982",
+      "source_location": "L987",
       "id": "sim_simulation_simulation_resolvebasecollision",
       "community": 42,
       "norm_label": ".resolvebasecollision()"
@@ -10604,7 +10604,7 @@
       "label": ".ResolveHullCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L993",
+      "source_location": "L998",
       "id": "sim_simulation_simulation_resolvehullcollision",
       "community": 42,
       "norm_label": ".resolvehullcollision()"
@@ -10613,7 +10613,7 @@
       "label": "ConvexHull",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L993",
+      "source_location": "L998",
       "id": "server_sim_simulation_cs_convexhull",
       "community": 42,
       "norm_label": "convexhull"
@@ -10622,7 +10622,7 @@
       "label": "Quat",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L993",
+      "source_location": "L998",
       "id": "server_sim_simulation_cs_quat",
       "community": 42,
       "norm_label": "quat"
@@ -10631,7 +10631,7 @@
       "label": ".SphereVsHull()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1003",
+      "source_location": "L1008",
       "id": "sim_simulation_simulation_spherevshull",
       "community": 42,
       "norm_label": ".spherevshull()"
@@ -10640,7 +10640,7 @@
       "label": ".IntersectsDockDisc()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1027",
+      "source_location": "L1032",
       "id": "sim_simulation_simulation_intersectsdockdisc",
       "community": 42,
       "norm_label": ".intersectsdockdisc()"
@@ -10649,7 +10649,7 @@
       "label": ".ApplyBounce()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1045",
+      "source_location": "L1050",
       "id": "sim_simulation_simulation_applybounce",
       "community": 42,
       "norm_label": ".applybounce()"
@@ -10658,7 +10658,7 @@
       "label": ".HullRayEntry()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1058",
+      "source_location": "L1063",
       "id": "sim_simulation_simulation_hullrayentry",
       "community": 42,
       "norm_label": ".hullrayentry()"
@@ -10667,7 +10667,7 @@
       "label": ".ResolveStaticCollision()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1070",
+      "source_location": "L1075",
       "id": "sim_simulation_simulation_resolvestaticcollision",
       "community": 42,
       "norm_label": ".resolvestaticcollision()"
@@ -10676,7 +10676,7 @@
       "label": ".TryWarp()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1093",
+      "source_location": "L1098",
       "id": "sim_simulation_simulation_trywarp",
       "community": 42,
       "norm_label": ".trywarp()"
@@ -10685,7 +10685,7 @@
       "label": ".LookRotationZ()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1130",
+      "source_location": "L1135",
       "id": "sim_simulation_simulation_lookrotationz",
       "community": 42,
       "norm_label": ".lookrotationz()"
@@ -10694,7 +10694,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/Simulation.cs",
-      "source_location": "L1138",
+      "source_location": "L1143",
       "id": "sim_simulation_simulation_dot",
       "community": 42,
       "norm_label": ".dot()"
@@ -15437,9 +15437,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scripts_camerarig_camerarig",
-      "target": "client_scripts_camerarig_cs_float",
-      "confidence_score": 1.0
+      "target": "client_scripts_camerarig_cs_float"
     },
     {
       "relation": "references",
@@ -15469,9 +15469,9 @@
       "source_file": "client/scripts/CameraRig.cs",
       "source_location": "L34",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_camerarig_camerarig",
-      "target": "scripts_camerarig_camerarig_input",
-      "confidence_score": 1.0
+      "target": "scripts_camerarig_camerarig_input"
     },
     {
       "relation": "method",
@@ -15533,9 +15533,9 @@
       "source_location": "L34",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scripts_camerarig_camerarig_input",
-      "target": "client_scripts_camerarig_cs_inputevent",
-      "confidence_score": 1.0
+      "target": "client_scripts_camerarig_cs_inputevent"
     },
     {
       "relation": "contains",
@@ -43462,5 +43462,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "29123fc03ec4eba2056a1ed8691ecc2f614ae3a3"
+  "built_at_commit": "f00c59ba5209d361aa32cff1e809028ec3158624"
 }
