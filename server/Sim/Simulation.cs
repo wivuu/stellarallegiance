@@ -1,4 +1,5 @@
 using StellarAllegiance.Shared;
+using SimServer.Assets;
 
 namespace SimServer.Sim;
 
@@ -13,13 +14,13 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     public const uint TickHz = 20;
-    private const uint RespawnDelayTicks = 3 * TickHz;
     private const int ShotRingSize = 64;          // > max ProjectileLifeTicks
 
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255;             // reserved "class" selecting the Pod flight profile
     private const float PodMaxHull = 20f;         // an ejected pod's low starting hull
     private const float DockRadiusFrac = 0.9f;    // dock when within this fraction of your OWN base radius
+    private const float LaunchSpeed = 80f;        // u/s catapult out of the docking-exit hardpoint on spawn
     private static readonly float RescueRadius = World.ShipRadius * 4f;  // pickup distance (no need to directly intersect)
     private const float PodEjectSpeed = 90f;      // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f;        // rad/s initial tumble (decays via angular drag)
@@ -251,15 +252,34 @@ public sealed partial class Simulation
                 if (b.SectorId != s.SectorId) continue;
                 if (b.Team != s.Team)
                 {
-                    ResolveStaticCollision(s, b.Pos, World.BaseRadius);
+                    ResolveBaseCollision(s, b.Pos);   // enemy base: fully solid hull
                     continue;
                 }
-                float dockR = World.BaseRadius * DockRadiusFrac;
-                if ((s.State.Pos - b.Pos).LengthSquared() <= dockR * dockR)
+                // Own base: with a loaded hull you dock ONLY by flying your ship into a docking cone's
+                // base disc (the green debug cones) — the rest of the base is a solid hull that bounces
+                // you. Without a model, fall back to the legacy core-sphere dock so docking can't break.
+                Vec3 d = s.State.Pos - b.Pos;
+                if (World.BaseHull is ConvexHull baseHull)
                 {
-                    DockShip(s, tick);
-                    docked = true;
-                    break;
+                    if (IntersectsDockDisc(d))
+                    {
+                        DockShip(s, tick);   // intersected an entrance cone's base disc
+                        docked = true;
+                        break;
+                    }
+                    // Base is identity-oriented at scale 1, so its local frame == world (offset by center).
+                    if (baseHull.ResolveSphere(d, World.ShipRadius, out Vec3 bn, out float bpen, out _))
+                        ApplyBounce(s, bn, bpen);   // solid shell everywhere else
+                }
+                else
+                {
+                    float dockR = World.BaseRadius * DockRadiusFrac;
+                    if (d.LengthSquared() <= dockR * dockR)
+                    {
+                        DockShip(s, tick);
+                        docked = true;
+                        break;
+                    }
                 }
             }
             if (docked)
@@ -393,8 +413,10 @@ public sealed partial class Simulation
         return s;
     }
 
-    // Position a ship just outside its team base, facing the sector center (shared by player
-    // and PIG spawns; `clearance` is added to the base+ship radii along the outward axis).
+    // Position a ship just outside its team base, launched out of the base's DOCKING-EXIT
+    // hardpoint (World.BaseExitDir, from the GLB). Without a loaded model it falls back to the
+    // pre-hull behavior: outward toward the sector center. `clearance` is added past the base
+    // radius so the spawn sits clear of the solid shell (won't instantly re-dock).
     private void PlaceAtBase(ShipSim s, float clearance, uint tick)
     {
         Vec3 basePos = default;
@@ -402,17 +424,34 @@ public sealed partial class Simulation
         foreach (var b in World.Bases)
             if (b.Team == s.Team) { basePos = b.Pos; sector = b.SectorId; break; }
 
-        float dirLen = basePos.Length();
-        Vec3 outward = dirLen > 1e-3f ? basePos * (-1f / dirLen) : new Vec3(0f, 0f, 1f);
-        float offset = World.BaseRadius + clearance;
-        float yaw = MathF.Atan2(-basePos.X, -basePos.Z);
+        Vec3 outward;
+        Quat rot;
+        Vec3 spawnPos;
+        if (World.BaseHull is not null)
+        {
+            // Catapult out of the exit cone: start at its base disc (the DockingExit hardpoint) and
+            // fling along the cone axis toward the tip, nudged out by `clearance` so the ship clears
+            // the bay mouth. (The cone base sits at the hull surface, so any residual overlap is a
+            // benign outward pop — ApplyBounce never damages a ship already moving outward.)
+            outward = World.BaseExitDir;
+            rot = LookRotationZ(outward);
+            spawnPos = basePos + World.BaseExitPos + outward * clearance;
+        }
+        else
+        {
+            float dirLen = basePos.Length();
+            outward = dirLen > 1e-3f ? basePos * (-1f / dirLen) : new Vec3(0f, 0f, 1f);
+            float yaw = MathF.Atan2(-basePos.X, -basePos.Z);
+            rot = new Quat(0f, MathF.Sin(yaw * 0.5f), 0f, MathF.Cos(yaw * 0.5f));
+            spawnPos = basePos + outward * (World.BaseRadius + clearance);
+        }
 
         s.SectorId = sector;
         s.State = new ShipState
         {
-            Pos = basePos + outward * offset,
-            Vel = default,
-            Rot = new Quat(0f, MathF.Sin(yaw * 0.5f), 0f, MathF.Cos(yaw * 0.5f)),
+            Pos = spawnPos,
+            Vel = outward * LaunchSpeed,   // catapult out of the bay instead of drifting
+            Rot = rot,
             AngVel = default,
             Mass = s.State.Mass,
             AbPower = 0f,
@@ -511,34 +550,38 @@ public sealed partial class Simulation
         return pod;
     }
 
-    // A pod resolved by reaching 0 health: a player pod schedules the owner's respawn; a PIG
-    // pod frees its slot. Pods never eject pods.
+    // A pod resolved by reaching 0 health: a player pod returns its owner to the spawn menu; a
+    // PIG pod frees its slot. Pods never eject pods.
     private void KillPod(ShipSim pod, uint tick)
     {
         _toRemove.Add(pod);
         if (pod.IsPig)
             FreePigPodSlot(pod, 0u, tick);      // destroyed: slot rejoins the next squad wave
         else if (pod.OwnerClientId >= 0)
-            ScheduleRespawn(pod.OwnerClientId, tick + RespawnDelayTicks);
+            ClearClientShip(pod.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
     }
 
     // A ship/pod reached its OWN base (voluntary dock, pod flew home, or rescue): a clean
-    // resolution — no pod ejection, no respawn penalty. Player ship/pod -> scheduled respawn;
-    // PIG pod -> slot freed with an immediate respawn so the drone rejoins the wave.
+    // resolution — no pod ejection. A player is returned to the spawn menu and relaunches on
+    // demand (no auto-respawn); a PIG pod frees its slot with an immediate respawn so the drone
+    // rejoins the wave.
     private void DockShip(ShipSim s, uint tick)
     {
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)
-            ScheduleRespawn(s.OwnerClientId, tick + RespawnDelayTicks);
+            ClearClientShip(s.OwnerClientId);   // player: wait for a manual relaunch (spawn menu)
     }
 
-    private void ScheduleRespawn(int clientId, uint atTick)
+    // A player lost their live ship (docked safely, or their escape pod was destroyed). Drop the
+    // ship binding so the client's spawn menu reopens, but DON'T schedule a respawn: the player
+    // chooses when (and which class) to relaunch by sending MsgSpawn. Replaces the old timed
+    // auto-respawn so a dock no longer flings you straight back out.
+    private void ClearClientShip(int clientId)
     {
-        _byClient.Remove(clientId);            // no live ship until the respawn fires
-        if (_clientInfo.ContainsKey(clientId)) // still connected
-            _clientRespawn[clientId] = atTick;
+        _byClient.Remove(clientId);
+        _clientRespawn.Remove(clientId);
     }
 
     // Remove a ship from the world immediately (used at join-drain time, before the step's
@@ -609,7 +652,10 @@ public sealed partial class Simulation
             {
                 var b = World.Bases[i];
                 if (b.SectorId != ship.SectorId || b.Team == ship.Team) continue;
-                if (FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out float t) && t < bestT)
+                bool hit = World.BaseHull is ConvexHull bh
+                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, mv, World.ProjectileRadius, bestT, out float t)
+                    : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
+                if (hit && t < bestT)
                 {
                     bestT = t; targetBase = i; targetShip = 0;
                 }
@@ -625,10 +671,30 @@ public sealed partial class Simulation
                 foreach (var s in shipsInCell)
                 {
                     if (s.Team == ship.Team || !s.Alive) continue;
-                    float r = World.ShipRadius + World.ProjectileRadius;
-                    if (FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
+                    var body = World.ShipHull(s.Class, s.IsPod);
+                    if (body is World.ShipBody sb)
                     {
-                        bestT = t; targetShip = s.ShipId; targetBase = -1;
+                        // Bounding-sphere pre-test (accounts for the ship's drift via its velocity),
+                        // then the ship's convex hull. The hull is static at the ship's current pose
+                        // for the bolt's short flight; the ship's linear drift is folded into the ray
+                        // by using the bolt-relative velocity (mv − ship velocity), exactly as the
+                        // sphere FirstEntryTime uses the relative velocity.
+                        float br = sb.BoundingRadius + World.ProjectileRadius;
+                        if (!FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, br, bestT, out _)) continue;
+                        Vec3 vrel = mv - s.State.Vel;
+                        if (HullRayEntry(sb.Hull, s.State.Pos, s.State.Rot, 1f, mp, vrel, World.ProjectileRadius, bestT, out float th)
+                            && th < bestT)
+                        {
+                            bestT = th; targetShip = s.ShipId; targetBase = -1;
+                        }
+                    }
+                    else
+                    {
+                        float r = World.ShipRadius + World.ProjectileRadius;
+                        if (FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
+                        {
+                            bestT = t; targetShip = s.ShipId; targetBase = -1;
+                        }
                     }
                 }
             }
@@ -636,8 +702,14 @@ public sealed partial class Simulation
             {
                 foreach (var a in rocks)
                 {
+                    // Bounding-sphere pre-test, then the rock's convex hull if it has one.
                     float r = a.Radius * World.AsteroidCollisionScale + World.ProjectileRadius;
-                    if (FirstEntryTime(mp, mv, a.Pos, default, r, bestT, out float t) && t < bestT)
+                    if (!FirstEntryTime(mp, mv, a.Pos, default, a.Radius + World.ProjectileRadius, bestT, out _))
+                        continue;
+                    bool hit = World.RockBodies.TryGetValue(a.Id, out var body)
+                        ? HullRayEntry(body.Hull, a.Pos, body.Rot, body.Scale, mp, mv, World.ProjectileRadius, bestT, out float t)
+                        : FirstEntryTime(mp, mv, a.Pos, default, r, bestT, out t);
+                    if (hit && t < bestT)
                     {
                         bestT = t; targetShip = 0; targetBase = -1;   // stopped by a rock
                     }
@@ -746,15 +818,77 @@ public sealed partial class Simulation
 
     // ---- Collisions (module Pass C, mass-weighted) ------------------------
 
+    // Enemy ship-vs-ship contact. With both ships' GLB hulls loaded the contact is resolved as a
+    // ShipRadius sphere against the OTHER ship's convex hull (the same kernel asteroids/bases use),
+    // so a long bomber or a wide fighter collides on its real silhouette; without hulls it falls
+    // back to the legacy equal-radius sphere overlap. Either way the resolution is the module's
+    // mass-weighted impulse + inverse-mass-split push-out along the contact normal n (b → a).
     private void CollideShips(ShipSim a, ShipSim b)
+    {
+        var ha = World.ShipHull(a.Class, a.IsPod);
+        var hb = World.ShipHull(b.Class, b.IsPod);
+
+        Vec3 n;
+        float pen;
+        if (ha is null && hb is null)
+        {
+            if (!ShipSphereContact(a, b, out n, out pen)) return;
+        }
+        else if (!ShipHullContact(a, b, ha, hb, out n, out pen))
+        {
+            return;
+        }
+
+        ResolveShipImpulse(a, b, n, pen);
+    }
+
+    // Legacy equal-radius sphere overlap. n points b → a (the separation axis), pen is the overlap.
+    private static bool ShipSphereContact(ShipSim a, ShipSim b, out Vec3 n, out float pen)
     {
         Vec3 d = a.State.Pos - b.State.Pos;
         float dist2 = d.LengthSquared();
         float minD = 2f * World.ShipRadius;
-        if (dist2 >= minD * minD) return;
-
+        if (dist2 >= minD * minD) { n = default; pen = 0f; return false; }
         float dist = MathF.Sqrt(dist2);
-        Vec3 n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+        n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+        pen = minD - dist;
+        return true;
+    }
+
+    // Hull-aware contact: each ship's center, as a ShipRadius sphere, tested against the other's
+    // hull; the deeper of the two contacts wins (the convex analogue of the sphere overlap). n is
+    // oriented b → a so the shared impulse step pushes them apart correctly.
+    private static bool ShipHullContact(ShipSim a, ShipSim b, World.ShipBody? ha, World.ShipBody? hb,
+        out Vec3 n, out float pen)
+    {
+        n = default; pen = 0f;
+
+        // Broad-phase: the two world bounding spheres (hull bound, or ShipRadius without a hull).
+        float ra = ha?.BoundingRadius ?? World.ShipRadius;
+        float rb = hb?.BoundingRadius ?? World.ShipRadius;
+        float bound = ra + rb;
+        if ((a.State.Pos - b.State.Pos).LengthSquared() >= bound * bound) return false;
+
+        // a's center vs b's hull → normal already points out of b toward a (= b → a).
+        if (hb is World.ShipBody bbody &&
+            SphereVsHull(a.State.Pos, World.ShipRadius, bbody.Hull, b.State.Pos, b.State.Rot, 1f, out Vec3 nB, out float pB))
+        {
+            n = nB; pen = pB;
+        }
+        // b's center vs a's hull → normal points out of a toward b (a → b); negate to b → a.
+        if (ha is World.ShipBody abody &&
+            SphereVsHull(b.State.Pos, World.ShipRadius, abody.Hull, a.State.Pos, a.State.Rot, 1f, out Vec3 nA, out float pA)
+            && pA > pen)
+        {
+            n = nA * -1f; pen = pA;
+        }
+        return pen > 0f;
+    }
+
+    // Module-identical mass-weighted bounce: restitution impulse + collision damage when closing,
+    // and an inverse-mass-split positional correction along n (which points b → a).
+    private static void ResolveShipImpulse(ShipSim a, ShipSim b, Vec3 n, float pen)
+    {
         float iA = a.State.Mass > 0f ? 1f / a.State.Mass : 1f;
         float iB = b.State.Mass > 0f ? 1f / b.State.Mass : 1f;
         float invSum = iA + iB;
@@ -769,7 +903,6 @@ public sealed partial class Simulation
             a.Health -= dmg;
             b.Health -= dmg;
         }
-        float pen = minD - dist;
         a.State.Pos += n * (pen * (iA / invSum));
         b.State.Pos -= n * (pen * (iB / invSum));
     }
@@ -785,8 +918,107 @@ public sealed partial class Simulation
             if (!grid.TryGetValue((gx, gy, gz), out var cell))
                 continue;
             foreach (var a in cell)
-                ResolveStaticCollision(s, a.Pos, a.Radius * World.AsteroidCollisionScale);
+            {
+                // Cheap bounding-sphere reject (rock.Radius is the visual/world bound), then the
+                // convex hull if this rock has one — else the legacy sphere.
+                Vec3 dd = s.State.Pos - a.Pos;
+                float bound = a.Radius + World.ShipRadius;
+                if (dd.LengthSquared() >= bound * bound) continue;
+                if (World.RockBodies.TryGetValue(a.Id, out var body))
+                    ResolveHullCollision(s, body.Hull, a.Pos, body.Rot, body.Scale);
+                else
+                    ResolveStaticCollision(s, a.Pos, a.Radius * World.AsteroidCollisionScale);
+            }
         }
+    }
+
+    // Bounce a ship off a base: the loaded world hull if present, else the legacy radius sphere.
+    private void ResolveBaseCollision(ShipSim s, Vec3 center)
+    {
+        if (World.BaseHull is ConvexHull hull)
+            ResolveHullCollision(s, hull, center, Quat.Identity, 1f);
+        else
+            ResolveStaticCollision(s, center, World.BaseRadius);
+    }
+
+    // Sphere-vs-convex-hull bounce (the convex analogue of ResolveStaticCollision). The hull is
+    // in its own authored frame at (center, rot, uniform scale); SphereVsHull maps the ship sphere
+    // into that frame, resolves against the nearest face, and maps the contact back to world.
+    private static void ResolveHullCollision(ShipSim s, ConvexHull hull, Vec3 center, Quat rot, float scale)
+    {
+        if (SphereVsHull(s.State.Pos, World.ShipRadius, hull, center, rot, scale, out Vec3 n, out float pen))
+            ApplyBounce(s, n, pen);
+    }
+
+    // Sphere(center=spherePos, radius) vs a convex hull placed at (center, rot, uniform scale). On
+    // contact returns the WORLD outward normal (out of the hull toward the sphere) and the world
+    // penetration depth. The shared kernel behind every hull bounce — asteroids, bases, and
+    // (treating each ship as a ShipRadius sphere) ship-vs-ship.
+    private static bool SphereVsHull(Vec3 spherePos, float radius, ConvexHull hull,
+        Vec3 center, Quat rot, float scale, out Vec3 worldNormal, out float worldPenetration)
+    {
+        worldNormal = default; worldPenetration = 0f;
+        if (scale <= 1e-6f) return false;
+        float inv = 1f / scale;
+        Quat rotInv = rot.Conjugate();
+        Vec3 localP = rotInv.Rotate(spherePos - center) * inv;
+        float localR = radius * inv;
+        if (!hull.ResolveSphere(localP, localR, out Vec3 localN, out float pen)) return false;
+
+        Vec3 n = rot.Rotate(localN);   // rotation preserves length; uniform scale doesn't tilt normals
+        float nl = n.Length();
+        worldNormal = nl > 1e-6f ? n * (1f / nl) : new Vec3(0f, 1f, 0f);
+        worldPenetration = pen * scale;   // penetration is in local units → ×scale to world
+        return true;
+    }
+
+    // True when the ship sphere intersects a docking cone's base disc (the green debug cones): the
+    // ship center is at/just inside the disc plane and within the disc radius laterally. `d` is the
+    // ship position relative to the base center (disc Pos/Normal are in that same base-local frame).
+    // The inward slack (−DockDiscRadius) keeps a fast ship from tunneling through the thin disc plane
+    // in one tick; lateral uses radius+ShipRadius so the ship's hull (not just its center) must reach
+    // the disc. This is the ONLY way to dock at a hull base — everything else is the solid shell.
+    private bool IntersectsDockDisc(Vec3 d)
+    {
+        var discs = World.BaseDockDiscs;
+        float r = World.DockDiscRadius + World.ShipRadius;
+        for (int i = 0; i < discs.Length; i++)
+        {
+            Vec3 rel = d - discs[i].Pos;
+            float along = Dot(rel, discs[i].Normal);
+            if (along > World.ShipRadius || along < -World.DockDiscRadius) continue;
+            Vec3 lateral = rel - discs[i].Normal * along;
+            if (lateral.LengthSquared() <= r * r) return true;
+        }
+        return false;
+    }
+
+    // Bounce a ship off a contact: damp + reflect inbound velocity along the world-space contact
+    // normal and push out of penetration. Shared by ResolveHullCollision (asteroids, enemy base) and
+    // the friendly-base solid-shell branch (identity transform → normal/penetration already world).
+    private static void ApplyBounce(ShipSim s, Vec3 worldNormal, float worldPenetration)
+    {
+        float vn = Dot(s.State.Vel, worldNormal);
+        if (vn < 0f)
+        {
+            s.Health -= MathF.Min(-vn * World.CollisionDamageScale, World.MaxCollisionDamage);
+            s.State.Vel -= worldNormal * ((1f + World.CollisionRestitution) * vn);
+        }
+        s.State.Pos += worldNormal * worldPenetration;
+    }
+
+    // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the
+    // ray into hull-local space; t is invariant under the rigid+uniform-scale transform.
+    private static bool HullRayEntry(ConvexHull hull, Vec3 center, Quat rot, float scale,
+        Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    {
+        t = 0f;
+        if (scale <= 1e-6f) return false;
+        float inv = 1f / scale;
+        Quat rotInv = rot.Conjugate();
+        Vec3 o = rotInv.Rotate(mp - center) * inv;
+        Vec3 dir = rotInv.Rotate(mv) * inv;
+        return hull.RayEntry(o, dir, maxT, margin * inv, out t);
     }
 
     private static void ResolveStaticCollision(ShipSim s, Vec3 center, float radius)

@@ -108,12 +108,13 @@ public static class ShipModelLoader
         // hardpoints always arrives before its ship spawns, see DefRegistry.)
         if (!isPod && nozzles.Count > 0)
         {
-            (float radius, float plume, float range) = cls switch
-            {
-                ShipClass.Fighter => (0.6f, 3.8f, 18f),
-                ShipClass.Bomber => (0.75f, 4.2f, 20f),
-                _ => (0.85f, 3.5f, 15f),
-            };
+            // Size the flame off the hull's silhouette length so a Scout's exhaust isn't as big
+            // as a Bomber's, and keep it deliberately small relative to the hull (the old
+            // per-class constants over-sized the glow — the Scout worst of all).
+            float len = TargetLength(cls, isPod);
+            float radius = len * 0.10f;   // flame mouth radius
+            float plume = len * 0.55f;    // plume length (before the afterburner stretch)
+            float range = len * 2.6f;     // engine-wash light reach
             var glow = new EngineGlow
             {
                 Name = "EngineGlow",

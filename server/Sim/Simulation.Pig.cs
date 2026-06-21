@@ -30,8 +30,8 @@ public sealed partial class Simulation
     private const int MaxPigsPerTeam = 5;
     private const uint PigSquadDelayTicks = 10 * TickHz;   // 10 s after a wipe before the next squad
     private const uint PigAggroWindowTicks = 3 * TickHz;   // ~3 s aggression memory
-    private const float PigPatrolRadius = 400f;
-    private const float PigPatrolAngRate = 0.05f;
+    private const float PigPatrolReachFrac = 0.7f;   // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
+    private const float PigPatrolArrive = 120f;      // re-roll a patrol waypoint once within this distance of it
     private const float PigRadarRange = 1200f;
     private const float PigFireRange = 360f;
     private const float PigStandoff = 90f;
@@ -82,6 +82,12 @@ public sealed partial class Simulation
         public uint RespawnAtTick;     // staggered launch tick within an active squad
         public PigState State;
         public ulong? TargetShipId;
+
+        // Roaming patrol: a random waypoint the drone flies to when it has no combat goal,
+        // re-rolled on arrival or when the drone changes sector (see MakePatrolPlan).
+        public Vec3 PatrolPoint;
+        public bool HasPatrolPoint;
+        public uint PatrolSector;
     }
 
     // What the brain DECIDED for one drone this cycle; PigExecute re-steers from it at 20 Hz.
@@ -301,6 +307,7 @@ public sealed partial class Simulation
         slot.Ship = s;
         slot.State = PigState.Idle;
         slot.TargetShipId = null;
+        slot.HasPatrolPoint = false;   // fresh drone rolls its own patrol waypoint
     }
 
     // A PIG combat drone died: eject a PIG pod (auto-flies home via PodThink) and point the
@@ -555,11 +562,41 @@ public sealed partial class Simulation
         return null;
     }
 
-    // Default: sweep a ring around the sector center (origin in this world).
+    // Default: roam the sector. Each drone holds a random waypoint and flies to it; once it
+    // arrives (or crosses into a new sector) it rolls a fresh one, so the squad spreads out and
+    // sweeps the whole sector instead of orbiting the center — which keeps drones moving through
+    // the radar range of enemies anywhere in the sector, where the priority chain above takes
+    // over (TryChaseEnemy etc.). A drone with no slot (shouldn't happen for a live pig) just
+    // holds the center.
     private PigPlan MakePatrolPlan(in PigContext ctx)
     {
-        if (ctx.Slot is PigSlot sp) { sp.State = PigState.Patrol; sp.TargetShipId = null; }
-        return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = 0f, Py = 0f, Pz = 0f };
+        if (ctx.Slot is not PigSlot sp)
+            return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = 0f, Py = 0f, Pz = 0f };
+
+        sp.State = PigState.Patrol;
+        sp.TargetShipId = null;
+        if (!sp.HasPatrolPoint || sp.PatrolSector != ctx.Me.SectorId
+            || (sp.PatrolPoint - ctx.MyPos).LengthSquared() <= PigPatrolArrive * PigPatrolArrive)
+        {
+            sp.PatrolPoint = RandomPatrolPoint(ctx.Me.SectorId);
+            sp.PatrolSector = ctx.Me.SectorId;
+            sp.HasPatrolPoint = true;
+        }
+        return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = sp.PatrolPoint.X, Py = sp.PatrolPoint.Y, Pz = sp.PatrolPoint.Z };
+    }
+
+    // A random patrol waypoint inside the sector: uniform over a disc kept clear of the
+    // boundary, with a flatter vertical spread (the playfield is wide and shallow). Server-only
+    // RNG — drones are never predicted, so this needs no determinism contract.
+    private Vec3 RandomPatrolPoint(uint sector)
+    {
+        float radius = World.SectorRadius(sector);
+        if (float.IsInfinity(radius) || radius <= 0f) radius = 1000f;
+        float reach = radius * PigPatrolReachFrac;
+        double ang = _rng.NextDouble() * Math.PI * 2.0;
+        double rad = reach * Math.Sqrt(_rng.NextDouble());   // sqrt -> uniform over the disc area
+        float y = (float)((_rng.NextDouble() * 2.0 - 1.0) * reach * 0.25f);
+        return new Vec3((float)(Math.Cos(ang) * rad), y, (float)(Math.Sin(ang) * rad));
     }
 
     // ---- The EXECUTION half (20 Hz): cached decision -> this tick's flight input ----
@@ -585,7 +622,7 @@ public sealed partial class Simulation
             case PigKindAttackPoint:
                 return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius);
             case PigKindPatrol:
-                return PigPatrolFromCenter(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), tick);
+                return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 0.7f);
             default:
                 return default;
         }
@@ -654,16 +691,6 @@ public sealed partial class Simulation
         };
     }
 
-    private ShipInputState PigPatrolFromCenter(ShipSim me, Vec3 myPos, Quat myRot, Vec3 center, uint tick)
-    {
-        float phase = tick * PigPatrolAngRate + me.ShipId * 1.61803399f;
-        Vec3 waypoint = new Vec3(
-            center.X + MathF.Cos(phase) * PigPatrolRadius,
-            center.Y,
-            center.Z + MathF.Sin(phase) * PigPatrolRadius);
-        return PigSteerTo(me, myPos, myRot, waypoint, 0.6f);
-    }
-
     private static bool IsAggressive(ShipSim enemy, uint tick) =>
         !enemy.IsPod && enemy.LastFireTick != 0 && tick - enemy.LastFireTick <= PigAggroWindowTicks;
 
@@ -684,7 +711,13 @@ public sealed partial class Simulation
             {
                 foreach (var b in World.Bases)
                     if (b.Team == me.Team)
-                        return PigSteerTo(me, myPos, myRot, b.Pos, 1f);
+                    {
+                        // Aim at the docking-bay mouth (the entrance-hardpoint centroid) so the
+                        // now-solid hull funnels the pod onto the doorway faces instead of bouncing
+                        // it off. Without a model, fall back to the base center (pre-hull target).
+                        Vec3 aim = World.BaseHull is not null ? b.Pos + World.BaseDoorCenter : b.Pos;
+                        return PigSteerTo(me, myPos, myRot, aim, 1f);
+                    }
             }
         }
         return default;

@@ -1,4 +1,5 @@
 using StellarAllegiance.Shared;
+using SimServer.Assets;
 
 namespace SimServer.Sim;
 
@@ -13,6 +14,7 @@ public sealed class World
     public const float ShipRadius = 3f;
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = 90f;
+    public const float DockDiscRadius = 9f;      // docking cone base-disc radius (sync w/ client BaseModelLoader.DebugConeRadius)
     public const float BaseMaxHealth = 2000f;
     public const float AsteroidCollisionScale = 0.82f;
     public const float CollisionRestitution = 0.3f;
@@ -52,6 +54,48 @@ public sealed class World
     public readonly List<Rock> Asteroids = new();
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
+
+    // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
+    // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
+    // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
+    public readonly SimModel? BaseModel;
+    public readonly ConvexHull? BaseHull;     // base hull in WORLD units (base is identity-oriented)
+    public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay (cone base → tip)
+    public readonly Vec3 BaseExitPos;         // exit cone's base disc (the DockingExit hardpoint), base-local world units
+    public readonly Vec3 BaseEntryAxis;       // mean entrance direction (from DockingEntrance), for AI aim
+    public readonly Vec3 BaseDoorCenter;      // local centroid of the entrance hardpoints (AI aim target)
+    // Docking cone base-discs: one per DockingEntrance hardpoint, in base-local units (offset from
+    // base center). Pos = the hardpoint (= the cone's base), Normal = radial-outward (the cone axis).
+    // A ship docks ONLY by intersecting one of these discs; the rest of the base is a solid hull.
+    public readonly (Vec3 Pos, Vec3 Normal)[] BaseDockDiscs;
+    public readonly Dictionary<ulong, RockBody> RockBodies = new();
+
+    // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
+    // and the uniform scale mapping authored units → this rock's collision size.
+    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale);
+
+    // Per-class ship collision hulls, loaded from the same GLBs the client renders and pre-scaled
+    // to the client's per-class silhouette length (ShipModelLoader.TargetLength), so the hull a
+    // bolt or another ship tests against matches what the player sees. The hull lives in the ship's
+    // local frame at the ship's pose (center = Pos, rotation = Rot); BoundingRadius is its
+    // world-space bounding sphere for broad-phase. Null when a class GLB is absent — the sim then
+    // falls back to the ShipRadius sphere for that class (like asteroids/bases do without a model).
+    public readonly record struct ShipBody(ConvexHull Hull, float BoundingRadius);
+    private readonly ShipBody?[] _shipHulls;   // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
+    private readonly ShipBody? _podHull;
+
+    // Client ShipModelLoader.TargetLength, mirrored here so the server collision hull is scaled to
+    // the exact visual silhouette length the client uniform-scales each GLB to. Keep in sync.
+    private static readonly (string Name, float TargetLen)[] ShipClassAssets =
+    {
+        ("scout", 4.5f), ("fighter", 5.5f), ("bomber", 7.2f),
+    };
+    private const float PodTargetLength = 2.8f;
+
+    // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
+    // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
+    public ShipBody? ShipHull(byte cls, bool isPod)
+        => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
 
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
@@ -103,6 +147,107 @@ public sealed class World
                 grid[key] = cell = new List<Rock>();
             cell.Add(r);
         }
+
+        // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
+        (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
+        LoadRockBodies();
+        (_shipHulls, _podHull) = LoadShipBodies();
+    }
+
+    // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the
+    // client's silhouette length (longestAxis → TargetLen), so the world-frame hull matches the
+    // rendered ship. A missing/degenerate GLB leaves that class on the sphere fallback.
+    private static (ShipBody?[], ShipBody?) LoadShipBodies()
+    {
+        var classes = new ShipBody?[ShipClassAssets.Length];
+        for (int i = 0; i < ShipClassAssets.Length; i++)
+            classes[i] = LoadShipHull($"ships/{ShipClassAssets[i].Name}.glb", ShipClassAssets[i].TargetLen);
+        return (classes, LoadShipHull("ships/pod.glb", PodTargetLength));
+    }
+
+    private static ShipBody? LoadShipHull(string relPath, float targetLen)
+    {
+        var model = SimAssets.TryLoad(relPath);
+        if (model is null || model.LongestAxis <= 1e-3f) return null;
+        float ws = targetLen / model.LongestAxis;
+        return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
+    }
+
+    // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
+    // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
+    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
+    {
+        var model = SimAssets.TryLoad("bases/base.glb");
+        if (model is null) return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
+        float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
+        ConvexHull hull = model.Hull.Scaled(ws);
+        // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
+        // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
+        Vec3 exitDir, exitPos;
+        if (model.FirstHardpoint("HP_DockingExit") is { } ex)
+        {
+            exitPos = ex.Pos * ws;
+            exitDir = Normalize(ex.Pos);
+        }
+        else
+        {
+            exitPos = default;
+            exitDir = new Vec3(0f, 0f, 1f);
+        }
+
+        // Entrance hardpoints in base-local world units (authored * ws): their mean direction is the
+        // AI-aim axis, their centroid is the AI-aim point, and each one is a docking cone base-disc
+        // (Pos = the hardpoint, Normal = radial-outward = the cone axis the client renders).
+        var entrances = new List<Vec3>();
+        foreach (var hp in model.Hardpoints)
+            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal)) entrances.Add(hp.Pos * ws);
+        Vec3 sum = default;
+        foreach (var p in entrances) sum += p;
+        Vec3 entryAxis = entrances.Count > 0 ? Normalize(sum) : exitDir;
+        Vec3 doorCenter = entrances.Count > 0 ? sum * (1f / entrances.Count) : default;
+
+        var discs = new (Vec3, Vec3)[entrances.Count];
+        for (int i = 0; i < entrances.Count; i++)
+            discs[i] = (entrances[i], Normalize(entrances[i]));
+        return (model, hull, exitDir, exitPos, entryAxis, doorCenter, discs);
+    }
+
+    // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
+    // scale + rotation. Rocks whose variant GLB is missing stay sphere-collided (no body added).
+    private void LoadRockBodies()
+    {
+        if (Asteroids.Count == 0) return;
+        var variants = new Dictionary<byte, SimModel?>();
+        foreach (var r in Asteroids)
+        {
+            if (!variants.TryGetValue(r.Variant, out var vm))
+            {
+                string name = AsteroidShapes.NameForIndex(r.Variant);
+                vm = string.IsNullOrEmpty(name) ? null : SimAssets.TryLoad($"asteroids/{name}.glb");
+                variants[r.Variant] = vm;
+            }
+            if (vm is null || vm.Hull.BoundingRadius <= 1e-3f) continue;
+            float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
+            RockBodies[r.Id] = new RockBody(vm.Hull, RockRotation(r.RotX, r.RotY, r.RotZ), scale);
+        }
+    }
+
+    private static Vec3 Normalize(Vec3 v)
+    {
+        float l = v.Length();
+        return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
+    }
+
+    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+    // Godot Node3D.Rotation Euler is YXZ order; the client applies (RotX,RotY,RotZ) that way,
+    // so the server builds q = qY · qX · qZ to collide each rock as it visually renders.
+    private static Quat RockRotation(float rx, float ry, float rz)
+    {
+        Quat qx = Quat.FromRotationVector(new Vec3(rx, 0f, 0f));
+        Quat qy = Quat.FromRotationVector(new Vec3(0f, ry, 0f));
+        Quat qz = Quat.FromRotationVector(new Vec3(0f, 0f, rz));
+        return (qy * qx * qz).Normalized();
     }
 
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>

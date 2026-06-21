@@ -45,8 +45,8 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1781896879.0672581,
-    "ast_hash": "013747257b0d7277324c42b155d250f3",
+    "mtime": 1781969737.9761207,
+    "ast_hash": "3725f0eb268e54ff78810b80b9db12c4",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -60,12 +60,12 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1781960199.1505704,
+    "mtime": 1781960326.039076,
     "ast_hash": "0b888cbeba2a51876bc1696a04482bfb",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
-    "mtime": 1781960179.9638338,
+    "mtime": 1781960326.0392668,
     "ast_hash": "56328864bbfd320b3bb4a75620764d71",
     "semantic_hash": ""
   },
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1781960203.742159,
-    "ast_hash": "9694aa2e67efb6fae9f889e63559a421",
+    "mtime": 1781970116.525145,
+    "ast_hash": "6cfd72981ee3e472a413dad5dbd8a23c",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,7 +105,7 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1781960190.4995751,
+    "mtime": 1781960326.0397065,
     "ast_hash": "bc5b048d023c7104ed1934fe875a715e",
     "semantic_hash": ""
   },
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1781615629.011653,
-    "ast_hash": "83b528fb4e1ab103c9e08b9268bbc0fc",
+    "mtime": 1781997304.3276477,
+    "ast_hash": "3e4021bcf17bff4da993bf20821c01ad",
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
@@ -220,23 +220,23 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1781875552.6990564,
-    "ast_hash": "1140232e15af09bb239b7a452e7f8ff5",
+    "mtime": 1781982835.5460272,
+    "ast_hash": "04580a9c620cab1bb0c6c0ed88c5e6e7",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1781959512.5587463,
-    "ast_hash": "c5d983855f214898967104cf33e295fc",
+    "mtime": 1781997256.4879134,
+    "ast_hash": "7ea86ad3684379bb523cec2663fa2eb8",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1781899388.4307787,
-    "ast_hash": "2eb85ef6b2fbfde0a9fe47fef398ba42",
+    "mtime": 1781997236.1607172,
+    "ast_hash": "5f9427f7f044ddf6649de1a80edf33bf",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1781875552.6992316,
-    "ast_hash": "ec5857020a9b94002c217d83a2346137",
+    "mtime": 1781984418.888004,
+    "ast_hash": "518778416f8b56667a2f9f042f7715e7",
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1781908534.378901,
-    "ast_hash": "a9ba4e339b27d0214d2392deaa3dbe79",
+    "mtime": 1781995163.0224311,
+    "ast_hash": "883f138c39679161bc25ca342a4a84ae",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -6142,6 +6142,36 @@
   "client/scripts/Nameplate.cs": {
     "mtime": 1781959279.8642635,
     "ast_hash": "0f0d29f5aba8e0a096ca656058be7994",
+    "semantic_hash": ""
+  },
+  "client/scripts/VelocityIndicator.cs": {
+    "mtime": 1781969737.976269,
+    "ast_hash": "ea598cbf846913294a50d262f3891d27",
+    "semantic_hash": ""
+  },
+  "server/Assets/ConvexHull.cs": {
+    "mtime": 1781995087.0319724,
+    "ast_hash": "5acdea5d1ff9b520b08845875ac1f16d",
+    "semantic_hash": ""
+  },
+  "server/Assets/GlbReader.cs": {
+    "mtime": 1781976278.9112356,
+    "ast_hash": "bc6c7a304b59859882db084a9fb4ed8d",
+    "semantic_hash": ""
+  },
+  "server/Assets/SelfTest.cs": {
+    "mtime": 1781997264.0465257,
+    "ast_hash": "c3ac4495d4098318bfcea565be3eab56",
+    "semantic_hash": ""
+  },
+  "server/Assets/SimAssets.cs": {
+    "mtime": 1781984443.0902255,
+    "ast_hash": "17779f24c462c3a3c8ccf6332f5e5ee8",
+    "semantic_hash": ""
+  },
+  "server/Assets/SimModel.cs": {
+    "mtime": 1781976792.5954566,
+    "ast_hash": "cdb4fece3b71c30abaa7b83c7d847e11",
     "semantic_hash": ""
   }
 }

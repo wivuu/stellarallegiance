@@ -1,8 +1,31 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
+using SimServer.Assets;
 using SimServer.Backend;
 using SimServer.Net;
 using SimServer.Sim;
+using StellarAllegiance.Shared;
+
+// Maintenance flag: build + cache the convex-hull/hardpoint SimModel for the base and EVERY
+// asteroid variant (not just the ones a given seed rolls), then exit. Run after editing an art
+// GLB so the committed assets/sim-cache/ stays complete; the hash-keyed cache makes it a no-op
+// when nothing changed. Usage: dotnet SimServer.dll --pregen-assets
+if (args.Contains("--pregen-assets"))
+{
+    int ok = SimAssets.TryLoad("bases/base.glb") is not null ? 1 : 0;
+    int rocks = 0;
+    foreach (string name in AsteroidShapes.Variants)
+        if (SimAssets.TryLoad($"asteroids/{name}.glb") is not null) rocks++;
+    Console.WriteLine($"[SimServer] pregen-assets: base={ok}, asteroid variants cached={rocks}/{AsteroidShapes.Variants.Length}");
+    return;
+}
+
+// Self-test for the server-side collision pipeline (ConvexHull/QuickHull queries + World GLB
+// models). Usage: dotnet SimServer.dll --selftest  → prints PASS/FAIL, exits non-zero on failure.
+// (The tests/CollisionTest project is the same checks for CI; this flag runs them without a
+// separate project restore.)
+if (args.Contains("--selftest"))
+    Environment.Exit(SelfTest.Run());
 
 // Standalone sim server entry point: Kestrel hosts one WebSocket endpoint (/game); a
 // dedicated thread runs the fixed-dt 20 Hz authoritative simulation with a wall-clock
