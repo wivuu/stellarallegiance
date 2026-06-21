@@ -17,8 +17,6 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- Implement client-update mechanism that checks for new releases
-  - Ban old game servers from appearing in public server list.
 ---
 
 ## Roadmap (prioritized)
