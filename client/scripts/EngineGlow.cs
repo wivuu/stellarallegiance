@@ -44,6 +44,32 @@ public partial class EngineGlow : Node3D
 	private const float EaseRate = 9f;           // spool-UP rate: engines ramp in smoothly (1/s)
 	private static readonly Color BoostColor = new(0.85f, 0.92f, 1f); // blue-white afterburner
 
+	// ========================================================================
+	//  SMOKE PLUME TUNING  —  every knob for the exhaust smoke, in one place.
+	// ========================================================================
+	// The plume is a stream of soft, mix-blended motes driven by a custom particle SHADER
+	// (SmokeShaderCode) and world-anchored, so motes hang in space once emitted and the ship
+	// trails smoke behind it. Two mathematical curves, both peaking partway along each mote's
+	// life, sculpt the plume (all parameters below; *_At in 0..1 = birth..death):
+	//   • MOVEMENT (the bell): each mote drifts back along the nozzle axis AND swings out
+	//     sideways by SmokeBell, peaking at SmokeBellAt, then converging back to the axis —
+	//     so the cloud fans into a bell near the exhaust and re-merges toward the tail.
+	//   • SIZE (the billow): each mote is born small (SmokeTip), GROWS to SmokeGrow× at
+	//     SmokeGrowAt, then SHRINKS back to a wisp; ×SmokeSizeVar random per-mote base.
+	private const int   SmokeAmount       = 180;    // mote count — density/fill of the trail
+	private const float SmokeLifetime     = 1.5f;   // mote lifespan (sec); also how long smoke lingers after boost
+	private const float SmokeSize         = 2.5f;     // base mote DIAMETER, in NozzleRadius units  ← overall bigness
+	private const float SmokeSizeVar      = 0.6f;   // ± random per-mote size variation (0 = all identical, 0.6 = 40%–160%)
+	private const float SmokeSpeed        = 4f;     // backward drift speed; with Lifetime sets plume LENGTH
+	private const float SmokeSpeedVar     = 0.5f;   // ± random drift spread
+	private const float SmokeBell         = 2f;     // lateral fan-out radius, in NozzleRadius units  ← how wide the bell
+	private const float SmokeBellAt       = 0.4f;   // where the bell is widest along the life (0..1)
+	private const float SmokeBoostSpeedUp = 1.05f;  // particle SpeedScale at full boost (keep ~1 so the shape holds)
+	private const float SmokeGrow         = 2.2f;   // life-curve PEAK: a mote swells to this × its base size  ← billow amount
+	private const float SmokeGrowAt       = 0.1f;   // where the size peak sits along the life (0..1)
+	private const float SmokeTip          = 0.4f;  // size at birth & death (curve ends)  ← how small it starts/ends
+	private const float SmokeOpacity      = 0.75f;   // peak per-mote alpha (mix-blended coverage)
+
 	// Per-nozzle visuals we modulate every frame. Materials/particles are unique
 	// per EngineGlow instance so one ship's throttle never bleeds into another's.
 	private readonly System.Collections.Generic.List<StandardMaterial3D> _plumeMats = new();
@@ -52,7 +78,13 @@ public partial class EngineGlow : Node3D
 	private readonly System.Collections.Generic.List<Node3D> _innerHolders = new();
 	private readonly System.Collections.Generic.List<StandardMaterial3D> _coreMats = new();
 	private readonly System.Collections.Generic.List<GpuParticles3D> _exhausts = new();
-	private readonly System.Collections.Generic.List<ParticleProcessMaterial> _exhaustMats = new();
+	private readonly System.Collections.Generic.List<ShaderMaterial> _exhaustMats = new();
+
+	// Custom particle-process shader, compiled once and shared by every nozzle's emitter
+	// (per-nozzle uniforms live on each ShaderMaterial). Built lazily so it's only paid for
+	// the first time a ship spawns an engine.
+	private static Shader? _smokeShaderCached;
+	private static Shader SmokeShader => _smokeShaderCached ??= new Shader { Code = SmokeShaderCode };
 	private OmniLight3D _light = null!;
 
 	private float _target;       // requested throttle (0..1)
@@ -60,6 +92,16 @@ public partial class EngineGlow : Node3D
 	private float _targetBoost;  // requested afterburner (0..1)
 	private float _shownBoost;   // eased afterburner actually rendered
 	private float _flicker;      // small per-instance phase so engines don't pulse in lockstep
+	private float _smokeFade;    // seconds of exhaust smoke still potentially in flight; keeps the node drawn while it ages out
+
+	// Spatial engine audio. Both loops are children of this node, so they ride the
+	// ship's world transform for free (this covers local, remote, and AI ships —
+	// everything flows through SetThrottle). Driven off the EASED throttle/boost in
+	// _Process so the sound spools with the glow rather than snapping on input.
+	private AudioStreamPlayer3D? _engineSfx;
+	private AudioStreamPlayer3D? _boostSfx;
+	private const float EngineUnitSize = 50f;
+	private const float EngineMaxDistance = 1400f;
 
 	// Feed the current drive each frame. throttle (0..1) is forward thrust and
 	// always glows the engines; boost (0..1) is the afterburner — a SEPARATE input
@@ -76,15 +118,18 @@ public partial class EngineGlow : Node3D
 	{
 		_flicker = GD.Randf() * Mathf.Tau;
 
-		// Soft radial mote shared by the cores and the exhaust billboards: an 8-bit
-		// shape only — the HDR brightness that drives bloom comes from emission energy.
+		// Soft radial mote for the hot cores: an 8-bit shape only — the HDR brightness
+		// that drives bloom comes from emission energy.
 		var dot = RadialDot();
+		// Soft-edged mote for the exhaust: a dense pile of these, mix-blended, builds one
+		// continuous smoke volume; the particle shader moves/sizes each mote into the plume.
+		var smoke = SmokeMote();
 
 		var avg = Vector3.Zero;
 		foreach (var n in Nozzles)
 		{
 			avg += n;
-			BuildNozzle(n, dot);
+			BuildNozzle(n, dot, smoke);
 		}
 		avg /= Nozzles.Length;
 
@@ -100,9 +145,56 @@ public partial class EngineGlow : Node3D
 		AddChild(_light);
 
 		ApplyVisual(0f, 0f);   // start dark; _Process lights it once throttle is fed
+
+		BuildAudio();
 	}
 
-	private void BuildNozzle(Vector3 pos, Texture2D dot)
+	// Engine hum + afterburner whoosh, both looping and parked behind the hull with
+	// the wash light. Volume/pitch are modulated every frame in _Process. Guarded:
+	// if the audio service or its streams aren't up, the ship simply runs silent.
+	private void BuildAudio()
+	{
+		var sfx = SfxManager.Instance;
+		if (sfx == null)
+			return;
+		Vector3 rear = new(0f, 0f, -PlumeLength * 0.3f);
+		var engine = sfx.GetStream(SfxManager.SfxId.EngineLoop);
+		if (engine != null)
+		{
+			_engineSfx = new AudioStreamPlayer3D
+			{
+				Stream = engine,
+				Bus = "Engines",
+				UnitSize = EngineUnitSize,
+				MaxDistance = EngineMaxDistance,
+				Position = rear,
+				VolumeDb = -80f,   // silent until throttle drives it up
+			};
+			AddChild(_engineSfx);
+			_engineSfx.Play();
+		}
+		var boost = sfx.GetStream(SfxManager.SfxId.BoosterLoop);
+		if (boost != null)
+		{
+			_boostSfx = new AudioStreamPlayer3D
+			{
+				Stream = boost,
+				Bus = "Engines",
+				UnitSize = EngineUnitSize,
+				MaxDistance = EngineMaxDistance,
+				Position = rear,
+				VolumeDb = -80f,   // silent until the afterburner fires
+			};
+			AddChild(_boostSfx);
+			_boostSfx.Play();
+		}
+	}
+
+	// Map an eased 0..1 drive level onto a playable VolumeDb, fading to silence at 0.
+	private static float DriveToDb(float level)
+		=> level <= 0.001f ? -80f : Mathf.Lerp(-26f, -2f, Mathf.Clamp(level, 0f, 1f));
+
+	private void BuildNozzle(Vector3 pos, Texture2D dot, Texture2D smoke)
 	{
 		// Holder sits at the nozzle, axis-aligned with the hull, so scaling its Z
 		// stretches the plume backward (afterburner) while pinning the wide end to
@@ -204,33 +296,36 @@ public partial class EngineGlow : Node3D
 			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
 		});
 
-		// GPU-particle exhaust trailing backward. Default global simulation makes the
-		// motes hang in space as the ship moves, so they read as a proper trail.
-		var procMat = new ParticleProcessMaterial
-		{
-			EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
-			EmissionSphereRadius = NozzleRadius * 0.5f,   // motes fill the nozzle mouth
-			Direction = new Vector3(0f, 0f, -1f),
-			Spread = 12f,
-			InitialVelocityMin = 14f,
-			InitialVelocityMax = 22f,
-			Gravity = Vector3.Zero,
-			// Born large at the nozzle, then shrink over life (ScaleCurve) so the trail
-			// tapers to a wisp instead of reading as a string of identical circles.
-			ScaleMin = NozzleRadius * 1.3f,
-			ScaleMax = NozzleRadius * 2.0f,
-			ScaleCurve = ShrinkCurve(),
-			Color = CoreColor,
-			ColorRamp = ExhaustRamp(),
-		};
+		// GPU-particle exhaust driven by the custom SmokeShaderCode. World-anchored (NOT local
+		// coords): the shader bakes the nozzle's facing into each mote's VELOCITY at birth, so
+		// once emitted a mote keeps its own world-space path and the ship flies away from it —
+		// a real trail that stays put when the ship turns. The shader applies the lateral BELL
+		// (fan out then re-merge) and the grow/shrink SIZE billow directly, so there's no
+		// ParticleProcessMaterial; the draw quad is unit-sized and the shader sets full scale.
+		// All tuning is fed in as uniforms from the SMOKE PLUME TUNING block above.
+		var procMat = new ShaderMaterial { Shader = SmokeShader };
+		procMat.SetShaderParameter("life_s", SmokeLifetime);
+		procMat.SetShaderParameter("speed", SmokeSpeed);
+		procMat.SetShaderParameter("speed_var", SmokeSpeedVar);
+		procMat.SetShaderParameter("spawn_radius", NozzleRadius * 0.3f);
+		procMat.SetShaderParameter("bell_amp", NozzleRadius * SmokeBell);
+		procMat.SetShaderParameter("bell_at", SmokeBellAt);
+		procMat.SetShaderParameter("size_base", NozzleRadius * SmokeSize);
+		procMat.SetShaderParameter("size_var", SmokeSizeVar);
+		procMat.SetShaderParameter("grow", SmokeGrow);
+		procMat.SetShaderParameter("grow_at", SmokeGrowAt);
+		procMat.SetShaderParameter("tip", SmokeTip);
+		procMat.SetShaderParameter("opacity", SmokeOpacity);
+		procMat.SetShaderParameter("smoke_color", CoreColor);
 		_exhaustMats.Add(procMat);
 		var exhaust = new GpuParticles3D
 		{
-			Amount = 56,
-			Lifetime = 0.6,
+			Amount = SmokeAmount,
+			Lifetime = SmokeLifetime,
+			LocalCoords = false,        // world-anchored: motes keep their own path once emitted
 			ProcessMaterial = procMat,
-			DrawPass1 = new QuadMesh { Size = new Vector2(NozzleRadius * 1.4f, NozzleRadius * 1.4f) },
-			MaterialOverride = ExhaustDrawMaterial(dot),
+			DrawPass1 = new QuadMesh { Size = new Vector2(1f, 1f) },   // shader sets the real size
+			MaterialOverride = ExhaustDrawMaterial(smoke),
 			Position = pos,
 			Emitting = false,   // lit only while the afterburner is firing (see ApplyVisual)
 		};
@@ -247,7 +342,21 @@ public partial class EngineGlow : Node3D
 		_shown = EaseToward(_shown, _target, dt);
 		_shownBoost = EaseToward(_shownBoost, _targetBoost, dt);
 		_flicker += dt * 12f;   // slow enough that turbulence reads as flow, not a strobe
+		_smokeFade = Mathf.Max(0f, _smokeFade - dt);   // count down the lingering-smoke window
 		ApplyVisual(_shown, _shownBoost);
+
+		// Engine pitch rises with throttle; both loops fade in with their drive level
+		// (boost only audible while the afterburner is lit).
+		if (_engineSfx != null)
+		{
+			_engineSfx.VolumeDb = DriveToDb(_shown);
+			_engineSfx.PitchScale = Mathf.Lerp(0.8f, 1.4f, _shown);
+		}
+		if (_boostSfx != null)
+		{
+			_boostSfx.VolumeDb = DriveToDb(_shownBoost);
+			_boostSfx.PitchScale = Mathf.Lerp(0.9f, 1.3f, _shownBoost);
+		}
 	}
 
 	// Spool UP smoothly; cut DOWN instantly. The flame must die the frame the pilot drops
@@ -261,10 +370,20 @@ public partial class EngineGlow : Node3D
 	{
 		// Master on/off envelope: the engine is fully dark at rest and ramps to full
 		// glow by IdleThrottle, so a parked ship (throttle 0, no boost) shows nothing.
-		// Folds into every emission energy and the wash light, and the whole node is
-		// hidden once truly dark so even the additive plume albedo stops drawing.
+		// Folds into every emission energy, every additive-plume ALBEDO alpha, and the wash
+		// light, so at glow 0 the flame draws nothing even though the node stays alive.
 		float glow = Mathf.Clamp(Mathf.Max(throttle / IdleThrottle, boost), 0f, 1f);
-		Visible = glow > 0.001f;
+
+		// Smoke must outlive the flame. The instant boost drops, the hot plume cuts out
+		// (EaseToward snaps boost down), but the exhaust already in the air should keep
+		// drifting and fading over its full lifetime — not blink out. So while boosting we
+		// keep topping up a lingering-smoke window, and the node stays drawn until BOTH the
+		// flame is dark AND that window has elapsed. (Hard-hiding the node on `glow` is
+		// exactly what used to kill the live smoke particles mid-flight.)
+		bool burning = boost > 0.02f;
+		if (burning)
+			_smokeFade = SmokeLifetime;
+		Visible = glow > 0.001f || _smokeFade > 0f;
 		if (!Visible)
 		{
 			_light.LightEnergy = 0f;
@@ -301,27 +420,32 @@ public partial class EngineGlow : Node3D
 
 		for (int i = 0; i < _plumeHolders.Count; i++)
 		{
-			// Wispier outer flame (lower alpha) so it reads as gas, not a solid shell.
+			// Wispier outer flame (lower alpha) so it reads as gas, not a solid shell. All
+			// albedo alphas are scaled by `glow` so the additive flame fully stops drawing
+			// at glow 0 (the node may still be alive for lingering smoke).
 			_plumeHolders[i].Scale = new Vector3(widthScale, widthScale, lengthScale);
 			_plumeMats[i].Emission = plumeColor;
-			_plumeMats[i].AlbedoColor = new Color(plumeColor.R, plumeColor.G, plumeColor.B, Mathf.Lerp(0.15f, 0.45f, throttle));
+			_plumeMats[i].AlbedoColor = new Color(plumeColor.R, plumeColor.G, plumeColor.B, Mathf.Lerp(0.15f, 0.45f, throttle) * glow);
 			_plumeMats[i].EmissionEnergyMultiplier = plumeEnergy;
 			_innerHolders[i].Scale = new Vector3(widthScale * 0.9f, widthScale * 0.9f, innerLength);
 			_innerMats[i].Emission = innerColor;
-			_innerMats[i].AlbedoColor = new Color(innerColor.R, innerColor.G, innerColor.B, Mathf.Lerp(0.25f, 0.6f, throttle));
+			_innerMats[i].AlbedoColor = new Color(innerColor.R, innerColor.G, innerColor.B, Mathf.Lerp(0.25f, 0.6f, throttle) * glow);
 			_innerMats[i].EmissionEnergyMultiplier = innerEnergy;
 			_coreMats[i].Emission = Colors.White.Lerp(plumeColor, 0.4f * (1f - boost));
+			_coreMats[i].AlbedoColor = new Color(1f, 1f, 1f, glow);
 			_coreMats[i].EmissionEnergyMultiplier = coreEnergy;
 		}
 
-		// Exhaust smoke is the afterburner's tell: it only streams while boosting.
-		bool burning = boost > 0.02f;
+		// Exhaust smoke is the afterburner's tell: it only EMITS while boosting, but motes
+		// already in the air keep aging out and fading after boost ends (see _smokeFade).
 		for (int i = 0; i < _exhausts.Count; i++)
 		{
 			_exhausts[i].Emitting = burning;
-			_exhausts[i].AmountRatio = Mathf.Lerp(0.4f, 1f, boost);
-			_exhausts[i].SpeedScale = Mathf.Lerp(0.9f, 1.8f, boost);
-			_exhaustMats[i].Color = plumeColor;
+			_exhausts[i].AmountRatio = Mathf.Lerp(0.55f, 1f, boost);
+			// Keep the motes near their base speed even at full boost: speeding them up just
+			// stretches the plume and washes the spindle out, so stay close to 1.
+			_exhausts[i].SpeedScale = Mathf.Lerp(1f, SmokeBoostSpeedUp, boost);
+			_exhaustMats[i].SetShaderParameter("smoke_color", plumeColor);
 		}
 
 		_light.LightColor = plumeColor;
@@ -353,43 +477,138 @@ public partial class EngineGlow : Node3D
 		};
 	}
 
-	// Exhaust mote: born bright at the nozzle, holds a moment, then fades to nothing.
-	private static GradientTexture1D ExhaustRamp()
+	// Custom particle-process shader for the exhaust smoke. It owns the whole motion+look of a
+	// mote so the shape is explicit and reliable (no ParticleProcessMaterial curve quirks):
+	//
+	//   • At birth (start): bake the nozzle's world-space backward axis into VELOCITY (so the
+	//     mote drifts straight back in WORLD space and keeps that path as the ship flies on),
+	//     and stash that axis + the birth TIME in CUSTOM. Per-mote randomness (angle, size,
+	//     speed) is hashed from the stable particle NUMBER, so it can be recomputed each frame
+	//     without storing it.
+	//   • Each frame (process): bump(t, *_At) is a smooth 0→1→0 hump peaking at *_At.
+	//       - BELL: add a lateral offset = bell_amp * bump(t, bell_at) along a fixed per-mote
+	//         sideways direction — the mote fans out from the axis then re-merges by death.
+	//         (Applied incrementally on top of the engine's VELOCITY integration so the
+	//         world-space backward drift is preserved.)
+	//       - SIZE: scale = base × random × mix(tip, grow, bump(t, grow_at)) — grow then shrink.
+	//       - ALPHA: fade in fast, hold, fade out so the tail dissipates.
+	private const string SmokeShaderCode = @"
+shader_type particles;
+
+uniform float life_s;
+uniform float speed;
+uniform float speed_var;
+uniform float spawn_radius;
+uniform float bell_amp;
+uniform float bell_at;
+uniform float size_base;
+uniform float size_var;
+uniform float grow;
+uniform float grow_at;
+uniform float tip;
+uniform float opacity;
+uniform vec4 smoke_color : source_color;
+
+float hash11(float p) {
+	p = fract(p * 0.1031);
+	p *= p + 33.33;
+	p *= p + p;
+	return fract(p);
+}
+
+// Smooth hump: 0 at t=0 and t=1, 1 at t=at (sine ease on each side).
+float bump(float t, float at) {
+	at = clamp(at, 0.001, 0.999);
+	float u = t < at ? t / at : (1.0 - t) / (1.0 - at);
+	return sin(clamp(u, 0.0, 1.0) * 1.5707963);
+}
+
+// Stable per-mote sideways unit vector, perpendicular to the backward axis.
+vec3 lateral_dir(vec3 backward, float n) {
+	float ang = hash11(n * 1.7) * 6.2831853;
+	vec3 up = abs(backward.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+	vec3 side = normalize(cross(backward, up));
+	vec3 fwd = cross(backward, side);
+	return side * cos(ang) + fwd * sin(ang);
+}
+
+void start() {
+	float n = float(NUMBER);
+	vec3 backward = normalize(mat3(EMISSION_TRANSFORM) * vec3(0.0, 0.0, -1.0));
+	float spv = (hash11(n * 5.1) * 2.0 - 1.0) * speed_var;
+
+	TRANSFORM[3].xyz = EMISSION_TRANSFORM[3].xyz + lateral_dir(backward, n) * spawn_radius * hash11(n * 7.3);
+	VELOCITY = backward * (speed + spv);
+
+	CUSTOM = vec4(backward, TIME);
+	COLOR = smoke_color;
+}
+
+void process() {
+	vec3 backward = CUSTOM.xyz;
+	float n = float(NUMBER);
+	float age = TIME - CUSTOM.w;
+	float t = clamp(age / life_s, 0.0, 1.0);
+	float tp = clamp((age - DELTA) / life_s, 0.0, 1.0);
+
+	// Lateral bell, added incrementally so the engine's backward VELOCITY integration stands.
+	float d_off = bell_amp * (bump(t, bell_at) - bump(tp, bell_at));
+	TRANSFORM[3].xyz += lateral_dir(backward, n) * d_off;
+
+	// Grow-then-shrink size (uniform scale on the billboarded quad).
+	float sr = 1.0 + (hash11(n * 3.3) * 2.0 - 1.0) * size_var;
+	float s = mix(tip, grow, bump(t, grow_at)) * sr * size_base;
+	TRANSFORM[0].xyz = vec3(s, 0.0, 0.0);
+	TRANSFORM[1].xyz = vec3(0.0, s, 0.0);
+	TRANSFORM[2].xyz = vec3(0.0, 0.0, s);
+
+	float fade = smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.55, 1.0, t));
+	COLOR = vec4(smoke_color.rgb, opacity * fade);
+}
+";
+
+	// Exhaust mote shape: a fuller soft-edged puff (vs. the cores' tighter RadialDot). The
+	// solid-ish core gives each mote enough presence that the dense pile resolves a defined
+	// plume silhouette, while the feathered rim still blends the seams into continuous smoke.
+	private static GradientTexture2D SmokeMote()
 	{
 		var gradient = new Gradient
 		{
-			Offsets = new[] { 0f, 0.25f, 1f },
-			Colors = new[]
-			{
-				new Color(1f, 1f, 1f, 1f),
-				new Color(1f, 1f, 1f, 0.7f),
-				new Color(1f, 1f, 1f, 0f),
-			},
+			Offsets = [0f, 0.45f, 1f],
+			Colors =
+            [
+                new Color(1f, 1f, 1f, 1f),
+				new Color(1f, 1f, 1f, 0.8f),    // fuller core so the mote reads as a defined puff...
+				new Color(1f, 1f, 1f, 0f),       // ...then feathers to nothing for a soft but real edge
+			],
 		};
-		return new GradientTexture1D { Gradient = gradient, Width = 64 };
+
+		return new GradientTexture2D
+		{
+			Gradient = gradient,
+			Width = 128,
+			Height = 128,
+			Fill = GradientTexture2D.FillEnum.Radial,
+			FillFrom = new Vector2(0.5f, 0.5f),
+			FillTo = new Vector2(0.5f, 0f),
+		};
 	}
 
-	// Per-particle scale over lifetime: full size at birth, shrinking to a wisp as
-	// it trails away. Paired with the larger ScaleMin/Max so motes start big.
-	private static CurveTexture ShrinkCurve()
-	{
-		var curve = new Curve();
-		curve.AddPoint(new Vector2(0f, 1f));
-		curve.AddPoint(new Vector2(1f, 0.2f));
-		return new CurveTexture { Curve = curve };
-	}
-
-	private static StandardMaterial3D ExhaustDrawMaterial(Texture2D dot) => new()
+	// MIX (alpha) blend, NOT additive: additive sums to a featureless bright blob (reads as
+	// fire/energy), whereas alpha-over lets overlapping translucent puffs build a real
+	// COVERAGE silhouette — the only way the spindle shape (and "smoke" at all) reads. No
+	// emission: smoke is lit translucent matter, the hot glow is the separate flame/core.
+	private static StandardMaterial3D ExhaustDrawMaterial(Texture2D smoke) => new()
 	{
 		ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
 		Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-		BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-		AlbedoTexture = dot,
-		EmissionEnabled = true,
-		EmissionTexture = dot,
-		Emission = Colors.White,
-		EmissionEnergyMultiplier = 1.6f,
+		BlendMode = BaseMaterial3D.BlendModeEnum.Mix,
+		AlbedoTexture = smoke,
 		BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
-		VertexColorUseAsAlbedo = true,   // honour the per-particle ColorRamp alpha
+		// CRITICAL: particle billboards normalise away the per-mote transform SCALE unless this
+		// is set — without it every mote renders at the draw quad's base size and the shader's
+		// grow/shrink (and SmokeSize itself) has no visible effect at all.
+		BillboardKeepScale = true,
+		VertexColorUseAsAlbedo = true,   // honour the shader's per-mote COLOR (tint + fade alpha)
 	};
 }

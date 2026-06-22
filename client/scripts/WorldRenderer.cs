@@ -52,6 +52,8 @@ public partial class WorldRenderer : Node3D
 	private readonly Dictionary<ulong, (Node3D Node, Vector3 Axis, float Speed)> _asteroidSpins = new();
 	private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 	private readonly Dictionary<ulong, Node3D> _alephNodes = new();
+	// Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
+	private readonly List<Vector3> _alephScratch = new();
 
 	// Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
 	// once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
@@ -135,11 +137,10 @@ public partial class WorldRenderer : Node3D
 	private readonly List<(Vector3 Pos, byte Team)> _baseScratch = new();
 
 	// Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
-	// VisualHitRadius of a ship's rendered centre, but not until it has travelled MuzzleClearance
-	// from its spawn — so a shot never sparks on the ship that fired it. Team-agnostic by design
-	// (friendly fire sparks too). Tune to taste against the ship silhouette size.
+	// VisualHitRadius of a ship's rendered centre. The firing ship is excluded by bolt OwnerShipId
+	// (see CheckBoltImpacts), so a shot never sparks on its own hull; otherwise team-agnostic by
+	// design (friendly fire sparks too). Tune to taste against the ship silhouette size.
 	private const float VisualHitRadius = 5f;
-	private const float MuzzleClearance = 10f;
 
 	private StandardMaterial3D _asteroidMat = null!;
 	private StandardMaterial3D _team0Mat = null!;
@@ -243,6 +244,19 @@ public partial class WorldRenderer : Node3D
 		return _baseHealthScratch;
 	}
 
+	// Warp gates (alephs) in the currently-visible (local) sector, as world positions, for the
+	// HUD off-screen indicators. Mirrors VisibleBases()' sector filter via Node.Visible, so the
+	// markers only reflect gates in the sector you're flying. Returns a shared scratch list —
+	// read it immediately.
+	public IReadOnlyList<Vector3> VisibleAlephs()
+	{
+		_alephScratch.Clear();
+		foreach (var node in _alephNodes.Values)
+			if (node.Visible)
+				_alephScratch.Add(node.GlobalPosition);
+		return _alephScratch;
+	}
+
 	public override void _Ready()
 	{
 		_bases = new Node3D { Name = "Bases" };
@@ -316,6 +330,70 @@ public partial class WorldRenderer : Node3D
 	public void NetUpdateShip(Ship oldRow, Ship newRow) => UpdateShip(oldRow, newRow);
 	public void NetDeleteShip(Ship row) => DeleteShip(row);
 
+	// ShipId -> pilot name, rebuilt from each MsgLobbyState roster. The roster is the only source of
+	// names (snapshots carry no identity); it's sent on every roster change including spawn/death, so
+	// this stays current. PIG/pod ships with no roster row simply aren't in the map -> no nameplate.
+	private readonly Dictionary<ulong, string> _pilotNames = new();
+
+	// Apply the latest roster to live ship nodes. Called by GameNetClient whenever the roster lands —
+	// which may be a frame after a ship's first snapshot (so InsertShip couldn't resolve the name
+	// yet) and again across respawns (the pilot's ShipId changes). Remote ships only; the local
+	// ship (a PredictionController) gets no nameplate.
+	public void NetApplyPilotNames(IReadOnlyList<LobbyPlayer> roster)
+	{
+		_pilotNames.Clear();
+		foreach (var p in roster)
+			if (p.ShipId != 0 && !string.IsNullOrEmpty(p.Name))
+				_pilotNames[p.ShipId] = p.Name;
+
+		foreach (var (shipId, node) in _shipNodes)
+		{
+			string nm = _pilotNames.TryGetValue(shipId, out var n) ? n : "";
+			// Remote ships always show their pilot's name; the local ship (a PredictionController)
+			// carries its own name too but only reveals it in the F3 overview.
+			if (node is RemoteShip rs) rs.SetPilotName(nm);
+			else if (node is PredictionController pc) pc.SetPilotName(nm);
+		}
+	}
+
+	// Tear the whole rendered world down to a blank slate — used when the player leaves a server
+	// (ConnectionManager.Leave) so nothing from the old session lingers behind the address screen,
+	// and so a fresh Welcome rebuilds cleanly rather than double-adding. Frees every world node
+	// (the local ship lives under _ships, so it goes too) and clears every cache, then resets the
+	// match/sector/team bookkeeping to its pre-connection defaults.
+	public void Reset()
+	{
+		foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
+			foreach (var child in group.GetChildren())
+				child.QueueFree();
+
+		_baseNodes.Clear();
+		_baseList.Clear();
+		_baseHealthFrac.Clear();
+		_asteroidNodes.Clear();
+		_asteroidSpins.Clear();
+		_shipNodes.Clear();
+		_alephNodes.Clear();
+		_asteroidClip.Clear();
+		_baseClip.Clear();
+		_alephLinks.Clear();
+		_baseTeams.Clear();
+		_bolts.Clear();
+		_sectors.Clear();
+		_pilotNames.Clear();
+
+		LocalShip = null;
+		_localSector = HomeSector;
+		_viewOverride = null;
+		_localTeam = null;
+		ServerTick = 0;
+		Phase = MatchPhase.Lobby;
+		Winner = null;
+		_deathCamUntil = -1.0;
+		_pendingHomeReset = false;
+		_starscape?.SetSector(HomeSector);
+	}
+
 	// Static world from the Welcome frame, feeding the same bodies the STDB path uses.
 	public void NetAddSector(Sector row) { _sectors[row.SectorId] = row; }
 	public void NetAddBase(Base row) => InsertBase(row);
@@ -351,6 +429,14 @@ public partial class WorldRenderer : Node3D
 		fx.Position = pos;
 		SetNodeSector(fx, sector);
 	}
+
+	// Collision SFX hook (ship↔ship / base / asteroid). DEFERRED: the client does no
+	// collision detection today — collisions are resolved server-side — so nothing
+	// calls this yet. When the server emits a collision event the client can observe,
+	// route it here with the impact's world position. Wired through the same pooled
+	// 3D path as every other discrete sound; the placeholder asset already exists.
+	private void PlayCollisionSfx(Vector3 worldPos)
+		=> SfxManager.Instance?.PlayAt(SfxManager.SfxId.Collision, worldPos);
 
 	// ---- Aleph (warp funnel) -------------------------------------------
 
@@ -545,6 +631,8 @@ public partial class WorldRenderer : Node3D
 			pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
 			ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
 			pc.Initialize(row, _defs);
+			if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
+				pc.SetPilotName(localPilot);
 			LocalShip = pc;
 			_localTeam = row.Team;
 			// Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
@@ -565,7 +653,9 @@ public partial class WorldRenderer : Node3D
 		_ships.AddChild(rs);
 		rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
 		ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
-		rs.Initialize(row, _defs);
+		rs.Initialize(row, _defs, ServerTick);
+		if (_pilotNames.TryGetValue(row.ShipId, out var pilot))
+			rs.SetPilotName(pilot);
 		_shipNodes[row.ShipId] = node;
 		SetNodeSector(node, row.SectorId);
 	}
@@ -595,7 +685,7 @@ public partial class WorldRenderer : Node3D
 				// Synthesize the bolt locally (no Projectile rows are replicated).
 				if (newRow.LastFireTick != oldRow.LastFireTick && newRow.LastFireTick != 0 && !newRow.IsPod)
 					SpawnBoltFor(newRow);
-				rs.OnAuthoritative(newRow);
+				rs.OnAuthoritative(newRow, ServerTick);
 				SetNodeSector(rs, newRow.SectorId);   // a remote ship may have warped in/out
 				break;
 		}
@@ -622,6 +712,10 @@ public partial class WorldRenderer : Node3D
 			Vector3 deathPos = local ? node.GlobalPosition : new Vector3(row.PosX, row.PosY, row.PosZ);
 			var boom = ExplosionEffect.Create(row.Class, row.Team);
 			SpawnEffect(boom, deathPos, row.SectorId);
+			// Bigger hulls boom lower/longer; nudge pitch down for Fighters/Bombers.
+			float boomPitch = row.Class == ShipClass.Scout ? 1.05f
+				: row.Class == ShipClass.Bomber ? 0.8f : 0.9f;
+			SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, deathPos, pitch: boomPitch);
 		}
 
 		if (local)
@@ -688,7 +782,8 @@ public partial class WorldRenderer : Node3D
 	// every client and the server derive the same bolt from the same replicated row.
 	private void SpawnBoltFor(Ship row)
 	{
-		if (!_defs.TryGetWeapon((byte)row.Class, out var hp, out var weapon))
+		var mounts = _defs.WeaponMounts((byte)row.Class);
+		if (mounts.Count == 0)
 			return;
 
 		var state = ShipMath.StateFromRow(row);
@@ -701,28 +796,38 @@ public partial class WorldRenderer : Node3D
 			? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
 		Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
 
-		Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
-		Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick);
-		Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
-		Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
+		// One bolt per weapon hardpoint (the Fighter's twin cannons), each from its own muzzle
+		// offset and with its own barrel-seeded scatter — the exact mirror of the server's TryFire.
+		for (byte barrel = 0; barrel < mounts.Count; barrel++)
+		{
+			var (hp, weapon) = mounts[barrel];
+			Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
+			Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
+			Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
+			Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
 
-		AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), row.SectorId,
-			weapon.ProjectileLifeTicks * FlightModel.Dt, ShotMaskLeadSec());
+			AddBolt(ShipMath.ToGodot(mp), ShipMath.ToGodot(mv), ShipMath.ToGodot(shotDir), row.SectorId,
+				weapon.ProjectileLifeTicks * FlightModel.Dt, row.ShipId, ShotMaskLeadSec());
+		}
 	}
 
 	// The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
 	// rendering as a remote bolt, no masking lead (prediction is already now-correct).
-	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, float lifeSec)
-		=> AddBolt(pos, vel, _localSector, lifeSec, 0f);
+	public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec)
+		=> AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
 
-	private void AddBolt(Vector3 pos, Vector3 vel, uint sector, float lifeSec, float leadSec)
+	private void AddBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, uint sector, float lifeSec, ulong ownerShipId, float leadSec)
 	{
 		var pv = new ProjectileView { Name = "Bolt" };
 		_projectiles.AddChild(pv);
 		pv.AddChild(NewProjectileMesh());
-		pv.Initialize(pos, vel, ClipBoltTtl(sector, pos, vel, lifeSec), leadSec);
+		pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
 		SetNodeSector(pv, sector);
 		_bolts.Add(pv);
+		// Single chokepoint for every shot (local + remote), so the muzzle report
+		// fires once per bolt at the muzzle position.
+		SfxManager.Instance?.PlayAt(SfxManager.SfxId.WeaponFire, pos,
+			pitch: 0.95f + GD.Randf() * 0.1f);
 	}
 
 	// How far ahead to render an enemy/remote shot to mask its ~1 RTT-late pop-in
@@ -843,12 +948,14 @@ public partial class WorldRenderer : Node3D
 			if (!pv.Visible)
 				continue;
 			Vector3 b = pv.GlobalPosition;
-			// Don't let a shot spark on the ship that fired it: ignore until it has left the muzzle.
-			if (b.DistanceSquaredTo(pv.SpawnPos) < MuzzleClearance * MuzzleClearance)
-				continue;
 			Vector3 a = b - pv.Velocity * (float)delta;   // swept path across this frame
-			foreach (var ship in _shipNodes.Values)
+			foreach (var (shipId, ship) in _shipNodes)
 			{
+				// Never spark on the firing ship. Skipping by owner id (rather than a static
+				// muzzle-distance gate) holds even when the ship flies forward with its own
+				// bolt — flying straight while shooting no longer sparks on your own hull.
+				if (shipId == pv.OwnerShipId)
+					continue;
 				if (!ship.Visible)
 					continue;
 				Vector3 c = ship.GlobalPosition;
@@ -856,6 +963,8 @@ public partial class WorldRenderer : Node3D
 				if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
 				{
 					SpawnEffect(new HitFlash(), hit, _localSector);
+					SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit,
+						pitch: 0.92f + GD.Randf() * 0.16f);
 					pv.QueueFree();
 					_bolts.RemoveAt(i);
 					break;

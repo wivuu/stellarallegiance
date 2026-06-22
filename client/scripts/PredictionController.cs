@@ -37,7 +37,7 @@ public partial class PredictionController : Node3D
 
 	// A shot the prediction step just fired, in Godot space, for the renderer to
 	// spawn an immediate ghost projectile.
-	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; public float LifeSec; }
+	public struct PredictedShot { public Vector3 Pos; public Vector3 Vel; public Vector3 Dir; public float LifeSec; }
 
 	private struct Entry
 	{
@@ -59,6 +59,7 @@ public partial class PredictionController : Node3D
 	private DefRegistry _defs = null!;                  // runtime ship/weapon defs (M3); wired at Initialize
 	private ShipClass _class;                          // class id for def/weapon lookups
 	private uint _lastFireTick;                        // mirrors server Ship.LastFireTick (0 = ready)
+	private readonly List<PredictedShot> _shotsOut = new();  // reused per-Step fire output (0, 1, or twin bolts)
 	private readonly List<Entry> _buffer = new();
 
 	private double _tickTimer;                         // seconds since last prediction step
@@ -102,6 +103,32 @@ public partial class PredictionController : Node3D
 	// Hand over the engine glow built by WorldRenderer; driven from _Process.
 	public void AttachEngine(EngineGlow engine) => _engine = engine;
 
+	// The local player's own nameplate. Unlike remote ships (always labelled), the local ship's
+	// label is shown ONLY while the F3 sector overview is open — in normal chase flight you don't
+	// want your own name floating in front of you. Created lazily once a name resolves; _Process
+	// toggles its visibility from SectorOverview.Active.
+	private Label3D? _nameplate;
+	private string _pilotName = "";
+
+	public void SetPilotName(string name)
+	{
+		name ??= "";
+		if (name == _pilotName) return;
+		_pilotName = name;
+		if (name.Length == 0)
+		{
+			if (_nameplate is not null) _nameplate.Visible = false;
+			return;
+		}
+		if (_nameplate is null)
+		{
+			_nameplate = Nameplate.Create(Team);
+			_nameplate.Visible = false;   // visibility is driven by the F3 overview in _Process
+			AddChild(_nameplate);
+		}
+		_nameplate.Text = name;
+	}
+
 	// Engine-glow intensity for the afterburner. The boost's FLIGHT effect now rides
 	// in the networked ShipInput (FlightModel reads input.Boost), so this only drives
 	// the visual exhaust; ShipController sets it from the same Shift key each frame.
@@ -141,13 +168,15 @@ public partial class PredictionController : Node3D
 		ApplyVisual(1f);
 	}
 
-	// One fixed-dt prediction step for the given input + client tick. Returns a
-	// PredictedShot when the fire gate fires this tick (else null), so the renderer
-	// can spawn the bolt immediately. The gate mirrors the server's exactly (same tick
-	// space, FireInterval, muzzle math), so the local bolt matches the shot the server
-	// resolves — there is no authoritative Projectile row to wait for anymore.
-	public PredictedShot? Step(ShipInputState input, uint clientTick)
+	// One fixed-dt prediction step for the given input + client tick. Returns the shots the
+	// fire gate produced this tick — empty when it didn't fire, one per weapon hardpoint when it
+	// did (the Fighter's twin cannons fire two) — so the renderer can spawn them immediately. The
+	// gate mirrors the server's exactly (same tick space, FireInterval, per-muzzle math), so the
+	// local bolts match the shots the server resolves — there's no authoritative Projectile row to
+	// wait for. The returned list is reused between calls; consume it before the next Step.
+	public IReadOnlyList<PredictedShot> Step(ShipInputState input, uint clientTick)
 	{
+		_shotsOut.Clear();
 		_prevState = _state;
 		// Re-pull stats from the registry each tick (a cheap cached lookup) so a runtime
 		// retune of this class's ShipClassDef flows into prediction with no respawn — and
@@ -155,7 +184,7 @@ public partial class PredictionController : Node3D
 		// yet, don't predict on missing data: hold the last authoritative state until it
 		// arrives (no baked-tuning fallback).
 		if (_defs.TryGetStats((byte)_class, IsPod, out var st)) { _stats = st; _hasStats = true; }
-		if (!_hasStats) return null;
+		if (!_hasStats) return _shotsOut;
 		_throttle = Mathf.Clamp(input.Thrust, 0f, 1f);   // forward thrust drives the engine glow
 		_state = FlightModel.Integrate(_state, input, _stats);
 		_buffer.Add(new Entry { Tick = clientTick, Input = input, Predicted = _state });
@@ -163,39 +192,46 @@ public partial class PredictionController : Node3D
 			_buffer.RemoveRange(0, _buffer.Count - BufferLen);
 		_tickTimer = 0;
 
-		// Muzzle + weapon come from data (M3): the ship's primary Weapon hardpoint and
-		// the WeaponDef it names — the SAME rows the server's TryFire reads, so the local
-		// bolt matches the shot the server resolves. No def / no weapon hardpoint (e.g.
-		// a pod) ⇒ the server won't fire either, so we predict nothing.
-		if (input.Firing
-			&& _defs.TryGetWeapon((byte)_class, out var hp, out var weapon)
-			&& clientTick - _lastFireTick >= weapon.FireIntervalTicks)
+		// Muzzles + weapon come from data (M3): every Weapon hardpoint on this class and the
+		// WeaponDef each names — the SAME rows the server's TryFire reads, so the local bolts
+		// match the shots the server resolves. No def / no weapon hardpoint (e.g. a pod) ⇒ the
+		// server won't fire either, so we predict nothing. The shared FireInterval is the same on
+		// every barrel of a class, so the first mount gates the whole volley.
+		var mounts = input.Firing ? _defs.WeaponMounts((byte)_class) : EmptyMounts;
+		if (mounts.Count > 0 && clientTick - _lastFireTick >= mounts[0].weapon.FireIntervalTicks)
 		{
 			_lastFireTick = clientTick;
-			// Anchor the muzzle to the RENDERED transform (_renderedPos/_renderedRot), not
-			// the raw post-integration _state. _state.Pos is up to one tick of motion AHEAD
-			// of what's on screen (the visual interpolates toward it over the next tick, plus
-			// any reconcile _posErr offset), so spawning from it made the ghost's exit point
-			// drift off the nose by an amount proportional to the ship's speed. The rendered
-			// transform is exactly where the ship appears right now, so the muzzle stays
-			// pinned to the nose regardless of thrust/velocity. The local hardpoint
-			// offset/forward are rotated by the rendered attitude (offset (0,0,NoseOffset),
-			// forward +Z on the seeded hulls reproduces the old `pos + fwd*NoseOffset`).
-			Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
-			Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
-			Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
-			Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick);
-			Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
-			Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
-			return new PredictedShot
+			// Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
+			// raw post-integration _state. _state.Pos is up to one tick of motion AHEAD of what's
+			// on screen (the visual interpolates toward it over the next tick, plus any reconcile
+			// _posErr offset), so spawning from it made the ghost's exit point drift off the hull
+			// by an amount proportional to the ship's speed. The rendered transform is exactly
+			// where the ship appears right now, so each muzzle stays pinned to its hardpoint
+			// regardless of thrust/velocity. The local hardpoint offset/forward are rotated by the
+			// rendered attitude (the twin Fighter cannons sit at ±X, the single Scout/Bomber gun on
+			// the nose, reproducing the old `pos + fwd*NoseOffset`).
+			for (byte barrel = 0; barrel < mounts.Count; barrel++)
 			{
-				Pos = ShipMath.ToGodot(mp),
-				Vel = ShipMath.ToGodot(mv),
-				LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
-			};
+				var (hp, weapon) = mounts[barrel];
+				Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
+				Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
+				Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
+				Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick, barrel);
+				Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
+				Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
+				_shotsOut.Add(new PredictedShot
+				{
+					Pos = ShipMath.ToGodot(mp),
+					Vel = ShipMath.ToGodot(mv),
+					Dir = ShipMath.ToGodot(shotDir),   // fired direction, for tracer orientation (not skewed by strafe)
+					LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
+				});
+			}
 		}
-		return null;
+		return _shotsOut;
 	}
+
+	private static readonly List<(HardpointDef hp, WeaponDef weapon)> EmptyMounts = new();
 
 	// T5 test hook: artificially diverge the predicted path from authority by
 	// offsetting the current state AND every unacknowledged buffered prediction.
@@ -325,6 +361,10 @@ public partial class PredictionController : Node3D
 
 		ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
 		_engine?.SetThrottle(_throttle, _afterburner);
+
+		// Show the local nameplate only in the F3 sector overview.
+		if (_nameplate is not null)
+			_nameplate.Visible = SectorOverview.Active && _pilotName.Length > 0;
 	}
 
 	// Semi-implicit critically-damped (ζ=1) spring driving offset x and its

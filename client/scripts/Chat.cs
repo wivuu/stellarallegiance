@@ -133,6 +133,7 @@ public partial class Chat : Control
         _teamChannel = false;
         UpdateChip();
         _inputRow.Visible = true;
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
         _entry.Clear();
         _entry.GrabFocus();
         _savedMouseMode = Input.MouseMode;
@@ -143,6 +144,7 @@ public partial class Chat : Control
     private void CloseInput()
     {
         _inputRow.Visible = false;
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
         _entry.Clear();
         _entry.ReleaseFocus();
         Capturing = false;

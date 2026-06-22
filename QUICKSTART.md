@@ -14,6 +14,8 @@ cd wivuullegiance
 dotnet build shared/Shared.csproj      # sanity-check the toolchain
 ```
 
+For a quick local game, pass `--local` to both scripts (skips the public lobby).
+
 ### 3. Start the server (terminal 1)
 ```pwsh
 scripts/run-server.ps1
@@ -25,8 +27,8 @@ It rebuilds, then listens on `ws://localhost:8090/game`. You should see
 ```pwsh
 scripts/run-client.ps1
 ```
-The first screen prompts for a **server address**. Enter `localhost:8090` and Connect.
-(Or skip it: `scripts/run-client.sh --host localhost:8090`.)
+`--local` connects straight to `localhost:8090`. (Drop it to open the **public lobby browser**
+instead, or pass `--host hostname-or-ip:8090` to target a specific server.)
 
 ### 5. Play
 Pick **BLUE** or **RED**, click **Ready**, and the match starts once everyone in the lobby is
@@ -34,6 +36,11 @@ ready. Fly with `W/S` throttle, mouse aim, `Shift` afterburner, click/`Space` to
 fill out the opposition.
 
 ---
+
+### Public lobby
+Without `--local`, `run-server.sh` publishes the server to the public lobby (`PUBLIC_LOBBY`,
+default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.sh` opens a browser of the servers listed there —
+including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.
 
 ### Solo / unattended
 Skip the ready-up gate and start a perpetual match immediately:

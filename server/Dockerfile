@@ -14,14 +14,21 @@ COPY shared/Shared.csproj shared/
 COPY server/SimServer.csproj server/
 RUN dotnet restore server/SimServer.csproj
 
-# Now the sources, and publish a framework-dependent build (the aspnet runtime image below
-# supplies the shared framework).
+# The sources PLUS the art GLBs the csproj links as Content (the sim's collision hulls +
+# docking hardpoints). publish copies them to /app/assets, so the runtime image needs no
+# separate asset copy. client/assets is also where the Godot client's canonical copy lives.
 COPY shared/ shared/
 COPY server/ server/
+COPY client/assets/bases client/assets/bases
+COPY client/assets/asteroids client/assets/asteroids
 RUN dotnet publish server/SimServer.csproj -c Release -o /app /p:UseAppHost=false
+# Bake the convex-hull cache into the image (/app/sim-cache) so a cold container doesn't
+# recompute hulls on first start. Self-heals at run time if a GLB ever changes.
+RUN dotnet /app/SimServer.dll --pregen-assets
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
+# Carries the published binary, /app/assets (GLBs), and /app/sim-cache (warm hull cache).
 COPY --from=build /app ./
 
 # Binary game socket. Behind the hosting layer's TLS-terminating ingress (wss:// -> here).
@@ -30,5 +37,6 @@ EXPOSE 8090
 # Config is via env (see Program.cs):
 #   SIM_SECRET     optional shared-secret password (enables auth when set)
 #   SIM_AUTOSTART  set to 1 to skip the lobby ready-up (bots / benchmarking)
-# Seed/port are flags; override the command to change them.
-ENTRYPOINT ["dotnet", "SimServer.dll", "--port", "8090"]
+#   PORT/SIM_PORT  listen port (PORT wins; default 8090). A PaaS (Railway) injects PORT.
+# Seed is a flag; append --seed/--port to override the command.
+ENTRYPOINT ["dotnet", "SimServer.dll"]

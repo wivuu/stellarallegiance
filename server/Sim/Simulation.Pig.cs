@@ -30,8 +30,8 @@ public sealed partial class Simulation
     private const int MaxPigsPerTeam = 5;
     private const uint PigSquadDelayTicks = 10 * TickHz;   // 10 s after a wipe before the next squad
     private const uint PigAggroWindowTicks = 3 * TickHz;   // ~3 s aggression memory
-    private const float PigPatrolRadius = 400f;
-    private const float PigPatrolAngRate = 0.05f;
+    private const float PigPatrolReachFrac = 0.7f;   // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
+    private const float PigPatrolArrive = 120f;      // re-roll a patrol waypoint once within this distance of it
     private const float PigRadarRange = 1200f;
     private const float PigFireRange = 360f;
     private const float PigStandoff = 90f;
@@ -46,6 +46,9 @@ public sealed partial class Simulation
     private const float PigThreatSwitchMargin = 1.3f;
     private const float PigThreatBaseWeight = 2.5f;
     private const float PigBaseThreatRadius = 700f;
+    private const float PigThreatBomberBonus = 2.0f;            // extra threat score for Bomber-class enemies
+    private const uint PigWanderPeriodTicks = 60 * TickHz;      // 60 s window before a pig re-rolls its wander sector
+    private const uint PigBomberRespawnTicks = 15 * TickHz;     // 15 s cooldown before a team's bomber relaunches
 
     // Aiming skill (per-slot): lead accuracy, turn snappiness, residual wobble.
     private const float PigTurnGainMin = 2.2f;
@@ -74,10 +77,17 @@ public sealed partial class Simulation
         public ulong PigId;
         public byte Team;
         public byte Class;
+        public bool IsBomberSlot;      // the single per-team bomber slot (separate launch/cooldown lifecycle)
         public ShipSim? Ship;          // live drone OR its flying pod, or null when free
         public uint RespawnAtTick;     // staggered launch tick within an active squad
         public PigState State;
         public ulong? TargetShipId;
+
+        // Roaming patrol: a random waypoint the drone flies to when it has no combat goal,
+        // re-rolled on arrival or when the drone changes sector (see MakePatrolPlan).
+        public Vec3 PatrolPoint;
+        public bool HasPatrolPoint;
+        public uint PatrolSector;
     }
 
     // What the brain DECIDED for one drone this cycle; PigExecute re-steers from it at 20 Hz.
@@ -88,6 +98,30 @@ public sealed partial class Simulation
         public ulong TargetShipId;
         public float Px, Py, Pz;
         public float Radius;
+    }
+
+    // Everything one decision needs, gathered ONCE per drone per brain tick (single sector/radar
+    // scan) so the prioritization chain (TryRescue -> ... -> patrol) reads cheap fields instead
+    // of re-scanning. Built by GatherPigContext; consumed by the Try* goal methods.
+    private struct PigContext
+    {
+        public ShipSim Me;
+        public PigSlot? Slot;
+        public ulong PigId;
+        public Vec3 MyPos;
+        public uint Tick;
+        public ulong? KeepId;             // the slot's currently-locked target (hysteresis)
+
+        public Vec3? MyBasePos;           // our base in this sector, if any (for base-threat scoring)
+        public World.BaseSite? EnemyBase; // nearest enemy base in this sector, if any
+
+        public ShipSim? BestAggr;         // highest-threat aggressor in radar range
+        public float BestAggrScore;
+        public ShipSim? KeptAggr;         // the locked target, if still a visible aggressor
+        public float KeptAggrScore;
+        public ShipSim? NearestPassive;   // nearest non-aggressive enemy in radar range
+        public ShipSim? BestEnemyBomber;  // highest-threat enemy Bomber (priority target)
+        public float BestEnemyBomberScore;
     }
 
     private readonly List<PigSlot> _pigs = new();
@@ -149,16 +183,23 @@ public sealed partial class Simulation
         _pigSlotsCreated = true;
         for (byte team = 0; team < NumTeams; team++)
             for (int i = 0; i < MaxPigsPerTeam; i++)
+            {
+                // Last slot is reserved as the team's lone bomber; the rest alternate Scout/Fighter.
+                bool isBomber = i == MaxPigsPerTeam - 1;
                 _pigs.Add(new PigSlot
                 {
                     PigId = _nextPigId++,
                     Team = team,
-                    Class = (byte)(i % 2 == 0 ? FlightModel.ClassScout : FlightModel.ClassFighter),
+                    Class = isBomber
+                        ? FlightModel.ClassBomber
+                        : (byte)(i % 2 == 0 ? FlightModel.ClassScout : FlightModel.ClassFighter),
+                    IsBomberSlot = isBomber,
                     Ship = null,
                     RespawnAtTick = 0,
                     State = PigState.Idle,
                     TargetShipId = null,
                 });
+            }
     }
 
     // Tear down all drones (no player / match ended) and reset every slot + squad so the next
@@ -190,11 +231,15 @@ public sealed partial class Simulation
             if (TeamBaseSector(team) is not uint baseSector)
                 continue;
 
+            // Squad waves cover the scout/fighter slots only; the bomber slot is tracked
+            // separately so it launches on its own cadence and never gates a squad reset.
             int alive = 0, pending = 0;
             var empty = new List<PigSlot>();
+            PigSlot? bomber = null;
             foreach (var slot in _pigs)
             {
                 if (slot.Team != team) continue;
+                if (slot.IsBomberSlot) { bomber = slot; continue; }
                 if (slot.Ship is not null) { alive++; continue; }
                 empty.Add(slot);
                 if (slot.RespawnAtTick != 0) pending++;
@@ -206,27 +251,34 @@ public sealed partial class Simulation
                 {
                     _squadActive[team] = false;
                     _squadNextTick[team] = tick + PigSquadDelayTicks;
-                    continue;
                 }
-                foreach (var slot in empty)
-                    if (slot.RespawnAtTick != 0 && tick >= slot.RespawnAtTick)
-                        SpawnPig(slot, tick);
-                continue;
+                else
+                {
+                    foreach (var slot in empty)
+                        if (slot.RespawnAtTick != 0 && tick >= slot.RespawnAtTick)
+                            SpawnPig(slot, tick);
+                }
             }
-
-            if (tick < _squadNextTick[team])
-                continue;
-            if (!EnemyInSector(team, baseSector))
-                continue;
-
-            empty.Sort((a, b) => a.PigId.CompareTo(b.PigId));
-            for (int i = 0; i < empty.Count; i++)
+            else if (tick >= _squadNextTick[team] && EnemyInSector(team, baseSector))
             {
-                if (i == 0) SpawnPig(empty[i], tick);
-                else empty[i].RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks;
+                empty.Sort((a, b) => a.PigId.CompareTo(b.PigId));
+                for (int i = 0; i < empty.Count; i++)
+                {
+                    if (i == 0) SpawnPig(empty[i], tick);
+                    else empty[i].RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks;
+                }
+                _squadActive[team] = true;
+                _squadNextTick[team] = 0;
             }
-            _squadActive[team] = true;
-            _squadNextTick[team] = 0;
+
+            // Lone bomber: while a squad is fielded, keep exactly one bomber pressing the
+            // enemy base. After it is lost, FreePigPodSlot holds RespawnAtTick on cooldown.
+            if (bomber is PigSlot bs && _squadActive[team]
+                && bs.Ship is null && tick >= bs.RespawnAtTick
+                && EnemyBaseExists(team))
+            {
+                SpawnPig(bs, tick);
+            }
         }
     }
 
@@ -255,6 +307,7 @@ public sealed partial class Simulation
         slot.Ship = s;
         slot.State = PigState.Idle;
         slot.TargetShipId = null;
+        slot.HasPatrolPoint = false;   // fresh drone rolls its own patrol waypoint
     }
 
     // A PIG combat drone died: eject a PIG pod (auto-flies home via PodThink) and point the
@@ -278,15 +331,18 @@ public sealed partial class Simulation
     }
 
     // Free the slot tracking a resolved PIG pod. respawnAtTick==tick+1 = immediate respawn
-    // (docked/rescued); ==0 = leave free to join the next squad wave (pod destroyed).
-    private void FreePigPodSlot(ShipSim pod, uint respawnAtTick)
+    // (docked/rescued); ==0 = leave free to join the next squad wave (pod destroyed). A lost
+    // bomber instead waits out a relaunch cooldown so the team never fields two in quick succession.
+    private void FreePigPodSlot(ShipSim pod, uint respawnAtTick, uint tick)
     {
         _pigDecisions.Remove(pod.ShipId);
         foreach (var slot in _pigs)
             if (ReferenceEquals(slot.Ship, pod))
             {
                 slot.Ship = null;
-                slot.RespawnAtTick = respawnAtTick;
+                slot.RespawnAtTick = (slot.IsBomberSlot && respawnAtTick == 0)
+                    ? tick + PigBomberRespawnTicks
+                    : respawnAtTick;
                 slot.State = PigState.Idle;
                 slot.TargetShipId = null;
                 break;
@@ -320,7 +376,7 @@ public sealed partial class Simulation
                 if (!pod.IsPod || pod.IsPig || pod.Team != team) continue;
                 foreach (var p in _pigs)
                 {
-                    if (p.Team != team || p.State == PigState.Rescue) continue;
+                    if (p.Team != team || p.State == PigState.Rescue || p.IsBomberSlot) continue;
                     if (p.Ship is not ShipSim drone || drone.IsPod || drone.SectorId != pod.SectorId) continue;
                     float d2 = (drone.State.Pos - pod.State.Pos).LengthSquared();
                     if (d2 < best2) { best2 = d2; bestDrone = p; bestPod = pod.ShipId; }
@@ -330,102 +386,217 @@ public sealed partial class Simulation
         }
     }
 
-    // ---- The DECISION half (5 Hz): pick a target/mode, update the slot, return the plan ----
+    // ---- The DECISION half (5 Hz): gather context once, then walk a priority chain. ----
+    // Each Try* goal returns a concrete PigPlan when it claims this drone, or null to defer to
+    // the next, lower-priority goal. Bombers are single-minded: they skip ship-hunting goals
+    // and press the enemy base (and never chase another bomber). Scouts/fighters treat enemy
+    // bombers as the top combat priority. The final fallbacks roam sectors, then ring-patrol.
     private PigPlan PigDecide(ShipSim me, uint tick)
     {
-        PigSlot? slotOpt = _slotByShip.TryGetValue(me.ShipId, out var slotRow) ? slotRow : null;
-        ulong pigId = slotOpt?.PigId ?? me.ShipId;
-        Vec3 myPos = me.State.Pos;
+        var ctx = GatherPigContext(me, tick);
+        bool isBomber = ctx.Slot?.IsBomberSlot ?? false;
+        return TryRescue(in ctx)
+            ?? TryChaseLockedTarget(in ctx)
+            ?? (isBomber ? null : TryChaseEnemyBomber(in ctx))
+            ?? (isBomber ? null : TryChaseEnemy(in ctx))
+            ?? TryAttackBase(in ctx)
+            ?? TryWanderAleph(in ctx)
+            ?? MakePatrolPlan(in ctx);
+    }
 
-        // Rescue duty: emit a SteerShip plan onto the assigned friendly pod.
-        if (slotOpt is PigSlot rescuer && rescuer.State == PigState.Rescue
-            && rescuer.TargetShipId is ulong rescuePodId
-            && _ships.TryGetValue(rescuePodId, out var rescuePod)
-            && rescuePod.IsPod && rescuePod.Team == me.Team && rescuePod.SectorId == me.SectorId)
+    // One sector/radar scan feeding the whole chain: locates our base + nearest enemy base in
+    // this sector and ranks visible enemies (best aggressor, kept-target, nearest passive, and
+    // the best enemy bomber — priority targets regardless of whether they are currently firing).
+    private PigContext GatherPigContext(ShipSim me, uint tick)
+    {
+        var ctx = new PigContext
         {
-            return new PigPlan { Kind = PigKindSteerShip, PigId = pigId, TargetShipId = rescuePodId };
-        }
+            Me = me,
+            Slot = _slotByShip.TryGetValue(me.ShipId, out var slotRow) ? slotRow : null,
+            MyPos = me.State.Pos,
+            Tick = tick,
+            BestAggrScore = float.NegativeInfinity,
+            KeptAggrScore = float.NegativeInfinity,
+            BestEnemyBomberScore = float.NegativeInfinity,
+        };
+        ctx.PigId = ctx.Slot?.PigId ?? me.ShipId;
+        ctx.KeepId = ctx.Slot?.TargetShipId;
 
-        ulong? keepId = slotOpt?.TargetShipId;
-
-        // Locked target warped to another sector: chase THROUGH the aleph that leads there.
-        if (keepId is ulong lockId
-            && _ships.TryGetValue(lockId, out var locked)
-            && locked.Team != me.Team && locked.SectorId != me.SectorId)
-        {
-            if (AlephTo(me.SectorId, locked.SectorId) is World.Gate gate)
-            {
-                if (slotOpt is PigSlot spp) { spp.State = PigState.Seek; spp.TargetShipId = locked.ShipId; }
-                return new PigPlan { Kind = PigKindSteerPoint, PigId = pigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
-            }
-            keepId = null;
-        }
-
-        // Our own base in this sector (enemies near it are shelling the win condition).
-        Vec3? myBasePos = null;
+        // Our own base (base-threat scoring) + nearest enemy base, both in this sector.
+        float eb2 = float.PositiveInfinity;
         foreach (var b in World.Bases)
-            if (b.Team == me.Team && b.SectorId == me.SectorId) { myBasePos = b.Pos; break; }
+        {
+            if (b.SectorId != me.SectorId) continue;
+            if (b.Team == me.Team) ctx.MyBasePos = b.Pos;
+            else
+            {
+                float bd2 = (ctx.MyPos - b.Pos).LengthSquared();
+                if (bd2 < eb2) { eb2 = bd2; ctx.EnemyBase = b; }
+            }
+        }
 
         float radar2 = PigRadarRange * PigRadarRange;
         float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
-        ShipSim? bestAggr = null; float bestAggrScore = float.NegativeInfinity;
-        ShipSim? keptAggr = null; float keptAggrScore = float.NegativeInfinity;
-        ShipSim? nearestPassive = null; float nearestPassive2 = float.PositiveInfinity;
+        float nearestPassive2 = float.PositiveInfinity;
         foreach (var s in _order)
         {
             if (s.SectorId != me.SectorId || s.Team == me.Team) continue;
             if (s.IsPod) continue;
-            float d2 = (myPos - s.State.Pos).LengthSquared();
+            float d2 = (ctx.MyPos - s.State.Pos).LengthSquared();
             if (d2 > keep2) continue;
+
+            float score = PigThreatScore(ctx.MyPos, s, ctx.MyBasePos);
+
+            // Enemy bombers are priority targets whether or not they are currently firing.
+            if (s.Class == FlightModel.ClassBomber && d2 <= radar2 && score > ctx.BestEnemyBomberScore)
+            { ctx.BestEnemyBomberScore = score; ctx.BestEnemyBomber = s; }
+
             if (IsAggressive(s, tick))
             {
-                float score = PigThreatScore(myPos, s, myBasePos);
-                if (keepId is ulong k && s.ShipId == k) { keptAggr = s; keptAggrScore = score; }
-                if (d2 <= radar2 && score > bestAggrScore) { bestAggrScore = score; bestAggr = s; }
+                if (ctx.KeepId is ulong k && s.ShipId == k) { ctx.KeptAggr = s; ctx.KeptAggrScore = score; }
+                if (d2 <= radar2 && score > ctx.BestAggrScore) { ctx.BestAggrScore = score; ctx.BestAggr = s; }
             }
             else if (d2 <= radar2 && d2 < nearestPassive2)
             {
-                nearestPassive2 = d2; nearestPassive = s;
+                nearestPassive2 = d2; ctx.NearestPassive = s;
             }
         }
+        return ctx;
+    }
 
-        ShipSim? target;
-        if (bestAggr is ShipSim ba)
-            target = (keptAggr is ShipSim ka && bestAggrScore <= keptAggrScore * PigThreatSwitchMargin) ? ka : ba;
-        else
-            target = nearestPassive;
+    // Goal: fetch a downed friendly pod (duty pre-committed by AssignPigRescuers).
+    private PigPlan? TryRescue(in PigContext ctx)
+    {
+        if (ctx.Slot is PigSlot rescuer && rescuer.State == PigState.Rescue
+            && rescuer.TargetShipId is ulong rescuePodId
+            && _ships.TryGetValue(rescuePodId, out var rescuePod)
+            && rescuePod.IsPod && rescuePod.Team == ctx.Me.Team && rescuePod.SectorId == ctx.Me.SectorId)
+            return new PigPlan { Kind = PigKindSteerShip, PigId = ctx.PigId, TargetShipId = rescuePodId };
+        return null;
+    }
 
-        if (target is not ShipSim tgt)
+    // Goal: a locked target slipped to another sector — chase THROUGH the aleph that leads there.
+    private PigPlan? TryChaseLockedTarget(in PigContext ctx)
+    {
+        if (ctx.KeepId is ulong lockId
+            && _ships.TryGetValue(lockId, out var locked)
+            && locked.Team != ctx.Me.Team && locked.SectorId != ctx.Me.SectorId
+            && AlephTo(ctx.Me.SectorId, locked.SectorId) is World.Gate gate)
         {
-            // Stranded in a foreign sector → route home through the aleph.
-            if (TeamBaseSector(me.Team) is uint home && home != me.SectorId
-                && AlephTo(me.SectorId, home) is World.Gate homeGate)
-            {
-                if (slotOpt is PigSlot sh) { sh.State = PigState.Patrol; sh.TargetShipId = null; }
-                return new PigPlan { Kind = PigKindSteerPoint, PigId = pigId, Px = homeGate.Pos.X, Py = homeGate.Pos.Y, Pz = homeGate.Pos.Z };
-            }
-            // Nothing to fight → press the nearest enemy base and shell it.
-            World.BaseSite? targetBase = null; float tb2 = float.PositiveInfinity;
+            if (ctx.Slot is PigSlot spp) { spp.State = PigState.Seek; spp.TargetShipId = locked.ShipId; }
+            return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+        }
+        return null;
+    }
+
+    // Goal (scouts/fighters): an enemy bomber outranks all other ships — kill it first.
+    private PigPlan? TryChaseEnemyBomber(in PigContext ctx)
+    {
+        if (ctx.BestEnemyBomber is ShipSim eb)
+            return MakeChasePlan(in ctx, eb);
+        return null;
+    }
+
+    // Goal (scouts/fighters): pick the best aggressor (with hysteresis) else the nearest passive.
+    private PigPlan? TryChaseEnemy(in PigContext ctx)
+    {
+        ShipSim? target;
+        if (ctx.BestAggr is ShipSim ba)
+            target = (ctx.KeptAggr is ShipSim ka && ctx.BestAggrScore <= ctx.KeptAggrScore * PigThreatSwitchMargin) ? ka : ba;
+        else
+            target = ctx.NearestPassive;
+        return target is ShipSim tgt ? MakeChasePlan(in ctx, tgt) : (PigPlan?)null;
+    }
+
+    private PigPlan MakeChasePlan(in PigContext ctx, ShipSim tgt)
+    {
+        float dist = (tgt.State.Pos - ctx.MyPos).Length();
+        PigState state = dist <= PigFireRange ? PigState.Attack : PigState.Seek;
+        if (ctx.Slot is PigSlot sp) { sp.State = state; sp.TargetShipId = tgt.ShipId; }
+        return new PigPlan { Kind = PigKindChase, PigId = ctx.PigId, TargetShipId = tgt.ShipId };
+    }
+
+    // Goal: press the enemy base. Bombers pursue it cross-sector (their whole reason to exist);
+    // scouts/fighters only shell a base that is already in their current sector.
+    private PigPlan? TryAttackBase(in PigContext ctx)
+    {
+        if (ctx.EnemyBase is World.BaseSite eb)
+        {
+            if (ctx.Slot is PigSlot sb) { sb.State = PigState.Attack; sb.TargetShipId = null; }
+            return new PigPlan { Kind = PigKindAttackPoint, PigId = ctx.PigId, Px = eb.Pos.X, Py = eb.Pos.Y, Pz = eb.Pos.Z, Radius = World.BaseRadius };
+        }
+
+        if (ctx.Slot is PigSlot bs && bs.IsBomberSlot)
+        {
             foreach (var b in World.Bases)
             {
-                if (b.Team == me.Team || b.SectorId != me.SectorId) continue;
-                float bd2 = (myPos - b.Pos).LengthSquared();
-                if (bd2 < tb2) { tb2 = bd2; targetBase = b; }
+                if (b.Team == ctx.Me.Team) continue;
+                if (AlephTo(ctx.Me.SectorId, b.SectorId) is World.Gate gate)
+                {
+                    bs.State = PigState.Seek; bs.TargetShipId = null;
+                    return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+                }
             }
-            if (targetBase is World.BaseSite eb)
-            {
-                if (slotOpt is PigSlot sb) { sb.State = PigState.Attack; sb.TargetShipId = null; }
-                return new PigPlan { Kind = PigKindAttackPoint, PigId = pigId, Px = eb.Pos.X, Py = eb.Pos.Y, Pz = eb.Pos.Z, Radius = World.BaseRadius };
-            }
-            // Else patrol a ring around the sector center (origin in this world).
-            if (slotOpt is PigSlot sp) { sp.State = PigState.Patrol; sp.TargetShipId = null; }
-            return new PigPlan { Kind = PigKindPatrol, PigId = pigId, Px = 0f, Py = 0f, Pz = 0f };
         }
+        return null;
+    }
 
-        float dist = (tgt.State.Pos - myPos).Length();
-        PigState state = dist <= PigFireRange ? PigState.Attack : PigState.Seek;
-        if (slotOpt is PigSlot sp2) { sp2.State = state; sp2.TargetShipId = tgt.ShipId; }
-        return new PigPlan { Kind = PigKindChase, PigId = pigId, TargetShipId = tgt.ShipId };
+    // Goal: roam between sectors. Each pig picks a sector to patrol that holds for ~60 s (stable
+    // hash on PigId+period); if that sector isn't the current one, head for the aleph to it.
+    private PigPlan? TryWanderAleph(in PigContext ctx)
+    {
+        int sectorCount = World.Sectors.Count;
+        if (sectorCount <= 1) return null;
+
+        uint period = ctx.Tick / PigWanderPeriodTicks;
+        uint hash = unchecked((uint)ctx.PigId * 2654435761u ^ period * 1013904223u);
+        hash ^= hash >> 16;
+        uint wantSector = World.Sectors[(int)(hash % (uint)sectorCount)].Id;
+        if (wantSector == ctx.Me.SectorId) return null;   // already roaming the chosen sector
+
+        if (AlephTo(ctx.Me.SectorId, wantSector) is World.Gate gate)
+        {
+            if (ctx.Slot is PigSlot sl) { sl.State = PigState.Patrol; sl.TargetShipId = null; }
+            return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+        }
+        return null;
+    }
+
+    // Default: roam the sector. Each drone holds a random waypoint and flies to it; once it
+    // arrives (or crosses into a new sector) it rolls a fresh one, so the squad spreads out and
+    // sweeps the whole sector instead of orbiting the center — which keeps drones moving through
+    // the radar range of enemies anywhere in the sector, where the priority chain above takes
+    // over (TryChaseEnemy etc.). A drone with no slot (shouldn't happen for a live pig) just
+    // holds the center.
+    private PigPlan MakePatrolPlan(in PigContext ctx)
+    {
+        if (ctx.Slot is not PigSlot sp)
+            return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = 0f, Py = 0f, Pz = 0f };
+
+        sp.State = PigState.Patrol;
+        sp.TargetShipId = null;
+        if (!sp.HasPatrolPoint || sp.PatrolSector != ctx.Me.SectorId
+            || (sp.PatrolPoint - ctx.MyPos).LengthSquared() <= PigPatrolArrive * PigPatrolArrive)
+        {
+            sp.PatrolPoint = RandomPatrolPoint(ctx.Me.SectorId);
+            sp.PatrolSector = ctx.Me.SectorId;
+            sp.HasPatrolPoint = true;
+        }
+        return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = sp.PatrolPoint.X, Py = sp.PatrolPoint.Y, Pz = sp.PatrolPoint.Z };
+    }
+
+    // A random patrol waypoint inside the sector: uniform over a disc kept clear of the
+    // boundary, with a flatter vertical spread (the playfield is wide and shallow). Server-only
+    // RNG — drones are never predicted, so this needs no determinism contract.
+    private Vec3 RandomPatrolPoint(uint sector)
+    {
+        float radius = World.SectorRadius(sector);
+        if (float.IsInfinity(radius) || radius <= 0f) radius = 1000f;
+        float reach = radius * PigPatrolReachFrac;
+        double ang = _rng.NextDouble() * Math.PI * 2.0;
+        double rad = reach * Math.Sqrt(_rng.NextDouble());   // sqrt -> uniform over the disc area
+        float y = (float)((_rng.NextDouble() * 2.0 - 1.0) * reach * 0.25f);
+        return new Vec3((float)(Math.Cos(ang) * rad), y, (float)(Math.Sin(ang) * rad));
     }
 
     // ---- The EXECUTION half (20 Hz): cached decision -> this tick's flight input ----
@@ -451,7 +622,7 @@ public sealed partial class Simulation
             case PigKindAttackPoint:
                 return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius);
             case PigKindPatrol:
-                return PigPatrolFromCenter(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), tick);
+                return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 0.7f);
             default:
                 return default;
         }
@@ -520,16 +691,6 @@ public sealed partial class Simulation
         };
     }
 
-    private ShipInputState PigPatrolFromCenter(ShipSim me, Vec3 myPos, Quat myRot, Vec3 center, uint tick)
-    {
-        float phase = tick * PigPatrolAngRate + me.ShipId * 1.61803399f;
-        Vec3 waypoint = new Vec3(
-            center.X + MathF.Cos(phase) * PigPatrolRadius,
-            center.Y,
-            center.Z + MathF.Sin(phase) * PigPatrolRadius);
-        return PigSteerTo(me, myPos, myRot, waypoint, 0.6f);
-    }
-
     private static bool IsAggressive(ShipSim enemy, uint tick) =>
         !enemy.IsPod && enemy.LastFireTick != 0 && tick - enemy.LastFireTick <= PigAggroWindowTicks;
 
@@ -550,7 +711,13 @@ public sealed partial class Simulation
             {
                 foreach (var b in World.Bases)
                     if (b.Team == me.Team)
-                        return PigSteerTo(me, myPos, myRot, b.Pos, 1f);
+                    {
+                        // Aim at the docking-bay mouth (the entrance-hardpoint centroid) so the
+                        // now-solid hull funnels the pod onto the doorway faces instead of bouncing
+                        // it off. Without a model, fall back to the base center (pre-hull target).
+                        Vec3 aim = World.BaseHull is not null ? b.Pos + World.BaseDoorCenter : b.Pos;
+                        return PigSteerTo(me, myPos, myRot, aim, 1f);
+                    }
             }
         }
         return default;
@@ -631,8 +798,9 @@ public sealed partial class Simulation
             float bd = (ePos - bp).Length();
             baseThreat = 1f - bd / PigBaseThreatRadius; if (baseThreat < 0f) baseThreat = 0f;
         }
+        float bomberBonus = enemy.Class == FlightModel.ClassBomber ? PigThreatBomberBonus : 0f;
         return PigThreatAimWeight * aim + PigThreatCloseWeight * close
-             + PigThreatDmgWeight * dmg + PigThreatBaseWeight * baseThreat;
+             + PigThreatDmgWeight * dmg + PigThreatBaseWeight * baseThreat + bomberBonus;
     }
 
     private uint? TeamBaseSector(byte team)
@@ -646,6 +814,13 @@ public sealed partial class Simulation
     {
         foreach (var s in _order)
             if (s.Team != team && s.SectorId == sector) return true;
+        return false;
+    }
+
+    private bool EnemyBaseExists(byte team)
+    {
+        foreach (var b in World.Bases)
+            if (b.Team != team) return true;
         return false;
     }
 

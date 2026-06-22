@@ -322,14 +322,16 @@ namespace StellarAllegiance.Shared
         // predicted tracer then lands exactly where the authoritative projectile goes.
         // Uses only cross-runtime-deterministic ops: integer hashing, MathDet trig, and
         // IEEE sqrt (the same primitives the integrator already relies on). A spread of
-        // <= 0 returns fwd unchanged.
-        public static Vec3 SpreadDirection(Vec3 fwd, float spreadRad, ulong shipId, uint fireTick)
+        // <= 0 returns fwd unchanged. `barrel` distinguishes the muzzles of a multi-gun hull
+        // (e.g. the Fighter's twin cannons) so each barrel scatters independently; barrel 0
+        // (the default, used by every single-gun class) keeps the original key bit-for-bit.
+        public static Vec3 SpreadDirection(Vec3 fwd, float spreadRad, ulong shipId, uint fireTick, byte barrel = 0)
         {
             if (spreadRad <= 0f)
                 return fwd;
 
             // Two independent uniforms in [0,1) from a hash of the shot key.
-            uint key = unchecked((uint)shipId * 2654435761u ^ (fireTick * 40503u));
+            uint key = unchecked((uint)shipId * 2654435761u ^ (fireTick * 40503u) ^ ((uint)barrel * 0x9e3779b9u));
             float u1 = UnitFloat(Hash(key));
             float u2 = UnitFloat(Hash(key ^ 0x9e3779b9u));
 

@@ -103,8 +103,11 @@ namespace StellarAllegiance.Net
         public readonly byte Team;
         public readonly bool Ready;
         public readonly bool HasShip;
-        public LobbyPlayer(int id, string name, byte team, bool ready, bool hasShip)
-        { Id = id; Name = name; Team = team; Ready = ready; HasShip = hasShip; }
+        // The player's currently-controlled ship id (0 = not flying). Lets the renderer map a
+        // snapshot ship back to this pilot for the in-world nameplate.
+        public readonly ulong ShipId;
+        public LobbyPlayer(int id, string name, byte team, bool ready, bool hasShip, ulong shipId)
+        { Id = id; Name = name; Team = team; Ready = ready; HasShip = hasShip; ShipId = shipId; }
     }
 
     // One chat line, decoded from MsgChatRelay (scope 0 = all, 1 = team).

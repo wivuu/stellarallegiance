@@ -1,8 +1,10 @@
 namespace SimServer.Net;
 
 // One roster row on the wire (Protocol.BuildLobbyState) and the unit the matchmaker reasons
-// over. HasShip is overlaid at broadcast time from the sim (whether the client is flying).
-public readonly record struct LobbyEntry(int Id, string Name, byte Team, bool Ready, bool HasShip);
+// over. ShipId is overlaid at broadcast time from the sim — the client's currently-controlled ship
+// (0 = not flying), which lets every client map a snapshot ship back to its pilot's name for the
+// in-world nameplate. HasShip = ShipId != 0.
+public readonly record struct LobbyEntry(int Id, string Name, byte Team, bool Ready, bool HasShip, ulong ShipId);
 
 // The pre-match lobby: who's connected, which side they picked, and whether they're ready.
 // Lives at the connection layer (NOT in the authoritative sim, which only knows ships) and is
@@ -66,15 +68,19 @@ public sealed class Lobby
         get { lock (_lock) return _players.Count; }
     }
 
-    // A point-in-time roster copy. `hasShip` (optional) marks whoever is currently flying.
-    public List<LobbyEntry> Snapshot(Func<int, bool>? hasShip = null)
+    // A point-in-time roster copy. `shipIdOf` (optional) supplies each client's currently-controlled
+    // ship id from the sim (0 = not flying); HasShip is derived from it.
+    public List<LobbyEntry> Snapshot(Func<int, ulong>? shipIdOf = null)
     {
         lock (_lock)
         {
             var list = new List<LobbyEntry>(_players.Count);
             foreach (var kv in _players)
+            {
+                ulong sid = shipIdOf is null ? 0UL : shipIdOf(kv.Key);
                 list.Add(new LobbyEntry(kv.Key, kv.Value.Name, kv.Value.Team, kv.Value.Ready,
-                    hasShip is not null && hasShip(kv.Key)));
+                    sid != 0UL, sid));
+            }
             return list;
         }
     }

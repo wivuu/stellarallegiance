@@ -1,16 +1,16 @@
-# Graph Report - wivuullegiance  (2026-06-16)
+# Graph Report - wivuullegiance  (2026-06-21)
 
 ## Corpus Check
-- 67 files · ~96,305 words
+- 87 files · ~122,079 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1232 nodes · 2078 edges · 73 communities (61 shown, 12 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.8)
+- 1596 nodes · 2748 edges · 92 communities (76 shown, 16 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `88a518de`
+- Built from commit: `1b485663`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -81,20 +81,38 @@
 - [[_COMMUNITY_Community 67|Community 67]]
 - [[_COMMUNITY_Community 68|Community 68]]
 - [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
 - [[_COMMUNITY_Community 71|Community 71]]
 - [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
+- [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `WorldRenderer` - 84 edges
-2. `Simulation` - 52 edges
-3. `GameNetClient` - 48 edges
-4. `SectorOverview` - 40 edges
-5. `ClientHub` - 40 edges
-6. `Simulation` - 39 edges
+1. `WorldRenderer` - 88 edges
+2. `Simulation` - 66 edges
+3. `GameNetClient` - 57 edges
+4. `Simulation` - 50 edges
+5. `ClientHub` - 41 edges
+6. `SectorOverview` - 40 edges
 7. `TargetMarkers` - 36 edges
 8. `Chat` - 35 edges
-9. `PredictionController` - 31 edges
-10. `ShipController` - 30 edges
+9. `PredictionController` - 34 edges
+10. `EngineGlow` - 33 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `TargetMarkers` --inherits--> `Control`  [EXTRACTED]
@@ -114,14 +132,14 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (73 total, 12 thin omitted)
+## Communities (92 total, 16 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
 Nodes (13): IAuthenticator, IMatchmaker, IMatchResultSink, InMemoryPlayerDirectory, IPlayerDirectory, LoggingMatchResultSink, OpenAuthenticator, ReadyUpMatchmaker (+5 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.09
+Cohesion: 0.08
 Nodes (15): bool, byte, ConnectionManager, DefRegistry, Dictionary, double, float, List (+7 more)
 
 ### Community 2 - "Chat System"
@@ -133,12 +151,12 @@ Cohesion: 0.10
 Nodes (34): _base_params(), _bumps(), _colour_params(), _crystal(), _cull(), _detail_params(), eval_base(), _eval_shape() (+26 more)
 
 ### Community 4 - "Connection Overlay UI"
-Cohesion: 0.17
-Nodes (10): CanvasLayer, ConnectionManager, Label, Player, ShipController, WorldRenderer, CanvasLayer, Control (+2 more)
+Cohesion: 0.16
+Nodes (11): Color, ConnectionManager, HttpClient, Label, LineEdit, List, string, Task (+3 more)
 
 ### Community 6 - "Client-Side Prediction"
-Cohesion: 0.07
-Nodes (25): bool, DefRegistry, double, EngineGlow, float, int, List, Quaternion (+17 more)
+Cohesion: 0.06
+Nodes (28): bool, DefRegistry, double, EngineGlow, float, int, IReadOnlyList, Label3D (+20 more)
 
 ### Community 7 - "Shared Flight Model"
 Cohesion: 0.13
@@ -149,32 +167,32 @@ Cohesion: 0.09
 Nodes (17): bool, ConnectionManager, double, float, GameNetClient, InputEvent, int, ShipClass (+9 more)
 
 ### Community 9 - "Engine Glow Effects"
-Cohesion: 0.11
-Nodes (15): Color, CurveTexture, float, GradientTexture1D, GradientTexture2D, OmniLight3D, StandardMaterial3D, Texture2D (+7 more)
+Cohesion: 0.08
+Nodes (20): AudioStreamPlayer3D, Color, CurveTexture, float, GradientTexture1D, GradientTexture2D, int, OmniLight3D (+12 more)
 
 ### Community 10 - "Lobby UI"
-Cohesion: 0.12
-Nodes (16): Action, Action, Button, Color, ConnectionManager, DbConnection, GameNetClient, HBoxContainer (+8 more)
+Cohesion: 0.11
+Nodes (17): Action, Action, Button, Color, ConnectionManager, DbConnection, GameNetClient, HBoxContainer (+9 more)
 
 ### Community 11 - "Hit Flash Effect"
-Cohesion: 0.27
-Nodes (4): Quat, ShipInputState, ShipSim, Vec3
+Cohesion: 0.10
+Nodes (16): ArrayMesh, float, int, Shader, ShaderMaterial, ShaderMaterial, string, uint (+8 more)
 
 ### Community 12 - "Explosion Effect"
-Cohesion: 0.13
-Nodes (11): byte, Color, CurveTexture, double, float, GradientTexture1D, GradientTexture2D, MeshInstance3D (+3 more)
+Cohesion: 0.12
+Nodes (13): byte, Color, CurveTexture, double, float, GradientTexture1D, GradientTexture2D, MeshInstance3D (+5 more)
 
 ### Community 13 - "Target Markers HUD"
-Cohesion: 0.08
-Nodes (26): Basis, Camera3D, Basis, Vector3, WorldRenderer, bool, Camera3D, Color (+18 more)
+Cohesion: 0.07
+Nodes (28): Basis, Camera3D, Basis, float, InputEvent, Vector3, WorldRenderer, bool (+20 more)
 
 ### Community 14 - "Remote Ship Networked"
-Cohesion: 0.15
-Nodes (11): bool, DefRegistry, double, EngineGlow, float, int, List, Quaternion (+3 more)
+Cohesion: 0.12
+Nodes (14): bool, DefRegistry, double, EngineGlow, float, int, Label3D, List (+6 more)
 
 ### Community 15 - "Project Build Config"
-Cohesion: 0.12
-Nodes (12): wivuullegiance, net8.0, SpacetimeDB.ClientSDK (2.3.0), Godot.NET.Sdk/4.6.3, Microsoft.NET.Sdk.Web, net8.0, net8.0, Microsoft.NET.Sdk (+4 more)
+Cohesion: 0.11
+Nodes (15): wivuullegiance, net8.0, SIPSorcery (10.0.9), SpacetimeDB.ClientSDK (2.3.0), Godot.NET.Sdk/4.6.3, Microsoft.NET.Sdk.Web, net8.0, SIPSorcery (10.0.9) (+7 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.16
@@ -205,8 +223,8 @@ Cohesion: 0.42
 Nodes (8): _add_output_flags(), _file_info(), generate(), _generate_star(), main(), _opts(), _sizes(), Path
 
 ### Community 25 - "Starscape Background"
-Cohesion: 0.10
-Nodes (15): ArrayMesh, float, int, ShaderMaterial, ShaderMaterial, string, uint, Environment (+7 more)
+Cohesion: 0.18
+Nodes (12): Basis, DefRegistry, HardpointDef, List, Marker3D, Material, MeshInstance3D, ShipClass (+4 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.19
@@ -217,7 +235,7 @@ Cohesion: 0.25
 Nodes (7): commands, rollForward, version, isRoot, tools, csharpier, version
 
 ### Community 28 - "Local Publishing Scripts"
-Cohesion: 0.12
+Cohesion: 0.11
 Nodes (10): LobbyEntry, Lobby, Rec, bool, byte, Dictionary, Func, List (+2 more)
 
 ### Community 29 - "CI Workflow Pipeline"
@@ -233,55 +251,55 @@ Cohesion: 0.29
 Nodes (13): bool, byte, float, ShipClass, string, uint, ulong, Aleph (+5 more)
 
 ### Community 32 - "SpaceTimeDB Module Config"
-Cohesion: 0.20
-Nodes (7): Color, ConnectionManager, Dictionary, float, Vector2, WorldRenderer, Minimap
+Cohesion: 0.12
+Nodes (10): HeartbeatRequest, IReadOnlyCollection, ConcurrentDictionary, int, IReadOnlyList, TimeSpan, InMemoryServerRegistry, IServerRegistry (+2 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.09
 Nodes (17): bool, Camera3D, Color, float, ImmediateMesh, InputEvent, Label, MeshInstance3D (+9 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.21
-Nodes (6): IReadOnlyList, RemoteShip, Vector3, Frac, Pos, Team
+Cohesion: 0.16
+Nodes (8): IReadOnlyList, LobbyPlayer, Pos, RemoteShip, Vector3, Frac, Pos, Team
 
 ### Community 41 - "Community 41"
-Cohesion: 0.47
-Nodes (3): EventContext, Projectile, Projectile
+Cohesion: 0.14
+Nodes (15): IClientTransport, WebRtcListener, WebRtcTransport, PendingOfferDto, RTCDataChannel, CancellationToken, Channel, ClientHub (+7 more)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.09
-Nodes (20): object, Queue, Random, Action, bool, byte, Dictionary, float (+12 more)
+Cohesion: 0.07
+Nodes (27): IEnumerable, Muzzle, object, Queue, Random, Action, bool, byte (+19 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.17
-Nodes (12): Basis, DefRegistry, HardpointDef, List, Marker3D, Material, MeshInstance3D, ShipClass (+4 more)
+Cohesion: 0.21
+Nodes (12): GlbModel, GlbReader, TransformDir(), TransformPoint(), Trs(), JsonElement, Mat4, IEnumerable (+4 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.07
-Nodes (34): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+26 more)
+Cohesion: 0.06
+Nodes (41): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+33 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.12
-Nodes (16): BaseBeacon, Basis, Color, DefRegistry, float, GradientTexture2D, HardpointDef, Marker3D (+8 more)
+Nodes (17): BaseBeacon, Basis, bool, Color, DefRegistry, float, GradientTexture2D, HardpointDef (+9 more)
 
 ### Community 46 - "Community 46"
-Cohesion: 0.12
-Nodes (22): DetRng, Rock, rx, ry, rz, DetRng, Dictionary, float (+14 more)
+Cohesion: 0.08
+Nodes (29): DetRng, Rock, rx, ry, rz, bool, ConvexHull, DetRng (+21 more)
 
 ### Community 47 - "Community 47"
 Cohesion: 0.13
 Nodes (10): BinaryWriter, List<HardpointDef>, Protocol, byte, int, IReadOnlyList<LobbyEntry>, ShipSim, Vec3 (+2 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.06
-Nodes (25): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, CancellationTokenSource, Channel, ClientWebSocket (+17 more)
+Cohesion: 0.05
+Nodes (29): BinaryReader, CancellationTokenSource, bool, byte, CancellationToken, CancellationTokenSource, Channel, ClientWebSocket (+21 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.11
-Nodes (14): Gate, PigPlan, PigState, bool, byte, Dictionary, float, int (+6 more)
+Cohesion: 0.10
+Nodes (19): Gate, PigContext, PigPlan, PigState, bool, byte, Dictionary, float (+11 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.23
+Cohesion: 0.22
 Nodes (5): double, float, Projectile, Vector3, ProjectileView
 
 ### Community 56 - "Community 56"
@@ -289,76 +307,132 @@ Cohesion: 0.27
 Nodes (6): Asteroid, AuthoredRadius, Axis, Asteroid, Mesh, Speed
 
 ### Community 57 - "Community 57"
-Cohesion: 0.06
-Nodes (24): BaseDef, DbConnection, GameNetClient, Identity, string, BaseDef, byte, ConnectionManager (+16 more)
+Cohesion: 0.25
+Nodes (6): ConvexHull, Face, Plane, Dictionary, IReadOnlyList, Vec3
 
 ### Community 58 - "Community 58"
-Cohesion: 0.30
-Nodes (5): Base, Base, Color, EventContext, BaseHealthBar
+Cohesion: 0.29
+Nodes (6): Base, Base, EventContext, Projectile, EventContext, Projectile
 
 ### Community 59 - "Community 59"
-Cohesion: 0.27
-Nodes (6): Button, Color, ConnectionManager, double, Label, ConnectionOverlay
+Cohesion: 0.13
+Nodes (7): DbConnection, GameNetClient, Identity, string, Exception, ConnectionManager, ServerInputOverlay
 
 ### Community 60 - "Community 60"
 Cohesion: 0.29
 Nodes (4): int, uint, HmacSha256, Sha256
 
 ### Community 62 - "Community 62"
-Cohesion: 0.29
-Nodes (6): Control, Color, ConnectionManager, Label, LineEdit, ServerInputOverlay
+Cohesion: 0.13
+Nodes (10): AudioStream, AudioStreamPlayer, Dictionary, HashSet, int, List, string, Vector3 (+2 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.28
-Nodes (4): MeshInstance3D, Node, ShipClass, MeshInstance3D
-
-### Community 65 - "Community 65"
-Cohesion: 0.21
-Nodes (4): Node3D, Ship, StandardMaterial3D, Node3D
+Cohesion: 0.15
+Nodes (12): DateTimeOffset, PendingOffer, CancellationToken, ConcurrentDictionary, IReadOnlyList, List, string, Task (+4 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.14
 Nodes (11): bool, Color, double, float, ImmediateMesh, int, List, MeshInstance3D (+3 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.40
-Nodes (3): DbConnection, DbConnection, Match
+Cohesion: 0.15
+Nodes (14): LobbyRegistrar, bool, CancellationToken, CancellationTokenSource, ClientHub, HttpClient, IceServerDto, int (+6 more)
 
 ### Community 68 - "Community 68"
-Cohesion: 0.40
-Nodes (3): Button, Button, ShipClass
+Cohesion: 0.33
+Nodes (4): int, string, ConfigFile, UserPrefs
 
 ### Community 69 - "Community 69"
+Cohesion: 0.28
+Nodes (4): MeshInstance3D, Node, ShipClass, MeshInstance3D
+
+### Community 70 - "Community 70"
+Cohesion: 0.20
+Nodes (7): Color, ConnectionManager, Dictionary, float, Vector2, WorldRenderer, Minimap
+
+### Community 71 - "Community 71"
+Cohesion: 0.22
+Nodes (8): SimModel, SimModelCache, Forward, Name, int, Pos, uint, Vec3
+
+### Community 72 - "Community 72"
 Cohesion: 0.20
 Nodes (7): float, GradientTexture2D, StandardMaterial3D, Texture2D, WorldRenderer, GpuParticles3D, DustField
 
-### Community 71 - "Community 71"
-Cohesion: 0.33
-Nodes (3): IEnumerable, IEnumerable, Vec3
+### Community 73 - "Community 73"
+Cohesion: 0.40
+Nodes (3): Color, Label3D, Nameplate
 
-### Community 72 - "Community 72"
+### Community 77 - "Community 77"
+Cohesion: 0.23
+Nodes (7): bool, Camera3D, Color, float, Vector2, WorldRenderer, VelocityIndicator
+
+### Community 78 - "Community 78"
+Cohesion: 0.40
+Nodes (3): DbConnection, DbConnection, Match
+
+### Community 79 - "Community 79"
+Cohesion: 0.20
+Nodes (9): Host, Port, CancellationToken, HttpClient, string, Task, TimeSpan, ReachabilityProbe (+1 more)
+
+### Community 80 - "Community 80"
 Cohesion: 0.22
 Nodes (6): double, float, GradientTexture2D, MeshInstance3D, StandardMaterial3D, HitFlash
 
+### Community 81 - "Community 81"
+Cohesion: 0.24
+Nodes (7): Button, Color, ConnectionManager, double, Label, Control, ConnectionOverlay
+
+### Community 82 - "Community 82"
+Cohesion: 0.15
+Nodes (11): CanvasLayer, bool, ConnectionManager, Label, Player, ShipController, WorldRenderer, CanvasLayer (+3 more)
+
+### Community 85 - "Community 85"
+Cohesion: 0.32
+Nodes (4): SelfTest, int, Vec3, World
+
+### Community 86 - "Community 86"
+Cohesion: 0.24
+Nodes (5): Node3D, Color, StandardMaterial3D, Node3D, BaseHealthBar
+
+### Community 87 - "Community 87"
+Cohesion: 0.25
+Nodes (5): SimAssets, bool, object, SimModel, string
+
+### Community 88 - "Community 88"
+Cohesion: 0.40
+Nodes (3): Button, Button, ShipClass
+
+### Community 89 - "Community 89"
+Cohesion: 0.18
+Nodes (7): byte, ConnectionManager, DbConnection, Dictionary, ShipStats, Node, DefRegistry
+
+### Community 90 - "Community 90"
+Cohesion: 0.27
+Nodes (6): HardpointDef, List, WeaponDef, hp, weapon, WeaponDef
+
+### Community 91 - "Community 91"
+Cohesion: 0.22
+Nodes (6): BaseDef, BaseDef, IReadOnlyList, ShipClassDef, ShipClassDef, WorldConfig
+
 ## Knowledge Gaps
-- **358 isolated node(s):** `float`, `int`, `ShaderMaterial`, `Marker3D`, `BaseBeacon` (+353 more)
+- **453 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+448 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **12 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 67`, `PigAI NPC Behavior`, `Community 38`, `Community 41`, `Community 56`, `Community 58`, `Community 63`?**
-  _High betweenness centrality (0.174) - this node is a cross-community bridge._
-- **Why does `Node3D` connect `Community 65` to `AlephView World State`, `Community 66`, `Community 69`, `Client-Side Prediction`, `Community 37`, `Community 72`, `Engine Glow Effects`, `Community 43`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 55`, `Starscape Background`, `Community 58`?**
-  _High betweenness centrality (0.147) - this node is a cross-community bridge._
-- **Why does `Node` connect `Community 63` to `Ship Controller Input`, `Community 57`, `Community 51`?**
-  _High betweenness centrality (0.110) - this node is a cross-community bridge._
+- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 38`, `Community 69`, `Target Markers HUD`, `Community 78`, `Community 86`, `Community 56`, `Community 58`?**
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
+- **Why does `Node3D` connect `Community 86` to `AlephView World State`, `Community 66`, `Community 65`, `Community 37`, `Client-Side Prediction`, `Community 72`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 80`, `Community 55`, `Starscape Background`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Community 81`, `Community 82`, `Hit Flash Effect`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _378 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _473 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.08615384615384615 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08262108262108261 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07200929152148665 - nodes in this community are weakly interconnected._

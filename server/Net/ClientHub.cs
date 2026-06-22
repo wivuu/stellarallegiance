@@ -70,7 +70,7 @@ public sealed class ClientHub
     {
         public int Id;
         public byte Team;
-        public WebSocket Socket = null!;
+        public IClientTransport Transport = null!;
         public Channel<OutFrame> Outbound = null!;
         public ulong ShipId;
         // AOI anchor, cached each tick by AfterStep's sequential pre-pass (own ship pos/sector,
@@ -144,6 +144,16 @@ public sealed class ClientHub
 
     public int ConnectionCount => _clients.Count;
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
+
+    // Lobby-advertised liveness fields (reported in the heartbeat to the public lobby): how many
+    // players are connected and whether we're waiting in the lobby, mid-match, or wrapping up.
+    public int PlayerCount => _clients.Count;
+    public string GameState => _sim.Phase switch
+    {
+        Simulation.PhaseActive => "in-progress",
+        Simulation.PhaseEnded  => "ended",
+        _                      => "lobby",
+    };
 
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
@@ -219,17 +229,17 @@ public sealed class ClientHub
     private void BroadcastLobby()
     {
         var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner,
-            _lobby.Snapshot(id => _sim.ShipIdOf(id) != 0));
+            _lobby.Snapshot(id => _sim.ShipIdOf(id)));
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
 
-    public async Task HandleConnection(WebSocket socket, CancellationToken ct)
+    public async Task HandleConnection(IClientTransport transport, CancellationToken ct)
     {
         var client = new Client
         {
             Id = Interlocked.Increment(ref _nextClientId),
-            Socket = socket,
+            Transport = transport,
             Outbound = Channel.CreateBounded<OutFrame>(new BoundedChannelOptions(OutboundQueueDepth)
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
@@ -261,11 +271,11 @@ public sealed class ClientHub
         var buffer = new byte[2048];
         while (!ct.IsCancellationRequested)
         {
-            var result = await client.Socket.ReceiveAsync(buffer, ct);
-            if (result.MessageType == WebSocketMessageType.Close)
-                return;
-            if (result.Count < 1)
-                continue;
+            int count = await client.Transport.ReceiveAsync(buffer, ct);
+            if (count < 0)
+                return;        // transport closed
+            if (count < 1)
+                continue;      // empty frame
 
             switch (buffer[0])
             {
@@ -276,15 +286,15 @@ public sealed class ClientHub
                     // when the server runs without one); name labels the lobby roster. No
                     // class/team here — those are lobby actions, spawning is MsgSpawn.
                     string secret = "", name = "";
-                    if (result.Count > 1)
+                    if (count > 1)
                     {
                         int secLen = buffer[1];
                         int o = 2 + secLen;
-                        if (result.Count >= o + 1)
+                        if (count >= o + 1)
                         {
                             secret = System.Text.Encoding.UTF8.GetString(buffer, 2, secLen);
                             int nameLen = buffer[o]; o += 1;
-                            if (result.Count >= o + nameLen)
+                            if (count >= o + nameLen)
                                 name = System.Text.Encoding.UTF8.GetString(buffer, o, nameLen);
                         }
                     }
@@ -292,7 +302,7 @@ public sealed class ClientHub
                     if (!_auth.Authenticate(secret))
                     {
                         Console.WriteLine($"[Hub] rejected join (bad secret) from client {client.Id}");
-                        await client.Socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "bad secret", ct);
+                        await client.Transport.CloseAsync("bad secret", ct);
                         return;
                     }
 
@@ -309,7 +319,7 @@ public sealed class ClientHub
                     BroadcastLobby();
                     break;
                 }
-                case Protocol.MsgSpawn when result.Count >= 2:
+                case Protocol.MsgSpawn when count >= 2:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team
                     // comes from the lobby (authoritative), not the client.
@@ -323,23 +333,23 @@ public sealed class ClientHub
                     }
                     break;
                 }
-                case Protocol.MsgSetTeam when result.Count >= 2:
+                case Protocol.MsgSetTeam when count >= 2:
                 {
                     _lobby.SetTeam(client.Id, buffer[1]);
                     BroadcastLobby();
                     break;
                 }
-                case Protocol.MsgSetReady when result.Count >= 2:
+                case Protocol.MsgSetReady when count >= 2:
                 {
                     _lobby.SetReady(client.Id, buffer[1] != 0);
                     BroadcastLobby();
                     break;
                 }
-                case Protocol.MsgChat when result.Count >= 4:
+                case Protocol.MsgChat when count >= 4:
                 {
                     byte scope = buffer[1];
                     int len = BitConverter.ToUInt16(buffer, 2);
-                    if (result.Count >= 4 + len)
+                    if (count >= 4 + len)
                     {
                         string text = System.Text.Encoding.UTF8.GetString(buffer, 4, len);
                         byte fromTeam = _lobby.TeamOf(client.Id);
@@ -350,7 +360,7 @@ public sealed class ClientHub
                     }
                     break;
                 }
-                case Protocol.MsgInput when result.Count >= 1 + 4 + 24 + 1:
+                case Protocol.MsgInput when count >= 1 + 4 + 24 + 1:
                 {
                     uint tick = BitConverter.ToUInt32(buffer, 1);
                     byte flags = buffer[29];
@@ -369,7 +379,7 @@ public sealed class ClientHub
                     _sim.EnqueueInput(client.Id, tick, input);
                     break;
                 }
-                case Protocol.MsgPing when result.Count >= 1 + 4:
+                case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
                     // queue snapshots use, so the measured RTT reflects real send-side latency.
@@ -385,9 +395,7 @@ public sealed class ClientHub
     {
         await foreach (var frame in client.Outbound.Reader.ReadAllAsync(ct))
         {
-            await client.Socket.SendAsync(
-                new ArraySegment<byte>(frame.Buf, 0, frame.Len),
-                WebSocketMessageType.Binary, true, ct);
+            await client.Transport.SendAsync(frame.Buf.AsMemory(0, frame.Len), ct);
             Interlocked.Add(ref _bytesSent, frame.Len);
             if (frame.Pooled)
                 ArrayPool<byte>.Shared.Return(frame.Buf);   // safe: SendAsync has drained it
@@ -441,6 +449,11 @@ public sealed class ClientHub
         // roster the fan-out hands to the workers). After this, the snapshot build reads only
         // shared, immutable-for-the-tick state.
         _dispatchList.Clear();
+        // A spawn/death/respawn is processed by the sim a tick or more AFTER MsgSpawn enqueued it,
+        // so the controlled-ship id only becomes known here. Whenever one flips, the lobby roster's
+        // ShipId is stale, so re-broadcast it once after the pass — that roster is how every client
+        // maps a snapshot ship back to its pilot for the in-world nameplate (and the HasShip flag).
+        bool rosterDirty = false;
         foreach (var kv in _clients)
         {
             var client = kv.Value;
@@ -451,6 +464,7 @@ public sealed class ClientHub
             if (sid != client.ShipId)
             {
                 client.ShipId = sid;
+                rosterDirty = true;
                 if (sid != 0)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildYouAre(sid)));
             }
@@ -475,6 +489,10 @@ public sealed class ClientHub
 
             _dispatchList.Add(client);
         }
+
+        // Publish the corrected roster (ShipId now known for any ship that just spawned/changed).
+        if (rosterDirty)
+            BroadcastLobby();
 
         int n = _dispatchList.Count;
 

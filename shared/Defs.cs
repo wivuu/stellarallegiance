@@ -150,7 +150,9 @@ namespace StellarAllegiance.Shared
         public static uint FireInterval(byte classId) => classId switch
         {
             FlightModel.ClassBomber => 14u,
-            FlightModel.ClassFighter => 8u,
+            // The Fighter's twin cannons cycle as fast as the Scout's single gun — single-sourced
+            // off the Scout interval so the two stay locked if it's ever retuned.
+            FlightModel.ClassFighter => FireInterval(FlightModel.ClassScout),
             _ => 4u,
         };
 
@@ -187,10 +189,12 @@ namespace StellarAllegiance.Shared
                     Hp(HardpointKind.Weapon, 0, 0f, 0f, NoseOffset, 0f, 0f, 1f, ScoutWeaponId),
                     Hp(HardpointKind.MainEngine, 0, 0f, 0f, -2.25f, 0f, 0f, -1f))),
 
-            // Fighter: twin boosters either side; a heavier, wider-scatter cannon.
+            // Fighter: twin boosters either side; twin wing cannons (both the FighterWeaponId)
+            // that fire together — one bolt per muzzle, emerging from each hardpoint's offset.
             ShipDefFromStats(FlightModel.ClassFighter, "Fighter", FlightModel.Fighter, MaxHull(FlightModel.ClassFighter),
                 Hps(
-                    Hp(HardpointKind.Weapon, 0, 0f, 0f, NoseOffset, 0f, 0f, 1f, FighterWeaponId),
+                    Hp(HardpointKind.Weapon, 0, -0.9f, 0f, NoseOffset, 0f, 0f, 1f, FighterWeaponId),
+                    Hp(HardpointKind.Weapon, 1, 0.9f, 0f, NoseOffset, 0f, 0f, 1f, FighterWeaponId),
                     Hp(HardpointKind.Booster, 0, -1.1f, 0f, -2.75f, 0f, 0f, -1f),
                     Hp(HardpointKind.Booster, 1, 1.1f, 0f, -2.75f, 0f, 0f, -1f))),
 

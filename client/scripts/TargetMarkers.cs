@@ -54,8 +54,13 @@ public partial class TargetMarkers : Control
 	private static readonly Color Team0Color = new(0.25f, 0.50f, 0.95f);   // blue
 	private static readonly Color Team1Color = new(0.95f, 0.30f, 0.25f);   // red
 
-	// The per-class symbol drawn at each marker. A pod overrides the hull class.
-	private enum Kind { Base, Scout, Fighter, Bomber, Pod }
+	// Warp gates are team-neutral navigation landmarks, so they get their own cyan tint
+	// matching the AlephView vortex rather than a team color.
+	private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
+
+	// The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
+	// world landmark (warp gate) rather than a ship/base.
+	private enum Kind { Base, Scout, Fighter, Bomber, Pod, Aleph }
 
 	private WorldRenderer _world = null!;
 	private Camera3D _camera = null!;
@@ -229,6 +234,11 @@ public partial class TargetMarkers : Control
 			DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
 		foreach (var (pos, frac) in _world.VisibleBaseHealth())
 			DrawBaseHealthBar(view, pos, frac);
+
+		// Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
+		// edge arrow off-screen) so the way to the nearest aleph always reads.
+		foreach (var pos in _world.VisibleAlephs())
+			DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true);
 
 		var local = _world.LocalShip;
 		if (local == null)
@@ -407,6 +417,12 @@ public partial class TargetMarkers : Control
 			case Kind.Pod:
 				// Small circle.
 				DrawCircle(p, r * 0.85f, color);
+				break;
+			case Kind.Aleph:
+				// Warp gate: concentric hollow rings (a portal/vortex), distinct from the
+				// solid pod circle and never team-colored.
+				DrawArc(p, r, 0f, Mathf.Tau, 20, color, 1.6f, true);
+				DrawArc(p, r * 0.5f, 0f, Mathf.Tau, 16, color, 1.4f, true);
 				break;
 		}
 	}
