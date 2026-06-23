@@ -273,8 +273,12 @@ public partial class GameNetClient : Node
             await WaitForIceGathering(pc, ct);
 
             // Post the offer, get a ticket, long-poll for the server's answer.
+            var offerSdp = pc.localDescription.sdp.ToString();
+            // Confirm our gathered srflx actually made it into the non-trickle offer SDP — gathering
+            // it locally (the cand logs above) isn't enough; it has to be embedded here to reach the peer.
+            GD.Print($"[GameNet] offer SDP candidates: {SdpCandSummary(offerSdp)}");
             using var offerResp = await Http.PostAsJsonAsync($"{shareBase}/servers/{sessionId}/connect",
-                new { sdpOffer = pc.localDescription.sdp.ToString() }, ct);
+                new { sdpOffer = offerSdp }, ct);
             offerResp.EnsureSuccessStatusCode();
             var ticket = (await offerResp.Content.ReadFromJsonAsync<TicketDto>(ct))?.Ticket;
             if (string.IsNullOrEmpty(ticket)) throw new Exception("no signaling ticket from lobby");
@@ -289,6 +293,9 @@ public partial class GameNetClient : Node
                 // 204 NoContent = not ready; the GET already long-polled, so just loop.
             }
             if (answerSdp is null) throw new Exception("no answer from server (timeout)");
+            // What the SERVER put on the wire — if this lists no srflx, our checks have nothing
+            // routable off-LAN to pair with and ICE fails instantly (the symptom we're chasing).
+            GD.Print($"[GameNet] answer SDP candidates: {SdpCandSummary(answerSdp)}");
 
             var set = pc.setRemoteDescription(
                 new RTCSessionDescriptionInit { type = RTCSdpType.answer, sdp = answerSdp });
@@ -327,6 +334,25 @@ public partial class GameNetClient : Node
         }
         catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
         finally { pc.onicegatheringstatechange -= Handler; }
+    }
+
+    // Tally a=candidate lines embedded in an SDP by type — distinguishes "we gathered a srflx"
+    // from "the srflx is actually on the wire". Mirrors the server's WebRtcListener.SdpCandSummary.
+    private static string SdpCandSummary(string? sdp)
+    {
+        if (string.IsNullOrEmpty(sdp)) return "(empty sdp)";
+        int host = 0, srflx = 0, relay = 0, other = 0, total = 0;
+        foreach (var raw in sdp.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.IndexOf("a=candidate", StringComparison.Ordinal) < 0) continue;
+            total++;
+            if (line.Contains(" host ", StringComparison.Ordinal)) host++;
+            else if (line.Contains(" srflx ", StringComparison.Ordinal)) srflx++;
+            else if (line.Contains(" relay ", StringComparison.Ordinal)) relay++;
+            else other++;
+        }
+        return $"{total} total ({host} host / {srflx} srflx / {relay} relay / {other} other)";
     }
 
     private static List<RTCIceServer> ToIceServers(IceServerDto[]? dtos)

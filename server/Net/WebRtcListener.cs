@@ -192,12 +192,18 @@ public sealed class WebRtcListener
                 pc.Dispose();
                 return;
             }
+            // What the CLIENT actually put on the wire — if this has no srflx, the peer never
+            // offered a routable candidate and our checks have nothing off-LAN to pair with.
+            Console.WriteLine($"[WebRtc] offer SDP candidates (ticket {offer.Ticket}): {SdpCandSummary(offer.SdpOffer)}");
 
             var answer = pc.createAnswer();
             await pc.setLocalDescription(answer);
             await WaitForIceGathering(pc, ct);
 
             var answerSdp = pc.localDescription.sdp.ToString();
+            // What WE put on the wire — confirms our gathered srflx actually made it into the SDP
+            // (gathering it locally isn't enough; it has to be embedded in the non-trickle answer).
+            Console.WriteLine($"[WebRtc] answer SDP candidates (ticket {offer.Ticket}): {SdpCandSummary(answerSdp)}");
             using var resp = await _http.PostAsJsonAsync(
                 $"{_shareBase}/connect/{offer.Ticket}/answer", new { sdpAnswer = answerSdp }, ct);
             if (!resp.IsSuccessStatusCode)
@@ -234,6 +240,27 @@ public sealed class WebRtcListener
         }
         catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
         finally { pc.onicegatheringstatechange -= Handler; }
+    }
+
+    // Tally the a=candidate lines embedded in an SDP by type (host/srflx/relay). The diagnostic
+    // that distinguishes "we gathered a srflx" from "the srflx is actually on the wire" — a
+    // non-trickle SDP that lists host-only candidates can never connect two peers off-LAN.
+    private static string SdpCandSummary(string? sdp)
+    {
+        if (string.IsNullOrEmpty(sdp)) return "(empty sdp)";
+        int host = 0, srflx = 0, relay = 0, other = 0, total = 0;
+        foreach (var raw in sdp.Split('\n'))
+        {
+            var line = raw.Trim();
+            int i = line.IndexOf("a=candidate", StringComparison.Ordinal);
+            if (i < 0) continue;
+            total++;
+            if (line.Contains(" host ", StringComparison.Ordinal)) host++;
+            else if (line.Contains(" srflx ", StringComparison.Ordinal)) srflx++;
+            else if (line.Contains(" relay ", StringComparison.Ordinal)) relay++;
+            else other++;
+        }
+        return $"{total} total ({host} host / {srflx} srflx / {relay} relay / {other} other)";
     }
 
     // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
