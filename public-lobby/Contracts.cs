@@ -10,9 +10,12 @@ namespace PublicLobby;
 // probes the request's source IP instead. IceCandidates is legacy/unused.
 // Players/MaxPlayers/State seed the live status fields the browser shows (also refreshed by the
 // heartbeat) — current player count, capacity, and "lobby"/"in-progress"/"ended".
+// ProtocolVersion is the server's wire-protocol version (server/Net/Protocol.cs); clients filter the
+// browser list to their own protocol so they only see servers they can actually handshake with. 0 =
+// unspecified (a legacy server that predates this field) — those match no real client filter.
 public record RegisterRequest(
     string Name, int Port, string? PublicEndpoint, string[]? IceCandidates,
-    int Players = 0, int MaxPlayers = 0, string? State = null);
+    int Players = 0, int MaxPlayers = 0, string? State = null, int ProtocolVersion = 0);
 
 // Periodic liveness ping. Carries the current player count, capacity, and game state so the
 // browser list stays fresh between (re)registrations. All optional — a body-less ping just
@@ -31,7 +34,8 @@ public record ServerEntry(
     IReadOnlyList<IceServer> IceServers,
     int Players = 0,
     int MaxPlayers = 0,
-    string? State = null);
+    string? State = null,
+    int ProtocolVersion = 0);
 
 // A single ICE server entry, mirroring the WebRTC RTCIceServer shape. Urls is one or more
 // stun:/turn: URLs; Username/Credential are set only for TURN.

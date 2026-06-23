@@ -65,8 +65,13 @@ public sealed partial class Simulation
     private const float PigJukeAmpMax = 1.0f;
 
     // Lead solving uses the drone's primary weapon (all server weapons share these).
-    private static float PigShotSpeed => Weapons[0].Speed;       // 200 u/s
-    private static uint PigShotLifeTicks => Weapons[0].LifeTicks; // 16
+    // Stored as fields (not properties) so the array lookup is paid once, not per call.
+    private static readonly float PigShotSpeed = Weapons[0].Speed;          // 200 u/s
+    private static readonly uint PigShotLifeTicks = Weapons[0].LifeTicks;   // 16
+    private static readonly float PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
+    private static readonly float PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
+    // Precomputed once; used in both PigChaseInput and PigAttackPoint.
+    private static readonly float PigAimSinDeg = MathF.Sin(PigAimDeg * (MathF.PI / 180f));
 
     private enum PigState : byte { Idle, Seek, Attack, Patrol, Rescue }
 
@@ -124,13 +129,18 @@ public sealed partial class Simulation
         public float BestEnemyBomberScore;
     }
 
-    private readonly List<PigSlot> _pigs = new();
-    private readonly Dictionary<ulong, PigPlan> _pigDecisions = new();   // keyed by live drone ShipId
-    private readonly Dictionary<ulong, PigSlot> _slotByShip = new();     // rebuilt each brain tick
+    private readonly List<PigSlot> _pigs = [];
+    private readonly Dictionary<ulong, PigPlan> _pigDecisions = [];   // keyed by live drone ShipId
+    private readonly Dictionary<ulong, PigSlot> _slotByShip = [];     // rebuilt each brain tick
     private readonly uint[] _squadNextTick = new uint[NumTeams];
     private readonly bool[] _squadActive = new bool[NumTeams];
     private bool _pigSlotsCreated;
     private ulong _nextPigId = 1;
+
+    // Reused across brain ticks (5 Hz) to avoid per-tick allocations.
+    private readonly HashSet<ulong> _livePigIds = [];
+    private readonly List<ulong> _stalePigIds = [];
+    private readonly List<PigSlot> _emptyPigSlots = [];
 
     // ---- Brain loop (5 Hz): lifecycle + target selection -> cached PigDecision ----
     // Called from Step() every tick; the body only runs on the 5 Hz cadence.
@@ -160,20 +170,20 @@ public sealed partial class Simulation
                 _slotByShip[sh.ShipId] = p;
 
         // Decide once per live combat drone; pods auto-fly via PodThink (not brained here).
-        var liveIds = new HashSet<ulong>();
+        _livePigIds.Clear();
         foreach (var me in _order)
         {
             if (!me.IsPig || me.IsPod) continue;
-            liveIds.Add(me.ShipId);
+            _livePigIds.Add(me.ShipId);
             _pigDecisions[me.ShipId] = PigDecide(me, tick);
         }
         // Prune decisions whose drone no longer exists.
-        if (_pigDecisions.Count > liveIds.Count)
+        if (_pigDecisions.Count > _livePigIds.Count)
         {
-            var stale = new List<ulong>();
+            _stalePigIds.Clear();
             foreach (var id in _pigDecisions.Keys)
-                if (!liveIds.Contains(id)) stale.Add(id);
-            foreach (var id in stale) _pigDecisions.Remove(id);
+                if (!_livePigIds.Contains(id)) _stalePigIds.Add(id);
+            foreach (var id in _stalePigIds) _pigDecisions.Remove(id);
         }
     }
 
@@ -192,7 +202,7 @@ public sealed partial class Simulation
                     Team = team,
                     Class = isBomber
                         ? FlightModel.ClassBomber
-                        : (byte)(i % 2 == 0 ? FlightModel.ClassScout : FlightModel.ClassFighter),
+                        : i % 2 == 0 ? FlightModel.ClassScout : FlightModel.ClassFighter,
                     IsBomberSlot = isBomber,
                     Ship = null,
                     RespawnAtTick = 0,
@@ -234,7 +244,8 @@ public sealed partial class Simulation
             // Squad waves cover the scout/fighter slots only; the bomber slot is tracked
             // separately so it launches on its own cadence and never gates a squad reset.
             int alive = 0, pending = 0;
-            var empty = new List<PigSlot>();
+            _emptyPigSlots.Clear();
+            var empty = _emptyPigSlots;
             PigSlot? bomber = null;
             foreach (var slot in _pigs)
             {
@@ -297,7 +308,7 @@ public sealed partial class Simulation
         };
         PlaceAtBase(s, World.ShipRadius + 6f, tick);
         // -2..2 vertical fan keyed by slot.
-        float fan = (slot.PigId % 5) * (World.ShipRadius * 2.5f) - 2f * World.ShipRadius * 2.5f;
+        float fan = ((slot.PigId % 5) - 2f) * (World.ShipRadius * 2.5f);
         s.State.Pos += new Vec3(0f, fan, 0f);
         s.State.Mass = FlightModel.StatsFor(slot.Class, false).Mass;
         s.Health = MaxHull(slot.Class);
@@ -436,7 +447,8 @@ public sealed partial class Simulation
         }
 
         float radar2 = PigRadarRange * PigRadarRange;
-        float keep2 = (PigRadarRange * 1.25f) * (PigRadarRange * 1.25f);
+        float keepRange = PigRadarRange * 1.25f;
+        float keep2 = keepRange * keepRange;
         float nearestPassive2 = float.PositiveInfinity;
         foreach (var s in _order)
         {
@@ -505,7 +517,7 @@ public sealed partial class Simulation
             target = (ctx.KeptAggr is ShipSim ka && ctx.BestAggrScore <= ctx.KeptAggrScore * PigThreatSwitchMargin) ? ka : ba;
         else
             target = ctx.NearestPassive;
-        return target is ShipSim tgt ? MakeChasePlan(in ctx, tgt) : (PigPlan?)null;
+        return target is ShipSim tgt ? MakeChasePlan(in ctx, tgt) : null;
     }
 
     private PigPlan MakeChasePlan(in PigContext ctx, ShipSim tgt)
@@ -678,7 +690,7 @@ public sealed partial class Simulation
         }
 
         bool inRange = dist <= PigFireRange;
-        bool onTarget = haveLead && local.Z > 0f && aimErr < MathF.Sin(PigAimDeg * (MathF.PI / 180f));
+        bool onTarget = haveLead && local.Z > 0f && aimErr < PigAimSinDeg;
         return new ShipInputState
         {
             Thrust = thrust,
@@ -729,10 +741,10 @@ public sealed partial class Simulation
         haveLead = false;
         Vec3 dvec = targetPos - shooterPos;
         Vec3 vrel = targetVel - shooterVel;
-        float a = PigShotSpeed * PigShotSpeed - vrel.LengthSquared();
+        float a = PigShotSpeedSq - vrel.LengthSquared();
         float b = 2f * Dot(dvec, vrel);
         float c = dvec.LengthSquared();
-        float maxLead = PigShotLifeTicks * FlightModel.Dt;
+        float maxLead = PigMaxLead;
 
         float t;
         if (MathF.Abs(a) < 1e-3f)
@@ -862,7 +874,7 @@ public sealed partial class Simulation
         else thrust = 0.2f;
 
         float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
-        bool onTarget = local.Z > 0f && aimErr < MathF.Sin(PigAimDeg * (MathF.PI / 180f));
+        bool onTarget = local.Z > 0f && aimErr < PigAimSinDeg;
         bool inRange = (dist - radius) <= PigFireRange;
         return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch, Firing = inRange && onTarget };
     }
@@ -896,7 +908,7 @@ public sealed partial class Simulation
     // ---- small server-only math helpers ----
     private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
     private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
-    private static Quat Conjugate(Quat q) => new Quat(-q.X, -q.Y, -q.Z, q.W);
+    private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
 
     private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
     {

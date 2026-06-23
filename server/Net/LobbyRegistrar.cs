@@ -155,6 +155,10 @@ public sealed class LobbyRegistrar
                     players = _hub.PlayerCount,
                     maxPlayers = _maxPlayers,
                     state = _hub.GameState,
+                    // Advertise our wire-protocol version so the lobby only lists us to clients on the
+                    // same protocol (they filter /servers?protocol=). This is the byte the handshake
+                    // already gates on (Protocol.Version / GameNetClient.ProtocolVersion).
+                    protocolVersion = (int)Protocol.Version,
                 }, ct);
             if (!resp.IsSuccessStatusCode)
             {

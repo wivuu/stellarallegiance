@@ -176,17 +176,17 @@ public partial class GameNetClient : Node
 
     public void SendInput(uint tick, in ShipInputState input)
     {
-        var f = new byte[30];
+        Span<byte> f = stackalloc byte[30];
         f[0] = 2;   // Input
-        BitConverter.TryWriteBytes(f.AsSpan(1), tick);
-        BitConverter.TryWriteBytes(f.AsSpan(5), input.Thrust);
-        BitConverter.TryWriteBytes(f.AsSpan(9), input.StrafeX);
-        BitConverter.TryWriteBytes(f.AsSpan(13), input.StrafeY);
-        BitConverter.TryWriteBytes(f.AsSpan(17), input.Yaw);
-        BitConverter.TryWriteBytes(f.AsSpan(21), input.Pitch);
-        BitConverter.TryWriteBytes(f.AsSpan(25), input.Roll);
+        BitConverter.TryWriteBytes(f[1..], tick);
+        BitConverter.TryWriteBytes(f[5..], input.Thrust);
+        BitConverter.TryWriteBytes(f[9..], input.StrafeX);
+        BitConverter.TryWriteBytes(f[13..], input.StrafeY);
+        BitConverter.TryWriteBytes(f[17..], input.Yaw);
+        BitConverter.TryWriteBytes(f[21..], input.Pitch);
+        BitConverter.TryWriteBytes(f[25..], input.Roll);
         f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0) | (input.Coast ? 4 : 0));
-        _tx.Writer.TryWrite(f);
+        _tx.Writer.TryWrite(f.ToArray());
     }
 
     public void SendPing(uint nonce)
@@ -394,7 +394,8 @@ public partial class GameNetClient : Node
     }
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-    private const byte ProtocolVersion = 8;
+    // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
+    public const byte ProtocolVersion = 8;
 
     private void ApplyWelcome(BinaryReader r)
     {

@@ -242,14 +242,15 @@ public partial class BaseBeacon : Node3D
 	{
 		_phase = GD.Randf() * Period;
 
+		var dot = RadialDot();
 		_moteMat = new StandardMaterial3D
 		{
 			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
 			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
 			BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-			AlbedoTexture = RadialDot(),
+			AlbedoTexture = dot,
 			EmissionEnabled = true,
-			EmissionTexture = RadialDot(),
+			EmissionTexture = dot,
 			Emission = Color,
 			EmissionEnergyMultiplier = 4f,
 			BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,

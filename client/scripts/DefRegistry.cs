@@ -31,13 +31,14 @@ public partial class DefRegistry : Node
     // Derived ShipStats memo keyed by ClassId (ShipStats.Create runs an Exp() — too costly to
     // repeat per-ship per-tick). Pure function of the def, so it never breaks determinism;
     // cleared whenever the defs are reloaded.
-    private readonly Dictionary<byte, ShipStats> _statsCache = new();
+    private readonly Dictionary<byte, ShipStats> _statsCache = [];
+    private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef weapon)>> _mountsCache = [];
 
     // Apply the defs downloaded from the server (GameNetClient.ApplyDefs).
     public void Load(IReadOnlyList<ShipClassDef> ships, IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases, WorldConfig _)
     {
-        _ships.Clear(); _weapons.Clear(); _bases.Clear(); _statsCache.Clear();
+        _ships.Clear(); _weapons.Clear(); _bases.Clear(); _statsCache.Clear(); _mountsCache.Clear();
         foreach (var s in ships) _ships[s.ClassId] = s;
         foreach (var w in weapons) _weapons[w.WeaponId] = w;
         foreach (var b in bases) _bases[b.BaseTypeId] = b;
@@ -76,11 +77,14 @@ public partial class DefRegistry : Node
     // (e.g. a pod) — in that case the ship simply doesn't fire.
     public List<(HardpointDef hp, WeaponDef weapon)> WeaponMounts(byte classId)
     {
+        if (_mountsCache.TryGetValue(classId, out var cached))
+            return cached;
         var mounts = new List<(HardpointDef, WeaponDef)>();
         if (_ships.TryGetValue(classId, out var def) && def.Hardpoints is not null)
             foreach (var h in def.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon && _weapons.TryGetValue(h.WeaponId, out var w))
                     mounts.Add((h, w));
+        _mountsCache[classId] = mounts;
         return mounts;
     }
 

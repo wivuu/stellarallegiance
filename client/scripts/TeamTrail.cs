@@ -83,8 +83,12 @@ public partial class TeamTrail : Node3D
 		if (_samples.Count == 0 || pos.DistanceTo(_samples[^1].Pos) > MinSampleDist)
 			_samples.Add(new Sample { Pos = pos, Time = now });
 
-		// Age out the tail and cap the buffer.
-		_samples.RemoveAll(s => now - s.Time > TrailSeconds);
+		// Age out the tail (samples are in insertion/time order, so expired ones are at the front).
+		int cutoff = 0;
+		while (cutoff < _samples.Count && now - _samples[cutoff].Time > TrailSeconds)
+			cutoff++;
+		if (cutoff > 0)
+			_samples.RemoveRange(0, cutoff);
 		if (_samples.Count > MaxSamples)
 			_samples.RemoveRange(0, _samples.Count - MaxSamples);
 
