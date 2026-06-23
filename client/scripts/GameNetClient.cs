@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -252,6 +253,14 @@ public partial class GameNetClient : Node
             if (entry is null) throw new Exception("server not found in lobby");
 
             pc = new RTCPeerConnection(new RTCConfiguration { iceServers = ToIceServers(entry.IceServers) });
+
+            // Collect every a=candidate line as it gathers. SIPSorcery's offerer drops candidates
+            // gathered AFTER createOffer() from pc.localDescription (the answerer keeps them), so a
+            // non-trickle offer ends up host-only and our srflx never reaches the peer — ICE then
+            // fails instantly with no routable pair. We re-inject these into the offer SDP below.
+            var gatheredCands = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            pc.onicecandidate += c => { if (c is not null) gatheredCands.Enqueue(BuildCandidateAttr(c)); };
+
             var dc = await pc.createDataChannel("game");
             var dcOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -274,9 +283,13 @@ public partial class GameNetClient : Node
 
             // Post the offer, get a ticket, long-poll for the server's answer.
             var offerSdp = pc.localDescription.sdp.ToString();
-            // Confirm our gathered srflx actually made it into the non-trickle offer SDP — gathering
-            // it locally (the cand logs above) isn't enough; it has to be embedded here to reach the peer.
-            GD.Print($"[GameNet] offer SDP candidates: {SdpCandSummary(offerSdp)}");
+            // Re-inject any gathered candidate (esp. our srflx) that SIPSorcery left out of the
+            // offerer's localDescription. Without this the offer is host-only and unroutable off-LAN.
+            var gatheredList = gatheredCands.ToArray();
+            offerSdp = EnsureCandidatesInSdp(offerSdp, gatheredList);
+            // A srflx count of 0 here is the regression signal — the peer can't reach us off-LAN.
+            int offerSrflx = gatheredList.Count(l => l.Contains(" typ srflx", StringComparison.Ordinal));
+            GD.Print($"[GameNet] webrtc offer: {gatheredList.Length} local candidates ({offerSrflx} srflx)");
             using var offerResp = await Http.PostAsJsonAsync($"{shareBase}/servers/{sessionId}/connect",
                 new { sdpOffer = offerSdp }, ct);
             offerResp.EnsureSuccessStatusCode();
@@ -293,9 +306,6 @@ public partial class GameNetClient : Node
                 // 204 NoContent = not ready; the GET already long-polled, so just loop.
             }
             if (answerSdp is null) throw new Exception("no answer from server (timeout)");
-            // What the SERVER put on the wire — if this lists no srflx, our checks have nothing
-            // routable off-LAN to pair with and ICE fails instantly (the symptom we're chasing).
-            GD.Print($"[GameNet] answer SDP candidates: {SdpCandSummary(answerSdp)}");
 
             var set = pc.setRemoteDescription(
                 new RTCSessionDescriptionInit { type = RTCSdpType.answer, sdp = answerSdp });
@@ -336,23 +346,51 @@ public partial class GameNetClient : Node
         finally { pc.onicegatheringstatechange -= Handler; }
     }
 
-    // Tally a=candidate lines embedded in an SDP by type — distinguishes "we gathered a srflx"
-    // from "the srflx is actually on the wire". Mirrors the server's WebRtcListener.SdpCandSummary.
-    private static string SdpCandSummary(string? sdp)
+    // Serialize an RTCIceCandidate to its SDP "a=candidate:..." attribute line deterministically
+    // from its W3C properties — we don't rely on SIPSorcery's ToString() (format unverified). Shape
+    // per RFC 8839: candidate:<foundation> <component> <proto> <priority> <addr> <port> typ <type>
+    // [raddr <relAddr> rport <relPort>].
+    private static string BuildCandidateAttr(RTCIceCandidate c)
     {
-        if (string.IsNullOrEmpty(sdp)) return "(empty sdp)";
-        int host = 0, srflx = 0, relay = 0, other = 0, total = 0;
-        foreach (var raw in sdp.Split('\n'))
+        var line = $"candidate:{c.foundation} {(int)c.component} {c.protocol.ToString().ToLowerInvariant()} " +
+                   $"{c.priority} {c.address} {c.port} typ {c.type.ToString().ToLowerInvariant()}";
+        if ((c.type is RTCIceCandidateType.srflx or RTCIceCandidateType.relay or RTCIceCandidateType.prflx)
+            && !string.IsNullOrEmpty(c.relatedAddress))
+            line += $" raddr {c.relatedAddress} rport {c.relatedPort}";
+        return "a=" + line;
+    }
+
+    // Insert any gathered a=candidate line not already present in the SDP, placed right after the
+    // existing candidate block of the (single) data m-section so the ufrag/mid context matches.
+    // Works around SIPSorcery 10.0.9 dropping late-gathered candidates from the offerer's
+    // localDescription; idempotent (skips duplicates, e.g. the srflx SIPSorcery reports twice).
+    private static string EnsureCandidatesInSdp(string sdp, IEnumerable<string> candidateLines)
+    {
+        if (string.IsNullOrEmpty(sdp)) return sdp;
+        var lines = sdp.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').ToList();
+
+        // Existing candidate values already on the wire (compare on the value, ignore "a=" prefix).
+        var present = new HashSet<string>(
+            lines.Where(l => l.StartsWith("a=candidate", StringComparison.Ordinal))
+                 .Select(l => l.Trim()), StringComparer.Ordinal);
+
+        int lastCand = lines.FindLastIndex(l => l.StartsWith("a=candidate", StringComparison.Ordinal));
+        // Fall back to just after the data m-section's a=mid (or the m= line) if no host candidate landed.
+        if (lastCand < 0)
+        {
+            lastCand = lines.FindIndex(l => l.StartsWith("a=mid:", StringComparison.Ordinal));
+            if (lastCand < 0) lastCand = lines.FindLastIndex(l => l.StartsWith("m=", StringComparison.Ordinal));
+        }
+        if (lastCand < 0) return sdp;   // shape we don't recognize — leave untouched
+
+        foreach (var raw in candidateLines)
         {
             var line = raw.Trim();
-            if (line.IndexOf("a=candidate", StringComparison.Ordinal) < 0) continue;
-            total++;
-            if (line.Contains(" host ", StringComparison.Ordinal)) host++;
-            else if (line.Contains(" srflx ", StringComparison.Ordinal)) srflx++;
-            else if (line.Contains(" relay ", StringComparison.Ordinal)) relay++;
-            else other++;
+            if (!line.StartsWith("a=candidate", StringComparison.Ordinal)) continue;
+            if (!present.Add(line)) continue;        // dup
+            lines.Insert(++lastCand, line);
         }
-        return $"{total} total ({host} host / {srflx} srflx / {relay} relay / {other} other)";
+        return string.Join("\r\n", lines) + "\r\n";
     }
 
     private static List<RTCIceServer> ToIceServers(IceServerDto[]? dtos)
