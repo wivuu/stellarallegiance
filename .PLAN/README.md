@@ -22,6 +22,7 @@ Archives:
 - Code cleanup and refactor
 - HUD health/shield bars should be true HUD elements, not world-space objects (the base
   health bar currently casts a shadow on the base).
+- Harden lobby endpoints to ensure to ensure that server registration cannot be easily messed with by malicious clients.
 ---
 
 ## Roadmap (prioritized)

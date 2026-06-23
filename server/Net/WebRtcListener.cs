@@ -128,6 +128,37 @@ public sealed class WebRtcListener
         try
         {
             var pc = new RTCPeerConnection(new RTCConfiguration { iceServers = _iceServers });
+
+            // --- ICE diagnostics ------------------------------------------------------------
+            // Make a failed remote join observable: log every candidate we gather (by type) and
+            // every ICE/connection state transition. Read the candidate-type tallies on a failure:
+            //   no "srflx"      => STUN unreachable from here; we shipped host-only candidates and
+            //                      no off-LAN client can route to us.
+            //   srflx but ICE  => symmetric NAT on one/both ends; STUN can't punch (would need TURN).
+            //     never connects
+            int hostCands = 0, srflxCands = 0, relayCands = 0, otherCands = 0;
+            pc.onicecandidate += c =>
+            {
+                if (c is null) return;
+                switch (c.type)
+                {
+                    case RTCIceCandidateType.host:  Interlocked.Increment(ref hostCands);  break;
+                    case RTCIceCandidateType.srflx: Interlocked.Increment(ref srflxCands); break;
+                    case RTCIceCandidateType.relay: Interlocked.Increment(ref relayCands); break;
+                    default:                        Interlocked.Increment(ref otherCands); break;
+                }
+                Console.WriteLine($"[WebRtc] cand (ticket {offer.Ticket}) {c.type} {c.address}:{c.port} ({c.protocol})");
+            };
+            pc.oniceconnectionstatechange += s =>
+                Console.WriteLine($"[WebRtc] ICE state (ticket {offer.Ticket}): {s}");
+            pc.onicegatheringstatechange += s =>
+            {
+                if (s == RTCIceGatheringState.complete)
+                    Console.WriteLine($"[WebRtc] ICE gather complete (ticket {offer.Ticket}): " +
+                        $"{hostCands} host / {srflxCands} srflx / {relayCands} relay / {otherCands} other");
+            };
+            // --------------------------------------------------------------------------------
+
             pc.ondatachannel += dc =>
             {
                 // Build the transport NOW (not on open): it attaches onmessage immediately so a
@@ -148,6 +179,7 @@ public sealed class WebRtcListener
             };
             pc.onconnectionstatechange += s =>
             {
+                Console.WriteLine($"[WebRtc] conn state (ticket {offer.Ticket}): {s}");
                 if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed)
                     pc.Dispose();
             };
