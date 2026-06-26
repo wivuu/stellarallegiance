@@ -173,6 +173,9 @@ public sealed class WebRtcListener
             await WaitForIceGathering(pc, needSrflx: _iceServers.Count > 0, ct);
 
             var answerSdp = pc.localDescription.sdp.ToString();
+            // Diagnostic: which side ended up host-only? The client can only reach us via our
+            // srflx; if answer srflx == 0 the punch can't start regardless of the client's offer.
+            Console.WriteLine($"[WebRtc] ticket {offer.Ticket}: offer {CountCand(offer.SdpOffer)}, answer {CountCand(answerSdp)}");
             using var resp = await _http.PostAsJsonAsync(
                 $"{_shareBase}/connect/{offer.Ticket}/answer", new { sdpAnswer = answerSdp }, ct);
             if (!resp.IsSuccessStatusCode)
@@ -214,6 +217,23 @@ public sealed class WebRtcListener
         }
         catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
         finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
+    }
+
+    // Diagnostic: tally a=candidate types in an SDP (host/srflx/relay) so we can see at a glance
+    // whether either side is host-only (off-LAN unroutable). Temporary — remove once stable.
+    private static string CountCand(string? sdp)
+    {
+        int host = 0, srflx = 0, relay = 0, other = 0;
+        if (!string.IsNullOrEmpty(sdp))
+            foreach (var l in sdp.Split('\n'))
+            {
+                if (l.IndexOf("a=candidate", StringComparison.Ordinal) < 0) continue;
+                if (l.Contains(" typ host", StringComparison.Ordinal)) host++;
+                else if (l.Contains(" typ srflx", StringComparison.Ordinal)) srflx++;
+                else if (l.Contains(" typ relay", StringComparison.Ordinal)) relay++;
+                else other++;
+            }
+        return $"{host}h/{srflx}srflx/{relay}relay" + (other > 0 ? $"/{other}?" : "");
     }
 
     // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
