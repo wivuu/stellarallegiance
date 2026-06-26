@@ -1,16 +1,16 @@
-# Graph Report - client  (2026-06-21)
+# Graph Report - client  (2026-06-25)
 
 ## Corpus Check
-- 36 files · ~46,827 words
+- 39 files · ~49,002 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 791 nodes · 1239 edges · 40 communities (39 shown, 1 thin omitted)
+- 831 nodes · 1301 edges · 44 communities (41 shown, 3 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1b485663`
+- Built from commit: `d4ede195`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -54,6 +54,10 @@
 - [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 38|Community 38]]
 - [[_COMMUNITY_Community 39|Community 39]]
+- [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 43|Community 43]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 83 edges
@@ -61,19 +65,19 @@
 3. `Chat` - 35 edges
 4. `SectorOverview` - 34 edges
 5. `PredictionController` - 33 edges
-6. `TargetMarkers` - 31 edges
+6. `TargetMarkers` - 32 edges
 7. `EngineGlow` - 30 edges
 8. `ShipController` - 28 edges
 9. `ConnectionManager` - 22 edges
-10. `RemoteShip` - 20 edges
+10. `ServerInputOverlay` - 22 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Chat` --inherits--> `Control`  [EXTRACTED]
   scripts/Chat.cs → scripts/Hud.cs
-- `ConnectionManager` --inherits--> `Node`  [EXTRACTED]
-  scripts/ConnectionManager.cs → scripts/WorldRenderer.cs
 - `Hud` --inherits--> `CanvasLayer`  [EXTRACTED]
   scripts/Hud.cs → scripts/SectorOverview.cs
+- `LensFlare` --inherits--> `Control`  [EXTRACTED]
+  scripts/LensFlare.cs → scripts/Hud.cs
 - `Lobby` --inherits--> `Control`  [EXTRACTED]
   scripts/Lobby.cs → scripts/Hud.cs
 - `ServerInputOverlay` --inherits--> `Control`  [EXTRACTED]
@@ -82,11 +86,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (40 total, 1 thin omitted)
+## Communities (44 total, 3 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.08
-Nodes (16): Dictionary, Match, bool, byte, ConnectionManager, DbConnection, DefRegistry, Dictionary (+8 more)
+Cohesion: 0.09
+Nodes (15): Dictionary, bool, byte, ConnectionManager, DefRegistry, Dictionary, double, float (+7 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
@@ -118,7 +122,7 @@ Nodes (13): CurveTexture, GradientTexture1D, byte, Color, CurveTexture, double, 
 
 ### Community 8 - "Community 8"
 Cohesion: 0.07
-Nodes (21): ConnectionOverlay, Button, Color, ConnectionManager, double, Label, Control, Color (+13 more)
+Nodes (23): ConnectionOverlay, Button, Color, ConnectionManager, double, Label, Control, Color (+15 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.13
@@ -129,12 +133,12 @@ Cohesion: 0.21
 Nodes (7): ArrayMesh, AlephView, float, int, Shader, ShaderMaterial, Shader
 
 ### Community 11 - "Community 11"
-Cohesion: 0.16
-Nodes (11): Color, ConnectionManager, HttpClient, Label, LineEdit, List, string, Task (+3 more)
+Cohesion: 0.13
+Nodes (13): Color, ConnectionManager, HttpClient, Label, LineEdit, List, RichTextLabel, string (+5 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.13
-Nodes (7): Exception, ConnectionManager, DbConnection, GameNetClient, Identity, string, ServerInputOverlay
+Nodes (8): Exception, ConnectionManager, DbConnection, GameNetClient, Identity, string, Node, ServerInputOverlay
 
 ### Community 13 - "Community 13"
 Cohesion: 0.20
@@ -200,6 +204,10 @@ Nodes (14): BaseDef, hp, Node, byte, Dictionary, HardpointDef, IReadOnlyList, Li
 Cohesion: 0.29
 Nodes (13): Aleph, Asteroid, Base, bool, byte, float, ShipClass, string (+5 more)
 
+### Community 30 - "Community 30"
+Cohesion: 0.26
+Nodes (3): Base, BaseHealthBar, Color
+
 ### Community 31 - "Community 31"
 Cohesion: 0.23
 Nodes (6): Aabb, HashSet<string>, List<(string Name, Transform3D Local)>, Node, Node3D, GlbLoader
@@ -209,16 +217,12 @@ Cohesion: 0.21
 Nodes (5): Asteroid, AuthoredRadius, Axis, Mesh, Speed
 
 ### Community 33 - "Community 33"
-Cohesion: 0.14
-Nodes (7): Frac, Pos, IReadOnlyList, LobbyPlayer, RemoteShip, Vector3, Team
+Cohesion: 0.20
+Nodes (6): Frac, Pos, IReadOnlyList, LobbyPlayer, RemoteShip, Team
 
 ### Community 34 - "Community 34"
 Cohesion: 0.31
 Nodes (3): Aleph, EventContext, Projectile
-
-### Community 35 - "Community 35"
-Cohesion: 0.29
-Nodes (4): BaseHealthBar, MeshInstance3D, Node, StandardMaterial3D
 
 ### Community 36 - "Community 36"
 Cohesion: 0.14
@@ -236,24 +240,32 @@ Nodes (3): Color, Label3D, Nameplate
 Cohesion: 0.13
 Nodes (10): AudioStream, AudioStreamPlayer, Dictionary, HashSet, int, List, string, Vector3 (+2 more)
 
+### Community 40 - "Community 40"
+Cohesion: 0.19
+Nodes (9): Gradient, Camera3D, Color, float, GradientTexture2D, int, Texture2D, Vector2 (+1 more)
+
+### Community 41 - "Community 41"
+Cohesion: 0.26
+Nodes (6): HttpClient, string, Task, UpdateInfo, UpdateChecker, Version
+
 ## Knowledge Gaps
-- **259 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `MeshInstance3D` (+254 more)
+- **270 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `MeshInstance3D` (+265 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `Community 0` to `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 26`, `Community 30`?**
-  _High betweenness centrality (0.366) - this node is a cross-community bridge._
+- **Why does `WorldRenderer` connect `Community 0` to `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 42`, `Community 26`, `Community 30`?**
+  _High betweenness centrality (0.349) - this node is a cross-community bridge._
 - **Why does `SectorOverview` connect `Community 24` to `Community 26`, `Community 36`?**
-  _High betweenness centrality (0.320) - this node is a cross-community bridge._
-- **Why does `Control` connect `Community 8` to `Community 1`, `Community 36`, `Community 4`, `Community 6`, `Community 11`?**
-  _High betweenness centrality (0.287) - this node is a cross-community bridge._
+  _High betweenness centrality (0.325) - this node is a cross-community bridge._
+- **Why does `Control` connect `Community 8` to `Community 1`, `Community 36`, `Community 4`, `Community 6`, `Community 40`, `Community 11`?**
+  _High betweenness centrality (0.308) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _259 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _270 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.082010582010582 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08923076923076922 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.07200929152148665 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
