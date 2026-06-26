@@ -129,6 +129,13 @@ public sealed class WebRtcListener
         {
             var pc = new RTCPeerConnection(new RTCConfiguration { iceServers = _iceServers });
 
+            // Collect every gathered a=candidate line. SIPSorcery 10.0.9 drops the srflx from the
+            // answerer's localDescription on the 2nd+ peer connection (gather completes, sawSrflx=true,
+            // yet the answer SDP is host-only) — same quirk the offerer hits on the client. We re-inject
+            // these into the answer SDP below so the client always gets a public address to punch toward.
+            var gatheredCands = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            pc.onicecandidate += c => { if (c is not null) gatheredCands.Enqueue(BuildCandidateAttr(c)); };
+
             pc.ondatachannel += dc =>
             {
                 // Build the transport NOW (not on open): it attaches onmessage immediately so a
@@ -177,9 +184,9 @@ public sealed class WebRtcListener
             await WaitForIceGathering(pc, needSrflx: _iceServers.Count > 0, ct);
 
             var answerSdp = pc.localDescription.sdp.ToString();
-            // Diagnostic: which side ended up host-only? The client can only reach us via our
-            // srflx; if answer srflx == 0 the punch can't start regardless of the client's offer.
-            Console.WriteLine($"[WebRtc] ticket {offer.Ticket}: offer {CountCand(offer.SdpOffer)}, answer {CountCand(answerSdp)}");
+            // Re-inject any gathered candidate (esp. our srflx) that SIPSorcery left out of the
+            // answerer's localDescription, else the answer is host-only and unroutable off-LAN.
+            answerSdp = EnsureCandidatesInSdp(answerSdp, gatheredCands.ToArray());
             using var resp = await _http.PostAsJsonAsync(
                 $"{_shareBase}/connect/{offer.Ticket}/answer", new { sdpAnswer = answerSdp }, ct);
             if (!resp.IsSuccessStatusCode)
@@ -207,18 +214,10 @@ public sealed class WebRtcListener
             return;
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
-        bool sawSrflx = false;
         void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        void OnCand(RTCIceCandidate c)
-        {
-            if (c is null) return;
-            seen.Add(c.type.ToString().ToLowerInvariant());
-            if (c.type == RTCIceCandidateType.srflx) { sawSrflx = true; if (needSrflx) tcs.TrySetResult(); }
-        }
+        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
         pc.onicegatheringstatechange += OnState;
         pc.onicecandidate += OnCand;
-        bool timedOut = false;
         try
         {
             if (pc.iceGatheringState == RTCIceGatheringState.complete)
@@ -227,31 +226,50 @@ public sealed class WebRtcListener
             timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
             await tcs.Task.WaitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) { timedOut = true; /* proceed with candidates gathered so far */ }
-        finally
-        {
-            pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand;
-            // Trace: which candidate types did this pc's gather actually produce, and did we bail on
-            // the timeout? Tells host-only-because-STUN-timed-out apart from STUN-replied-but-dropped.
-            Console.WriteLine($"[WebRtc] gather: state={pc.iceGatheringState} sawSrflx={sawSrflx} timedOut={timedOut} cands=[{string.Join(",", seen)}]");
-        }
+        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
+        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
     }
 
-    // Diagnostic: tally a=candidate types in an SDP (host/srflx/relay) so we can see at a glance
-    // whether either side is host-only (off-LAN unroutable). Temporary — remove once stable.
-    private static string CountCand(string? sdp)
+    // Serialize an RTCIceCandidate to its SDP "a=candidate:..." attribute line deterministically
+    // from its W3C properties (per RFC 8839), mirroring the client offerer's serializer.
+    private static string BuildCandidateAttr(RTCIceCandidate c)
     {
-        int host = 0, srflx = 0, relay = 0, other = 0;
-        if (!string.IsNullOrEmpty(sdp))
-            foreach (var l in sdp.Split('\n'))
-            {
-                if (l.IndexOf("a=candidate", StringComparison.Ordinal) < 0) continue;
-                if (l.Contains(" typ host", StringComparison.Ordinal)) host++;
-                else if (l.Contains(" typ srflx", StringComparison.Ordinal)) srflx++;
-                else if (l.Contains(" typ relay", StringComparison.Ordinal)) relay++;
-                else other++;
-            }
-        return $"{host}h/{srflx}srflx/{relay}relay" + (other > 0 ? $"/{other}?" : "");
+        var line = $"candidate:{c.foundation} {(int)c.component} {c.protocol.ToString().ToLowerInvariant()} " +
+                   $"{c.priority} {c.address} {c.port} typ {c.type.ToString().ToLowerInvariant()}";
+        if ((c.type is RTCIceCandidateType.srflx or RTCIceCandidateType.relay or RTCIceCandidateType.prflx)
+            && !string.IsNullOrEmpty(c.relatedAddress))
+            line += $" raddr {c.relatedAddress} rport {c.relatedPort}";
+        return "a=" + line;
+    }
+
+    // Insert any gathered a=candidate line not already present in the SDP, after the existing
+    // candidate block of the data m-section. Works around SIPSorcery 10.0.9 dropping the srflx from
+    // the answerer's localDescription on subsequent peer connections; idempotent (skips duplicates).
+    private static string EnsureCandidatesInSdp(string sdp, IEnumerable<string> candidateLines)
+    {
+        if (string.IsNullOrEmpty(sdp)) return sdp;
+        var lines = sdp.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').ToList();
+
+        var present = new HashSet<string>(
+            lines.Where(l => l.StartsWith("a=candidate", StringComparison.Ordinal))
+                 .Select(l => l.Trim()), StringComparer.Ordinal);
+
+        int lastCand = lines.FindLastIndex(l => l.StartsWith("a=candidate", StringComparison.Ordinal));
+        if (lastCand < 0)
+        {
+            lastCand = lines.FindIndex(l => l.StartsWith("a=mid:", StringComparison.Ordinal));
+            if (lastCand < 0) lastCand = lines.FindLastIndex(l => l.StartsWith("m=", StringComparison.Ordinal));
+        }
+        if (lastCand < 0) return sdp;   // shape we don't recognize — leave untouched
+
+        foreach (var raw in candidateLines)
+        {
+            var line = raw.Trim();
+            if (!line.StartsWith("a=candidate", StringComparison.Ordinal)) continue;
+            if (!present.Add(line)) continue;        // dup
+            lines.Insert(++lastCand, line);
+        }
+        return string.Join("\r\n", lines) + "\r\n";
     }
 
     // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
