@@ -149,7 +149,11 @@ public sealed class WebRtcListener
             };
             pc.onconnectionstatechange += s =>
             {
-                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed)
+                // Dispose on disconnected too (not just failed/closed): a client that restarts
+                // leaves its server-side pc in `disconnected` for SIPSorcery's long consent-timeout,
+                // and a leaked pc keeps holding its ICE/STUN sockets while the next offer comes in.
+                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed
+                      or RTCPeerConnectionState.disconnected)
                 {
                     if (s == RTCPeerConnectionState.failed)
                         Console.WriteLine($"[WebRtc] connection failed (ticket {offer.Ticket})");
@@ -203,10 +207,18 @@ public sealed class WebRtcListener
             return;
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
+        bool sawSrflx = false;
         void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
+        void OnCand(RTCIceCandidate c)
+        {
+            if (c is null) return;
+            seen.Add(c.type.ToString().ToLowerInvariant());
+            if (c.type == RTCIceCandidateType.srflx) { sawSrflx = true; if (needSrflx) tcs.TrySetResult(); }
+        }
         pc.onicegatheringstatechange += OnState;
         pc.onicecandidate += OnCand;
+        bool timedOut = false;
         try
         {
             if (pc.iceGatheringState == RTCIceGatheringState.complete)
@@ -215,8 +227,14 @@ public sealed class WebRtcListener
             timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
             await tcs.Task.WaitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
+        catch (OperationCanceledException) { timedOut = true; /* proceed with candidates gathered so far */ }
+        finally
+        {
+            pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand;
+            // Trace: which candidate types did this pc's gather actually produce, and did we bail on
+            // the timeout? Tells host-only-because-STUN-timed-out apart from STUN-replied-but-dropped.
+            Console.WriteLine($"[WebRtc] gather: state={pc.iceGatheringState} sawSrflx={sawSrflx} timedOut={timedOut} cands=[{string.Join(",", seen)}]");
+        }
     }
 
     // Diagnostic: tally a=candidate types in an SDP (host/srflx/relay) so we can see at a glance
