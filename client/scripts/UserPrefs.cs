@@ -21,7 +21,8 @@ public static class UserPrefs
     {
         get
         {
-            if (_cfg is not null) return _cfg;
+            if (_cfg is not null)
+                return _cfg;
             _cfg = new ConfigFile();
             // Load is best-effort: a missing file (first run) just leaves an empty config.
             _cfg.Load(Path);

@@ -25,7 +25,11 @@ public static class SimAssets
         {
             lock (_lock)
             {
-                if (!_resolved) { _dir = Resolve(); _resolved = true; }
+                if (!_resolved)
+                {
+                    _dir = Resolve();
+                    _resolved = true;
+                }
                 return _dir;
             }
         }
@@ -47,21 +51,32 @@ public static class SimAssets
     public static SimModel? TryLoad(string relPath)
     {
         string? dir = AssetsDir;
-        if (dir is null) return null;
+        if (dir is null)
+            return null;
         string full = Path.Combine(dir, relPath);
-        if (!File.Exists(full)) return null;
-        try { return SimModelCache.Load(full, CacheDir); }
-        catch (Exception e) { Console.WriteLine($"[SimAssets] failed to load {relPath}: {e.Message}"); return null; }
+        if (!File.Exists(full))
+            return null;
+        try
+        {
+            return SimModelCache.Load(full, CacheDir);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[SimAssets] failed to load {relPath}: {e.Message}");
+            return null;
+        }
     }
 
     private static string? Resolve()
     {
         string? env = Environment.GetEnvironmentVariable("SIM_ASSETS_DIR");
-        if (!string.IsNullOrEmpty(env) && IsAssetsDir(env)) return env;
+        if (!string.IsNullOrEmpty(env) && IsAssetsDir(env))
+            return env;
 
         // Published/built layout: the csproj copies the GLBs to <binary>/assets.
         string local = Path.Combine(AppContext.BaseDirectory, "assets");
-        if (IsAssetsDir(local)) return local;
+        if (IsAssetsDir(local))
+            return local;
 
         // Running from source without a build copy: probe up for the canonical client/assets.
         foreach (string start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
@@ -72,7 +87,8 @@ public static class SimAssets
                 foreach (string sub in new[] { "client/assets", "assets" })
                 {
                     string cand = Path.Combine(d.FullName, sub);
-                    if (IsAssetsDir(cand)) return cand;
+                    if (IsAssetsDir(cand))
+                        return cand;
                 }
             }
         }

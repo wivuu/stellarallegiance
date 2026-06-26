@@ -19,315 +19,325 @@ using StellarAllegiance.Shared;
 // rides a smoothed wall→server offset (filters arrival jitter, still tracks drift).
 public partial class RemoteShip : Node3D
 {
-	// Render this far behind the latest sample so there are normally two samples
-	// bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07) This is the FLOOR
-	// for the adaptive delay below — nearby full-rate ships never need more.
-	private const double InterpDelayMs = 100.0;
-	private const int MaxSamples = 16;
+    // Render this far behind the latest sample so there are normally two samples
+    // bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07) This is the FLOOR
+    // for the adaptive delay below — nearby full-rate ships never need more.
+    private const double InterpDelayMs = 100.0;
+    private const int MaxSamples = 16;
 
-	// Adaptive interpolation. Coarse-AOI ships (beyond the server's nearest-N, or in another
-	// sector) arrive at ~1/10th the rate of full-rate ships — ~500 ms apart — so the fixed
-	// 100 ms buffer can't bracket their gaps: renderT runs past the newest sample, the ship
-	// holds, then snaps when the next coarse sample lands (the visible teleport). So instead
-	// of a fixed delay, track each ship's smoothed inter-arrival gap and render ~1.5 gaps
-	// behind, clamped to [floor, cap]. Full-rate ships sit at the 100 ms floor; coarse ships
-	// widen their buffer to span their gap and lerp smoothly across it. The extra latency is
-	// harmless — by construction these are the distant / other-sector ships the server itself
-	// deemed low-priority. As a ship crosses into the full-rate set its gap (hence delay)
-	// decays back to the floor within ~0.5 s.
-	private const double MaxInterpDelayMs = 800.0;   // cap: bounds added latency; < MaxSamples*gap
-	private const float GapDelayFactor = 1.5f;       // render this many smoothed gaps behind
-	private const float GapEmaAlpha = 0.3f;          // inter-arrival EMA responsiveness
-	// Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
-	private double _gapEma = InterpDelayMs / GapDelayFactor;
+    // Adaptive interpolation. Coarse-AOI ships (beyond the server's nearest-N, or in another
+    // sector) arrive at ~1/10th the rate of full-rate ships — ~500 ms apart — so the fixed
+    // 100 ms buffer can't bracket their gaps: renderT runs past the newest sample, the ship
+    // holds, then snaps when the next coarse sample lands (the visible teleport). So instead
+    // of a fixed delay, track each ship's smoothed inter-arrival gap and render ~1.5 gaps
+    // behind, clamped to [floor, cap]. Full-rate ships sit at the 100 ms floor; coarse ships
+    // widen their buffer to span their gap and lerp smoothly across it. The extra latency is
+    // harmless — by construction these are the distant / other-sector ships the server itself
+    // deemed low-priority. As a ship crosses into the full-rate set its gap (hence delay)
+    // decays back to the floor within ~0.5 s.
+    private const double MaxInterpDelayMs = 800.0; // cap: bounds added latency; < MaxSamples*gap
+    private const float GapDelayFactor = 1.5f; // render this many smoothed gaps behind
+    private const float GapEmaAlpha = 0.3f; // inter-arrival EMA responsiveness
 
-	// Server-tick → server-time conversion. The sim integrates at a fixed dt, so a tick
-	// number maps to an exact server-time stamp; samples live on this jitter-free axis.
-	private const double MsPerTick = FlightModel.Dt * 1000.0;
+    // Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
+    private double _gapEma = InterpDelayMs / GapDelayFactor;
 
-	// Playback clock = wall clock minus a smoothed (wall − server) offset, kept `delay`
-	// behind the newest sample. The EMA absorbs per-packet arrival jitter (so the clock
-	// advances smoothly with wall time) while still tracking slow client/server clock
-	// drift. Small alpha ⇒ heavy jitter rejection over the ~18 Hz arrival rate.
-	private const float ClockOffsetAlpha = 0.05f;
-	private double _clockOffset;        // smoothed (wall ms − server ms)
-	private bool _haveClockOffset;
+    // Server-tick → server-time conversion. The sim integrates at a fixed dt, so a tick
+    // number maps to an exact server-time stamp; samples live on this jitter-free axis.
+    private const double MsPerTick = FlightModel.Dt * 1000.0;
 
-	private struct Sample
-	{
-		public double T;        // server-time stamp (ms) = serverTick * MsPerTick
-		public Vector3 Pos;
-		public Quaternion Rot;
-	}
+    // Playback clock = wall clock minus a smoothed (wall − server) offset, kept `delay`
+    // behind the newest sample. The EMA absorbs per-packet arrival jitter (so the clock
+    // advances smoothly with wall time) while still tracking slow client/server clock
+    // drift. Small alpha ⇒ heavy jitter rejection over the ~18 Hz arrival rate.
+    private const float ClockOffsetAlpha = 0.05f;
+    private double _clockOffset; // smoothed (wall ms − server ms)
+    private bool _haveClockOffset;
 
-	// How fast the smoothed Velocity eases toward the latest authoritative value, as
-	// an exponential rate (1/s). ~16 → ~60 ms time constant: fast enough to feel
-	// responsive, slow enough to bridge the gaps between snapshots smoothly.
-	private const float VelSmoothRate = 16f;
+    private struct Sample
+    {
+        public double T; // server-time stamp (ms) = serverTick * MsPerTick
+        public Vector3 Pos;
+        public Quaternion Rot;
+    }
 
-	private readonly List<Sample> _samples = new();   // chronological
+    // How fast the smoothed Velocity eases toward the latest authoritative value, as
+    // an exponential rate (1/s). ~16 → ~60 ms time constant: fast enough to feel
+    // responsive, slow enough to bridge the gaps between snapshots smoothly.
+    private const float VelSmoothRate = 16f;
 
-	public ulong ShipId { get; private set; }
-	public byte Team { get; private set; }
+    private readonly List<Sample> _samples = new(); // chronological
 
-	// Hull class (Scout/Fighter/Bomber) straight off the row. TargetMarkers uses it to pick
-	// the per-class HUD glyph; a pod (IsPod) overrides this with the pod symbol.
-	public ShipClass Class { get; private set; }
+    public ulong ShipId { get; private set; }
+    public byte Team { get; private set; }
 
-	// AI combat drone (PIG) rather than a player ship — read straight off the row.
-	// TargetMarkers uses it to highlight drones distinctly on the HUD.
-	public bool IsPig { get; private set; }
+    // Hull class (Scout/Fighter/Bomber) straight off the row. TargetMarkers uses it to pick
+    // the per-class HUD glyph; a pod (IsPod) overrides this with the pod symbol.
+    public ShipClass Class { get; private set; }
 
-	// Escape pod (Ship.IsPod): harmless, unarmed. Excluded from the enemy target set
-	// (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
-	public bool IsPod { get; private set; }
+    // AI combat drone (PIG) rather than a player ship — read straight off the row.
+    // TargetMarkers uses it to highlight drones distinctly on the HUD.
+    public bool IsPig { get; private set; }
 
-	// Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
-	// (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
-	// than being finite-differenced from positions — differencing 20 Hz snapshots over
-	// their jittery arrival-time delta was noisy enough to make the lead reticle jump
-	// even in straight-line flight. The row velocity is exact but still arrives in
-	// ~18.7 Hz steps at irregular times, so _Process eases Velocity toward the latest
-	// row value (_velTarget) each frame to tween out the steps.
-	public Vector3 Velocity { get; private set; }
-	private Vector3 _velTarget;
+    // Escape pod (Ship.IsPod): harmless, unarmed. Excluded from the enemy target set
+    // (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
+    public bool IsPod { get; private set; }
 
-	// Dynamic engine glow. A remote ship has no input to read, so its throttle is
-	// approximated from forward speed as a fraction of the class max — fast forward
-	// flight lights the engines, drifting/turning lets them idle.
-	private EngineGlow? _engine;
-	private float _maxSpeed = 1f;
-	private bool _canBoost;     // hull has an afterburner (AbThrust > 0); gates the synthesized plume
+    // Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
+    // (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
+    // than being finite-differenced from positions — differencing 20 Hz snapshots over
+    // their jittery arrival-time delta was noisy enough to make the lead reticle jump
+    // even in straight-line flight. The row velocity is exact but still arrives in
+    // ~18.7 Hz steps at irregular times, so _Process eases Velocity toward the latest
+    // row value (_velTarget) each frame to tween out the steps.
+    public Vector3 Velocity { get; private set; }
+    private Vector3 _velTarget;
 
-	// PIG afterburner: drones have no input to read, so we synthesize occasional
-	// afterburner bursts when one swings onto a new heading (added realism — a
-	// drone gunning it out of a turn). Purely cosmetic, mirrors a player's key.
-	private const float PigTurnThreshold = 0.7f;   // rad/s of heading change that counts as "turning"
-	private float _burnTimer;                       // remaining burst seconds
-	private float _burnCooldown;                    // seconds until the next burst roll
-	private Vector3 _prevHeading;                   // last travel direction (for turn detection)
-	private bool _hasHeading;
+    // Dynamic engine glow. A remote ship has no input to read, so its throttle is
+    // approximated from forward speed as a fraction of the class max — fast forward
+    // flight lights the engines, drifting/turning lets them idle.
+    private EngineGlow? _engine;
+    private float _maxSpeed = 1f;
+    private bool _canBoost; // hull has an afterburner (AbThrust > 0); gates the synthesized plume
 
-	// Hand over the engine glow built by WorldRenderer; driven from _Process.
-	public void AttachEngine(EngineGlow engine) => _engine = engine;
+    // PIG afterburner: drones have no input to read, so we synthesize occasional
+    // afterburner bursts when one swings onto a new heading (added realism — a
+    // drone gunning it out of a turn). Purely cosmetic, mirrors a player's key.
+    private const float PigTurnThreshold = 0.7f; // rad/s of heading change that counts as "turning"
+    private float _burnTimer; // remaining burst seconds
+    private float _burnCooldown; // seconds until the next burst roll
+    private Vector3 _prevHeading; // last travel direction (for turn detection)
+    private bool _hasHeading;
 
-	// Floating pilot nameplate (other players only — the local ship is a PredictionController and
-	// never gets one). Created lazily the first time a non-empty name resolves; PIGs/pods that never
-	// resolve a name never allocate one. Billboarded + fixed screen size so it stays readable at any
-	// range and orientation, no depth test so the hull never clips it.
-	private Label3D? _nameplate;
-	private string _pilotName = "";
+    // Hand over the engine glow built by WorldRenderer; driven from _Process.
+    public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-	public void SetPilotName(string name)
-	{
-		name ??= "";
-		if (name == _pilotName) return;   // cheap: skip churn when the roster re-broadcasts unchanged
-		_pilotName = name;
+    // Floating pilot nameplate (other players only — the local ship is a PredictionController and
+    // never gets one). Created lazily the first time a non-empty name resolves; PIGs/pods that never
+    // resolve a name never allocate one. Billboarded + fixed screen size so it stays readable at any
+    // range and orientation, no depth test so the hull never clips it.
+    private Label3D? _nameplate;
+    private string _pilotName = "";
 
-		if (name.Length == 0)
-		{
-			if (_nameplate is not null) _nameplate.Visible = false;
-			return;
-		}
+    public void SetPilotName(string name)
+    {
+        name ??= "";
+        if (name == _pilotName)
+            return; // cheap: skip churn when the roster re-broadcasts unchanged
+        _pilotName = name;
 
-		if (_nameplate is null)
-		{
-			_nameplate = Nameplate.Create(Team);
-			AddChild(_nameplate);
-		}
-		_nameplate.Text = name;
-		_nameplate.Visible = true;
-	}
+        if (name.Length == 0)
+        {
+            if (_nameplate is not null)
+                _nameplate.Visible = false;
+            return;
+        }
 
-	public void Initialize(Ship row, DefRegistry defs, uint serverTick)
-	{
-		ShipId = row.ShipId;
-		Team = row.Team;
-		Class = row.Class;
-		IsPig = row.IsPig;
-		IsPod = row.IsPod;
-		// Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
-		// leaves the harmless 1f default until the row lands — no baked tuning on the
-		// client. Pod-aware so a pod's proxy reads against its slow cap.
-		if (defs.TryGetStats((byte)row.Class, row.IsPod, out var s))
-		{
-			_maxSpeed = s.MaxSpeed;
-			_canBoost = s.AbThrust > 0f;
-		}
-		_burnCooldown = (float)GD.RandRange(1.0, 3.0);   // stagger drones' first burst roll
-		Push(row, serverTick);
-	}
+        if (_nameplate is null)
+        {
+            _nameplate = Nameplate.Create(Team);
+            AddChild(_nameplate);
+        }
+        _nameplate.Text = name;
+        _nameplate.Visible = true;
+    }
 
-	public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
+    public void Initialize(Ship row, DefRegistry defs, uint serverTick)
+    {
+        ShipId = row.ShipId;
+        Team = row.Team;
+        Class = row.Class;
+        IsPig = row.IsPig;
+        IsPod = row.IsPod;
+        // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
+        // leaves the harmless 1f default until the row lands — no baked tuning on the
+        // client. Pod-aware so a pod's proxy reads against its slow cap.
+        if (defs.TryGetStats((byte)row.Class, row.IsPod, out var s))
+        {
+            _maxSpeed = s.MaxSpeed;
+            _canBoost = s.AbThrust > 0f;
+        }
+        _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
+        Push(row, serverTick);
+    }
 
-	// Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
-	// un-initialized or transient ship state on the wire — would NaN under Normalized()
-	// (divide by ~0), and a single NaN assignment permanently poisons the node's Basis
-	// (every later read throws "must be normalized"), since a ship that then stops
-	// receiving samples never recovers. Reject non-finite/zero-length; fall back to identity.
-	private static Quaternion SafeRot(float x, float y, float z, float w)
-	{
-		var q = new Quaternion(x, y, z, w);
-		float len2 = q.LengthSquared();
-		if (!float.IsFinite(len2) || len2 < 1e-6f)
-			return Quaternion.Identity;
-		return q.Normalized();
-	}
+    public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
 
-	private static bool IsFinite(Vector3 v) => v.IsFinite();
+    // Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
+    // un-initialized or transient ship state on the wire — would NaN under Normalized()
+    // (divide by ~0), and a single NaN assignment permanently poisons the node's Basis
+    // (every later read throws "must be normalized"), since a ship that then stops
+    // receiving samples never recovers. Reject non-finite/zero-length; fall back to identity.
+    private static Quaternion SafeRot(float x, float y, float z, float w)
+    {
+        var q = new Quaternion(x, y, z, w);
+        float len2 = q.LengthSquared();
+        if (!float.IsFinite(len2) || len2 < 1e-6f)
+            return Quaternion.Identity;
+        return q.Normalized();
+    }
 
-	private void Push(Ship row, uint serverTick)
-	{
-		double serverMs = serverTick * MsPerTick;
+    private static bool IsFinite(Vector3 v) => v.IsFinite();
 
-		// Reject stale/out-of-order frames (a reordered or duplicate packet on the unreliable
-		// WebRTC channel): the segment search below assumes _samples is chronological by T, and
-		// a backward stamp would corrupt it. Newest-only is fine — we never extrapolate.
-		if (_samples.Count > 0 && serverMs <= _samples[^1].T)
-			return;
+    private void Push(Ship row, uint serverTick)
+    {
+        double serverMs = serverTick * MsPerTick;
 
-		// Smoothed wall→server offset so _Process can map wall time onto the server timeline
-		// without inheriting this packet's arrival jitter. Seed from the first sample.
-		double offset = Time.GetTicksMsec() - serverMs;
-		if (!_haveClockOffset) { _clockOffset = offset; _haveClockOffset = true; }
-		else _clockOffset += (offset - _clockOffset) * ClockOffsetAlpha;
+        // Reject stale/out-of-order frames (a reordered or duplicate packet on the unreliable
+        // WebRTC channel): the segment search below assumes _samples is chronological by T, and
+        // a backward stamp would corrupt it. Newest-only is fine — we never extrapolate.
+        if (_samples.Count > 0 && serverMs <= _samples[^1].T)
+            return;
 
-		var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-		var s = new Sample
-		{
-			T = serverMs,
-			Pos = IsFinite(pos) ? pos : Position,   // keep last good on a corrupt sample
-			Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
-		};
-		var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
-		_velTarget = IsFinite(vel) ? vel : Vector3.Zero;
+        // Smoothed wall→server offset so _Process can map wall time onto the server timeline
+        // without inheriting this packet's arrival jitter. Seed from the first sample.
+        double offset = Time.GetTicksMsec() - serverMs;
+        if (!_haveClockOffset)
+        {
+            _clockOffset = offset;
+            _haveClockOffset = true;
+        }
+        else
+            _clockOffset += (offset - _clockOffset) * ClockOffsetAlpha;
 
-		// Track the smoothed gap between successive samples (now in jitter-free server time, so
-		// this is the ship's true update cadence) to size the render delay below. Reject
-		// absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
-		if (_samples.Count > 0)
-		{
-			double gap = s.T - _samples[^1].T;   // > 0 by the stale guard above
-			if (gap < 4000.0)
-				_gapEma += (gap - _gapEma) * GapEmaAlpha;
-		}
+        var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
+        var s = new Sample
+        {
+            T = serverMs,
+            Pos = IsFinite(pos) ? pos : Position, // keep last good on a corrupt sample
+            Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
+        };
+        var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
+        _velTarget = IsFinite(vel) ? vel : Vector3.Zero;
 
-		_samples.Add(s);
-		if (_samples.Count > MaxSamples)
-			_samples.RemoveRange(0, _samples.Count - MaxSamples);
+        // Track the smoothed gap between successive samples (now in jitter-free server time, so
+        // this is the ship's true update cadence) to size the render delay below. Reject
+        // absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
+        if (_samples.Count > 0)
+        {
+            double gap = s.T - _samples[^1].T; // > 0 by the stale guard above
+            if (gap < 4000.0)
+                _gapEma += (gap - _gapEma) * GapEmaAlpha;
+        }
 
-		if (_samples.Count == 1)
-		{
-			// First sample: render at it until we have a pair to interpolate, and seed
-			// the velocity so it eases from the real value rather than ramping from zero.
-			Position = s.Pos;
-			Quaternion = s.Rot;
-			Velocity = _velTarget;
-		}
-	}
+        _samples.Add(s);
+        if (_samples.Count > MaxSamples)
+            _samples.RemoveRange(0, _samples.Count - MaxSamples);
 
-	public override void _Process(double delta)
-	{
-		// Ease the smoothed velocity toward the latest authoritative value (frame-rate
-		// independent), tweening out the snapshot-rate steps the lead reticle reads.
-		Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
+        if (_samples.Count == 1)
+        {
+            // First sample: render at it until we have a pair to interpolate, and seed
+            // the velocity so it eases from the real value rather than ramping from zero.
+            Position = s.Pos;
+            Quaternion = s.Rot;
+            Velocity = _velTarget;
+        }
+    }
 
-		// Throttle proxy: forward speed (local +Z) as a fraction of the class max.
-		// Uses last frame's orientation, which is imperceptible for a glow. Afterburner
-		// has no networked signal, so players approximate it from near-top-speed flight
-		// and PIGs get synthesized turn-bursts.
-		if (_engine != null)
-		{
-			Vector3 fwd = (Quaternion * Vector3.Back).Normalized();   // ship-local +Z forward
-			float throttle = Velocity.Dot(fwd) / _maxSpeed;
-			// Boost-less hulls (Scout/Bomber/Pod) never light an afterburner, even at top
-			// speed or out of a hard turn — keeps remote VFX consistent with the flight model.
-			float boost = !_canBoost ? 0f
-				: IsPig ? PigBoost((float)delta) : Mathf.SmoothStep(0.92f, 1f, throttle);
-			_engine.SetThrottle(throttle, boost);
-		}
+    public override void _Process(double delta)
+    {
+        // Ease the smoothed velocity toward the latest authoritative value (frame-rate
+        // independent), tweening out the snapshot-rate steps the lead reticle reads.
+        Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
 
-		int n = _samples.Count;
-		if (n == 0)
-			return;
-		if (n == 1)
-		{
-			Position = _samples[0].Pos;
-			Quaternion = _samples[0].Rot;
-			return;
-		}
+        // Throttle proxy: forward speed (local +Z) as a fraction of the class max.
+        // Uses last frame's orientation, which is imperceptible for a glow. Afterburner
+        // has no networked signal, so players approximate it from near-top-speed flight
+        // and PIGs get synthesized turn-bursts.
+        if (_engine != null)
+        {
+            Vector3 fwd = (Quaternion * Vector3.Back).Normalized(); // ship-local +Z forward
+            float throttle = Velocity.Dot(fwd) / _maxSpeed;
+            // Boost-less hulls (Scout/Bomber/Pod) never light an afterburner, even at top
+            // speed or out of a hard turn — keeps remote VFX consistent with the flight model.
+            float boost =
+                !_canBoost ? 0f
+                : IsPig ? PigBoost((float)delta)
+                : Mathf.SmoothStep(0.92f, 1f, throttle);
+            _engine.SetThrottle(throttle, boost);
+        }
 
-		// Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. Floor keeps nearby
-		// ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
-		// renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
-		double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
-		// Map wall time onto the server timeline via the smoothed offset, then render `delay`
-		// behind. The offset filtered out the arrival jitter, so renderT sweeps the uniformly
-		// tick-spaced samples at a steady rate — uniform interp segments, smooth motion.
-		double renderT = (Time.GetTicksMsec() - _clockOffset) - delay;
+        int n = _samples.Count;
+        if (n == 0)
+            return;
+        if (n == 1)
+        {
+            Position = _samples[0].Pos;
+            Quaternion = _samples[0].Rot;
+            return;
+        }
 
-		// Before our oldest sample → clamp to it.
-		if (renderT <= _samples[0].T)
-		{
-			Position = _samples[0].Pos;
-			Quaternion = _samples[0].Rot;
-			return;
-		}
+        // Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. Floor keeps nearby
+        // ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
+        // renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
+        double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
+        // Map wall time onto the server timeline via the smoothed offset, then render `delay`
+        // behind. The offset filtered out the arrival jitter, so renderT sweeps the uniformly
+        // tick-spaced samples at a steady rate — uniform interp segments, smooth motion.
+        double renderT = (Time.GetTicksMsec() - _clockOffset) - delay;
 
-		// Find the segment [a, b] with a.T <= renderT <= b.T and interpolate.
-		for (int i = 0; i < n - 1; i++)
-		{
-			var a = _samples[i];
-			var b = _samples[i + 1];
-			if (renderT >= a.T && renderT <= b.T)
-			{
-				float dt = (float)(b.T - a.T);
-				float f = dt > 0f ? Mathf.Clamp((float)(renderT - a.T) / dt, 0f, 1f) : 1f;
-				Position = a.Pos.Lerp(b.Pos, f);
-				Quaternion = a.Rot.Slerp(b.Rot, f);
-				return;
-			}
-		}
+        // Before our oldest sample → clamp to it.
+        if (renderT <= _samples[0].T)
+        {
+            Position = _samples[0].Pos;
+            Quaternion = _samples[0].Rot;
+            return;
+        }
 
-		// renderT is past our newest sample (no fresh data) → hold latest, no
-		// extrapolation. A brief stall here means updates stopped arriving.
-		var last = _samples[n - 1];
-		Position = last.Pos;
-		Quaternion = last.Rot;
-	}
+        // Find the segment [a, b] with a.T <= renderT <= b.T and interpolate.
+        for (int i = 0; i < n - 1; i++)
+        {
+            var a = _samples[i];
+            var b = _samples[i + 1];
+            if (renderT >= a.T && renderT <= b.T)
+            {
+                float dt = (float)(b.T - a.T);
+                float f = dt > 0f ? Mathf.Clamp((float)(renderT - a.T) / dt, 0f, 1f) : 1f;
+                Position = a.Pos.Lerp(b.Pos, f);
+                Quaternion = a.Rot.Slerp(b.Rot, f);
+                return;
+            }
+        }
 
-	// Synthesized PIG afterburner. Tracks the drone's travel direction (from the
-	// smoothed velocity) and, on a periodic roll, fires a short burst when it's
-	// actually swinging onto a new heading — so drones occasionally light the
-	// burners coming out of a turn rather than glowing in lockstep with speed.
-	private float PigBoost(float dt)
-	{
-		float turnRate = 0f;
-		if (Velocity.LengthSquared() > 4f)   // only judge heading while genuinely moving
-		{
-			Vector3 heading = Velocity.Normalized();
-			if (_hasHeading && dt > 0f)
-				turnRate = Mathf.Acos(Mathf.Clamp(_prevHeading.Dot(heading), -1f, 1f)) / dt;
-			_prevHeading = heading;
-			_hasHeading = true;
-		}
+        // renderT is past our newest sample (no fresh data) → hold latest, no
+        // extrapolation. A brief stall here means updates stopped arriving.
+        var last = _samples[n - 1];
+        Position = last.Pos;
+        Quaternion = last.Rot;
+    }
 
-		if (_burnTimer > 0f)
-		{
-			_burnTimer -= dt;
-			return 1f;
-		}
+    // Synthesized PIG afterburner. Tracks the drone's travel direction (from the
+    // smoothed velocity) and, on a periodic roll, fires a short burst when it's
+    // actually swinging onto a new heading — so drones occasionally light the
+    // burners coming out of a turn rather than glowing in lockstep with speed.
+    private float PigBoost(float dt)
+    {
+        float turnRate = 0f;
+        if (Velocity.LengthSquared() > 4f) // only judge heading while genuinely moving
+        {
+            Vector3 heading = Velocity.Normalized();
+            if (_hasHeading && dt > 0f)
+                turnRate = Mathf.Acos(Mathf.Clamp(_prevHeading.Dot(heading), -1f, 1f)) / dt;
+            _prevHeading = heading;
+            _hasHeading = true;
+        }
 
-		_burnCooldown -= dt;
-		if (_burnCooldown <= 0f)
-		{
-			_burnCooldown = (float)GD.RandRange(1.5, 3.5);   // next decision window
-			if (turnRate > PigTurnThreshold && GD.Randf() < 0.5f)
-			{
-				_burnTimer = (float)GD.RandRange(0.4, 0.9); // burst length
-				return 1f;
-			}
-		}
-		return 0f;
-	}
+        if (_burnTimer > 0f)
+        {
+            _burnTimer -= dt;
+            return 1f;
+        }
+
+        _burnCooldown -= dt;
+        if (_burnCooldown <= 0f)
+        {
+            _burnCooldown = (float)GD.RandRange(1.5, 3.5); // next decision window
+            if (turnRate > PigTurnThreshold && GD.Randf() < 0.5f)
+            {
+                _burnTimer = (float)GD.RandRange(0.4, 0.9); // burst length
+                return 1f;
+            }
+        }
+        return 0f;
+    }
 }

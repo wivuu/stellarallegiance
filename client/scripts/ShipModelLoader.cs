@@ -68,8 +68,14 @@ public static class ShipModelLoader
     // procedural placeholder.
     private static Node3D? LoadHull(ShipClass cls, bool isPod)
     {
-        string name = isPod ? "pod"
-            : cls switch { ShipClass.Fighter => "fighter", ShipClass.Bomber => "bomber", _ => "scout" };
+        string name = isPod
+            ? "pod"
+            : cls switch
+            {
+                ShipClass.Fighter => "fighter",
+                ShipClass.Bomber => "bomber",
+                _ => "scout",
+            };
         Node3D? hull = GlbLoader.Load($"res://assets/ships/{name}.glb");
         if (hull == null)
             return null;
@@ -80,8 +86,15 @@ public static class ShipModelLoader
     // Longest local axis (world units) a loaded hull is uniform-scaled to, per class — the
     // placeholder silhouette's length, so the fixed def muzzle (+Z≈3) and engine nozzles
     // (−Z≈2.25–3.4) keep landing on the hull's nose/tail whatever scale the art was authored at.
-    private static float TargetLength(ShipClass cls, bool isPod) => isPod ? 2.8f
-        : cls switch { ShipClass.Fighter => 5.5f, ShipClass.Bomber => 7.2f, _ => 4.5f };
+    private static float TargetLength(ShipClass cls, bool isPod) =>
+        isPod
+            ? 2.8f
+            : cls switch
+            {
+                ShipClass.Fighter => 5.5f,
+                ShipClass.Bomber => 7.2f,
+                _ => 4.5f,
+            };
 
     // Attach the dynamic engine glow + team trail, reading the nozzle/anchor positions
     // from the class's engine hardpoints. The glow node is handed back to the ship node
@@ -112,9 +125,9 @@ public static class ShipModelLoader
             // as a Bomber's, and keep it deliberately small relative to the hull (the old
             // per-class constants over-sized the glow — the Scout worst of all).
             float len = TargetLength(cls, isPod);
-            float radius = len * 0.10f;   // flame mouth radius
-            float plume = len * 0.55f;    // plume length (before the afterburner stretch)
-            float range = len * 2.6f;     // engine-wash light reach
+            float radius = len * 0.10f; // flame mouth radius
+            float plume = len * 0.55f; // plume length (before the afterburner stretch)
+            float range = len * 2.6f; // engine-wash light reach
             var glow = new EngineGlow
             {
                 Name = "EngineGlow",
@@ -127,8 +140,12 @@ public static class ShipModelLoader
             shipNode.AddChild(glow);
             switch (shipNode)
             {
-                case PredictionController pc: pc.AttachEngine(glow); break;
-                case RemoteShip rs: rs.AttachEngine(glow); break;
+                case PredictionController pc:
+                    pc.AttachEngine(glow);
+                    break;
+                case RemoteShip rs:
+                    rs.AttachEngine(glow);
+                    break;
             }
         }
 
@@ -140,18 +157,22 @@ public static class ShipModelLoader
         // exhaust rather than clipping the hull.
         const float trailGap = 3f;
         float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
-        shipNode.AddChild(new TeamTrail
-        {
-            Name = "TeamTrail",
-            Position = new Vector3(0f, 0f, trailZ),
-            TeamColor = hot,
-            Width = cls == ShipClass.Bomber ? 0.65f : cls == ShipClass.Fighter ? 0.5f : 0.4f,
-        });
+        shipNode.AddChild(
+            new TeamTrail
+            {
+                Name = "TeamTrail",
+                Position = new Vector3(0f, 0f, trailZ),
+                TeamColor = hot,
+                Width =
+                    cls == ShipClass.Bomber ? 0.65f
+                    : cls == ShipClass.Fighter ? 0.5f
+                    : 0.4f,
+            }
+        );
     }
 
     // The def-table id a class/pod resolves to (pods sit at the reserved PodClassId).
-    private static byte DefId(ShipClass cls, bool isPod)
-        => isPod ? DefRegistry.PodClassId : (byte)cls;
+    private static byte DefId(ShipClass cls, bool isPod) => isPod ? DefRegistry.PodClassId : (byte)cls;
 
     // Distinct silhouettes per class (placeholder art), all built pointing local +Z to
     // match the flight model's forward axis: the Scout a sleek cone, the Fighter a chunkier
@@ -161,7 +182,13 @@ public static class ShipModelLoader
         if (isPod)
             return new MeshInstance3D
             {
-                Mesh = new SphereMesh { Radius = 1.4f, Height = 2.8f, RadialSegments = 12, Rings = 8 },
+                Mesh = new SphereMesh
+                {
+                    Radius = 1.4f,
+                    Height = 2.8f,
+                    RadialSegments = 12,
+                    Rings = 8,
+                },
                 MaterialOverride = mat,
             };
 
@@ -181,7 +208,13 @@ public static class ShipModelLoader
 
         return new MeshInstance3D
         {
-            Mesh = new CylinderMesh { TopRadius = 0f, BottomRadius = 1.4f, Height = 4.5f, RadialSegments = 12 },
+            Mesh = new CylinderMesh
+            {
+                TopRadius = 0f,
+                BottomRadius = 1.4f,
+                Height = 4.5f,
+                RadialSegments = 12,
+            },
             MaterialOverride = mat,
             RotationDegrees = new Vector3(90f, 0f, 0f), // +Y cone tip -> +Z
         };
@@ -194,11 +227,7 @@ public static class ShipModelLoader
     {
         var pos = new Vector3(hp.OffX, hp.OffY, hp.OffZ);
         Basis basis = BasisFacingZ(new Vector3(hp.DirX, hp.DirY, hp.DirZ));
-        return new Marker3D
-        {
-            Name = $"HP_{hp.Kind}_{hp.Index}",
-            Transform = new Transform3D(basis, pos),
-        };
+        return new Marker3D { Name = $"HP_{hp.Kind}_{hp.Index}", Transform = new Transform3D(basis, pos) };
     }
 
     // Orthonormal basis whose local +Z points along `forward` (game-forward). Falls back to

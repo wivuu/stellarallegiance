@@ -25,13 +25,13 @@ static class Program
     {
         return new ShipInputState
         {
-            Thrust  = 1.0f,
+            Thrust = 1.0f,
             StrafeX = (tick % 40 < 20) ? 0.5f : -0.5f,
             StrafeY = 0.2f,
-            Yaw     = (float)Math.Sin(tick * 0.05) * 0.8f, // deterministic shape, not RNG
-            Pitch   = (tick % 60 < 30) ? 0.3f : -0.3f,
-            Roll    = 0.1f,
-            Firing  = false,
+            Yaw = (float)Math.Sin(tick * 0.05) * 0.8f, // deterministic shape, not RNG
+            Pitch = (tick % 60 < 30) ? 0.3f : -0.3f,
+            Roll = 0.1f,
+            Firing = false,
         };
     }
 
@@ -51,11 +51,20 @@ static class Program
     }
 
     static bool BitEqual(ShipState a, ShipState b) =>
-        a.Pos.X == b.Pos.X && a.Pos.Y == b.Pos.Y && a.Pos.Z == b.Pos.Z &&
-        a.Vel.X == b.Vel.X && a.Vel.Y == b.Vel.Y && a.Vel.Z == b.Vel.Z &&
-        a.Rot.X == b.Rot.X && a.Rot.Y == b.Rot.Y && a.Rot.Z == b.Rot.Z && a.Rot.W == b.Rot.W &&
-        a.AngVel.X == b.AngVel.X && a.AngVel.Y == b.AngVel.Y && a.AngVel.Z == b.AngVel.Z &&
-        a.AbPower == b.AbPower;
+        a.Pos.X == b.Pos.X
+        && a.Pos.Y == b.Pos.Y
+        && a.Pos.Z == b.Pos.Z
+        && a.Vel.X == b.Vel.X
+        && a.Vel.Y == b.Vel.Y
+        && a.Vel.Z == b.Vel.Z
+        && a.Rot.X == b.Rot.X
+        && a.Rot.Y == b.Rot.Y
+        && a.Rot.Z == b.Rot.Z
+        && a.Rot.W == b.Rot.W
+        && a.AngVel.X == b.AngVel.X
+        && a.AngVel.Y == b.AngVel.Y
+        && a.AngVel.Z == b.AngVel.Z
+        && a.AbPower == b.AbPower;
 
     static int Main()
     {
@@ -107,7 +116,8 @@ static class Program
         {
             var s = new ShipState { Rot = Quat.Identity };
             var full = new ShipInputState { Thrust = 1f };
-            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, full, scout);
+            for (int t = 0; t < 2000; t++)
+                s = FlightModel.Integrate(s, full, scout);
             float speed = s.Vel.Length();
             if (speed < scout.MaxSpeed * 0.98f || speed > scout.MaxSpeed + 0.5f)
             {
@@ -128,7 +138,8 @@ static class Program
             var fighter = FlightModel.StatsFor(FlightModel.ClassFighter);
             var s = new ShipState { Rot = Quat.Identity };
             var boost = new ShipInputState { Thrust = 1f, Boost = true };
-            for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, fighter);
+            for (int t = 0; t < 2000; t++)
+                s = FlightModel.Integrate(s, boost, fighter);
             float boostSpeed = s.Vel.Length();
             float boostCap = fighter.MaxSpeed * (1f + fighter.AbThrust / fighter.Thrust);
             if (boostSpeed <= fighter.MaxSpeed + 0.5f || boostSpeed > boostCap + 0.5f)
@@ -143,7 +154,9 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: afterburner overspeed {boostSpeed:R} in ({fighter.MaxSpeed}, {boostCap:R}], AbPower={s.AbPower:R}");
+                Console.WriteLine(
+                    $"PASS: afterburner overspeed {boostSpeed:R} in ({fighter.MaxSpeed}, {boostCap:R}], AbPower={s.AbPower:R}"
+                );
             }
         }
 
@@ -160,11 +173,14 @@ static class Program
             {
                 var s = new ShipState { Rot = Quat.Identity };
                 var boost = new ShipInputState { Thrust = 1f, Boost = true };
-                for (int t = 0; t < 2000; t++) s = FlightModel.Integrate(s, boost, st);
+                for (int t = 0; t < 2000; t++)
+                    s = FlightModel.Integrate(s, boost, st);
                 float speed = s.Vel.Length();
                 if (st.AbThrust != 0f || speed > st.MaxSpeed + 0.5f)
                 {
-                    Console.WriteLine($"FAIL: {name} should not boost — AbThrust={st.AbThrust:R}, boosted speed {speed:R} > MaxSpeed {st.MaxSpeed}");
+                    Console.WriteLine(
+                        $"FAIL: {name} should not boost — AbThrust={st.AbThrust:R}, boosted speed {speed:R} > MaxSpeed {st.MaxSpeed}"
+                    );
                     failures++;
                 }
                 else
@@ -197,15 +213,20 @@ static class Program
         {
             var s = new ShipState { Rot = Quat.Identity };
             var spin = new ShipInputState { Yaw = 1f };
-            for (int t = 0; t < 80; t++) s = FlightModel.Integrate(s, spin, scout);   // reach max yaw rate
+            for (int t = 0; t < 80; t++)
+                s = FlightModel.Integrate(s, spin, scout); // reach max yaw rate
             float maxRateDeg = Math.Abs(s.AngVel.Y) * Rad2Deg;
             Quat before = s.Rot;
             var release = new ShipInputState();
             int steps = 0;
-            while (Math.Abs(s.AngVel.Y) > 1e-4f && steps < 200) { s = FlightModel.Integrate(s, release, scout); steps++; }
+            while (Math.Abs(s.AngVel.Y) > 1e-4f && steps < 200)
+            {
+                s = FlightModel.Integrate(s, release, scout);
+                steps++;
+            }
             float overshootDeg = AngleDeg(before, s.Rot);
-            float expected = scout.DriftYawDeg / 0.5f;   // ~10° for the Scout (drift 5°)
-            bool rateOk = Math.Abs(maxRateDeg - scout.RateYawDeg) < 2f;   // spun up to the authored cap
+            float expected = scout.DriftYawDeg / 0.5f; // ~10° for the Scout (drift 5°)
+            bool rateOk = Math.Abs(maxRateDeg - scout.RateYawDeg) < 2f; // spun up to the authored cap
             if (!rateOk)
             {
                 Console.WriteLine($"FAIL: yaw rate {maxRateDeg:0.0}°/s did not reach cap {scout.RateYawDeg}°/s");
@@ -218,7 +239,9 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: drift overshoot {overshootDeg:0.00}° ~= {expected:0.00}° (keeps turning after release over {steps} ticks)");
+                Console.WriteLine(
+                    $"PASS: drift overshoot {overshootDeg:0.00}° ~= {expected:0.00}° (keeps turning after release over {steps} ticks)"
+                );
             }
         }
 
@@ -233,12 +256,16 @@ static class Program
             float backRatio = dvReverse / dvFwd;
             if (Math.Abs(sideRatio - scout.SideMult) > 0.02f || Math.Abs(backRatio - scout.BackMult) > 0.02f)
             {
-                Console.WriteLine($"FAIL: clip ratios side {sideRatio:0.000} (want {scout.SideMult}), back {backRatio:0.000} (want {scout.BackMult})");
+                Console.WriteLine(
+                    $"FAIL: clip ratios side {sideRatio:0.000} (want {scout.SideMult}), back {backRatio:0.000} (want {scout.BackMult})"
+                );
                 failures++;
             }
             else
             {
-                Console.WriteLine($"PASS: weak strafe/reverse — side {sideRatio:0.000}=SideMult, back {backRatio:0.000}=BackMult");
+                Console.WriteLine(
+                    $"PASS: weak strafe/reverse — side {sideRatio:0.000}=SideMult, back {backRatio:0.000}=BackMult"
+                );
             }
         }
 
@@ -246,9 +273,9 @@ static class Program
         //    instance gains speed slower; the zero-mass fallback equals baseline mass.
         {
             var thrust = new ShipInputState { Thrust = 1f };
-            var light = new ShipState { Rot = Quat.Identity, Mass = scout.Mass };       // baseline
-            var heavy = new ShipState { Rot = Quat.Identity, Mass = scout.Mass * 4f };  // 4x heavier
-            var unset = new ShipState { Rot = Quat.Identity };                          // Mass = 0 -> baseline
+            var light = new ShipState { Rot = Quat.Identity, Mass = scout.Mass }; // baseline
+            var heavy = new ShipState { Rot = Quat.Identity, Mass = scout.Mass * 4f }; // 4x heavier
+            var unset = new ShipState { Rot = Quat.Identity }; // Mass = 0 -> baseline
             for (int t = 0; t < 5; t++)
             {
                 light = FlightModel.Integrate(light, thrust, scout);
@@ -267,7 +294,9 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R}); zero-mass fallback exact");
+                Console.WriteLine(
+                    $"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R}); zero-mass fallback exact"
+                );
             }
         }
 
@@ -292,17 +321,35 @@ static class Program
     }
 
     static bool Close(ShipState a, ShipState b) =>
-        Near(a.Pos.X, b.Pos.X) && Near(a.Pos.Y, b.Pos.Y) && Near(a.Pos.Z, b.Pos.Z) &&
-        Near(a.Vel.X, b.Vel.X) && Near(a.Vel.Y, b.Vel.Y) && Near(a.Vel.Z, b.Vel.Z) &&
-        Near(a.Rot.X, b.Rot.X) && Near(a.Rot.Y, b.Rot.Y) && Near(a.Rot.Z, b.Rot.Z) && Near(a.Rot.W, b.Rot.W) &&
-        Near(a.AngVel.X, b.AngVel.X) && Near(a.AngVel.Y, b.AngVel.Y) && Near(a.AngVel.Z, b.AngVel.Z);
+        Near(a.Pos.X, b.Pos.X)
+        && Near(a.Pos.Y, b.Pos.Y)
+        && Near(a.Pos.Z, b.Pos.Z)
+        && Near(a.Vel.X, b.Vel.X)
+        && Near(a.Vel.Y, b.Vel.Y)
+        && Near(a.Vel.Z, b.Vel.Z)
+        && Near(a.Rot.X, b.Rot.X)
+        && Near(a.Rot.Y, b.Rot.Y)
+        && Near(a.Rot.Z, b.Rot.Z)
+        && Near(a.Rot.W, b.Rot.W)
+        && Near(a.AngVel.X, b.AngVel.X)
+        && Near(a.AngVel.Y, b.AngVel.Y)
+        && Near(a.AngVel.Z, b.AngVel.Z);
 
     static bool Near(float a, float b) => Math.Abs(a - b) <= Tol;
 
     // Golden values — recorded from the canonical M0 Allegiance model (200-tick
     // RunSequence above). Regenerated for the M0 flight-model rework.
-    const float GOLDEN_POS_X = 322.4554f, GOLDEN_POS_Y = 36.674164f, GOLDEN_POS_Z = 453.73428f;
-    const float GOLDEN_VEL_X = 46.985027f, GOLDEN_VEL_Y = 9.789256f, GOLDEN_VEL_Z = 71.76047f;
-    const float GOLDEN_ROT_X = 0.10109462f, GOLDEN_ROT_Y = 0.52838504f, GOLDEN_ROT_Z = 0.43981338f, GOLDEN_ROT_W = 0.71913385f;
-    const float GOLDEN_ANGVEL_X = 0.2617994f, GOLDEN_ANGVEL_Y = -0.3500468f, GOLDEN_ANGVEL_Z = 0.08726647f;
+    const float GOLDEN_POS_X = 322.4554f,
+        GOLDEN_POS_Y = 36.674164f,
+        GOLDEN_POS_Z = 453.73428f;
+    const float GOLDEN_VEL_X = 46.985027f,
+        GOLDEN_VEL_Y = 9.789256f,
+        GOLDEN_VEL_Z = 71.76047f;
+    const float GOLDEN_ROT_X = 0.10109462f,
+        GOLDEN_ROT_Y = 0.52838504f,
+        GOLDEN_ROT_Z = 0.43981338f,
+        GOLDEN_ROT_W = 0.71913385f;
+    const float GOLDEN_ANGVEL_X = 0.2617994f,
+        GOLDEN_ANGVEL_Y = -0.3500468f,
+        GOLDEN_ANGVEL_Z = 0.08726647f;
 }

@@ -13,8 +13,9 @@ public sealed class WebRtcTransport : IClientTransport
 {
     private readonly RTCPeerConnection _pc;
     private readonly RTCDataChannel _dc;
-    private readonly Channel<byte[]> _rx =
-        Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<byte[]> _rx = Channel.CreateUnbounded<byte[]>(
+        new UnboundedChannelOptions { SingleReader = true }
+    );
 
     public WebRtcTransport(RTCPeerConnection pc, RTCDataChannel dc)
     {
@@ -25,8 +26,7 @@ public sealed class WebRtcTransport : IClientTransport
         _dc.onerror += _ => _rx.Writer.TryComplete();
         _pc.onconnectionstatechange += s =>
         {
-            if (s is RTCPeerConnectionState.closed or RTCPeerConnectionState.failed
-                  or RTCPeerConnectionState.disconnected)
+            if (s is RTCPeerConnectionState.closed or RTCPeerConnectionState.failed or RTCPeerConnectionState.disconnected)
                 _rx.Writer.TryComplete();
         };
     }
@@ -36,14 +36,17 @@ public sealed class WebRtcTransport : IClientTransport
         try
         {
             if (!await _rx.Reader.WaitToReadAsync(ct))
-                return -1;   // channel closed
+                return -1; // channel closed
             if (!_rx.Reader.TryRead(out var frame))
                 return 0;
             int n = Math.Min(frame.Length, buffer.Length);
             Array.Copy(frame, buffer, n);
             return n;
         }
-        catch (ChannelClosedException) { return -1; }
+        catch (ChannelClosedException)
+        {
+            return -1;
+        }
     }
 
     public ValueTask SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct)
@@ -64,36 +67,48 @@ public sealed class WebRtcTransport : IClientTransport
                     _dc.send(data.ToArray());
             }
         }
-        catch { /* channel tore down mid-send — receive loop will observe the close */ }
+        catch
+        { /* channel tore down mid-send — receive loop will observe the close */
+        }
         return ValueTask.CompletedTask;
     }
 
     public ValueTask CloseAsync(string reason, CancellationToken ct)
     {
-        try { _pc.close(); } catch { }
+        try
+        {
+            _pc.close();
+        }
+        catch { }
         _rx.Writer.TryComplete();
         return ValueTask.CompletedTask;
     }
 }
 
-// The server's WebRTC side: it is the ANSWERER. Clients (offerers) post SDP offers to the public lobby
-// keyed by our SessionId; this listener long-polls /pending, builds a peer connection per offer,
-// answers it (non-trickle ICE — gather candidates into the SDP before replying), and on
-// DataChannel open hands the transport to the SAME ClientHub.HandleConnection the WebSocket path
-// uses. Started only when the server registered a public name (see Program.cs / LobbyRegistrar).
+// The server's WebRTC side: it is the ANSWERER. Clients (offerers) post SDP offers to the public
+// lobby; the lobby pushes them down the WS connection to LobbyRegistrar, which writes them into
+// _offers. This listener drains that channel, builds a peer connection per offer, answers it
+// (non-trickle ICE — gather candidates into the SDP before replying), and on DataChannel open
+// hands the transport to the SAME ClientHub.HandleConnection the WebSocket path uses.
+// Started only when the server registered a public name and is in NAT mode.
 public sealed class WebRtcListener
 {
     private readonly ClientHub _hub;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
-    private readonly string _shareBase;     // http://host:port
-    private readonly string _sessionId;
+    private readonly string _shareBase; // http://host:port — still needed to POST answers
+    private readonly ChannelReader<PendingOfferDto> _offers;
     private readonly List<RTCIceServer> _iceServers;
 
-    public WebRtcListener(ClientHub hub, string shareBase, string sessionId, List<RTCIceServer> iceServers)
+    internal WebRtcListener(
+        ClientHub hub,
+        string shareBase,
+        ChannelReader<PendingOfferDto> offers,
+        List<RTCIceServer> iceServers
+    )
     {
         _hub = hub;
         _shareBase = shareBase.TrimEnd('/');
-        _sessionId = sessionId;
+        _offers = offers;
         _iceServers = iceServers;
     }
 
@@ -101,26 +116,13 @@ public sealed class WebRtcListener
 
     private async Task RunLoop(CancellationToken ct)
     {
-        Console.WriteLine($"[WebRtc] signaling listener up (session {_sessionId}, {_iceServers.Count} ICE server(s))");
-        while (!ct.IsCancellationRequested)
+        Console.WriteLine($"[WebRtc] signaling listener up ({_iceServers.Count} ICE server(s))");
+        try
         {
-            try
-            {
-                // Long-poll the public lobby for offers addressed to us (returns promptly when one
-                // lands, else after the relay's max-wait).
-                var pending = await _http.GetFromJsonAsync<List<PendingOfferDto>>(
-                    $"{_shareBase}/servers/{_sessionId}/pending", ct);
-                if (pending is not null)
-                    foreach (var offer in pending)
-                        _ = AnswerOffer(offer, ct);   // each client handshake runs independently
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception e)
-            {
-                Console.WriteLine($"[WebRtc] poll error: {e.Message}");
-                try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { break; }
-            }
+            await foreach (var offer in _offers.ReadAllAsync(ct))
+                _ = AnswerOffer(offer, ct); // each client handshake runs independently
         }
+        catch (OperationCanceledException) { }
     }
 
     private async Task AnswerOffer(PendingOfferDto offer, CancellationToken ct)
@@ -141,7 +143,8 @@ public sealed class WebRtcListener
                 int started = 0;
                 void Ready()
                 {
-                    if (Interlocked.Exchange(ref started, 1) != 0) return;
+                    if (Interlocked.Exchange(ref started, 1) != 0)
+                        return;
                     Console.WriteLine($"[WebRtc] datachannel open (ticket {offer.Ticket})");
                     _ = _hub.HandleConnection(transport, ct);
                 }
@@ -149,15 +152,20 @@ public sealed class WebRtcListener
                 // onopen never fires — handle both: subscribe AND check current state (Ready is
                 // idempotent via the guard).
                 dc.onopen += Ready;
-                if (dc.readyState == RTCDataChannelState.open) Ready();
+                if (dc.readyState == RTCDataChannelState.open)
+                    Ready();
             };
             pc.onconnectionstatechange += s =>
             {
                 // Dispose on disconnected too (not just failed/closed): a client that restarts
                 // leaves its server-side pc in `disconnected` for SIPSorcery's long consent-timeout,
                 // and a leaked pc keeps holding its ICE/STUN sockets while the next offer comes in.
-                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed
-                      or RTCPeerConnectionState.disconnected)
+                if (
+                    s
+                    is RTCPeerConnectionState.failed
+                        or RTCPeerConnectionState.closed
+                        or RTCPeerConnectionState.disconnected
+                )
                 {
                     if (s == RTCPeerConnectionState.failed)
                         Console.WriteLine($"[WebRtc] connection failed (ticket {offer.Ticket})");
@@ -166,7 +174,8 @@ public sealed class WebRtcListener
             };
 
             var set = pc.setRemoteDescription(
-                new RTCSessionDescriptionInit { type = RTCSdpType.offer, sdp = offer.SdpOffer });
+                new RTCSessionDescriptionInit { type = RTCSdpType.offer, sdp = offer.SdpOffer }
+            );
             if (set != SetDescriptionResultEnum.OK)
             {
                 Console.WriteLine($"[WebRtc] bad offer ({set}) for ticket {offer.Ticket}");
@@ -184,7 +193,10 @@ public sealed class WebRtcListener
             // answerer's localDescription, else the answer is host-only and unroutable off-LAN.
             var answerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredCands.ToArray());
             using var resp = await _http.PostAsJsonAsync(
-                $"{_shareBase}/connect/{offer.Ticket}/answer", new { sdpAnswer = answerSdp }, ct);
+                $"{_shareBase}/connect/{offer.Ticket}/answer",
+                new { sdpAnswer = answerSdp },
+                ct
+            );
             if (!resp.IsSuccessStatusCode)
             {
                 Console.WriteLine($"[WebRtc] answer post failed ({(int)resp.StatusCode}) ticket {offer.Ticket}");
@@ -197,7 +209,7 @@ public sealed class WebRtcListener
             Console.WriteLine($"[WebRtc] answer error (ticket {offer.Ticket}): {e.Message}");
         }
     }
-
-    // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
-    private sealed record PendingOfferDto(string Ticket, string SdpOffer);
 }
+
+// Shared within SimServer.Net: written by LobbyRegistrar's WS receive loop, read by WebRtcListener.
+internal sealed record PendingOfferDto(string Ticket, string SdpOffer);

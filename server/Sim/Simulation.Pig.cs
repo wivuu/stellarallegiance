@@ -15,23 +15,23 @@ public sealed partial class Simulation
 {
     // ---- AI decision rate: re-decide every 4th sim tick (~200 ms), re-steer every tick ----
     private const uint PigBrainHz = 5;
-    private const uint PigBrainEvery = TickHz / PigBrainHz;   // 4
+    private const uint PigBrainEvery = TickHz / PigBrainHz; // 4
 
     // PigDecision.Kind — how PigExecute should fly a drone for the cached decision.
     private const byte PigKindNone = 0;
-    private const byte PigKindChase = 1;        // combat: lead + juke + fire on a target ship
-    private const byte PigKindSteerShip = 2;    // fly onto a moving friendly ship (rescue pod)
-    private const byte PigKindSteerPoint = 3;   // fly to a static point (aleph gate / home)
-    private const byte PigKindAttackPoint = 4;  // shell a static target (enemy base) from standoff
-    private const byte PigKindPatrol = 5;       // sweep a ring around the cached sector center
+    private const byte PigKindChase = 1; // combat: lead + juke + fire on a target ship
+    private const byte PigKindSteerShip = 2; // fly onto a moving friendly ship (rescue pod)
+    private const byte PigKindSteerPoint = 3; // fly to a static point (aleph gate / home)
+    private const byte PigKindAttackPoint = 4; // shell a static target (enemy base) from standoff
+    private const byte PigKindPatrol = 5; // sweep a ring around the cached sector center
 
     // ---- PIG tuning (ported verbatim from the module) ----
     private const byte NumTeams = 2;
     private const int MaxPigsPerTeam = 5;
-    private const uint PigSquadDelayTicks = 10 * TickHz;   // 10 s after a wipe before the next squad
-    private const uint PigAggroWindowTicks = 3 * TickHz;   // ~3 s aggression memory
-    private const float PigPatrolReachFrac = 0.7f;   // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
-    private const float PigPatrolArrive = 120f;      // re-roll a patrol waypoint once within this distance of it
+    private const uint PigSquadDelayTicks = 10 * TickHz; // 10 s after a wipe before the next squad
+    private const uint PigAggroWindowTicks = 3 * TickHz; // ~3 s aggression memory
+    private const float PigPatrolReachFrac = 0.7f; // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
+    private const float PigPatrolArrive = 120f; // re-roll a patrol waypoint once within this distance of it
     private const float PigRadarRange = 1200f;
     private const float PigFireRange = 360f;
     private const float PigStandoff = 90f;
@@ -46,9 +46,9 @@ public sealed partial class Simulation
     private const float PigThreatSwitchMargin = 1.3f;
     private const float PigThreatBaseWeight = 2.5f;
     private const float PigBaseThreatRadius = 700f;
-    private const float PigThreatBomberBonus = 2.0f;            // extra threat score for Bomber-class enemies
-    private const uint PigWanderPeriodTicks = 60 * TickHz;      // 60 s window before a pig re-rolls its wander sector
-    private const uint PigBomberRespawnTicks = 15 * TickHz;     // 15 s cooldown before a team's bomber relaunches
+    private const float PigThreatBomberBonus = 2.0f; // extra threat score for Bomber-class enemies
+    private const uint PigWanderPeriodTicks = 60 * TickHz; // 60 s window before a pig re-rolls its wander sector
+    private const uint PigBomberRespawnTicks = 15 * TickHz; // 15 s cooldown before a team's bomber relaunches
 
     // Aiming skill (per-slot): lead accuracy, turn snappiness, residual wobble.
     private const float PigTurnGainMin = 2.2f;
@@ -66,14 +66,22 @@ public sealed partial class Simulation
 
     // Lead solving uses the drone's primary weapon (all server weapons share these).
     // Stored as fields (not properties) so the array lookup is paid once, not per call.
-    private static readonly float PigShotSpeed = Weapons[0].Speed;          // 200 u/s
-    private static readonly uint PigShotLifeTicks = Weapons[0].LifeTicks;   // 16
+    private static readonly float PigShotSpeed = Weapons[0].Speed; // 200 u/s
+    private static readonly uint PigShotLifeTicks = Weapons[0].LifeTicks; // 16
     private static readonly float PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
     private static readonly float PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
+
     // Precomputed once; used in both PigChaseInput and PigAttackPoint.
     private static readonly float PigAimSinDeg = MathF.Sin(PigAimDeg * (MathF.PI / 180f));
 
-    private enum PigState : byte { Idle, Seek, Attack, Patrol, Rescue }
+    private enum PigState : byte
+    {
+        Idle,
+        Seek,
+        Attack,
+        Patrol,
+        Rescue,
+    }
 
     // One persistent slot per drone. Outlives the drone: when the drone dies its Ship goes to
     // the ejected pod (still "occupied") and then null (free), then the squad refills it.
@@ -82,9 +90,9 @@ public sealed partial class Simulation
         public ulong PigId;
         public byte Team;
         public byte Class;
-        public bool IsBomberSlot;      // the single per-team bomber slot (separate launch/cooldown lifecycle)
-        public ShipSim? Ship;          // live drone OR its flying pod, or null when free
-        public uint RespawnAtTick;     // staggered launch tick within an active squad
+        public bool IsBomberSlot; // the single per-team bomber slot (separate launch/cooldown lifecycle)
+        public ShipSim? Ship; // live drone OR its flying pod, or null when free
+        public uint RespawnAtTick; // staggered launch tick within an active squad
         public PigState State;
         public ulong? TargetShipId;
 
@@ -101,7 +109,9 @@ public sealed partial class Simulation
         public byte Kind;
         public ulong PigId;
         public ulong TargetShipId;
-        public float Px, Py, Pz;
+        public float Px,
+            Py,
+            Pz;
         public float Radius;
     }
 
@@ -115,23 +125,23 @@ public sealed partial class Simulation
         public ulong PigId;
         public Vec3 MyPos;
         public uint Tick;
-        public ulong? KeepId;             // the slot's currently-locked target (hysteresis)
+        public ulong? KeepId; // the slot's currently-locked target (hysteresis)
 
-        public Vec3? MyBasePos;           // our base in this sector, if any (for base-threat scoring)
+        public Vec3? MyBasePos; // our base in this sector, if any (for base-threat scoring)
         public World.BaseSite? EnemyBase; // nearest enemy base in this sector, if any
 
-        public ShipSim? BestAggr;         // highest-threat aggressor in radar range
+        public ShipSim? BestAggr; // highest-threat aggressor in radar range
         public float BestAggrScore;
-        public ShipSim? KeptAggr;         // the locked target, if still a visible aggressor
+        public ShipSim? KeptAggr; // the locked target, if still a visible aggressor
         public float KeptAggrScore;
-        public ShipSim? NearestPassive;   // nearest non-aggressive enemy in radar range
-        public ShipSim? BestEnemyBomber;  // highest-threat enemy Bomber (priority target)
+        public ShipSim? NearestPassive; // nearest non-aggressive enemy in radar range
+        public ShipSim? BestEnemyBomber; // highest-threat enemy Bomber (priority target)
         public float BestEnemyBomberScore;
     }
 
     private readonly List<PigSlot> _pigs = [];
-    private readonly Dictionary<ulong, PigPlan> _pigDecisions = [];   // keyed by live drone ShipId
-    private readonly Dictionary<ulong, PigSlot> _slotByShip = [];     // rebuilt each brain tick
+    private readonly Dictionary<ulong, PigPlan> _pigDecisions = []; // keyed by live drone ShipId
+    private readonly Dictionary<ulong, PigSlot> _slotByShip = []; // rebuilt each brain tick
     private readonly uint[] _squadNextTick = new uint[NumTeams];
     private readonly bool[] _squadActive = new bool[NumTeams];
     private bool _pigSlotsCreated;
@@ -173,7 +183,8 @@ public sealed partial class Simulation
         _livePigIds.Clear();
         foreach (var me in _order)
         {
-            if (!me.IsPig || me.IsPod) continue;
+            if (!me.IsPig || me.IsPod)
+                continue;
             _livePigIds.Add(me.ShipId);
             _pigDecisions[me.ShipId] = PigDecide(me, tick);
         }
@@ -182,47 +193,57 @@ public sealed partial class Simulation
         {
             _stalePigIds.Clear();
             foreach (var id in _pigDecisions.Keys)
-                if (!_livePigIds.Contains(id)) _stalePigIds.Add(id);
-            foreach (var id in _stalePigIds) _pigDecisions.Remove(id);
+                if (!_livePigIds.Contains(id))
+                    _stalePigIds.Add(id);
+            foreach (var id in _stalePigIds)
+                _pigDecisions.Remove(id);
         }
     }
 
     private void EnsurePigSlots()
     {
-        if (_pigSlotsCreated) return;
+        if (_pigSlotsCreated)
+            return;
         _pigSlotsCreated = true;
         for (byte team = 0; team < NumTeams; team++)
-            for (int i = 0; i < MaxPigsPerTeam; i++)
-            {
-                // Last slot is reserved as the team's lone bomber; the rest alternate Scout/Fighter.
-                bool isBomber = i == MaxPigsPerTeam - 1;
-                _pigs.Add(new PigSlot
+        for (int i = 0; i < MaxPigsPerTeam; i++)
+        {
+            // Last slot is reserved as the team's lone bomber; the rest alternate Scout/Fighter.
+            bool isBomber = i == MaxPigsPerTeam - 1;
+            _pigs.Add(
+                new PigSlot
                 {
                     PigId = _nextPigId++,
                     Team = team,
-                    Class = isBomber
-                        ? FlightModel.ClassBomber
-                        : i % 2 == 0 ? FlightModel.ClassScout : FlightModel.ClassFighter,
+                    Class =
+                        isBomber ? FlightModel.ClassBomber
+                        : i % 2 == 0 ? FlightModel.ClassScout
+                        : FlightModel.ClassFighter,
                     IsBomberSlot = isBomber,
                     Ship = null,
                     RespawnAtTick = 0,
                     State = PigState.Idle,
                     TargetShipId = null,
-                });
-            }
+                }
+            );
+        }
     }
 
     // Tear down all drones (no player / match ended) and reset every slot + squad so the next
     // time combat goes live a fresh squad scrambles immediately.
     private void DespawnAllPigs()
     {
-        for (byte team = 0; team < NumTeams; team++) { _squadActive[team] = false; _squadNextTick[team] = 0; }
+        for (byte team = 0; team < NumTeams; team++)
+        {
+            _squadActive[team] = false;
+            _squadNextTick[team] = 0;
+        }
         foreach (var slot in _pigs)
         {
             if (slot.Ship is ShipSim sh)
             {
                 _pigDecisions.Remove(sh.ShipId);
-                RemoveShipNow(sh);   // before Pass A, so direct removal is safe
+                RemoveShipNow(sh); // before Pass A, so direct removal is safe
             }
             slot.Ship = null;
             slot.RespawnAtTick = 0;
@@ -243,17 +264,28 @@ public sealed partial class Simulation
 
             // Squad waves cover the scout/fighter slots only; the bomber slot is tracked
             // separately so it launches on its own cadence and never gates a squad reset.
-            int alive = 0, pending = 0;
+            int alive = 0,
+                pending = 0;
             _emptyPigSlots.Clear();
             var empty = _emptyPigSlots;
             PigSlot? bomber = null;
             foreach (var slot in _pigs)
             {
-                if (slot.Team != team) continue;
-                if (slot.IsBomberSlot) { bomber = slot; continue; }
-                if (slot.Ship is not null) { alive++; continue; }
+                if (slot.Team != team)
+                    continue;
+                if (slot.IsBomberSlot)
+                {
+                    bomber = slot;
+                    continue;
+                }
+                if (slot.Ship is not null)
+                {
+                    alive++;
+                    continue;
+                }
                 empty.Add(slot);
-                if (slot.RespawnAtTick != 0) pending++;
+                if (slot.RespawnAtTick != 0)
+                    pending++;
             }
 
             if (_squadActive[team])
@@ -275,8 +307,10 @@ public sealed partial class Simulation
                 empty.Sort((a, b) => a.PigId.CompareTo(b.PigId));
                 for (int i = 0; i < empty.Count; i++)
                 {
-                    if (i == 0) SpawnPig(empty[i], tick);
-                    else empty[i].RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks;
+                    if (i == 0)
+                        SpawnPig(empty[i], tick);
+                    else
+                        empty[i].RespawnAtTick = tick + (uint)i * PigSpawnStaggerTicks;
                 }
                 _squadActive[team] = true;
                 _squadNextTick[team] = 0;
@@ -284,9 +318,13 @@ public sealed partial class Simulation
 
             // Lone bomber: while a squad is fielded, keep exactly one bomber pressing the
             // enemy base. After it is lost, FreePigPodSlot holds RespawnAtTick on cooldown.
-            if (bomber is PigSlot bs && _squadActive[team]
-                && bs.Ship is null && tick >= bs.RespawnAtTick
-                && EnemyBaseExists(team))
+            if (
+                bomber is PigSlot bs
+                && _squadActive[team]
+                && bs.Ship is null
+                && tick >= bs.RespawnAtTick
+                && EnemyBaseExists(team)
+            )
             {
                 SpawnPig(bs, tick);
             }
@@ -318,7 +356,7 @@ public sealed partial class Simulation
         slot.Ship = s;
         slot.State = PigState.Idle;
         slot.TargetShipId = null;
-        slot.HasPatrolPoint = false;   // fresh drone rolls its own patrol waypoint
+        slot.HasPatrolPoint = false; // fresh drone rolls its own patrol waypoint
     }
 
     // A PIG combat drone died: eject a PIG pod (auto-flies home via PodThink) and point the
@@ -328,7 +366,7 @@ public sealed partial class Simulation
     {
         _pigDecisions.Remove(s.ShipId);
         _toRemove.Add(s);
-        var pod = MakePod(s, tick);   // IsPig carried over from the dead drone
+        var pod = MakePod(s, tick); // IsPig carried over from the dead drone
         foreach (var slot in _pigs)
             if (ReferenceEquals(slot.Ship, s))
             {
@@ -351,9 +389,8 @@ public sealed partial class Simulation
             if (ReferenceEquals(slot.Ship, pod))
             {
                 slot.Ship = null;
-                slot.RespawnAtTick = (slot.IsBomberSlot && respawnAtTick == 0)
-                    ? tick + PigBomberRespawnTicks
-                    : respawnAtTick;
+                slot.RespawnAtTick =
+                    (slot.IsBomberSlot && respawnAtTick == 0) ? tick + PigBomberRespawnTicks : respawnAtTick;
                 slot.State = PigState.Idle;
                 slot.TargetShipId = null;
                 break;
@@ -367,33 +404,55 @@ public sealed partial class Simulation
         {
             PigSlot? activeRescuer = null;
             foreach (var p in _pigs)
-                if (p.Team == team && p.State == PigState.Rescue) { activeRescuer = p; break; }
+                if (p.Team == team && p.State == PigState.Rescue)
+                {
+                    activeRescuer = p;
+                    break;
+                }
 
             if (activeRescuer is PigSlot ar)
             {
-                bool valid = ar.Ship is ShipSim rship
+                bool valid =
+                    ar.Ship is ShipSim rship
                     && ar.TargetShipId is ulong pid
                     && _ships.TryGetValue(pid, out var curPod)
-                    && curPod.IsPod && !curPod.IsPig && curPod.Team == team && curPod.SectorId == rship.SectorId;
+                    && curPod.IsPod
+                    && !curPod.IsPig
+                    && curPod.Team == team
+                    && curPod.SectorId == rship.SectorId;
                 if (valid)
                     continue;
                 ar.State = PigState.Idle;
                 ar.TargetShipId = null;
             }
 
-            PigSlot? bestDrone = null; ulong bestPod = 0; float best2 = float.PositiveInfinity;
+            PigSlot? bestDrone = null;
+            ulong bestPod = 0;
+            float best2 = float.PositiveInfinity;
             foreach (var pod in _order)
             {
-                if (!pod.IsPod || pod.IsPig || pod.Team != team) continue;
+                if (!pod.IsPod || pod.IsPig || pod.Team != team)
+                    continue;
                 foreach (var p in _pigs)
                 {
-                    if (p.Team != team || p.State == PigState.Rescue || p.IsBomberSlot) continue;
-                    if (p.Ship is not ShipSim drone || drone.IsPod || drone.SectorId != pod.SectorId) continue;
+                    if (p.Team != team || p.State == PigState.Rescue || p.IsBomberSlot)
+                        continue;
+                    if (p.Ship is not ShipSim drone || drone.IsPod || drone.SectorId != pod.SectorId)
+                        continue;
                     float d2 = (drone.State.Pos - pod.State.Pos).LengthSquared();
-                    if (d2 < best2) { best2 = d2; bestDrone = p; bestPod = pod.ShipId; }
+                    if (d2 < best2)
+                    {
+                        best2 = d2;
+                        bestDrone = p;
+                        bestPod = pod.ShipId;
+                    }
                 }
             }
-            if (bestDrone is PigSlot chosen) { chosen.State = PigState.Rescue; chosen.TargetShipId = bestPod; }
+            if (bestDrone is PigSlot chosen)
+            {
+                chosen.State = PigState.Rescue;
+                chosen.TargetShipId = bestPod;
+            }
         }
     }
 
@@ -437,12 +496,18 @@ public sealed partial class Simulation
         float eb2 = float.PositiveInfinity;
         foreach (var b in World.Bases)
         {
-            if (b.SectorId != me.SectorId) continue;
-            if (b.Team == me.Team) ctx.MyBasePos = b.Pos;
+            if (b.SectorId != me.SectorId)
+                continue;
+            if (b.Team == me.Team)
+                ctx.MyBasePos = b.Pos;
             else
             {
                 float bd2 = (ctx.MyPos - b.Pos).LengthSquared();
-                if (bd2 < eb2) { eb2 = bd2; ctx.EnemyBase = b; }
+                if (bd2 < eb2)
+                {
+                    eb2 = bd2;
+                    ctx.EnemyBase = b;
+                }
             }
         }
 
@@ -452,25 +517,40 @@ public sealed partial class Simulation
         float nearestPassive2 = float.PositiveInfinity;
         foreach (var s in _order)
         {
-            if (s.SectorId != me.SectorId || s.Team == me.Team) continue;
-            if (s.IsPod) continue;
+            if (s.SectorId != me.SectorId || s.Team == me.Team)
+                continue;
+            if (s.IsPod)
+                continue;
             float d2 = (ctx.MyPos - s.State.Pos).LengthSquared();
-            if (d2 > keep2) continue;
+            if (d2 > keep2)
+                continue;
 
             float score = PigThreatScore(ctx.MyPos, s, ctx.MyBasePos);
 
             // Enemy bombers are priority targets whether or not they are currently firing.
             if (s.Class == FlightModel.ClassBomber && d2 <= radar2 && score > ctx.BestEnemyBomberScore)
-            { ctx.BestEnemyBomberScore = score; ctx.BestEnemyBomber = s; }
+            {
+                ctx.BestEnemyBomberScore = score;
+                ctx.BestEnemyBomber = s;
+            }
 
             if (IsAggressive(s, tick))
             {
-                if (ctx.KeepId is ulong k && s.ShipId == k) { ctx.KeptAggr = s; ctx.KeptAggrScore = score; }
-                if (d2 <= radar2 && score > ctx.BestAggrScore) { ctx.BestAggrScore = score; ctx.BestAggr = s; }
+                if (ctx.KeepId is ulong k && s.ShipId == k)
+                {
+                    ctx.KeptAggr = s;
+                    ctx.KeptAggrScore = score;
+                }
+                if (d2 <= radar2 && score > ctx.BestAggrScore)
+                {
+                    ctx.BestAggrScore = score;
+                    ctx.BestAggr = s;
+                }
             }
             else if (d2 <= radar2 && d2 < nearestPassive2)
             {
-                nearestPassive2 = d2; ctx.NearestPassive = s;
+                nearestPassive2 = d2;
+                ctx.NearestPassive = s;
             }
         }
         return ctx;
@@ -479,24 +559,48 @@ public sealed partial class Simulation
     // Goal: fetch a downed friendly pod (duty pre-committed by AssignPigRescuers).
     private PigPlan? TryRescue(in PigContext ctx)
     {
-        if (ctx.Slot is PigSlot rescuer && rescuer.State == PigState.Rescue
+        if (
+            ctx.Slot is PigSlot rescuer
+            && rescuer.State == PigState.Rescue
             && rescuer.TargetShipId is ulong rescuePodId
             && _ships.TryGetValue(rescuePodId, out var rescuePod)
-            && rescuePod.IsPod && rescuePod.Team == ctx.Me.Team && rescuePod.SectorId == ctx.Me.SectorId)
-            return new PigPlan { Kind = PigKindSteerShip, PigId = ctx.PigId, TargetShipId = rescuePodId };
+            && rescuePod.IsPod
+            && rescuePod.Team == ctx.Me.Team
+            && rescuePod.SectorId == ctx.Me.SectorId
+        )
+            return new PigPlan
+            {
+                Kind = PigKindSteerShip,
+                PigId = ctx.PigId,
+                TargetShipId = rescuePodId,
+            };
         return null;
     }
 
     // Goal: a locked target slipped to another sector — chase THROUGH the aleph that leads there.
     private PigPlan? TryChaseLockedTarget(in PigContext ctx)
     {
-        if (ctx.KeepId is ulong lockId
+        if (
+            ctx.KeepId is ulong lockId
             && _ships.TryGetValue(lockId, out var locked)
-            && locked.Team != ctx.Me.Team && locked.SectorId != ctx.Me.SectorId
-            && AlephTo(ctx.Me.SectorId, locked.SectorId) is World.Gate gate)
+            && locked.Team != ctx.Me.Team
+            && locked.SectorId != ctx.Me.SectorId
+            && AlephTo(ctx.Me.SectorId, locked.SectorId) is World.Gate gate
+        )
         {
-            if (ctx.Slot is PigSlot spp) { spp.State = PigState.Seek; spp.TargetShipId = locked.ShipId; }
-            return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+            if (ctx.Slot is PigSlot spp)
+            {
+                spp.State = PigState.Seek;
+                spp.TargetShipId = locked.ShipId;
+            }
+            return new PigPlan
+            {
+                Kind = PigKindSteerPoint,
+                PigId = ctx.PigId,
+                Px = gate.Pos.X,
+                Py = gate.Pos.Y,
+                Pz = gate.Pos.Z,
+            };
         }
         return null;
     }
@@ -514,7 +618,8 @@ public sealed partial class Simulation
     {
         ShipSim? target;
         if (ctx.BestAggr is ShipSim ba)
-            target = (ctx.KeptAggr is ShipSim ka && ctx.BestAggrScore <= ctx.KeptAggrScore * PigThreatSwitchMargin) ? ka : ba;
+            target =
+                (ctx.KeptAggr is ShipSim ka && ctx.BestAggrScore <= ctx.KeptAggrScore * PigThreatSwitchMargin) ? ka : ba;
         else
             target = ctx.NearestPassive;
         return target is ShipSim tgt ? MakeChasePlan(in ctx, tgt) : null;
@@ -524,8 +629,17 @@ public sealed partial class Simulation
     {
         float dist = (tgt.State.Pos - ctx.MyPos).Length();
         PigState state = dist <= PigFireRange ? PigState.Attack : PigState.Seek;
-        if (ctx.Slot is PigSlot sp) { sp.State = state; sp.TargetShipId = tgt.ShipId; }
-        return new PigPlan { Kind = PigKindChase, PigId = ctx.PigId, TargetShipId = tgt.ShipId };
+        if (ctx.Slot is PigSlot sp)
+        {
+            sp.State = state;
+            sp.TargetShipId = tgt.ShipId;
+        }
+        return new PigPlan
+        {
+            Kind = PigKindChase,
+            PigId = ctx.PigId,
+            TargetShipId = tgt.ShipId,
+        };
     }
 
     // Goal: press the enemy base. Bombers pursue it cross-sector (their whole reason to exist);
@@ -534,19 +648,40 @@ public sealed partial class Simulation
     {
         if (ctx.EnemyBase is World.BaseSite eb)
         {
-            if (ctx.Slot is PigSlot sb) { sb.State = PigState.Attack; sb.TargetShipId = null; }
-            return new PigPlan { Kind = PigKindAttackPoint, PigId = ctx.PigId, Px = eb.Pos.X, Py = eb.Pos.Y, Pz = eb.Pos.Z, Radius = World.BaseRadius };
+            if (ctx.Slot is PigSlot sb)
+            {
+                sb.State = PigState.Attack;
+                sb.TargetShipId = null;
+            }
+            return new PigPlan
+            {
+                Kind = PigKindAttackPoint,
+                PigId = ctx.PigId,
+                Px = eb.Pos.X,
+                Py = eb.Pos.Y,
+                Pz = eb.Pos.Z,
+                Radius = World.BaseRadius,
+            };
         }
 
         if (ctx.Slot is PigSlot bs && bs.IsBomberSlot)
         {
             foreach (var b in World.Bases)
             {
-                if (b.Team == ctx.Me.Team) continue;
+                if (b.Team == ctx.Me.Team)
+                    continue;
                 if (AlephTo(ctx.Me.SectorId, b.SectorId) is World.Gate gate)
                 {
-                    bs.State = PigState.Seek; bs.TargetShipId = null;
-                    return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+                    bs.State = PigState.Seek;
+                    bs.TargetShipId = null;
+                    return new PigPlan
+                    {
+                        Kind = PigKindSteerPoint,
+                        PigId = ctx.PigId,
+                        Px = gate.Pos.X,
+                        Py = gate.Pos.Y,
+                        Pz = gate.Pos.Z,
+                    };
                 }
             }
         }
@@ -558,18 +693,31 @@ public sealed partial class Simulation
     private PigPlan? TryWanderAleph(in PigContext ctx)
     {
         int sectorCount = World.Sectors.Count;
-        if (sectorCount <= 1) return null;
+        if (sectorCount <= 1)
+            return null;
 
         uint period = ctx.Tick / PigWanderPeriodTicks;
         uint hash = unchecked((uint)ctx.PigId * 2654435761u ^ period * 1013904223u);
         hash ^= hash >> 16;
         uint wantSector = World.Sectors[(int)(hash % (uint)sectorCount)].Id;
-        if (wantSector == ctx.Me.SectorId) return null;   // already roaming the chosen sector
+        if (wantSector == ctx.Me.SectorId)
+            return null; // already roaming the chosen sector
 
         if (AlephTo(ctx.Me.SectorId, wantSector) is World.Gate gate)
         {
-            if (ctx.Slot is PigSlot sl) { sl.State = PigState.Patrol; sl.TargetShipId = null; }
-            return new PigPlan { Kind = PigKindSteerPoint, PigId = ctx.PigId, Px = gate.Pos.X, Py = gate.Pos.Y, Pz = gate.Pos.Z };
+            if (ctx.Slot is PigSlot sl)
+            {
+                sl.State = PigState.Patrol;
+                sl.TargetShipId = null;
+            }
+            return new PigPlan
+            {
+                Kind = PigKindSteerPoint,
+                PigId = ctx.PigId,
+                Px = gate.Pos.X,
+                Py = gate.Pos.Y,
+                Pz = gate.Pos.Z,
+            };
         }
         return null;
     }
@@ -583,18 +731,35 @@ public sealed partial class Simulation
     private PigPlan MakePatrolPlan(in PigContext ctx)
     {
         if (ctx.Slot is not PigSlot sp)
-            return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = 0f, Py = 0f, Pz = 0f };
+            return new PigPlan
+            {
+                Kind = PigKindPatrol,
+                PigId = ctx.PigId,
+                Px = 0f,
+                Py = 0f,
+                Pz = 0f,
+            };
 
         sp.State = PigState.Patrol;
         sp.TargetShipId = null;
-        if (!sp.HasPatrolPoint || sp.PatrolSector != ctx.Me.SectorId
-            || (sp.PatrolPoint - ctx.MyPos).LengthSquared() <= PigPatrolArrive * PigPatrolArrive)
+        if (
+            !sp.HasPatrolPoint
+            || sp.PatrolSector != ctx.Me.SectorId
+            || (sp.PatrolPoint - ctx.MyPos).LengthSquared() <= PigPatrolArrive * PigPatrolArrive
+        )
         {
             sp.PatrolPoint = RandomPatrolPoint(ctx.Me.SectorId);
             sp.PatrolSector = ctx.Me.SectorId;
             sp.HasPatrolPoint = true;
         }
-        return new PigPlan { Kind = PigKindPatrol, PigId = ctx.PigId, Px = sp.PatrolPoint.X, Py = sp.PatrolPoint.Y, Pz = sp.PatrolPoint.Z };
+        return new PigPlan
+        {
+            Kind = PigKindPatrol,
+            PigId = ctx.PigId,
+            Px = sp.PatrolPoint.X,
+            Py = sp.PatrolPoint.Y,
+            Pz = sp.PatrolPoint.Z,
+        };
     }
 
     // A random patrol waypoint inside the sector: uniform over a disc kept clear of the
@@ -603,10 +768,11 @@ public sealed partial class Simulation
     private Vec3 RandomPatrolPoint(uint sector)
     {
         float radius = World.SectorRadius(sector);
-        if (float.IsInfinity(radius) || radius <= 0f) radius = 1000f;
+        if (float.IsInfinity(radius) || radius <= 0f)
+            radius = 1000f;
         float reach = radius * PigPatrolReachFrac;
         double ang = _rng.NextDouble() * Math.PI * 2.0;
-        double rad = reach * Math.Sqrt(_rng.NextDouble());   // sqrt -> uniform over the disc area
+        double rad = reach * Math.Sqrt(_rng.NextDouble()); // sqrt -> uniform over the disc area
         float y = (float)((_rng.NextDouble() * 2.0 - 1.0) * reach * 0.25f);
         return new Vec3((float)(Math.Cos(ang) * rad), y, (float)(Math.Sin(ang) * rad));
     }
@@ -615,14 +781,18 @@ public sealed partial class Simulation
     private ShipInputState PigExecute(ShipSim me, uint tick)
     {
         if (!_pigDecisions.TryGetValue(me.ShipId, out var d))
-            return default;   // no decision yet — coast until the brain fires
+            return default; // no decision yet — coast until the brain fires
         Vec3 myPos = me.State.Pos;
         Quat myRot = me.State.Rot;
         switch (d.Kind)
         {
             case PigKindChase:
-                if (_ships.TryGetValue(d.TargetShipId, out var tgt)
-                    && !tgt.IsPod && tgt.Team != me.Team && tgt.SectorId == me.SectorId)
+                if (
+                    _ships.TryGetValue(d.TargetShipId, out var tgt)
+                    && !tgt.IsPod
+                    && tgt.Team != me.Team
+                    && tgt.SectorId == me.SectorId
+                )
                     return PigChaseInput(me, tgt, d.PigId, tick);
                 return default;
             case PigKindSteerShip:
@@ -660,7 +830,8 @@ public sealed partial class Simulation
         desiredDir = PigAvoidAsteroids(me.SectorId, myPos, desiredDir);
 
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desiredDir), new Vec3(0f, 0f, 1f));
-        float yaw, pitch;
+        float yaw,
+            pitch;
         if (local.Z < 0f)
         {
             yaw = local.X >= 0f ? 1f : -1f;
@@ -675,11 +846,15 @@ public sealed partial class Simulation
         float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
         bool facing = local.Z > 0f && aimErr < 0.30f;
         float thrust;
-        if (dist > PigStandoff * 1.5f) thrust = facing ? 1f : 0.5f;
-        else if (dist < PigStandoff * 0.7f) thrust = -0.25f;
-        else thrust = 0.3f;
+        if (dist > PigStandoff * 1.5f)
+            thrust = facing ? 1f : 0.5f;
+        else if (dist < PigStandoff * 0.7f)
+            thrust = -0.25f;
+        else
+            thrust = 0.3f;
 
-        float strafeX = 0f, strafeY = 0f;
+        float strafeX = 0f,
+            strafeY = 0f;
         if (dist <= PigJukeRange)
         {
             float closeFrac = Clamp01(1f - dist / PigJukeRange);
@@ -749,17 +924,20 @@ public sealed partial class Simulation
         float t;
         if (MathF.Abs(a) < 1e-3f)
         {
-            if (MathF.Abs(b) < 1e-6f) return targetPos;
+            if (MathF.Abs(b) < 1e-6f)
+                return targetPos;
             t = -c / b;
         }
         else
         {
             float disc = b * b + 4f * a * c;
-            if (disc < 0f) return targetPos;
+            if (disc < 0f)
+                return targetPos;
             float root = MathF.Sqrt(disc);
             t = SmallestPositiveF((b - root) / (2f * a), (b + root) / (2f * a));
         }
-        if (t <= 0f || t > maxLead) return targetPos;
+        if (t <= 0f || t > maxLead)
+            return targetPos;
         haveLead = true;
         return targetPos + vrel * t;
     }
@@ -770,28 +948,34 @@ public sealed partial class Simulation
         Vec3 dir = NormalizeOr(desiredDir, new Vec3(0f, 0f, 1f));
         Vec3 steer = default;
         var grid = World.RockGrid(sector);
-        int cx = World.CellOf(pos.X), cy = World.CellOf(pos.Y), cz = World.CellOf(pos.Z);
+        int cx = World.CellOf(pos.X),
+            cy = World.CellOf(pos.Y),
+            cz = World.CellOf(pos.Z);
         for (int gx = cx - 1; gx <= cx + 1; gx++)
         for (int gy = cy - 1; gy <= cy + 1; gy++)
         for (int gz = cz - 1; gz <= cz + 1; gz++)
         {
-            if (!grid.TryGetValue((gx, gy, gz), out var cell)) continue;
+            if (!grid.TryGetValue((gx, gy, gz), out var cell))
+                continue;
             foreach (var rock in cell)
             {
                 Vec3 toA = rock.Pos - pos;
                 float proj = Dot(toA, dir);
-                if (proj <= 0f || proj > PigAvoidLookahead) continue;
+                if (proj <= 0f || proj > PigAvoidLookahead)
+                    continue;
                 Vec3 closest = pos + dir * proj;
                 Vec3 off = closest - rock.Pos;
                 float clearance = rock.Radius + World.ShipRadius + PigAvoidMargin;
                 float perp = off.Length();
-                if (perp >= clearance) continue;
+                if (perp >= clearance)
+                    continue;
                 Vec3 pushDir = NormalizeOr(off, PerpendicularTo(dir));
                 float strength = (1f - proj / PigAvoidLookahead) * (1f - perp / clearance);
                 steer += pushDir * strength;
             }
         }
-        if (steer.LengthSquared() < 1e-8f) return dir;
+        if (steer.LengthSquared() < 1e-8f)
+            return dir;
         return NormalizeOr(dir + steer * 1.5f, dir);
     }
 
@@ -800,46 +984,59 @@ public sealed partial class Simulation
         Vec3 ePos = enemy.State.Pos;
         Vec3 toMe = NormalizeOr(myPos - ePos, new Vec3(0f, 0f, 1f));
         Vec3 eFwd = enemy.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
-        float aim = Dot(eFwd, toMe); if (aim < 0f) aim = 0f;
+        float aim = Dot(eFwd, toMe);
+        if (aim < 0f)
+            aim = 0f;
         float dist = (ePos - myPos).Length();
-        float close = 1f - dist / PigRadarRange; if (close < 0f) close = 0f;
+        float close = 1f - dist / PigRadarRange;
+        if (close < 0f)
+            close = 0f;
         float dmg = Weapons[enemy.Class < Weapons.Length ? enemy.Class : 0].Damage / 10f;
         float baseThreat = 0f;
         if (myBasePos is Vec3 bp)
         {
             float bd = (ePos - bp).Length();
-            baseThreat = 1f - bd / PigBaseThreatRadius; if (baseThreat < 0f) baseThreat = 0f;
+            baseThreat = 1f - bd / PigBaseThreatRadius;
+            if (baseThreat < 0f)
+                baseThreat = 0f;
         }
         float bomberBonus = enemy.Class == FlightModel.ClassBomber ? PigThreatBomberBonus : 0f;
-        return PigThreatAimWeight * aim + PigThreatCloseWeight * close
-             + PigThreatDmgWeight * dmg + PigThreatBaseWeight * baseThreat + bomberBonus;
+        return PigThreatAimWeight * aim
+            + PigThreatCloseWeight * close
+            + PigThreatDmgWeight * dmg
+            + PigThreatBaseWeight * baseThreat
+            + bomberBonus;
     }
 
     private uint? TeamBaseSector(byte team)
     {
         foreach (var b in World.Bases)
-            if (b.Team == team) return b.SectorId;
+            if (b.Team == team)
+                return b.SectorId;
         return null;
     }
 
     private bool EnemyInSector(byte team, uint sector)
     {
         foreach (var s in _order)
-            if (s.Team != team && s.SectorId == sector) return true;
+            if (s.Team != team && s.SectorId == sector)
+                return true;
         return false;
     }
 
     private bool EnemyBaseExists(byte team)
     {
         foreach (var b in World.Bases)
-            if (b.Team != team) return true;
+            if (b.Team != team)
+                return true;
         return false;
     }
 
     private World.Gate? AlephTo(uint fromSector, uint destSector)
     {
         foreach (var a in World.Alephs)
-            if (a.SectorId == fromSector && a.DestSectorId == destSector) return a;
+            if (a.SectorId == fromSector && a.DestSectorId == destSector)
+                return a;
         return null;
     }
 
@@ -853,7 +1050,12 @@ public sealed partial class Simulation
         float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
         float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
         float thrust = local.Z > 0.3f ? thrustWhenFacing : 0.2f;
-        return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch };
+        return new ShipInputState
+        {
+            Thrust = thrust,
+            Yaw = yaw,
+            Pitch = pitch,
+        };
     }
 
     private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius)
@@ -863,28 +1065,48 @@ public sealed partial class Simulation
         Vec3 desired = PigAvoidAsteroids(me.SectorId, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
 
-        float yaw, pitch;
-        if (local.Z < 0f) { yaw = local.X >= 0f ? 1f : -1f; pitch = local.Y >= 0f ? -1f : 1f; }
-        else { yaw = Clamp1(local.X * PigTurnGain); pitch = Clamp1(-local.Y * PigTurnGain); }
+        float yaw,
+            pitch;
+        if (local.Z < 0f)
+        {
+            yaw = local.X >= 0f ? 1f : -1f;
+            pitch = local.Y >= 0f ? -1f : 1f;
+        }
+        else
+        {
+            yaw = Clamp1(local.X * PigTurnGain);
+            pitch = Clamp1(-local.Y * PigTurnGain);
+        }
 
         float standoff = radius + PigStandoff;
         float thrust;
-        if (dist > standoff * 1.2f) thrust = local.Z > 0.3f ? 1f : 0.5f;
-        else if (dist < radius + PigStandoff * 0.6f) thrust = -0.25f;
-        else thrust = 0.2f;
+        if (dist > standoff * 1.2f)
+            thrust = local.Z > 0.3f ? 1f : 0.5f;
+        else if (dist < radius + PigStandoff * 0.6f)
+            thrust = -0.25f;
+        else
+            thrust = 0.2f;
 
         float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
         bool onTarget = local.Z > 0f && aimErr < PigAimSinDeg;
         bool inRange = (dist - radius) <= PigFireRange;
-        return new ShipInputState { Thrust = thrust, Yaw = yaw, Pitch = pitch, Firing = inRange && onTarget };
+        return new ShipInputState
+        {
+            Thrust = thrust,
+            Yaw = yaw,
+            Pitch = pitch,
+            Firing = inRange && onTarget,
+        };
     }
 
     // Per-slot stable aiming competence in [0,1] (integer avalanche on PigId).
     private static float PigAimSkill(ulong pigId)
     {
         uint x = unchecked((uint)pigId * 2654435761u + 1013904223u);
-        x ^= x >> 16; x *= 0x7feb352du;
-        x ^= x >> 15; x *= 0x846ca68bu;
+        x ^= x >> 16;
+        x *= 0x7feb352du;
+        x ^= x >> 15;
+        x *= 0x846ca68bu;
         x ^= x >> 16;
         return (x >> 8) * (1f / 16777216f);
     }
@@ -894,7 +1116,8 @@ public sealed partial class Simulation
     private static Vec3 PigAimWobble(Vec3 los, ulong pigId, uint tick, float skill)
     {
         float angle = PigAimWobbleMaxRad * (1f - skill);
-        if (angle <= 0f) return default;
+        if (angle <= 0f)
+            return default;
         Vec3 f = NormalizeOr(los, new Vec3(0f, 0f, 1f));
         Vec3 right = NormalizeOr(Vec3.Cross(new Vec3(0f, 1f, 0f), f), new Vec3(1f, 0f, 0f));
         Vec3 up = Vec3.Cross(f, right);
@@ -907,7 +1130,9 @@ public sealed partial class Simulation
 
     // ---- small server-only math helpers ----
     private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
+
     private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
+
     private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
 
     private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
@@ -924,8 +1149,10 @@ public sealed partial class Simulation
 
     private static float SmallestPositiveF(float x, float y)
     {
-        if (x > 0f && y > 0f) return MathF.Min(x, y);
-        if (x > 0f) return x;
+        if (x > 0f && y > 0f)
+            return MathF.Min(x, y);
+        if (x > 0f)
+            return x;
         return y;
     }
 }

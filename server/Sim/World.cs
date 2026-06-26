@@ -1,5 +1,5 @@
-using StellarAllegiance.Shared;
 using SimServer.Assets;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
 
@@ -14,7 +14,7 @@ public sealed class World
     public const float ShipRadius = 3f;
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = 90f;
-    public const float DockDiscRadius = 9f;      // docking cone base-disc radius (sync w/ client BaseModelLoader.DebugConeRadius)
+    public const float DockDiscRadius = 9f; // docking cone base-disc radius (sync w/ client BaseModelLoader.DebugConeRadius)
     public const float BaseMaxHealth = 2000f;
     public const float AsteroidCollisionScale = 0.82f;
     public const float CollisionRestitution = 0.3f;
@@ -27,30 +27,41 @@ public sealed class World
     public const float BoundaryMaxDps = 60f;
     public const float AlephTriggerRadius = 18f;
     public const float WarpExitOffset = 60f;
-    public const float WarpExitJitter = 0.12f;   // per-axis random spread on the exit cone
+    public const float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
     public const uint HomeSector = 0;
     public const uint VergeSector = 1;
     public const float CoreRadius = 2100f;
     public const float VergeRadius = 700f;
-    public const int AsteroidCount = 4;          // base count, scaled by cube law below
+    public const int AsteroidCount = 4; // base count, scaled by cube law below
     public const int VergeAsteroidCount = 4;
     public const float VergeBeltRadius = 380f;
-    public const float SectorScale = 2.25f;      // module WorldConfig defaults
+    public const float SectorScale = 2.25f; // module WorldConfig defaults
     public const float AsteroidDensity = 1.0f;
-    public const float GridCell = 160f;          // module AsteroidGridCell (= PigAvoidLookahead)
+    public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
 
     public readonly record struct Sector(uint Id, float Radius);
+
     public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
+
     // Variant/Rot* are cosmetic only (the sim ignores them) but are drawn from the same DetRng
     // sequence the module uses, so they ride along to the client via the Welcome frame instead
     // of leaving rocks as grey spheres. Variant is the index into Shared.AsteroidShapes.Variants.
     public readonly record struct Rock(
-        ulong Id, uint SectorId, Vec3 Pos, float Radius, byte Variant, float RotX, float RotY, float RotZ);
+        ulong Id,
+        uint SectorId,
+        Vec3 Pos,
+        float Radius,
+        byte Variant,
+        float RotX,
+        float RotY,
+        float RotZ
+    );
+
     public readonly record struct Gate(ulong Id, uint SectorId, uint DestSectorId, Vec3 Pos, Vec3 PartnerPos);
 
     public readonly List<Sector> Sectors = new();
     public readonly List<BaseSite> Bases = new();
-    public readonly float[] BaseHealth;          // indexed like Bases
+    public readonly float[] BaseHealth; // indexed like Bases
     public readonly List<Rock> Asteroids = new();
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
@@ -59,11 +70,12 @@ public sealed class World
     // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
     // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
     public readonly SimModel? BaseModel;
-    public readonly ConvexHull? BaseHull;     // base hull in WORLD units (base is identity-oriented)
-    public readonly Vec3 BaseExitDir;         // radial launch axis out of the docking bay (cone base → tip)
-    public readonly Vec3 BaseExitPos;         // exit cone's base disc (the DockingExit hardpoint), base-local world units
-    public readonly Vec3 BaseEntryAxis;       // mean entrance direction (from DockingEntrance), for AI aim
-    public readonly Vec3 BaseDoorCenter;      // local centroid of the entrance hardpoints (AI aim target)
+    public readonly ConvexHull? BaseHull; // base hull in WORLD units (base is identity-oriented)
+    public readonly Vec3 BaseExitDir; // radial launch axis out of the docking bay (cone base → tip)
+    public readonly Vec3 BaseExitPos; // exit cone's base disc (the DockingExit hardpoint), base-local world units
+    public readonly Vec3 BaseEntryAxis; // mean entrance direction (from DockingEntrance), for AI aim
+    public readonly Vec3 BaseDoorCenter; // local centroid of the entrance hardpoints (AI aim target)
+
     // Docking cone base-discs: one per DockingEntrance hardpoint, in base-local units (offset from
     // base center). Pos = the hardpoint (= the cone's base), Normal = radial-outward (the cone axis).
     // A ship docks ONLY by intersecting one of these discs; the rest of the base is a solid hull.
@@ -81,21 +93,23 @@ public sealed class World
     // world-space bounding sphere for broad-phase. Null when a class GLB is absent — the sim then
     // falls back to the ShipRadius sphere for that class (like asteroids/bases do without a model).
     public readonly record struct ShipBody(ConvexHull Hull, float BoundingRadius);
-    private readonly ShipBody?[] _shipHulls;   // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
+
+    private readonly ShipBody?[] _shipHulls; // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
     private readonly ShipBody? _podHull;
 
     // Client ShipModelLoader.TargetLength, mirrored here so the server collision hull is scaled to
     // the exact visual silhouette length the client uniform-scales each GLB to. Keep in sync.
     private static readonly (string Name, float TargetLen)[] ShipClassAssets =
     {
-        ("scout", 4.5f), ("fighter", 5.5f), ("bomber", 7.2f),
+        ("scout", 4.5f),
+        ("fighter", 5.5f),
+        ("bomber", 7.2f),
     };
     private const float PodTargetLength = 2.8f;
 
     // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
     // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
-    public ShipBody? ShipHull(byte cls, bool isPod)
-        => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
+    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
 
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
@@ -118,9 +132,9 @@ public sealed class World
         // Team 0 base in HomeSector, Team 1 base in VergeSector — semi-random positions
         // derived from a dedicated RNG so the asteroid/aleph sequence is unaffected.
         var baseRng = new DetRng(seed ^ 0xB453_BA53_B453_BA53UL);
-        Vec3 homeBasePos  = RandomBasePos(ref baseRng, 600f, 1200f);
-        Vec3 vergeBasePos = RandomBasePos(ref baseRng, 200f,  500f);
-        Bases.Add(new BaseSite(1, 0, HomeSector,  homeBasePos));
+        Vec3 homeBasePos = RandomBasePos(ref baseRng, 600f, 1200f);
+        Vec3 vergeBasePos = RandomBasePos(ref baseRng, 200f, 500f);
+        Bases.Add(new BaseSite(1, 0, HomeSector, homeBasePos));
         Bases.Add(new BaseSite(2, 1, VergeSector, vergeBasePos));
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
@@ -166,7 +180,8 @@ public sealed class World
     private static ShipBody? LoadShipHull(string relPath, float targetLen)
     {
         var model = SimAssets.TryLoad(relPath);
-        if (model is null || model.LongestAxis <= 1e-3f) return null;
+        if (model is null || model.LongestAxis <= 1e-3f)
+            return null;
         float ws = targetLen / model.LongestAxis;
         return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
     }
@@ -176,12 +191,14 @@ public sealed class World
     private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
     {
         var model = SimAssets.TryLoad("bases/base.glb");
-        if (model is null) return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
+        if (model is null)
+            return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
         // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
-        Vec3 exitDir, exitPos;
+        Vec3 exitDir,
+            exitPos;
         if (model.FirstHardpoint("HP_DockingExit") is { } ex)
         {
             exitPos = ex.Pos * ws;
@@ -198,9 +215,11 @@ public sealed class World
         // (Pos = the hardpoint, Normal = radial-outward = the cone axis the client renders).
         var entrances = new List<Vec3>();
         foreach (var hp in model.Hardpoints)
-            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal)) entrances.Add(hp.Pos * ws);
+            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal))
+                entrances.Add(hp.Pos * ws);
         Vec3 sum = default;
-        foreach (var p in entrances) sum += p;
+        foreach (var p in entrances)
+            sum += p;
         Vec3 entryAxis = entrances.Count > 0 ? Normalize(sum) : exitDir;
         Vec3 doorCenter = entrances.Count > 0 ? sum * (1f / entrances.Count) : default;
 
@@ -214,7 +233,8 @@ public sealed class World
     // scale + rotation. Rocks whose variant GLB is missing stay sphere-collided (no body added).
     private void LoadRockBodies()
     {
-        if (Asteroids.Count == 0) return;
+        if (Asteroids.Count == 0)
+            return;
         var variants = new Dictionary<byte, SimModel?>();
         foreach (var r in Asteroids)
         {
@@ -224,7 +244,8 @@ public sealed class World
                 vm = string.IsNullOrEmpty(name) ? null : SimAssets.TryLoad($"asteroids/{name}.glb");
                 variants[r.Variant] = vm;
             }
-            if (vm is null || vm.Hull.BoundingRadius <= 1e-3f) continue;
+            if (vm is null || vm.Hull.BoundingRadius <= 1e-3f)
+                continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
             RockBodies[r.Id] = new RockBody(vm.Hull, RockRotation(r.RotX, r.RotY, r.RotZ), scale);
         }
@@ -262,7 +283,9 @@ public sealed class World
     // Core pattern: diffuse sheared bands (module SeedAsteroidField, byte-equivalent draws).
     private void SeedAsteroidField(ref DetRng rng, uint sector, int count, float scale, ref ulong id)
     {
-        const double halfX = 800.0, halfY = 200.0, halfZ = 800.0;
+        const double halfX = 800.0,
+            halfY = 200.0,
+            halfZ = 800.0;
         int bandCount = 3 + rng.NextInt(3);
         var bandZ = new double[bandCount];
         var bandThick = new double[bandCount];
@@ -329,8 +352,8 @@ public sealed class World
     private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR)
     {
         double ang = rng.NextDouble() * Math.PI * 2.0;
-        double r   = minR + rng.NextDouble() * (maxR - minR);
-        float  y   = (float)((rng.NextDouble() - 0.5) * 80.0);
+        double r = minR + rng.NextDouble() * (maxR - minR);
+        float y = (float)((rng.NextDouble() - 0.5) * 80.0);
         return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 }
@@ -339,7 +362,11 @@ public sealed class World
 public struct DetRng
 {
     private ulong _state;
-    public DetRng(ulong seed) { _state = seed; }
+
+    public DetRng(ulong seed)
+    {
+        _state = seed;
+    }
 
     public ulong NextULong()
     {
@@ -351,6 +378,8 @@ public struct DetRng
     }
 
     public double NextDouble() => (NextULong() >> 11) * (1.0 / (1UL << 53));
+
     public double NextRange(double lo, double hi) => lo + (hi - lo) * NextDouble();
+
     public int NextInt(int n) => (int)(NextDouble() * n);
 }

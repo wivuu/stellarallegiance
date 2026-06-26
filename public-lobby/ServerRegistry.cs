@@ -34,9 +34,13 @@ public sealed class InMemoryServerRegistry : IServerRegistry
 
     readonly ConcurrentDictionary<string, ServerEntry> _servers = new();
     readonly IReadOnlyList<IceServer> _iceServers;
+    readonly LobbyEventBus _bus;
 
-    // iceServers is the lobby's STUN config, handed to every server/client for the WebRTC fallback.
-    public InMemoryServerRegistry(IReadOnlyList<IceServer> iceServers) => _iceServers = iceServers;
+    public InMemoryServerRegistry(IReadOnlyList<IceServer> iceServers, LobbyEventBus bus)
+    {
+        _iceServers = iceServers;
+        _bus = bus;
+    }
 
     // Trimmed, 3-50 chars. Returns the cleaned name, or null if invalid.
     public static string? NormalizeName(string? name)
@@ -48,7 +52,8 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     public ServerEntry? Register(RegisterRequest req, string? publicEndpoint)
     {
         var name = NormalizeName(req.Name);
-        if (name is null) return null;
+        if (name is null)
+            return null;
 
         var now = DateTimeOffset.UtcNow;
         var entry = new ServerEntry(
@@ -63,9 +68,11 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             Players: Math.Max(0, req.Players),
             MaxPlayers: Math.Max(0, req.MaxPlayers),
             State: NormalizeState(req.State),
-            ProtocolVersion: Math.Max(0, req.ProtocolVersion));
+            ProtocolVersion: Math.Max(0, req.ProtocolVersion)
+        );
 
         _servers[entry.SessionId] = entry;
+        _bus.Publish(new LobbyEvent(LobbyEventKind.Registered, Entry: entry));
         return entry;
     }
 
@@ -83,6 +90,16 @@ public sealed class InMemoryServerRegistry : IServerRegistry
                 State = NormalizeState(status.State) ?? existing.State,
             };
         _servers[sessionId] = updated;
+        // Only fan out SSE when a visible field actually changed — suppresses noise from bare pings.
+        if (
+            status is not null
+            && (
+                updated.Players != existing.Players
+                || updated.MaxPlayers != existing.MaxPlayers
+                || updated.State != existing.State
+            )
+        )
+            _bus.Publish(new LobbyEvent(LobbyEventKind.Updated, Entry: updated));
         return true;
     }
 
@@ -105,7 +122,13 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return _servers.Values.ToArray();
     }
 
-    public bool Remove(string sessionId) => _servers.TryRemove(sessionId, out _);
+    public bool Remove(string sessionId)
+    {
+        if (!_servers.TryRemove(sessionId, out _))
+            return false;
+        _bus.Publish(new LobbyEvent(LobbyEventKind.Removed, SessionId: sessionId));
+        return true;
+    }
 
     public bool Exists(string sessionId)
     {

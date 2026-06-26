@@ -15,8 +15,11 @@ if (args.Contains("--pregen-assets"))
     int ok = SimAssets.TryLoad("bases/base.glb") is not null ? 1 : 0;
     int rocks = 0;
     foreach (string name in AsteroidShapes.Variants)
-        if (SimAssets.TryLoad($"asteroids/{name}.glb") is not null) rocks++;
-    Console.WriteLine($"[SimServer] pregen-assets: base={ok}, asteroid variants cached={rocks}/{AsteroidShapes.Variants.Length}");
+        if (SimAssets.TryLoad($"asteroids/{name}.glb") is not null)
+            rocks++;
+    Console.WriteLine(
+        $"[SimServer] pregen-assets: base={ok}, asteroid variants cached={rocks}/{AsteroidShapes.Variants.Length}"
+    );
     return;
 }
 
@@ -35,22 +38,30 @@ if (args.Contains("--selftest"))
 //   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart]
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SIM_PORT (compose/self-host), else the 8090 default. A --port flag below overrides all of these.
-int port = int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
-         : int.TryParse(Environment.GetEnvironmentVariable("SIM_PORT"), out var sp) ? sp
-         : 8090;
+int port =
+    int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
+    : int.TryParse(Environment.GetEnvironmentVariable("SIM_PORT"), out var sp) ? sp
+    : 8090;
 ulong seed = 1234567;
+
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
+
 // Skip the lobby ready-up gate and run a perpetual match (for bots / benchmarking / dev
 // iteration). Off by default: a real game readies up in the lobby.
 bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is "1" or "true";
 for (int i = 0; i < args.Length; i++)
 {
-    if (args[i] == "--autostart") autoStart = true;
-    if (i >= args.Length - 1) continue;
-    if (args[i] == "--port") port = int.Parse(args[i + 1]);
-    if (args[i] == "--seed") seed = ulong.Parse(args[i + 1]);
-    if (args[i] == "--secret") secret = args[i + 1];
+    if (args[i] == "--autostart")
+        autoStart = true;
+    if (i >= args.Length - 1)
+        continue;
+    if (args[i] == "--port")
+        port = int.Parse(args[i + 1]);
+    if (args[i] == "--seed")
+        seed = ulong.Parse(args[i + 1]);
+    if (args[i] == "--secret")
+        secret = args[i + 1];
 }
 
 // Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /
@@ -71,6 +82,7 @@ IMatchResultSink results = new LoggingMatchResultSink();
 var world = new World(seed);
 var sim = new Simulation(world);
 var hub = new ClientHub(sim, auth, players, matchmaker);
+
 // Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when
 // it returns to the lobby so ready flags reset. Both run on the sim thread.
 sim.ShouldStartMatch = hub.ShouldStartMatch;
@@ -80,6 +92,7 @@ var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
 var app = builder.Build();
+
 // Behind the hosting layer's TLS-terminating proxy (wss:// -> ws://:8090): honour the
 // X-Forwarded-* headers so the request scheme/remote IP reflect the real client. Clear the
 // default loopback-only trust so the headers are accepted from the proxy (compose network /
@@ -92,28 +105,33 @@ fwd.KnownNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 app.UseWebSockets();
+
 // Lightweight reachability/health probe target: the public lobby GETs this to decide whether we
 // are directly joinable (a reachable port -> advertise direct WebSocket; else clients use WebRTC).
 // Also doubles as a container/systemd healthcheck. Not part of the game protocol.
 app.MapGet("/health", () => Results.Text("wivuu-sim"));
-app.Map("/game", async context =>
-{
-    if (!context.WebSockets.IsWebSocketRequest)
+app.Map(
+    "/game",
+    async context =>
     {
-        context.Response.StatusCode = 400;
-        return;
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = 400;
+            return;
+        }
+        using var socket = await context.WebSockets.AcceptWebSocketAsync();
+        await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
     }
-    using var socket = await context.WebSockets.AcceptWebSocketAsync();
-    await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
-});
+);
 
 // ---- Sim loop: fixed 50 ms steps, wall-clock accumulator, bench stats ----
 var cts = new CancellationTokenSource();
+
 // Empty-server idle reset: once the last client disconnects, give a short grace window (for
 // quick reconnects / page refreshes), then tear the match down to a clean idle lobby. The
 // server then sits idle — no ships, no PIGs, matchmaker waiting — until players rejoin and
 // ready up. Wall-clock so it's independent of how many ticks the (now empty) sim runs.
-const double EmptyResetMs = 5_000;   // end + reset within 5 s of the server going empty
+const double EmptyResetMs = 5_000; // end + reset within 5 s of the server going empty
 double? emptySinceMs = null;
 var simThread = new Thread(() =>
 {
@@ -130,12 +148,13 @@ var simThread = new Thread(() =>
             continue;
         }
         next += dtMs;
-        if (now - next > 500) next = now;   // fell far behind (debugger etc.): re-anchor
+        if (now - next > 500)
+            next = now; // fell far behind (debugger etc.): re-anchor
 
         double t0 = clock.Elapsed.TotalMilliseconds;
         sim.Step();
         if (sim.JustEnded)
-            results.ReportResult(sim.Winner);   // one-shot, fire-and-forget
+            results.ReportResult(sim.Winner); // one-shot, fire-and-forget
         hub.AfterStep();
         // Recycle the match once the server has been empty for the grace window: end whatever
         // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
@@ -152,7 +171,11 @@ var simThread = new Thread(() =>
         }
     }
 })
-{ IsBackground = true, Name = "SimLoop", Priority = ThreadPriority.AboveNormal };
+{
+    IsBackground = true,
+    Name = "SimLoop",
+    Priority = ThreadPriority.AboveNormal,
+};
 simThread.Start();
 
 // Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY

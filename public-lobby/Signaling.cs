@@ -12,9 +12,10 @@ namespace PublicLobby;
 //   server  GET  /servers/{sid}/pending          -> [{ticket,offer}]  (long-poll, TakePending)
 //   server  POST /connect/{ticket}/answer {answer}                (PostAnswer)
 //   client  GET  /connect/{ticket}/answer        -> {answer}      (long-poll, WaitAnswer)
-public sealed class SignalingRelay
+public sealed class SignalingRelay(ServerConnectionManager connMgr)
 {
     static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
+
     // Cap a single long-poll so a stale client/server connection can't hang a request thread.
     static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(15);
 
@@ -25,28 +26,40 @@ public sealed class SignalingRelay
         public required string SdpOffer;
         public string? SdpAnswer;
         public DateTimeOffset CreatedAt = DateTimeOffset.UtcNow;
+
         // Signalled when the answer arrives so the client's long-poll wakes immediately.
         public readonly SemaphoreSlim AnswerReady = new(0, 1);
     }
 
     // ticket -> pending handshake.
     readonly ConcurrentDictionary<string, Pending> _byTicket = new();
+
     // sessionId -> tickets awaiting pickup by that game server's /pending poll.
     readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _inbox = new();
+
     // sessionId -> wake signal so /pending returns the instant a new offer lands.
     readonly ConcurrentDictionary<string, SemaphoreSlim> _wake = new();
 
-    SemaphoreSlim WakeFor(string sessionId) =>
-        _wake.GetOrAdd(sessionId, _ => new SemaphoreSlim(0));
+    SemaphoreSlim WakeFor(string sessionId) => _wake.GetOrAdd(sessionId, _ => new SemaphoreSlim(0));
 
     // Client side: stash an offer for a server, return a ticket to poll the answer with.
+    // Tries to push the offer directly to the server's live WS connection; falls back to the
+    // long-poll inbox for servers without a WS (direct-mode, reconnecting, or old code).
     public string EnqueueOffer(string sessionId, string sdpOffer)
     {
         Prune();
         var ticket = Guid.NewGuid().ToString("n");
-        _byTicket[ticket] = new Pending { Ticket = ticket, SessionId = sessionId, SdpOffer = sdpOffer };
-        _inbox.GetOrAdd(sessionId, _ => new ConcurrentQueue<string>()).Enqueue(ticket);
-        WakeFor(sessionId).Release();
+        _byTicket[ticket] = new Pending
+        {
+            Ticket = ticket,
+            SessionId = sessionId,
+            SdpOffer = sdpOffer,
+        };
+        if (!connMgr.TryPushOffer(sessionId, new PendingOffer(ticket, sdpOffer)))
+        {
+            _inbox.GetOrAdd(sessionId, _ => new ConcurrentQueue<string>()).Enqueue(ticket);
+            WakeFor(sessionId).Release();
+        }
         return ticket;
     }
 
@@ -56,10 +69,17 @@ public sealed class SignalingRelay
     {
         Prune();
         var result = Drain(sessionId);
-        if (result.Count > 0) return result;
+        if (result.Count > 0)
+            return result;
 
-        try { await WakeFor(sessionId).WaitAsync(MaxWait, ct); }
-        catch (OperationCanceledException) { return Array.Empty<PendingOffer>(); }
+        try
+        {
+            await WakeFor(sessionId).WaitAsync(MaxWait, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return Array.Empty<PendingOffer>();
+        }
         return Drain(sessionId);
     }
 
@@ -76,9 +96,16 @@ public sealed class SignalingRelay
     // Game-server side: deliver the answer for a ticket. False if the ticket is unknown/expired.
     public bool PostAnswer(string ticket, string sdpAnswer)
     {
-        if (!_byTicket.TryGetValue(ticket, out var p)) return false;
+        if (!_byTicket.TryGetValue(ticket, out var p))
+            return false;
         p.SdpAnswer = sdpAnswer;
-        try { p.AnswerReady.Release(); } catch (SemaphoreFullException) { /* already signalled */ }
+        try
+        {
+            p.AnswerReady.Release();
+        }
+        catch (SemaphoreFullException)
+        { /* already signalled */
+        }
         return true;
     }
 
@@ -87,11 +114,19 @@ public sealed class SignalingRelay
     public async Task<string?> WaitAnswerAsync(string ticket, CancellationToken ct)
     {
         Prune();
-        if (!_byTicket.TryGetValue(ticket, out var p)) return null;
-        if (p.SdpAnswer is not null) return p.SdpAnswer;
+        if (!_byTicket.TryGetValue(ticket, out var p))
+            return null;
+        if (p.SdpAnswer is not null)
+            return p.SdpAnswer;
 
-        try { await p.AnswerReady.WaitAsync(MaxWait, ct); }
-        catch (OperationCanceledException) { return null; }
+        try
+        {
+            await p.AnswerReady.WaitAsync(MaxWait, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
         return p.SdpAnswer;
     }
 

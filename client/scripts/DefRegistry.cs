@@ -35,13 +35,24 @@ public partial class DefRegistry : Node
     private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef weapon)>> _mountsCache = [];
 
     // Apply the defs downloaded from the server (GameNetClient.ApplyDefs).
-    public void Load(IReadOnlyList<ShipClassDef> ships, IReadOnlyList<WeaponDef> weapons,
-        IReadOnlyList<BaseDef> bases, WorldConfig _)
+    public void Load(
+        IReadOnlyList<ShipClassDef> ships,
+        IReadOnlyList<WeaponDef> weapons,
+        IReadOnlyList<BaseDef> bases,
+        WorldConfig _
+    )
     {
-        _ships.Clear(); _weapons.Clear(); _bases.Clear(); _statsCache.Clear(); _mountsCache.Clear();
-        foreach (var s in ships) _ships[s.ClassId] = s;
-        foreach (var w in weapons) _weapons[w.WeaponId] = w;
-        foreach (var b in bases) _bases[b.BaseTypeId] = b;
+        _ships.Clear();
+        _weapons.Clear();
+        _bases.Clear();
+        _statsCache.Clear();
+        _mountsCache.Clear();
+        foreach (var s in ships)
+            _ships[s.ClassId] = s;
+        foreach (var w in weapons)
+            _weapons[w.WeaponId] = w;
+        foreach (var b in bases)
+            _bases[b.BaseTypeId] = b;
     }
 
     // ---- Ship flight stats ------------------------------------------------
@@ -60,10 +71,21 @@ public partial class DefRegistry : Node
             stats = default;
             return false;
         }
-        stats = ShipStats.Create(d.MaxSpeed, d.Accel, d.Mass,
-            d.RateYawDeg, d.RatePitchDeg, d.RateRollDeg,
-            d.DriftYawDeg, d.DriftPitchDeg, d.SideMult, d.BackMult,
-            d.AbAccel, d.AbOnRate, d.AbOffRate);
+        stats = ShipStats.Create(
+            d.MaxSpeed,
+            d.Accel,
+            d.Mass,
+            d.RateYawDeg,
+            d.RatePitchDeg,
+            d.RateRollDeg,
+            d.DriftYawDeg,
+            d.DriftPitchDeg,
+            d.SideMult,
+            d.BackMult,
+            d.AbAccel,
+            d.AbOnRate,
+            d.AbOffRate
+        );
         _statsCache[defId] = stats;
         return true;
     }
@@ -90,16 +112,12 @@ public partial class DefRegistry : Node
 
     // A class's full hardpoint list (engines/turrets/lights/docking + weapons), for the ship-mesh
     // loader. Null until the def arrives.
-    public List<HardpointDef>? GetHardpoints(byte classId)
-        => _ships.TryGetValue(classId, out var d) ? d.Hardpoints : null;
+    public List<HardpointDef>? GetHardpoints(byte classId) => _ships.TryGetValue(classId, out var d) ? d.Hardpoints : null;
 
-    public bool TryGetShipDef(byte classId, out ShipClassDef def)
-        => _ships.TryGetValue(classId, out def!);
+    public bool TryGetShipDef(byte classId, out ShipClassDef def) => _ships.TryGetValue(classId, out def!);
 
-    public WeaponDef? GetWeapon(uint weaponId)
-        => _weapons.TryGetValue(weaponId, out var w) ? w : null;
+    public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;
 
     // A base type's def (radius/health/hardpoints), for the base-mesh loader. Null until it arrives.
-    public BaseDef? GetBaseDef(byte baseTypeId)
-        => _bases.TryGetValue(baseTypeId, out var b) ? b : null;
+    public BaseDef? GetBaseDef(byte baseTypeId) => _bases.TryGetValue(baseTypeId, out var b) ? b : null;
 }

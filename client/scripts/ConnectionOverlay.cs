@@ -14,7 +14,7 @@ public partial class ConnectionOverlay : Control
     private Label _title = null!;
     private Label _detail = null!;
     private Button _retry = null!;
-    private double _connectingFor;   // seconds spent in Connecting (for the "…" pulse)
+    private double _connectingFor; // seconds spent in Connecting (for the "…" pulse)
 
     public void Init(ConnectionManager cm)
     {
@@ -64,8 +64,7 @@ public partial class ConnectionOverlay : Control
     {
         // Hidden the moment we're live — the Lobby/HUD take over from here. Also hidden while
         // the address-input screen owns the view (no server chosen yet).
-        if (_cm.State == ConnectionManager.ConnState.Connected
-            || _cm.State == ConnectionManager.ConnState.AwaitingAddress)
+        if (_cm.State == ConnectionManager.ConnState.Connected || _cm.State == ConnectionManager.ConnState.AwaitingAddress)
         {
             Visible = false;
             _connectingFor = 0;
@@ -97,7 +96,8 @@ public partial class ConnectionOverlay : Control
                 _connectingFor = 0;
                 _title.Text = "⚠  Server offline";
                 _title.AddThemeColorOverride("font_color", Offline);
-                _detail.Text = $"Couldn't reach {_cm.ServerUrl}.\n"
+                _detail.Text =
+                    $"Couldn't reach {_cm.ServerUrl}.\n"
                     + "Check the server is running (scripts/run-server.sh), then Retry to enter an address.";
                 _retry.Visible = true;
                 break;

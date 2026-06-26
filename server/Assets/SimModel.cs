@@ -33,7 +33,8 @@ public sealed class SimModel
     public (string Name, Vec3 Pos, Vec3 Forward)? FirstHardpoint(string kindPrefix)
     {
         foreach (var hp in Hardpoints)
-            if (hp.Name.StartsWith(kindPrefix, StringComparison.Ordinal)) return hp;
+            if (hp.Name.StartsWith(kindPrefix, StringComparison.Ordinal))
+                return hp;
         return null;
     }
 }
@@ -62,29 +63,33 @@ public static class SimModelCache
             Directory.CreateDirectory(cacheDir);
             Write(cachePath, hash, model);
         }
-        catch (IOException) { /* read-only fs (e.g. container) — recompute next run, no crash */ }
+        catch (IOException)
+        { /* read-only fs (e.g. container) — recompute next run, no crash */
+        }
         return model;
     }
 
     private static bool TryRead(string path, byte[] expectHash, out SimModel? model)
     {
         model = null;
-        if (!File.Exists(path)) return false;
+        if (!File.Exists(path))
+            return false;
         try
         {
             using var fs = File.OpenRead(path);
             using var r = new BinaryReader(fs);
-            if (r.ReadUInt32() != Magic || r.ReadInt32() != Version) return false;
+            if (r.ReadUInt32() != Magic || r.ReadInt32() != Version)
+                return false;
             byte[] hash = r.ReadBytes(32);
-            if (hash.Length != 32 || !hash.AsSpan().SequenceEqual(expectHash)) return false;
+            if (hash.Length != 32 || !hash.AsSpan().SequenceEqual(expectHash))
+                return false;
 
             float boundingRadius = r.ReadSingle();
             float longestAxis = r.ReadSingle();
             int planeCount = r.ReadInt32();
             var planes = new ConvexHull.Plane[planeCount];
             for (int i = 0; i < planeCount; i++)
-                planes[i] = new ConvexHull.Plane(
-                    new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()), r.ReadSingle());
+                planes[i] = new ConvexHull.Plane(new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()), r.ReadSingle());
 
             int hpCount = r.ReadInt32();
             var hps = new List<(string, Vec3, Vec3)>(hpCount);
@@ -98,7 +103,10 @@ public static class SimModelCache
             model = new SimModel(ConvexHull.FromPlanes(planes, boundingRadius, longestAxis), hps);
             return true;
         }
-        catch (IOException) { return false; }   // EndOfStreamException ⊂ IOException — truncated/garbled cache
+        catch (IOException)
+        {
+            return false;
+        } // EndOfStreamException ⊂ IOException — truncated/garbled cache
     }
 
     private static void Write(string path, byte[] hash, SimModel model)
@@ -113,14 +121,21 @@ public static class SimModelCache
         w.Write(model.Hull.Planes.Length);
         foreach (var p in model.Hull.Planes)
         {
-            w.Write(p.N.X); w.Write(p.N.Y); w.Write(p.N.Z); w.Write(p.D);
+            w.Write(p.N.X);
+            w.Write(p.N.Y);
+            w.Write(p.N.Z);
+            w.Write(p.D);
         }
         w.Write(model.Hardpoints.Count);
         foreach (var (name, pos, fwd) in model.Hardpoints)
         {
             w.Write(name);
-            w.Write(pos.X); w.Write(pos.Y); w.Write(pos.Z);
-            w.Write(fwd.X); w.Write(fwd.Y); w.Write(fwd.Z);
+            w.Write(pos.X);
+            w.Write(pos.Y);
+            w.Write(pos.Z);
+            w.Write(fwd.X);
+            w.Write(fwd.Y);
+            w.Write(fwd.Z);
         }
     }
 }

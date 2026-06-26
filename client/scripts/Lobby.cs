@@ -172,11 +172,15 @@ public partial class Lobby : Control
         }
 
         // Roster + balance counts.
-        int n0 = 0, n1 = 0;
+        int n0 = 0,
+            n1 = 0;
         var sb = new StringBuilder();
         foreach (var p in _net.LobbyPlayers)
         {
-            if (p.Team == 0) n0++; else n1++;
+            if (p.Team == 0)
+                n0++;
+            else
+                n1++;
             bool isMe = p.Id == _net.LocalClientId;
             string sideHex = (p.Team == 0 ? Team0 : Team1).ToHtml(false);
             string side = p.Team == 0 ? "BLUE" : "RED";

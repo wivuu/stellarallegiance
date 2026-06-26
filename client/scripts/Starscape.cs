@@ -9,99 +9,99 @@ using Godot;
 // warps; we recompute the shader uniforms only when the sector actually changes.
 public partial class Starscape : Node3D
 {
-	// Home/battlefield sector — applied at startup so the pre-spawn overview already
-	// shows the right backdrop (mirrors WorldRenderer.HomeSector).
-	private const uint HomeSector = 0;
+    // Home/battlefield sector — applied at startup so the pre-spawn overview already
+    // shows the right backdrop (mirrors WorldRenderer.HomeSector).
+    private const uint HomeSector = 0;
 
-	private ShaderMaterial _mat = null!;
-	private Godot.Environment _env = null!;
-	private uint _currentSector = uint.MaxValue; // forces the first SetSector to apply
+    private ShaderMaterial _mat = null!;
+    private Godot.Environment _env = null!;
+    private uint _currentSector = uint.MaxValue; // forces the first SetSector to apply
 
-	public override void _Ready()
-	{
-		var shader = new Shader { Code = ShaderCode };
-		_mat = new ShaderMaterial { Shader = shader };
+    public override void _Ready()
+    {
+        var shader = new Shader { Code = ShaderCode };
+        _mat = new ShaderMaterial { Shader = shader };
 
-		// Feed the sky shader the sun's sky direction so it can wash out the dim
-		// backdrop near the disc. The DirectionalLight3D emits along -Z, so the light
-		// SOURCE (the visible sun) lies along +Z of its basis — same vector Sun.cs uses.
-		var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
-		_mat.SetShaderParameter("sun_dir", light.GlobalTransform.Basis.Z.Normalized());
-		// Warm haze tint, matching the sun disc's emission colour.
-		_mat.SetShaderParameter("sun_glow_color", new Color(0.5f, 0.4f, 0.28f));
+        // Feed the sky shader the sun's sky direction so it can wash out the dim
+        // backdrop near the disc. The DirectionalLight3D emits along -Z, so the light
+        // SOURCE (the visible sun) lies along +Z of its basis — same vector Sun.cs uses.
+        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+        _mat.SetShaderParameter("sun_dir", light.GlobalTransform.Basis.Z.Normalized());
+        // Warm haze tint, matching the sun disc's emission colour.
+        _mat.SetShaderParameter("sun_glow_color", new Color(0.5f, 0.4f, 0.28f));
 
-		var sky = new Sky { SkyMaterial = _mat };
+        var sky = new Sky { SkyMaterial = _mat };
 
-		// Swap the flat background colour for the procedural sky. Ambient stays a flat
-		// colour source, but SetSector retints it per sector to match the nebula palette.
-		var we = GetNode<WorldEnvironment>("../WorldEnvironment");
-		_env = we.Environment;
-		_env.BackgroundMode = Godot.Environment.BGMode.Sky;
-		_env.Sky = sky;
-		_env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
-		// Critical: with a Sky background this defaults to 1.0, meaning the (bright)
-		// procedural sky supplies all ambient and AmbientLightColor/Energy are ignored.
-		// Zero it so our per-sector colour + energy below actually drive the ambient.
-		_env.AmbientLightSkyContribution = 0f;
+        // Swap the flat background colour for the procedural sky. Ambient stays a flat
+        // colour source, but SetSector retints it per sector to match the nebula palette.
+        var we = GetNode<WorldEnvironment>("../WorldEnvironment");
+        _env = we.Environment;
+        _env.BackgroundMode = Godot.Environment.BGMode.Sky;
+        _env.Sky = sky;
+        _env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
+        // Critical: with a Sky background this defaults to 1.0, meaning the (bright)
+        // procedural sky supplies all ambient and AmbientLightColor/Energy are ignored.
+        // Zero it so our per-sector colour + energy below actually drive the ambient.
+        _env.AmbientLightSkyContribution = 0f;
 
-		SetSector(HomeSector);
-	}
+        SetSector(HomeSector);
+    }
 
-	// Repaint the backdrop for a sector. Deterministic in the sector id alone, so the
-	// same sector renders identically for every player. No-op if unchanged.
-	public void SetSector(uint sectorId)
-	{
-		if (sectorId == _currentSector)
-			return;
-		_currentSector = sectorId;
+    // Repaint the backdrop for a sector. Deterministic in the sector id alone, so the
+    // same sector renders identically for every player. No-op if unchanged.
+    public void SetSector(uint sectorId)
+    {
+        if (sectorId == _currentSector)
+            return;
+        _currentSector = sectorId;
 
-		var rng = new RandomNumberGenerator { Seed = SeedFor(sectorId) };
+        var rng = new RandomNumberGenerator { Seed = SeedFor(sectorId) };
 
-		// Sampling offset: shifts every sector to a different region of noise space, so
-		// nebula shapes and star placement differ. Kept finite to preserve float precision.
-		var offset = new Vector3(
-			rng.RandfRange(-500f, 500f),
-			rng.RandfRange(-500f, 500f),
-			rng.RandfRange(-500f, 500f));
+        // Sampling offset: shifts every sector to a different region of noise space, so
+        // nebula shapes and star placement differ. Kept finite to preserve float precision.
+        var offset = new Vector3(rng.RandfRange(-500f, 500f), rng.RandfRange(-500f, 500f), rng.RandfRange(-500f, 500f));
 
-		// Two nebula hues per sector: a base hue and a second one offset around the wheel,
-		// blended across the clouds so each sector reads as its own colour palette.
-		float hueA = rng.Randf();
-		float hueB = Mathf.PosMod(hueA + 0.30f + rng.RandfRange(-0.12f, 0.12f), 1f);
-		var colorA = Color.FromHsv(hueA, rng.RandfRange(0.6f, 0.85f), 0.9f);
-		var colorB = Color.FromHsv(hueB, rng.RandfRange(0.5f, 0.8f), 0.8f);
-		// Kept dim on purpose: the nebula is a faint backdrop, not a light source. Higher
-		// values wash the scene out via sky reflections bouncing onto ships/asteroids.
-		float intensity = rng.RandfRange(0.05f, 0.1f);
+        // Two nebula hues per sector: a base hue and a second one offset around the wheel,
+        // blended across the clouds so each sector reads as its own colour palette.
+        float hueA = rng.Randf();
+        float hueB = Mathf.PosMod(hueA + 0.30f + rng.RandfRange(-0.12f, 0.12f), 1f);
+        var colorA = Color.FromHsv(hueA, rng.RandfRange(0.6f, 0.85f), 0.9f);
+        var colorB = Color.FromHsv(hueB, rng.RandfRange(0.5f, 0.8f), 0.8f);
+        // Kept dim on purpose: the nebula is a faint backdrop, not a light source. Higher
+        // values wash the scene out via sky reflections bouncing onto ships/asteroids.
+        float intensity = rng.RandfRange(0.05f, 0.1f);
 
-		_mat.SetShaderParameter("seed_offset", offset);
-		_mat.SetShaderParameter("nebula_color_a", colorA);
-		_mat.SetShaderParameter("nebula_color_b", colorB);
-		_mat.SetShaderParameter("nebula_intensity", intensity);
+        _mat.SetShaderParameter("seed_offset", offset);
+        _mat.SetShaderParameter("nebula_color_a", colorA);
+        _mat.SetShaderParameter("nebula_color_b", colorB);
+        _mat.SetShaderParameter("nebula_intensity", intensity);
 
-		// Baseline ambient that matches the sector's nebula hue (the mean of its two
-		// colours) but lifted toward white so it lights the scene without over-saturating
-		// the shadowed sides of ships and asteroids. Energy is well above the old 0.2 so
-		// the world no longer reads as dim.
-		_env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.45f);
-		_env.AmbientLightEnergy = 0.2f;
-	}
+        // Baseline ambient that matches the sector's nebula hue (the mean of its two
+        // colours) but lifted toward white so it lights the scene without over-saturating
+        // the shadowed sides of ships and asteroids. Energy is well above the old 0.2 so
+        // the world no longer reads as dim.
+        _env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.45f);
+        _env.AmbientLightEnergy = 0.2f;
+    }
 
-	// Deterministic ulong seed from a sector id (splitmix64 finalizer over a mixed id).
-	// Pure function of the id → identical backdrop for every player in that sector.
-	private static ulong SeedFor(uint sectorId)
-	{
-		ulong h = sectorId * 0x9E3779B97F4A7C15UL + 0x1234567UL;
-		h ^= h >> 30; h *= 0xBF58476D1CE4E5B9UL;
-		h ^= h >> 27; h *= 0x94D049BB133111EBUL;
-		h ^= h >> 31;
-		return h;
-	}
+    // Deterministic ulong seed from a sector id (splitmix64 finalizer over a mixed id).
+    // Pure function of the id → identical backdrop for every player in that sector.
+    private static ulong SeedFor(uint sectorId)
+    {
+        ulong h = sectorId * 0x9E3779B97F4A7C15UL + 0x1234567UL;
+        h ^= h >> 30;
+        h *= 0xBF58476D1CE4E5B9UL;
+        h ^= h >> 27;
+        h *= 0x94D049BB133111EBUL;
+        h ^= h >> 31;
+        return h;
+    }
 
-	// Sky shader: nebula = colourised fbm of 3D value noise (biased to wisps); stars =
-	// jittered points on a few cell grids of differing scale, brightest layer pushed
-	// past 1.0 so it feeds the environment's bloom. All seeded via seed_offset.
-	private const string ShaderCode = @"
+    // Sky shader: nebula = colourised fbm of 3D value noise (biased to wisps); stars =
+    // jittered points on a few cell grids of differing scale, brightest layer pushed
+    // past 1.0 so it feeds the environment's bloom. All seeded via seed_offset.
+    private const string ShaderCode =
+        @"
 shader_type sky;
 
 uniform vec3 seed_offset = vec3(0.0);

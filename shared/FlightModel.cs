@@ -48,9 +48,19 @@ namespace StellarAllegiance.Shared
             // Taylor series to x^11 (Horner). Accurate to ~1e-6 over [-PI, PI];
             // the half-angles fed in here are tiny, so it's far better in practice.
             float x2 = x * x;
-            return x * (1f + x2 * (-0.16666667f + x2 * (0.008333334f
-                + x2 * (-0.00019841270f + x2 * (0.0000027557319f
-                + x2 * -0.000000025051883f)))));
+            return x
+                * (
+                    1f
+                    + x2
+                        * (
+                            -0.16666667f
+                            + x2
+                                * (
+                                    0.008333334f
+                                    + x2 * (-0.00019841270f + x2 * (0.0000027557319f + x2 * -0.000000025051883f))
+                                )
+                        )
+                );
         }
 
         public static float Cos(float x) => Sin(x + HalfPI);
@@ -73,8 +83,8 @@ namespace StellarAllegiance.Shared
             float r = x - k * Ln2;
 
             // exp(r), |r| <= ~0.3466 — Horner Taylor series.
-            float er = 1f + r * (1f + r * (0.5f + r * (0.16666667f
-                + r * (0.041666668f + r * (0.008333334f + r * 0.0013888889f)))));
+            float er =
+                1f + r * (1f + r * (0.5f + r * (0.16666667f + r * (0.041666668f + r * (0.008333334f + r * 0.0013888889f)))));
 
             return er * Pow2(k);
         }
@@ -83,43 +93,66 @@ namespace StellarAllegiance.Shared
         // Clamped to the representable normal range; deterministic on every runtime.
         private static float Pow2(int k)
         {
-            if (k < -126) k = -126;
-            if (k > 127) k = 127;
+            if (k < -126)
+                k = -126;
+            if (k > 127)
+                k = 127;
             return System.BitConverter.Int32BitsToSingle((k + 127) << 23);
         }
     }
 
     public struct Vec3
     {
-        public float X, Y, Z;
-        public Vec3(float x, float y, float z) { X = x; Y = y; Z = z; }
+        public float X,
+            Y,
+            Z;
+
+        public Vec3(float x, float y, float z)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+        }
 
         public static Vec3 operator +(Vec3 a, Vec3 b) => new Vec3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+
         public static Vec3 operator -(Vec3 a, Vec3 b) => new Vec3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+
         public static Vec3 operator *(Vec3 a, float s) => new Vec3(a.X * s, a.Y * s, a.Z * s);
 
         public float LengthSquared() => X * X + Y * Y + Z * Z;
+
         public float Length() => (float)System.Math.Sqrt(X * X + Y * Y + Z * Z);
 
-        public static Vec3 Cross(Vec3 a, Vec3 b) => new Vec3(
-            a.Y * b.Z - a.Z * b.Y,
-            a.Z * b.X - a.X * b.Z,
-            a.X * b.Y - a.Y * b.X);
+        public static Vec3 Cross(Vec3 a, Vec3 b) =>
+            new Vec3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
     }
 
     public struct Quat
     {
-        public float X, Y, Z, W;
-        public Quat(float x, float y, float z, float w) { X = x; Y = y; Z = z; W = w; }
+        public float X,
+            Y,
+            Z,
+            W;
+
+        public Quat(float x, float y, float z, float w)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+            W = w;
+        }
 
         public static Quat Identity => new Quat(0f, 0f, 0f, 1f);
 
         // Hamilton product a*b (apply b in a's local frame when used as a*delta).
-        public static Quat operator *(Quat a, Quat b) => new Quat(
-            a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
-            a.W * b.Y - a.X * b.Z + a.Y * b.W + a.Z * b.X,
-            a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
-            a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z);
+        public static Quat operator *(Quat a, Quat b) =>
+            new Quat(
+                a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
+                a.W * b.Y - a.X * b.Z + a.Y * b.W + a.Z * b.X,
+                a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
+                a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z
+            );
 
         // Conjugate = inverse for a unit quaternion. Used to map a world-space vector
         // into ship-local space: q.Conjugate().Rotate(worldVec).
@@ -128,7 +161,8 @@ namespace StellarAllegiance.Shared
         public Quat Normalized()
         {
             float n = (float)System.Math.Sqrt(X * X + Y * Y + Z * Z + W * W);
-            if (n < 1e-12f) return Identity;
+            if (n < 1e-12f)
+                return Identity;
             float inv = 1f / n;
             return new Quat(X * inv, Y * inv, Z * inv, W * inv);
         }
@@ -137,7 +171,8 @@ namespace StellarAllegiance.Shared
         public static Quat FromRotationVector(Vec3 r)
         {
             float angle = r.Length();
-            if (angle < 1e-9f) return Identity;
+            if (angle < 1e-9f)
+                return Identity;
             float half = angle * 0.5f;
             // Deterministic sin/cos (see MathDet) so the wasm server and mono client
             // produce bit-identical rotations and don't drift apart each tick.
@@ -159,16 +194,19 @@ namespace StellarAllegiance.Shared
         public Vec3 Pos;
         public Vec3 Vel;
         public Quat Rot;
+
         // Persistent per-axis turn rate (rad/s) in SHIP-LOCAL axes: X=pitch, Y=yaw,
         // Z=roll. Allegiance's rotational-inertia signature: the rate slews toward
         // the commanded rate each tick and keeps rotating briefly after the stick is
         // released. (Previously a world-axis angular velocity; the Allegiance rework
         // made it a body-local rate — server and client switch together.)
         public Vec3 AngVel;
+
         // Per-instance actual mass (from the synced Ship row). Equals the class
         // baseline (ShipStats.Mass) today; future cargo/upgrades may differ. A
         // value <= 0 means "unset" and Integrate falls back to the class baseline.
         public float Mass;
+
         // Afterburner power ramp, 0..1. Persisted/synced like AngVel so the server's
         // authority and the client's prediction ramp the afterburner identically
         // (it climbs at AbOnRate while Boost is held, falls at AbOffRate otherwise).
@@ -182,10 +220,15 @@ namespace StellarAllegiance.Shared
         // fraction of MaxSpeed (throttle-commands-speed); <0 is manual reverse thrust
         // (weak, via BackMult). StrafeX/StrafeY are manual lateral thrust (weak, via
         // SideMult). See FlightModel.Integrate for the exact branches.
-        public float Thrust, StrafeX, StrafeY, Yaw, Pitch, Roll;
+        public float Thrust,
+            StrafeX,
+            StrafeY,
+            Yaw,
+            Pitch,
+            Roll;
         public bool Firing;
-        public bool Boost;   // afterburner held: ramps AbPower, raising equilibrium speed
-        public bool Coast;   // vector lock: engine thrust exactly cancels drag (hold velocity)
+        public bool Boost; // afterburner held: ramps AbPower, raising equilibrium speed
+        public bool Coast; // vector lock: engine thrust exactly cancels drag (hold velocity)
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)
@@ -196,38 +239,64 @@ namespace StellarAllegiance.Shared
     public struct ShipStats
     {
         // --- Authored (the nine knobs + afterburner) ---
-        public float MaxSpeed;   // terminal velocity (u/s) — an equilibrium, not a hard cap
-        public float Accel;      // forward accel (u/s²); Thrust = Mass·Accel internally
-        public float Mass;       // collisions/momentum + class baseline for Ship.Mass
-        public float RateYawDeg, RatePitchDeg, RateRollDeg;   // max turn rates (deg/s)
-        public float DriftYawDeg, DriftPitchDeg;              // overshoot angle (deg); roll reuses pitch
-        public float SideMult, BackMult;                      // 0..1 strafe / reverse thrust fraction
-        public float AbAccel;                                 // extra forward accel at full afterburner
-        public float AbOnRate, AbOffRate;                     // afterburner power ramp per second
+        public float MaxSpeed; // terminal velocity (u/s) — an equilibrium, not a hard cap
+        public float Accel; // forward accel (u/s²); Thrust = Mass·Accel internally
+        public float Mass; // collisions/momentum + class baseline for Ship.Mass
+        public float RateYawDeg,
+            RatePitchDeg,
+            RateRollDeg; // max turn rates (deg/s)
+        public float DriftYawDeg,
+            DriftPitchDeg; // overshoot angle (deg); roll reuses pitch
+        public float SideMult,
+            BackMult; // 0..1 strafe / reverse thrust fraction
+        public float AbAccel; // extra forward accel at full afterburner
+        public float AbOnRate,
+            AbOffRate; // afterburner power ramp per second
 
         // --- Derived once by Create() (NOT authored, NOT stored in a row) ---
-        public float Thrust;       // Mass·Accel — engine force capacity (clip magnitude)
-        public float AbThrust;     // Mass·AbAccel — afterburner force
+        public float Thrust; // Mass·Accel — engine force capacity (clip magnitude)
+        public float AbThrust; // Mass·AbAccel — afterburner force
         public float OneMinusDrag; // 1 − exp(−Accel·Dt/MaxSpeed): per-tick drag fraction
-        public float MaxRateYawRad, MaxRatePitchRad, MaxRateRollRad;   // rates in rad/s
-        public float TorqueYawRad, TorquePitchRad, TorqueRollRad;      // angular-accel terms
+        public float MaxRateYawRad,
+            MaxRatePitchRad,
+            MaxRateRollRad; // rates in rad/s
+        public float TorqueYawRad,
+            TorquePitchRad,
+            TorqueRollRad; // angular-accel terms
 
         private const float Deg2Rad = 0.017453292519943295f;
 
         public static ShipStats Create(
-            float maxSpeed, float accel, float mass,
-            float rateYawDeg, float ratePitchDeg, float rateRollDeg,
-            float driftYawDeg, float driftPitchDeg,
-            float sideMult, float backMult,
-            float abAccel, float abOnRate, float abOffRate)
+            float maxSpeed,
+            float accel,
+            float mass,
+            float rateYawDeg,
+            float ratePitchDeg,
+            float rateRollDeg,
+            float driftYawDeg,
+            float driftPitchDeg,
+            float sideMult,
+            float backMult,
+            float abAccel,
+            float abOnRate,
+            float abOffRate
+        )
         {
             return new ShipStats
             {
-                MaxSpeed = maxSpeed, Accel = accel, Mass = mass,
-                RateYawDeg = rateYawDeg, RatePitchDeg = ratePitchDeg, RateRollDeg = rateRollDeg,
-                DriftYawDeg = driftYawDeg, DriftPitchDeg = driftPitchDeg,
-                SideMult = sideMult, BackMult = backMult,
-                AbAccel = abAccel, AbOnRate = abOnRate, AbOffRate = abOffRate,
+                MaxSpeed = maxSpeed,
+                Accel = accel,
+                Mass = mass,
+                RateYawDeg = rateYawDeg,
+                RatePitchDeg = ratePitchDeg,
+                RateRollDeg = rateRollDeg,
+                DriftYawDeg = driftYawDeg,
+                DriftPitchDeg = driftPitchDeg,
+                SideMult = sideMult,
+                BackMult = backMult,
+                AbAccel = abAccel,
+                AbOnRate = abOnRate,
+                AbOffRate = abOffRate,
 
                 Thrust = mass * accel,
                 AbThrust = mass * abAccel,
@@ -268,11 +337,39 @@ namespace StellarAllegiance.Shared
         // out-TURNS the Scout (60 vs 50 °/s); the Scout's edge is speed and snap.
         //                                 maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
         public static readonly ShipStats Scout = ShipStats.Create(
-            160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f);
+            160f,
+            30f,
+            40f,
+            50f,
+            50f,
+            50f,
+            5f,
+            5f,
+            0.5f,
+            0.25f,
+            0f,
+            2.0f,
+            1.0f
+        );
+
         // abAccel 0 → no afterburner: the Scout's edge is raw speed/snap, not boost.
 
         public static readonly ShipStats Fighter = ShipStats.Create(
-            100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f);
+            100f,
+            25f,
+            36f,
+            60f,
+            60f,
+            60f,
+            5f,
+            5f,
+            0.5f,
+            0.5f,
+            10f,
+            2.0f,
+            1.0f
+        );
+
         // abAccel 10 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
 
         // Bomber: the heavy hull, straight from the extracted Allegiance numbers
@@ -280,7 +377,21 @@ namespace StellarAllegiance.Shared
         // only rate²/(2·drift) = 25°/s² of angular accel — ~0.8-1.6 s to wind a turn
         // up or stop it. This is the hull where the rotational inertia really shows.
         public static readonly ShipStats Bomber = ShipStats.Create(
-            60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f);
+            60f,
+            15f,
+            50f,
+            20f,
+            20f,
+            20f,
+            8f,
+            8f,
+            0.5f,
+            0.5f,
+            0f,
+            2.0f,
+            1.0f
+        );
+
         // abAccel 0 → no afterburner: the heavy hull lumbers at its base speed.
 
         // Escape pod (server Ship.IsPod): a slow, unarmed lifeboat ejected on ship death.
@@ -288,17 +399,30 @@ namespace StellarAllegiance.Shared
         // gets shoved around in collisions (light mass). Selected via StatsFor(class,
         // isPod) so server authority and client prediction integrate pods identically.
         public static readonly ShipStats Pod = ShipStats.Create(
-            60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f);
+            60f,
+            15f,
+            10f,
+            40f,
+            40f,
+            40f,
+            8f,
+            8f,
+            1.0f,
+            1.0f,
+            0f,
+            2.0f,
+            1.0f
+        );
 
         public static ShipStats StatsFor(byte shipClass) =>
-            shipClass == ClassFighter ? Fighter :
-            shipClass == ClassBomber ? Bomber : Scout;
+            shipClass == ClassFighter ? Fighter
+            : shipClass == ClassBomber ? Bomber
+            : Scout;
 
         // Pod-aware stats selection: a pod ignores its class and flies the slow,
         // boost-less Pod profile. Callers pass ship.IsPod so server authority and
         // client prediction agree on which stats a pod integrates with.
-        public static ShipStats StatsFor(byte shipClass, bool isPod) =>
-            isPod ? Pod : StatsFor(shipClass);
+        public static ShipStats StatsFor(byte shipClass, bool isPod) => isPod ? Pod : StatsFor(shipClass);
 
         // ---- Weapon spread -------------------------------------------------
         //
@@ -308,13 +432,14 @@ namespace StellarAllegiance.Shared
         // near-pinpoint, while the Fighter's heavier gun scatters more. Lives here in
         // the shared model so the authoritative server and the predicting client read
         // the SAME value (no mirrored-constant drift).
-        public const float ScoutSpread = 0.006f;    // ~0.34° — minimal (default weapon)
-        public const float FighterSpread = 0.035f;  // ~2.0°
-        public const float BomberSpread = 0.012f;   // ~0.7° — slow heavy slugs, fairly true
+        public const float ScoutSpread = 0.006f; // ~0.34° — minimal (default weapon)
+        public const float FighterSpread = 0.035f; // ~2.0°
+        public const float BomberSpread = 0.012f; // ~0.7° — slow heavy slugs, fairly true
 
         public static float WeaponSpreadRad(byte shipClass) =>
-            shipClass == ClassFighter ? FighterSpread :
-            shipClass == ClassBomber ? BomberSpread : ScoutSpread;
+            shipClass == ClassFighter ? FighterSpread
+            : shipClass == ClassBomber ? BomberSpread
+            : ScoutSpread;
 
         // Deterministically scatter a unit fire direction within a cone of the given
         // half-angle. Keyed by (shipId, fireTick) so the wasm server and the mono
@@ -356,7 +481,8 @@ namespace StellarAllegiance.Shared
         private static Vec3 NormalizeVec(Vec3 v)
         {
             float n = v.Length();
-            if (n < 1e-12f) return v;
+            if (n < 1e-12f)
+                return v;
             float inv = 1f / n;
             return new Vec3(v.X * inv, v.Y * inv, v.Z * inv);
         }
@@ -366,9 +492,12 @@ namespace StellarAllegiance.Shared
         {
             unchecked
             {
-                x ^= x >> 16; x *= 0x7feb352du;
-                x ^= x >> 15; x *= 0x846ca68bu;
-                x ^= x >> 16; return x;
+                x ^= x >> 16;
+                x *= 0x7feb352du;
+                x ^= x >> 15;
+                x *= 0x846ca68bu;
+                x ^= x >> 16;
+                return x;
             }
         }
 
@@ -399,9 +528,9 @@ namespace StellarAllegiance.Shared
         public static ShipState Integrate(ShipState s, ShipInputState i, ShipStats st)
         {
             float dt = Dt;
-            float instMass = (s.Mass > 0f) ? s.Mass : st.Mass;   // heavier instance flies heavier
-            float ttv = dt / instMass;                            // thrustToVelocity (force→Δv)
-            float thrust = st.Thrust;                             // class force capacity
+            float instMass = (s.Mass > 0f) ? s.Mass : st.Mass; // heavier instance flies heavier
+            float ttv = dt / instMass; // thrustToVelocity (force→Δv)
+            float thrust = st.Thrust; // class force capacity
             float speed = s.Vel.Length();
 
             // --- Step 1: rotation (rate- AND acceleration-limited, per axis). ---
@@ -421,7 +550,8 @@ namespace StellarAllegiance.Shared
             // (composed on the right = each in the frame left by the previous), then
             // renormalize. Must NOT be combined into one rotation vector — sequence is
             // part of the feel.
-            Quat rot = s.Rot
+            Quat rot =
+                s.Rot
                 * Quat.FromRotationVector(new Vec3(0f, rateYaw * dt, 0f))
                 * Quat.FromRotationVector(new Vec3(ratePitch * dt, 0f, 0f))
                 * Quat.FromRotationVector(new Vec3(0f, 0f, rateRoll * dt));
@@ -443,12 +573,14 @@ namespace StellarAllegiance.Shared
                 {
                     thrustRatio = st.AbThrust / thrust;
                     abPower = abPower + dt * st.AbOnRate;
-                    if (abPower > 1f) abPower = 1f;
+                    if (abPower > 1f)
+                        abPower = 1f;
                 }
                 else
                 {
                     abPower = abPower - dt * st.AbOffRate;
-                    if (abPower < 0f) abPower = 0f;
+                    if (abPower < 0f)
+                        abPower = 0f;
                 }
                 if (abPower != 0f)
                     drag = drag + backward * (abPower * st.AbThrust);
@@ -491,23 +623,31 @@ namespace StellarAllegiance.Shared
             else
             {
                 Vec3 worldThrust = rot.Rotate(localThrust);
-                engine = (r2 <= thrust * thrust)
-                    ? worldThrust
-                    : worldThrust * (thrust / (float)System.Math.Sqrt(r2));
+                engine = (r2 <= thrust * thrust) ? worldThrust : worldThrust * (thrust / (float)System.Math.Sqrt(r2));
             }
 
             // --- Step 6: integrate velocity then position. vel += ttv·(engine − drag). ---
             Vec3 vel = s.Vel + (engine - drag) * ttv;
             Vec3 pos = s.Pos + vel * dt;
 
-            return new ShipState { Pos = pos, Vel = vel, Rot = rot, AngVel = angVel, Mass = s.Mass, AbPower = abPower };
+            return new ShipState
+            {
+                Pos = pos,
+                Vel = vel,
+                Rot = rot,
+                AngVel = angVel,
+                Mass = s.Mass,
+                AbPower = abPower,
+            };
         }
 
         // Slew `cur` toward `desired`, changing by at most `maxDelta` this tick.
         private static float SlewRate(float cur, float desired, float maxDelta)
         {
-            if (desired < cur - maxDelta) return cur - maxDelta;
-            if (desired > cur + maxDelta) return cur + maxDelta;
+            if (desired < cur - maxDelta)
+                return cur - maxDelta;
+            if (desired > cur + maxDelta)
+                return cur + maxDelta;
             return desired;
         }
     }

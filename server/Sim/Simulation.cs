@@ -1,5 +1,5 @@
-using StellarAllegiance.Shared;
 using SimServer.Assets;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
 
@@ -14,24 +14,31 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     public const uint TickHz = 20;
-    private const int ShotRingSize = 64;          // > max ProjectileLifeTicks
+    private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
     // ---- Escape pods + docking (ported from module Lib.cs) ----
-    public const byte PodClass = 255;             // reserved "class" selecting the Pod flight profile
-    private const float PodMaxHull = 20f;         // an ejected pod's low starting hull
-    private const float DockRadiusFrac = 0.9f;    // dock when within this fraction of your OWN base radius
-    private const float LaunchSpeed = 80f;        // u/s catapult out of the docking-exit hardpoint on spawn
-    private static readonly float RescueRadius = World.ShipRadius * 4f;  // pickup distance (no need to directly intersect)
-    private const float PodEjectSpeed = 90f;      // u/s initial fling (decays to Pod.MaxSpeed)
-    private const float PodEjectSpin = 5f;        // rad/s initial tumble (decays via angular drag)
+    public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
+    private const float PodMaxHull = 20f; // an ejected pod's low starting hull
+    private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
+    private const float LaunchSpeed = 80f; // u/s catapult out of the docking-exit hardpoint on spawn
+    private static readonly float RescueRadius = World.ShipRadius * 4f; // pickup distance (no need to directly intersect)
+    private const float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
+    private const float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
 
     // Per-class weapon spec — the values SeedDefaults pours into WeaponDef (Defs.cs).
-    private readonly record struct WeaponSpec(float Damage, uint IntervalTicks, float Speed, uint LifeTicks, float SpreadRad);
+    private readonly record struct WeaponSpec(
+        float Damage,
+        uint IntervalTicks,
+        float Speed,
+        uint LifeTicks,
+        float SpreadRad
+    );
+
     private static readonly WeaponSpec[] Weapons =
     {
-        new(4f, 4u, 200f, 16u, FlightModel.ScoutSpread),     // Scout
-        new(10f, 4u, 200f, 16u, FlightModel.FighterSpread),  // Fighter (twin guns; cycles as fast as the Scout)
-        new(22f, 14u, 200f, 16u, FlightModel.BomberSpread),  // Bomber
+        new(4f, 4u, 200f, 16u, FlightModel.ScoutSpread), // Scout
+        new(10f, 4u, 200f, 16u, FlightModel.FighterSpread), // Fighter (twin guns; cycles as fast as the Scout)
+        new(22f, 14u, 200f, 16u, FlightModel.BomberSpread), // Bomber
     };
 
     // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
@@ -50,12 +57,15 @@ public sealed partial class Simulation
         var defs = GameContent.ShipClasses();
         int max = 0;
         foreach (var d in defs)
-            if (d.ClassId != GameContent.PodClassId && d.ClassId > max) max = d.ClassId;
+            if (d.ClassId != GameContent.PodClassId && d.ClassId > max)
+                max = d.ClassId;
         var table = new Muzzle[max + 1][];
-        for (int i = 0; i < table.Length; i++) table[i] = System.Array.Empty<Muzzle>();
+        for (int i = 0; i < table.Length; i++)
+            table[i] = System.Array.Empty<Muzzle>();
         foreach (var d in defs)
         {
-            if (d.ClassId == GameContent.PodClassId) continue;
+            if (d.ClassId == GameContent.PodClassId)
+                continue;
             var list = new List<Muzzle>();
             foreach (var h in d.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon)
@@ -64,22 +74,30 @@ public sealed partial class Simulation
         }
         return table;
     }
-    private static float MaxHull(byte cls) => cls switch { 2 => 240f, 1 => 120f, _ => 60f };
+
+    private static float MaxHull(byte cls) =>
+        cls switch
+        {
+            2 => 240f,
+            1 => 120f,
+            _ => 60f,
+        };
 
     public sealed class ShipSim
     {
         public ulong ShipId;
-        public int OwnerClientId;     // a connected client's id, or -1 for server-owned (PIGs / PIG pods)
+        public int OwnerClientId; // a connected client's id, or -1 for server-owned (PIGs / PIG pods)
         public byte Team;
         public byte Class;
         public uint SectorId;
-        public ShipState State;       // shared FlightModel state (pos/vel/rot/angvel/mass/ab)
+        public ShipState State; // shared FlightModel state (pos/vel/rot/angvel/mass/ab)
         public float Health;
         public uint LastInputTick;
         public uint LastFireTick;
-        public ShipInputState HeldInput;   // replayed on ticks with no exact-stamped input
+        public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;
-        public uint RespawnAtTick;    // when !Alive
+        public uint RespawnAtTick; // when !Alive
+
         // AI combat drone — server-driven via the PIG brain (Simulation.Pig.cs), not client
         // input. An escape pod ejected on death — slow, unarmed, flown by its owner (player
         // pod) or auto-flown home by PodThink (PIG pod). A ship is at most one of these.
@@ -90,15 +108,16 @@ public sealed partial class Simulation
         // for tick T is applied exactly AT tick T, so the server replays the same input
         // sequence the client predicted with — the contract client prediction relies on.
         public readonly ShipInputState[] InputRing = new ShipInputState[InputRingSize];
-        public readonly uint[] InputRingTick = new uint[InputRingSize];   // 0 = empty slot
+        public readonly uint[] InputRingTick = new uint[InputRingSize]; // 0 = empty slot
     }
+
     public const int InputRingSize = 64;
 
     private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage);
 
     public readonly World World;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
-    private readonly List<ShipSim> _order = new();             // stable iteration order
+    private readonly List<ShipSim> _order = new(); // stable iteration order
     private ulong _nextShipId = 1;
     private uint _tick;
 
@@ -112,12 +131,15 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, byte team, byte cls)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
     private readonly object _qLock = new();
+
     // The ship a client currently controls — a combat ship, OR (after death) the escape pod
     // it's flying. Absent while the client is dead and waiting on a respawn. ShipId changes
     // across combat->pod->respawn, so the hub re-sends YouAre whenever this ship flips.
     private readonly Dictionary<int, ShipSim> _byClient = new();
+
     // Remembered join class/team per connected client, so a respawn re-creates the same ship.
     private readonly Dictionary<int, (byte team, byte cls)> _clientInfo = new();
+
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
 
@@ -149,6 +171,7 @@ public sealed partial class Simulation
     public const byte NoWinner = 255;
     public byte Phase { get; private set; } = PhaseLobby;
     public byte Winner { get; private set; } = NoWinner;
+
     // How long the Ended result lingers before the server returns to the lobby for the next match.
     private const uint EndedToLobbyTicks = 6 * TickHz;
     private uint _returnToLobbyAtTick;
@@ -163,13 +186,16 @@ public sealed partial class Simulation
     // True only on the single step the match ends — Program.cs reads it to fire the
     // one-shot result writeback (IMatchResultSink).
     public bool JustEnded { get; private set; }
+
     // Set whenever a base took damage this step (or the match ended), so the hub streams
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
+
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
     private bool _matchDirty;
+
     // True when the sim is already a clean idle lobby — no match running and no ships left.
     // The sim loop resets an emptied-out server to this state after a grace window, then the
     // server sits idle here (matchmaker won't start a match until players rejoin and ready up).
@@ -179,6 +205,7 @@ public sealed partial class Simulation
     public uint Tick => _tick;
     public int ShipCount => _order.Count;
     public IReadOnlyList<ShipSim> Ships => _order;
+
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
@@ -194,22 +221,26 @@ public sealed partial class Simulation
 
     public void EnqueueJoin(int clientId, byte team, byte cls)
     {
-        lock (_qLock) _joinQueue.Enqueue((clientId, team, cls));
+        lock (_qLock)
+            _joinQueue.Enqueue((clientId, team, cls));
     }
 
     public void EnqueueLeave(int clientId)
     {
-        lock (_qLock) _leaveQueue.Enqueue(clientId);
+        lock (_qLock)
+            _leaveQueue.Enqueue(clientId);
     }
 
     public void EnqueueInput(int clientId, uint tick, ShipInputState input)
     {
-        lock (_qLock) _inputQueue.Enqueue((clientId, tick, input));
+        lock (_qLock)
+            _inputQueue.Enqueue((clientId, tick, input));
     }
 
     public ulong ShipIdOf(int clientId)
     {
-        lock (_qLock) return _byClient.TryGetValue(clientId, out var s) ? s.ShipId : 0;
+        lock (_qLock)
+            return _byClient.TryGetValue(clientId, out var s) ? s.ShipId : 0;
     }
 
     // ---- One fixed-dt authoritative step ---------------------------------
@@ -238,7 +269,7 @@ public sealed partial class Simulation
 
         ProcessRespawns(tick);
         if (Phase == PhaseActive)
-            PigBrainStep(tick);      // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+            PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
         ResolveDueShots(tick);
         RebuildShipGrid();
 
@@ -265,7 +296,8 @@ public sealed partial class Simulation
             for (int j = i + 1; j < _order.Count; j++)
             {
                 var b = _order[j];
-                if (a.Team == b.Team || a.SectorId != b.SectorId) continue;
+                if (a.Team == b.Team || a.SectorId != b.SectorId)
+                    continue;
                 CollideShips(a, b);
             }
         }
@@ -287,10 +319,11 @@ public sealed partial class Simulation
             bool docked = false;
             foreach (var b in World.Bases)
             {
-                if (b.SectorId != s.SectorId) continue;
+                if (b.SectorId != s.SectorId)
+                    continue;
                 if (b.Team != s.Team)
                 {
-                    ResolveBaseCollision(s, b.Pos);   // enemy base: fully solid hull
+                    ResolveBaseCollision(s, b.Pos); // enemy base: fully solid hull
                     continue;
                 }
                 // Own base: with a loaded hull you dock ONLY by flying your ship into a docking cone's
@@ -301,13 +334,13 @@ public sealed partial class Simulation
                 {
                     if (IntersectsDockDisc(d))
                     {
-                        DockShip(s, tick);   // intersected an entrance cone's base disc
+                        DockShip(s, tick); // intersected an entrance cone's base disc
                         docked = true;
                         break;
                     }
                     // Base is identity-oriented at scale 1, so its local frame == world (offset by center).
                     if (baseHull.ResolveSphere(d, World.ShipRadius, out Vec3 bn, out float bpen, out _))
-                        ApplyBounce(s, bn, bpen);   // solid shell everywhere else
+                        ApplyBounce(s, bn, bpen); // solid shell everywhere else
                 }
                 else
                 {
@@ -332,7 +365,8 @@ public sealed partial class Simulation
         // sector) is rescued — same resolution as docking. Runs over the post-death set.
         foreach (var pod in _order)
         {
-            if (!pod.IsPod) continue;
+            if (!pod.IsPod)
+                continue;
             foreach (var friend in _order)
             {
                 if (friend.IsPod || friend.Team != pod.Team || friend.SectorId != pod.SectorId)
@@ -397,7 +431,8 @@ public sealed partial class Simulation
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
     public void StartMatch()
     {
-        if (Phase == PhaseActive) return;
+        if (Phase == PhaseActive)
+            return;
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
         BasesChangedThisStep = true;
         Phase = PhaseActive;
@@ -465,7 +500,12 @@ public sealed partial class Simulation
         Vec3 basePos = default;
         uint sector = World.HomeSector;
         foreach (var b in World.Bases)
-            if (b.Team == s.Team) { basePos = b.Pos; sector = b.SectorId; break; }
+            if (b.Team == s.Team)
+            {
+                basePos = b.Pos;
+                sector = b.SectorId;
+                break;
+            }
 
         Vec3 outward;
         Quat rot;
@@ -493,7 +533,7 @@ public sealed partial class Simulation
         s.State = new ShipState
         {
             Pos = spawnPos,
-            Vel = outward * LaunchSpeed,   // catapult out of the bay instead of drifting
+            Vel = outward * LaunchSpeed, // catapult out of the bay instead of drifting
             Rot = rot,
             AngVel = default,
             Mass = s.State.Mass,
@@ -508,17 +548,21 @@ public sealed partial class Simulation
     // are still connected with no live ship). The first spawn at join goes through here too.
     private void ProcessRespawns(uint tick)
     {
-        if (_clientRespawn.Count == 0) return;
+        if (_clientRespawn.Count == 0)
+            return;
         List<int>? due = null;
         foreach (var kv in _clientRespawn)
             if (tick >= kv.Value)
                 (due ??= new()).Add(kv.Key);
-        if (due is null) return;
+        if (due is null)
+            return;
         foreach (int cid in due)
         {
             _clientRespawn.Remove(cid);
-            if (!_clientInfo.TryGetValue(cid, out var info)) continue;   // disconnected
-            if (_byClient.ContainsKey(cid)) continue;                    // already flying
+            if (!_clientInfo.TryGetValue(cid, out var info))
+                continue; // disconnected
+            if (_byClient.ContainsKey(cid))
+                continue; // already flying
             SpawnCombatShip(cid, info.team, info.cls, tick);
         }
     }
@@ -527,8 +571,10 @@ public sealed partial class Simulation
     // pods) replay their exact-tick / held stick state (auth == client prediction).
     private ShipInputState InputFor(ShipSim s, uint tick)
     {
-        if (s.IsPig && s.IsPod) return PodThink(s, tick);
-        if (s.IsPig) return PigExecute(s, tick);
+        if (s.IsPig && s.IsPod)
+            return PodThink(s, tick);
+        if (s.IsPig)
+            return PigExecute(s, tick);
 
         int slot = (int)(tick % InputRingSize);
         if (s.InputRingTick[slot] == tick)
@@ -554,11 +600,11 @@ public sealed partial class Simulation
     // keeps flying — its controlled ship flips to the pod (the hub re-sends YouAre).
     private void EjectPlayerPod(ShipSim dead, uint tick)
     {
-        _toRemove.Add(dead);   // ShipGone -> client plays the death FX
+        _toRemove.Add(dead); // ShipGone -> client plays the death FX
         var pod = MakePod(dead, tick);
         pod.OwnerClientId = dead.OwnerClientId;
         if (dead.OwnerClientId >= 0)
-            _byClient[dead.OwnerClientId] = pod;   // client now flies the pod
+            _byClient[dead.OwnerClientId] = pod; // client now flies the pod
         _toAdd.Add(pod);
     }
 
@@ -599,7 +645,7 @@ public sealed partial class Simulation
     {
         _toRemove.Add(pod);
         if (pod.IsPig)
-            FreePigPodSlot(pod, 0u, tick);      // destroyed: slot rejoins the next squad wave
+            FreePigPodSlot(pod, 0u, tick); // destroyed: slot rejoins the next squad wave
         else if (pod.OwnerClientId >= 0)
             ClearClientShip(pod.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
     }
@@ -614,7 +660,7 @@ public sealed partial class Simulation
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)
-            ClearClientShip(s.OwnerClientId);   // player: wait for a manual relaunch (spawn menu)
+            ClearClientShip(s.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
     }
 
     // A player lost their live ship (docked safely, or their escape pod was destroyed). Drop the
@@ -680,7 +726,7 @@ public sealed partial class Simulation
 
         var muzzles = ship.Class < ClassMuzzles.Length ? ClassMuzzles[ship.Class] : System.Array.Empty<Muzzle>();
         if (muzzles.Length == 0)
-            return;   // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
+            return; // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
         ship.LastFireTick = tick;
 
         // One bolt per muzzle, in hardpoint order (the Fighter's twin cannons fire together).
@@ -709,13 +755,16 @@ public sealed partial class Simulation
             for (int i = 0; i < World.Bases.Count; i++)
             {
                 var b = World.Bases[i];
-                if (b.SectorId != ship.SectorId || b.Team == ship.Team) continue;
+                if (b.SectorId != ship.SectorId || b.Team == ship.Team)
+                    continue;
                 bool hit = World.BaseHull is ConvexHull bh
                     ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, mv, World.ProjectileRadius, bestT, out float t)
                     : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
                 if (hit && t < bestT)
                 {
-                    bestT = t; targetBase = i; targetShip = 0;
+                    bestT = t;
+                    targetBase = i;
+                    targetShip = 0;
                 }
             }
         }
@@ -728,7 +777,8 @@ public sealed partial class Simulation
             {
                 foreach (var s in shipsInCell)
                 {
-                    if (s.Team == ship.Team || !s.Alive) continue;
+                    if (s.Team == ship.Team || !s.Alive)
+                        continue;
                     var body = World.ShipHull(s.Class, s.IsPod);
                     if (body is World.ShipBody sb)
                     {
@@ -738,12 +788,27 @@ public sealed partial class Simulation
                         // by using the bolt-relative velocity (mv − ship velocity), exactly as the
                         // sphere FirstEntryTime uses the relative velocity.
                         float br = sb.BoundingRadius + World.ProjectileRadius;
-                        if (!FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, br, bestT, out _)) continue;
+                        if (!FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, br, bestT, out _))
+                            continue;
                         Vec3 vrel = mv - s.State.Vel;
-                        if (HullRayEntry(sb.Hull, s.State.Pos, s.State.Rot, 1f, mp, vrel, World.ProjectileRadius, bestT, out float th)
-                            && th < bestT)
+                        if (
+                            HullRayEntry(
+                                sb.Hull,
+                                s.State.Pos,
+                                s.State.Rot,
+                                1f,
+                                mp,
+                                vrel,
+                                World.ProjectileRadius,
+                                bestT,
+                                out float th
+                            )
+                            && th < bestT
+                        )
                         {
-                            bestT = th; targetShip = s.ShipId; targetBase = -1;
+                            bestT = th;
+                            targetShip = s.ShipId;
+                            targetBase = -1;
                         }
                     }
                     else
@@ -751,7 +816,9 @@ public sealed partial class Simulation
                         float r = World.ShipRadius + World.ProjectileRadius;
                         if (FirstEntryTime(mp, mv, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
                         {
-                            bestT = t; targetShip = s.ShipId; targetBase = -1;
+                            bestT = t;
+                            targetShip = s.ShipId;
+                            targetBase = -1;
                         }
                     }
                 }
@@ -765,11 +832,23 @@ public sealed partial class Simulation
                     if (!FirstEntryTime(mp, mv, a.Pos, default, a.Radius + World.ProjectileRadius, bestT, out _))
                         continue;
                     bool hit = World.RockBodies.TryGetValue(a.Id, out var body)
-                        ? HullRayEntry(body.Hull, a.Pos, body.Rot, body.Scale, mp, mv, World.ProjectileRadius, bestT, out float t)
+                        ? HullRayEntry(
+                            body.Hull,
+                            a.Pos,
+                            body.Rot,
+                            body.Scale,
+                            mp,
+                            mv,
+                            World.ProjectileRadius,
+                            bestT,
+                            out float t
+                        )
                         : FirstEntryTime(mp, mv, a.Pos, default, r, bestT, out t);
                     if (hit && t < bestT)
                     {
-                        bestT = t; targetShip = 0; targetBase = -1;   // stopped by a rock
+                        bestT = t;
+                        targetShip = 0;
+                        targetBase = -1; // stopped by a rock
                     }
                 }
             }
@@ -778,8 +857,7 @@ public sealed partial class Simulation
         if (targetShip != 0 || targetBase >= 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize]
-                .Add(new PendingShot(targetShip, targetBase, w.Damage));
+            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage));
         }
     }
 
@@ -815,7 +893,15 @@ public sealed partial class Simulation
         due.Clear();
     }
 
-    private static bool FirstEntryTime(Vec3 shotPos, Vec3 shotVel, Vec3 targetPos, Vec3 targetVel, float radius, float maxT, out float t)
+    private static bool FirstEntryTime(
+        Vec3 shotPos,
+        Vec3 shotVel,
+        Vec3 targetPos,
+        Vec3 targetVel,
+        float radius,
+        float maxT,
+        out float t
+    )
     {
         Vec3 d = targetPos - shotPos;
         Vec3 vrel = targetVel - shotVel;
@@ -823,18 +909,34 @@ public sealed partial class Simulation
         float b = 2f * Dot(d, vrel);
         float c = d.LengthSquared() - radius * radius;
 
-        if (c <= 0f) { t = 0f; return true; }
+        if (c <= 0f)
+        {
+            t = 0f;
+            return true;
+        }
         if (a < 1e-6f)
         {
-            if (b >= -1e-6f) { t = 0f; return false; }
+            if (b >= -1e-6f)
+            {
+                t = 0f;
+                return false;
+            }
             t = -c / b;
         }
         else
         {
             float disc = b * b - 4f * a * c;
-            if (disc < 0f) { t = 0f; return false; }
+            if (disc < 0f)
+            {
+                t = 0f;
+                return false;
+            }
             t = (-b - MathF.Sqrt(disc)) / (2f * a);
-            if (t < 0f) { t = 0f; return false; }
+            if (t < 0f)
+            {
+                t = 0f;
+                return false;
+            }
         }
         return t <= maxT;
     }
@@ -847,7 +949,9 @@ public sealed partial class Simulation
         for (int i = 0; i <= steps; i++)
         {
             Vec3 p = start + vel * (maxT * i / steps);
-            int cx = World.CellOf(p.X), cy = World.CellOf(p.Y), cz = World.CellOf(p.Z);
+            int cx = World.CellOf(p.X),
+                cy = World.CellOf(p.Y),
+                cz = World.CellOf(p.Z);
             for (int dx = -1; dx <= 1; dx++)
             for (int dy = -1; dy <= 1; dy++)
             for (int dz = -1; dz <= 1; dz++)
@@ -864,7 +968,8 @@ public sealed partial class Simulation
         _shipGrid.Clear();
         foreach (var s in _order)
         {
-            if (!s.Alive) continue;
+            if (!s.Alive)
+                continue;
             if (!_shipGrid.TryGetValue(s.SectorId, out var grid))
                 _shipGrid[s.SectorId] = grid = new Dictionary<(int, int, int), List<ShipSim>>();
             var key = (World.CellOf(s.State.Pos.X), World.CellOf(s.State.Pos.Y), World.CellOf(s.State.Pos.Z));
@@ -890,7 +995,8 @@ public sealed partial class Simulation
         float pen;
         if (ha is null && hb is null)
         {
-            if (!ShipSphereContact(a, b, out n, out pen)) return;
+            if (!ShipSphereContact(a, b, out n, out pen))
+                return;
         }
         else if (!ShipHullContact(a, b, ha, hb, out n, out pen))
         {
@@ -906,7 +1012,12 @@ public sealed partial class Simulation
         Vec3 d = a.State.Pos - b.State.Pos;
         float dist2 = d.LengthSquared();
         float minD = 2f * World.ShipRadius;
-        if (dist2 >= minD * minD) { n = default; pen = 0f; return false; }
+        if (dist2 >= minD * minD)
+        {
+            n = default;
+            pen = 0f;
+            return false;
+        }
         float dist = MathF.Sqrt(dist2);
         n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
         pen = minD - dist;
@@ -916,29 +1027,61 @@ public sealed partial class Simulation
     // Hull-aware contact: each ship's center, as a ShipRadius sphere, tested against the other's
     // hull; the deeper of the two contacts wins (the convex analogue of the sphere overlap). n is
     // oriented b → a so the shared impulse step pushes them apart correctly.
-    private static bool ShipHullContact(ShipSim a, ShipSim b, World.ShipBody? ha, World.ShipBody? hb,
-        out Vec3 n, out float pen)
+    private static bool ShipHullContact(
+        ShipSim a,
+        ShipSim b,
+        World.ShipBody? ha,
+        World.ShipBody? hb,
+        out Vec3 n,
+        out float pen
+    )
     {
-        n = default; pen = 0f;
+        n = default;
+        pen = 0f;
 
         // Broad-phase: the two world bounding spheres (hull bound, or ShipRadius without a hull).
         float ra = ha?.BoundingRadius ?? World.ShipRadius;
         float rb = hb?.BoundingRadius ?? World.ShipRadius;
         float bound = ra + rb;
-        if ((a.State.Pos - b.State.Pos).LengthSquared() >= bound * bound) return false;
+        if ((a.State.Pos - b.State.Pos).LengthSquared() >= bound * bound)
+            return false;
 
         // a's center vs b's hull → normal already points out of b toward a (= b → a).
-        if (hb is World.ShipBody bbody &&
-            SphereVsHull(a.State.Pos, World.ShipRadius, bbody.Hull, b.State.Pos, b.State.Rot, 1f, out Vec3 nB, out float pB))
+        if (
+            hb is World.ShipBody bbody
+            && SphereVsHull(
+                a.State.Pos,
+                World.ShipRadius,
+                bbody.Hull,
+                b.State.Pos,
+                b.State.Rot,
+                1f,
+                out Vec3 nB,
+                out float pB
+            )
+        )
         {
-            n = nB; pen = pB;
+            n = nB;
+            pen = pB;
         }
         // b's center vs a's hull → normal points out of a toward b (a → b); negate to b → a.
-        if (ha is World.ShipBody abody &&
-            SphereVsHull(b.State.Pos, World.ShipRadius, abody.Hull, a.State.Pos, a.State.Rot, 1f, out Vec3 nA, out float pA)
-            && pA > pen)
+        if (
+            ha is World.ShipBody abody
+            && SphereVsHull(
+                b.State.Pos,
+                World.ShipRadius,
+                abody.Hull,
+                a.State.Pos,
+                a.State.Rot,
+                1f,
+                out Vec3 nA,
+                out float pA
+            )
+            && pA > pen
+        )
         {
-            n = nA * -1f; pen = pA;
+            n = nA * -1f;
+            pen = pA;
         }
         return pen > 0f;
     }
@@ -968,7 +1111,9 @@ public sealed partial class Simulation
     private void ResolveAsteroidCollisions(ShipSim s)
     {
         var grid = World.RockGrid(s.SectorId);
-        int cx = World.CellOf(s.State.Pos.X), cy = World.CellOf(s.State.Pos.Y), cz = World.CellOf(s.State.Pos.Z);
+        int cx = World.CellOf(s.State.Pos.X),
+            cy = World.CellOf(s.State.Pos.Y),
+            cz = World.CellOf(s.State.Pos.Z);
         for (int gx = cx - 1; gx <= cx + 1; gx++)
         for (int gy = cy - 1; gy <= cy + 1; gy++)
         for (int gz = cz - 1; gz <= cz + 1; gz++)
@@ -981,7 +1126,8 @@ public sealed partial class Simulation
                 // convex hull if this rock has one — else the legacy sphere.
                 Vec3 dd = s.State.Pos - a.Pos;
                 float bound = a.Radius + World.ShipRadius;
-                if (dd.LengthSquared() >= bound * bound) continue;
+                if (dd.LengthSquared() >= bound * bound)
+                    continue;
                 if (World.RockBodies.TryGetValue(a.Id, out var body))
                     ResolveHullCollision(s, body.Hull, a.Pos, body.Rot, body.Scale);
                 else
@@ -1012,21 +1158,32 @@ public sealed partial class Simulation
     // contact returns the WORLD outward normal (out of the hull toward the sphere) and the world
     // penetration depth. The shared kernel behind every hull bounce — asteroids, bases, and
     // (treating each ship as a ShipRadius sphere) ship-vs-ship.
-    private static bool SphereVsHull(Vec3 spherePos, float radius, ConvexHull hull,
-        Vec3 center, Quat rot, float scale, out Vec3 worldNormal, out float worldPenetration)
+    private static bool SphereVsHull(
+        Vec3 spherePos,
+        float radius,
+        ConvexHull hull,
+        Vec3 center,
+        Quat rot,
+        float scale,
+        out Vec3 worldNormal,
+        out float worldPenetration
+    )
     {
-        worldNormal = default; worldPenetration = 0f;
-        if (scale <= 1e-6f) return false;
+        worldNormal = default;
+        worldPenetration = 0f;
+        if (scale <= 1e-6f)
+            return false;
         float inv = 1f / scale;
         Quat rotInv = rot.Conjugate();
         Vec3 localP = rotInv.Rotate(spherePos - center) * inv;
         float localR = radius * inv;
-        if (!hull.ResolveSphere(localP, localR, out Vec3 localN, out float pen)) return false;
+        if (!hull.ResolveSphere(localP, localR, out Vec3 localN, out float pen))
+            return false;
 
-        Vec3 n = rot.Rotate(localN);   // rotation preserves length; uniform scale doesn't tilt normals
+        Vec3 n = rot.Rotate(localN); // rotation preserves length; uniform scale doesn't tilt normals
         float nl = n.Length();
         worldNormal = nl > 1e-6f ? n * (1f / nl) : new Vec3(0f, 1f, 0f);
-        worldPenetration = pen * scale;   // penetration is in local units → ×scale to world
+        worldPenetration = pen * scale; // penetration is in local units → ×scale to world
         return true;
     }
 
@@ -1044,9 +1201,11 @@ public sealed partial class Simulation
         {
             Vec3 rel = d - discs[i].Pos;
             float along = Dot(rel, discs[i].Normal);
-            if (along > World.ShipRadius || along < -World.DockDiscRadius) continue;
+            if (along > World.ShipRadius || along < -World.DockDiscRadius)
+                continue;
             Vec3 lateral = rel - discs[i].Normal * along;
-            if (lateral.LengthSquared() <= r * r) return true;
+            if (lateral.LengthSquared() <= r * r)
+                return true;
         }
         return false;
     }
@@ -1067,11 +1226,21 @@ public sealed partial class Simulation
 
     // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the
     // ray into hull-local space; t is invariant under the rigid+uniform-scale transform.
-    private static bool HullRayEntry(ConvexHull hull, Vec3 center, Quat rot, float scale,
-        Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    private static bool HullRayEntry(
+        ConvexHull hull,
+        Vec3 center,
+        Quat rot,
+        float scale,
+        Vec3 mp,
+        Vec3 mv,
+        float margin,
+        float maxT,
+        out float t
+    )
     {
         t = 0f;
-        if (scale <= 1e-6f) return false;
+        if (scale <= 1e-6f)
+            return false;
         float inv = 1f / scale;
         Quat rotInv = rot.Conjugate();
         Vec3 o = rotInv.Rotate(mp - center) * inv;
@@ -1084,7 +1253,8 @@ public sealed partial class Simulation
         Vec3 d = s.State.Pos - center;
         float dist2 = d.LengthSquared();
         float minD = radius + World.ShipRadius;
-        if (dist2 >= minD * minD) return;
+        if (dist2 >= minD * minD)
+            return;
 
         float dist = MathF.Sqrt(dist2);
         Vec3 n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
@@ -1106,12 +1276,14 @@ public sealed partial class Simulation
     {
         foreach (var g in World.Alephs)
         {
-            if (g.SectorId != s.SectorId) continue;
+            if (g.SectorId != s.SectorId)
+                continue;
             float rr = World.AlephTriggerRadius + World.ShipRadius;
-            if ((s.State.Pos - g.Pos).LengthSquared() > rr * rr) continue;
+            if ((s.State.Pos - g.Pos).LengthSquared() > rr * rr)
+                continue;
 
             float speed = s.State.Vel.Length();
-            Vec3 mouth = g.PartnerPos * -1f;   // toward the dest sector center (origin)
+            Vec3 mouth = g.PartnerPos * -1f; // toward the dest sector center (origin)
             float mlen = mouth.Length();
             Vec3 m = mlen > 0.001f ? mouth * (1f / mlen) : new Vec3(0f, 1f, 0f);
 
@@ -1120,7 +1292,8 @@ public sealed partial class Simulation
             Vec3 e = new Vec3(
                 m.X + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter,
                 m.Y + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter,
-                m.Z + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter);
+                m.Z + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter
+            );
             float elen = e.Length();
             e = elen > 1e-4f ? e * (1f / elen) : m;
 
@@ -1143,7 +1316,8 @@ public sealed partial class Simulation
     {
         float d = dir.Z;
         // Antiparallel (facing -Z): the formula degenerates; spin 180° about X instead.
-        if (d < -0.99999f) return new Quat(1f, 0f, 0f, 0f);
+        if (d < -0.99999f)
+            return new Quat(1f, 0f, 0f, 0f);
         return new Quat(-dir.Y, dir.X, 0f, 1f + d).Normalized();
     }
 

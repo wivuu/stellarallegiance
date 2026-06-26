@@ -2,8 +2,8 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Threading.Channels;
-using StellarAllegiance.Shared;
 using SimServer.Sim;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Net;
 
@@ -23,10 +23,10 @@ public sealed class ClientHub
     // for a furball packed inside R1 — that rare overflow is the one path that still sorts.
     // All tunable from the environment so the LOD can be swept without recompiling.
     private static readonly float FullRateRadius = EnvF("SIM_FULLRATE_RADIUS", 600f);
-    private static readonly float MidRateRadius  = EnvF("SIM_MIDRATE_RADIUS", 1500f);
-    private static readonly int MidEveryTicks    = Math.Max(1, EnvI("SIM_MID_EVERY", 3));
+    private static readonly float MidRateRadius = EnvF("SIM_MIDRATE_RADIUS", 1500f);
+    private static readonly int MidEveryTicks = Math.Max(1, EnvI("SIM_MID_EVERY", 3));
     private static readonly int CoarseEveryTicks = Math.Max(1, EnvI("SIM_COARSE_EVERY", 10));
-    private static readonly int MaxRecords       = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
+    private static readonly int MaxRecords = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
     private const int OutboundQueueDepth = 8;
 
     // AOI broad-phase grid cell (server/Net only — distinct from the sim's 160 u collision grid,
@@ -35,21 +35,27 @@ public sealed class ClientHub
     // candidates from those cells instead of scanning every ship in the world.
     private static readonly float AoiGridCell = MathF.Max(FullRateRadius, EnvF("SIM_AOI_GRID_CELL", 600f));
     private static readonly int AoiCellRadius = (int)MathF.Ceiling(FullRateRadius / AoiGridCell);
+
     // Fan out per-client snapshots across cores once the connection count makes the fork/join
     // worth it; below this, the sequential loop avoids the overhead. Tunable for measurement.
     private static readonly int ParallelClientThreshold = Math.Max(1, EnvI("SIM_PARALLEL_THRESHOLD", 24));
+
     // Persistent snapshot worker threads pulling clients off a Channel (vs spinning up tasks per
     // tick). Default leaves a core for the sim thread + Kestrel. 0 = no pool (sim thread builds
     // every snapshot itself), for A/B against the threaded path.
-    private static readonly int SnapshotWorkers = Math.Max(0, EnvI("SIM_SNAPSHOT_WORKERS", Math.Max(1, Environment.ProcessorCount - 1)));
+    private static readonly int SnapshotWorkers = Math.Max(
+        0,
+        EnvI("SIM_SNAPSHOT_WORKERS", Math.Max(1, Environment.ProcessorCount - 1))
+    );
+
     // Squared radii precomputed once (the LOD thresholds are constants) instead of per snapshot.
     private static readonly float FullRateRadiusSq = FullRateRadius * FullRateRadius;
     private static readonly float MidRateRadiusSq = MidRateRadius * MidRateRadius;
 
-    private static float EnvF(string k, float d) =>
-        float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
-    private static int EnvI(string k, int d) =>
-        int.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
+    private static float EnvF(string k, float d) => float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
+
+    private static int EnvI(string k, int d) => int.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
+
     private static int CellOf(float v) => (int)MathF.Floor(v / AoiGridCell);
 
     // One queued outbound frame. Snapshot frames are rented from ArrayPool and oversized, so
@@ -62,7 +68,14 @@ public sealed class ClientHub
         public readonly byte[] Buf;
         public readonly int Len;
         public readonly bool Pooled;
-        public OutFrame(byte[] buf, int len, bool pooled) { Buf = buf; Len = len; Pooled = pooled; }
+
+        public OutFrame(byte[] buf, int len, bool pooled)
+        {
+            Buf = buf;
+            Len = len;
+            Pooled = pooled;
+        }
+
         public static OutFrame Whole(byte[] b) => new(b, b.Length, false);
     }
 
@@ -73,11 +86,13 @@ public sealed class ClientHub
         public IClientTransport Transport = null!;
         public Channel<OutFrame> Outbound = null!;
         public ulong ShipId;
+
         // AOI anchor, cached each tick by AfterStep's sequential pre-pass (own ship pos/sector,
         // or the home-sector origin before a ship exists) so the parallel snapshot build reads
         // it without touching the sim's locked client→ship map.
         public Vec3 AnchorPos;
         public uint AnchorSector;
+
         // Per-client pick scratch, pre-sized past the typical coarse-tick fan-out so it doesn't
         // grow-and-realloc each tick. Reused every snapshot; never escapes the owning client.
         public List<(float Dist2, int Index)> Scratch = new(256);
@@ -111,49 +126,58 @@ public sealed class ClientHub
     private readonly ManualResetEventSlim _fanoutDone = new(false);
     private int _fanoutPending;
     private IReadOnlyList<Simulation.ShipSim> _dispatchShips = System.Array.Empty<Simulation.ShipSim>();
-    private bool _dispatchMid, _dispatchCoarse;
+    private bool _dispatchMid,
+        _dispatchCoarse;
+
     // Snapshot header values captured once per tick (identical for every client) so the workers
     // don't each re-read the sim. _aliveCount is how many ships SerializeRecords packed at the
     // front of _recordScratch — also the body of the shared coarse snapshot.
     private uint _dispatchTick;
-    private byte _dispatchPhase, _dispatchWinner;
+    private byte _dispatchPhase,
+        _dispatchWinner;
     private int _aliveCount;
     private readonly List<Client> _dispatchList = new(256);
     private readonly CancellationTokenSource _shutdownCts = new();
 
     private readonly Simulation _sim;
+
     // Pluggable backends (server/Backend/Backends.cs): connect-time auth, player directory,
     // matchmaker. SpacetimeDB used to own these; they're now in-process with swap-in seams.
     private readonly Backend.IAuthenticator _auth;
     private readonly Backend.IPlayerDirectory _players;
     private readonly Backend.IMatchmaker _matchmaker;
+
     // The pre-match lobby (team/ready/name). The sim polls ShouldStartMatch to leave the lobby.
     private readonly Lobby _lobby = new();
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
     private long _bytesSent;
+
     // LOD effectiveness counters: total ship records streamed and how many snapshots carried
     // them, so the bench line can report avg records/snapshot — the LOD's real fan-out, which a
     // distance tiering makes vary with how clustered the world is. Bumped from the snapshot
     // build, which may run in parallel across clients, so writes go through Interlocked.
     private long _recordsSent;
     private long _snapshotCount;
+
     // Last phase the hub broadcast, so AfterStep emits a fresh LobbyState on every transition
     // (Lobby->Active->Ended->Lobby) without polling every tick.
     private byte _lastPhase = Simulation.PhaseLobby;
 
     public int ConnectionCount => _clients.Count;
+
     public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
 
     // Lobby-advertised liveness fields (reported in the heartbeat to the public lobby): how many
     // players are connected and whether we're waiting in the lobby, mid-match, or wrapping up.
     public int PlayerCount => _clients.Count;
-    public string GameState => _sim.Phase switch
-    {
-        Simulation.PhaseActive => "in-progress",
-        Simulation.PhaseEnded  => "ended",
-        _                      => "lobby",
-    };
+    public string GameState =>
+        _sim.Phase switch
+        {
+            Simulation.PhaseActive => "in-progress",
+            Simulation.PhaseEnded => "ended",
+            _ => "lobby",
+        };
 
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
@@ -164,8 +188,12 @@ public sealed class ClientHub
         return snaps == 0 ? 0.0 : (double)recs / snaps;
     }
 
-    public ClientHub(Simulation sim, Backend.IAuthenticator auth, Backend.IPlayerDirectory players,
-        Backend.IMatchmaker matchmaker)
+    public ClientHub(
+        Simulation sim,
+        Backend.IAuthenticator auth,
+        Backend.IPlayerDirectory players,
+        Backend.IMatchmaker matchmaker
+    )
     {
         _sim = sim;
         _auth = auth;
@@ -176,12 +204,14 @@ public sealed class ClientHub
         {
             // Single writer (sim thread), many readers (the workers). Sync continuations let a
             // worker resume inline when the sim thread writes, shaving wake-up latency.
-            _workQueue = Channel.CreateUnbounded<Client>(new UnboundedChannelOptions
-            {
-                SingleWriter = true,
-                SingleReader = false,
-                AllowSynchronousContinuations = true,
-            });
+            _workQueue = Channel.CreateUnbounded<Client>(
+                new UnboundedChannelOptions
+                {
+                    SingleWriter = true,
+                    SingleReader = false,
+                    AllowSynchronousContinuations = true,
+                }
+            );
             for (int i = 0; i < SnapshotWorkers; i++)
                 new Thread(SnapshotWorkerLoop) { IsBackground = true, Name = $"SnapWorker{i}" }.Start();
             Console.WriteLine($"[Hub] snapshot worker pool: {SnapshotWorkers} threads");
@@ -198,10 +228,12 @@ public sealed class ClientHub
         try
         {
             while (reader.WaitToReadAsync(ct).AsTask().GetAwaiter().GetResult())
-                while (reader.TryRead(out var client))
-                    BuildAndCountDown(client);
+            while (reader.TryRead(out var client))
+                BuildAndCountDown(client);
         }
-        catch (OperationCanceledException) { /* shutting down */ }
+        catch (OperationCanceledException)
+        { /* shutting down */
+        }
     }
 
     // Build one client's snapshot and, if it was the last outstanding item this tick, release
@@ -228,8 +260,7 @@ public sealed class ClientHub
     // Build + fan out the current lobby roster (HasShip overlaid from the live sim).
     private void BroadcastLobby()
     {
-        var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner,
-            _lobby.Snapshot(id => _sim.ShipIdOf(id)));
+        var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner, _lobby.Snapshot(id => _sim.ShipIdOf(id)));
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
@@ -240,11 +271,13 @@ public sealed class ClientHub
         {
             Id = Interlocked.Increment(ref _nextClientId),
             Transport = transport,
-            Outbound = Channel.CreateBounded<OutFrame>(new BoundedChannelOptions(OutboundQueueDepth)
-            {
-                FullMode = BoundedChannelFullMode.DropOldest,
-                SingleReader = true,
-            }),
+            Outbound = Channel.CreateBounded<OutFrame>(
+                new BoundedChannelOptions(OutboundQueueDepth)
+                {
+                    FullMode = BoundedChannelFullMode.DropOldest,
+                    SingleReader = true,
+                }
+            ),
         };
 
         var sendTask = SendLoop(client, ct);
@@ -252,8 +285,12 @@ public sealed class ClientHub
         {
             await ReceiveLoop(client, ct);
         }
-        catch (OperationCanceledException) { /* server shutting down */ }
-        catch (WebSocketException) { /* client vanished without a close handshake — normal */ }
+        catch (OperationCanceledException)
+        { /* server shutting down */
+        }
+        catch (WebSocketException)
+        { /* client vanished without a close handshake — normal */
+        }
         finally
         {
             _clients.TryRemove(client.Id, out _);
@@ -261,8 +298,14 @@ public sealed class ClientHub
             _lobby.Remove(client.Id);
             _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
-            BroadcastLobby();   // roster shrank
-            try { await sendTask; } catch { /* socket torn down */ }
+            BroadcastLobby(); // roster shrank
+            try
+            {
+                await sendTask;
+            }
+            catch
+            { /* socket torn down */
+            }
         }
     }
 
@@ -273,9 +316,9 @@ public sealed class ClientHub
         {
             int count = await client.Transport.ReceiveAsync(buffer, ct);
             if (count < 0)
-                return;        // transport closed
+                return; // transport closed
             if (count < 1)
-                continue;      // empty frame
+                continue; // empty frame
 
             switch (buffer[0])
             {
@@ -285,7 +328,8 @@ public sealed class ClientHub
                     // optional shared-secret password the server constant-time compares (open
                     // when the server runs without one); name labels the lobby roster. No
                     // class/team here — those are lobby actions, spawning is MsgSpawn.
-                    string secret = "", name = "";
+                    string secret = "",
+                        name = "";
                     if (count > 1)
                     {
                         int secLen = buffer[1];
@@ -293,7 +337,8 @@ public sealed class ClientHub
                         if (count >= o + 1)
                         {
                             secret = System.Text.Encoding.UTF8.GetString(buffer, 2, secLen);
-                            int nameLen = buffer[o]; o += 1;
+                            int nameLen = buffer[o];
+                            o += 1;
                             if (count >= o + nameLen)
                                 name = System.Text.Encoding.UTF8.GetString(buffer, o, nameLen);
                         }
@@ -308,13 +353,14 @@ public sealed class ClientHub
 
                     _players.OnConnect(client.Id, name);
                     _lobby.Add(client.Id, _players.NameOf(client.Id));
-                    _clients[client.Id] = client;   // visible to AfterStep / broadcasts once joined
+                    _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
                     client.Team = _lobby.TeamOf(client.Id);
 
                     // The client downloads everything from the server: world statics, the
                     // content defs, then the lobby roster.
-                    client.Outbound.Writer.TryWrite(OutFrame.Whole(
-                        Protocol.BuildWelcome(client.Id, client.Team, _sim.World, _sim.Tick)));
+                    client.Outbound.Writer.TryWrite(
+                        OutFrame.Whole(Protocol.BuildWelcome(client.Id, client.Team, _sim.World, _sim.Tick))
+                    );
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs()));
                     BroadcastLobby();
                     break;
@@ -324,7 +370,8 @@ public sealed class ClientHub
                     // Spawn the chosen class — honored only while a match is live. The team
                     // comes from the lobby (authoritative), not the client.
                     byte cls = buffer[1];
-                    if (cls > 2) cls = 0;
+                    if (cls > 2)
+                        cls = 0;
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
@@ -398,7 +445,7 @@ public sealed class ClientHub
             await client.Transport.SendAsync(frame.Buf.AsMemory(0, frame.Len), ct);
             Interlocked.Add(ref _bytesSent, frame.Len);
             if (frame.Pooled)
-                ArrayPool<byte>.Shared.Return(frame.Buf);   // safe: SendAsync has drained it
+                ArrayPool<byte>.Shared.Return(frame.Buf); // safe: SendAsync has drained it
         }
     }
 
@@ -439,9 +486,7 @@ public sealed class ClientHub
 
         // Stream base health when it changed (a hit landed / match ended) or on coarse
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
-        byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse)
-            ? Protocol.BuildBases(_sim.World)
-            : null;
+        byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
@@ -506,7 +551,7 @@ public sealed class ClientHub
             var shared = OutFrame.Whole(BuildSharedCoarseSnapshot());
             for (int i = 0; i < n; i++)
                 _dispatchList[i].Outbound.Writer.TryWrite(shared);
-            _recordsSent += (long)_aliveCount * n;   // sim thread only here, no interlock needed
+            _recordsSent += (long)_aliveCount * n; // sim thread only here, no interlock needed
             _snapshotCount += n;
             return;
         }
@@ -550,16 +595,22 @@ public sealed class ClientHub
         if (buildGrid)
             foreach (var sectorGrid in _aoiGrid.Values)
             {
-                foreach (var cell in sectorGrid.Values) { cell.Clear(); _cellPool.Push(cell); }
+                foreach (var cell in sectorGrid.Values)
+                {
+                    cell.Clear();
+                    _cellPool.Push(cell);
+                }
                 sectorGrid.Clear();
             }
 
         for (int i = 0; i < ships.Count; i++)
         {
             var s = ships[i];
-            if (!s.Alive) continue;
+            if (!s.Alive)
+                continue;
             _shipIndexById[s.ShipId] = i;
-            if (!buildGrid) continue;
+            if (!buildGrid)
+                continue;
 
             if (!_aoiGrid.TryGetValue(s.SectorId, out var grid))
                 _aoiGrid[s.SectorId] = grid = new Dictionary<(int, int, int), List<int>>();
@@ -584,13 +635,17 @@ public sealed class ClientHub
         int slot = 0;
         for (int i = 0; i < n; i++)
         {
-            if (!ships[i].Alive) { _recordOffset[i] = -1; continue; }
+            if (!ships[i].Alive)
+            {
+                _recordOffset[i] = -1;
+                continue;
+            }
             int off = slot * Protocol.ShipRecordSize;
             Protocol.WriteShip(_recordScratch.AsSpan(off, Protocol.ShipRecordSize), ships[i]);
             _recordOffset[i] = off;
             slot++;
         }
-        _aliveCount = slot;   // alive records occupy _recordScratch[0 .. slot*ShipRecordSize)
+        _aliveCount = slot; // alive records occupy _recordScratch[0 .. slot*ShipRecordSize)
     }
 
     // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).
@@ -631,9 +686,12 @@ public sealed class ClientHub
             for (int i = 0; i < ships.Count; i++)
             {
                 var s = ships[i];
-                if (!s.Alive) continue;
-                if (s.SectorId == mySector) picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
-                else picks.Add((float.MaxValue, i));
+                if (!s.Alive)
+                    continue;
+                if (s.SectorId == mySector)
+                    picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
+                else
+                    picks.Add((float.MaxValue, i));
             }
         }
         else if (midTick)
@@ -642,11 +700,12 @@ public sealed class ClientHub
             // other sectors' ships are skipped entirely (no full-world scan).
             if (_aoiGrid.TryGetValue(mySector, out var grid))
                 foreach (var cell in grid.Values)
-                    foreach (int i in cell)
-                    {
-                        float d2 = (ships[i].State.Pos - myPos).LengthSquared();
-                        if (d2 <= r2sq) picks.Add((d2, i));
-                    }
+                foreach (int i in cell)
+                {
+                    float d2 = (ships[i].State.Pos - myPos).LengthSquared();
+                    if (d2 <= r2sq)
+                        picks.Add((d2, i));
+                }
         }
         else
         {
@@ -654,7 +713,10 @@ public sealed class ClientHub
             // viewer's 3x3x3 cell neighborhood (AoiCellRadius). Cell >= R1 guarantees coverage.
             if (_aoiGrid.TryGetValue(mySector, out var grid))
             {
-                int cx = CellOf(myPos.X), cy = CellOf(myPos.Y), cz = CellOf(myPos.Z), r = AoiCellRadius;
+                int cx = CellOf(myPos.X),
+                    cy = CellOf(myPos.Y),
+                    cz = CellOf(myPos.Z),
+                    r = AoiCellRadius;
                 for (int gx = cx - r; gx <= cx + r; gx++)
                 for (int gy = cy - r; gy <= cy + r; gy++)
                 for (int gz = cz - r; gz <= cz + r; gz++)
@@ -662,7 +724,8 @@ public sealed class ClientHub
                         foreach (int i in cell)
                         {
                             float d2 = (ships[i].State.Pos - myPos).LengthSquared();
-                            if (d2 <= r1sq) picks.Add((d2, i));
+                            if (d2 <= r1sq)
+                                picks.Add((d2, i));
                         }
             }
         }
