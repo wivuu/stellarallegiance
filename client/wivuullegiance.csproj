@@ -23,5 +23,8 @@
          as the sim server so the SDP offer/answer handshake interops. Direct ip:port joins still
          use the built-in WebSocket path. -->
     <PackageReference Include="SIPSorcery" Version="10.0.9" />
+    <!-- Non-trickle SDP/ICE helpers shared with the sim server (excluded from Shared.csproj,
+         which is dependency-free); compiled in here so both sides serialize candidates identically. -->
+    <Compile Include="../shared/Net/WebRtcSdp.cs" Link="scripts/WebRtcSdp.cs" />
   </ItemGroup>
 </Project>

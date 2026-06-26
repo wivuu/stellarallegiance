@@ -254,12 +254,9 @@ public partial class GameNetClient : Node
             var iceServers = ToIceServers(entry.IceServers);
             pc = new RTCPeerConnection(new RTCConfiguration { iceServers = iceServers });
 
-            // Collect every a=candidate line as it gathers. SIPSorcery's offerer drops candidates
-            // gathered AFTER createOffer() from pc.localDescription (the answerer keeps them), so a
-            // non-trickle offer ends up host-only and our srflx never reaches the peer — ICE then
-            // fails instantly with no routable pair. We re-inject these into the offer SDP below.
-            var gatheredCands = new System.Collections.Concurrent.ConcurrentQueue<string>();
-            pc.onicecandidate += c => { if (c is not null) gatheredCands.Enqueue(BuildCandidateAttr(c)); };
+            // Collect every candidate as it gathers so we can re-inject the ones SIPSorcery drops
+            // from the offerer's localDescription (see WebRtcSdp / EnsureCandidatesInSdp).
+            var gatheredCands = WebRtcSdp.CollectCandidates(pc);
 
             var dc = await pc.createDataChannel("game");
             var dcOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -281,14 +278,13 @@ public partial class GameNetClient : Node
             await pc.setLocalDescription(offer);
             // Off-LAN reachability needs our srflx in the offer; wait for it (not just any
             // 3s cap) whenever a STUN server is configured. LAN/--local has none -> fast path.
-            await WaitForIceGathering(pc, needSrflx: iceServers.Count > 0, ct);
+            await WebRtcSdp.WaitForIceGathering(pc, needSrflx: iceServers.Count > 0, ct);
 
-            // Post the offer, get a ticket, long-poll for the server's answer.
-            var offerSdp = pc.localDescription.sdp.ToString();
-            // Re-inject any gathered candidate (esp. our srflx) that SIPSorcery left out of the
-            // offerer's localDescription. Without this the offer is host-only and unroutable off-LAN.
+            // Post the offer, get a ticket, long-poll for the server's answer. Re-inject any
+            // gathered candidate (esp. our srflx) SIPSorcery left out of the offerer's
+            // localDescription, else the offer is host-only and unroutable off-LAN.
             var gatheredList = gatheredCands.ToArray();
-            offerSdp = EnsureCandidatesInSdp(offerSdp, gatheredList);
+            var offerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredList);
             // A srflx count of 0 here is the regression signal — the peer can't reach us off-LAN.
             int offerSrflx = gatheredList.Count(l => l.Contains(" typ srflx", StringComparison.Ordinal));
             GD.Print($"[GameNet] webrtc offer: {gatheredList.Length} local candidates ({offerSrflx} srflx)");
@@ -327,77 +323,6 @@ public partial class GameNetClient : Node
             CallDeferred(nameof(OnSocketClosed));
         }
         finally { pc?.Dispose(); }
-    }
-
-    // Non-trickle ICE: wait (bounded) for candidate gathering so the SDP is complete in one round
-    // trip; fall through with whatever gathered if STUN/TURN is slow (host candidates suffice LAN).
-    // When needSrflx (a STUN server is configured), resolve as soon as the srflx candidate arrives
-    // — off-LAN reachability hinges on it — with a longer ceiling, since a slow cellular STUN RTT
-    // can exceed the LAN-tuned 3s cap and leave the offer host-only (unroutable off-LAN).
-    private static async Task WaitForIceGathering(RTCPeerConnection pc, bool needSrflx, CancellationToken ct)
-    {
-        if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
-        pc.onicegatheringstatechange += OnState;
-        pc.onicecandidate += OnCand;
-        try
-        {
-            if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
-            await tcs.Task.WaitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
-    }
-
-    // Serialize an RTCIceCandidate to its SDP "a=candidate:..." attribute line deterministically
-    // from its W3C properties — we don't rely on SIPSorcery's ToString() (format unverified). Shape
-    // per RFC 8839: candidate:<foundation> <component> <proto> <priority> <addr> <port> typ <type>
-    // [raddr <relAddr> rport <relPort>].
-    private static string BuildCandidateAttr(RTCIceCandidate c)
-    {
-        var line = $"candidate:{c.foundation} {(int)c.component} {c.protocol.ToString().ToLowerInvariant()} " +
-                   $"{c.priority} {c.address} {c.port} typ {c.type.ToString().ToLowerInvariant()}";
-        if ((c.type is RTCIceCandidateType.srflx or RTCIceCandidateType.relay or RTCIceCandidateType.prflx)
-            && !string.IsNullOrEmpty(c.relatedAddress))
-            line += $" raddr {c.relatedAddress} rport {c.relatedPort}";
-        return "a=" + line;
-    }
-
-    // Insert any gathered a=candidate line not already present in the SDP, placed right after the
-    // existing candidate block of the (single) data m-section so the ufrag/mid context matches.
-    // Works around SIPSorcery 10.0.9 dropping late-gathered candidates from the offerer's
-    // localDescription; idempotent (skips duplicates, e.g. the srflx SIPSorcery reports twice).
-    private static string EnsureCandidatesInSdp(string sdp, IEnumerable<string> candidateLines)
-    {
-        if (string.IsNullOrEmpty(sdp)) return sdp;
-        var lines = sdp.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').ToList();
-
-        // Existing candidate values already on the wire (compare on the value, ignore "a=" prefix).
-        var present = new HashSet<string>(
-            lines.Where(l => l.StartsWith("a=candidate", StringComparison.Ordinal))
-                 .Select(l => l.Trim()), StringComparer.Ordinal);
-
-        int lastCand = lines.FindLastIndex(l => l.StartsWith("a=candidate", StringComparison.Ordinal));
-        // Fall back to just after the data m-section's a=mid (or the m= line) if no host candidate landed.
-        if (lastCand < 0)
-        {
-            lastCand = lines.FindIndex(l => l.StartsWith("a=mid:", StringComparison.Ordinal));
-            if (lastCand < 0) lastCand = lines.FindLastIndex(l => l.StartsWith("m=", StringComparison.Ordinal));
-        }
-        if (lastCand < 0) return sdp;   // shape we don't recognize — leave untouched
-
-        foreach (var raw in candidateLines)
-        {
-            var line = raw.Trim();
-            if (!line.StartsWith("a=candidate", StringComparison.Ordinal)) continue;
-            if (!present.Add(line)) continue;        // dup
-            lines.Insert(++lastCand, line);
-        }
-        return string.Join("\r\n", lines) + "\r\n";
     }
 
     private static List<RTCIceServer> ToIceServers(IceServerDto[]? dtos)
