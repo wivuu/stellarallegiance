@@ -1,7 +1,7 @@
 {
   "client/scripts/AlephView.cs": {
-    "mtime": 1782253548.8042927,
-    "ast_hash": "370c1fc740424ba86d6a2ee2b6f8f6f8",
+    "mtime": 1780756899.81516,
+    "ast_hash": "68adcc792e65c15546ade30fa7c5fce6",
     "semantic_hash": ""
   },
   "client/scripts/CameraRig.cs": {
@@ -45,8 +45,8 @@
     "semantic_hash": "06cbbf17aa619336fdbf34371a93a577"
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1782439223.8590062,
-    "ast_hash": "6793477b7c8a3a120ce006f5150fa50e",
+    "mtime": 1781969737.9761207,
+    "ast_hash": "3725f0eb268e54ff78810b80b9db12c4",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -55,8 +55,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Minimap.cs": {
-    "mtime": 1782253548.8051438,
-    "ast_hash": "95b33914221a525fac114400b0db80e0",
+    "mtime": 1781482367.8426785,
+    "ast_hash": "55665b1400a3ee1b7fd7f5b47cbc9a36",
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
@@ -90,18 +90,18 @@
     "semantic_hash": ""
   },
   "client/scripts/Sun.cs": {
-    "mtime": 1782439223.8596306,
-    "ast_hash": "a7f98e0c99c48a9bfcf78d078a302c8f",
+    "mtime": 1781482367.8433692,
+    "ast_hash": "ce2905691416829d38180bb15bc61429",
     "semantic_hash": ""
   },
   "client/scripts/TargetMarkers.cs": {
-    "mtime": 1782253548.805552,
-    "ast_hash": "827385e6d70ca6e716d9069b371c765d",
+    "mtime": 1781909500.143825,
+    "ast_hash": "e6e902d9a22aef1b83216f9a3f030217",
     "semantic_hash": ""
   },
   "client/scripts/TeamTrail.cs": {
-    "mtime": 1782253548.8057446,
-    "ast_hash": "fe0c4c1e12a3dc527dcca7bb8942eee4",
+    "mtime": 1781575197.1057796,
+    "ast_hash": "1a0e9532db3abce85b19933d11341704",
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
@@ -110,8 +110,8 @@
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
-    "mtime": 1782505826.1296124,
-    "ast_hash": "04b8af3e9b57e9e01176cf364b62988f",
+    "mtime": 1781875552.6827903,
+    "ast_hash": "38ef98881cdd397a5df6585670380d8c",
     "semantic_hash": ""
   },
   "client/wivuullegiance.sln": {
@@ -135,9 +135,9 @@
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
-    "mtime": 1782505819.4997444,
-    "ast_hash": "2f8abbbdfb89dcdf7a72a9d1fd307cc7",
-    "semantic_hash": ""
+    "mtime": 1781297565.5266557,
+    "ast_hash": "569baec20e5abc28ec535f8fd2831790",
+    "semantic_hash": "569baec20e5abc28ec535f8fd2831790"
   },
   "tests/FlightModelTest/FlightModelTest.csproj": {
     "mtime": 1781297652.5839584,
@@ -195,8 +195,8 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "client/scripts/DefRegistry.cs": {
-    "mtime": 1782253548.804783,
-    "ast_hash": "29dd770602c37c13f13a3002c1f53ec0",
+    "mtime": 1782043905.1498687,
+    "ast_hash": "d9b9fedaff4a833939a31911d31feb64",
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "client/scripts/BaseModelLoader.cs": {
-    "mtime": 1782253548.8045151,
-    "ast_hash": "4d6f45ced1b9b1e1ff338041cca963e4",
+    "mtime": 1782043489.7160413,
+    "ast_hash": "804e02ef46133e3ed6ccf3594364b192",
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
@@ -225,18 +225,18 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782253548.8133473,
-    "ast_hash": "070f7a1a8a7aca804ab651970a64799b",
+    "mtime": 1782044476.6720436,
+    "ast_hash": "bcabc2f5f97bd2776d491e227d9d4a0b",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782253548.8135288,
-    "ast_hash": "74c3cbaa4689710c4e0dc7130e96c4e3",
+    "mtime": 1782043489.7357252,
+    "ast_hash": "d9736ee3e4db4edc959a99da5246458c",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1782505836.3332825,
-    "ast_hash": "24a41a3d2528f4669200905d1af70970",
+    "mtime": 1782043489.7360063,
+    "ast_hash": "574b276ab5cf73e4247bcd3d6c34994f",
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782505883.4938102,
-    "ast_hash": "5ba6a2622d1939d88b7db68d81081b73",
+    "mtime": 1782067218.17999,
+    "ast_hash": "f49979a8f9d3975e1730da8a570a6ed4",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1782253548.8131049,
-    "ast_hash": "b55d95009639e187a087018b137af571",
+    "mtime": 1782043489.7351491,
+    "ast_hash": "8e9febd171f7623fe3ee1d24226aabb0",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -300,7 +300,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ServerInputOverlay.cs": {
-    "mtime": 1782253548.805359,
+    "mtime": 1782067281.6195743,
     "ast_hash": "c19856d56d008de3a6549c1395252f21",
     "semantic_hash": ""
   },
@@ -360,23 +360,23 @@
     "semantic_hash": ""
   },
   "server/Net/LobbyRegistrar.cs": {
-    "mtime": 1782253548.812891,
+    "mtime": 1782067210.7111154,
     "ast_hash": "6f1600ae0add6020545cb71ae2423f2d",
     "semantic_hash": ""
   },
   "server/Net/WebRtcListener.cs": {
-    "mtime": 1782505928.8963935,
-    "ast_hash": "20b74ea45c792aa4d8a0d37e3625cf34",
+    "mtime": 1781875552.698801,
+    "ast_hash": "a4298ae0a09ef80e6608cd8976ca202e",
     "semantic_hash": ""
   },
   "public-lobby/Contracts.cs": {
-    "mtime": 1782253548.8123481,
+    "mtime": 1782067183.500714,
     "ast_hash": "b33754ce93316bcf82fe8bb8a62f4bbe",
     "semantic_hash": ""
   },
   "public-lobby/PublicLobby.cs": {
-    "mtime": 1782253548.8125272,
-    "ast_hash": "b6bc06591a8628fc45a76ec20a50761a",
+    "mtime": 1782067195.6511843,
+    "ast_hash": "6ebad02e5705343d726b974f1965b109",
     "semantic_hash": ""
   },
   "public-lobby/PublicLobby.csproj": {
@@ -390,7 +390,7 @@
     "semantic_hash": ""
   },
   "public-lobby/ServerRegistry.cs": {
-    "mtime": 1782253548.812695,
+    "mtime": 1782067191.7163446,
     "ast_hash": "cf2ad884d6bbeff78afea5177f04e62f",
     "semantic_hash": ""
   },
@@ -6130,7 +6130,7 @@
     "semantic_hash": ""
   },
   ".github/workflows/release.yml": {
-    "mtime": 1782253548.8040545,
+    "mtime": 1782067293.207559,
     "ast_hash": "09092bf4bda62523ead8e2c3a86d0a19",
     "semantic_hash": ""
   },
@@ -6175,23 +6175,13 @@
     "semantic_hash": ""
   },
   "client/scripts/BuildInfo.cs": {
-    "mtime": 1782253548.8046165,
+    "mtime": 1782067227.6115878,
     "ast_hash": "4187ffbfba1aa9e400d2269f1055381f",
     "semantic_hash": ""
   },
   "client/scripts/UpdateChecker.cs": {
-    "mtime": 1782253548.8058631,
+    "mtime": 1782067401.8240469,
     "ast_hash": "9f7076851196075e951af3d55fc9f049",
-    "semantic_hash": ""
-  },
-  "client/scripts/LensFlare.cs": {
-    "mtime": 1782439223.8593557,
-    "ast_hash": "447d23621c6dd1eb4f4ad3ba257a7bdb",
-    "semantic_hash": ""
-  },
-  "shared/Net/WebRtcSdp.cs": {
-    "mtime": 1782505952.4222617,
-    "ast_hash": "0108ad0f5a4f58a7fa9fc35bbcce8ce0",
     "semantic_hash": ""
   }
 }

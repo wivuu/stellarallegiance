@@ -1,7 +1,7 @@
-using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using SIPSorcery.Net;
+using StellarAllegiance.Net;
 
 namespace SimServer.Net;
 
@@ -129,35 +129,9 @@ public sealed class WebRtcListener
         {
             var pc = new RTCPeerConnection(new RTCConfiguration { iceServers = _iceServers });
 
-            // --- ICE diagnostics ------------------------------------------------------------
-            // Make a failed remote join observable: log every candidate we gather (by type) and
-            // every ICE/connection state transition. Read the candidate-type tallies on a failure:
-            //   no "srflx"      => STUN unreachable from here; we shipped host-only candidates and
-            //                      no off-LAN client can route to us.
-            //   srflx but ICE  => symmetric NAT on one/both ends; STUN can't punch (would need TURN).
-            //     never connects
-            int hostCands = 0, srflxCands = 0, relayCands = 0, otherCands = 0;
-            pc.onicecandidate += c =>
-            {
-                if (c is null) return;
-                switch (c.type)
-                {
-                    case RTCIceCandidateType.host:  Interlocked.Increment(ref hostCands);  break;
-                    case RTCIceCandidateType.srflx: Interlocked.Increment(ref srflxCands); break;
-                    case RTCIceCandidateType.relay: Interlocked.Increment(ref relayCands); break;
-                    default:                        Interlocked.Increment(ref otherCands); break;
-                }
-                Console.WriteLine($"[WebRtc] cand (ticket {offer.Ticket}) {c.type} {c.address}:{c.port} ({c.protocol})");
-            };
-            pc.oniceconnectionstatechange += s =>
-                Console.WriteLine($"[WebRtc] ICE state (ticket {offer.Ticket}): {s}");
-            pc.onicegatheringstatechange += s =>
-            {
-                if (s == RTCIceGatheringState.complete)
-                    Console.WriteLine($"[WebRtc] ICE gather complete (ticket {offer.Ticket}): " +
-                        $"{hostCands} host / {srflxCands} srflx / {relayCands} relay / {otherCands} other");
-            };
-            // --------------------------------------------------------------------------------
+            // Collect every candidate as it gathers so we can re-inject the ones SIPSorcery drops
+            // from the answerer's localDescription (see WebRtcSdp / EnsureCandidatesInSdp).
+            var gatheredCands = WebRtcSdp.CollectCandidates(pc);
 
             pc.ondatachannel += dc =>
             {
@@ -179,9 +153,16 @@ public sealed class WebRtcListener
             };
             pc.onconnectionstatechange += s =>
             {
-                Console.WriteLine($"[WebRtc] conn state (ticket {offer.Ticket}): {s}");
-                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed)
+                // Dispose on disconnected too (not just failed/closed): a client that restarts
+                // leaves its server-side pc in `disconnected` for SIPSorcery's long consent-timeout,
+                // and a leaked pc keeps holding its ICE/STUN sockets while the next offer comes in.
+                if (s is RTCPeerConnectionState.failed or RTCPeerConnectionState.closed
+                      or RTCPeerConnectionState.disconnected)
+                {
+                    if (s == RTCPeerConnectionState.failed)
+                        Console.WriteLine($"[WebRtc] connection failed (ticket {offer.Ticket})");
                     pc.Dispose();
+                }
             };
 
             var set = pc.setRemoteDescription(
@@ -195,9 +176,13 @@ public sealed class WebRtcListener
 
             var answer = pc.createAnswer();
             await pc.setLocalDescription(answer);
-            await WaitForIceGathering(pc, ct);
+            // The client can only reach us off-LAN via our srflx, so wait for it (not just the
+            // 3s cap) whenever a STUN server is configured. No ICE servers -> LAN-only fast path.
+            await WebRtcSdp.WaitForIceGathering(pc, needSrflx: _iceServers.Count > 0, ct);
 
-            var answerSdp = pc.localDescription.sdp.ToString();
+            // Re-inject any gathered candidate (esp. our srflx) that SIPSorcery left out of the
+            // answerer's localDescription, else the answer is host-only and unroutable off-LAN.
+            var answerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredCands.ToArray());
             using var resp = await _http.PostAsJsonAsync(
                 $"{_shareBase}/connect/{offer.Ticket}/answer", new { sdpAnswer = answerSdp }, ct);
             if (!resp.IsSuccessStatusCode)
@@ -211,29 +196,6 @@ public sealed class WebRtcListener
         {
             Console.WriteLine($"[WebRtc] answer error (ticket {offer.Ticket}): {e.Message}");
         }
-    }
-
-    // Non-trickle ICE: wait for candidate gathering to finish so the answer SDP is complete in a
-    // single round trip. Bounded so a stuck STUN/TURN query can't hang the handshake — we then
-    // reply with whatever candidates gathered (host candidates always succeed on a LAN).
-    private static async Task WaitForIceGathering(RTCPeerConnection pc, CancellationToken ct)
-    {
-        if (pc.iceGatheringState == RTCIceGatheringState.complete)
-            return;
-
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Handler(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        pc.onicegatheringstatechange += Handler;
-        try
-        {
-            if (pc.iceGatheringState == RTCIceGatheringState.complete)
-                return;
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
-            await tcs.Task.WaitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= Handler; }
     }
 
     // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).

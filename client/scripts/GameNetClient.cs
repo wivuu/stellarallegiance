@@ -2,8 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Threading;
@@ -251,7 +251,13 @@ public partial class GameNetClient : Node
             var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
             if (entry is null) throw new Exception("server not found in lobby");
 
-            pc = new RTCPeerConnection(new RTCConfiguration { iceServers = ToIceServers(entry.IceServers) });
+            var iceServers = ToIceServers(entry.IceServers);
+            pc = new RTCPeerConnection(new RTCConfiguration { iceServers = iceServers });
+
+            // Collect every candidate as it gathers so we can re-inject the ones SIPSorcery drops
+            // from the offerer's localDescription (see WebRtcSdp / EnsureCandidatesInSdp).
+            var gatheredCands = WebRtcSdp.CollectCandidates(pc);
+
             var dc = await pc.createDataChannel("game");
             var dcOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -270,11 +276,20 @@ public partial class GameNetClient : Node
 
             var offer = pc.createOffer();
             await pc.setLocalDescription(offer);
-            await WaitForIceGathering(pc, ct);
+            // Off-LAN reachability needs our srflx in the offer; wait for it (not just any
+            // 3s cap) whenever a STUN server is configured. LAN/--local has none -> fast path.
+            await WebRtcSdp.WaitForIceGathering(pc, needSrflx: iceServers.Count > 0, ct);
 
-            // Post the offer, get a ticket, long-poll for the server's answer.
+            // Post the offer, get a ticket, long-poll for the server's answer. Re-inject any
+            // gathered candidate (esp. our srflx) SIPSorcery left out of the offerer's
+            // localDescription, else the offer is host-only and unroutable off-LAN.
+            var gatheredList = gatheredCands.ToArray();
+            var offerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredList);
+            // A srflx count of 0 here is the regression signal — the peer can't reach us off-LAN.
+            int offerSrflx = gatheredList.Count(l => l.Contains(" typ srflx", StringComparison.Ordinal));
+            GD.Print($"[GameNet] webrtc offer: {gatheredList.Length} local candidates ({offerSrflx} srflx)");
             using var offerResp = await Http.PostAsJsonAsync($"{shareBase}/servers/{sessionId}/connect",
-                new { sdpOffer = pc.localDescription.sdp.ToString() }, ct);
+                new { sdpOffer = offerSdp }, ct);
             offerResp.EnsureSuccessStatusCode();
             var ticket = (await offerResp.Content.ReadFromJsonAsync<TicketDto>(ct))?.Ticket;
             if (string.IsNullOrEmpty(ticket)) throw new Exception("no signaling ticket from lobby");
@@ -308,25 +323,6 @@ public partial class GameNetClient : Node
             CallDeferred(nameof(OnSocketClosed));
         }
         finally { pc?.Dispose(); }
-    }
-
-    // Non-trickle ICE: wait (bounded) for candidate gathering so the SDP is complete in one round
-    // trip; fall through with whatever gathered if STUN/TURN is slow (host candidates suffice LAN).
-    private static async Task WaitForIceGathering(RTCPeerConnection pc, CancellationToken ct)
-    {
-        if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Handler(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        pc.onicegatheringstatechange += Handler;
-        try
-        {
-            if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
-            await tcs.Task.WaitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= Handler; }
     }
 
     private static List<RTCIceServer> ToIceServers(IceServerDto[]? dtos)

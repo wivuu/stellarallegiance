@@ -13,4 +13,9 @@
     <!-- No RID here on purpose: this is portable managed IL. The consuming
          project (e.g. the wasi-wasm module) supplies the RID and recompiles. -->
   </PropertyGroup>
+  <ItemGroup>
+    <!-- shared/Net/ holds SIPSorcery-dependent WebRTC source that the client and server compile
+         in via <Compile Include Link>. This project stays dependency-free, so exclude it here. -->
+    <Compile Remove="Net/**/*.cs" />
+  </ItemGroup>
 </Project>

@@ -93,18 +93,18 @@ public static class BaseModelLoader
 					root.AddChild(MakeBeacon(new Vector3(hp.OffX, hp.OffY, hp.OffZ), team, i++));
 		}
 
-		// DEBUG visualization of the docking hardpoints (entry = green, exit = magenta). Read from
-		// the hull's own HP_ nodes — the exact positions the server scales by the same world scale
-		// Each green cone's base disc IS the dock zone, so this shows exactly where you must fly to
-		// dock. hull.Transform maps the GLB-local node into the unscaled
-		// BaseModel root the cones sit on, same as the beacons above.
-		if (ShowHardpointDebug)
-		{
-			foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingEntrance"))
-				root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(0.2f, 1f, 0.35f), name));
-			foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingExit"))
-				root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(1f, 0.25f, 0.95f), name));
-		}
+		// // DEBUG visualization of the docking hardpoints (entry = green, exit = magenta). Read from
+		// // the hull's own HP_ nodes — the exact positions the server scales by the same world scale
+		// // Each green cone's base disc IS the dock zone, so this shows exactly where you must fly to
+		// // dock. hull.Transform maps the GLB-local node into the unscaled
+		// // BaseModel root the cones sit on, same as the beacons above.
+		// if (ShowHardpointDebug)
+		// {
+		// 	foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingEntrance"))
+		// 		root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(0.2f, 1f, 0.35f), name));
+		// 	foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingExit"))
+		// 		root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(1f, 0.25f, 0.95f), name));
+		// }
 
 		return root;
 	}
