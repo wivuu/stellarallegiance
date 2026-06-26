@@ -26,6 +26,12 @@ public partial class Hud : CanvasLayer
 		_world = GetNode<WorldRenderer>("../WorldRenderer");
 		_ship = GetNode<ShipController>("../ShipController");
 
+		// Sun lens flare (added first so it sits UNDER every HUD element while still drawing over
+		// the 3D viewport — it's a light effect on the sky, not a readout).
+		var flare = new LensFlare { Name = "LensFlare" };
+		AddChild(flare);
+		flare.Init(GetNode<Camera3D>("../Camera3D"));
+
 		// Enemy target markers (added first so the HUD text/menu draw on top of it).
 		var markers = new TargetMarkers { Name = "TargetMarkers" };
 		AddChild(markers);

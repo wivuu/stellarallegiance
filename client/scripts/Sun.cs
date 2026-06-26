@@ -12,8 +12,13 @@ public partial class Sun : MeshInstance3D
 {
 	// Far enough to sit well beyond any sector geometry but inside the camera's
 	// far plane. The quad is sized to subtend a believable stylised disc.
-	private const float Distance = 4500f;
+	public const float Distance = 4500f;
 	private const float Size = 900f;
+
+	// World-space unit vector pointing toward the sun, shared so the screen-space
+	// lens flare overlay (LensFlare) can anchor its bright core exactly on the disc.
+	// Vector3.Zero until _Ready runs — consumers must guard for that.
+	public static Vector3 SkyDirection { get; private set; }
 
 	private Vector3 _skyDir; // world-space unit vector pointing toward the sun
 
@@ -23,6 +28,7 @@ public partial class Sun : MeshInstance3D
 		// the opposite direction (+Z of its basis). Read it once: the light is static.
 		var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
 		_skyDir = light.GlobalTransform.Basis.Z.Normalized();
+		SkyDirection = _skyDir;
 
 		Mesh = new QuadMesh { Size = new Vector2(Size, Size) };
 		MaterialOverride = BuildMaterial();
