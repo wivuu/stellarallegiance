@@ -245,7 +245,10 @@ public sealed class LobbyRegistrar
             var r = await ws.ReceiveAsync(buf, ct);
             if (r.MessageType == WebSocketMessageType.Close)
                 return;
-            var reply = JsonSerializer.Deserialize<WsReplyDto>(buf.AsSpan(0, r.Count));
+            var reply = JsonSerializer.Deserialize<WsReplyDto>(
+                buf.AsSpan(0, r.Count),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
             if (reply?.Type != "ok")
             {
                 Console.WriteLine($"[Lobby] WS auth rejected: {reply?.Message}");
