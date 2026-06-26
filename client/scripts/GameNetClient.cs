@@ -252,7 +252,8 @@ public partial class GameNetClient : Node
             var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
             if (entry is null) throw new Exception("server not found in lobby");
 
-            pc = new RTCPeerConnection(new RTCConfiguration { iceServers = ToIceServers(entry.IceServers) });
+            var iceServers = ToIceServers(entry.IceServers);
+            pc = new RTCPeerConnection(new RTCConfiguration { iceServers = iceServers });
 
             // Collect every a=candidate line as it gathers. SIPSorcery's offerer drops candidates
             // gathered AFTER createOffer() from pc.localDescription (the answerer keeps them), so a
@@ -279,7 +280,9 @@ public partial class GameNetClient : Node
 
             var offer = pc.createOffer();
             await pc.setLocalDescription(offer);
-            await WaitForIceGathering(pc, ct);
+            // Off-LAN reachability needs our srflx in the offer; wait for it (not just any
+            // 3s cap) whenever a STUN server is configured. LAN/--local has none -> fast path.
+            await WaitForIceGathering(pc, needSrflx: iceServers.Count > 0, ct);
 
             // Post the offer, get a ticket, long-poll for the server's answer.
             var offerSdp = pc.localDescription.sdp.ToString();
@@ -329,21 +332,26 @@ public partial class GameNetClient : Node
 
     // Non-trickle ICE: wait (bounded) for candidate gathering so the SDP is complete in one round
     // trip; fall through with whatever gathered if STUN/TURN is slow (host candidates suffice LAN).
-    private static async Task WaitForIceGathering(RTCPeerConnection pc, CancellationToken ct)
+    // When needSrflx (a STUN server is configured), resolve as soon as the srflx candidate arrives
+    // — off-LAN reachability hinges on it — with a longer ceiling, since a slow cellular STUN RTT
+    // can exceed the LAN-tuned 3s cap and leave the offer host-only (unroutable off-LAN).
+    private static async Task WaitForIceGathering(RTCPeerConnection pc, bool needSrflx, CancellationToken ct)
     {
         if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Handler(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        pc.onicegatheringstatechange += Handler;
+        void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
+        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
+        pc.onicegatheringstatechange += OnState;
+        pc.onicecandidate += OnCand;
         try
         {
             if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
             await tcs.Task.WaitAsync(timeout.Token);
         }
         catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= Handler; }
+        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
     }
 
     // Serialize an RTCIceCandidate to its SDP "a=candidate:..." attribute line deterministically

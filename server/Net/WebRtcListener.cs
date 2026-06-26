@@ -168,7 +168,9 @@ public sealed class WebRtcListener
 
             var answer = pc.createAnswer();
             await pc.setLocalDescription(answer);
-            await WaitForIceGathering(pc, ct);
+            // The client can only reach us off-LAN via our srflx, so wait for it (not just the
+            // 3s cap) whenever a STUN server is configured. No ICE servers -> LAN-only fast path.
+            await WaitForIceGathering(pc, needSrflx: _iceServers.Count > 0, ct);
 
             var answerSdp = pc.localDescription.sdp.ToString();
             using var resp = await _http.PostAsJsonAsync(
@@ -189,24 +191,29 @@ public sealed class WebRtcListener
     // Non-trickle ICE: wait for candidate gathering to finish so the answer SDP is complete in a
     // single round trip. Bounded so a stuck STUN/TURN query can't hang the handshake — we then
     // reply with whatever candidates gathered (host candidates always succeed on a LAN).
-    private static async Task WaitForIceGathering(RTCPeerConnection pc, CancellationToken ct)
+    // When needSrflx (a STUN server is configured), resolve as soon as the srflx candidate arrives
+    // — the client can only reach us off-LAN through it — with a longer ceiling, since a slow STUN
+    // RTT can exceed the LAN-tuned 3s cap and leave the answer host-only (unroutable off-LAN).
+    private static async Task WaitForIceGathering(RTCPeerConnection pc, bool needSrflx, CancellationToken ct)
     {
         if (pc.iceGatheringState == RTCIceGatheringState.complete)
             return;
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Handler(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        pc.onicegatheringstatechange += Handler;
+        void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
+        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
+        pc.onicegatheringstatechange += OnState;
+        pc.onicecandidate += OnCand;
         try
         {
             if (pc.iceGatheringState == RTCIceGatheringState.complete)
                 return;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
             await tcs.Task.WaitAsync(timeout.Token);
         }
         catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= Handler; }
+        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
     }
 
     // the public lobby's /pending JSON shape (camelCase; web JSON defaults are case-insensitive).
