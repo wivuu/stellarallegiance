@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using SIPSorcery.Net;
