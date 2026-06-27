@@ -85,6 +85,13 @@ namespace StellarAllegiance.Shared
         public uint FactionId; // reserved (per-team content); default 0
     }
 
+    // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
+    // Today every weapon is a Bolt (analytic ray-cast); missile/mine kinds land in a later phase.
+    public enum WeaponKind : byte
+    {
+        Bolt, // instant analytic ray-cast bolt (the only kind today)
+    }
+
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
     public sealed class WeaponDef
     {
@@ -96,6 +103,11 @@ namespace StellarAllegiance.Shared
         public uint ProjectileLifeTicks; // ticks before the bolt is culled
         public float ProjectileRadius; // projectile hit sphere
         public float SpreadRad; // cone half-angle (rad); 0 = pinpoint
+
+        // Behavior dispatch, consumed SERVER-SIDE only (Simulation.TryFire). Defaults to Bolt and is
+        // deliberately NOT sent over the wire yet (Protocol.MsgDefs) — the client renders bolts
+        // regardless, so a kind only needs wiring when it must render differently (Stage 2/missiles).
+        public WeaponKind Kind;
     }
 
     // One per base type.

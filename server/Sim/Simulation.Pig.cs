@@ -66,8 +66,8 @@ public sealed partial class Simulation
 
     // Lead solving uses the drone's primary weapon (all server weapons share these).
     // Stored as fields (not properties) so the array lookup is paid once, not per call.
-    private static readonly float PigShotSpeed = Weapons[0].Speed; // 200 u/s
-    private static readonly uint PigShotLifeTicks = Weapons[0].LifeTicks; // 16
+    private static readonly float PigShotSpeed = WeaponDefs[GameContent.ScoutWeaponId].ProjectileSpeed; // 200 u/s
+    private static readonly uint PigShotLifeTicks = WeaponDefs[GameContent.ScoutWeaponId].ProjectileLifeTicks; // 16
     private static readonly float PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
     private static readonly float PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
 
@@ -349,7 +349,7 @@ public sealed partial class Simulation
         float fan = ((slot.PigId % 5) - 2f) * (World.ShipRadius * 2.5f);
         s.State.Pos += new Vec3(0f, fan, 0f);
         s.State.Mass = FlightModel.StatsFor(slot.Class, false).Mass;
-        s.Health = MaxHull(slot.Class);
+        s.Health = HullFor(slot.Class);
 
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -991,7 +991,7 @@ public sealed partial class Simulation
         float close = 1f - dist / PigRadarRange;
         if (close < 0f)
             close = 0f;
-        float dmg = Weapons[enemy.Class < Weapons.Length ? enemy.Class : 0].Damage / 10f;
+        float dmg = PrimaryWeapon(enemy.Class).Damage / 10f;
         float baseThreat = 0f;
         if (myBasePos is Vec3 bp)
         {

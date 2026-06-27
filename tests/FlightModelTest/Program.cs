@@ -300,6 +300,38 @@ static class Program
             }
         }
 
+        // 9. Content single-source integrity (Stage 0 consolidation guard). The sim no longer
+        //    keeps private stat tables: it resolves a ship's gun by its Weapon hardpoint's WeaponId
+        //    and its spawn hull from the class def. Assert every referenced WeaponId has a WeaponDef
+        //    and every non-pod class carries a positive hull, so those lookups can never silently
+        //    miss (a regression would otherwise surface only as a runtime KeyNotFound on the server).
+        {
+            var weapons = GameContent.Weapons();
+            var weaponIds = new HashSet<uint>();
+            foreach (var w in weapons)
+                weaponIds.Add(w.WeaponId);
+            int contentErrors = 0;
+            foreach (var d in GameContent.ShipClasses())
+            {
+                if (d.ClassId != GameContent.PodClassId && d.MaxHull <= 0f)
+                {
+                    Console.WriteLine($"FAIL: class {d.Name} ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
+                    contentErrors++;
+                }
+                foreach (var h in d.Hardpoints)
+                    if (h.Kind == HardpointKind.Weapon && !weaponIds.Contains(h.WeaponId))
+                    {
+                        Console.WriteLine($"FAIL: class {d.Name} weapon hardpoint references unknown WeaponId {h.WeaponId}");
+                        contentErrors++;
+                    }
+            }
+            failures += contentErrors;
+            if (contentErrors == 0)
+                Console.WriteLine(
+                    $"PASS: content single-source — {weapons.Count} weapon defs cover every ship weapon hardpoint; all hulls positive"
+                );
+        }
+
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;
     }

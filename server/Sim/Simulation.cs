@@ -18,33 +18,25 @@ public sealed partial class Simulation
 
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
-    private const float PodMaxHull = 20f; // an ejected pod's low starting hull
     private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
     private const float LaunchSpeed = 80f; // u/s catapult out of the docking-exit hardpoint on spawn
     private static readonly float RescueRadius = World.ShipRadius * 4f; // pickup distance (no need to directly intersect)
     private const float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
 
-    // Per-class weapon spec — the values SeedDefaults pours into WeaponDef (Defs.cs).
-    private readonly record struct WeaponSpec(
-        float Damage,
-        uint IntervalTicks,
-        float Speed,
-        uint LifeTicks,
-        float SpreadRad
-    );
-
-    private static readonly WeaponSpec[] Weapons =
-    {
-        new(4f, 4u, 200f, 16u, FlightModel.ScoutSpread), // Scout
-        new(10f, 4u, 200f, 16u, FlightModel.FighterSpread), // Fighter (twin guns; cycles as fast as the Scout)
-        new(22f, 14u, 200f, 16u, FlightModel.BomberSpread), // Bomber
-    };
+    // The sim consumes the AUTHORED defs straight from GameContent — ONE source of truth with the
+    // defs it ships to the client (no private duplicate that can silently drift out of sync).
+    // WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the weapon it fires); ShipDefs by
+    // ClassId. (BuildMuzzles already sources its muzzle geometry from GameContent the same way.)
+    private static readonly Dictionary<uint, WeaponDef> WeaponDefs =
+        GameContent.Weapons().ToDictionary(w => w.WeaponId);
+    private static readonly Dictionary<byte, ShipClassDef> ShipDefs =
+        GameContent.ShipClasses().ToDictionary(d => d.ClassId);
 
     // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
     // fires along. Single-sourced from the authored ShipClassDef hardpoints so the server's
     // hit-detection muzzles match the bolts the client renders from the same defs.
-    private readonly record struct Muzzle(Vec3 Off, Vec3 Dir);
+    private readonly record struct Muzzle(Vec3 Off, Vec3 Dir, uint WeaponId);
 
     // Per-class weapon muzzles, indexed by ClassId. A class with several Weapon hardpoints
     // (the Fighter's twin cannons) fires one bolt from EACH muzzle every fire tick; the array
@@ -69,19 +61,24 @@ public sealed partial class Simulation
             var list = new List<Muzzle>();
             foreach (var h in d.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon)
-                    list.Add(new Muzzle(new Vec3(h.OffX, h.OffY, h.OffZ), new Vec3(h.DirX, h.DirY, h.DirZ)));
+                    list.Add(new Muzzle(new Vec3(h.OffX, h.OffY, h.OffZ), new Vec3(h.DirX, h.DirY, h.DirZ), h.WeaponId));
             table[d.ClassId] = list.ToArray();
         }
         return table;
     }
 
-    private static float MaxHull(byte cls) =>
-        cls switch
-        {
-            2 => 240f,
-            1 => 120f,
-            _ => 60f,
-        };
+    // Spawn hull for a class, read straight from its def (was a duplicate switch). An unknown class
+    // falls back to the Scout hull, matching the old default.
+    private static float HullFor(byte cls) =>
+        ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
+
+    // A class's primary (first) weapon — or the Scout gun if the hull carries no weapon hardpoint.
+    // Drives the PIG threat heuristic; single-sourced from the same muzzles/defs the sim fires from.
+    private static WeaponDef PrimaryWeapon(byte cls)
+    {
+        var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
+        return WeaponDefs[m.Length > 0 ? m[0].WeaponId : GameContent.ScoutWeaponId];
+    }
 
     public sealed class ShipSim
     {
@@ -483,7 +480,7 @@ public sealed partial class Simulation
         };
         PlaceAtBase(s, World.ShipRadius, tick);
         s.State.Mass = FlightModel.StatsFor(cls, false).Mass;
-        s.Health = MaxHull(cls);
+        s.Health = HullFor(cls);
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
@@ -624,7 +621,7 @@ public sealed partial class Simulation
             IsPod = true,
             IsPig = dead.IsPig,
             Alive = true,
-            Health = PodMaxHull,
+            Health = HullFor(GameContent.PodClassId),
             LastInputTick = tick,
             State = new ShipState
             {
@@ -720,32 +717,43 @@ public sealed partial class Simulation
 
     private void TryFire(ShipSim ship, uint tick)
     {
-        var w = Weapons[ship.Class < Weapons.Length ? ship.Class : 0];
-        if (tick - ship.LastFireTick < w.IntervalTicks && ship.LastFireTick != 0)
-            return;
-
         var muzzles = ship.Class < ClassMuzzles.Length ? ClassMuzzles[ship.Class] : System.Array.Empty<Muzzle>();
         if (muzzles.Length == 0)
             return; // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
+
+        // ponytail: one cadence per ship, gated off the primary muzzle's weapon; per-weapon cadence
+        // (a separate LastFireTick per mount) arrives with mixed loadouts (Stage 2).
+        var primary = WeaponDefs[muzzles[0].WeaponId];
+        if (tick - ship.LastFireTick < primary.FireIntervalTicks && ship.LastFireTick != 0)
+            return;
         ship.LastFireTick = tick;
 
-        // One bolt per muzzle, in hardpoint order (the Fighter's twin cannons fire together).
+        // One shot per muzzle, in hardpoint order (the Fighter's twin cannons fire together). Each
+        // muzzle fires its own weapon, dispatched by kind — today every weapon is a Bolt.
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
-            FireBolt(ship, tick, w, muzzles[barrel], barrel);
+        {
+            var w = WeaponDefs[muzzles[barrel].WeaponId];
+            switch (w.Kind) // ponytail: one-branch seam; missile/mine kinds add a case + a behavior method (Stage 2)
+            {
+                case WeaponKind.Bolt:
+                    FireBolt(ship, tick, w, muzzles[barrel], barrel);
+                    break;
+            }
+        }
     }
 
     // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
     // first hull/base/rock it enters, and queue the damage at the impact tick. The bolt direction
     // is seeded by (ShipId, fire tick, barrel), so the client renders the same bolt from the same
     // muzzle and the per-barrel scatter agrees on both sides.
-    private void FireBolt(ShipSim ship, uint tick, in WeaponSpec w, in Muzzle muzzle, byte barrel)
+    private void FireBolt(ShipSim ship, uint tick, WeaponDef w, in Muzzle muzzle, byte barrel)
     {
         Vec3 fwd = ship.State.Rot.Rotate(muzzle.Dir);
         Vec3 shotDir = FlightModel.SpreadDirection(fwd, w.SpreadRad, ship.ShipId, tick, barrel);
         Vec3 mp = ship.State.Pos + ship.State.Rot.Rotate(muzzle.Off);
-        Vec3 mv = shotDir * w.Speed + ship.State.Vel;
+        Vec3 mv = shotDir * w.ProjectileSpeed + ship.State.Vel;
 
-        float maxT = w.LifeTicks * FlightModel.Dt;
+        float maxT = w.ProjectileLifeTicks * FlightModel.Dt;
         float bestT = maxT;
         ulong targetShip = 0;
         int targetBase = -1;
