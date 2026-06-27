@@ -441,7 +441,7 @@ public partial class ShipController : Node
             StrafeY = Axis(Key.Z, Key.C), // strafe up / down
             Yaw = Mathf.Clamp(Axis(Key.Left, Key.Right) + _stickYaw, -1f, 1f),
             Pitch = Mathf.Clamp(Axis(Key.Up, Key.Down) + _stickPitch, -1f, 1f),
-            Roll = Axis(Key.Q, Key.E), // roll left / right
+            Roll = Axis(Key.E, Key.Q), // roll right / left
             Firing = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
             Coast = Input.IsPhysicalKeyPressed(Key.X), // vector lock: hold velocity
         };
