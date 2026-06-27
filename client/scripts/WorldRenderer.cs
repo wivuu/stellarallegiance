@@ -83,6 +83,14 @@ public partial class WorldRenderer : Node3D
     // TTL where the SERVER's analytic solve would have stopped it on a rock.
     private const float AsteroidCollisionScale = 0.82f;
 
+    // Ships currently overlapping a static obstruction, so the collision thud fires once on
+    // ENTRY rather than every frame while grinding against a rock. Mirrors _shipNodes' lifetime.
+    private readonly HashSet<ulong> _collidingShips = new();
+
+    // ponytail: flat collision skin radius (sim resolves the real geometry server-side; this is
+    // only the audio trigger). Bump if big hulls thud too late / too early.
+    private const float ShipCollisionRadius = 6f;
+
     // Sector partitioning. The world is split into sectors (see module Sector/Aleph
     // tables); the client subscribes to everything but only SHOWS objects in the
     // player's current sector, toggled by node visibility (each node stashes its
@@ -390,6 +398,7 @@ public partial class WorldRenderer : Node3D
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
         _shipNodes.Clear();
+        _collidingShips.Clear();
         _alephNodes.Clear();
         _asteroidClip.Clear();
         _baseClip.Clear();
@@ -453,12 +462,52 @@ public partial class WorldRenderer : Node3D
         SetNodeSector(fx, sector);
     }
 
-    // Collision SFX hook (ship↔ship / base / asteroid). DEFERRED: the client does no
-    // collision detection today — collisions are resolved server-side — so nothing
-    // calls this yet. When the server emits a collision event the client can observe,
-    // route it here with the impact's world position. Wired through the same pooled
-    // 3D path as every other discrete sound; the placeholder asset already exists.
-    private void PlayCollisionSfx(Vector3 worldPos) => SfxManager.Instance?.PlayAt(SfxManager.SfxId.Collision, worldPos);
+    // Purely client-side collision audio: thud when a ship touches a solid asteroid. Like the
+    // hit-spark sweep this is a cosmetic interception — the sim resolves the real collision
+    // server-side — so it only mirrors the _asteroidClip spheres the bolt-TTL pass uses.
+    // Visibility (== local sector) gates the ships; spheres are filtered to the same sector. The
+    // thud fires once on ENTRY (_collidingShips debounce) so grinding a rock doesn't machine-gun.
+    //
+    // Bases are deliberately NOT checked: their def Radius is a bounding sphere, but a base is
+    // dockable geometry (solid except an entry-bay cone), so a sphere test fires far from the
+    // hull AND on spawn/exit from inside the dock. Doing it right needs the server's GLB convex
+    // hull + entry-bay cone replicated client-side (see [[server-glb-collision]]) — deferred.
+    private void CheckCollisions()
+    {
+        if (_shipNodes.Count == 0 || _asteroidClip.Count == 0)
+            return;
+
+        foreach (var (shipId, ship) in _shipNodes)
+        {
+            if (!ship.Visible)
+                continue;
+            Vector3 c = ship.GlobalPosition;
+            bool now = OverlapsAsteroid(c);
+            if (now && _collidingShips.Add(shipId))
+                PlayCollisionSfx(c);
+            else if (!now)
+                _collidingShips.Remove(shipId);
+        }
+    }
+
+    // True if a ship at sector-local position c (radius ShipCollisionRadius) overlaps any solid
+    // asteroid sphere in the local sector.
+    private bool OverlapsAsteroid(Vector3 c)
+    {
+        foreach (var a in _asteroidClip)
+        {
+            if (a.Sector != _localSector)
+                continue;
+            float r = a.Radius + ShipCollisionRadius;
+            if (c.DistanceSquaredTo(a.Pos) <= r * r)
+                return true;
+        }
+        return false;
+    }
+
+    // Fire the pooled 3D collision thud at a world position.
+    private void PlayCollisionSfx(Vector3 worldPos) =>
+        SfxManager.Instance?.PlayAt(SfxManager.SfxId.Collision, worldPos, pitch: 0.9f + GD.Randf() * 0.2f);
 
     // ---- Aleph (warp funnel) -------------------------------------------
 
@@ -965,6 +1014,7 @@ public partial class WorldRenderer : Node3D
         }
 
         CheckBoltImpacts(delta);
+        CheckCollisions();
 
         // Lazy cosmetic tumble: spin each rock slowly about its fixed pseudo-random axis.
         if (_asteroidSpins.Count > 0)

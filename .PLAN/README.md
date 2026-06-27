@@ -20,10 +20,11 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- HUD health/shield bars should be true HUD elements, not world-space objects (the base
-  health bar currently casts a shadow on the base). *(Stage 3 — HUD polish.)*
-- Password protect game servers (repurpose --secret / SIM_SECRET env var)
-- Re-enable `/pigs on` and `/pigs off` commands in text
+- ✅ Password-protect game servers — done; set `--secret` / `SIM_SECRET` to gate joins
+  (constant-time compare in `server/Backend/Backends.cs`).
+- ✅ `/pigs on|off` in-game text commands — done (`server/Net/ClientHub.cs`).
+- ✅ HUD health bars are screen-space — player HP text (`client/scripts/Hud.cs`), base health
+  overlay (`client/scripts/TargetMarkers.cs`, replaced the old world-space quad).
 ---
 
 ## Content philosophy (the through-line)
@@ -220,7 +221,10 @@ Not stage-bound — done when convenient or when a stage needs them.
   `FlightModelTest` (determinism/golden + content guard) and `CryptoTest` in `tests/`.
 - ☐ **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
   explore baking and in-engine parallax/height maps.
-- ☐ **Spatial audio polish** — `SfxManager` exists; collisions and a settings UI are deferred.
+- ◐ **Spatial audio polish** — `SfxManager` exists; ✅ asteroid collision thuds (client-side
+  interception in `WorldRenderer.CheckCollisions`) and ✅ a volume settings UI (per-bus sliders in
+  the Lobby overlay, persisted via `UserPrefs`) shipped. Remaining: base-collision thuds need the
+  server's GLB hull replicated client-side (a sphere fires far from the dockable hull); finer mix.
 
 ## Deep backlog
 

@@ -10,6 +10,11 @@ public static class UserPrefs
     private const string Path = "user://settings.cfg";
     private const string PlayerSection = "player";
     private const string NameKey = "name";
+    private const string AudioSection = "audio";
+
+    // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
+    // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
+    public static readonly string[] AudioBuses = { "SFX", "UI", "Ambient" };
 
     // A pilot name is sent in MsgHello with a single-byte length prefix and floats above the ship as
     // a nameplate, so keep it short.
@@ -48,5 +53,43 @@ public static class UserPrefs
     {
         name = (name ?? "").Trim();
         return name.Length > MaxNameLength ? name[..MaxNameLength] : name;
+    }
+
+    // Saved 0..1 linear volume for a bus (defaults to 1 = full on first run).
+    public static float GetBusVolume(string bus) =>
+        Mathf.Clamp((float)(double)Cfg.GetValue(AudioSection, bus, 1.0), 0f, 1f);
+
+    // Persist a bus volume and apply it live. Writes through immediately like SetPilotName.
+    public static void SetBusVolume(string bus, float linear)
+    {
+        linear = Mathf.Clamp(linear, 0f, 1f);
+        Cfg.SetValue(AudioSection, bus, linear);
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+        ApplyBus(bus, linear);
+    }
+
+    // Push every saved bus volume to the audio server. Call once at startup so persisted
+    // settings take effect before any sound plays.
+    public static void ApplyAudioPrefs()
+    {
+        foreach (var bus in AudioBuses)
+            ApplyBus(bus, GetBusVolume(bus));
+    }
+
+    private static void ApplyBus(string bus, float linear)
+    {
+        int idx = AudioServer.GetBusIndex(bus);
+        if (idx < 0)
+            return; // bus not in the layout — skip rather than crash (no-fallback discipline)
+        // Linear 0 → muted; otherwise map to dB. LinearToDb(0) is -inf, so mute explicitly.
+        if (linear <= 0f)
+            AudioServer.SetBusMute(idx, true);
+        else
+        {
+            AudioServer.SetBusMute(idx, false);
+            AudioServer.SetBusVolumeDb(idx, Mathf.LinearToDb(linear));
+        }
     }
 }

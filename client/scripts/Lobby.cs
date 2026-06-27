@@ -95,11 +95,39 @@ public partial class Lobby : Control
 
         col.AddChild(new HSeparator());
 
+        // Audio settings: one slider per bus, persisted + applied live via UserPrefs.
+        col.AddChild(Centered("Audio", 16));
+        foreach (var bus in UserPrefs.AudioBuses)
+            col.AddChild(VolumeRow(bus));
+
+        col.AddChild(new HSeparator());
+
         // Always-available exit back to the server-address screen.
         var leaveRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         col.AddChild(leaveRow);
         _leave = MakeButton("Leave Server", () => _cm.Leave());
         leaveRow.AddChild(_leave);
+    }
+
+    // A "<bus>  [====slider====]" row that writes through to UserPrefs (which persists and
+    // applies the new volume live) on every change.
+    private static HBoxContainer VolumeRow(string bus)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        row.AddChild(new Label { Text = bus, CustomMinimumSize = new Vector2(70, 0) });
+        var slider = new HSlider
+        {
+            MinValue = 0,
+            MaxValue = 1,
+            Step = 0.05,
+            Value = UserPrefs.GetBusVolume(bus),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(260, 0),
+        };
+        slider.ValueChanged += v => UserPrefs.SetBusVolume(bus, (float)v);
+        row.AddChild(slider);
+        return row;
     }
 
     private LobbyPlayer? Me()
