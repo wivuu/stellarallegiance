@@ -36,6 +36,7 @@ public static class WireQuant
     // (Int16 bit-cast variant: HalfToInt16Bits exists on every supported runtime; the
     // signed/unsigned distinction is irrelevant since both ends round-trip the same bits.)
     public static ushort PackHalf(float v) => (ushort)BitConverter.HalfToInt16Bits((Half)v);
+
     public static float UnpackHalf(ushort h) => (float)BitConverter.Int16BitsToHalf((short)h);
 
     // Smallest-three quaternion: drop the largest-magnitude component (reconstructed from
@@ -46,22 +47,36 @@ public static class WireQuant
     public static uint PackQuat(float x, float y, float z, float w)
     {
         float n = MathF.Sqrt(x * x + y * y + z * z + w * w);
-        if (n < 1e-12f) { x = 0f; y = 0f; z = 0f; w = 1f; n = 1f; }
-        float inv = 1f / n; x *= inv; y *= inv; z *= inv; w *= inv;
+        if (n < 1e-12f)
+        {
+            x = 0f;
+            y = 0f;
+            z = 0f;
+            w = 1f;
+            n = 1f;
+        }
+        float inv = 1f / n;
+        x *= inv;
+        y *= inv;
+        z *= inv;
+        w *= inv;
 
         Span<float> c = stackalloc float[4] { x, y, z, w };
         int max = 0;
         for (int i = 1; i < 4; i++)
-            if (MathF.Abs(c[i]) > MathF.Abs(c[max])) max = i;
-        if (c[max] < 0f)                      // q and -q are the same rotation; canonicalize
-            for (int i = 0; i < 4; i++) c[i] = -c[i];   // so the dropped component is positive
+            if (MathF.Abs(c[i]) > MathF.Abs(c[max]))
+                max = i;
+        if (c[max] < 0f) // q and -q are the same rotation; canonicalize
+            for (int i = 0; i < 4; i++)
+                c[i] = -c[i]; // so the dropped component is positive
 
         uint packed = (uint)max << 30;
         int shift = 20;
         for (int i = 0; i < 4; i++)
         {
-            if (i == max) continue;
-            float norm = c[i] * (1f / InvSqrt2);          // -> [-1, 1]
+            if (i == max)
+                continue;
+            float norm = c[i] * (1f / InvSqrt2); // -> [-1, 1]
             int q = (int)MathF.Round((norm * 0.5f + 0.5f) * 1023f);
             q = q < 0 ? 0 : (q > 1023 ? 1023 : q);
             packed |= (uint)q << shift;
@@ -78,14 +93,18 @@ public static class WireQuant
         float sumSq = 0f;
         for (int i = 0; i < 4; i++)
         {
-            if (i == max) continue;
+            if (i == max)
+                continue;
             int q = (int)((packed >> shift) & 0x3FF);
             float v = (q / 1023f * 2f - 1f) * InvSqrt2;
             c[i] = v;
             sumSq += v * v;
             shift -= 10;
         }
-        c[max] = MathF.Sqrt(MathF.Max(0f, 1f - sumSq));   // reconstructed largest (sign +)
-        x = c[0]; y = c[1]; z = c[2]; w = c[3];
+        c[max] = MathF.Sqrt(MathF.Max(0f, 1f - sumSq)); // reconstructed largest (sign +)
+        x = c[0];
+        y = c[1];
+        z = c[2];
+        w = c[3];
     }
 }

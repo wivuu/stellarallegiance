@@ -13,17 +13,39 @@ public static class AsteroidShapes
 {
     public static readonly string[] Variants =
     {
-        "asteroid-flint", "asteroid-boulder", "asteroid-quartz", "asteroid-geode",
-        "asteroid-shard", "asteroid-gravel", "asteroid-pebble", "asteroid-hunk",
-        "asteroid-blob", "asteroid-gourd", "asteroid-nodule", "asteroid-prism",
-        "asteroid-facet", "asteroid-gem", "asteroid-opal", "asteroid-beryl",
-        "asteroid-chunk", "asteroid-rubble", "asteroid-scree", "asteroid-slag",
-        "asteroid-crag", "asteroid-marble", "asteroid-lump", "asteroid-spire",
-        "asteroid-flake", "asteroid-monolith", "asteroid-debris", "asteroid-cobble",
-        "asteroid-slab", "asteroid-ore", "asteroid-knob",
+        "asteroid-flint",
+        "asteroid-boulder",
+        "asteroid-quartz",
+        "asteroid-geode",
+        "asteroid-shard",
+        "asteroid-gravel",
+        "asteroid-pebble",
+        "asteroid-hunk",
+        "asteroid-blob",
+        "asteroid-gourd",
+        "asteroid-nodule",
+        "asteroid-prism",
+        "asteroid-facet",
+        "asteroid-gem",
+        "asteroid-opal",
+        "asteroid-beryl",
+        "asteroid-chunk",
+        "asteroid-rubble",
+        "asteroid-scree",
+        "asteroid-slag",
+        "asteroid-crag",
+        "asteroid-marble",
+        "asteroid-lump",
+        "asteroid-spire",
+        "asteroid-flake",
+        "asteroid-monolith",
+        "asteroid-debris",
+        "asteroid-cobble",
+        "asteroid-slab",
+        "asteroid-ore",
+        "asteroid-knob",
     };
 
     // Name for a wire index, or "" (sphere fallback) if the index is out of range.
-    public static string NameForIndex(int index) =>
-        index >= 0 && index < Variants.Length ? Variants[index] : "";
+    public static string NameForIndex(int index) => index >= 0 && index < Variants.Length ? Variants[index] : "";
 }

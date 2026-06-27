@@ -14,8 +14,15 @@ namespace PublicLobby;
 // browser list to their own protocol so they only see servers they can actually handshake with. 0 =
 // unspecified (a legacy server that predates this field) — those match no real client filter.
 public record RegisterRequest(
-    string Name, int Port, string? PublicEndpoint, string[]? IceCandidates,
-    int Players = 0, int MaxPlayers = 0, string? State = null, int ProtocolVersion = 0);
+    string Name,
+    int Port,
+    string? PublicEndpoint,
+    string[]? IceCandidates,
+    int Players = 0,
+    int MaxPlayers = 0,
+    string? State = null,
+    int ProtocolVersion = 0
+);
 
 // Periodic liveness ping. Carries the current player count, capacity, and game state so the
 // browser list stays fresh between (re)registrations. All optional — a body-less ping just
@@ -35,7 +42,8 @@ public record ServerEntry(
     int Players = 0,
     int MaxPlayers = 0,
     string? State = null,
-    int ProtocolVersion = 0);
+    int ProtocolVersion = 0
+);
 
 // A single ICE server entry, mirroring the WebRTC RTCIceServer shape. Urls is one or more
 // stun:/turn: URLs; Username/Credential are set only for TURN.
@@ -46,6 +54,7 @@ public record IceServer(string[] Urls, string? Username = null, string? Credenti
 // A joining client posts its SDP offer for a given server; the relay returns a Ticket the client
 // then polls for the answer, and the game server long-polls /pending to pick the offer up.
 public record OfferRequest(string SdpOffer);
+
 public record OfferResponse(string Ticket);
 
 // One pending offer handed to the game server's /pending long-poll.
@@ -53,4 +62,5 @@ public record PendingOffer(string Ticket, string SdpOffer);
 
 // The game server posts its SDP answer for a ticket; the client polls /answer to receive it.
 public record AnswerRequest(string SdpAnswer);
+
 public record AnswerResponse(string SdpAnswer);

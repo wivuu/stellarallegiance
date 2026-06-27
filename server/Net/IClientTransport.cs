@@ -24,6 +24,7 @@ public interface IClientTransport
 public sealed class WebSocketTransport : IClientTransport
 {
     private readonly WebSocket _socket;
+
     public WebSocketTransport(WebSocket socket) => _socket = socket;
 
     public async ValueTask<int> ReceiveAsync(byte[] buffer, CancellationToken ct)
@@ -37,7 +38,12 @@ public sealed class WebSocketTransport : IClientTransport
 
     public async ValueTask CloseAsync(string reason, CancellationToken ct)
     {
-        try { await _socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, reason, ct); }
-        catch { /* socket already torn down */ }
+        try
+        {
+            await _socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, reason, ct);
+        }
+        catch
+        { /* socket already torn down */
+        }
     }
 }

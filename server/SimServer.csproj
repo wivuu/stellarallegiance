@@ -24,9 +24,21 @@
          distribution — not Docker-only. Source of truth stays client/assets/ (the Godot client's
          copy); these are linked, not duplicated. The server resolves them via AppContext at run
          time (SimAssets) and bakes per-model convex hulls into a sibling sim-cache/ on first use. -->
-    <Content Include="..\client\assets\bases\*.glb" Link="assets\bases\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\client\assets\asteroids\*.glb" Link="assets\asteroids\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\client\assets\ships\*.glb" Link="assets\ships\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content
+      Include="..\client\assets\bases\*.glb"
+      Link="assets\bases\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+    <Content
+      Include="..\client\assets\asteroids\*.glb"
+      Link="assets\asteroids\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+    <Content
+      Include="..\client\assets\ships\*.glb"
+      Link="assets\ships\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />

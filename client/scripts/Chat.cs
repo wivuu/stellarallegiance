@@ -101,8 +101,7 @@ public partial class Chat : Control
     {
         if (_inputRow.Visible || _cm.State != ConnectionManager.ConnState.Connected)
             return;
-        if (@event is InputEventKey k && k.Pressed && !k.Echo
-            && (k.Keycode == Key.Enter || k.Keycode == Key.KpEnter))
+        if (@event is InputEventKey k && k.Pressed && !k.Echo && (k.Keycode == Key.Enter || k.Keycode == Key.KpEnter))
         {
             OpenInput();
             GetViewport().SetInputAsHandled();

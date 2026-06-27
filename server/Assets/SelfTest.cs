@@ -59,23 +59,33 @@ public static class SelfTest
         Approx("world: ExitDir is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
         Approx("world: EntryAxis is unit", world.BaseEntryAxis.Length(), 1f, 1e-3f);
         Check("world: rock bodies built", world.RockBodies.Count > 0);
-        Approx("world: base hull longest axis ~ 2R", world.BaseHull!.LongestAxis, World.BaseRadius * 2f, World.BaseRadius * 0.05f);
+        Approx(
+            "world: base hull longest axis ~ 2R",
+            world.BaseHull!.LongestAxis,
+            World.BaseRadius * 2f,
+            World.BaseRadius * 0.05f
+        );
         Check("world: dock discs built (>=1)", world.BaseDockDiscs.Length >= 1);
         bool discNormalsUnit = true;
-        foreach (var (_, n) in world.BaseDockDiscs) if (MathF.Abs(n.Length() - 1f) > 1e-3f) discNormalsUnit = false;
+        foreach (var (_, n) in world.BaseDockDiscs)
+            if (MathF.Abs(n.Length() - 1f) > 1e-3f)
+                discNormalsUnit = false;
         Check("world: dock disc normals are unit", discNormalsUnit);
-        Console.WriteLine($"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}");
+        Console.WriteLine(
+            $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
+        );
 
         // Ships catapult from the exit cone's base disc along the axis (PlaceAtBase). The cone base
         // is a launch-bay mouth ~on the hull surface, so the spawn point (base + ShipRadius along the
         // axis) must not be deeply embedded — any residual overlap is a tiny, damage-free outward pop.
         Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
-        Check("world: exit cone base near hull surface (sphere just grazes)",
-            world.BaseExitPos.LengthSquared() > 1f);   // a real hardpoint, not the (0,0,0) fallback
+        Check("world: exit cone base near hull surface (sphere just grazes)", world.BaseExitPos.LengthSquared() > 1f); // a real hardpoint, not the (0,0,0) fallback
         Vec3 spawn = world.BaseExitPos + world.BaseExitDir * World.ShipRadius;
         world.BaseHull!.ResolveSphere(spawn, World.ShipRadius, out _, out float spawnPen);
-        Check($"world: spawn point clears the bay mouth (penetration {spawnPen:0.##} < ShipRadius)",
-            spawnPen < World.ShipRadius);
+        Check(
+            $"world: spawn point clears the bay mouth (penetration {spawnPen:0.##} < ShipRadius)",
+            spawnPen < World.ShipRadius
+        );
 
         TestShipHulls(world);
     }
@@ -86,14 +96,17 @@ public static class SelfTest
     {
         (byte cls, bool pod, string name, float target)[] kinds =
         {
-            (0, false, "scout", 4.5f), (1, false, "fighter", 5.5f),
-            (2, false, "bomber", 7.2f), (0, true, "pod", 2.8f),
+            (0, false, "scout", 4.5f),
+            (1, false, "fighter", 5.5f),
+            (2, false, "bomber", 7.2f),
+            (0, true, "pod", 2.8f),
         };
         foreach (var (cls, pod, name, target) in kinds)
         {
             var body = world.ShipHull(cls, pod);
             Check($"ship {name}: hull loaded", body is not null);
-            if (body is not World.ShipBody sb) continue;
+            if (body is not World.ShipBody sb)
+                continue;
             // Pre-scaled to the silhouette length: longest hull axis ≈ target (within 5%).
             Approx($"ship {name}: longest axis ~ target", sb.Hull.LongestAxis, target, target * 0.05f);
             // The ship center is inside its own hull → a sphere there must contact.
@@ -108,14 +121,16 @@ public static class SelfTest
     private static void Check(string name, bool ok)
     {
         Console.WriteLine($"  [{(ok ? "PASS" : "FAIL")}] {name}");
-        if (!ok) _failures++;
+        if (!ok)
+            _failures++;
     }
 
     private static void Approx(string name, float got, float want, float tol = 1e-3f)
     {
         bool ok = MathF.Abs(got - want) <= tol;
         Console.WriteLine($"  [{(ok ? "PASS" : "FAIL")}] {name}: got {got:0.####}, want {want:0.####}");
-        if (!ok) _failures++;
+        if (!ok)
+            _failures++;
     }
 
     private static string F(Vec3 v) => $"{v.X:0.###}, {v.Y:0.###}, {v.Z:0.###}";

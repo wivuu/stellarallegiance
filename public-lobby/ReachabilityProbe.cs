@@ -36,7 +36,7 @@ public sealed class ReachabilityProbe
 
         string host;
         int probePort = port;
-        bool secure = false;   // probe over HTTPS and advertise wss:// (a PaaS HTTPS edge)
+        bool secure = false; // probe over HTTPS and advertise wss:// (a PaaS HTTPS edge)
 
         // An operator may assert an explicit endpoint (SIM_PUBLIC_ENDPOINT): the address clients
         // should actually use, e.g. the host's LAN/public address behind container NAT / a reverse
@@ -45,19 +45,24 @@ public sealed class ReachabilityProbe
         if (!string.IsNullOrWhiteSpace(providedEndpoint))
         {
             var (h, p, isTls) = ParseEndpoint(providedEndpoint);
-            if (h is null) return null;
+            if (h is null)
+                return null;
             secure = isTls;
             host = NormalizeIp(h);
-            if (p is > 0 and <= 65535) probePort = p;
-            else if (isTls) probePort = 443;   // default HTTPS port when none is given
+            if (p is > 0 and <= 65535)
+                probePort = p;
+            else if (isTls)
+                probePort = 443; // default HTTPS port when none is given
         }
         else
         {
             host = NormalizeIp(sourceIp);
         }
 
-        if (probePort is < 1 or > 65535) return null;
-        if (IsLinkLocal(host)) return null;
+        if (probePort is < 1 or > 65535)
+            return null;
+        if (IsLinkLocal(host))
+            return null;
 
         if (!await IsReachableAsync(secure, host, probePort, ct))
             return null;
@@ -74,27 +79,28 @@ public sealed class ReachabilityProbe
         try
         {
             var scheme = secure ? "https" : "http";
-            var authority = host.Contains(':') ? $"[{host}]" : host;   // bracket bare IPv6
+            var authority = host.Contains(':') ? $"[{host}]" : host; // bracket bare IPv6
             using var resp = await _http.GetAsync($"{scheme}://{authority}:{port}/health", ct);
-            if (!resp.IsSuccessStatusCode) return false;
+            if (!resp.IsSuccessStatusCode)
+                return false;
             var body = await resp.Content.ReadAsStringAsync(ct);
             return body.Contains(ExpectedToken, StringComparison.Ordinal);
         }
-        catch { return false; }   // unreachable / timeout / wrong service -> not direct
+        catch
+        {
+            return false;
+        } // unreachable / timeout / wrong service -> not direct
     }
 
     static string NormalizeIp(string ip)
     {
         // X-Forwarded-For / RemoteIpAddress can hand us IPv4-mapped IPv6 (::ffff:1.2.3.4).
-        return IPAddress.TryParse(ip, out var a) && a.IsIPv4MappedToIPv6
-            ? a.MapToIPv4().ToString()
-            : ip;
+        return IPAddress.TryParse(ip, out var a) && a.IsIPv4MappedToIPv6 ? a.MapToIPv4().ToString() : ip;
     }
 
     static bool IsLinkLocal(string host) =>
-        IPAddress.TryParse(host, out var a) &&
-        (a.IsIPv6LinkLocal ||
-         (a.AddressFamily == AddressFamily.InterNetwork && a.GetAddressBytes() is [169, 254, ..]));
+        IPAddress.TryParse(host, out var a)
+        && (a.IsIPv6LinkLocal || (a.AddressFamily == AddressFamily.InterNetwork && a.GetAddressBytes() is [169, 254, ..]));
 
     // Splits an asserted endpoint into (host, port, secure). Understands an optional scheme:
     // https:// or wss:// -> secure (probe HTTPS, advertise wss://); http:// / ws:// / none -> plain.

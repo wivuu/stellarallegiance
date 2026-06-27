@@ -1,5 +1,5 @@
-using Godot;
 using System;
+using Godot;
 
 // A warp gate ("aleph"), rendered as a curved funnel mesh with a custom shader that
 // creates an animated swirling vortex effect — like water draining into a plughole.
@@ -10,146 +10,147 @@ using System;
 // center.
 public partial class AlephView : Node3D
 {
-	private const float MouthRadius = 16f;
-	private const float ThroatRadius = 2.0f;
-	private const float FunnelDepth = 28f;
-	private const int Rings = 40;           // vertical subdivisions
-	private const int Segments = 48;        // around the circumference
+    private const float MouthRadius = 16f;
+    private const float ThroatRadius = 2.0f;
+    private const float FunnelDepth = 28f;
+    private const int Rings = 40; // vertical subdivisions
+    private const int Segments = 48; // around the circumference
 
-	public override void _Ready()
-	{
-		// Build the funnel mesh and shader-driven material
-		var mesh = BuildFunnelMesh();
-		var material = BuildVortexShader();
+    public override void _Ready()
+    {
+        // Build the funnel mesh and shader-driven material
+        var mesh = BuildFunnelMesh();
+        var material = BuildVortexShader();
 
-		var meshInst = new MeshInstance3D
-		{
-			Mesh = mesh,
-			MaterialOverride = material,
-			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-		};
-		AddChild(meshInst);
+        var meshInst = new MeshInstance3D
+        {
+            Mesh = mesh,
+            MaterialOverride = material,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        AddChild(meshInst);
 
-		// --- Cap the throat with a small disc so there's no hole ---
-		var capMesh = BuildCapDisc();
-		var capMat = new ShaderMaterial { Shader = BuildCapShader() };
-		capMat.SetShaderParameter("color_core", new Vector3(0.7f, 0.98f, 1.0f));
-		var capInst = new MeshInstance3D
-		{
-			Mesh = capMesh,
-			MaterialOverride = capMat,
-			Position = new Vector3(0, -FunnelDepth, 0),
-			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-		};
-		AddChild(capInst);
+        // --- Cap the throat with a small disc so there's no hole ---
+        var capMesh = BuildCapDisc();
+        var capMat = new ShaderMaterial { Shader = BuildCapShader() };
+        capMat.SetShaderParameter("color_core", new Vector3(0.7f, 0.98f, 1.0f));
+        var capInst = new MeshInstance3D
+        {
+            Mesh = capMesh,
+            MaterialOverride = capMat,
+            Position = new Vector3(0, -FunnelDepth, 0),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        AddChild(capInst);
 
-		// --- Bright spinning star at the very center of the throat ---
-		var starShaderMat = new ShaderMaterial { Shader = BuildStarShader() };
-		starShaderMat.SetShaderParameter("color_core", new Vector3(0.8f, 1.0f, 1.0f));
-		starShaderMat.SetShaderParameter("spin_speed", 2.0f);
-		var starQuad = new QuadMesh { Size = new Vector2(ThroatRadius * 3.5f, ThroatRadius * 3.5f) };
-		starQuad.Material = starShaderMat;
-		var starInst = new MeshInstance3D
-		{
-			Mesh = starQuad,
-			Position = new Vector3(0, -FunnelDepth, 0),
-			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-		};
-		AddChild(starInst);
+        // --- Bright spinning star at the very center of the throat ---
+        var starShaderMat = new ShaderMaterial { Shader = BuildStarShader() };
+        starShaderMat.SetShaderParameter("color_core", new Vector3(0.8f, 1.0f, 1.0f));
+        starShaderMat.SetShaderParameter("spin_speed", 2.0f);
+        var starQuad = new QuadMesh { Size = new Vector2(ThroatRadius * 3.5f, ThroatRadius * 3.5f) };
+        starQuad.Material = starShaderMat;
+        var starInst = new MeshInstance3D
+        {
+            Mesh = starQuad,
+            Position = new Vector3(0, -FunnelDepth, 0),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        AddChild(starInst);
 
-		// Bright core glow at the throat
-		var light = new OmniLight3D
-		{
-			LightColor = new Color(0.5f, 0.95f, 1.0f),
-			LightEnergy = 3.0f,
-			OmniRange = ThroatRadius * 5f,
-			OmniAttenuation = 1.5f,
-			Position = new Vector3(0, -FunnelDepth * 0.9f, 0),
-			ShadowEnabled = false,
-		};
-		AddChild(light);
-	}
+        // Bright core glow at the throat
+        var light = new OmniLight3D
+        {
+            LightColor = new Color(0.5f, 0.95f, 1.0f),
+            LightEnergy = 3.0f,
+            OmniRange = ThroatRadius * 5f,
+            OmniAttenuation = 1.5f,
+            Position = new Vector3(0, -FunnelDepth * 0.9f, 0),
+            ShadowEnabled = false,
+        };
+        AddChild(light);
+    }
 
-	/// <summary>
-	/// Builds a curved funnel (surface of revolution). The profile curve goes from
-	/// MouthRadius at the top (y=0) to ThroatRadius at the bottom (y=-FunnelDepth),
-	/// following a power curve so it flares outward like a trumpet/whirlpool.
-	/// UV.x = angle around circumference (0-1), UV.y = depth (0=mouth, 1=throat).
-	/// </summary>
-	private ArrayMesh BuildFunnelMesh()
-	{
-		var verts = new Vector3[(Rings + 1) * (Segments + 1)];
-		var uvs = new Vector2[(Rings + 1) * (Segments + 1)];
-		var normals = new Vector3[(Rings + 1) * (Segments + 1)];
-		var indices = new int[Rings * Segments * 6];
+    /// <summary>
+    /// Builds a curved funnel (surface of revolution). The profile curve goes from
+    /// MouthRadius at the top (y=0) to ThroatRadius at the bottom (y=-FunnelDepth),
+    /// following a power curve so it flares outward like a trumpet/whirlpool.
+    /// UV.x = angle around circumference (0-1), UV.y = depth (0=mouth, 1=throat).
+    /// </summary>
+    private ArrayMesh BuildFunnelMesh()
+    {
+        var verts = new Vector3[(Rings + 1) * (Segments + 1)];
+        var uvs = new Vector2[(Rings + 1) * (Segments + 1)];
+        var normals = new Vector3[(Rings + 1) * (Segments + 1)];
+        var indices = new int[Rings * Segments * 6];
 
-		for (int ring = 0; ring <= Rings; ring++)
-		{
-			float t = ring / (float)Rings;  // 0 at mouth, 1 at throat
-			// Power curve for whirlpool shape: flares wide at top, tight curve inward
-			float radius = MouthRadius * Mathf.Pow(1f - t, 2.2f) + ThroatRadius;
-			float y = -t * FunnelDepth;
+        for (int ring = 0; ring <= Rings; ring++)
+        {
+            float t = ring / (float)Rings; // 0 at mouth, 1 at throat
+            // Power curve for whirlpool shape: flares wide at top, tight curve inward
+            float radius = MouthRadius * Mathf.Pow(1f - t, 2.2f) + ThroatRadius;
+            float y = -t * FunnelDepth;
 
-			for (int seg = 0; seg <= Segments; seg++)
-			{
-				float u = seg / (float)Segments;
-				float angle = u * Mathf.Tau;
-				int idx = ring * (Segments + 1) + seg;
+            for (int seg = 0; seg <= Segments; seg++)
+            {
+                float u = seg / (float)Segments;
+                float angle = u * Mathf.Tau;
+                int idx = ring * (Segments + 1) + seg;
 
-				verts[idx] = new Vector3(Mathf.Cos(angle) * radius, y, Mathf.Sin(angle) * radius);
-				uvs[idx] = new Vector2(u, t);
+                verts[idx] = new Vector3(Mathf.Cos(angle) * radius, y, Mathf.Sin(angle) * radius);
+                uvs[idx] = new Vector2(u, t);
 
-				// Normal pointing outward from funnel surface
-				var outward = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
-				normals[idx] = outward.Normalized();
-			}
-		}
+                // Normal pointing outward from funnel surface
+                var outward = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+                normals[idx] = outward.Normalized();
+            }
+        }
 
-		int triIdx = 0;
-		for (int ring = 0; ring < Rings; ring++)
-		{
-			for (int seg = 0; seg < Segments; seg++)
-			{
-				int tl = ring * (Segments + 1) + seg;
-				int tr = tl + 1;
-				int bl = tl + (Segments + 1);
-				int br = bl + 1;
+        int triIdx = 0;
+        for (int ring = 0; ring < Rings; ring++)
+        {
+            for (int seg = 0; seg < Segments; seg++)
+            {
+                int tl = ring * (Segments + 1) + seg;
+                int tr = tl + 1;
+                int bl = tl + (Segments + 1);
+                int br = bl + 1;
 
-				indices[triIdx++] = tl;
-				indices[triIdx++] = bl;
-				indices[triIdx++] = tr;
+                indices[triIdx++] = tl;
+                indices[triIdx++] = bl;
+                indices[triIdx++] = tr;
 
-				indices[triIdx++] = tr;
-				indices[triIdx++] = bl;
-				indices[triIdx++] = br;
-			}
-		}
+                indices[triIdx++] = tr;
+                indices[triIdx++] = bl;
+                indices[triIdx++] = br;
+            }
+        }
 
-		var arrays = new Godot.Collections.Array();
-		arrays.Resize((int)Mesh.ArrayType.Max);
-		arrays[(int)Mesh.ArrayType.Vertex] = verts;
-		arrays[(int)Mesh.ArrayType.TexUV] = uvs;
-		arrays[(int)Mesh.ArrayType.Normal] = normals;
-		arrays[(int)Mesh.ArrayType.Index] = indices;
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts;
+        arrays[(int)Mesh.ArrayType.TexUV] = uvs;
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
 
-		var arrMesh = new ArrayMesh();
-		arrMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-		return arrMesh;
-	}
+        var arrMesh = new ArrayMesh();
+        arrMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return arrMesh;
+    }
 
-	/// <summary>
-	/// Shader that creates the animated swirling vortex look:
-	/// - Swirling flow lines that rotate faster toward the throat
-	/// - Brightness increases toward center (UV.y -> 1)
-	/// - Alpha fades to 0 at the mouth rim (UV.y -> 0)
-	/// - Multiple layered noise-like patterns for organic water/energy feel
-	/// - Double-sided rendering so you can see inside the funnel
-	/// - Noise is sampled on a circular path to avoid UV seam at angle=0/1
-	/// </summary>
-	private ShaderMaterial BuildVortexShader()
-	{
-		var shader = new Shader();
-		shader.Code = @"
+    /// <summary>
+    /// Shader that creates the animated swirling vortex look:
+    /// - Swirling flow lines that rotate faster toward the throat
+    /// - Brightness increases toward center (UV.y -> 1)
+    /// - Alpha fades to 0 at the mouth rim (UV.y -> 0)
+    /// - Multiple layered noise-like patterns for organic water/energy feel
+    /// - Double-sided rendering so you can see inside the funnel
+    /// - Noise is sampled on a circular path to avoid UV seam at angle=0/1
+    /// </summary>
+    private ShaderMaterial BuildVortexShader()
+    {
+        var shader = new Shader();
+        shader.Code =
+            @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
 
@@ -248,70 +249,71 @@ void fragment() {
     ALPHA = alpha_fade * (0.3 + pattern * 0.7) * clamp(intensity + 0.2, 0.0, 1.0);
 }
 ";
-		var mat = new ShaderMaterial { Shader = shader };
-		mat.SetShaderParameter("time_scale", 1.0f);
-		mat.SetShaderParameter("color_core", new Vector3(0.6f, 0.98f, 1.0f));
-		mat.SetShaderParameter("color_mid", new Vector3(0.25f, 0.7f, 1.0f));
-		mat.SetShaderParameter("color_edge", new Vector3(0.15f, 0.4f, 0.8f));
-		mat.SetShaderParameter("emission_strength", 3.0f);
-		return mat;
-	}
+        var mat = new ShaderMaterial { Shader = shader };
+        mat.SetShaderParameter("time_scale", 1.0f);
+        mat.SetShaderParameter("color_core", new Vector3(0.6f, 0.98f, 1.0f));
+        mat.SetShaderParameter("color_mid", new Vector3(0.25f, 0.7f, 1.0f));
+        mat.SetShaderParameter("color_edge", new Vector3(0.15f, 0.4f, 0.8f));
+        mat.SetShaderParameter("emission_strength", 3.0f);
+        return mat;
+    }
 
-	/// <summary>
-	/// Small disc mesh to cap the throat opening. UV maps radially so the cap
-	/// shader can do a radial glow.
-	/// </summary>
-	private ArrayMesh BuildCapDisc()
-	{
-		int segs = Segments;
-		// Center vertex + ring of vertices
-		var verts = new Vector3[segs + 2];
-		var uvs = new Vector2[segs + 2];
-		var normals = new Vector3[segs + 2];
-		var indices = new int[segs * 3];
+    /// <summary>
+    /// Small disc mesh to cap the throat opening. UV maps radially so the cap
+    /// shader can do a radial glow.
+    /// </summary>
+    private ArrayMesh BuildCapDisc()
+    {
+        int segs = Segments;
+        // Center vertex + ring of vertices
+        var verts = new Vector3[segs + 2];
+        var uvs = new Vector2[segs + 2];
+        var normals = new Vector3[segs + 2];
+        var indices = new int[segs * 3];
 
-		// Center
-		verts[0] = Vector3.Zero;
-		uvs[0] = new Vector2(0.5f, 0.5f);
-		normals[0] = Vector3.Up;
+        // Center
+        verts[0] = Vector3.Zero;
+        uvs[0] = new Vector2(0.5f, 0.5f);
+        normals[0] = Vector3.Up;
 
-		for (int i = 0; i <= segs; i++)
-		{
-			float a = (i / (float)segs) * Mathf.Tau;
-			float x = Mathf.Cos(a) * ThroatRadius;
-			float z = Mathf.Sin(a) * ThroatRadius;
-			verts[i + 1] = new Vector3(x, 0, z);
-			uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(a) * 0.5f, 0.5f + Mathf.Sin(a) * 0.5f);
-			normals[i + 1] = Vector3.Up;
-		}
+        for (int i = 0; i <= segs; i++)
+        {
+            float a = (i / (float)segs) * Mathf.Tau;
+            float x = Mathf.Cos(a) * ThroatRadius;
+            float z = Mathf.Sin(a) * ThroatRadius;
+            verts[i + 1] = new Vector3(x, 0, z);
+            uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(a) * 0.5f, 0.5f + Mathf.Sin(a) * 0.5f);
+            normals[i + 1] = Vector3.Up;
+        }
 
-		for (int i = 0; i < segs; i++)
-		{
-			indices[i * 3] = 0;
-			indices[i * 3 + 1] = i + 1;
-			indices[i * 3 + 2] = i + 2;
-		}
+        for (int i = 0; i < segs; i++)
+        {
+            indices[i * 3] = 0;
+            indices[i * 3 + 1] = i + 1;
+            indices[i * 3 + 2] = i + 2;
+        }
 
-		var arrays = new Godot.Collections.Array();
-		arrays.Resize((int)Mesh.ArrayType.Max);
-		arrays[(int)Mesh.ArrayType.Vertex] = verts;
-		arrays[(int)Mesh.ArrayType.TexUV] = uvs;
-		arrays[(int)Mesh.ArrayType.Normal] = normals;
-		arrays[(int)Mesh.ArrayType.Index] = indices;
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts;
+        arrays[(int)Mesh.ArrayType.TexUV] = uvs;
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
 
-		var arrMesh = new ArrayMesh();
-		arrMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-		return arrMesh;
-	}
+        var arrMesh = new ArrayMesh();
+        arrMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return arrMesh;
+    }
 
-	/// <summary>
-	/// Shader for the throat cap disc: radial glow that's brightest at center,
-	/// with a subtle swirl animation.
-	/// </summary>
-	private Shader BuildCapShader()
-	{
-		var shader = new Shader();
-		shader.Code = @"
+    /// <summary>
+    /// Shader for the throat cap disc: radial glow that's brightest at center,
+    /// with a subtle swirl animation.
+    /// </summary>
+    private Shader BuildCapShader()
+    {
+        var shader = new Shader();
+        shader.Code =
+            @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
 
@@ -333,18 +335,19 @@ void fragment() {
     ALPHA = glow;
 }
 ";
-		return shader;
-	}
+        return shader;
+    }
 
-	/// <summary>
-	/// Shader for the star sprite: renders a spinning multi-pointed star shape
-	/// with soft glow, discarding pixels outside the star silhouette.
-	/// Billboard mode is handled in the vertex shader.
-	/// </summary>
-	private Shader BuildStarShader()
-	{
-		var shader = new Shader();
-		shader.Code = @"
+    /// <summary>
+    /// Shader for the star sprite: renders a spinning multi-pointed star shape
+    /// with soft glow, discarding pixels outside the star silhouette.
+    /// Billboard mode is handled in the vertex shader.
+    /// </summary>
+    private Shader BuildStarShader()
+    {
+        var shader = new Shader();
+        shader.Code =
+            @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
 
@@ -395,7 +398,6 @@ void fragment() {
     ALPHA = clamp(brightness, 0.0, 1.0);
 }
 ";
-		return shader;
-	}
-
+        return shader;
+    }
 }

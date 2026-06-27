@@ -10,83 +10,83 @@ using Godot;
 // the environment's glow/bloom.
 public partial class Sun : MeshInstance3D
 {
-	// Far enough to sit well beyond any sector geometry but inside the camera's
-	// far plane. The quad is sized to subtend a believable stylised disc.
-	public const float Distance = 4500f;
-	private const float Size = 900f;
+    // Far enough to sit well beyond any sector geometry but inside the camera's
+    // far plane. The quad is sized to subtend a believable stylised disc.
+    public const float Distance = 4500f;
+    private const float Size = 900f;
 
-	// World-space unit vector pointing toward the sun, shared so the screen-space
-	// lens flare overlay (LensFlare) can anchor its bright core exactly on the disc.
-	// Vector3.Zero until _Ready runs — consumers must guard for that.
-	public static Vector3 SkyDirection { get; private set; }
+    // World-space unit vector pointing toward the sun, shared so the screen-space
+    // lens flare overlay (LensFlare) can anchor its bright core exactly on the disc.
+    // Vector3.Zero until _Ready runs — consumers must guard for that.
+    public static Vector3 SkyDirection { get; private set; }
 
-	private Vector3 _skyDir; // world-space unit vector pointing toward the sun
+    private Vector3 _skyDir; // world-space unit vector pointing toward the sun
 
-	public override void _Ready()
-	{
-		// A DirectionalLight3D emits along its local -Z, so the light SOURCE lies in
-		// the opposite direction (+Z of its basis). Read it once: the light is static.
-		var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
-		_skyDir = light.GlobalTransform.Basis.Z.Normalized();
-		SkyDirection = _skyDir;
+    public override void _Ready()
+    {
+        // A DirectionalLight3D emits along its local -Z, so the light SOURCE lies in
+        // the opposite direction (+Z of its basis). Read it once: the light is static.
+        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+        _skyDir = light.GlobalTransform.Basis.Z.Normalized();
+        SkyDirection = _skyDir;
 
-		Mesh = new QuadMesh { Size = new Vector2(Size, Size) };
-		MaterialOverride = BuildMaterial();
-		CastShadow = ShadowCastingSetting.Off;
-	}
+        Mesh = new QuadMesh { Size = new Vector2(Size, Size) };
+        MaterialOverride = BuildMaterial();
+        CastShadow = ShadowCastingSetting.Off;
+    }
 
-	public override void _Process(double delta)
-	{
-		// Anchor to whichever camera is currently rendering so the sun always sits in
-		// the sky backdrop — including the F3 overview, where following the (parked)
-		// chase camera would otherwise leave it as a physical quad sitting in the sector.
-		var cam = GetViewport().GetCamera3D();
-		if (cam == null)
-			return;
-		GlobalPosition = cam.GlobalPosition + _skyDir * Distance;
-	}
+    public override void _Process(double delta)
+    {
+        // Anchor to whichever camera is currently rendering so the sun always sits in
+        // the sky backdrop — including the F3 overview, where following the (parked)
+        // chase camera would otherwise leave it as a physical quad sitting in the sector.
+        var cam = GetViewport().GetCamera3D();
+        if (cam == null)
+            return;
+        GlobalPosition = cam.GlobalPosition + _skyDir * Distance;
+    }
 
-	private static StandardMaterial3D BuildMaterial()
-	{
-		// Radial falloff: a hot white core easing out through a warm corona to fully
-		// transparent at the quad's edge. 8-bit texture only carries the SHAPE; the
-		// HDR brightness that drives bloom comes from the emission energy below.
-		var gradient = new Gradient
-		{
-			Offsets = new float[] { 0.0f, 0.12f, 0.4f, 1.0f },
-			Colors = new[]
-			{
-				new Color(1f, 1f, 1f, 1f),
-				new Color(1f, 0.95f, 0.85f, 1f),
-				new Color(1f, 0.55f, 0.25f, 0.45f),
-				new Color(0f, 0f, 0f, 0f),
-			},
-		};
-		var tex = new GradientTexture2D
-		{
-			Gradient = gradient,
-			Width = 256,
-			Height = 256,
-			Fill = GradientTexture2D.FillEnum.Radial,
-			FillFrom = new Vector2(0.5f, 0.5f),
-			FillTo = new Vector2(0.5f, 0f),
-		};
+    private static StandardMaterial3D BuildMaterial()
+    {
+        // Radial falloff: a hot white core easing out through a warm corona to fully
+        // transparent at the quad's edge. 8-bit texture only carries the SHAPE; the
+        // HDR brightness that drives bloom comes from the emission energy below.
+        var gradient = new Gradient
+        {
+            Offsets = new float[] { 0.0f, 0.12f, 0.4f, 1.0f },
+            Colors = new[]
+            {
+                new Color(1f, 1f, 1f, 1f),
+                new Color(1f, 0.95f, 0.85f, 1f),
+                new Color(1f, 0.55f, 0.25f, 0.45f),
+                new Color(0f, 0f, 0f, 0f),
+            },
+        };
+        var tex = new GradientTexture2D
+        {
+            Gradient = gradient,
+            Width = 256,
+            Height = 256,
+            Fill = GradientTexture2D.FillEnum.Radial,
+            FillFrom = new Vector2(0.5f, 0.5f),
+            FillTo = new Vector2(0.5f, 0f),
+        };
 
-		return new StandardMaterial3D
-		{
-			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-			Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-			// Additive blend lets the disc glow over the dark sector without a hard
-			// edge, and contributes nothing where the gradient fades to black.
-			BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-			CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-			AlbedoTexture = tex,
-			EmissionEnabled = true,
-			EmissionTexture = tex,
-			Emission = new Color(1f, 0.85f, 0.6f),
-			EmissionEnergyMultiplier = 5f, // push past the env's HDR glow threshold
-			BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
-			BillboardKeepScale = true,
-		};
-	}
+        return new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            // Additive blend lets the disc glow over the dark sector without a hard
+            // edge, and contributes nothing where the gradient fades to black.
+            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            AlbedoTexture = tex,
+            EmissionEnabled = true,
+            EmissionTexture = tex,
+            Emission = new Color(1f, 0.85f, 0.6f),
+            EmissionEnergyMultiplier = 5f, // push past the env's HDR glow threshold
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
+            BillboardKeepScale = true,
+        };
+    }
 }

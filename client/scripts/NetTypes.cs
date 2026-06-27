@@ -41,17 +41,26 @@ namespace StellarAllegiance.Net
         public byte Team;
         public uint SectorId;
         public ShipClass Class;
-        public float PosX, PosY, PosZ;
-        public float VelX, VelY, VelZ;
-        public float RotX, RotY, RotZ, RotW;
-        public float AngVelX, AngVelY, AngVelZ;
+        public float PosX,
+            PosY,
+            PosZ;
+        public float VelX,
+            VelY,
+            VelZ;
+        public float RotX,
+            RotY,
+            RotZ,
+            RotW;
+        public float AngVelX,
+            AngVelY,
+            AngVelZ;
         public float AbPower;
         public float Health;
         public float Mass;
         public uint LastInputTick;
         public uint LastFireTick;
-        public bool IsPig;   // AI combat drone
-        public bool IsPod;   // escape pod
+        public bool IsPig; // AI combat drone
+        public bool IsPod; // escape pod
     }
 
     // A team base (from Welcome + streamed health frames).
@@ -60,7 +69,9 @@ namespace StellarAllegiance.Net
         public ulong BaseId;
         public byte Team;
         public uint SectorId;
-        public float PosX, PosY, PosZ;
+        public float PosX,
+            PosY,
+            PosZ;
         public float Health;
     }
 
@@ -69,10 +80,14 @@ namespace StellarAllegiance.Net
     {
         public ulong AsteroidId;
         public uint SectorId;
-        public float PosX, PosY, PosZ;
+        public float PosX,
+            PosY,
+            PosZ;
         public float Radius;
         public string Variant = "";
-        public float RotX, RotY, RotZ;
+        public float RotX,
+            RotY,
+            RotZ;
     }
 
     // An aleph warp gate (static, from Welcome).
@@ -81,7 +96,9 @@ namespace StellarAllegiance.Net
         public ulong AlephId;
         public uint SectorId;
         public uint DestSectorId;
-        public float PosX, PosY, PosZ;
+        public float PosX,
+            PosY,
+            PosZ;
     }
 
     // A sector (static, from Welcome). Sectors are origin-centered today (Center* = 0).
@@ -89,7 +106,9 @@ namespace StellarAllegiance.Net
     {
         public uint SectorId;
         public string Name = "";
-        public float CenterX, CenterY, CenterZ;
+        public float CenterX,
+            CenterY,
+            CenterZ;
         public float Radius;
     }
 
@@ -103,11 +122,20 @@ namespace StellarAllegiance.Net
         public readonly byte Team;
         public readonly bool Ready;
         public readonly bool HasShip;
+
         // The player's currently-controlled ship id (0 = not flying). Lets the renderer map a
         // snapshot ship back to this pilot for the in-world nameplate.
         public readonly ulong ShipId;
+
         public LobbyPlayer(int id, string name, byte team, bool ready, bool hasShip, ulong shipId)
-        { Id = id; Name = name; Team = team; Ready = ready; HasShip = hasShip; ShipId = shipId; }
+        {
+            Id = id;
+            Name = name;
+            Team = team;
+            Ready = ready;
+            HasShip = hasShip;
+            ShipId = shipId;
+        }
     }
 
     // One chat line, decoded from MsgChatRelay (scope 0 = all, 1 = team).
@@ -117,7 +145,13 @@ namespace StellarAllegiance.Net
         public readonly byte FromTeam;
         public readonly string Name;
         public readonly string Text;
+
         public ChatLine(byte scope, byte fromTeam, string name, string text)
-        { Scope = scope; FromTeam = fromTeam; Name = name; Text = text; }
+        {
+            Scope = scope;
+            FromTeam = fromTeam;
+            Name = name;
+            Text = text;
+        }
     }
 }

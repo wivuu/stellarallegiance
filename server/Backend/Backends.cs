@@ -1,5 +1,5 @@
-using StellarAllegiance.Shared;
 using SimServer.Net;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Backend;
 
@@ -31,7 +31,9 @@ public sealed class OpenAuthenticator : IAuthenticator
 public sealed class SharedSecretAuthenticator : IAuthenticator
 {
     private readonly string _secret;
+
     public SharedSecretAuthenticator(string secret) => _secret = secret;
+
     // Constant-time compare so response timing can't leak the expected password.
     public bool Authenticate(string secret) => JoinTokens.ConstantTimeEquals(secret ?? "", _secret);
 }
@@ -48,8 +50,12 @@ public interface IPlayerDirectory
 public sealed class InMemoryPlayerDirectory : IPlayerDirectory
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _names = new();
-    public void OnConnect(int clientId, string name) => _names[clientId] = string.IsNullOrWhiteSpace(name) ? $"Pilot{clientId}" : name;
+
+    public void OnConnect(int clientId, string name) =>
+        _names[clientId] = string.IsNullOrWhiteSpace(name) ? $"Pilot{clientId}" : name;
+
     public void OnDisconnect(int clientId) => _names.TryRemove(clientId, out _);
+
     public string NameOf(int clientId) => _names.TryGetValue(clientId, out var n) ? n : $"Pilot{clientId}";
 }
 
@@ -62,8 +68,7 @@ public interface IMatchResultSink
 
 public sealed class LoggingMatchResultSink : IMatchResultSink
 {
-    public void ReportResult(byte winner)
-        => Console.WriteLine($"[Result] match ended — winner team {winner}");
+    public void ReportResult(byte winner) => Console.WriteLine($"[Result] match ended — winner team {winner}");
 }
 
 // Decides when a lobby should start its match. Default: start once at least one player is
@@ -78,16 +83,20 @@ public interface IMatchmaker
 public sealed class ReadyUpMatchmaker : IMatchmaker
 {
     private readonly bool _autoStart;
+
     public ReadyUpMatchmaker(bool autoStart) => _autoStart = autoStart;
 
     public bool ShouldStart(System.Collections.Generic.IReadOnlyList<LobbyEntry> lobby)
     {
-        if (lobby.Count == 0) return false;
-        if (_autoStart) return true;
+        if (lobby.Count == 0)
+            return false;
+        if (_autoStart)
+            return true;
         bool anyReady = false;
         foreach (var e in lobby)
         {
-            if (!e.Ready) return false;
+            if (!e.Ready)
+                return false;
             anyReady = true;
         }
         return anyReady;

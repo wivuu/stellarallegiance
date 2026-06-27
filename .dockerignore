@@ -1,7 +1,8 @@
-# The sim-server image only needs shared/ and server/ (see server/Dockerfile). Keep the
-# build context tiny + reproducible by excluding everything else, build outputs, and local
-# state. (The Dockerfile copies shared/ and server/ explicitly, so excluding the rest here
-# just speeds up the context upload.)
+# The sim-server image needs shared/, server/, and the canonical GLB assets it loads for
+# server-side collision: client/assets/bases and client/assets/asteroids (see server/Dockerfile).
+# Keep the build context tiny + reproducible by excluding everything else, build outputs, and
+# local state. (The Dockerfile copies what it needs explicitly, so excluding the rest here just
+# speeds up the context upload.)
 .git
 .github
 .vscode
@@ -13,7 +14,12 @@
 **/.godot
 graphify-out
 build
-client
+# Exclude client/ but keep the GLB asset dirs the sim-server's Dockerfile copies.
+client/*
+!client/assets
+client/assets/*
+!client/assets/bases
+!client/assets/asteroids
 docs
 tests
 tools

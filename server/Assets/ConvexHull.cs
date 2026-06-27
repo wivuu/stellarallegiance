@@ -23,14 +23,19 @@ public sealed class ConvexHull
 {
     public readonly struct Plane
     {
-        public readonly Vec3 N;  // outward unit normal
+        public readonly Vec3 N; // outward unit normal
         public readonly float D; // Dot(N, anyFaceVertex)
-        public Plane(Vec3 n, float d) { N = n; D = d; }
+
+        public Plane(Vec3 n, float d)
+        {
+            N = n;
+            D = d;
+        }
     }
 
     public Plane[] Planes { get; }
-    public float BoundingRadius { get; }  // farthest input vertex from origin (asteroid scale ref)
-    public float LongestAxis { get; }     // longest AABB axis (base scale ref)
+    public float BoundingRadius { get; } // farthest input vertex from origin (asteroid scale ref)
+    public float LongestAxis { get; } // longest AABB axis (base scale ref)
 
     private ConvexHull(Plane[] planes, float boundingRadius, float longestAxis)
     {
@@ -40,8 +45,8 @@ public sealed class ConvexHull
     }
 
     // Public ctor used by the cache deserializer (planes/metrics already known).
-    public static ConvexHull FromPlanes(Plane[] planes, float boundingRadius, float longestAxis)
-        => new(planes, boundingRadius, longestAxis);
+    public static ConvexHull FromPlanes(Plane[] planes, float boundingRadius, float longestAxis) =>
+        new(planes, boundingRadius, longestAxis);
 
     // Uniformly scaled copy: a plane (N, D) over vertices v (D = Dot(N,v)) scales to (N, D·s).
     public ConvexHull Scaled(float s)
@@ -57,8 +62,8 @@ public sealed class ConvexHull
     // Sphere(center,radius) vs hull. On contact returns the outward normal of the face of
     // least penetration and how deep the sphere is (≥0). Mirrors ResolveStaticCollision's
     // "nearest face" resolution; approximate near edges/corners, which is fine for bounce.
-    public bool ResolveSphere(Vec3 center, float radius, out Vec3 normal, out float penetration)
-        => ResolveSphere(center, radius, out normal, out penetration, out _);
+    public bool ResolveSphere(Vec3 center, float radius, out Vec3 normal, out float penetration) =>
+        ResolveSphere(center, radius, out normal, out penetration, out _);
 
     // Overload that also reports the index of the contact face (the face of least penetration). The
     // base docking gate uses it: a sphere whose contact face is the bay-cap doorway docks instead of
@@ -70,11 +75,18 @@ public sealed class ConvexHull
         for (int i = 0; i < Planes.Length; i++)
         {
             float d = Dot(Planes[i].N, center) - Planes[i].D;
-            if (d > maxDist) { maxDist = d; best = i; }
+            if (d > maxDist)
+            {
+                maxDist = d;
+                best = i;
+            }
         }
         if (best < 0 || maxDist > radius)
         {
-            normal = default; penetration = 0f; faceIndex = -1; return false;
+            normal = default;
+            penetration = 0f;
+            faceIndex = -1;
+            return false;
         }
         normal = Planes[best].N;
         penetration = radius - maxDist;
@@ -86,7 +98,8 @@ public sealed class ConvexHull
     // within [0, maxT]. Convex slab clip. t=0 if the origin is already inside.
     public bool RayEntry(Vec3 o, Vec3 dir, float maxT, float margin, out float t)
     {
-        float tEnter = 0f, tExit = maxT;
+        float tEnter = 0f,
+            tExit = maxT;
         for (int i = 0; i < Planes.Length; i++)
         {
             Vec3 n = Planes[i].N;
@@ -95,13 +108,29 @@ public sealed class ConvexHull
             float num = Dot(n, o) - dPlane; // >0 ⇒ origin outside this halfspace
             if (denom > -1e-9f && denom < 1e-9f)
             {
-                if (num > 0f) { t = 0f; return false; } // parallel and outside
+                if (num > 0f)
+                {
+                    t = 0f;
+                    return false;
+                } // parallel and outside
                 continue;
             }
             float thit = -num / denom;
-            if (denom < 0f) { if (thit > tEnter) tEnter = thit; }
-            else { if (thit < tExit) tExit = thit; }
-            if (tEnter > tExit) { t = 0f; return false; }
+            if (denom < 0f)
+            {
+                if (thit > tEnter)
+                    tEnter = thit;
+            }
+            else
+            {
+                if (thit < tExit)
+                    tExit = thit;
+            }
+            if (tEnter > tExit)
+            {
+                t = 0f;
+                return false;
+            }
         }
         t = tEnter;
         return tEnter >= 0f && tEnter <= maxT && tExit >= 0f;
@@ -138,7 +167,8 @@ public sealed class ConvexHull
 
     private static IReadOnlyList<Vec3> ReduceToExtremes(IReadOnlyList<Vec3> pts, int dirCount)
     {
-        if (pts.Count <= dirCount) return pts;
+        if (pts.Count <= dirCount)
+            return pts;
         Vec3[] dirs = FibonacciSphere(dirCount);
         var bestIdx = new int[dirs.Length];
         var bestDot = new float[dirs.Length];
@@ -149,12 +179,17 @@ public sealed class ConvexHull
             for (int d = 0; d < dirs.Length; d++)
             {
                 float dot = Dot(p, dirs[d]);
-                if (dot > bestDot[d]) { bestDot[d] = dot; bestIdx[d] = i; }
+                if (dot > bestDot[d])
+                {
+                    bestDot[d] = dot;
+                    bestIdx[d] = i;
+                }
             }
         }
         var keep = new HashSet<int>(bestIdx);
         var outPts = new List<Vec3>(keep.Count);
-        foreach (int i in keep) outPts.Add(pts[i]);
+        foreach (int i in keep)
+            outPts.Add(pts[i]);
         return outPts;
     }
 
@@ -175,7 +210,8 @@ public sealed class ConvexHull
 
     private static Plane[]? TryQuickHull(IReadOnlyList<Vec3> pts, float eps)
     {
-        if (pts.Count < 4) return null;
+        if (pts.Count < 4)
+            return null;
 
         // Seed: two farthest extreme points, the point farthest from that line, then the
         // point farthest from that triangle's plane.
@@ -194,7 +230,8 @@ public sealed class ConvexHull
         var seed = new HashSet<int> { i0, i1, i2, i3 };
         for (int i = 0; i < pts.Count; i++)
         {
-            if (seed.Contains(i)) continue;
+            if (seed.Contains(i))
+                continue;
             Vec3 p = pts[i];
 
             // Faces this point can see (is outside of).
@@ -202,7 +239,8 @@ public sealed class ConvexHull
             for (int f = 0; f < faces.Count; f++)
                 if (Dot(faces[f].N, p) - faces[f].D > eps)
                     (visible ??= new()).Add(f);
-            if (visible is null) continue; // inside the current hull
+            if (visible is null)
+                continue; // inside the current hull
 
             // Horizon = undirected edges that appear in exactly one visible face.
             var edgeCount = new Dictionary<(int, int), int>();
@@ -217,7 +255,8 @@ public sealed class ConvexHull
             var visibleSet = new HashSet<int>(visible);
             var kept = new List<Face>(faces.Count);
             for (int f = 0; f < faces.Count; f++)
-                if (!visibleSet.Contains(f)) kept.Add(faces[f]);
+                if (!visibleSet.Contains(f))
+                    kept.Add(faces[f]);
 
             foreach (var kv in edgeCount)
                 if (kv.Value == 1)
@@ -226,24 +265,38 @@ public sealed class ConvexHull
             faces = kept;
         }
 
-        if (faces.Count < 4) return null;
+        if (faces.Count < 4)
+            return null;
         var planes = new Plane[faces.Count];
         for (int f = 0; f < faces.Count; f++)
             planes[f] = new Plane(faces[f].N, faces[f].D);
         return planes;
     }
 
-    private static bool SeedTetra(IReadOnlyList<Vec3> pts, float eps,
-        out int i0, out int i1, out int i2, out int i3)
+    private static bool SeedTetra(IReadOnlyList<Vec3> pts, float eps, out int i0, out int i1, out int i2, out int i3)
     {
         i0 = i1 = i2 = i3 = -1;
         // Extreme points along each axis.
-        int minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
+        int minX = 0,
+            maxX = 0,
+            minY = 0,
+            maxY = 0,
+            minZ = 0,
+            maxZ = 0;
         for (int i = 1; i < pts.Count; i++)
         {
-            if (pts[i].X < pts[minX].X) minX = i; if (pts[i].X > pts[maxX].X) maxX = i;
-            if (pts[i].Y < pts[minY].Y) minY = i; if (pts[i].Y > pts[maxY].Y) maxY = i;
-            if (pts[i].Z < pts[minZ].Z) minZ = i; if (pts[i].Z > pts[maxZ].Z) maxZ = i;
+            if (pts[i].X < pts[minX].X)
+                minX = i;
+            if (pts[i].X > pts[maxX].X)
+                maxX = i;
+            if (pts[i].Y < pts[minY].Y)
+                minY = i;
+            if (pts[i].Y > pts[maxY].Y)
+                maxY = i;
+            if (pts[i].Z < pts[minZ].Z)
+                minZ = i;
+            if (pts[i].Z > pts[maxZ].Z)
+                maxZ = i;
         }
         int[] extremes = { minX, maxX, minY, maxY, minZ, maxZ };
 
@@ -253,9 +306,15 @@ public sealed class ConvexHull
         foreach (int b in extremes)
         {
             float d = (pts[a] - pts[b]).LengthSquared();
-            if (d > bestD) { bestD = d; i0 = a; i1 = b; }
+            if (d > bestD)
+            {
+                bestD = d;
+                i0 = a;
+                i1 = b;
+            }
         }
-        if (bestD <= eps * eps) return false;
+        if (bestD <= eps * eps)
+            return false;
 
         // p2 = farthest from the line p0p1.
         Vec3 line = pts[i1] - pts[i0];
@@ -263,30 +322,50 @@ public sealed class ConvexHull
         for (int i = 0; i < pts.Count; i++)
         {
             float area = Vec3.Cross(line, pts[i] - pts[i0]).LengthSquared();
-            if (area > bestArea) { bestArea = area; i2 = i; }
+            if (area > bestArea)
+            {
+                bestArea = area;
+                i2 = i;
+            }
         }
-        if (bestArea <= eps * eps) return false;
+        if (bestArea <= eps * eps)
+            return false;
 
         // p3 = farthest from the plane (p0,p1,p2).
         Vec3 nrm = Vec3.Cross(pts[i1] - pts[i0], pts[i2] - pts[i0]);
         float nlen = nrm.Length();
-        if (nlen < eps) return false;
+        if (nlen < eps)
+            return false;
         nrm = nrm * (1f / nlen);
         float bestDist = -1f;
         for (int i = 0; i < pts.Count; i++)
         {
             float dist = MathF.Abs(Dot(nrm, pts[i] - pts[i0]));
-            if (dist > bestDist) { bestDist = dist; i3 = i; }
+            if (dist > bestDist)
+            {
+                bestDist = dist;
+                i3 = i;
+            }
         }
         return bestDist > eps && i0 != i1 && i2 != i0 && i2 != i1 && i3 != i0 && i3 != i1 && i3 != i2;
     }
 
     private readonly struct Face
     {
-        public readonly int A, B, C;
+        public readonly int A,
+            B,
+            C;
         public readonly Vec3 N;
         public readonly float D;
-        public Face(int a, int b, int c, Vec3 n, float d) { A = a; B = b; C = c; N = n; D = d; }
+
+        public Face(int a, int b, int c, Vec3 n, float d)
+        {
+            A = a;
+            B = b;
+            C = c;
+            N = n;
+            D = d;
+        }
     }
 
     // Triangle face with its normal flipped to point AWAY from the interior reference point.
@@ -296,16 +375,24 @@ public sealed class ConvexHull
         float len = n.Length();
         n = len > 1e-12f ? n * (1f / len) : new Vec3(0f, 0f, 1f);
         float d = Dot(n, pts[a]);
-        if (Dot(n, interior) > d) { n = n * -1f; d = -d; } // ensure interior is inside
+        if (Dot(n, interior) > d)
+        {
+            n = n * -1f;
+            d = -d;
+        } // ensure interior is inside
         return new Face(a, b, c, n, d);
     }
 
-    private static Plane[] BoxPlanes(Vec3 lo, Vec3 hi) => new[]
-    {
-        new Plane(new Vec3(1, 0, 0), hi.X),  new Plane(new Vec3(-1, 0, 0), -lo.X),
-        new Plane(new Vec3(0, 1, 0), hi.Y),  new Plane(new Vec3(0, -1, 0), -lo.Y),
-        new Plane(new Vec3(0, 0, 1), hi.Z),  new Plane(new Vec3(0, 0, -1), -lo.Z),
-    };
+    private static Plane[] BoxPlanes(Vec3 lo, Vec3 hi) =>
+        new[]
+        {
+            new Plane(new Vec3(1, 0, 0), hi.X),
+            new Plane(new Vec3(-1, 0, 0), -lo.X),
+            new Plane(new Vec3(0, 1, 0), hi.Y),
+            new Plane(new Vec3(0, -1, 0), -lo.Y),
+            new Plane(new Vec3(0, 0, 1), hi.Z),
+            new Plane(new Vec3(0, 0, -1), -lo.Z),
+        };
 
     private static void Bump(Dictionary<(int, int), int> m, int a, int b)
     {

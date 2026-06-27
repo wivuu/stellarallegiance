@@ -23,145 +23,141 @@ using Godot;
 // it (guarded), never crash and never substitute.
 public partial class SfxManager : Node
 {
-	public static SfxManager? Instance { get; private set; }
+    public static SfxManager? Instance { get; private set; }
 
-	public enum SfxId
-	{
-		AmbientHum,
-		EngineLoop,
-		BoosterLoop,
-		WeaponFire,
-		Explosion,
-		Impact,
-		UiClick,
-		UiNotify,
-		MenuOpen,
-		MenuClose,
-		Collision,
-	}
+    public enum SfxId
+    {
+        AmbientHum,
+        EngineLoop,
+        BoosterLoop,
+        WeaponFire,
+        Explosion,
+        Impact,
+        UiClick,
+        UiNotify,
+        MenuOpen,
+        MenuClose,
+        Collision,
+    }
 
-	private static readonly Dictionary<SfxId, string> Files = new()
-	{
-		{ SfxId.AmbientHum, "ambient_hum.ogg" },
-		{ SfxId.EngineLoop, "engine_loop.ogg" },
-		{ SfxId.BoosterLoop, "booster_loop.ogg" },
-		{ SfxId.WeaponFire, "weapon_fire.ogg" },
-		{ SfxId.Explosion, "explosion.ogg" },
-		{ SfxId.Impact, "impact.ogg" },
-		{ SfxId.UiClick, "ui_click.ogg" },
-		{ SfxId.UiNotify, "ui_notify.ogg" },
-		{ SfxId.MenuOpen, "menu_open.ogg" },
-		{ SfxId.MenuClose, "menu_close.ogg" },
-		{ SfxId.Collision, "collision_thud.ogg" },
-	};
+    private static readonly Dictionary<SfxId, string> Files = new()
+    {
+        { SfxId.AmbientHum, "ambient_hum.ogg" },
+        { SfxId.EngineLoop, "engine_loop.ogg" },
+        { SfxId.BoosterLoop, "booster_loop.ogg" },
+        { SfxId.WeaponFire, "weapon_fire.ogg" },
+        { SfxId.Explosion, "explosion.ogg" },
+        { SfxId.Impact, "impact.ogg" },
+        { SfxId.UiClick, "ui_click.ogg" },
+        { SfxId.UiNotify, "ui_notify.ogg" },
+        { SfxId.MenuOpen, "menu_open.ogg" },
+        { SfxId.MenuClose, "menu_close.ogg" },
+        { SfxId.Collision, "collision_thud.ogg" },
+    };
 
-	// Streams that should play as seamless loops (engine bed, ambience).
-	private static readonly HashSet<SfxId> Loops = new()
-	{
-		SfxId.AmbientHum, SfxId.EngineLoop, SfxId.BoosterLoop,
-	};
+    // Streams that should play as seamless loops (engine bed, ambience).
+    private static readonly HashSet<SfxId> Loops = new() { SfxId.AmbientHum, SfxId.EngineLoop, SfxId.BoosterLoop };
 
-	private const int Pool3DSize = 24;
-	private const int PoolUiSize = 6;
-	private const string AssetDir = "res://assets/audio/";
+    private const int Pool3DSize = 24;
+    private const int PoolUiSize = 6;
+    private const string AssetDir = "res://assets/audio/";
 
-	private readonly Dictionary<SfxId, AudioStream> _streams = new();
-	private readonly List<AudioStreamPlayer3D> _pool3D = new();
-	private readonly List<AudioStreamPlayer> _poolUi = new();
-	private AudioStreamPlayer _ambient = null!;
-	private int _next3D;
-	private int _nextUi;
+    private readonly Dictionary<SfxId, AudioStream> _streams = new();
+    private readonly List<AudioStreamPlayer3D> _pool3D = new();
+    private readonly List<AudioStreamPlayer> _poolUi = new();
+    private AudioStreamPlayer _ambient = null!;
+    private int _next3D;
+    private int _nextUi;
 
-	public override void _EnterTree() => Instance = this;
+    public override void _EnterTree() => Instance = this;
 
-	public override void _ExitTree()
-	{
-		if (Instance == this)
-			Instance = null;
-	}
+    public override void _ExitTree()
+    {
+        if (Instance == this)
+            Instance = null;
+    }
 
-	public override void _Ready()
-	{
-		LoadStreams();
+    public override void _Ready()
+    {
+        LoadStreams();
 
-		for (int i = 0; i < Pool3DSize; i++)
-		{
-			var p = new AudioStreamPlayer3D
-			{
-				Bus = "SFX",
-				// World units are large here (ships range over hundreds of units), so
-				// stretch the distance model accordingly. Placeholder values — tune later.
-				UnitSize = 60f,
-				MaxDistance = 2200f,
-				AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance,
-			};
-			AddChild(p);
-			_pool3D.Add(p);
-		}
+        for (int i = 0; i < Pool3DSize; i++)
+        {
+            var p = new AudioStreamPlayer3D
+            {
+                Bus = "SFX",
+                // World units are large here (ships range over hundreds of units), so
+                // stretch the distance model accordingly. Placeholder values — tune later.
+                UnitSize = 60f,
+                MaxDistance = 2200f,
+                AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance,
+            };
+            AddChild(p);
+            _pool3D.Add(p);
+        }
 
-		for (int i = 0; i < PoolUiSize; i++)
-		{
-			var p = new AudioStreamPlayer { Bus = "UI" };
-			AddChild(p);
-			_poolUi.Add(p);
-		}
+        for (int i = 0; i < PoolUiSize; i++)
+        {
+            var p = new AudioStreamPlayer { Bus = "UI" };
+            AddChild(p);
+            _poolUi.Add(p);
+        }
 
-		_ambient = new AudioStreamPlayer { Bus = "Ambient" };
-		AddChild(_ambient);
-		if (_streams.TryGetValue(SfxId.AmbientHum, out var hum))
-		{
-			_ambient.Stream = hum;
-			_ambient.Play();
-		}
-	}
+        _ambient = new AudioStreamPlayer { Bus = "Ambient" };
+        AddChild(_ambient);
+        if (_streams.TryGetValue(SfxId.AmbientHum, out var hum))
+        {
+            _ambient.Stream = hum;
+            _ambient.Play();
+        }
+    }
 
-	private void LoadStreams()
-	{
-		foreach (var (id, file) in Files)
-		{
-			var stream = ResourceLoader.Load<AudioStream>(AssetDir + file);
-			if (stream == null)
-			{
-				GD.PushWarning($"[SfxManager] missing audio asset: {file}");
-				continue;
-			}
-			// .ogg imports as AudioStreamOggVorbis; flip loopers to loop here so we
-			// don't have to hand-maintain per-file .import loop settings.
-			if (Loops.Contains(id) && stream is AudioStreamOggVorbis ogg)
-				ogg.Loop = true;
-			_streams[id] = stream;
-		}
-	}
+    private void LoadStreams()
+    {
+        foreach (var (id, file) in Files)
+        {
+            var stream = ResourceLoader.Load<AudioStream>(AssetDir + file);
+            if (stream == null)
+            {
+                GD.PushWarning($"[SfxManager] missing audio asset: {file}");
+                continue;
+            }
+            // .ogg imports as AudioStreamOggVorbis; flip loopers to loop here so we
+            // don't have to hand-maintain per-file .import loop settings.
+            if (Loops.Contains(id) && stream is AudioStreamOggVorbis ogg)
+                ogg.Loop = true;
+            _streams[id] = stream;
+        }
+    }
 
-	// The stream behind an id (already loop-configured), for callers that own their
-	// own player — e.g. EngineGlow's per-ship engine/booster loops.
-	public AudioStream? GetStream(SfxId id)
-		=> _streams.TryGetValue(id, out var s) ? s : null;
+    // The stream behind an id (already loop-configured), for callers that own their
+    // own player — e.g. EngineGlow's per-ship engine/booster loops.
+    public AudioStream? GetStream(SfxId id) => _streams.TryGetValue(id, out var s) ? s : null;
 
-	// One-shot positional sound at a world position. pitch jitters the playback rate
-	// for variety; volumeDb offsets the per-event level.
-	public void PlayAt(SfxId id, Vector3 worldPos, float pitch = 1f, float volumeDb = 0f)
-	{
-		if (!_streams.TryGetValue(id, out var stream))
-			return;
-		var p = _pool3D[_next3D];
-		_next3D = (_next3D + 1) % _pool3D.Count;
-		p.Stream = stream;
-		p.GlobalPosition = worldPos;
-		p.PitchScale = pitch;
-		p.VolumeDb = volumeDb;
-		p.Play();
-	}
+    // One-shot positional sound at a world position. pitch jitters the playback rate
+    // for variety; volumeDb offsets the per-event level.
+    public void PlayAt(SfxId id, Vector3 worldPos, float pitch = 1f, float volumeDb = 0f)
+    {
+        if (!_streams.TryGetValue(id, out var stream))
+            return;
+        var p = _pool3D[_next3D];
+        _next3D = (_next3D + 1) % _pool3D.Count;
+        p.Stream = stream;
+        p.GlobalPosition = worldPos;
+        p.PitchScale = pitch;
+        p.VolumeDb = volumeDb;
+        p.Play();
+    }
 
-	// Non-positional interface sound.
-	public void PlayUi(SfxId id, float pitch = 1f)
-	{
-		if (!_streams.TryGetValue(id, out var stream))
-			return;
-		var p = _poolUi[_nextUi];
-		_nextUi = (_nextUi + 1) % _poolUi.Count;
-		p.Stream = stream;
-		p.PitchScale = pitch;
-		p.Play();
-	}
+    // Non-positional interface sound.
+    public void PlayUi(SfxId id, float pitch = 1f)
+    {
+        if (!_streams.TryGetValue(id, out var stream))
+            return;
+        var p = _poolUi[_nextUi];
+        _nextUi = (_nextUi + 1) % _poolUi.Count;
+        p.Stream = stream;
+        p.PitchScale = pitch;
+        p.Play();
+    }
 }

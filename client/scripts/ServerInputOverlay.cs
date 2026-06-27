@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Godot;
-// Godot ships its own HttpClient; the lobby list fetch uses the BCL one.
+// Godot ships its own HttpClient; the lobby uses the BCL one.
 using HttpClient = System.Net.Http.HttpClient;
 
 // The first screen a player sees when the client is launched WITHOUT --host. Two ways to join:
@@ -18,11 +23,17 @@ public partial class ServerInputOverlay : Control
     private static readonly Color Bad = new(1f, 0.45f, 0.4f);
     private static readonly Color Faint = new(0.6f, 0.66f, 0.78f);
 
-    // Shared by the (background) list fetch; web JSON defaults are case-insensitive so this binds
-    // the public lobby's camelCase entries.
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
-    private sealed record ServerDto(string SessionId, string Name, string? PublicEndpoint,
-        int Players, int MaxPlayers, string? State);
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    private sealed record ServerDto(
+        string SessionId,
+        string Name,
+        string? PublicEndpoint,
+        int Players,
+        int MaxPlayers,
+        string? State
+    );
 
     private ConnectionManager _cm = null!;
     private LineEdit _name = null!;
@@ -30,15 +41,16 @@ public partial class ServerInputOverlay : Control
     private Label _error = null!;
     private VBoxContainer _list = null!;
     private Label _listStatus = null!;
-    private Timer _autoRefresh = null!;
 
     // "A newer build exists" nudge — hidden until the startup check (UpdateChecker) finds one.
     private RichTextLabel _updateBanner = null!;
     private UpdateChecker.UpdateInfo? _update;
 
-    // Cross-thread handoff from the fetch task to RenderServers (called on the main thread).
-    private List<ServerDto>? _fetched;
-    private string? _fetchError;
+    // SSE state — managed from StartSse/StopSse; events are queued cross-thread, drained on main thread.
+    private CancellationTokenSource? _sseCts;
+    private readonly Dictionary<string, ServerDto> _serverMap = [];
+    private readonly ConcurrentQueue<(string Event, string Data)> _sseQueue = [];
+    private string? _sseError;
 
     public void Init(ConnectionManager cm)
     {
@@ -61,7 +73,6 @@ public partial class ServerInputOverlay : Control
         center.AddChild(col);
 
         // Update nudge: sits at the very top, hidden until CheckUpdateAsync finds a newer release.
-        // BBCode link opens the GitHub release page in the player's browser (OS.ShellOpen).
         _updateBanner = new RichTextLabel
         {
             BbcodeEnabled = true,
@@ -86,7 +97,6 @@ public partial class ServerInputOverlay : Control
             CustomMinimumSize = new Vector2(0, 40),
         };
         _name.AddThemeFontSizeOverride("font_size", 18);
-        // Enter in the name field re-confirms and connects to the typed direct address.
         _name.TextSubmitted += _ => Submit();
         col.AddChild(_name);
         _name.GrabFocus();
@@ -138,74 +148,213 @@ public partial class ServerInputOverlay : Control
         connect.Pressed += Submit;
         row.AddChild(connect);
 
-        Reload();
-
-        // Keep the list fresh (player counts / game state change between visits): re-fetch every
-        // 10s while the browser is visible. Silent — no "Loading…" flash, the rows just update.
-        _autoRefresh = new Timer { WaitTime = 10.0, Autostart = true };
-        _autoRefresh.Timeout += () => { if (Visible) _ = FetchAsync(); };
-        AddChild(_autoRefresh);
+        // Subscribe to the lobby SSE stream for live server list updates.
+        StartSse();
 
         // One-shot, fire-and-forget: ask GitHub whether a newer client release is out.
         _ = CheckUpdateAsync();
+    }
+
+    public override void _ExitTree()
+    {
+        StopSse();
+        base._ExitTree();
     }
 
     // Best-effort startup update check; surfaces the banner only if a newer stable release exists.
     private async Task CheckUpdateAsync()
     {
         _update = await UpdateChecker.CheckAsync();
-        if (_update is not null) CallDeferred(nameof(ShowUpdateBanner));
+        if (_update is not null)
+            CallDeferred(nameof(ShowUpdateBanner));
     }
 
     private void ShowUpdateBanner()
     {
-        if (_update is null) return;
+        if (_update is null)
+            return;
         _updateBanner.Text =
-            $"[center][color=#9fe6a0]A new version ({_update.Version}) is available — " +
-            $"[url={_update.Url}]download[/url][/color][/center]";
+            $"[center][color=#9fe6a0]A new version ({_update.Version}) is available — "
+            + $"[url={_update.Url}]download[/url][/color][/center]";
         _updateBanner.Visible = true;
     }
 
-    // Manual refresh (button / first load): show the loading hint and clear the stale rows.
+    // Manual refresh (button): cancel and restart the SSE stream so the snapshot is fresh.
     private void Reload()
     {
-        _listStatus.Text = "Loading servers…";
+        _listStatus.Text = "Connecting…";
         _listStatus.Visible = true;
-        foreach (var child in _list.GetChildren()) child.QueueFree();
-        _ = FetchAsync();
+        foreach (var child in _list.GetChildren())
+            child.QueueFree();
+        _serverMap.Clear();
+        StartSse();
     }
 
-    private async Task FetchAsync()
+    // ---- SSE subscription --------------------------------------------------
+
+    private void StartSse()
     {
+        _sseCts?.Cancel();
+        _sseCts?.Dispose();
+        _sseCts = new CancellationTokenSource();
+        _ = SseLoopAsync(_sseCts.Token);
+    }
+
+    private void StopSse()
+    {
+        _sseCts?.Cancel();
+        _sseCts?.Dispose();
+        _sseCts = null;
+    }
+
+    // Connects to /servers/events and streams SSE events with exponential-backoff reconnect.
+    private async Task SseLoopAsync(CancellationToken ct)
+    {
+        var backoff = TimeSpan.FromSeconds(1);
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    $"{_cm.LobbyBase}/servers/events?protocol={GameNetClient.ProtocolVersion}"
+                );
+                req.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
+
+                using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                resp.EnsureSuccessStatusCode();
+
+                using var stream = await resp.Content.ReadAsStreamAsync(ct);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+
+                _sseError = null;
+                backoff = TimeSpan.FromSeconds(1); // successful connect resets backoff
+
+                await ParseSseStreamAsync(reader, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                _sseError = e.Message;
+                _sseQueue.Enqueue(("error", ""));
+                CallDeferred(nameof(DrainSseQueue));
+            }
+
+            try
+            {
+                await Task.Delay(backoff, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, 30));
+        }
+    }
+
+    // Reads lines from an open SSE stream and dispatches events to the main thread.
+    private async Task ParseSseStreamAsync(StreamReader reader, CancellationToken ct)
+    {
+        string eventName = "";
+        var dataLines = new StringBuilder();
+
+        while (!ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync();
+            if (line is null)
+                return; // stream closed
+
+            if (line.StartsWith(':'))
+                continue; // SSE comment / keepalive
+
+            if (line.StartsWith("event:"))
+                eventName = line["event:".Length..].Trim();
+            else if (line.StartsWith("data:"))
+                dataLines.Append(line["data:".Length..].Trim());
+            else if (line.Length == 0 && dataLines.Length > 0)
+            {
+                // Blank line = event boundary; dispatch to main thread.
+                _sseQueue.Enqueue((eventName, dataLines.ToString()));
+                CallDeferred(nameof(DrainSseQueue));
+                eventName = "";
+                dataLines.Clear();
+            }
+        }
+    }
+
+    // Runs on the Godot main thread (via CallDeferred). Drains the queue and re-renders if changed.
+    private void DrainSseQueue()
+    {
+        bool changed = false;
+        while (_sseQueue.TryDequeue(out var item))
+        {
+            changed |= ApplySseEvent(item.Event, item.Data);
+        }
+        if (changed)
+            RenderServers();
+    }
+
+    // Applies one SSE event to _serverMap. Returns true when the list visibly changed.
+    private bool ApplySseEvent(string eventName, string data)
+    {
+        if (eventName == "error")
+            return true;
         try
         {
-            // Filter to our wire protocol so the browser only shows servers we can actually join
-            // (a mismatch would otherwise be rejected at the handshake, after the player clicks).
-            var json = await Http.GetStringAsync($"{_cm.LobbyBase}/servers?protocol={GameNetClient.ProtocolVersion}");
-            _fetched = JsonSerializer.Deserialize<List<ServerDto>>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            _fetchError = null;
+            switch (eventName)
+            {
+                case "snapshot":
+                {
+                    var list = JsonSerializer.Deserialize<List<ServerDto>>(data, JsonOpts) ?? new();
+                    _serverMap.Clear();
+                    foreach (var s in list)
+                        _serverMap[s.SessionId] = s;
+                    return true;
+                }
+                case "registered":
+                case "updated":
+                {
+                    var s = JsonSerializer.Deserialize<ServerDto>(data, JsonOpts);
+                    if (s is not null)
+                    {
+                        _serverMap[s.SessionId] = s;
+                        return true;
+                    }
+                    break;
+                }
+                case "removed":
+                {
+                    using var doc = JsonDocument.Parse(data);
+                    if (doc.RootElement.TryGetProperty("sessionId", out var sid))
+                        return _serverMap.Remove(sid.GetString() ?? "");
+                    break;
+                }
+            }
         }
-        catch (Exception e)
-        {
-            _fetched = null;
-            _fetchError = e.Message;
+        catch
+        { /* malformed event — skip */
         }
-        CallDeferred(nameof(RenderServers));
+        return false;
     }
+
+    // ---- Render ------------------------------------------------------------
 
     private void RenderServers()
     {
-        foreach (var child in _list.GetChildren()) child.QueueFree();
+        foreach (var child in _list.GetChildren())
+            child.QueueFree();
 
-        if (_fetchError is not null)
+        if (_sseError is not null)
         {
             _listStatus.Text = $"Lobby unreachable ({_cm.LobbyBase})";
             _listStatus.Visible = true;
             return;
         }
 
-        var servers = _fetched ?? new();
+        var servers = _serverMap.Values.ToList();
         if (servers.Count == 0)
         {
             _listStatus.Text = "No public servers online";
@@ -216,10 +365,7 @@ public partial class ServerInputOverlay : Control
         _listStatus.Visible = false;
         foreach (var s in servers)
         {
-            // The lobby probed each server: a PublicEndpoint means it's directly joinable over
-            // WebSocket; otherwise it's behind a NAT and we join over WebRTC (relayed SDP + STUN).
             bool direct = !string.IsNullOrEmpty(s.PublicEndpoint);
-            // Show occupancy + game state instead of the raw URL: "Name   ·   (3/32)   ·   in-progress".
             int max = s.MaxPlayers > 0 ? s.MaxPlayers : 32;
             string occupancy = $"({s.Players}/{max})";
             string state = string.IsNullOrEmpty(s.State) ? "" : $"   ·   {s.State}";
@@ -231,13 +377,16 @@ public partial class ServerInputOverlay : Control
                 Alignment = HorizontalAlignment.Left,
             };
             btn.AddThemeFontSizeOverride("font_size", 17);
-            // Capture per-iteration values for the handler.
-            string sid = s.SessionId, name = s.Name, endpoint = s.PublicEndpoint ?? "";
+            string sid = s.SessionId,
+                name = s.Name,
+                endpoint = s.PublicEndpoint ?? "";
             btn.Pressed += () =>
             {
                 CommitName();
-                if (direct) _cm.ConnectTo(endpoint);          // straight WebSocket to the server
-                else _cm.ConnectToLobby(sid, name);            // WebRTC via the lobby
+                if (direct)
+                    _cm.ConnectTo(endpoint);
+                else
+                    _cm.ConnectToLobby(sid, name);
             };
             _list.AddChild(btn);
         }
@@ -257,8 +406,6 @@ public partial class ServerInputOverlay : Control
         _cm.ConnectTo(text);
     }
 
-    // Persist the typed pilot name and hand it to the net client before any join. Empty is allowed
-    // (the server falls back to a Pilot{id} default), so this never blocks connecting.
     private void CommitName()
     {
         string name = UserPrefs.Clamp(_name.Text);

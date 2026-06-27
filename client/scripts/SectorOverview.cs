@@ -17,388 +17,406 @@ using Godot;
 // sibling of Camera3D / WorldRenderer.
 public partial class SectorOverview : Node3D
 {
-	public static bool Active { get; private set; }
+    public static bool Active { get; private set; }
 
-	// The overview camera while the map is open, else null. Lets the HUD's TargetMarkers
-	// reproject its entity indicators through THIS camera instead of hiding — so the same
-	// brackets / class glyphs / edge arrows appear over the map in F3.
-	public static Camera3D? ActiveCamera => Active ? _instance?._cam : null;
-	private static SectorOverview? _instance;
+    // The overview camera while the map is open, else null. Lets the HUD's TargetMarkers
+    // reproject its entity indicators through THIS camera instead of hiding — so the same
+    // brackets / class glyphs / edge arrows appear over the map in F3.
+    public static Camera3D? ActiveCamera => Active ? _instance?._cam : null;
+    private static SectorOverview? _instance;
 
-	private const float Fov = 50f;                 // perspective FOV (deg); perspective avoids the
-	                                               // sky-shader pinch an ortho camera causes
-	private const float DefaultYawDeg = 25f;
-	private const float DefaultPitchDeg = 30f;     // start oblique (3/4 view), not flat top-down
-	private const float PitchMin = -85f;
-	private const float PitchMax = 85f;
-	private const float OrbitPerPixel = 0.35f;     // mouse-drag orbit sensitivity (deg/px)
-	private const float KeyOrbitPerSec = 90f;      // arrow-key orbit speed (deg/s)
+    private const float Fov = 50f; // perspective FOV (deg); perspective avoids the
 
-	private const float GridCell = 200f;           // grid line spacing (world units)
-	private const float MinDist = 40f;             // closest dolly (fully zoomed in)
-	private const float ZoomStep = 1.12f;          // wheel / +- multiplicative zoom
+    // sky-shader pinch an ortho camera causes
+    private const float DefaultYawDeg = 25f;
+    private const float DefaultPitchDeg = 30f; // start oblique (3/4 view), not flat top-down
+    private const float PitchMin = -85f;
+    private const float PitchMax = 85f;
+    private const float OrbitPerPixel = 0.35f; // mouse-drag orbit sensitivity (deg/px)
+    private const float KeyOrbitPerSec = 90f; // arrow-key orbit speed (deg/s)
 
-	private static readonly Color GridColor = new(0.25f, 0.55f, 1f, 0.35f);
-	private static readonly Color AxisColor = new(0.45f, 0.75f, 1f, 0.6f);
-	private static readonly Color BoundaryColor = new(0.5f, 0.8f, 1f, 0.85f);
-	// Altitude stems: a warm yellow that reads against the cool blue grid.
-	private static readonly Color StemColor = new(1f, 0.85f, 0.2f, 0.7f);
-	private const float StemFootTick = 6f;   // half-length of the cross drawn where a stem meets the plane
+    private const float GridCell = 200f; // grid line spacing (world units)
+    private const float MinDist = 40f; // closest dolly (fully zoomed in)
+    private const float ZoomStep = 1.12f; // wheel / +- multiplicative zoom
 
-	private WorldRenderer _world = null!;
-	private Camera3D _chaseCam = null!;
-	private Camera3D _cam = null!;
-	private MeshInstance3D _grid = null!;
-	private MeshInstance3D _stems = null!;          // yellow altitude lines, entity -> grid plane
-	private ImmediateMesh _stemMesh = null!;        // rebuilt each frame from live entity positions
-	private readonly System.Collections.Generic.List<Vector3> _stemPoints = new();
-	private CanvasLayer _hudLayer = null!;
-	private Label _hint = null!;
-	private Minimap? _minimap;     // resolved lazily; clicking its nodes retargets the view
+    private static readonly Color GridColor = new(0.25f, 0.55f, 1f, 0.35f);
+    private static readonly Color AxisColor = new(0.45f, 0.75f, 1f, 0.6f);
+    private static readonly Color BoundaryColor = new(0.5f, 0.8f, 1f, 0.85f);
 
-	private Vector3 _target;       // orbit focus point
-	private float _yawDeg, _pitchDeg;
-	private float _dist;          // zoom (camera distance from target)
-	private float _gridRadius = -1f;  // sector radius the grid mesh was last built for
-	private bool _f3Held;
-	private bool _orbitDrag, _panDrag;
+    // Altitude stems: a warm yellow that reads against the cool blue grid.
+    private static readonly Color StemColor = new(1f, 0.85f, 0.2f, 0.7f);
+    private const float StemFootTick = 6f; // half-length of the cross drawn where a stem meets the plane
 
-	public override void _Ready()
-	{
-		_instance = this;
-		_world = GetNode<WorldRenderer>("../WorldRenderer");
-		_chaseCam = GetNode<Camera3D>("../Camera3D");
+    private WorldRenderer _world = null!;
+    private Camera3D _chaseCam = null!;
+    private Camera3D _cam = null!;
+    private MeshInstance3D _grid = null!;
+    private MeshInstance3D _stems = null!; // yellow altitude lines, entity -> grid plane
+    private ImmediateMesh _stemMesh = null!; // rebuilt each frame from live entity positions
+    private readonly System.Collections.Generic.List<Vector3> _stemPoints = new();
+    private CanvasLayer _hudLayer = null!;
+    private Label _hint = null!;
+    private Minimap? _minimap; // resolved lazily; clicking its nodes retargets the view
 
-		_cam = new Camera3D
-		{
-			Name = "OverviewCamera",
-			Projection = Camera3D.ProjectionType.Perspective,
-			Fov = Fov,
-			Near = 1f,
-			Far = 24000f,
-			Current = false,
-		};
-		AddChild(_cam);
+    private Vector3 _target; // orbit focus point
+    private float _yawDeg,
+        _pitchDeg;
+    private float _dist; // zoom (camera distance from target)
+    private float _gridRadius = -1f; // sector radius the grid mesh was last built for
+    private bool _f3Held;
+    private bool _orbitDrag,
+        _panDrag;
 
-		_grid = new MeshInstance3D { Name = "SectorGrid", Visible = false };
-		AddChild(_grid);
+    public override void _Ready()
+    {
+        _instance = this;
+        _world = GetNode<WorldRenderer>("../WorldRenderer");
+        _chaseCam = GetNode<Camera3D>("../Camera3D");
 
-		// Yellow vertical stems from every entity down to the grid plane, so the map reads
-		// the height each ship/base sits off the Y=0 plane (an orbiting view alone hides it).
-		_stemMesh = new ImmediateMesh();
-		_stems = new MeshInstance3D
-		{
-			Name = "AltitudeStems",
-			Mesh = _stemMesh,
-			Visible = false,
-			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-			MaterialOverride = new StandardMaterial3D
-			{
-				ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-				VertexColorUseAsAlbedo = true,
-				Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-			},
-		};
-		AddChild(_stems);
+        _cam = new Camera3D
+        {
+            Name = "OverviewCamera",
+            Projection = Camera3D.ProjectionType.Perspective,
+            Fov = Fov,
+            Near = 1f,
+            Far = 24000f,
+            Current = false,
+        };
+        AddChild(_cam);
 
-		_hudLayer = new CanvasLayer { Name = "OverviewHud", Layer = 2 };
-		AddChild(_hudLayer);
-		_hint = new Label
-		{
-			Visible = false,
-			HorizontalAlignment = HorizontalAlignment.Center,
-			AnchorRight = 1f,
-			OffsetTop = 14f,
-			Text = "SECTOR MAP — drag / arrows to orbit · shift-drag to pan · wheel or pinch to zoom · F3 to exit",
-		};
-		_hint.AddThemeFontSizeOverride("font_size", 18);
-		_hint.AddThemeColorOverride("font_color", new Color(0.6f, 0.85f, 1f));
-		_hudLayer.AddChild(_hint);
-	}
+        _grid = new MeshInstance3D { Name = "SectorGrid", Visible = false };
+        AddChild(_grid);
 
-	public override void _Process(double delta)
-	{
-		// F3 edge-detect (polled; F3 isn't used by flight input so no conflict).
-		bool f3 = Input.IsPhysicalKeyPressed(Key.F3);
-		if (f3 && !_f3Held)
-			Toggle();
-		_f3Held = f3;
+        // Yellow vertical stems from every entity down to the grid plane, so the map reads
+        // the height each ship/base sits off the Y=0 plane (an orbiting view alone hides it).
+        _stemMesh = new ImmediateMesh();
+        _stems = new MeshInstance3D
+        {
+            Name = "AltitudeStems",
+            Mesh = _stemMesh,
+            Visible = false,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D
+            {
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                VertexColorUseAsAlbedo = true,
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            },
+        };
+        AddChild(_stems);
 
-		if (!Active)
-			return;
+        _hudLayer = new CanvasLayer { Name = "OverviewHud", Layer = 2 };
+        AddChild(_hudLayer);
+        _hint = new Label
+        {
+            Visible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            AnchorRight = 1f,
+            OffsetTop = 14f,
+            Text = "SECTOR MAP — drag / arrows to orbit · shift-drag to pan · wheel or pinch to zoom · F3 to exit",
+        };
+        _hint.AddThemeFontSizeOverride("font_size", 18);
+        _hint.AddThemeColorOverride("font_color", new Color(0.6f, 0.85f, 1f));
+        _hudLayer.AddChild(_hint);
+    }
 
-		// View sector changed (warp, or a minimap click): rebuild the grid to its size.
-		float radius = _world.ViewSectorRadius;
-		if (radius > 0f && !Mathf.IsEqualApprox(radius, _gridRadius))
-			BuildGrid(radius);
+    public override void _Process(double delta)
+    {
+        // F3 edge-detect (polled; F3 isn't used by flight input so no conflict).
+        bool f3 = Input.IsPhysicalKeyPressed(Key.F3);
+        if (f3 && !_f3Held)
+            Toggle();
+        _f3Held = f3;
 
-		HandleKeys(delta);
-		PlaceCamera();
-		UpdateGridLod();
-		RebuildStems();
-	}
+        if (!Active)
+            return;
 
-	// Rebuild the yellow altitude stems from the live entity positions. One vertical line
-	// per ship/base from its world position to its foot on the grid plane (Y = sector
-	// center Y), plus a small cross at the foot so the base point reads where it meets the
-	// plane. Matches the set of entities the HUD indicators mark (ships + bases); asteroids
-	// are deliberately excluded — there can be thousands and they'd bury the map.
-	private void RebuildStems()
-	{
-		_stemPoints.Clear();
-		if (_world.LocalShip != null)
-			_stemPoints.Add(_world.LocalShip.GlobalPosition);
-		foreach (var s in _world.FriendlyShips())
-			_stemPoints.Add(s.GlobalPosition);
-		foreach (var s in _world.EnemyShips())
-			_stemPoints.Add(s.GlobalPosition);
-		foreach (var (pos, _) in _world.VisibleBases())
-			_stemPoints.Add(pos);
+        // View sector changed (warp, or a minimap click): rebuild the grid to its size.
+        float radius = _world.ViewSectorRadius;
+        if (radius > 0f && !Mathf.IsEqualApprox(radius, _gridRadius))
+            BuildGrid(radius);
 
-		// ClearSurfaces then SurfaceEnd with zero verts logs an error, so bail when empty.
-		_stemMesh.ClearSurfaces();
-		if (_stemPoints.Count == 0)
-			return;
+        HandleKeys(delta);
+        PlaceCamera();
+        UpdateGridLod();
+        RebuildStems();
+    }
 
-		float planeY = _world.ViewSectorCenter.Y;
-		_stemMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
-		foreach (var p in _stemPoints)
-		{
-			var foot = new Vector3(p.X, planeY, p.Z);
-			StemLine(p, foot);
-			StemLine(foot + new Vector3(-StemFootTick, 0f, 0f), foot + new Vector3(StemFootTick, 0f, 0f));
-			StemLine(foot + new Vector3(0f, 0f, -StemFootTick), foot + new Vector3(0f, 0f, StemFootTick));
-		}
-		_stemMesh.SurfaceEnd();
-	}
+    // Rebuild the yellow altitude stems from the live entity positions. One vertical line
+    // per ship/base from its world position to its foot on the grid plane (Y = sector
+    // center Y), plus a small cross at the foot so the base point reads where it meets the
+    // plane. Matches the set of entities the HUD indicators mark (ships + bases); asteroids
+    // are deliberately excluded — there can be thousands and they'd bury the map.
+    private void RebuildStems()
+    {
+        _stemPoints.Clear();
+        if (_world.LocalShip != null)
+            _stemPoints.Add(_world.LocalShip.GlobalPosition);
+        foreach (var s in _world.FriendlyShips())
+            _stemPoints.Add(s.GlobalPosition);
+        foreach (var s in _world.EnemyShips())
+            _stemPoints.Add(s.GlobalPosition);
+        foreach (var (pos, _) in _world.VisibleBases())
+            _stemPoints.Add(pos);
 
-	private void StemLine(Vector3 a, Vector3 b)
-	{
-		_stemMesh.SurfaceSetColor(StemColor);
-		_stemMesh.SurfaceAddVertex(a);
-		_stemMesh.SurfaceSetColor(StemColor);
-		_stemMesh.SurfaceAddVertex(b);
-	}
+        // ClearSurfaces then SurfaceEnd with zero verts logs an error, so bail when empty.
+        _stemMesh.ClearSurfaces();
+        if (_stemPoints.Count == 0)
+            return;
 
-	// Feed the grid shader the world-units-per-pixel for the CURRENT ZOOM (measured at
-	// the focus plane from the camera distance), so the sub-grid LOD is a pure function
-	// of zoom — uniform across the plane, not per-fragment / camera-distance based.
-	private void UpdateGridLod()
-	{
-		if (_grid.MaterialOverride is not ShaderMaterial mat)
-			return;
-		float viewH = Mathf.Max(GetViewport().GetVisibleRect().Size.Y, 1f);
-		float pw = 2f * _dist * Mathf.Tan(Mathf.DegToRad(Fov) * 0.5f) / viewH;
-		mat.SetShaderParameter("lod_pw", pw);
-	}
+        float planeY = _world.ViewSectorCenter.Y;
+        _stemMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
+        foreach (var p in _stemPoints)
+        {
+            var foot = new Vector3(p.X, planeY, p.Z);
+            StemLine(p, foot);
+            StemLine(foot + new Vector3(-StemFootTick, 0f, 0f), foot + new Vector3(StemFootTick, 0f, 0f));
+            StemLine(foot + new Vector3(0f, 0f, -StemFootTick), foot + new Vector3(0f, 0f, StemFootTick));
+        }
+        _stemMesh.SurfaceEnd();
+    }
 
-	private void Toggle()
-	{
-		if (Active)
-			Close();
-		else
-			Open();
-	}
+    private void StemLine(Vector3 a, Vector3 b)
+    {
+        _stemMesh.SurfaceSetColor(StemColor);
+        _stemMesh.SurfaceAddVertex(a);
+        _stemMesh.SurfaceSetColor(StemColor);
+        _stemMesh.SurfaceAddVertex(b);
+    }
 
-	private void Open()
-	{
-		float radius = _world.LocalSectorRadius;
-		if (radius <= 0f)
-			return;   // no sector data yet — nothing to show
+    // Feed the grid shader the world-units-per-pixel for the CURRENT ZOOM (measured at
+    // the focus plane from the camera distance), so the sub-grid LOD is a pure function
+    // of zoom — uniform across the plane, not per-fragment / camera-distance based.
+    private void UpdateGridLod()
+    {
+        if (_grid.MaterialOverride is not ShaderMaterial mat)
+            return;
+        float viewH = Mathf.Max(GetViewport().GetVisibleRect().Size.Y, 1f);
+        float pw = 2f * _dist * Mathf.Tan(Mathf.DegToRad(Fov) * 0.5f) / viewH;
+        mat.SetShaderParameter("lod_pw", pw);
+    }
 
-		BuildGrid(radius);
-		// Start viewing the local sector, centered on the player (fall back to the sector
-		// center while spectating), zoomed in close so they can spin around their own ship.
-		_world.SetViewSector(null);
-		_target = _world.LocalShip?.GlobalPosition ?? _world.ViewSectorCenter;
-		_yawDeg = DefaultYawDeg;
-		_pitchDeg = DefaultPitchDeg;
-		_dist = Mathf.Min(700f, radius);
+    private void Toggle()
+    {
+        if (Active)
+            Close();
+        else
+            Open();
+    }
 
-		Active = true;
-		_grid.Visible = true;
-		_stems.Visible = true;
-		_hint.Visible = true;
-		_cam.Current = true;
-		Input.MouseMode = Input.MouseModeEnum.Visible;   // free the cursor for dragging
-		PlaceCamera();
-	}
+    private void Open()
+    {
+        float radius = _world.LocalSectorRadius;
+        if (radius <= 0f)
+            return; // no sector data yet — nothing to show
 
-	private void Close()
-	{
-		Active = false;
-		_grid.Visible = false;
-		_stems.Visible = false;
-		_hint.Visible = false;
-		_orbitDrag = _panDrag = false;
-		_world.SetViewSector(null);   // restore the local-sector view for normal flight
-		_chaseCam.Current = true;
-		// Recapture for mouse-look if we're back to flying; ShipController otherwise
-		// leaves the cursor free for the spawn menu.
-		if (_world.LocalShip != null)
-			Input.MouseMode = Input.MouseModeEnum.Captured;
-	}
+        BuildGrid(radius);
+        // Start viewing the local sector, centered on the player (fall back to the sector
+        // center while spectating), zoomed in close so they can spin around their own ship.
+        _world.SetViewSector(null);
+        _target = _world.LocalShip?.GlobalPosition ?? _world.ViewSectorCenter;
+        _yawDeg = DefaultYawDeg;
+        _pitchDeg = DefaultPitchDeg;
+        _dist = Mathf.Min(700f, radius);
 
-	// Place the perspective camera on an orbit sphere around the target. Distance
-	// drives zoom (dolly in/out).
-	private void PlaceCamera()
-	{
-		float yaw = Mathf.DegToRad(_yawDeg);
-		float pitch = Mathf.DegToRad(_pitchDeg);
-		var dir = new Vector3(
-			Mathf.Cos(pitch) * Mathf.Sin(yaw),
-			Mathf.Sin(pitch),
-			Mathf.Cos(pitch) * Mathf.Cos(yaw));
-		_cam.GlobalPosition = _target + dir * _dist;
-		_cam.LookAt(_target, Vector3.Up);
-	}
+        Active = true;
+        _grid.Visible = true;
+        _stems.Visible = true;
+        _hint.Visible = true;
+        _cam.Current = true;
+        Input.MouseMode = Input.MouseModeEnum.Visible; // free the cursor for dragging
+        PlaceCamera();
+    }
 
-	private void HandleKeys(double delta)
-	{
-		float d = KeyOrbitPerSec * (float)delta;
-		if (Input.IsPhysicalKeyPressed(Key.Left)) _yawDeg -= d;
-		if (Input.IsPhysicalKeyPressed(Key.Right)) _yawDeg += d;
-		if (Input.IsPhysicalKeyPressed(Key.Up)) _pitchDeg += d;
-		if (Input.IsPhysicalKeyPressed(Key.Down)) _pitchDeg -= d;
-		_pitchDeg = Mathf.Clamp(_pitchDeg, PitchMin, PitchMax);
+    private void Close()
+    {
+        Active = false;
+        _grid.Visible = false;
+        _stems.Visible = false;
+        _hint.Visible = false;
+        _orbitDrag = _panDrag = false;
+        _world.SetViewSector(null); // restore the local-sector view for normal flight
+        _chaseCam.Current = true;
+        // Recapture for mouse-look if we're back to flying; ShipController otherwise
+        // leaves the cursor free for the spawn menu.
+        if (_world.LocalShip != null)
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+    }
 
-		if (Input.IsPhysicalKeyPressed(Key.Equal) || Input.IsPhysicalKeyPressed(Key.KpAdd))
-			Zoom(1f / Mathf.Pow(ZoomStep, (float)delta * 8f));
-		if (Input.IsPhysicalKeyPressed(Key.Minus) || Input.IsPhysicalKeyPressed(Key.KpSubtract))
-			Zoom(Mathf.Pow(ZoomStep, (float)delta * 8f));
-	}
+    // Place the perspective camera on an orbit sphere around the target. Distance
+    // drives zoom (dolly in/out).
+    private void PlaceCamera()
+    {
+        float yaw = Mathf.DegToRad(_yawDeg);
+        float pitch = Mathf.DegToRad(_pitchDeg);
+        var dir = new Vector3(Mathf.Cos(pitch) * Mathf.Sin(yaw), Mathf.Sin(pitch), Mathf.Cos(pitch) * Mathf.Cos(yaw));
+        _cam.GlobalPosition = _target + dir * _dist;
+        _cam.LookAt(_target, Vector3.Up);
+    }
 
-	// Mouse + trackpad. Use _Input (not _UnhandledInput) so HUD Controls can't eat
-	// the wheel/gesture events before they reach us.
-	public override void _Input(InputEvent @event)
-	{
-		if (!Active)
-			return;
+    private void HandleKeys(double delta)
+    {
+        float d = KeyOrbitPerSec * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Left))
+            _yawDeg -= d;
+        if (Input.IsPhysicalKeyPressed(Key.Right))
+            _yawDeg += d;
+        if (Input.IsPhysicalKeyPressed(Key.Up))
+            _pitchDeg += d;
+        if (Input.IsPhysicalKeyPressed(Key.Down))
+            _pitchDeg -= d;
+        _pitchDeg = Mathf.Clamp(_pitchDeg, PitchMin, PitchMax);
 
-		switch (@event)
-		{
-			case InputEventMouseButton mb:
-				switch (mb.ButtonIndex)
-				{
-					case MouseButton.WheelUp: if (mb.Pressed) Zoom(1f / ZoomStep); break;
-					case MouseButton.WheelDown: if (mb.Pressed) Zoom(ZoomStep); break;
-					case MouseButton.Left:
-						// A click on the minimap retargets the view sector instead of orbiting.
-						if (mb.Pressed && TryMinimapClick(mb.Position))
-							break;
-						_orbitDrag = mb.Pressed && !mb.ShiftPressed;
-						_panDrag = mb.Pressed && mb.ShiftPressed;
-						break;
-					case MouseButton.Right or MouseButton.Middle: _panDrag = mb.Pressed; break;
-				}
-				break;
+        if (Input.IsPhysicalKeyPressed(Key.Equal) || Input.IsPhysicalKeyPressed(Key.KpAdd))
+            Zoom(1f / Mathf.Pow(ZoomStep, (float)delta * 8f));
+        if (Input.IsPhysicalKeyPressed(Key.Minus) || Input.IsPhysicalKeyPressed(Key.KpSubtract))
+            Zoom(Mathf.Pow(ZoomStep, (float)delta * 8f));
+    }
 
-			case InputEventMouseMotion motion:
-				if (_panDrag) Pan(motion.Relative);
-				else if (_orbitDrag) Orbit(motion.Relative);
-				break;
+    // Mouse + trackpad. Use _Input (not _UnhandledInput) so HUD Controls can't eat
+    // the wheel/gesture events before they reach us.
+    public override void _Input(InputEvent @event)
+    {
+        if (!Active)
+            return;
 
-			// Apple trackpad: pinch to zoom.
-			case InputEventMagnifyGesture mag:
-				Zoom(1f / mag.Factor);
-				break;
+        switch (@event)
+        {
+            case InputEventMouseButton mb:
+                switch (mb.ButtonIndex)
+                {
+                    case MouseButton.WheelUp:
+                        if (mb.Pressed)
+                            Zoom(1f / ZoomStep);
+                        break;
+                    case MouseButton.WheelDown:
+                        if (mb.Pressed)
+                            Zoom(ZoomStep);
+                        break;
+                    case MouseButton.Left:
+                        // A click on the minimap retargets the view sector instead of orbiting.
+                        if (mb.Pressed && TryMinimapClick(mb.Position))
+                            break;
+                        _orbitDrag = mb.Pressed && !mb.ShiftPressed;
+                        _panDrag = mb.Pressed && mb.ShiftPressed;
+                        break;
+                    case MouseButton.Right or MouseButton.Middle:
+                        _panDrag = mb.Pressed;
+                        break;
+                }
+                break;
 
-			// Apple trackpad: two-finger drag orbits (shift to pan).
-			case InputEventPanGesture pan:
-				if (Input.IsKeyPressed(Key.Shift)) Pan(-pan.Delta * 12f);
-				else Orbit(pan.Delta * 6f);
-				break;
-		}
-	}
+            case InputEventMouseMotion motion:
+                if (_panDrag)
+                    Pan(motion.Relative);
+                else if (_orbitDrag)
+                    Orbit(motion.Relative);
+                break;
 
-	// If the point falls on a minimap sector node, switch the overview to that sector.
-	private bool TryMinimapClick(Vector2 point)
-	{
-		_minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
-		if (_minimap != null && _minimap.TryClickSector(point, out uint sector))
-		{
-			SwitchView(sector);
-			return true;
-		}
-		return false;
-	}
+            // Apple trackpad: pinch to zoom.
+            case InputEventMagnifyGesture mag:
+                Zoom(1f / mag.Factor);
+                break;
 
-	// Retarget the overview to a sector. Frames the local ship when it's our own sector,
-	// otherwise frames the whole sector (the orbit angle is kept).
-	private void SwitchView(uint sector)
-	{
-		_world.SetViewSector(sector);
-		float r = _world.ViewSectorRadius;
-		if (r <= 0f)
-			return;
-		BuildGrid(r);
-		if (sector == _world.LocalSector && _world.LocalShip != null)
-		{
-			_target = _world.LocalShip.GlobalPosition;
-			_dist = Mathf.Min(700f, r);
-		}
-		else
-		{
-			_target = _world.ViewSectorCenter;
-			_dist = Mathf.Clamp(r * 1.5f, MinDist, r * 3f);
-		}
-	}
+            // Apple trackpad: two-finger drag orbits (shift to pan).
+            case InputEventPanGesture pan:
+                if (Input.IsKeyPressed(Key.Shift))
+                    Pan(-pan.Delta * 12f);
+                else
+                    Orbit(pan.Delta * 6f);
+                break;
+        }
+    }
 
-	private void Orbit(Vector2 deltaPx)
-	{
-		_yawDeg -= deltaPx.X * OrbitPerPixel;
-		_pitchDeg = Mathf.Clamp(_pitchDeg + deltaPx.Y * OrbitPerPixel, PitchMin, PitchMax);
-	}
+    // If the point falls on a minimap sector node, switch the overview to that sector.
+    private bool TryMinimapClick(Vector2 point)
+    {
+        _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
+        if (_minimap != null && _minimap.TryClickSector(point, out uint sector))
+        {
+            SwitchView(sector);
+            return true;
+        }
+        return false;
+    }
 
-	// Pan the orbit target across the camera's screen plane (grab-the-map feel).
-	private void Pan(Vector2 deltaPx)
-	{
-		float viewH = Mathf.Max(GetViewport().GetVisibleRect().Size.Y, 1f);
-		// World units per screen pixel at the focus plane under perspective.
-		float wpp = 2f * _dist * Mathf.Tan(Mathf.DegToRad(Fov) * 0.5f) / viewH;
-		Basis b = _cam.GlobalTransform.Basis;
-		_target += -b.X * (deltaPx.X * wpp) + b.Y * (deltaPx.Y * wpp);
-	}
+    // Retarget the overview to a sector. Frames the local ship when it's our own sector,
+    // otherwise frames the whole sector (the orbit angle is kept).
+    private void SwitchView(uint sector)
+    {
+        _world.SetViewSector(sector);
+        float r = _world.ViewSectorRadius;
+        if (r <= 0f)
+            return;
+        BuildGrid(r);
+        if (sector == _world.LocalSector && _world.LocalShip != null)
+        {
+            _target = _world.LocalShip.GlobalPosition;
+            _dist = Mathf.Min(700f, r);
+        }
+        else
+        {
+            _target = _world.ViewSectorCenter;
+            _dist = Mathf.Clamp(r * 1.5f, MinDist, r * 3f);
+        }
+    }
 
-	private void Zoom(float factor)
-	{
-		float max = Mathf.Max(_gridRadius, 1f) * 3f;
-		_dist = Mathf.Clamp(_dist * factor, MinDist, max);
-	}
+    private void Orbit(Vector2 deltaPx)
+    {
+        _yawDeg -= deltaPx.X * OrbitPerPixel;
+        _pitchDeg = Mathf.Clamp(_pitchDeg + deltaPx.Y * OrbitPerPixel, PitchMin, PitchMax);
+    }
 
-	// Blue reference grid on the Y=0 plane. A single quad spanning the sector,
-	// shaded so the fragment shader can (a) clip to the circular sector boundary
-	// with discard, and (b) fade finer sub-grids in/out by zoom via screen-space
-	// derivatives — both impossible with static line geometry.
-	private void BuildGrid(float radius)
-	{
-		_gridRadius = radius;
-		Vector3 c = _world.ViewSectorCenter;
-		float s = radius * 2.1f;   // a touch larger than the circle so the boundary ring fits
+    // Pan the orbit target across the camera's screen plane (grab-the-map feel).
+    private void Pan(Vector2 deltaPx)
+    {
+        float viewH = Mathf.Max(GetViewport().GetVisibleRect().Size.Y, 1f);
+        // World units per screen pixel at the focus plane under perspective.
+        float wpp = 2f * _dist * Mathf.Tan(Mathf.DegToRad(Fov) * 0.5f) / viewH;
+        Basis b = _cam.GlobalTransform.Basis;
+        _target += -b.X * (deltaPx.X * wpp) + b.Y * (deltaPx.Y * wpp);
+    }
 
-		_grid.Mesh = new PlaneMesh { Size = new Vector2(s, s) };   // lies in XZ, normal +Y
-		_grid.Position = c;
+    private void Zoom(float factor)
+    {
+        float max = Mathf.Max(_gridRadius, 1f) * 3f;
+        _dist = Mathf.Clamp(_dist * factor, MinDist, max);
+    }
 
-		if (_grid.MaterialOverride is not ShaderMaterial mat)
-		{
-			mat = new ShaderMaterial { Shader = new Shader { Code = GridShader } };
-			_grid.MaterialOverride = mat;
-		}
-		mat.SetShaderParameter("center", new Vector2(c.X, c.Z));
-		mat.SetShaderParameter("radius", radius);
-		mat.SetShaderParameter("cell_fine", GridCell * 0.2f);
-		mat.SetShaderParameter("cell_mid", GridCell);
-		mat.SetShaderParameter("cell_coarse", GridCell * 5f);
-		mat.SetShaderParameter("grid_color", GridColor);
-		mat.SetShaderParameter("axis_color", AxisColor);
-		mat.SetShaderParameter("boundary_color", BoundaryColor);
-	}
+    // Blue reference grid on the Y=0 plane. A single quad spanning the sector,
+    // shaded so the fragment shader can (a) clip to the circular sector boundary
+    // with discard, and (b) fade finer sub-grids in/out by zoom via screen-space
+    // derivatives — both impossible with static line geometry.
+    private void BuildGrid(float radius)
+    {
+        _gridRadius = radius;
+        Vector3 c = _world.ViewSectorCenter;
+        float s = radius * 2.1f; // a touch larger than the circle so the boundary ring fits
 
-	// Ground-plane grid shader. Lines are kept ~1px via fwidth (so they don't
-	// thicken when zoomed in); the mid/fine sub-grids fade in only once their cells
-	// span enough screen pixels; everything is clipped to the sector circle, with a
-	// boundary ring at the rim and brighter center axes.
-	private const string GridShader = @"
+        _grid.Mesh = new PlaneMesh { Size = new Vector2(s, s) }; // lies in XZ, normal +Y
+        _grid.Position = c;
+
+        if (_grid.MaterialOverride is not ShaderMaterial mat)
+        {
+            mat = new ShaderMaterial { Shader = new Shader { Code = GridShader } };
+            _grid.MaterialOverride = mat;
+        }
+        mat.SetShaderParameter("center", new Vector2(c.X, c.Z));
+        mat.SetShaderParameter("radius", radius);
+        mat.SetShaderParameter("cell_fine", GridCell * 0.2f);
+        mat.SetShaderParameter("cell_mid", GridCell);
+        mat.SetShaderParameter("cell_coarse", GridCell * 5f);
+        mat.SetShaderParameter("grid_color", GridColor);
+        mat.SetShaderParameter("axis_color", AxisColor);
+        mat.SetShaderParameter("boundary_color", BoundaryColor);
+    }
+
+    // Ground-plane grid shader. Lines are kept ~1px via fwidth (so they don't
+    // thicken when zoomed in); the mid/fine sub-grids fade in only once their cells
+    // span enough screen pixels; everything is clipped to the sector circle, with a
+    // boundary ring at the rim and brighter center axes.
+    private const string GridShader =
+        @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never;
 

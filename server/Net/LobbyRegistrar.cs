@@ -1,20 +1,21 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.WebSockets;
+using System.Text.Json;
+using System.Threading.Channels;
 using SIPSorcery.Net;
 
 namespace SimServer.Net;
 
-// Publishes this game server to the public lobby (public lobby) so clients can discover and join
-// it through WebRTC — the opt-in path for player-run servers behind a NAT. Opt-in BY NAME: it
-// only registers when SIM_PUBLIC_NAME (3-50 chars) is set; with no name the server stays private
-// (direct ws://host:8090 only) and this whole subsystem is dormant.
+// Publishes this game server to the public lobby so clients can discover and join it. Opt-in BY
+// NAME: only registers when SIM_PUBLIC_NAME (3-50 chars) is set; with no name the server stays
+// private (direct ws://host:8090 only) and this whole subsystem is dormant.
 //
-// On register the lobby PROBES our port back and tells us our mode: if our port is reachable it
-// records a direct host:port (clients connect straight to us over WebSocket and we do nothing
-// extra); if not, we're a NAT'd server and start a WebRtcListener so clients can join via the
-// relayed SDP handshake + STUN. Then we heartbeat to stay live (registry TTL is 30 s); if the
-// lobby forgets us (restart -> 404) we re-register (which re-probes). On shutdown we delete the
-// entry for a clean disappearance.
+// After registration the server opens a WebSocket to /servers/ws. While that WS is open the lobby
+// considers it alive (no periodic heartbeats needed). State updates (player count, game state) are
+// pushed over the WS only when values actually change; a ping is sent every ~25 s as a keepalive
+// within the 30 s registry TTL. WebRTC offers from clients are pushed back down the same channel
+// (no long-polling /pending). On WS drop the server re-registers and re-opens a fresh WS.
 //
 // Env:
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
@@ -30,25 +31,25 @@ namespace SimServer.Net;
 public sealed class LobbyRegistrar
 {
     public const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
-    static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(10);
-    // When we assert a public endpoint but the lobby can't reach it yet (a PaaS domain whose edge
-    // routing/cert is still propagating in the first minute after boot), re-register on this faster
-    // cadence to re-probe until it flips to DIRECT — capped, then we settle for WebRTC/STUN.
+
+    // When we assert a public endpoint but the lobby can't reach it yet (PaaS domain propagation),
+    // re-register on a faster cadence to re-probe until it flips to DIRECT — capped.
     static readonly TimeSpan DirectRetryEvery = TimeSpan.FromSeconds(15);
     const int MaxDirectRetries = 8;
 
     private readonly ClientHub _hub;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
-    private readonly string _shareBase;     // http://host:port
+    private readonly string _shareBase; // http://host:port
     private readonly string _name;
-    private readonly int _port;             // public-facing port the lobby probes/advertises
+    private readonly int _port; // public-facing port the lobby probes/advertises
     private readonly string? _publicEndpoint;
-    private readonly int _maxPlayers;       // capacity advertised to the lobby browser
+    private readonly int _maxPlayers; // capacity advertised to the lobby browser
 
     private string? _sessionId;
     private CancellationTokenSource? _listenerCts;
-    private bool _gotDirect;        // last registration came back DIRECT (lobby reached our endpoint)
-    private int _directRetries;     // re-register attempts spent waiting for our endpoint to go live
+    private bool _gotDirect; // last registration came back DIRECT
+    private int _directRetries; // re-register attempts spent waiting for our endpoint to go live
+    private Channel<PendingOfferDto>? _offerChannel; // written by WS receive, read by WebRtcListener
 
     private LobbyRegistrar(ClientHub hub, string shareBase, string name, int port, string? publicEndpoint, int maxPlayers)
     {
@@ -66,7 +67,7 @@ public sealed class LobbyRegistrar
     {
         var name = (Environment.GetEnvironmentVariable("SIM_PUBLIC_NAME") ?? "").Trim();
         if (name.Length == 0)
-            return null;   // private: not published to any lobby
+            return null; // private: not published to any lobby
         if (name.Length is < 3 or > 50)
         {
             Console.WriteLine($"[Lobby] SIM_PUBLIC_NAME must be 3-50 chars (got {name.Length}); staying private.");
@@ -74,28 +75,26 @@ public sealed class LobbyRegistrar
         }
 
         var lobby = (Environment.GetEnvironmentVariable("PUBLIC_LOBBY") ?? "").Trim();
-        if (lobby.Length == 0) lobby = DefaultLobby;
+        if (lobby.Length == 0)
+            lobby = DefaultLobby;
         var shareBase = lobby.StartsWith("http") ? lobby.TrimEnd('/') : $"http://{lobby}";
         var endpoint = (Environment.GetEnvironmentVariable("SIM_PUBLIC_ENDPOINT") ?? "").Trim();
 
         // On a PaaS that fronts us with an HTTPS edge (Railway sets RAILWAY_PUBLIC_DOMAIN), our
-        // reachable address is wss://<domain> on 443 — assert it so the lobby probes/advertises that
-        // (our container source IP + listen port aren't directly reachable, and WebRTC has no UDP
-        // edge there anyway). An explicit SIM_PUBLIC_ENDPOINT still wins.
+        // reachable address is wss://<domain> on 443 — assert it so the lobby probes/advertises that.
         if (endpoint.Length == 0)
         {
             var railway = (Environment.GetEnvironmentVariable("RAILWAY_PUBLIC_DOMAIN") ?? "").Trim();
-            if (railway.Length > 0) endpoint = $"https://{railway}";
+            if (railway.Length > 0)
+                endpoint = $"https://{railway}";
         }
 
-        // Advertise/probe the public-facing port — usually the listen port, but a port-forward may
-        // map a different external port, so allow an override.
-        var port = int.TryParse(Environment.GetEnvironmentVariable("SIM_PUBLIC_PORT"), out var pp) && pp is > 0 and <= 65535
-            ? pp : listenPort;
+        var port =
+            int.TryParse(Environment.GetEnvironmentVariable("SIM_PUBLIC_PORT"), out var pp) && pp is > 0 and <= 65535
+                ? pp
+                : listenPort;
 
-        // Capacity advertised in the lobby browser (current/max). Default 32.
-        var maxPlayers = int.TryParse(Environment.GetEnvironmentVariable("SIM_MAX_PLAYERS"), out var mp) && mp > 0
-            ? mp : 32;
+        var maxPlayers = int.TryParse(Environment.GetEnvironmentVariable("SIM_MAX_PLAYERS"), out var mp) && mp > 0 ? mp : 32;
 
         Console.WriteLine($"[Lobby] publishing \"{name}\" to {shareBase} (port {port}, max {maxPlayers} players)");
         return new LobbyRegistrar(hub, shareBase, name, port, endpoint.Length == 0 ? null : endpoint, maxPlayers);
@@ -107,46 +106,64 @@ public sealed class LobbyRegistrar
     {
         try
         {
-            if (!await RegisterAndListen(ct)) return;
-
             while (!ct.IsCancellationRequested)
             {
-                // Self-heal the first-boot race: if we asserted a public endpoint but the lobby
-                // couldn't reach it yet, re-register on a faster cadence to re-probe until DIRECT
-                // (capped). We deregister the stale entry first so we never double-list ourselves.
-                bool retrying = _publicEndpoint is not null && !_gotDirect && _directRetries < MaxDirectRetries;
-
-                try { await Task.Delay(retrying ? DirectRetryEvery : HeartbeatEvery, ct); }
-                catch (OperationCanceledException) { break; }
-
-                if (retrying)
+                if (!await RegisterAndListen(ct))
                 {
-                    _directRetries++;
-                    Console.WriteLine($"[Lobby] endpoint not reachable from lobby yet; re-registering ({_directRetries}/{MaxDirectRetries}).");
-                    _listenerCts?.Cancel();
-                    await Deregister();              // drop the stale entry so we don't double-list
-                    await RegisterAndListen(ct);
+                    // Registration failed (lobby unreachable?); wait before retrying.
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                     continue;
                 }
 
-                var ok = await Heartbeat(ct);
-                if (!ok && !ct.IsCancellationRequested)
+                // Self-heal the first-boot race: if we asserted a public endpoint but the lobby
+                // couldn't reach it yet (PaaS domain propagation), re-register after the retry
+                // interval to re-probe. Open the WS during this window so offers can still flow.
+                bool retrying = _publicEndpoint is not null && !_gotDirect && _directRetries < MaxDirectRetries;
+                if (retrying)
                 {
-                    Console.WriteLine("[Lobby] heartbeat lost (lobby forgot us?); re-registering.");
-                    _listenerCts?.Cancel();
-                    await RegisterAndListen(ct);
+                    _directRetries++;
+                    Console.WriteLine(
+                        $"[Lobby] endpoint not yet reachable; re-probing ({_directRetries}/{MaxDirectRetries})."
+                    );
+                    using var retryCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    retryCts.CancelAfter(DirectRetryEvery);
+                    await RunWsAsync(_sessionId!, retryCts.Token); // opens WS for the retry window
+                    if (ct.IsCancellationRequested)
+                        break;
+                    await Deregister();
+                    continue;
                 }
+
+                // Normal: hold the WS until it drops or we shut down.
+                await RunWsAsync(_sessionId!, ct);
+                if (ct.IsCancellationRequested)
+                    break;
+                Console.WriteLine("[Lobby] WS dropped; re-registering.");
+                await Deregister();
             }
         }
-        catch (OperationCanceledException) { /* shutting down */ }
-        finally { await Deregister(); }
+        catch (OperationCanceledException)
+        { /* shutting down */
+        }
+        finally
+        {
+            await Deregister();
+        }
     }
 
     private async Task<bool> RegisterAndListen(CancellationToken ct)
     {
         try
         {
-            using var resp = await _http.PostAsJsonAsync($"{_shareBase}/servers",
+            using var resp = await _http.PostAsJsonAsync(
+                $"{_shareBase}/servers",
                 new
                 {
                     name = _name,
@@ -155,11 +172,10 @@ public sealed class LobbyRegistrar
                     players = _hub.PlayerCount,
                     maxPlayers = _maxPlayers,
                     state = _hub.GameState,
-                    // Advertise our wire-protocol version so the lobby only lists us to clients on the
-                    // same protocol (they filter /servers?protocol=). This is the byte the handshake
-                    // already gates on (Protocol.Version / GameNetClient.ProtocolVersion).
                     protocolVersion = (int)Protocol.Version,
-                }, ct);
+                },
+                ct
+            );
             if (!resp.IsSuccessStatusCode)
             {
                 Console.WriteLine($"[Lobby] register failed ({(int)resp.StatusCode}).");
@@ -176,23 +192,35 @@ public sealed class LobbyRegistrar
             _sessionId = entry.SessionId;
             _gotDirect = !string.IsNullOrEmpty(entry.PublicEndpoint);
 
-            // The lobby decided our mode from a reachability probe. A non-empty PublicEndpoint means
-            // we're directly joinable over WebSocket — nothing more to do here. Otherwise we're
-            // behind a NAT, so accept WebRTC joins relayed through the lobby (public STUN only).
-            if (!string.IsNullOrEmpty(entry.PublicEndpoint))
+            if (!_gotDirect)
             {
-                Console.WriteLine($"[Lobby] registered session {_sessionId} — DIRECT at {entry.PublicEndpoint} (no WebRTC listener).");
+                // NAT mode: create the offer channel and start WebRtcListener once — both are
+                // reused across re-registrations so the listener never needs to restart.
+                if (_offerChannel is null)
+                {
+                    _offerChannel = Channel.CreateUnbounded<PendingOfferDto>(
+                        new UnboundedChannelOptions { SingleReader = true }
+                    );
+                    var ice = ToIceServers(entry.IceServers);
+                    _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    new WebRtcListener(_hub, _shareBase, _offerChannel.Reader, ice).Start(_listenerCts.Token);
+                    Console.WriteLine($"[Lobby] registered {_sessionId} — STUN/WebRTC ({ice.Count} ICE server(s)).");
+                }
+                else
+                {
+                    Console.WriteLine($"[Lobby] re-registered {_sessionId} — STUN/WebRTC (listener already running).");
+                }
             }
             else
             {
-                var ice = ToIceServers(entry.IceServers);
-                _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                new WebRtcListener(_hub, _shareBase, _sessionId, ice).Start(_listenerCts.Token);
-                Console.WriteLine($"[Lobby] registered session {_sessionId} — STUN/WebRTC ({ice.Count} ICE server(s)).");
+                Console.WriteLine($"[Lobby] registered {_sessionId} — DIRECT at {entry.PublicEndpoint}.");
             }
             return true;
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             Console.WriteLine($"[Lobby] register error: {e.Message}");
@@ -200,51 +228,182 @@ public sealed class LobbyRegistrar
         }
     }
 
-    private async Task<bool> Heartbeat(CancellationToken ct)
+    // Opens a WS to the lobby, authenticates, then runs send/receive loops concurrently until
+    // the socket drops, ct fires, or a connection error occurs. Always returns (never throws).
+    private async Task RunWsAsync(string sessionId, CancellationToken ct)
     {
-        if (_sessionId is null) return false;
         try
         {
-            // Report live status with each ping so the browser shows a fresh (players/max) + state.
-            using var resp = await _http.PostAsJsonAsync($"{_shareBase}/servers/{_sessionId}/heartbeat",
-                new { players = _hub.PlayerCount, maxPlayers = _maxPlayers, state = _hub.GameState }, ct);
-            return resp.StatusCode != HttpStatusCode.NotFound && resp.IsSuccessStatusCode;
+            using var ws = new ClientWebSocket();
+            await ws.ConnectAsync(ToWsUri(_shareBase), ct);
+
+            // Auth handshake.
+            var authBytes = JsonSerializer.SerializeToUtf8Bytes(new { type = "auth", sessionId });
+            await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, ct);
+
+            var buf = new byte[512];
+            var r = await ws.ReceiveAsync(buf, ct);
+            if (r.MessageType == WebSocketMessageType.Close)
+                return;
+            var reply = JsonSerializer.Deserialize<WsReplyDto>(
+                buf.AsSpan(0, r.Count),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+            if (reply?.Type != "ok")
+            {
+                Console.WriteLine($"[Lobby] WS auth rejected: {reply?.Message}");
+                return;
+            }
+            Console.WriteLine($"[Lobby] WS connected (session {sessionId}).");
+
+            using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var sendTask = WsSendLoop(ws, pair.Token);
+            var recvTask = WsRecvLoop(ws, pair.Token);
+            await Task.WhenAny(sendTask, recvTask);
+            pair.Cancel();
+            await Task.WhenAll(sendTask, recvTask);
         }
-        catch (OperationCanceledException) { throw; }
-        catch { return false; }
+        catch (OperationCanceledException)
+        { /* ct fired (shutdown or retry interval) */
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[Lobby] WS error: {e.Message}");
+        }
+    }
+
+    // Sends state updates when values change, plus a periodic ping to keep LastSeen fresh.
+    private async Task WsSendLoop(ClientWebSocket ws, CancellationToken ct)
+    {
+        const int CheckMs = 2_000;
+        const int PingAfterTicks = 12; // 12 × 2 s = 24 s, within the 30 s TTL
+
+        int lastPlayers = -1;
+        string? lastState = null;
+        int ticks = 0;
+
+        try
+        {
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+            {
+                int players = _hub.PlayerCount;
+                string state = _hub.GameState;
+
+                if (players != lastPlayers || state != lastState)
+                {
+                    var payload = JsonSerializer.SerializeToUtf8Bytes(
+                        new
+                        {
+                            type = "update",
+                            players,
+                            maxPlayers = _maxPlayers,
+                            state,
+                        }
+                    );
+                    await ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
+                    lastPlayers = players;
+                    lastState = state;
+                    ticks = 0;
+                }
+                else if (++ticks >= PingAfterTicks)
+                {
+                    var ping = JsonSerializer.SerializeToUtf8Bytes(new { type = "ping" });
+                    await ws.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, ct);
+                    ticks = 0;
+                }
+
+                await Task.Delay(CheckMs, ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { }
+    }
+
+    // Receives messages from the lobby — currently only WebRTC offer pushes.
+    private async Task WsRecvLoop(ClientWebSocket ws, CancellationToken ct)
+    {
+        var buf = new byte[64 * 1024]; // SDP offers can be large
+        try
+        {
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+            {
+                var result = await ws.ReceiveAsync(buf, ct);
+                if (result.MessageType == WebSocketMessageType.Close)
+                    return;
+
+                var msg = JsonSerializer.Deserialize<WsOfferMsg>(
+                    buf.AsSpan(0, result.Count),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                if (msg?.Type == "offer" && _offerChannel is not null)
+                    _offerChannel.Writer.TryWrite(new PendingOfferDto(msg.Ticket!, msg.SdpOffer!));
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { }
     }
 
     private async Task Deregister()
     {
-        if (_sessionId is null) return;
+        if (_sessionId is null)
+            return;
+        var sid = _sessionId;
+        _sessionId = null; // null before the HTTP call to prevent double-deregister
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _http.DeleteAsync($"{_shareBase}/servers/{_sessionId}", cts.Token);
-            Console.WriteLine($"[Lobby] deregistered session {_sessionId}.");
+            await _http.DeleteAsync($"{_shareBase}/servers/{sid}", cts.Token);
+            Console.WriteLine($"[Lobby] deregistered session {sid}.");
         }
-        catch { /* best effort on shutdown */ }
+        catch
+        { /* best effort on shutdown */
+        }
     }
 
     private static List<RTCIceServer> ToIceServers(IReadOnlyList<IceServerDto>? dtos)
     {
         var list = new List<RTCIceServer>();
-        if (dtos is null) return list;
+        if (dtos is null)
+            return list;
         foreach (var d in dtos)
         {
-            if (d.Urls is null || d.Urls.Length == 0) continue;
-            list.Add(new RTCIceServer
-            {
-                urls = string.Join(',', d.Urls),
-                username = d.Username,
-                credential = d.Credential,
-            });
+            if (d.Urls is null || d.Urls.Length == 0)
+                continue;
+            list.Add(
+                new RTCIceServer
+                {
+                    urls = string.Join(',', d.Urls),
+                    username = d.Username,
+                    credential = d.Credential,
+                }
+            );
         }
         return list;
     }
 
-    // the public lobby's register-response JSON (camelCase; web JSON defaults are case-insensitive).
-    // PublicEndpoint is set by the lobby's reachability probe (direct mode) or null (WebRTC mode).
-    private sealed record RegisterResponseDto(string SessionId, string? PublicEndpoint, IReadOnlyList<IceServerDto>? IceServers);
+    static Uri ToWsUri(string httpBase)
+    {
+        var url = httpBase.TrimEnd('/');
+        if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            url = "wss://" + url[8..];
+        else if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            url = "ws://" + url[7..];
+        else
+            url = "ws://" + url;
+        return new Uri(url + "/servers/ws");
+    }
+
+    // JSON shapes for the /servers/ws protocol.
+    private sealed record WsReplyDto(string? Type, string? Message);
+
+    private sealed record WsOfferMsg(string? Type, string? Ticket, string? SdpOffer);
+
+    // Public lobby register-response JSON (camelCase; web JSON defaults are case-insensitive).
+    private sealed record RegisterResponseDto(
+        string SessionId,
+        string? PublicEndpoint,
+        IReadOnlyList<IceServerDto>? IceServers
+    );
+
     private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);
 }

@@ -26,9 +26,11 @@ public static class GlbLoader
     {
         if (_missing.Contains(resPath))
             return null;
-        if (ResourceLoader.Exists(resPath)
+        if (
+            ResourceLoader.Exists(resPath)
             && GD.Load<PackedScene>(resPath) is PackedScene scene
-            && scene.Instantiate() is Node3D root)
+            && scene.Instantiate() is Node3D root
+        )
             return root;
 
         _missing.Add(resPath);
@@ -99,8 +101,13 @@ public static class GlbLoader
                 for (int i = 0; i < 8; i++)
                 {
                     Vector3 p = local * b.GetEndpoint(i);
-                    if (!found) { acc = new Aabb(p, Vector3.Zero); found = true; }
-                    else acc = acc.Expand(p);
+                    if (!found)
+                    {
+                        acc = new Aabb(p, Vector3.Zero);
+                        found = true;
+                    }
+                    else
+                        acc = acc.Expand(p);
                 }
             }
             foreach (Node child in node.GetChildren())

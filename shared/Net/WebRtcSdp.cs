@@ -24,7 +24,11 @@ public static class WebRtcSdp
     public static ConcurrentQueue<string> CollectCandidates(RTCPeerConnection pc)
     {
         var gathered = new ConcurrentQueue<string>();
-        pc.onicecandidate += c => { if (c is not null) gathered.Enqueue(BuildCandidateAttr(c)); };
+        pc.onicecandidate += c =>
+        {
+            if (c is not null)
+                gathered.Enqueue(BuildCandidateAttr(c));
+        };
         return gathered;
     }
 
@@ -35,24 +39,40 @@ public static class WebRtcSdp
     // the LAN-tuned 3s cap and leave the SDP host-only (unroutable off-LAN).
     public static async Task WaitForIceGathering(RTCPeerConnection pc, bool needSrflx, CancellationToken ct)
     {
-        if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
+        if (pc.iceGatheringState == RTCIceGatheringState.complete)
+            return;
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void OnState(RTCIceGatheringState s) { if (s == RTCIceGatheringState.complete) tcs.TrySetResult(); }
-        void OnCand(RTCIceCandidate c) { if (needSrflx && c is { type: RTCIceCandidateType.srflx }) tcs.TrySetResult(); }
+        void OnState(RTCIceGatheringState s)
+        {
+            if (s == RTCIceGatheringState.complete)
+                tcs.TrySetResult();
+        }
+        void OnCand(RTCIceCandidate c)
+        {
+            if (needSrflx && c is { type: RTCIceCandidateType.srflx })
+                tcs.TrySetResult();
+        }
         pc.onicegatheringstatechange += OnState;
         pc.onicecandidate += OnCand;
         try
         {
             // Re-check: gathering may have completed while we were wiring the handlers (OnState
             // won't fire retroactively, so without this we'd block until the timeout).
-            if (pc.iceGatheringState == RTCIceGatheringState.complete) return;
+            if (pc.iceGatheringState == RTCIceGatheringState.complete)
+                return;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(needSrflx ? 8 : 3));
             await tcs.Task.WaitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) { /* proceed with candidates gathered so far */ }
-        finally { pc.onicegatheringstatechange -= OnState; pc.onicecandidate -= OnCand; }
+        catch (OperationCanceledException)
+        { /* proceed with candidates gathered so far */
+        }
+        finally
+        {
+            pc.onicegatheringstatechange -= OnState;
+            pc.onicecandidate -= OnCand;
+        }
     }
 
     // Insert any gathered a=candidate line not already present in the SDP, placed right after the
@@ -61,28 +81,34 @@ public static class WebRtcSdp
     // idempotent (skips duplicates, e.g. the srflx SIPSorcery reports twice).
     public static string EnsureCandidatesInSdp(string sdp, IEnumerable<string> candidateLines)
     {
-        if (string.IsNullOrEmpty(sdp)) return sdp;
+        if (string.IsNullOrEmpty(sdp))
+            return sdp;
         var lines = sdp.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').ToList();
 
         // Candidate values already on the wire (compare on the full line, ignore "a=" is part of it).
         var present = new HashSet<string>(
-            lines.Where(l => l.StartsWith("a=candidate", StringComparison.Ordinal))
-                 .Select(l => l.Trim()), StringComparer.Ordinal);
+            lines.Where(l => l.StartsWith("a=candidate", StringComparison.Ordinal)).Select(l => l.Trim()),
+            StringComparer.Ordinal
+        );
 
         int lastCand = lines.FindLastIndex(l => l.StartsWith("a=candidate", StringComparison.Ordinal));
         // Fall back to just after the data m-section's a=mid (or the m= line) if no host candidate landed.
         if (lastCand < 0)
         {
             lastCand = lines.FindIndex(l => l.StartsWith("a=mid:", StringComparison.Ordinal));
-            if (lastCand < 0) lastCand = lines.FindLastIndex(l => l.StartsWith("m=", StringComparison.Ordinal));
+            if (lastCand < 0)
+                lastCand = lines.FindLastIndex(l => l.StartsWith("m=", StringComparison.Ordinal));
         }
-        if (lastCand < 0) return sdp;   // shape we don't recognize — leave untouched
+        if (lastCand < 0)
+            return sdp; // shape we don't recognize — leave untouched
 
         foreach (var raw in candidateLines)
         {
             var line = raw.Trim();
-            if (!line.StartsWith("a=candidate", StringComparison.Ordinal)) continue;
-            if (!present.Add(line)) continue;        // dup
+            if (!line.StartsWith("a=candidate", StringComparison.Ordinal))
+                continue;
+            if (!present.Add(line))
+                continue; // dup
             lines.Insert(++lastCand, line);
         }
         return string.Join("\r\n", lines) + "\r\n";
@@ -94,10 +120,13 @@ public static class WebRtcSdp
     // [raddr <relAddr> rport <relPort>].
     private static string BuildCandidateAttr(RTCIceCandidate c)
     {
-        var line = $"candidate:{c.foundation} {(int)c.component} {c.protocol.ToString().ToLowerInvariant()} " +
-                   $"{c.priority} {c.address} {c.port} typ {c.type.ToString().ToLowerInvariant()}";
-        if ((c.type is RTCIceCandidateType.srflx or RTCIceCandidateType.relay or RTCIceCandidateType.prflx)
-            && !string.IsNullOrEmpty(c.relatedAddress))
+        var line =
+            $"candidate:{c.foundation} {(int)c.component} {c.protocol.ToString().ToLowerInvariant()} "
+            + $"{c.priority} {c.address} {c.port} typ {c.type.ToString().ToLowerInvariant()}";
+        if (
+            (c.type is RTCIceCandidateType.srflx or RTCIceCandidateType.relay or RTCIceCandidateType.prflx)
+            && !string.IsNullOrEmpty(c.relatedAddress)
+        )
             line += $" raddr {c.relatedAddress} rport {c.relatedPort}";
         return "a=" + line;
     }
