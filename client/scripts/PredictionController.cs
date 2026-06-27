@@ -70,6 +70,32 @@ public partial class PredictionController : Node3D
 
     private double _tickTimer; // seconds since last prediction step
 
+    // Supplies the local sector's static collision bodies (set by WorldRenderer). After each
+    // Integrate — in live prediction AND in reconcile replay — the predicted ship is resolved
+    // against these with the SAME shared kernel the server uses, so it bounces/stops at the surface
+    // immediately instead of sinking in until the authoritative push-out snaps it back.
+    private System.Func<IReadOnlyList<Collide.StaticBody>>? _bodies;
+
+    public void SetCollisionProvider(System.Func<IReadOnlyList<Collide.StaticBody>> bodies) => _bodies = bodies;
+
+    private void ResolveCollisions(ref ShipState st)
+    {
+        if (_bodies is null)
+            return;
+        var bodies = _bodies();
+        if (bodies.Count == 0)
+            return;
+        Collide.ResolveStatics(
+            ref st,
+            CollisionConfig.ShipRadius,
+            bodies,
+            Team,
+            CollisionConfig.CollisionRestitution,
+            CollisionConfig.DockDiscRadius,
+            out _
+        );
+    }
+
     // Spring-eased corrections so a reconcile re-base never snaps the rendered
     // transform. Each is a visual offset (render = predicted + offset) driven to
     // zero by a critically-damped spring; the matching *velocity* is carried
@@ -201,6 +227,7 @@ public partial class PredictionController : Node3D
             return _shotsOut;
         _throttle = Mathf.Clamp(input.Thrust, 0f, 1f); // forward thrust drives the engine glow
         _state = FlightModel.Integrate(_state, input, _stats);
+        ResolveCollisions(ref _state);
         _buffer.Add(
             new Entry
             {
@@ -320,6 +347,7 @@ public partial class PredictionController : Node3D
         for (int i = 0; i < replay.Count; i++)
         {
             s = FlightModel.Integrate(s, replay[i].Input, _stats);
+            ResolveCollisions(ref s);
             var e = replay[i];
             e.Predicted = s;
             replay[i] = e;

@@ -81,6 +81,9 @@ public partial class SfxManager : Node
     {
         LoadStreams();
 
+        // Apply persisted volume settings before any sound plays (the ambient bed starts below).
+        UserPrefs.ApplyAudioPrefs();
+
         for (int i = 0; i < Pool3DSize; i++)
         {
             var p = new AudioStreamPlayer3D

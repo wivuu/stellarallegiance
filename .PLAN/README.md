@@ -20,10 +20,11 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- HUD health/shield bars should be true HUD elements, not world-space objects (the base
-  health bar currently casts a shadow on the base). *(Stage 3 — HUD polish.)*
-- Password protect game servers (repurpose --secret / SIM_SECRET env var)
-- Re-enable `/pigs on` and `/pigs off` commands in text
+- ✅ Password-protect game servers — done; set `--secret` / `SIM_SECRET` to gate joins
+  (constant-time compare in `server/Backend/Backends.cs`).
+- ✅ `/pigs on|off` in-game text commands — done (`server/Net/ClientHub.cs`).
+- ✅ HUD health bars are screen-space — player HP text (`client/scripts/Hud.cs`), base health
+  overlay (`client/scripts/TargetMarkers.cs`, replaced the old world-space quad).
 ---
 
 ## Content philosophy (the through-line)
@@ -79,8 +80,11 @@ Tuning and content are data, not code, so new ships, weapons, and bases are conf
   The `tools/ship-gen` pipeline builds modular GLBs from YAML.
 - ✅ **Base meshes & hardpoints** — `BaseModelLoader` reads base models with docking, lighting,
   and exit hardpoints.
-- ✅ **(bonus) Server-side collision** — the server reads the same GLBs into convex hulls +
-  docking hardpoints; ships dock/exit via real geometry.
+- ✅ **(bonus) Shared collision** — the convex-hull collision core (`ConvexHull`, GLB parser,
+  `SimModel`, sphere-vs-hull response + dock-disc carve-out) lives in `shared/Collision/`; the
+  server reads GLBs from disk and the **client builds the same hulls from its `res://` GLB bytes**,
+  so the client *predicts* collision response identically (no penetrate-then-snap) and collision
+  audio is hull-accurate. Damage stays server-authoritative.
 
 ### Stage 0 — Data-driven cleanup — ✅ DONE (2026-06-27)
 
@@ -220,7 +224,10 @@ Not stage-bound — done when convenient or when a stage needs them.
   `FlightModelTest` (determinism/golden + content guard) and `CryptoTest` in `tests/`.
 - ☐ **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
   explore baking and in-engine parallax/height maps.
-- ☐ **Spatial audio polish** — `SfxManager` exists; collisions and a settings UI are deferred.
+- ◐ **Spatial audio polish** — `SfxManager` exists; ✅ collision thuds (asteroids AND bases,
+  client-side interception in `WorldRenderer.CheckCollisions` against the shared convex hulls, with
+  the own-base dock-disc carve-out) and ✅ a volume settings UI (per-bus sliders in the Lobby
+  overlay, persisted via `UserPrefs`) shipped. Remaining: finer mix tuning / more event coverage.
 
 ## Deep backlog
 

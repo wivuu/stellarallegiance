@@ -11,14 +11,16 @@ namespace SimServer.Sim;
 public sealed class World
 {
     // ---- Tuning ported from module/spacetimedb/Lib.cs (keep in sync) ----
-    public const float ShipRadius = 3f;
+    // Kinematic collision constants are sourced from shared CollisionConfig so the client predicts
+    // collisions identically (single source — these aliases keep existing World.* call sites).
+    public const float ShipRadius = CollisionConfig.ShipRadius;
     public const float ProjectileRadius = 1f;
-    public const float BaseRadius = 90f;
-    public const float DockDiscRadius = 9f; // docking cone base-disc radius (sync w/ client BaseModelLoader.DebugConeRadius)
+    public const float BaseRadius = CollisionConfig.BaseRadius;
+    public const float DockDiscRadius = CollisionConfig.DockDiscRadius; // docking cone base-disc radius
     public const float BaseMaxHealth = 2000f;
-    public const float AsteroidCollisionScale = 0.82f;
-    public const float CollisionRestitution = 0.3f;
-    public const float CollisionDamageScale = 0.6f;
+    public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
+    public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
+    public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
     public const float ShipShipDamageScale = 1.2f;
     public const float MaxCollisionDamage = 30f;
     public const float NoseOffset = 3f;
@@ -247,7 +249,7 @@ public sealed class World
             if (vm is null || vm.Hull.BoundingRadius <= 1e-3f)
                 continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
-            RockBodies[r.Id] = new RockBody(vm.Hull, RockRotation(r.RotX, r.RotY, r.RotZ), scale);
+            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale);
         }
     }
 
@@ -258,16 +260,6 @@ public sealed class World
     }
 
     private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-
-    // Godot Node3D.Rotation Euler is YXZ order; the client applies (RotX,RotY,RotZ) that way,
-    // so the server builds q = qY · qX · qZ to collide each rock as it visually renders.
-    private static Quat RockRotation(float rx, float ry, float rz)
-    {
-        Quat qx = Quat.FromRotationVector(new Vec3(rx, 0f, 0f));
-        Quat qy = Quat.FromRotationVector(new Vec3(0f, ry, 0f));
-        Quat qz = Quat.FromRotationVector(new Vec3(0f, 0f, rz));
-        return (qy * qx * qz).Normalized();
-    }
 
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>
         _rockGrid.TryGetValue(sector, out var g) ? g : NoGrid;

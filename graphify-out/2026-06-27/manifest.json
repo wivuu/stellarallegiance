@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
-    "mtime": 1782524272.039557,
-    "ast_hash": "482e29167c501c3b0e0e81f538e52579",
+    "mtime": 1782591115.0433135,
+    "ast_hash": "f77682ffed1ae5aeb046a4ca7a448d9b",
     "semantic_hash": ""
   },
   "client/scripts/Minimap.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782524272.045875,
-    "ast_hash": "65a2a0f8bfa23038240db699adb0496b",
+    "mtime": 1782591071.3062994,
+    "ast_hash": "1d97fec7b7b0167751b8a0b09fe0c576",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -210,8 +210,8 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1782524272.0503228,
-    "ast_hash": "216a58bf8514d629521c2994d93500d7",
+    "mtime": 1782588609.926214,
+    "ast_hash": "9b582c221b30fb183634272a7297b2e8",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782568125.8167453,
-    "ast_hash": "85918033dc5858498fdbbb230f4d017b",
+    "mtime": 1782588609.9267316,
+    "ast_hash": "55d97794453aeb4e3d8f43d7fc59ebf2",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1782568134.9290183,
-    "ast_hash": "4f21897470c6ce087fc222d7e32b1c0e",
+    "mtime": 1782588609.9264736,
+    "ast_hash": "dbcc35dd7de926ad8252013350735921",
     "semantic_hash": ""
   },
   "shared/WireQuant.cs": {
@@ -400,8 +400,8 @@
     "semantic_hash": ""
   },
   "client/scripts/SfxManager.cs": {
-    "mtime": 1782524272.0425649,
-    "ast_hash": "89433d7571f78b91e1a47e59e916bd34",
+    "mtime": 1782591099.6997721,
+    "ast_hash": "aab44d6782b3cd58a2f2affeb21328b7",
     "semantic_hash": ""
   },
   "docker-compose.server.yml": {
@@ -6135,8 +6135,8 @@
     "semantic_hash": ""
   },
   "client/scripts/UserPrefs.cs": {
-    "mtime": 1782524272.0452583,
-    "ast_hash": "a25d87a5fc699e53ac8ad23a1c54b4de",
+    "mtime": 1782591095.537992,
+    "ast_hash": "751b8dd95e7f8fdb3989ab0209ef082c",
     "semantic_hash": ""
   },
   "client/scripts/Nameplate.cs": {

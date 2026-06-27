@@ -1,9 +1,11 @@
-using StellarAllegiance.Shared;
-
-namespace SimServer.Assets;
+namespace StellarAllegiance.Shared;
 
 // =====================================================================
 //  ConvexHull.cs — HAND-ROLLED 3D CONVEX HULL + COLLISION QUERIES
+//
+//  Lives in shared/ so the server sim and the Godot client build IDENTICAL hulls from the same
+//  GLB bytes (Vec3-only, no engine types) — the basis for the client predicting the same
+//  collision response the server applies.
 //
 //  A small incremental QuickHull (no third-party library): grow a tetrahedron by, for each
 //  remaining point that lies outside the current hull, deleting the faces it can "see" and

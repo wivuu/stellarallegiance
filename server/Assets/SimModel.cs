@@ -4,41 +4,16 @@ using StellarAllegiance.Shared;
 namespace SimServer.Assets;
 
 // =====================================================================
-//  SimModel.cs — SERVER-SIDE "SIM MODEL" (convex hull + hardpoints) + DISK CACHE
+//  SimModelCache — SERVER-SIDE DISK CACHE for the shared SimModel (convex hull + hardpoints).
 //
-//  Everything the native sim derives from one GLB, in the GLB's AUTHORED units so a single
-//  cached hull serves every instance (a base bakes one world scale; an asteroid variant is
-//  scaled per rock). The convex hull (expensive: QuickHull) is cached to disk keyed by the
-//  GLB's content hash, so it is computed ONCE per GLB change and reused across server runs:
+//  The hull (expensive: QuickHull) is cached to disk keyed by the GLB's content hash, so it is
+//  computed ONCE per GLB change and reused across server runs:
 //    - hash matches  → load the cached .simmodel
 //    - missing/stale → parse the GLB, build the hull, extract hardpoints, write the cache
-//  The .simmodel files are committed so containers don't recompute on a cold start; the
-//  startup hash-check self-heals if a GLB is edited without a regen.
+//  The .simmodel files are committed so containers don't recompute on a cold start; the startup
+//  hash-check self-heals if a GLB is edited without a regen. The SimModel/ConvexHull/GlbReader
+//  types themselves live in shared/ so the client builds identical hulls in-memory.
 // =====================================================================
-public sealed class SimModel
-{
-    public ConvexHull Hull { get; }
-    public IReadOnlyList<(string Name, Vec3 Pos, Vec3 Forward)> Hardpoints { get; }
-
-    public float BoundingRadius => Hull.BoundingRadius;
-    public float LongestAxis => Hull.LongestAxis;
-
-    public SimModel(ConvexHull hull, IReadOnlyList<(string, Vec3, Vec3)> hardpoints)
-    {
-        Hull = hull;
-        Hardpoints = hardpoints;
-    }
-
-    // First hardpoint whose name starts with "HP_<kind>" (e.g. "HP_DockingExit"); null if none.
-    public (string Name, Vec3 Pos, Vec3 Forward)? FirstHardpoint(string kindPrefix)
-    {
-        foreach (var hp in Hardpoints)
-            if (hp.Name.StartsWith(kindPrefix, StringComparison.Ordinal))
-                return hp;
-        return null;
-    }
-}
-
 public static class SimModelCache
 {
     private const uint Magic = 0x4C444D53; // "SMDL"
