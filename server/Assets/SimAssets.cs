@@ -1,3 +1,5 @@
+using StellarAllegiance.Shared;
+
 namespace SimServer.Assets;
 
 // =====================================================================

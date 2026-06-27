@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The shared collision code the server sim and the Godot client both compile, so a
+         pass here is the result on both sides (the client predicts the same bounce). -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,10 +1,9 @@
 using System.Text.Json;
-using StellarAllegiance.Shared;
 
-namespace SimServer.Assets;
+namespace StellarAllegiance.Shared;
 
 // =====================================================================
-//  GlbReader.cs — MINIMAL IN-REPO GLB PARSER (server-side, no Godot, no NuGet)
+//  GlbReader.cs — MINIMAL IN-REPO GLB PARSER (no Godot, no NuGet)
 //
 //  The native sim has no engine to load art, but it needs the SAME geometry the Godot
 //  client renders so collision/hit-detection and hardpoints line up. This reads just the
@@ -16,8 +15,8 @@ namespace SimServer.Assets;
 //
 //  Scope is deliberately tiny: GLB container + glTF nodes/meshes/accessors for FLOAT VEC3
 //  POSITION. No animations, skins, sparse accessors, or non-float positions (our authored
-//  assets use none). It lives in server/ (not shared/) so the wasi-wasm module build stays
-//  dependency-free.
+//  assets use none). Lives in shared/ so the CLIENT can build the same hulls from its own
+//  res:// GLB bytes (via Parse) while the server reads them from disk (via Read).
 // =====================================================================
 public sealed class GlbModel
 {
@@ -34,11 +33,14 @@ public static class GlbReader
     private const uint ChunkJson = 0x4E4F534A; // "JSON"
     private const uint ChunkBin = 0x004E4942; // "BIN\0"
 
-    public static GlbModel Read(string path)
+    // Server path: read the .glb from disk and parse. The client uses Parse() directly with bytes
+    // it pulls from res:// via Godot FileAccess (same bytes → same hull).
+    public static GlbModel Read(string path) => Parse(File.ReadAllBytes(path), path);
+
+    public static GlbModel Parse(byte[] bytes, string label = "<glb>")
     {
-        byte[] bytes = File.ReadAllBytes(path);
         if (bytes.Length < 12 || BitConverter.ToUInt32(bytes, 0) != GlbMagic)
-            throw new InvalidDataException($"{path}: not a GLB file");
+            throw new InvalidDataException($"{label}: not a GLB file");
 
         // Chunk scan: a JSON chunk then (usually) a BIN chunk.
         ReadOnlySpan<byte> json = default;
@@ -60,7 +62,7 @@ public static class GlbReader
                 off += 4 - (int)(len & 3); // chunks are 4-byte aligned
         }
         if (json.IsEmpty)
-            throw new InvalidDataException($"{path}: no glTF JSON chunk");
+            throw new InvalidDataException($"{label}: no glTF JSON chunk");
 
         using var doc = JsonDocument.Parse(json.ToArray());
         JsonElement root = doc.RootElement;

@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "client/scripts/PredictionController.cs": {
-    "mtime": 1782524272.0405202,
-    "ast_hash": "a154ee5127668f4649f99f7a5e0f7586",
+    "mtime": 1782597436.2121222,
+    "ast_hash": "62c9e5a832796ee41be89d7d0f5a7a35",
     "semantic_hash": ""
   },
   "client/scripts/ProjectileView.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782591071.3062994,
-    "ast_hash": "1d97fec7b7b0167751b8a0b09fe0c576",
+    "mtime": 1782597519.132981,
+    "ast_hash": "07c2d032f3ef6aab9daa53ca3244669b",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782588609.9267316,
-    "ast_hash": "55d97794453aeb4e3d8f43d7fc59ebf2",
+    "mtime": 1782597000.0908773,
+    "ast_hash": "2f8a9e7bf17ef604ddd4ded302a8a253",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782524272.0532715,
-    "ast_hash": "b61e0d205c90aa94cf129067db1b7c07",
+    "mtime": 1782597260.3244047,
+    "ast_hash": "90c1a4e8bd868f88e90422a38287e320",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -6149,29 +6149,19 @@
     "ast_hash": "e267a0f2889f47989e419591f437c1e7",
     "semantic_hash": ""
   },
-  "server/Assets/ConvexHull.cs": {
-    "mtime": 1782524272.0485485,
-    "ast_hash": "7704d14b2f307a340baa9b66c426b825",
-    "semantic_hash": ""
-  },
-  "server/Assets/GlbReader.cs": {
-    "mtime": 1782524272.048911,
-    "ast_hash": "dc8c75c2e09cf89341b65f309f278332",
-    "semantic_hash": ""
-  },
   "server/Assets/SelfTest.cs": {
     "mtime": 1782524272.049211,
     "ast_hash": "7e7ea371a2ba25cc92ce1773d0aae0a7",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
-    "mtime": 1782524272.0494568,
-    "ast_hash": "620353583aa96d7edcb1701d9d2dda95",
+    "mtime": 1782597041.9153059,
+    "ast_hash": "776ecc28883c870383c5d6320255ca76",
     "semantic_hash": ""
   },
   "server/Assets/SimModel.cs": {
-    "mtime": 1782524272.0497224,
-    "ast_hash": "0ea1e5782c56222e91b431ca506314f3",
+    "mtime": 1782596877.5057244,
+    "ast_hash": "371516597a38fc80709a687f01bd4689",
     "semantic_hash": ""
   },
   "client/scripts/BuildInfo.cs": {
@@ -6202,6 +6192,46 @@
   "public-lobby/ServerConnectionManager.cs": {
     "mtime": 1782524272.047149,
     "ast_hash": "01018a6756571e3b11d1aaa51452506d",
+    "semantic_hash": ""
+  },
+  "client/scripts/CollisionWorld.cs": {
+    "mtime": 1782597374.615119,
+    "ast_hash": "bab11618bd55265a33f4a5ecc8f04b1c",
+    "semantic_hash": ""
+  },
+  "shared/Collision/Collide.cs": {
+    "mtime": 1782597487.6189373,
+    "ast_hash": "203cd6c5c6bb6a2ada7d56cf6aa78913",
+    "semantic_hash": ""
+  },
+  "shared/Collision/CollisionConfig.cs": {
+    "mtime": 1782596788.6407356,
+    "ast_hash": "b1881bcbb0150616ce8065622853b941",
+    "semantic_hash": ""
+  },
+  "shared/Collision/ConvexHull.cs": {
+    "mtime": 1782596823.7709146,
+    "ast_hash": "689eaa0c69ce70d2831d35457b8f4df2",
+    "semantic_hash": ""
+  },
+  "shared/Collision/GlbReader.cs": {
+    "mtime": 1782596854.3095453,
+    "ast_hash": "92457fe9ec1be02d3d093de52cf77b6c",
+    "semantic_hash": ""
+  },
+  "shared/Collision/SimModel.cs": {
+    "mtime": 1782596865.367675,
+    "ast_hash": "f598b648252aa5bced3a548b6ad2b22e",
+    "semantic_hash": ""
+  },
+  "tests/CollisionTest/CollisionTest.csproj": {
+    "mtime": 1782597564.6891282,
+    "ast_hash": "5eb294a6ab321e96510290f2e7068cc1",
+    "semantic_hash": ""
+  },
+  "tests/CollisionTest/Program.cs": {
+    "mtime": 1782597605.7301989,
+    "ast_hash": "5b148971d0f29b64ee124518def55ba9",
     "semantic_hash": ""
   }
 }

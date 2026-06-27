@@ -80,8 +80,11 @@ Tuning and content are data, not code, so new ships, weapons, and bases are conf
   The `tools/ship-gen` pipeline builds modular GLBs from YAML.
 - ✅ **Base meshes & hardpoints** — `BaseModelLoader` reads base models with docking, lighting,
   and exit hardpoints.
-- ✅ **(bonus) Server-side collision** — the server reads the same GLBs into convex hulls +
-  docking hardpoints; ships dock/exit via real geometry.
+- ✅ **(bonus) Shared collision** — the convex-hull collision core (`ConvexHull`, GLB parser,
+  `SimModel`, sphere-vs-hull response + dock-disc carve-out) lives in `shared/Collision/`; the
+  server reads GLBs from disk and the **client builds the same hulls from its `res://` GLB bytes**,
+  so the client *predicts* collision response identically (no penetrate-then-snap) and collision
+  audio is hull-accurate. Damage stays server-authoritative.
 
 ### Stage 0 — Data-driven cleanup — ✅ DONE (2026-06-27)
 
@@ -221,10 +224,10 @@ Not stage-bound — done when convenient or when a stage needs them.
   `FlightModelTest` (determinism/golden + content guard) and `CryptoTest` in `tests/`.
 - ☐ **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
   explore baking and in-engine parallax/height maps.
-- ◐ **Spatial audio polish** — `SfxManager` exists; ✅ asteroid collision thuds (client-side
-  interception in `WorldRenderer.CheckCollisions`) and ✅ a volume settings UI (per-bus sliders in
-  the Lobby overlay, persisted via `UserPrefs`) shipped. Remaining: base-collision thuds need the
-  server's GLB hull replicated client-side (a sphere fires far from the dockable hull); finer mix.
+- ◐ **Spatial audio polish** — `SfxManager` exists; ✅ collision thuds (asteroids AND bases,
+  client-side interception in `WorldRenderer.CheckCollisions` against the shared convex hulls, with
+  the own-base dock-disc carve-out) and ✅ a volume settings UI (per-bus sliders in the Lobby
+  overlay, persisted via `UserPrefs`) shipped. Remaining: finer mix tuning / more event coverage.
 
 ## Deep backlog
 
