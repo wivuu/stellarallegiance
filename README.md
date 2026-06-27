@@ -157,6 +157,16 @@ cp .env.example .env        # optionally set SIM_SECRET / SIM_AUTOSTART / SIM_PU
 docker compose up --build   # sim-server (ws://localhost:8090/game) + public-lobby (:8091)
 ```
 
+### Host a game server from the prebuilt image
+
+Released images are published to GHCR — no checkout or build needed:
+
+```bash
+docker run -p 8090:8090 \
+  -e SIM_PUBLIC_NAME="My Server" \
+  ghcr.io/wivuu/wivuullegiance-sim:latest
+```
+
 ## Deployment
 
 See **[docs/DEPLOY.md](docs/DEPLOY.md)** for production (TLS termination, single-service deploy, and
