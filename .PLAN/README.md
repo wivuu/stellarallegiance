@@ -22,8 +22,8 @@ Archives:
 - Code cleanup and refactor
 - HUD health/shield bars should be true HUD elements, not world-space objects (the base
   health bar currently casts a shadow on the base).
-- Harden lobby endpoints to ensure to ensure that server registration cannot be easily messed with by malicious clients.
-- Switch to SSE for lobby -> client updates, websocket for gameserver -> lobby updates.
+- Password protect game servers (repurpose --secret / SIM_SECRET env var)
+- Re-enable `/pigs on` and `/pigs off` commands in text
 ---
 
 ## Roadmap (prioritized)
@@ -79,13 +79,22 @@ hosting core is done; the social/persistence layer is not.**
   client-update release checks that ban out-of-date servers/clients.
 - ✅ **Adaptive prediction lead** — lead is derived from measured RTT + jitter
   (`UpdateAdaptiveLead`); `STDB_LEAD` (legacy name) remains as a manual override.
+- ☐ **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. (The
+  server browser exists; durable accounts do not.)
+  - Lobby has access to this persistent storage; deployed as a part of the lobby project.
+  - Use Orleans to allow lobby to be horizontally scalable and manage state.
+- ☐ **Client authentication** — clients must prove identity to the lobby (e.g., via
+  per-session secrets or tokens) to prevent unauthorized access.
+  - Choose authentication provider that supports passkeys
+  - Lobby gives session secret per client, which can be validated by game servers. Use JWT?
+- ☐ **Game Server authentication** — game servers must prove identity to the lobby; when game server starts, show a link to the user in terminal to click and authenticate session. Same authentication/registration userbase as clients.
 - ☐ **Scores, kills/deaths & ranks** — per-player in-match and post-match stats, an overall
   point system, and player ranks.
 - ☐ **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
-- ☐ **Matchmaking, accounts & persistence** — player identities, ELO, match history. (The
-  server browser exists; durable accounts do not.)
-- ☐ **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field.
+- ☐ **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field - store as YAML in a known location for game server.
+  - Each file represents a different map.
+  - environment variables to determine how to pick which map the game should use. (random, specific, pick from files only)
 
 ### Phase 4 — Strategy layer (Allegiance core)
 
