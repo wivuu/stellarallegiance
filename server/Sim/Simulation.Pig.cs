@@ -160,7 +160,7 @@ public sealed partial class Simulation
             return;
 
         // Drones run only while the match is live and at least one player is connected.
-        bool combatLive = Phase != PhaseEnded && _clientInfo.Count > 0;
+        bool combatLive = Phase != PhaseEnded && _clientInfo.Count > 0 && PigsEnabled;
         if (!combatLive)
         {
             DespawnAllPigs();
