@@ -127,26 +127,29 @@ public partial class ServerInputOverlay : Control
         // ---- Manual direct address ----
         col.AddChild(Centered("Or enter an address (direct connect)", 16));
 
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        col.AddChild(row);
+
         _field = new LineEdit
         {
             PlaceholderText = "ip-or-hostname:port   (e.g. localhost:8090)",
             Text = "localhost:8090",
-            CustomMinimumSize = new Vector2(0, 40),
+            CustomMinimumSize = new Vector2(0, 44),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
         _field.AddThemeFontSizeOverride("font_size", 18);
         _field.TextSubmitted += _ => Submit();
-        col.AddChild(_field);
+        row.AddChild(_field);
+
+        var connect = new Button { Text = "Connect", CustomMinimumSize = new Vector2(140, 44) };
+        connect.Pressed += Submit;
+        row.AddChild(connect);
 
         _error = Centered("", 16);
         _error.AddThemeColorOverride("font_color", Bad);
         _error.Visible = false;
         col.AddChild(_error);
-
-        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        col.AddChild(row);
-        var connect = new Button { Text = "Connect", CustomMinimumSize = new Vector2(200, 44) };
-        connect.Pressed += Submit;
-        row.AddChild(connect);
 
         // Subscribe to the lobby SSE stream for live server list updates.
         StartSse();
