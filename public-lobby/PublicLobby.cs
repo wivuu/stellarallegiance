@@ -71,30 +71,23 @@ app.MapPost(
         var sourceIp = ctx.Connection.RemoteIpAddress?.ToString();
         var endpoint = await probe.ResolveAsync(sourceIp, req.Port, req.PublicEndpoint, ct);
 
-        var entry = registry.Register(req, endpoint);
-        return entry is null
+        var result = registry.Register(req, endpoint);
+        // The response body is the only place the per-session secret is disclosed; it never appears
+        // in the SSE stream or GET /servers, so a client browsing the list can't replay it.
+        return result is null
             ? Results.BadRequest(
                 new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" }
             )
-            : Results.Created($"/servers/{entry.SessionId}", entry);
+            : Results.Created($"/servers/{result.Server.SessionId}", result);
     }
 );
 
-// Heartbeat to keep a server marked as active; the optional body refreshes its live status
-// (player count / capacity / game state) shown in the browser. 404 => the server re-registers.
-// Kept for backwards compat with servers that have not yet adopted the WS connection.
-app.MapPost(
-    "/servers/{sessionId}/heartbeat",
-    (string sessionId, HeartbeatRequest? status, IServerRegistry registry) =>
-        registry.Heartbeat(sessionId, status) ? Results.NoContent() : Results.NotFound()
-);
-
-// ---- Server WebSocket: replaces periodic heartbeats ----------------------
+// ---- Server WebSocket: the server's liveness + control channel ------------
 //
-// Game servers open this WS after registering. While it's open they're considered alive (no TTL
-// expiry from missing heartbeats). They push state updates (player count / game state) only when
-// values change; the lobby fans those out to SSE subscribers immediately. WebRTC offers are pushed
-// back down the same channel so the server can stop long-polling /pending.
+// Game servers open this WS after registering. While it's open they're considered alive (its
+// pings keep LastSeen fresh). They push state updates (player count / game state) only when values
+// change; the lobby fans those out to SSE subscribers immediately. WebRTC offers are pushed back
+// down the same channel so the server can stop long-polling /pending.
 // Route must be declared before /servers/{sessionId} so the literal "ws" segment wins routing.
 app.MapGet(
     "/servers/ws",
@@ -108,12 +101,13 @@ app.MapGet(
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
         var ct = ctx.RequestAborted;
 
-        // Auth: first frame must identify the session.
+        // Auth: first frame must identify the session AND carry the secret minted at registration,
+        // so a client that scraped the public sessionId can't hijack the server's control channel.
         var auth = await WsReceiveJsonAsync<WsAuthMsg>(ws, ct);
-        if (auth?.Type != "auth" || string.IsNullOrEmpty(auth.SessionId) || !registry.Exists(auth.SessionId))
+        if (auth?.Type != "auth" || string.IsNullOrEmpty(auth.SessionId) || !registry.ValidateSecret(auth.SessionId, auth.Secret))
         {
             if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "unknown session", default);
+                await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "unauthorized", default);
             return;
         }
         var sessionId = auth.SessionId;
@@ -163,11 +157,15 @@ app.MapGet(
     }
 );
 
-// Explicitly remove a server (graceful host shutdown).
+// Explicitly remove a server (graceful host shutdown). Requires the per-session secret in an
+// `Authorization: Bearer <secret>` header so only the registrant can tear down its own listing.
+// A bad/absent secret returns 404 (same as an unknown session) so it can't probe which exist.
 app.MapDelete(
     "/servers/{sessionId}",
-    (string sessionId, IServerRegistry registry, ServerConnectionManager connMgr) =>
+    (string sessionId, HttpContext ctx, IServerRegistry registry, ServerConnectionManager connMgr) =>
     {
+        if (!registry.ValidateSecret(sessionId, BearerToken(ctx)))
+            return Results.NotFound();
         connMgr.Unregister(sessionId); // completes offer channel → WS send loop exits cleanly
         return registry.Remove(sessionId) ? Results.NoContent() : Results.NotFound();
     }
@@ -275,6 +273,14 @@ app.Run();
 // ---- Helpers ---------------------------------------------------------------
 
 static string SseJson(object? o) => JsonSerializer.Serialize(o, LobbyJson.Opts);
+
+// Extracts the bearer token from an `Authorization: Bearer <token>` header, or null if absent.
+static string? BearerToken(HttpContext ctx)
+{
+    var header = ctx.Request.Headers.Authorization.ToString();
+    const string prefix = "Bearer ";
+    return header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? header[prefix.Length..].Trim() : null;
+}
 
 static async Task WriteSseEvent(Stream body, string eventName, string data, CancellationToken ct)
 {
@@ -389,8 +395,8 @@ static IReadOnlyList<IceServer> BuildStunServers()
 
 // ---- Message shapes --------------------------------------------------------
 
-// Inbound from game server over WS.
-file sealed record WsAuthMsg(string? Type, string? SessionId);
+// Inbound from game server over WS. Secret is the per-session capability from registration.
+file sealed record WsAuthMsg(string? Type, string? SessionId, string? Secret);
 
 file sealed record WsServerMsg(string? Type, int Players = 0, int MaxPlayers = 0, string? State = null);
 

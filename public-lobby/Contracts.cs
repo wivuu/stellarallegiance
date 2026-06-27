@@ -49,6 +49,12 @@ public record ServerEntry(
 // stun:/turn: URLs; Username/Credential are set only for TURN.
 public record IceServer(string[] Urls, string? Username = null, string? Credential = null);
 
+// Returned ONLY in the direct POST /servers response. Secret is the per-session capability the
+// registrant must echo to mutate or close its listing (WS auth frame + graceful DELETE); the lobby
+// validates it with a constant-time compare. It is never broadcast over SSE / GET /servers, so a
+// client reading the public server list can't manipulate or delete a listing it didn't register.
+public record RegisterResponse(ServerEntry Server, string Secret);
+
 // ---- Signaling (WebRTC SDP relay) ----
 
 // A joining client posts its SDP offer for a given server; the relay returns a Ticket the client

@@ -4,7 +4,8 @@ The **public lobby** lets player-run game servers be discovered and joined. The 
 host is one small HTTP service:
 
 - **`public-lobby`** — an HTTP service that does two jobs: a **registry** (game servers announce a
-  name + port and heartbeat; clients fetch the list) and a **WebRTC signaling relay** (it forwards
+  name + port and hold a WebSocket to stay listed; clients fetch the list) and a **WebRTC signaling
+  relay** (it forwards
   the SDP offer/answer between a joining client and a NAT'd game server). It is stateless and tiny,
   and **no game traffic ever flows through it.**
 
@@ -90,8 +91,8 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
 
 A public STUN server is fine — there's nothing to host. It holds everything in memory (no
-database): registry entries expire 30 s after the last heartbeat; signaling tickets expire after
-60 s. Run a single instance — there is no shared state across replicas.
+database): registry entries expire 30 s after the last WebSocket ping; signaling tickets expire
+after 60 s. Run a single instance — there is no shared state across replicas.
 
 ### The reachability probe
 
@@ -151,9 +152,13 @@ your own lobby before sharing builds.
 - **TLS for `public-lobby`.** The REST API is plain HTTP. For internet hosting, terminate TLS at a
   reverse proxy (Caddy/nginx) in front of `:8091` and set `PUBLIC_LOBBY=https://lobby.example.com`.
   The client and game server both honour an `https://` prefix.
-- **The registry is unauthenticated.** Anyone who can reach `:8091` can register a server, list
-  servers, or post signaling. That is fine for the intended "open public lobby", but expose only
-  `:8091`, keep it behind your proxy, and rate-limit at the proxy if abused.
+- **Registration is open; mutation is not.** Anyone who can reach `:8091` can register a *new*
+  server, list servers, or post signaling — fine for the intended "open public lobby". But each
+  registration mints a 256-bit per-session **secret**, returned only in that `POST /servers`
+  response (never in the SSE/list), and the privileged operations — the server WebSocket auth frame
+  and the graceful `DELETE` — require it (constant-time compared). So a client that scrapes a
+  `sessionId` from the public list still can't hijack the server's control channel, spoof its
+  player counts, or delete its listing. Run behind your proxy and rate-limit registration if abused.
 - **Probe SSRF.** The probe only connects back to the registrant's own source IP, over `http` to
   the fixed `/health` path, with a short timeout, and refuses link-local targets — so it can't be
   steered at arbitrary internal hosts. The residual surface (a caller making the lobby connect to
@@ -169,11 +174,14 @@ Registry:
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| `POST` | `/servers` | `{ name, port, publicEndpoint? }` | `400` if name not 3–50 chars. Lobby probes `port`; returns `{ sessionId, publicEndpoint, iceServers, … }` (`publicEndpoint` null = WebRTC mode). |
-| `POST` | `/servers/{sessionId}/heartbeat` | — | `204`, or `404` if expired. Send every ~10 s. |
+| `POST` | `/servers` | `{ name, port, publicEndpoint? }` | `400` if name not 3–50 chars. Lobby probes `port`; returns `{ server: { sessionId, publicEndpoint, iceServers, … }, secret }` (`publicEndpoint` null = WebRTC mode). `secret` is a per-session capability returned **only here** — never in the SSE/list — that the host echoes to mutate or close its listing. |
 | `GET` | `/servers/{sessionId}` | — | one entry, or `404`. |
-| `GET` | `/servers` | — | active server list (browser view). |
-| `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. |
+| `GET` | `/servers` | — | active server list (browser view); never includes `secret`. |
+| `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. Requires `Authorization: Bearer <secret>`; a missing/wrong secret returns `404`. |
+
+Liveness + status come solely from the server WebSocket (`/servers/ws`): the host authenticates
+with `{ type: "auth", sessionId, secret }`, then its `ping`/`update` frames keep the entry fresh
+and current. (There is no HTTP heartbeat endpoint.)
 
 Signaling (relays opaque SDP; long-polls so a join settles in ~one round trip):
 

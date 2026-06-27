@@ -1,5 +1,4 @@
-using System.Net;
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -46,6 +45,7 @@ public sealed class LobbyRegistrar
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
 
     private string? _sessionId;
+    private string? _secret; // per-session capability minted by the lobby at registration
     private CancellationTokenSource? _listenerCts;
     private bool _gotDirect; // last registration came back DIRECT
     private int _directRetries; // re-register attempts spent waiting for our endpoint to go live
@@ -182,14 +182,16 @@ public sealed class LobbyRegistrar
                 return false;
             }
 
-            var entry = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
-            if (entry is null || string.IsNullOrEmpty(entry.SessionId))
+            var resultDto = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
+            var entry = resultDto?.Server;
+            if (entry is null || string.IsNullOrEmpty(entry.SessionId) || string.IsNullOrEmpty(resultDto!.Secret))
             {
-                Console.WriteLine("[Lobby] register returned no session id.");
+                Console.WriteLine("[Lobby] register returned no session id / secret.");
                 return false;
             }
 
             _sessionId = entry.SessionId;
+            _secret = resultDto.Secret; // echoed on WS auth + graceful DELETE to prove ownership
             _gotDirect = !string.IsNullOrEmpty(entry.PublicEndpoint);
 
             if (!_gotDirect)
@@ -237,8 +239,8 @@ public sealed class LobbyRegistrar
             using var ws = new ClientWebSocket();
             await ws.ConnectAsync(ToWsUri(_shareBase), ct);
 
-            // Auth handshake.
-            var authBytes = JsonSerializer.SerializeToUtf8Bytes(new { type = "auth", sessionId });
+            // Auth handshake — carries the per-session secret so the lobby can verify ownership.
+            var authBytes = JsonSerializer.SerializeToUtf8Bytes(new { type = "auth", sessionId, secret = _secret });
             await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, ct);
 
             var buf = new byte[512];
@@ -348,11 +350,16 @@ public sealed class LobbyRegistrar
         if (_sessionId is null)
             return;
         var sid = _sessionId;
+        var secret = _secret;
         _sessionId = null; // null before the HTTP call to prevent double-deregister
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _http.DeleteAsync($"{_shareBase}/servers/{sid}", cts.Token);
+            // Prove ownership with the per-session secret so a scraped sessionId can't delete us.
+            using var req = new HttpRequestMessage(HttpMethod.Delete, $"{_shareBase}/servers/{sid}");
+            if (!string.IsNullOrEmpty(secret))
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+            await _http.SendAsync(req, cts.Token);
             Console.WriteLine($"[Lobby] deregistered session {sid}.");
         }
         catch
@@ -399,7 +406,11 @@ public sealed class LobbyRegistrar
     private sealed record WsOfferMsg(string? Type, string? Ticket, string? SdpOffer);
 
     // Public lobby register-response JSON (camelCase; web JSON defaults are case-insensitive).
-    private sealed record RegisterResponseDto(
+    // Secret is the per-session capability, disclosed only here, that we echo to mutate/close our
+    // listing. Server holds only the fields we actually consume.
+    private sealed record RegisterResponseDto(ServerEntryDto? Server, string? Secret);
+
+    private sealed record ServerEntryDto(
         string SessionId,
         string? PublicEndpoint,
         IReadOnlyList<IceServerDto>? IceServers

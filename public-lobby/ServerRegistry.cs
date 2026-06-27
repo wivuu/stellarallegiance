@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace PublicLobby;
 
@@ -9,12 +11,13 @@ public interface IServerRegistry
 {
     // Returns null when the name is invalid (caller maps to 400). publicEndpoint is the result of
     // the lobby's reachability probe: a host:port for a directly-joinable server, or null for a
-    // NAT'd server that clients must reach over WebRTC/STUN.
-    ServerEntry? Register(RegisterRequest req, string? publicEndpoint);
+    // NAT'd server that clients must reach over WebRTC/STUN. The result carries a freshly-minted
+    // per-session secret returned only to the registrant (see RegisterResponse).
+    RegisterResponse? Register(RegisterRequest req, string? publicEndpoint);
 
     // Refresh liveness (LastSeen) and, when status is given, the live player count / capacity /
     // game state shown in the browser. Returns false if the session isn't registered (-> 404,
-    // prompting the server to re-register).
+    // prompting the server to re-register). Reached only via the already-authenticated server WS.
     bool Heartbeat(string sessionId, HeartbeatRequest? status = null);
     ServerEntry? Get(string sessionId);
     IReadOnlyCollection<ServerEntry> ListActive();
@@ -22,6 +25,11 @@ public interface IServerRegistry
 
     // True if a session is currently registered (used by signaling to reject orphan offers).
     bool Exists(string sessionId);
+
+    // Constant-time check that `secret` matches the one minted for `sessionId` at registration.
+    // False for an unknown session or a null/empty/mismatched secret. Gates the privileged
+    // operations (server WS auth, graceful DELETE) so only the registrant can mutate its listing.
+    bool ValidateSecret(string sessionId, string? secret);
 }
 
 public sealed class InMemoryServerRegistry : IServerRegistry
@@ -33,6 +41,8 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     static readonly TimeSpan Ttl = TimeSpan.FromSeconds(30);
 
     readonly ConcurrentDictionary<string, ServerEntry> _servers = new();
+    // Per-session capability secrets, kept out of ServerEntry so they never reach the SSE/list JSON.
+    readonly ConcurrentDictionary<string, string> _secrets = new();
     readonly IReadOnlyList<IceServer> _iceServers;
     readonly LobbyEventBus _bus;
 
@@ -49,7 +59,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return n.Length is >= NameMin and <= NameMax ? n : null;
     }
 
-    public ServerEntry? Register(RegisterRequest req, string? publicEndpoint)
+    public RegisterResponse? Register(RegisterRequest req, string? publicEndpoint)
     {
         var name = NormalizeName(req.Name);
         if (name is null)
@@ -71,9 +81,12 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             ProtocolVersion: Math.Max(0, req.ProtocolVersion)
         );
 
+        // 256-bit capability secret handed back only in the registration response (never broadcast).
+        var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        _secrets[entry.SessionId] = secret;
         _servers[entry.SessionId] = entry;
         _bus.Publish(new LobbyEvent(LobbyEventKind.Registered, Entry: entry));
-        return entry;
+        return new RegisterResponse(entry, secret);
     }
 
     public bool Heartbeat(string sessionId, HeartbeatRequest? status = null)
@@ -126,6 +139,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     {
         if (!_servers.TryRemove(sessionId, out _))
             return false;
+        _secrets.TryRemove(sessionId, out _);
         _bus.Publish(new LobbyEvent(LobbyEventKind.Removed, SessionId: sessionId));
         return true;
     }
@@ -136,11 +150,25 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return _servers.ContainsKey(sessionId);
     }
 
+    public bool ValidateSecret(string sessionId, string? secret)
+    {
+        Prune();
+        if (string.IsNullOrEmpty(secret) || !_secrets.TryGetValue(sessionId, out var expected))
+            return false;
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(secret),
+            Encoding.UTF8.GetBytes(expected)
+        );
+    }
+
     void Prune()
     {
         var cutoff = DateTimeOffset.UtcNow - Ttl;
         foreach (var kvp in _servers)
             if (kvp.Value.LastSeen < cutoff)
+            {
                 _servers.TryRemove(kvp.Key, out _);
+                _secrets.TryRemove(kvp.Key, out _);
+            }
     }
 }
