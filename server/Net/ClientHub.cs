@@ -399,6 +399,11 @@ public sealed class ClientHub
                     if (count >= 4 + len)
                     {
                         string text = System.Text.Encoding.UTF8.GetString(buffer, 4, len);
+                        if (text.StartsWith('/'))
+                        {
+                            HandleCommand(client, text);
+                            break;
+                        }
                         byte fromTeam = _lobby.TeamOf(client.Id);
                         var frame = Protocol.BuildChatRelay(scope, fromTeam, _players.NameOf(client.Id), text);
                         foreach (var c in _clients.Values)
@@ -436,6 +441,43 @@ public sealed class ClientHub
                 }
             }
         }
+    }
+
+    // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
+    // Currently just /pigs on|off, which toggles AI drone spawns (see Simulation.PigsEnabled).
+    private void HandleCommand(Client client, string text)
+    {
+        var parts = text[1..].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        string verb = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        string arg = parts.Length > 1 ? parts[1].ToLowerInvariant() : "";
+
+        switch (verb)
+        {
+            case "pigs":
+                if (arg != "on" && arg != "off")
+                {
+                    SystemTo(client, "Usage: /pigs on|off");
+                    break;
+                }
+                bool on = arg == "on";
+                _sim.PigsEnabled = on;
+                SystemAll(client, $"AI drones turned {(on ? "ON" : "OFF")} by {_players.NameOf(client.Id)}");
+                break;
+            default:
+                break; // unknown command: silently ignored
+        }
+    }
+
+    // System chat lines reuse the normal chat-relay wire type; "★" is the sender name.
+    private void SystemTo(Client client, string text) =>
+        client.Outbound.Writer.TryWrite(
+            OutFrame.Whole(Protocol.BuildChatRelay(0, _lobby.TeamOf(client.Id), "★", text)));
+
+    private void SystemAll(Client origin, string text)
+    {
+        var frame = Protocol.BuildChatRelay(0, _lobby.TeamOf(origin.Id), "★", text);
+        foreach (var c in _clients.Values)
+            c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
 
     private async Task SendLoop(Client client, CancellationToken ct)

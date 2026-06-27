@@ -169,6 +169,11 @@ public sealed partial class Simulation
     public byte Phase { get; private set; } = PhaseLobby;
     public byte Winner { get; private set; } = NoWinner;
 
+    // AI drones spawn only while this is true. Default OFF; SIM_PIGS=1|true flips the
+    // server default to ON. Toggled live by the /pigs chat command (set on a network
+    // thread, read on the sim thread) — volatile for cross-thread visibility.
+    public volatile bool PigsEnabled;
+
     // How long the Ended result lingers before the server returns to the lobby for the next match.
     private const uint EndedToLobbyTicks = 6 * TickHz;
     private uint _returnToLobbyAtTick;
@@ -209,6 +214,7 @@ public sealed partial class Simulation
     public Simulation(World world)
     {
         World = world;
+        PigsEnabled = (System.Environment.GetEnvironmentVariable("SIM_PIGS") ?? "") is "1" or "true";
         _shotRing = new List<PendingShot>[ShotRingSize];
         for (int i = 0; i < ShotRingSize; i++)
             _shotRing[i] = new List<PendingShot>();
