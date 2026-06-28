@@ -1,117 +1,117 @@
 {
   "scripts/AlephView.cs": {
-    "mtime": 1782253548.8042927,
-    "ast_hash": "370c1fc740424ba86d6a2ee2b6f8f6f8",
+    "mtime": 1782524272.035778,
+    "ast_hash": "7ec9a6b4360e84508a4f0c179bc17b29",
     "semantic_hash": ""
   },
   "scripts/CameraRig.cs": {
-    "mtime": 1782045481.002257,
-    "ast_hash": "2da827d668821a3d68e5fc37d0403d78",
+    "mtime": 1782524272.0363004,
+    "ast_hash": "003254d4962cc8700585b4f5725e01ea",
     "semantic_hash": ""
   },
   "scripts/Chat.cs": {
-    "mtime": 1781896879.0668902,
-    "ast_hash": "1168e207ff05372279ef113474db794d",
+    "mtime": 1782524272.0365367,
+    "ast_hash": "abda1a640112ea5fa553c45c09d9bc25",
     "semantic_hash": ""
   },
   "scripts/ConnectionManager.cs": {
-    "mtime": 1781959279.8635397,
-    "ast_hash": "cdc744071312fb838df2621acc2a038f",
+    "mtime": 1782650578.8447912,
+    "ast_hash": "84e820a3ac60d9f33db7a52d99a0fd86",
     "semantic_hash": ""
   },
   "scripts/ConnectionOverlay.cs": {
-    "mtime": 1781442515.2988627,
-    "ast_hash": "aa14a943e7f395bd8e1b5261a40b032c",
+    "mtime": 1782524272.0369964,
+    "ast_hash": "0d0aac4388b514df4ceb52654398975f",
     "semantic_hash": ""
   },
   "scripts/DustField.cs": {
-    "mtime": 1780668592.8220572,
-    "ast_hash": "0119cebd52c7b7e59ffb768881a98abe",
+    "mtime": 1782524272.0374622,
+    "ast_hash": "c04c2ffda526e45d5a8b65e747ad083c",
     "semantic_hash": ""
   },
   "scripts/EngineGlow.cs": {
-    "mtime": 1782063674.5727687,
-    "ast_hash": "93dfb4ba72560f6033e0d45d17ad520f",
+    "mtime": 1782524272.037738,
+    "ast_hash": "a77290785c2d7991648fc41f14aa60e9",
     "semantic_hash": ""
   },
   "scripts/ExplosionEffect.cs": {
-    "mtime": 1781443032.7543602,
-    "ast_hash": "e675f6e5e5fd1a468c8a315d3234631d",
+    "mtime": 1782524272.0380638,
+    "ast_hash": "1f1e07af019a4660c35b4878abf2ee80",
     "semantic_hash": ""
   },
   "scripts/HitFlash.cs": {
-    "mtime": 1780678799.1351247,
-    "ast_hash": "06cbbf17aa619336fdbf34371a93a577",
+    "mtime": 1782524272.038834,
+    "ast_hash": "5a1b5ff2a3fd091034c316041eb8bcf3",
     "semantic_hash": ""
   },
   "scripts/Hud.cs": {
-    "mtime": 1782438897.1747324,
-    "ast_hash": "6793477b7c8a3a120ce006f5150fa50e",
+    "mtime": 1782524272.0390728,
+    "ast_hash": "8c56dd659d8fced0bdaa51a60a0ee0e8",
     "semantic_hash": ""
   },
   "scripts/Lobby.cs": {
-    "mtime": 1781896879.067461,
-    "ast_hash": "013f4a47c22c4b9763d3171ddbf1201c",
+    "mtime": 1782600399.8191485,
+    "ast_hash": "f77682ffed1ae5aeb046a4ca7a448d9b",
     "semantic_hash": ""
   },
   "scripts/Minimap.cs": {
-    "mtime": 1782253548.8051438,
-    "ast_hash": "95b33914221a525fac114400b0db80e0",
+    "mtime": 1782524272.0397909,
+    "ast_hash": "4c625e965ae17a795f81093e98d54bb4",
     "semantic_hash": ""
   },
   "scripts/PredictionController.cs": {
-    "mtime": 1782043969.5263085,
-    "ast_hash": "6e630de15530ef5f1e177570dfe5a292",
+    "mtime": 1782651560.6898353,
+    "ast_hash": "c8ead3583e1932a4bc6c4ba4e4a5ffb7",
     "semantic_hash": ""
   },
   "scripts/ProjectileView.cs": {
-    "mtime": 1781960326.0392668,
-    "ast_hash": "56328864bbfd320b3bb4a75620764d71",
+    "mtime": 1782524272.04092,
+    "ast_hash": "1e66ab656ab5aa9a494c3a042a7fffaa",
     "semantic_hash": ""
   },
   "scripts/RemoteShip.cs": {
-    "mtime": 1781959279.865292,
-    "ast_hash": "61457e31dfa6efd51d526ea10d03c600",
+    "mtime": 1782524272.041442,
+    "ast_hash": "fc80ba4d7056ecf3dfef046caff43c3c",
     "semantic_hash": ""
   },
   "scripts/ShipController.cs": {
-    "mtime": 1782043975.6637104,
-    "ast_hash": "ddbccab7e9bee3809309e9b867ded92b",
+    "mtime": 1782650578.8452637,
+    "ast_hash": "4a323886349f7a5ca0f43ebca095ce9c",
     "semantic_hash": ""
   },
   "scripts/ShipMath.cs": {
-    "mtime": 1781443032.7506232,
-    "ast_hash": "b797b01a8cc7028d06a0f72024b37f6b",
+    "mtime": 1782524272.0430777,
+    "ast_hash": "8539fe3c197e63aea2c286fb60b05d08",
     "semantic_hash": ""
   },
   "scripts/Starscape.cs": {
-    "mtime": 1780766621.203157,
-    "ast_hash": "c7b0003302e125f821a91ebbbb6d19eb",
+    "mtime": 1782524272.04373,
+    "ast_hash": "6c09d293656acfbc75774571f010f047",
     "semantic_hash": ""
   },
   "scripts/Sun.cs": {
-    "mtime": 1782438797.070879,
-    "ast_hash": "a7f98e0c99c48a9bfcf78d078a302c8f",
+    "mtime": 1782524272.0440018,
+    "ast_hash": "0c8314808ee1c7f264385514b536edb9",
     "semantic_hash": ""
   },
   "scripts/TargetMarkers.cs": {
-    "mtime": 1782253548.805552,
-    "ast_hash": "827385e6d70ca6e716d9069b371c765d",
+    "mtime": 1782524272.0442803,
+    "ast_hash": "82aee013ab4657600e596abada702609",
     "semantic_hash": ""
   },
   "scripts/TeamTrail.cs": {
-    "mtime": 1782253548.8057446,
-    "ast_hash": "fe0c4c1e12a3dc527dcca7bb8942eee4",
+    "mtime": 1782524272.0446532,
+    "ast_hash": "228ec5e2862d4f46ca58c4e92d7c749a",
     "semantic_hash": ""
   },
   "scripts/WorldRenderer.cs": {
-    "mtime": 1782043920.239747,
-    "ast_hash": "771b5dbd8e9d59cf7a7157b15e0bb298",
+    "mtime": 1782650578.845513,
+    "ast_hash": "34857e0b59d0fab6bba1cc4b30c8d195",
     "semantic_hash": ""
   },
   "wivuullegiance.csproj": {
-    "mtime": 1781875552.6827903,
-    "ast_hash": "38ef98881cdd397a5df6585670380d8c",
+    "mtime": 1782506387.4048128,
+    "ast_hash": "04b8af3e9b57e9e01176cf364b62988f",
     "semantic_hash": ""
   },
   "wivuullegiance.sln": {
@@ -120,63 +120,63 @@
     "semantic_hash": ""
   },
   "scripts/BaseModelLoader.cs": {
-    "mtime": 1782253548.8045151,
-    "ast_hash": "4d6f45ced1b9b1e1ff338041cca963e4",
+    "mtime": 1782524272.0360842,
+    "ast_hash": "64b1874363ff0361fe866a3db43842a0",
     "semantic_hash": ""
   },
   "scripts/DefRegistry.cs": {
-    "mtime": 1782253548.804783,
-    "ast_hash": "29dd770602c37c13f13a3002c1f53ec0",
+    "mtime": 1782524272.0372317,
+    "ast_hash": "10f37ada45b3e346fde488f3fad10f1d",
     "semantic_hash": ""
   },
   "scripts/GameNetClient.cs": {
-    "mtime": 1782438081.1630962,
-    "ast_hash": "38d09b86a24577db05b3823da1e3bfe8",
+    "mtime": 1782650578.8450549,
+    "ast_hash": "888f2c730ef1e2f8ede26a44b3fbd5a8",
     "semantic_hash": ""
   },
   "scripts/GlbLoader.cs": {
-    "mtime": 1781615585.3484962,
-    "ast_hash": "1c568dff8c7ecbbc2401d6760b38c65b",
+    "mtime": 1782524272.0386407,
+    "ast_hash": "dfd74fe29e7c72ab211e9df4e9741ce9",
     "semantic_hash": ""
   },
   "scripts/NetTypes.cs": {
-    "mtime": 1781959279.8646245,
-    "ast_hash": "5eea8dea4d60a7b7e713e4f489cf9efb",
+    "mtime": 1782524272.0402553,
+    "ast_hash": "39599b5c34baa46f49bfadd2e005f2f4",
     "semantic_hash": ""
   },
   "scripts/SectorOverview.cs": {
-    "mtime": 1781621418.3717592,
-    "ast_hash": "c05c0b077ed66d1fb2fb538c862f485e",
+    "mtime": 1782524272.0418742,
+    "ast_hash": "0e0bc999aeab671a24f11294fe066899",
     "semantic_hash": ""
   },
   "scripts/ServerInputOverlay.cs": {
-    "mtime": 1782253548.805359,
-    "ast_hash": "c19856d56d008de3a6549c1395252f21",
+    "mtime": 1782601233.6997802,
+    "ast_hash": "6cc36638dbe2bf6209ef82f56c1d05f9",
     "semantic_hash": ""
   },
   "scripts/ShipModelLoader.cs": {
-    "mtime": 1782043489.7203026,
-    "ast_hash": "732340f5c97543c511f4f8bcd5586737",
+    "mtime": 1782524272.0434217,
+    "ast_hash": "7c020e5e27d2a910c9e31a6601f8f7e2",
     "semantic_hash": ""
   },
   "scripts/SfxManager.cs": {
-    "mtime": 1781896879.0676007,
-    "ast_hash": "042d884d7394f88840d1169dad57e284",
+    "mtime": 1782600399.8197882,
+    "ast_hash": "aab44d6782b3cd58a2f2affeb21328b7",
     "semantic_hash": ""
   },
   "scripts/Nameplate.cs": {
-    "mtime": 1781959279.8642635,
-    "ast_hash": "0f0d29f5aba8e0a096ca656058be7994",
+    "mtime": 1782651469.5548291,
+    "ast_hash": "faf6b9febc3e9cd6fed562ef51c26d5c",
     "semantic_hash": ""
   },
   "scripts/UserPrefs.cs": {
-    "mtime": 1781959279.8658674,
-    "ast_hash": "bc2a4de7f45d34d22f06f4fd34ae6903",
+    "mtime": 1782600399.820012,
+    "ast_hash": "751b8dd95e7f8fdb3989ab0209ef082c",
     "semantic_hash": ""
   },
   "scripts/VelocityIndicator.cs": {
-    "mtime": 1781969737.976269,
-    "ast_hash": "ea598cbf846913294a50d262f3891d27",
+    "mtime": 1782524272.0454977,
+    "ast_hash": "e267a0f2889f47989e419591f437c1e7",
     "semantic_hash": ""
   },
   "scripts/BuildInfo.cs": {
@@ -185,13 +185,18 @@
     "semantic_hash": ""
   },
   "scripts/LensFlare.cs": {
-    "mtime": 1782438891.426001,
-    "ast_hash": "6d16c376f06555e44200fd46abb89e32",
+    "mtime": 1782524272.0393221,
+    "ast_hash": "d3644e6584934871d2b7229298d2df57",
     "semantic_hash": ""
   },
   "scripts/UpdateChecker.cs": {
-    "mtime": 1782253548.8058631,
-    "ast_hash": "9f7076851196075e951af3d55fc9f049",
+    "mtime": 1782524272.0449915,
+    "ast_hash": "6d5dc1c44e4f0e8bb7ebd3d8007d2fc6",
+    "semantic_hash": ""
+  },
+  "scripts/CollisionWorld.cs": {
+    "mtime": 1782650578.8445945,
+    "ast_hash": "c6a87e7d055912f803464f711f12fa19",
     "semantic_hash": ""
   }
 }

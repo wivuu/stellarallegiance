@@ -240,6 +240,10 @@ public partial class RemoteShip : Node3D
         // independent), tweening out the snapshot-rate steps the lead reticle reads.
         Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
 
+        // Hold the nameplate at a constant on-screen size across the flight / F3 camera FOVs.
+        if (_nameplate is not null)
+            Nameplate.UpdateFovScale(_nameplate, SectorOverview.ActiveCamera);
+
         // Throttle proxy: forward speed (local +Z) as a fraction of the class max.
         // Uses last frame's orientation, which is imperceptible for a glow. Afterburner
         // has no networked signal, so players approximate it from near-top-speed flight
