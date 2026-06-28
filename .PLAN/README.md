@@ -190,6 +190,13 @@ Stage-1 YAML pipeline.
     cache is keyed by content hash so a rejoining client re-pulls only what changed. The optional
     per-asset `httpUrl` lets a high-scale operator offload fanout to a bucket/CDN without making one
     a requirement.
+  - **Client ships a seed cache (not a baked-in fallback).** The client bundles the stock-faction
+    assets at install, pre-populating the hash-keyed cache so a vanilla first-join downloads ~nothing.
+    This is *not* the forbidden "baked-in" pattern: bundled assets are only ever used when the
+    server manifest names their exact `sha256` — a different/updated server asset has a different
+    hash and streams normally. So the server stays authoritative over content (binary-asset analog
+    of the no-baked-tuning rule: defs are authority data with no fallback; assets are content-
+    addressed blobs validated against server-named hashes, safe to pre-ship).
 - ☐ **Factions** — distinct factions with unique ship classes, tech trees, and visual styles for
   asymmetric play (a faction dimension on YAML defs). *Faction rules ride Stage 1; faction assets
   ride asset streaming above.*
