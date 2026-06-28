@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782650578.845513,
-    "ast_hash": "34857e0b59d0fab6bba1cc4b30c8d195",
+    "mtime": 1782677872.098114,
+    "ast_hash": "f4df07746f840e65d8dfb961c4bf3f76",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782676541.22927,
-    "ast_hash": "b3f00c75887a2dc90c72cd8aa265e0c0",
+    "mtime": 1782677883.9841273,
+    "ast_hash": "4c5dbcf8ba8b266c0bdc742d923951c2",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {

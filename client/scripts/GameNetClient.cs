@@ -72,6 +72,10 @@ public partial class GameNetClient : Node
     // Disconnect, where we explicitly give the ship up.
     private string _reconnectToken = "";
 
+    // True once a Welcome has populated the rendered world. A later Welcome arriving while this is
+    // set is a reconnect, so ApplyWelcome rebuilds the world from server authority (see there).
+    private bool _worldLoaded;
+
     public override void _Ready()
     {
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -145,6 +149,7 @@ public partial class GameNetClient : Node
         LocalShipId = 0;
         LocalClientId = 0;
         _reconnectToken = ""; // voluntary leave gives the ship up — don't try to reclaim it
+        _worldLoaded = false;
         _rows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
@@ -158,6 +163,7 @@ public partial class GameNetClient : Node
     public void GiveUpShip()
     {
         _reconnectToken = "";
+        _worldLoaded = false;
         LocalShipId = 0;
         _rows.Clear();
         _world.Reset();
@@ -445,6 +451,12 @@ public partial class GameNetClient : Node
                 break;
             case 2:
                 LocalShipId = r.ReadUInt64();
+                // Make this YouAre authoritative about which node is local: forget any prior row
+                // and drop a stale remote node for the same id (possible on a reconnect reclaim
+                // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
+                // as the predicted local ship rather than leaving it an un-predicted remote.
+                _rows.Remove(LocalShipId);
+                _world.NetPromoteLocal(LocalShipId);
                 GD.Print($"[GameNet] assigned ship {LocalShipId}");
                 break;
             case 3:
@@ -510,6 +522,17 @@ public partial class GameNetClient : Node
         // ship if this connection drops.
         byte tokenLen = r.ReadByte();
         _reconnectToken = Convert.ToHexString(r.ReadBytes(tokenLen));
+
+        // Reconnect: a Welcome arriving while a world is already rendered means we just
+        // re-established the link. Tear the stale world down and rebuild from this authoritative
+        // Welcome (+ the snapshots that follow), so the local ship is re-seeded at the server's
+        // position instead of continuing from where the client predicted during the dead window —
+        // and any ships that died/left while we were away (whose ShipGone we missed) don't linger
+        // as ghosts. During the dead window itself no Welcome arrives, so the frozen world stays
+        // up behind the reconnecting overlay. The first connect has nothing to reset.
+        if (_worldLoaded)
+            _world.Reset();
+        _worldLoaded = true;
 
         ushort sectors = r.ReadUInt16();
         for (int i = 0; i < sectors; i++)

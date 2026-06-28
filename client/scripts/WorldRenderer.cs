@@ -720,6 +720,22 @@ public partial class WorldRenderer : Node3D
         SetNodeSector(node, row.SectorId);
     }
 
+    // A YouAre named shipId as OUR ship. On a reconnect reclaim the ship already existed, so a
+    // snapshot that arrived just before the YouAre may have rendered it as a remote ship; drop
+    // that stale node so the next snapshot re-inserts it as a predicted LOCAL ship. No-op when
+    // it's missing or already the local ship (the normal first-spawn case).
+    public void NetPromoteLocal(ulong shipId)
+    {
+        if (LocalShip is not null && LocalShip.ShipId == shipId)
+            return;
+        if (_shipNodes.TryGetValue(shipId, out var node) && node is RemoteShip)
+        {
+            _shipNodes.Remove(shipId);
+            _collidingShips.Remove(shipId);
+            node.QueueFree();
+        }
+    }
+
     private void UpdateShip(Ship oldRow, Ship newRow)
     {
         if (!_shipNodes.TryGetValue(newRow.ShipId, out var node))
