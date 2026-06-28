@@ -162,7 +162,7 @@ docker compose up --build   # sim-server (ws://localhost:8090/game) + public-lob
 Released images are published to GHCR — no checkout or build needed:
 
 ```bash
-docker run -p 8090:8090 \
+docker run --rm -p 8090:8090 \
   -e SIM_PUBLIC_NAME="My Server" \
   ghcr.io/wivuu/wivuullegiance-sim:latest
 ```
