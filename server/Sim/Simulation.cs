@@ -1143,7 +1143,12 @@ public sealed partial class Simulation
                 if (dd.LengthSquared() >= bound * bound)
                     continue;
                 if (World.RockBodies.TryGetValue(a.Id, out var body))
-                    ResolveHullCollision(s, body.Hull, a.Pos, body.Rot, body.Scale);
+                {
+                    // Live tumble: compose the spawn pose with the spin at the current tick so the
+                    // authoritative hull matches the rendered rock (Collide.RockRotationAt, shared).
+                    Quat rot = Collide.RockRotationAt(body.Rot, body.SpinAxis, body.SpinSpeed, _tick * FlightModel.Dt);
+                    ResolveHullCollision(s, body.Hull, a.Pos, rot, body.Scale);
+                }
                 else
                     ResolveStaticCollision(s, a.Pos, a.Radius * World.AsteroidCollisionScale);
             }

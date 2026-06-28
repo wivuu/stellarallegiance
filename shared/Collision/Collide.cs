@@ -89,6 +89,35 @@ public static class Collide
         return (qy * qx * qz).Normalized();
     }
 
+    // Deterministic per-rock tumble (unit axis, speed rad/s) from the rock id. ONE shared source so
+    // the rendered rock, the client's predicted hull, and the server's authoritative hull all spin as
+    // one — integer splitmix64 hash + a uniform point on the sphere, so every peer agrees bit-for-bit.
+    public static (Vec3 Axis, float Speed) RockSpin(ulong id)
+    {
+        ulong h = id * 0x9E3779B97F4A7C15UL + 0x632BE59BD9B4E019UL;
+        h ^= h >> 30;
+        h *= 0xBF58476D1CE4E5B9UL;
+        h ^= h >> 27;
+        h *= 0x94D049BB133111EBUL;
+        h ^= h >> 31;
+        float u1 = (h & 0x1FFFFF) / (float)0x200000;
+        float u2 = ((h >> 21) & 0x1FFFFF) / (float)0x200000;
+        float u3 = ((h >> 42) & 0xFFFF) / (float)0x10000;
+        float z = u1 * 2f - 1f;
+        float phi = u2 * (float)(System.Math.PI * 2.0);
+        float r = (float)System.Math.Sqrt(System.Math.Max(0f, 1f - z * z));
+        var axis = new Vec3(r * (float)System.Math.Cos(phi), r * (float)System.Math.Sin(phi), z);
+        float len = axis.Length();
+        if (len < 1e-6f)
+            return (new Vec3(0f, 1f, 0f), 0.03f + u3 * 0.12f);
+        return (axis * (1f / len), 0.03f + u3 * 0.12f);
+    }
+
+    // World rotation of a tumbling rock at sim time t (seconds): spawn pose, then the tumble about its
+    // fixed world axis. t = tick * FlightModel.Dt on every peer, so the phase stays shared.
+    public static Quat RockRotationAt(Quat baseRot, Vec3 spinAxis, float spinSpeed, float t) =>
+        spinSpeed <= 0f ? baseRot : Quat.FromRotationVector(spinAxis * (spinSpeed * t)) * baseRot;
+
     // A static collision body in world space: a transformed convex hull, or a sphere fallback when
     // Hull is null. The client builds a per-sector list of these (asteroids + bases) and resolves the
     // local ship against them each predicted tick, exactly as the server resolves its sim ships.

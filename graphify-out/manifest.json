@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1782524272.0367644,
-    "ast_hash": "f912a250dd1fcd443b7b85604307b372",
+    "mtime": 1782605568.3092911,
+    "ast_hash": "84e820a3ac60d9f33db7a52d99a0fd86",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionOverlay.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782600399.8208127,
-    "ast_hash": "07c2d032f3ef6aab9daa53ca3244669b",
+    "mtime": 1782618652.0282838,
+    "ast_hash": "34857e0b59d0fab6bba1cc4b30c8d195",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782600399.828892,
-    "ast_hash": "2f8a9e7bf17ef604ddd4ded302a8a253",
+    "mtime": 1782618355.544982,
+    "ast_hash": "7539642f95aab257fb077117e5e97b77",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782605036.1622314,
-    "ast_hash": "71f0fb9265b758cd2fbf5d57bfa95c62",
+    "mtime": 1782618296.945553,
+    "ast_hash": "78434f6f099dee926ca87f512e4844a4",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -6195,13 +6195,13 @@
     "semantic_hash": ""
   },
   "client/scripts/CollisionWorld.cs": {
-    "mtime": 1782600399.8188486,
-    "ast_hash": "bab11618bd55265a33f4a5ecc8f04b1c",
+    "mtime": 1782618438.6902227,
+    "ast_hash": "c6a87e7d055912f803464f711f12fa19",
     "semantic_hash": ""
   },
   "shared/Collision/Collide.cs": {
-    "mtime": 1782600399.8296547,
-    "ast_hash": "203cd6c5c6bb6a2ada7d56cf6aa78913",
+    "mtime": 1782618258.6952462,
+    "ast_hash": "dfa84c4ba8e9fb1348902b34134bc934",
     "semantic_hash": ""
   },
   "shared/Collision/CollisionConfig.cs": {
@@ -6230,8 +6230,8 @@
     "semantic_hash": ""
   },
   "tests/CollisionTest/Program.cs": {
-    "mtime": 1782600399.8309288,
-    "ast_hash": "5b148971d0f29b64ee124518def55ba9",
+    "mtime": 1782618899.277213,
+    "ast_hash": "8349d507f1a1aab39ce3f784963df3f7",
     "semantic_hash": ""
   },
   ".serena/project.local.yml": {

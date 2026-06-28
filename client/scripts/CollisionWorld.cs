@@ -20,14 +20,41 @@ public sealed class CollisionWorld
     private SimModel? _baseModel;
     private bool _baseLoaded;
 
-    // Per-sector static bodies (asteroids + bases).
-    private readonly Dictionary<uint, List<Collide.StaticBody>> _bodies = new();
+    // Per-sector static bodies. We keep the SPAWN pose plus each rock's tumble (axis/speed) and
+    // compose the live rotation at query time, so the predicted hull spins in lockstep with the
+    // rendered rock and the server (Collide.RockSpin / RockRotationAt — one shared source).
+    private readonly record struct Entry(Collide.StaticBody Base, Vec3 SpinAxis, float SpinSpeed);
+    private readonly Dictionary<uint, List<Entry>> _src = new();
+    private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
     private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
 
-    public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector) =>
-        _bodies.TryGetValue(sector, out var l) ? l : Empty;
+    // Bodies in a sector with their rotation advanced to sim time t (seconds = tick * FlightModel.Dt).
+    public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector, float t)
+    {
+        if (!_src.TryGetValue(sector, out var src))
+            return Empty;
+        if (!_live.TryGetValue(sector, out var outBuf))
+            _live[sector] = outBuf = new List<Collide.StaticBody>(src.Count);
+        outBuf.Clear();
+        foreach (var e in src)
+            outBuf.Add(
+                e.SpinSpeed <= 0f
+                    ? e.Base
+                    : Collide.StaticBody.AsteroidHull(
+                        e.Base.Hull!,
+                        e.Base.Center,
+                        Collide.RockRotationAt(e.Base.Rot, e.SpinAxis, e.SpinSpeed, t),
+                        e.Base.Scale
+                    )
+            );
+        return outBuf;
+    }
 
-    public void Clear() => _bodies.Clear();
+    public void Clear()
+    {
+        _src.Clear();
+        _live.Clear();
+    }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)
     {
@@ -37,12 +64,14 @@ public sealed class CollisionWorld
         if (model is null || model.Hull.BoundingRadius <= 1e-3f)
         {
             // Sphere fallback — matches the server's ResolveStaticCollision for a hull-less rock.
-            list.Add(Collide.StaticBody.AsteroidSphere(center, row.Radius * CollisionConfig.AsteroidCollisionScale));
+            // A sphere is rotation-invariant, so it carries no spin.
+            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, row.Radius * CollisionConfig.AsteroidCollisionScale), default, 0f));
             return;
         }
         float scale = row.Radius * CollisionConfig.AsteroidCollisionScale / model.Hull.BoundingRadius;
         Quat rot = Collide.RockRotation(row.RotX, row.RotY, row.RotZ);
-        list.Add(Collide.StaticBody.AsteroidHull(model.Hull, center, rot, scale));
+        var (spinAxis, spinSpeed) = Collide.RockSpin(row.AsteroidId);
+        list.Add(new Entry(Collide.StaticBody.AsteroidHull(model.Hull, center, rot, scale), spinAxis, spinSpeed));
     }
 
     public void AddBase(StellarAllegiance.Net.Base row)
@@ -52,7 +81,7 @@ public sealed class CollisionWorld
         SimModel? model = BaseModel();
         if (model is null || model.LongestAxis <= 1e-3f)
         {
-            list.Add(Collide.StaticBody.BaseSphere(center, CollisionConfig.BaseRadius, row.Team));
+            list.Add(new Entry(Collide.StaticBody.BaseSphere(center, CollisionConfig.BaseRadius, row.Team), default, 0f));
             return;
         }
         // World scale: the client renders the base via NormalizeLongestAxis(radius*2); bake the same.
@@ -67,13 +96,13 @@ public sealed class CollisionWorld
                 Vec3 p = hp.Pos * ws;
                 entrances.Add((p, Normalize(hp.Pos)));
             }
-        list.Add(Collide.StaticBody.BaseHull(hull, center, row.Team, entrances.ToArray()));
+        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, center, row.Team, entrances.ToArray()), default, 0f));
     }
 
-    private List<Collide.StaticBody> BodyList(uint sector)
+    private List<Entry> BodyList(uint sector)
     {
-        if (!_bodies.TryGetValue(sector, out var l))
-            _bodies[sector] = l = new List<Collide.StaticBody>();
+        if (!_src.TryGetValue(sector, out var l))
+            _src[sector] = l = new List<Entry>();
         return l;
     }
 

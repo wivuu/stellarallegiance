@@ -86,7 +86,9 @@ public sealed class World
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
     // and the uniform scale mapping authored units → this rock's collision size.
-    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale);
+    // Rot is the SPAWN pose; SpinAxis/SpinSpeed give the live tumble — the resolver composes them at
+    // the current tick (Collide.RockRotationAt) so the hull rotates with the rendered rock.
+    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale, Vec3 SpinAxis, float SpinSpeed);
 
     // Per-class ship collision hulls, loaded from the same GLBs the client renders and pre-scaled
     // to the client's per-class silhouette length (ShipModelLoader.TargetLength), so the hull a
@@ -249,7 +251,8 @@ public sealed class World
             if (vm is null || vm.Hull.BoundingRadius <= 1e-3f)
                 continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
-            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale);
+            var (spinAxis, spinSpeed) = Collide.RockSpin(r.Id);
+            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale, spinAxis, spinSpeed);
         }
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).

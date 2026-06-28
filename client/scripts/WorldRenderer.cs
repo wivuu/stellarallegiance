@@ -52,7 +52,7 @@ public partial class WorldRenderer : Node3D
     // Purely cosmetic lazy tumble: each rock spins slowly about a fixed pseudo-random axis,
     // derived once from its id (stable across frames; the sim treats rocks as static spheres).
     // Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
-    private readonly Dictionary<ulong, (Node3D Node, Vector3 Axis, float Speed)> _asteroidSpins = new();
+    private readonly Dictionary<ulong, (Node3D Node, Quaternion Base, Vector3 Axis, float Speed)> _asteroidSpins = new();
     private readonly Dictionary<ulong, Node3D> _shipNodes = new();
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
@@ -341,6 +341,10 @@ public partial class WorldRenderer : Node3D
         Winner = winner == 255 ? (byte?)null : winner;
     }
 
+    // Shared spin clock: the authoritative tick in seconds. The rock tumble (visual + predicted hull)
+    // is phased on this, so they rotate together and stay within ~1° of the server's live hull.
+    private float SimSeconds => ServerTick * FlightModel.Dt;
+
     // Streamed base health (MsgBases). Bases are static nodes placed by the Welcome frame;
     // this records the 0..1 fraction TargetMarkers reads for the screen-space damage bar.
     public void NetUpdateBaseHealth(ulong baseId, float health)
@@ -472,7 +476,7 @@ public partial class WorldRenderer : Node3D
     // (_collidingShips debounce) so grinding a hull doesn't machine-gun the sound.
     private void CheckCollisions()
     {
-        var bodies = _collisionWorld.BodiesIn(_localSector);
+        var bodies = _collisionWorld.BodiesIn(_localSector, SimSeconds);
         if (_shipNodes.Count == 0 || bodies.Count == 0)
             return;
 
@@ -659,37 +663,15 @@ public partial class WorldRenderer : Node3D
         }
         _asteroids.AddChild(node);
         _asteroidNodes[row.AsteroidId] = node;
-        var (axis, speed) = AsteroidSpin(row.AsteroidId);
-        _asteroidSpins[row.AsteroidId] = (node, axis, speed);
+        // Capture the spawn pose as the spin base, then tumble absolutely off the shared sim clock so
+        // the rendered rock stays in lockstep with its collision hull (shared Collide.RockSpin).
+        var (sa, sp) = Collide.RockSpin(row.AsteroidId);
+        _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
         _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
         SetNodeSector(node, row.SectorId);
     }
 
-    // Stable pseudo-random tumble for one rock: hash the id into a uniform-ish unit axis and a
-    // slow rate. Deterministic so the axis never changes frame-to-frame (no per-frame RNG), and
-    // purely client-side — nothing here touches the sim. Rates are deliberately lazy (~0.03..0.15
-    // rad/s) so rocks drift rather than visibly whirl.
-    private static (Vector3 Axis, float Speed) AsteroidSpin(ulong id)
-    {
-        // splitmix64-style avalanche so neighbouring ids don't share an axis.
-        ulong h = id * 0x9E3779B97F4A7C15UL + 0x632BE59BD9B4E019UL;
-        h ^= h >> 30;
-        h *= 0xBF58476D1CE4E5B9UL;
-        h ^= h >> 27;
-        h *= 0x94D049BB133111EBUL;
-        h ^= h >> 31;
-        float u1 = (h & 0x1FFFFF) / (float)0x200000; // [0,1)  -> cos(polar)
-        float u2 = ((h >> 21) & 0x1FFFFF) / (float)0x200000; // [0,1)  -> azimuth
-        float u3 = ((h >> 42) & 0xFFFF) / (float)0x10000; // [0,1)  -> rate
-        float z = u1 * 2f - 1f;
-        float phi = u2 * Mathf.Tau;
-        float r = Mathf.Sqrt(Mathf.Max(0f, 1f - z * z));
-        var axis = new Vector3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z);
-        if (axis.LengthSquared() < 1e-6f)
-            axis = Vector3.Up;
-        return (axis.Normalized(), 0.03f + u3 * 0.12f);
-    }
 
     // ---- Ship -----------------------------------------------------------
 
@@ -708,7 +690,7 @@ public partial class WorldRenderer : Node3D
             ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
             pc.Initialize(row, _defs);
             // Predict collisions against the local sector's hulls (sector follows the ship on warp).
-            pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector));
+            pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector, SimSeconds));
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
@@ -1019,12 +1001,13 @@ public partial class WorldRenderer : Node3D
         CheckBoltImpacts(delta);
         CheckCollisions();
 
-        // Lazy cosmetic tumble: spin each rock slowly about its fixed pseudo-random axis.
+        // Tumble each rock to its ABSOLUTE pose at the shared sim clock (not a per-frame increment),
+        // so the rendered rock matches the predicted + authoritative collision hull exactly.
         if (_asteroidSpins.Count > 0)
         {
-            float fdelta = (float)delta;
-            foreach (var (node, axis, speed) in _asteroidSpins.Values)
-                node.Rotate(axis, speed * fdelta);
+            float t = SimSeconds;
+            foreach (var (node, baseQ, axis, speed) in _asteroidSpins.Values)
+                node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
         }
 
         // Cull bolts whose (obstruction-clipped) flight life has elapsed.
