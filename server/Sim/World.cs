@@ -23,6 +23,9 @@ public sealed class World
     public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
     public const float ShipShipDamageScale = 1.2f;
     public const float MaxCollisionDamage = 30f;
+    // Below this closing normal speed (m/s) a collision is a harmless kiss: it still bounces, no damage.
+    public const float CollisionDamageMinSpeed = 4f; // ponytail: tune knob; raise to make hulls more forgiving
+
     public const float NoseOffset = 3f;
     public const float BoundaryBaseDps = 8f;
     public const float BoundaryRampDps = 0.12f;

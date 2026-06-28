@@ -1114,7 +1114,7 @@ public sealed partial class Simulation
             float jimp = -(1f + World.CollisionRestitution) * relVn / invSum;
             a.State.Vel += n * (jimp * iA);
             b.State.Vel -= n * (jimp * iB);
-            float dmg = MathF.Min(-relVn * (1f / invSum) * World.ShipShipDamageScale, World.MaxCollisionDamage);
+            float dmg = CollisionDamage(-relVn, (1f / invSum) * World.ShipShipDamageScale);
             a.Health -= dmg;
             b.Health -= dmg;
         }
@@ -1181,7 +1181,7 @@ public sealed partial class Simulation
     {
         Collide.Bounce(ref s.State, worldNormal, worldPenetration, World.CollisionRestitution, out float vn);
         if (vn < 0f)
-            s.Health -= MathF.Min(-vn * World.CollisionDamageScale, World.MaxCollisionDamage);
+            s.Health -= CollisionDamage(-vn, World.CollisionDamageScale);
     }
 
     // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the
@@ -1216,8 +1216,16 @@ public sealed partial class Simulation
             Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
             && vn < 0f
         )
-            s.Health -= MathF.Min(-vn * World.CollisionDamageScale, World.MaxCollisionDamage);
+            s.Health -= CollisionDamage(-vn, World.CollisionDamageScale);
     }
+
+    // Server-only collision damage from a closing normal speed (m/s, always positive). Below
+    // World.CollisionDamageMinSpeed it's a harmless kiss: 0 damage (the bounce still ran). Above it,
+    // scaled and capped at MaxCollisionDamage. Shared by ship-ship, hull, and sphere-fallback bounces.
+    private static float CollisionDamage(float closingSpeed, float scale) =>
+        closingSpeed > World.CollisionDamageMinSpeed
+            ? MathF.Min(closingSpeed * scale, World.MaxCollisionDamage)
+            : 0f;
 
     // ---- Warp (module TryWarp): emerge out the partner mouth toward the dest sector
     // center, jittered by a small random cone so successive ships fan out instead of
