@@ -20,11 +20,7 @@ Archives:
 
 ## QUICKNOTES:
 - Code cleanup and refactor
-- ✅ Password-protect game servers — done; set `--secret` / `SIM_SECRET` to gate joins
-  (constant-time compare in `server/Backend/Backends.cs`).
-- ✅ `/pigs on|off` in-game text commands — done (`server/Net/ClientHub.cs`).
-- ✅ HUD health bars are screen-space — player HP text (`client/scripts/Hud.cs`), base health
-  overlay (`client/scripts/TargetMarkers.cs`, replaced the old world-space quad).
+- Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 ---
 
 ## Content philosophy (the through-line)
@@ -40,7 +36,7 @@ and eventually add an entire faction, with no client patch**:
 2. **YAML authoring + per-server override** — defs come from editable YAML the server loads at
    startup, not C# (Stage 1).
 3. **Runtime asset streaming** — the client downloads *binary* assets (meshes/textures/audio) it
-   lacks from the game server, so server-defined factions need no client install (Stage 4).
+   lacks from the game server to temp storage, so server-defined factions need no client install (Stage 4).
 
 Corollary for sequencing: **the content pipeline lands before we author much new content**, so
 missiles, tech, and factions are written as YAML data from the start, never as C# to be migrated.
@@ -184,6 +180,16 @@ Stage-1 YAML pipeline.
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
   (`MsgDefs`); this extends the same model to binary assets (transfer + cache + load-from-temp +
   validation/eviction). A substantial sub-project — the enabler for fully server-authored factions.
+  - **On-join loading gate.** Asset transfer is an explicit **blocking phase behind a loading
+    screen**, completed *before* the 20 Hz state stream starts — so bulk bytes never compete with
+    realtime gameplay on the single reliable-ordered channel (WS or WebRTC alike), and no second
+    data channel / CDN is required. A bad or missing asset fails at the loading screen with a clear
+    error (the client has no compile-time fallback), never mid-match.
+  - **Content-hash manifest + resumable cache.** Server is authoritative over a hashed manifest
+    (`assetId → {sha256, size, optional httpUrl}`) streamed over the existing def path; the temp
+    cache is keyed by content hash so a rejoining client re-pulls only what changed. The optional
+    per-asset `httpUrl` lets a high-scale operator offload fanout to a bucket/CDN without making one
+    a requirement.
 - ☐ **Factions** — distinct factions with unique ship classes, tech trees, and visual styles for
   asymmetric play (a faction dimension on YAML defs). *Faction rules ride Stage 1; faction assets
   ride asset streaming above.*
