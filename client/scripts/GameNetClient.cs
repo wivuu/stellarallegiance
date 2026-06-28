@@ -715,8 +715,10 @@ public partial class GameNetClient : Node
             row.Health = WireQuant.UnpackHalf(hp);
             row.LastInputTick = lastInput;
             row.LastFireTick = lastFire;
-            // Mass isn't on the wire: re-derive from the same shared class stats the server seeds.
-            row.Mass = FlightModel.StatsFor((byte)row.Class, row.IsPod).Mass;
+            // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
+            // seeds from), so a YAML-overridden mass matches server authority. No compile-time
+            // fallback — by the time ship snapshots arrive the MsgDefs frame has been applied.
+            row.Mass = _defs.TryGetStats((byte)row.Class, row.IsPod, out var massStats) ? massStats.Mass : 0f;
 
             _seenThisSnapshot.Add(id);
             if (prev is null)

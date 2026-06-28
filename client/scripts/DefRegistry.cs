@@ -71,21 +71,7 @@ public partial class DefRegistry : Node
             stats = default;
             return false;
         }
-        stats = ShipStats.Create(
-            d.MaxSpeed,
-            d.Accel,
-            d.Mass,
-            d.RateYawDeg,
-            d.RatePitchDeg,
-            d.RateRollDeg,
-            d.DriftYawDeg,
-            d.DriftPitchDeg,
-            d.SideMult,
-            d.BackMult,
-            d.AbAccel,
-            d.AbOnRate,
-            d.AbOffRate
-        );
+        stats = ShipStats.FromDef(d);
         _statsCache[defId] = stats;
         return true;
     }

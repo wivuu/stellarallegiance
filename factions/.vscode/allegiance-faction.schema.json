@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Allegiance faction core",
+  "$ref": "#/$defs/Faction",
+  "$defs": {
+    "Capability": {
+      "type": "string",
+      "enum": [
+        "base",
+        "shipyard-allowed",
+        "expansion-allowed",
+        "tactical-allowed",
+        "supremacy-allowed"
+      ]
+    },
+    "Faction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base-attributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/GameAttribute"
+          }
+        },
+        "base-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "base-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bonus-money": {
+          "type": "number"
+        },
+        "hud-name": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "income-money": {
+          "type": "number"
+        },
+        "initial-station-id": {
+          "type": "string"
+        },
+        "lifepod-hull-id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "no-dev-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "GameAttribute": {
+      "type": "string",
+      "enum": [
+        "max-speed",
+        "thrust",
+        "turn-rate",
+        "turn-torque",
+        "max-armor-station",
+        "armor-regeneration-station",
+        "max-shield-station",
+        "shield-regeneration-station",
+        "max-armor-ship",
+        "max-shield-ship",
+        "shield-regeneration-ship",
+        "scan-range",
+        "signature",
+        "max-energy",
+        "ammo-speed",
+        "energy-lifespan",
+        "missile-turn-rate",
+        "mining-rate",
+        "mining-yield",
+        "mining-capacity",
+        "ripcord-time",
+        "gun-damage",
+        "missile-damage",
+        "development-cost",
+        "development-time"
+      ]
+    }
+  }
+}

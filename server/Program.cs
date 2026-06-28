@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using SimServer.Assets;
 using SimServer.Backend;
+using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
@@ -35,7 +36,7 @@ if (args.Contains("--selftest"))
 // accumulator and fans out AOI snapshots after each step. The server is the SINGLE authority
 // and also hosts the lobby (team/ready) — clients connect directly by ip:port, download all
 // content from the server, and never talk to any database.
-//   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart]
+//   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart] [--content content.yaml]
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SIM_PORT (compose/self-host), else the 8090 default. A --port flag below overrides all of these.
 int port =
@@ -50,6 +51,11 @@ string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
 // Skip the lobby ready-up gate and run a perpetual match (for bots / benchmarking / dev
 // iteration). Off by default: a real game readies up in the lobby.
 bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is "1" or "true";
+
+// Per-server content override (Stage-1 content pipeline). Empty (default) = built-in GameContent
+// defaults; a path = load that YAML and OVERLAY it onto the defaults. A --content flag overrides
+// CONTENT_PATH. Mirrors the --secret/SIM_SECRET pattern.
+string? contentPath = Environment.GetEnvironmentVariable("CONTENT_PATH");
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--autostart")
@@ -62,7 +68,36 @@ for (int i = 0; i < args.Length; i++)
         seed = ulong.Parse(args[i + 1]);
     if (args[i] == "--secret")
         secret = args[i + 1];
+    if (args[i] == "--content")
+        contentPath = args[i + 1];
 }
+
+// Resolve content BEFORE the sim: load + overlay any per-server YAML, then validate. The client
+// has no compile-time fallback, so a malformed/incomplete def set must fail HERE (clear error,
+// refuse to start) rather than surfacing mid-match as a server KeyNotFound or a client desync.
+ContentSet content;
+try
+{
+    content = string.IsNullOrWhiteSpace(contentPath) ? ContentSet.Defaults() : ContentLoader.Load(contentPath);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}': {ex.Message}");
+    return;
+}
+var contentErrors = ContentValidator.Validate(content.Ships, content.Weapons, content.Bases);
+if (contentErrors.Count > 0)
+{
+    Console.Error.WriteLine($"[SimServer] FATAL: content validation failed ({contentErrors.Count} error(s)):");
+    foreach (var e in contentErrors)
+        Console.Error.WriteLine($"  - {e}");
+    return;
+}
+Console.WriteLine(
+    string.IsNullOrWhiteSpace(contentPath)
+        ? "[SimServer] content: built-in defaults."
+        : $"[SimServer] content: loaded + overlaid '{contentPath}' onto defaults."
+);
 
 // Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /
 // benchmarking, but set --secret/SIM_SECRET before exposing it to untrusted networks.
@@ -79,8 +114,8 @@ IPlayerDirectory players = new InMemoryPlayerDirectory();
 IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
 IMatchResultSink results = new LoggingMatchResultSink();
 
-var world = new World(seed);
-var sim = new Simulation(world);
+var world = new World(seed, content.World);
+var sim = new Simulation(world, content);
 var hub = new ClientHub(sim, auth, players, matchmaker);
 
 // Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when

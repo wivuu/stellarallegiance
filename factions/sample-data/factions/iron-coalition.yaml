@@ -1,0 +1,11 @@
+id: iron-coalition
+name: Iron Coalition
+hud-name: iron-hud
+income-money: 10
+bonus-money: 5000
+base-capabilities: [base, expansion-allowed]
+base-attributes:
+  max-armor-ship: 1.1
+  max-speed: 0.95
+lifepod-hull-id: lifepod
+initial-station-id: garrison

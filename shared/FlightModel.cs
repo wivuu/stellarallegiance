@@ -314,6 +314,27 @@ namespace StellarAllegiance.Shared
                 TorqueRollRad = mass * (rateRollDeg * rateRollDeg / (2f * driftPitchDeg)) * Deg2Rad,
             };
         }
+
+        // Build the ShipStats from a (possibly runtime-loaded) ShipClassDef's authored f32s — the
+        // SINGLE path both server authority and client prediction take, so a YAML-overridden def
+        // drives identical flight on both sides (the def is the source of truth, not the compile-in
+        // FlightModel.Scout/... blocks, which now only seed GameContent's defaults).
+        public static ShipStats FromDef(ShipClassDef d) =>
+            Create(
+                d.MaxSpeed,
+                d.Accel,
+                d.Mass,
+                d.RateYawDeg,
+                d.RatePitchDeg,
+                d.RateRollDeg,
+                d.DriftYawDeg,
+                d.DriftPitchDeg,
+                d.SideMult,
+                d.BackMult,
+                d.AbAccel,
+                d.AbOnRate,
+                d.AbOffRate
+            );
     }
 
     public static class FlightModel

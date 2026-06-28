@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The loader/overlay + wire encoder live server-side (YamlDotNet is server-only); the shared
+         validator + def records come transitively. Referencing SimServer pulls its assembly only —
+         its Main is never invoked. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock bundle under test, copied next to the test binary so it loads by filename. -->
+    <Content Include="../../server/content/stock.yaml" Link="stock.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

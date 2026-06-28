@@ -1,0 +1,12 @@
+id: gigacorp
+name: GigaCorp
+hud-name: gigacorp-hud
+income-money: 14
+bonus-money: 5000
+base-capabilities: [base, expansion-allowed]
+base-attributes:
+  development-cost: 0.85
+  development-time: 0.9
+  max-energy: 1.1
+lifepod-hull-id: lifepod
+initial-station-id: garrison

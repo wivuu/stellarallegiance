@@ -255,13 +255,13 @@ public static class Protocol
     // The full content defs the client renders + predicts from (formerly STDB public tables).
     // Sent once, right after Welcome. Full-float (not hot): the client guards until it arrives
     // and keeps no compile-time fallback, so this is the sole source of tuning on the client.
-    public static byte[] BuildDefs()
+    public static byte[] BuildDefs(SimServer.Content.ContentSet content)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
         w.Write(MsgDefs);
 
-        var ships = GameContent.ShipClasses();
+        var ships = content.Ships;
         w.Write((byte)ships.Count);
         foreach (var s in ships)
         {
@@ -285,7 +285,7 @@ public static class Protocol
             WriteHardpoints(w, s.Hardpoints);
         }
 
-        var weapons = GameContent.Weapons();
+        var weapons = content.Weapons;
         w.Write((byte)weapons.Count);
         foreach (var wp in weapons)
         {
@@ -299,7 +299,7 @@ public static class Protocol
             w.Write(wp.SpreadRad);
         }
 
-        var bases = GameContent.Bases();
+        var bases = content.Bases;
         w.Write((byte)bases.Count);
         foreach (var b in bases)
         {
@@ -310,7 +310,7 @@ public static class Protocol
             WriteHardpoints(w, b.Hardpoints);
         }
 
-        var cfg = GameContent.WorldDefaults();
+        var cfg = content.World;
         w.Write(cfg.Id);
         w.Write(cfg.SectorScale);
         w.Write(cfg.AsteroidDensity);

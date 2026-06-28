@@ -361,7 +361,7 @@ public sealed class ClientHub
                     client.Outbound.Writer.TryWrite(
                         OutFrame.Whole(Protocol.BuildWelcome(client.Id, client.Team, _sim.World, _sim.Tick))
                     );
-                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs()));
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
                     BroadcastLobby();
                     break;
                 }

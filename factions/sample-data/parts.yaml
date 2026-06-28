@@ -1,0 +1,67 @@
+weapons:
+  - id: light-cannon
+    name: Light Cannon
+    price: 50
+    slot: weapon
+    reload-time: 0.25
+    energy-per-shot: 5
+    projectile-id: bolt
+    required-capabilities: [base]
+
+  - id: heavy-cannon
+    name: Heavy Cannon
+    price: 120
+    slot: weapon
+    reload-time: 0.5
+    energy-per-shot: 12
+    projectile-id: heavy-bolt
+    required-techs: [gun-tier-2]
+
+shields:
+  - id: light-shield
+    name: Light Shield
+    price: 60
+    slot: shield
+    regen-rate: 2
+    max-strength: 80
+    required-capabilities: [base]
+
+  - id: heavy-shield
+    name: Heavy Shield
+    price: 140
+    slot: shield
+    regen-rate: 3
+    max-strength: 200
+    required-techs: [heavy-hulls]
+
+cloaks:
+  - id: field-cloak
+    name: Field Cloak
+    price: 180
+    slot: cloak
+    energy-consumption: 4
+    max-cloaking: 0.9
+    on-rate: 0.5
+    off-rate: 1.0
+    required-techs: [cloak-tech]
+
+afterburners:
+  - id: standard-burner
+    name: Standard Afterburner
+    price: 40
+    slot: afterburner
+    fuel-consumption: 3
+    max-thrust: 2.0
+    on-rate: 2
+    off-rate: 2
+    required-capabilities: [base]
+
+launchers:
+  - id: missile-rack
+    name: Missile Rack
+    price: 90
+    slot: dispenser
+    amount: 4
+    launch-count: 1
+    expendable-id: seeker-missile
+    required-capabilities: [tactical-allowed]

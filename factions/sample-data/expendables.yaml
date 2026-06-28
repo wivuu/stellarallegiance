@@ -1,0 +1,32 @@
+missiles:
+  - id: seeker-missile
+    name: Seeker Missile
+    lifespan: 8
+    acceleration: 40
+    turn-rate: 2.5
+    initial-speed: 60
+    power: 120
+    blast-radius: 30
+    damage-type: explosive
+    abilities: [shoot-ships]
+
+probes:
+  - id: sensor-probe
+    name: Sensor Probe
+    lifespan: 120
+    scanner-range: 6000
+
+projectiles:
+  - id: bolt
+    name: Plasma Bolt
+    power: 20
+    speed: 200
+    lifespan: 1.5
+    damage-type: energy
+
+  - id: heavy-bolt
+    name: Heavy Plasma Bolt
+    power: 45
+    speed: 180
+    lifespan: 1.8
+    damage-type: energy

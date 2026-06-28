@@ -107,16 +107,24 @@ Make all content editable data the server loads, not C# — the substrate for ev
 (weapons, costs, factions, tech, mechanics knobs). Reuses the existing def→`MsgDefs`→client path
 (no client change); adds only a server-side loader (`YamlDotNet`).
 
-- ☐ **YAML def authoring** — the server reads ship/weapon/base/world (and future faction/tech)
-  defs from YAML at startup, builds the same def objects `GameContent` does today, and ships them
-  over `MsgDefs`. Keep `GameContent` as built-in **defaults**; YAML **overrides and extends** them
-  (server still boots with no YAML).
-- ☐ **Per-server override** — a config path / env var picks the YAML set a server loads (mirror the
-  custom-maps scheme: built-in default, a specific file, or pick-from-dir). An operator retunes
-  mechanics or adds content per server with **no recompile** and **no client patch** — for content
-  reusing existing assets; brand-new visual assets need asset streaming (Stage 4).
-- ☐ **Schema + validation** — fail fast on a malformed/partial YAML def at load (the client has no
-  fallback), with a clear error; extend the Stage-0 content guard to the loaded set.
+- ✅ **YAML def authoring** — the server reads ship/weapon/base/world defs from YAML at startup
+  (`server/Content/ContentLoader` + `ContentSet`, `YamlDotNet`), builds the same shared def objects
+  `GameContent` does, and ships them over `MsgDefs` (no client change). `GameContent` stays the
+  built-in **defaults**; YAML **overrides/extends by id** (server still boots with no YAML). The
+  flight-stat path is single-sourced from the loaded def on BOTH sides (`ShipStats.FromDef`; server
+  authority + client `Mass` re-derive route through it), so a YAML-tuned ship can't desync.
+- ✅ **Per-server override** — `--content PATH` / `CONTENT_PATH` picks the YAML overlay (absent →
+  built-in defaults; a file → load + overlay), mirroring the `--secret`/`SIM_SECRET` pattern. An
+  operator retunes mechanics or adds content per server with **no recompile** and **no client
+  patch** (for content reusing existing assets; new visual assets need asset streaming, Stage 4).
+  A copy-me `server/content/stock.yaml` re-expresses the defaults as the authoring reference.
+- ✅ **Schema + validation** — `ContentValidator` (shared) fails fast at boot on a malformed/partial
+  set (dangling weapon-hardpoint refs, non-positive non-pod hull, dup ids) with a clear error and a
+  refuse-to-start; the same validator backs the Stage-0 content guard in `FlightModelTest`, and
+  `tests/ContentTest` asserts `stock.yaml` reproduces `GameContent` byte-for-byte on the wire.
+- *(The `Allegiance.Factions` library — `factions/`, formerly TMP_INCORPORATE — is now in the
+  solution as the dormant substrate for Stage 2/4 faction/tech-tree data; not wired into the Stage-1
+  def stream.)*
 
 ### Stage 2 — Thin strategy spine
 

@@ -1,0 +1,42 @@
+developments:
+  - id: dev-advanced-reactors
+    name: Advanced Reactors
+    price: 300
+    build-time-seconds: 60
+    granted-techs: [advanced-reactors]
+    attributes:
+      max-energy: 1.2
+      energy-lifespan: 1.1
+    required-capabilities: [shipyard-allowed]
+
+  - id: dev-heavy-hulls
+    name: Heavy Hull Plating
+    price: 350
+    build-time-seconds: 75
+    granted-techs: [heavy-hulls]
+    attributes:
+      max-armor-ship: 1.15
+    required-techs: [advanced-reactors]
+
+  - id: dev-gun-tier-2
+    name: Class-2 Cannons
+    price: 250
+    granted-techs: [gun-tier-2]
+    attributes:
+      gun-damage: 1.1
+    required-capabilities: [shipyard-allowed]
+
+  - id: dev-cloaking
+    name: Cloaking Systems
+    price: 450
+    granted-techs: [cloak-tech]
+    required-capabilities: [tactical-allowed]
+
+  - id: dev-mining
+    name: Improved Mining
+    price: 200
+    granted-techs: [mining-boost]
+    attributes:
+      mining-yield: 1.25
+    required-capabilities: [expansion-allowed]
+    tech-only: true

@@ -1,4 +1,5 @@
 using SimServer.Assets;
+using SimServer.Content;
 using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
@@ -24,14 +25,18 @@ public sealed partial class Simulation
     private const float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
 
-    // The sim consumes the AUTHORED defs straight from GameContent — ONE source of truth with the
-    // defs it ships to the client (no private duplicate that can silently drift out of sync).
-    // WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the weapon it fires); ShipDefs by
-    // ClassId. (BuildMuzzles already sources its muzzle geometry from GameContent the same way.)
-    private static readonly Dictionary<uint, WeaponDef> WeaponDefs =
-        GameContent.Weapons().ToDictionary(w => w.WeaponId);
-    private static readonly Dictionary<byte, ShipClassDef> ShipDefs =
-        GameContent.ShipClasses().ToDictionary(d => d.ClassId);
+    // The resolved content this match runs on (GameContent defaults, optionally YAML-overlaid at
+    // boot). ONE source of truth with the defs streamed to the client (Protocol.BuildDefs(Content)),
+    // so server authority and client prediction can never drift. Exposed for the hub's def frame.
+    public ContentSet Content { get; }
+
+    // Instance lookups built from Content in the ctor (were static-from-GameContent before the
+    // Stage-1 content pipeline). WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the
+    // weapon it fires); ShipDefs by ClassId; _stats is the per-class flight profile derived from the
+    // loaded def, so a YAML-overridden ship flies the authored numbers on BOTH sides.
+    private readonly Dictionary<uint, WeaponDef> WeaponDefs;
+    private readonly Dictionary<byte, ShipClassDef> ShipDefs;
+    private readonly Dictionary<byte, ShipStats> _stats;
 
     // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
     // fires along. Single-sourced from the authored ShipClassDef hardpoints so the server's
@@ -42,11 +47,10 @@ public sealed partial class Simulation
     // (the Fighter's twin cannons) fires one bolt from EACH muzzle every fire tick; the array
     // for a class is in hardpoint declaration order, which fixes each muzzle's barrel index so
     // the per-barrel spread seed (FlightModel.SpreadDirection) matches the client.
-    private static readonly Muzzle[][] ClassMuzzles = BuildMuzzles();
+    private readonly Muzzle[][] ClassMuzzles;
 
-    private static Muzzle[][] BuildMuzzles()
+    private static Muzzle[][] BuildMuzzles(IReadOnlyList<ShipClassDef> defs)
     {
-        var defs = GameContent.ShipClasses();
         int max = 0;
         foreach (var d in defs)
             if (d.ClassId != GameContent.PodClassId && d.ClassId > max)
@@ -69,15 +73,25 @@ public sealed partial class Simulation
 
     // Spawn hull for a class, read straight from its def (was a duplicate switch). An unknown class
     // falls back to the Scout hull, matching the old default.
-    private static float HullFor(byte cls) =>
+    private float HullFor(byte cls) =>
         ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
 
     // A class's primary (first) weapon — or the Scout gun if the hull carries no weapon hardpoint.
     // Drives the PIG threat heuristic; single-sourced from the same muzzles/defs the sim fires from.
-    private static WeaponDef PrimaryWeapon(byte cls)
+    private WeaponDef PrimaryWeapon(byte cls)
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
         return WeaponDefs[m.Length > 0 ? m[0].WeaponId : GameContent.ScoutWeaponId];
+    }
+
+    // Flight stats for a class, derived from the LOADED def (YAML-overridable) via the SAME path the
+    // client takes (ShipStats.FromDef) — so server authority and client prediction integrate
+    // bit-identically. A pod ignores its class and flies the Pod profile; an unknown class falls
+    // back to the Scout def, matching the old FlightModel.StatsFor behavior. Precomputed in the ctor.
+    private ShipStats StatsFor(byte cls, bool isPod)
+    {
+        byte defId = isPod ? GameContent.PodClassId : cls;
+        return _stats.TryGetValue(defId, out var s) ? s : _stats[FlightModel.ClassScout];
     }
 
     public sealed class ShipSim
@@ -211,9 +225,26 @@ public sealed partial class Simulation
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
-    public Simulation(World world)
+    public Simulation(World world, ContentSet content)
     {
         World = world;
+        Content = content;
+
+        // Resolve the per-match def lookups ONCE from the loaded content (defaults, or YAML-overlaid).
+        WeaponDefs = content.Weapons.ToDictionary(w => w.WeaponId);
+        ShipDefs = content.Ships.ToDictionary(d => d.ClassId);
+        ClassMuzzles = BuildMuzzles(content.Ships);
+        _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
+        foreach (var d in content.Ships)
+            _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
+
+        // PIG lead-prediction constants off the scout gun (all server weapons share these today).
+        var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
+        PigShotSpeed = pigShot.ProjectileSpeed;
+        PigShotLifeTicks = pigShot.ProjectileLifeTicks;
+        PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
+        PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
+
         PigsEnabled = (System.Environment.GetEnvironmentVariable("SIM_PIGS") ?? "") is "1" or "true";
         _shotRing = new List<PendingShot>[ShotRingSize];
         for (int i = 0; i < ShotRingSize; i++)
@@ -282,7 +313,7 @@ public sealed partial class Simulation
         foreach (var s in _order)
         {
             var input = InputFor(s, tick);
-            var stats = FlightModel.StatsFor(s.Class, s.IsPod);
+            var stats = StatsFor(s.Class, s.IsPod);
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
             // Pods are unarmed — only an armed combat ship fires.
@@ -485,7 +516,7 @@ public sealed partial class Simulation
             Alive = true,
         };
         PlaceAtBase(s, World.ShipRadius, tick);
-        s.State.Mass = FlightModel.StatsFor(cls, false).Mass;
+        s.State.Mass = StatsFor(cls, false).Mass;
         s.Health = HullFor(cls);
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -635,7 +666,7 @@ public sealed partial class Simulation
                 Vel = dead.State.Vel + dir * PodEjectSpeed,
                 Rot = dead.State.Rot,
                 AngVel = spin * PodEjectSpin,
-                Mass = FlightModel.StatsFor(dead.Class, true).Mass,
+                Mass = StatsFor(dead.Class, true).Mass,
                 AbPower = 0f,
             },
         };

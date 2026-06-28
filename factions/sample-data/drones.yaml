@@ -1,0 +1,12 @@
+drones:
+  - id: constructor-drone
+    name: Constructor Drone
+    pilot: builder
+    hull-id: constructor
+    required-capabilities: [shipyard-allowed]
+
+  - id: mining-drone
+    name: Mining Drone
+    pilot: miner
+    hull-id: miner
+    required-capabilities: [expansion-allowed]

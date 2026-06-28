@@ -39,6 +39,13 @@
       Link="assets\ships\%(Filename)%(Extension)"
       CopyToOutputDirectory="PreserveNewest"
     />
+    <!-- Stage-1 content pipeline: ship the stock content bundle (the built-in defaults re-expressed
+         as YAML) next to the binary as a copy-me reference for content/CONTENT_PATH overrides. -->
+    <Content
+      Include="content\*.yaml"
+      Link="content\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />
@@ -46,6 +53,10 @@
          runs on the Godot client and (optionally) simbot, so the offerer/answerer interop on one
          codebase. WebSocket stays the direct/LAN transport; WebRTC is the public-lobby path. -->
     <PackageReference Include="SIPSorcery" Version="10.0.9" />
+    <!-- Stage-1 content pipeline: the server loads per-server YAML content overrides at boot
+         (server/Content/ContentLoader). Server-only, so shared/ stays dependency-free and the
+         client/wasm never pull YamlDotNet. -->
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
     <!-- Non-trickle SDP/ICE helpers shared with the Godot client (excluded from Shared.csproj,
          which is dependency-free); compiled in here so both sides serialize candidates identically. -->
     <Compile Include="../shared/Net/WebRtcSdp.cs" Link="Net/WebRtcSdp.cs" />

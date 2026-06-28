@@ -40,7 +40,10 @@ public sealed class World
     public const int AsteroidCount = 4; // base count, scaled by cube law below
     public const int VergeAsteroidCount = 4;
     public const float VergeBeltRadius = 380f;
-    public const float SectorScale = 2.25f; // module WorldConfig defaults
+    // Default world-scale baseline (mirrors GameContent.WorldDefaults). The LIVE values used for
+    // seeding come from the WorldConfig passed to the ctor, so a per-server YAML `world:` override
+    // (SectorScale / AsteroidDensity) actually changes the generated map — not just what's streamed.
+    public const float SectorScale = 2.25f;
     public const float AsteroidDensity = 1.0f;
     public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
 
@@ -124,14 +127,17 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed)
+    public World(ulong seed, WorldConfig cfg)
     {
         Seed = seed;
-        float coreR = CoreRadius * SectorScale;
-        float vergeR = VergeRadius * SectorScale;
-        float scale3 = SectorScale * SectorScale * SectorScale;
-        int coreCount = (int)MathF.Round(AsteroidDensity * AsteroidCount * scale3);
-        int vergeCount = (int)MathF.Round(AsteroidDensity * VergeAsteroidCount * scale3);
+        // Live world-scale knobs from the loaded content (defaults, or a YAML `world:` override).
+        float sectorScale = cfg.SectorScale;
+        float density = cfg.AsteroidDensity;
+        float coreR = CoreRadius * sectorScale;
+        float vergeR = VergeRadius * sectorScale;
+        float scale3 = sectorScale * sectorScale * sectorScale;
+        int coreCount = (int)MathF.Round(density * AsteroidCount * scale3);
+        int vergeCount = (int)MathF.Round(density * VergeAsteroidCount * scale3);
 
         Sectors.Add(new Sector(HomeSector, coreR));
         Sectors.Add(new Sector(VergeSector, vergeR));
@@ -148,8 +154,8 @@ public sealed class World
 
         var rng = new DetRng(seed);
         ulong rockId = 1;
-        SeedAsteroidField(ref rng, HomeSector, coreCount, SectorScale, ref rockId);
-        SeedAsteroidBelt(ref rng, VergeSector, vergeCount, SectorScale, ref rockId);
+        SeedAsteroidField(ref rng, HomeSector, coreCount, sectorScale, ref rockId);
+        SeedAsteroidBelt(ref rng, VergeSector, vergeCount, sectorScale, ref rockId);
 
         // One linked aleph pair, placed toward the outer reaches of each sector.
         var corePos = RandomOuterPos(ref rng, coreR);
