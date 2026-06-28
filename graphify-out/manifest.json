@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1782601518.5492744,
-    "ast_hash": "225f94da7454617da1fa9861fa51f8e8",
+    "mtime": 1782649828.666631,
+    "ast_hash": "de7750e37b4ed8f5c289e7185a2bfce6",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "shared/FlightModel.cs": {
-    "mtime": 1782524272.0544047,
-    "ast_hash": "f9a2a4c64da5161c112690f8a8585255",
+    "mtime": 1782649800.0849776,
+    "ast_hash": "bb7617287ec6105c96577ae5c7a5e2ed",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
@@ -210,13 +210,13 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1782588609.926214,
-    "ast_hash": "9b582c221b30fb183634272a7297b2e8",
+    "mtime": 1782649834.8851912,
+    "ast_hash": "29ac54844185b100d206fe3d2f0c665b",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1782524272.0515385,
-    "ast_hash": "115c80603300b77a392825bdb620eee4",
+    "mtime": 1782649845.1286166,
+    "ast_hash": "ac63605b7bd6c93a257a88cdf5772d4a",
     "semantic_hash": ""
   },
   "server/Program.cs": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782524272.0383935,
-    "ast_hash": "f8c934ccfc472353b668a8772fb01de9",
+    "mtime": 1782649822.1696267,
+    "ast_hash": "888f2c730ef1e2f8ede26a44b3fbd5a8",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {

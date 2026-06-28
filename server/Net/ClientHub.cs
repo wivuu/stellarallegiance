@@ -426,7 +426,6 @@ public sealed class ClientHub
                         Roll = BitConverter.ToSingle(buffer, 25),
                         Firing = (flags & Protocol.FlagFiring) != 0,
                         Boost = (flags & Protocol.FlagBoost) != 0,
-                        Coast = (flags & Protocol.FlagCoast) != 0,
                     };
                     _sim.EnqueueInput(client.Id, tick, input);
                     break;

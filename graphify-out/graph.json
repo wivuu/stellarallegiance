@@ -1303,7 +1303,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "scripts_defregistry_defregistry_load",
-      "community": 101,
+      "community": 55,
       "norm_label": ".load()"
     },
     {
@@ -1312,7 +1312,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "client_scripts_defregistry_cs_ireadonlylist",
-      "community": 101,
+      "community": 55,
       "norm_label": "ireadonlylist"
     },
     {
@@ -1321,7 +1321,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "shipclassdef",
-      "community": 101,
+      "community": 55,
       "norm_label": "shipclassdef"
     },
     {
@@ -1339,7 +1339,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "basedef",
-      "community": 101,
+      "community": 55,
       "norm_label": "basedef"
     },
     {
@@ -1348,7 +1348,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "worldconfig",
-      "community": 101,
+      "community": 55,
       "norm_label": "worldconfig"
     },
     {
@@ -1429,7 +1429,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L117",
       "id": "scripts_defregistry_defregistry_trygetshipdef",
-      "community": 101,
+      "community": 55,
       "norm_label": ".trygetshipdef()"
     },
     {
@@ -1447,7 +1447,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L122",
       "id": "scripts_defregistry_defregistry_getbasedef",
-      "community": 101,
+      "community": 55,
       "norm_label": ".getbasedef()"
     },
     {
@@ -4937,7 +4937,7 @@
       "label": "Dictionary<uint, double>",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L111",
+      "source_location": "L110",
       "id": "dictionary_uint_double",
       "community": 8,
       "norm_label": "dictionary<uint, double>"
@@ -4946,7 +4946,7 @@
       "label": "._Ready()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L122",
+      "source_location": "L121",
       "id": "scripts_shipcontroller_shipcontroller_ready",
       "community": 8,
       "norm_label": "._ready()"
@@ -4955,7 +4955,7 @@
       "label": ".RequestSpawn()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L171",
+      "source_location": "L170",
       "id": "scripts_shipcontroller_shipcontroller_requestspawn",
       "community": 8,
       "norm_label": ".requestspawn()"
@@ -4964,7 +4964,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L177",
+      "source_location": "L176",
       "id": "scripts_shipcontroller_shipcontroller_process",
       "community": 8,
       "norm_label": "._process()"
@@ -4973,7 +4973,7 @@
       "label": ".UpdateAdaptiveLead()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L331",
+      "source_location": "L330",
       "id": "scripts_shipcontroller_shipcontroller_updateadaptivelead",
       "community": 8,
       "norm_label": ".updateadaptivelead()"
@@ -4982,7 +4982,7 @@
       "label": ".OnPong()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L341",
+      "source_location": "L340",
       "id": "scripts_shipcontroller_shipcontroller_onpong",
       "community": 8,
       "norm_label": ".onpong()"
@@ -4991,7 +4991,7 @@
       "label": ".RecordRtt()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L348",
+      "source_location": "L347",
       "id": "scripts_shipcontroller_shipcontroller_recordrtt",
       "community": 8,
       "norm_label": ".recordrtt()"
@@ -5000,7 +5000,7 @@
       "label": "._Input()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L369",
+      "source_location": "L368",
       "id": "scripts_shipcontroller_shipcontroller_input",
       "community": 8,
       "norm_label": "._input()"
@@ -5009,7 +5009,7 @@
       "label": "InputEvent",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L369",
+      "source_location": "L368",
       "id": "client_scripts_shipcontroller_cs_inputevent",
       "community": 8,
       "norm_label": "inputevent"
@@ -5018,7 +5018,7 @@
       "label": ".HandleMouseCapture()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L393",
+      "source_location": "L392",
       "id": "scripts_shipcontroller_shipcontroller_handlemousecapture",
       "community": 8,
       "norm_label": ".handlemousecapture()"
@@ -5027,7 +5027,7 @@
       "label": ".Axis()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L401",
+      "source_location": "L400",
       "id": "scripts_shipcontroller_shipcontroller_axis",
       "community": 8,
       "norm_label": ".axis()"
@@ -5036,7 +5036,7 @@
       "label": "Key",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L401",
+      "source_location": "L400",
       "id": "key",
       "community": 8,
       "norm_label": "key"
@@ -5045,7 +5045,7 @@
       "label": ".ReadInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L411",
+      "source_location": "L410",
       "id": "scripts_shipcontroller_shipcontroller_readinput",
       "community": 8,
       "norm_label": ".readinput()"
@@ -5054,7 +5054,7 @@
       "label": ".AutoInput()",
       "file_type": "code",
       "source_file": "client/scripts/ShipController.cs",
-      "source_location": "L454",
+      "source_location": "L452",
       "id": "scripts_shipcontroller_shipcontroller_autoinput",
       "community": 8,
       "norm_label": ".autoinput()"
@@ -9020,7 +9020,7 @@
       "label": ".HandleCommand()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L448",
+      "source_location": "L447",
       "id": "net_clienthub_clienthub_handlecommand",
       "community": 44,
       "norm_label": ".handlecommand()"
@@ -9029,7 +9029,7 @@
       "label": ".SystemTo()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L472",
+      "source_location": "L471",
       "id": "net_clienthub_clienthub_systemto",
       "community": 44,
       "norm_label": ".systemto()"
@@ -9038,7 +9038,7 @@
       "label": ".SystemAll()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L476",
+      "source_location": "L475",
       "id": "net_clienthub_clienthub_systemall",
       "community": 44,
       "norm_label": ".systemall()"
@@ -9047,7 +9047,7 @@
       "label": ".SendLoop()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L483",
+      "source_location": "L482",
       "id": "net_clienthub_clienthub_sendloop",
       "community": 44,
       "norm_label": ".sendloop()"
@@ -9056,7 +9056,7 @@
       "label": ".AfterStep()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L495",
+      "source_location": "L494",
       "id": "net_clienthub_clienthub_afterstep",
       "community": 44,
       "norm_label": ".afterstep()"
@@ -9065,7 +9065,7 @@
       "label": ".RebuildAoiIndex()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L634",
+      "source_location": "L633",
       "id": "net_clienthub_clienthub_rebuildaoiindex",
       "community": 44,
       "norm_label": ".rebuildaoiindex()"
@@ -9074,7 +9074,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L634",
+      "source_location": "L633",
       "id": "server_net_clienthub_cs_shipsim",
       "community": 44,
       "norm_label": "shipsim"
@@ -9083,7 +9083,7 @@
       "label": ".SerializeRecords()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L668",
+      "source_location": "L667",
       "id": "net_clienthub_clienthub_serializerecords",
       "community": 44,
       "norm_label": ".serializerecords()"
@@ -9092,7 +9092,7 @@
       "label": ".BuildSharedCoarseSnapshot()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L700",
+      "source_location": "L699",
       "id": "net_clienthub_clienthub_buildsharedcoarsesnapshot",
       "community": 44,
       "norm_label": ".buildsharedcoarsesnapshot()"
@@ -9101,7 +9101,7 @@
       "label": ".BuildSnapshotFor()",
       "file_type": "code",
       "source_file": "server/Net/ClientHub.cs",
-      "source_location": "L714",
+      "source_location": "L713",
       "id": "net_clienthub_clienthub_buildsnapshotfor",
       "community": 44,
       "norm_label": ".buildsnapshotfor()"
@@ -9677,7 +9677,7 @@
       "label": ".WriteVec3()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L62",
+      "source_location": "L61",
       "id": "net_protocol_protocol_writevec3",
       "community": 47,
       "norm_label": ".writevec3()"
@@ -9686,7 +9686,7 @@
       "label": "BinaryWriter",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L62",
+      "source_location": "L61",
       "id": "binarywriter",
       "community": 47,
       "norm_label": "binarywriter"
@@ -9695,7 +9695,7 @@
       "label": "Vec3",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L62",
+      "source_location": "L61",
       "id": "server_net_protocol_cs_vec3",
       "community": 47,
       "norm_label": "vec3"
@@ -9704,7 +9704,7 @@
       "label": ".WriteShip()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L74",
+      "source_location": "L73",
       "id": "net_protocol_protocol_writeship",
       "community": 47,
       "norm_label": ".writeship()"
@@ -9713,7 +9713,7 @@
       "label": "Span",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L74",
+      "source_location": "L73",
       "id": "span",
       "community": 47,
       "norm_label": "span"
@@ -9722,7 +9722,7 @@
       "label": "ShipSim",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L74",
+      "source_location": "L73",
       "id": "server_net_protocol_cs_shipsim",
       "community": 47,
       "norm_label": "shipsim"
@@ -9731,7 +9731,7 @@
       "label": ".BuildWelcome()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L130",
+      "source_location": "L129",
       "id": "net_protocol_protocol_buildwelcome",
       "community": 47,
       "norm_label": ".buildwelcome()"
@@ -9740,7 +9740,7 @@
       "label": "World",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L130",
+      "source_location": "L129",
       "id": "server_net_protocol_cs_world",
       "community": 47,
       "norm_label": "world"
@@ -9749,7 +9749,7 @@
       "label": ".BuildYouAre()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L187",
+      "source_location": "L186",
       "id": "net_protocol_protocol_buildyouare",
       "community": 47,
       "norm_label": ".buildyouare()"
@@ -9758,7 +9758,7 @@
       "label": ".BuildBases()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L197",
+      "source_location": "L196",
       "id": "net_protocol_protocol_buildbases",
       "community": 47,
       "norm_label": ".buildbases()"
@@ -9767,7 +9767,7 @@
       "label": ".BuildShipGone()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L213",
+      "source_location": "L212",
       "id": "net_protocol_protocol_buildshipgone",
       "community": 47,
       "norm_label": ".buildshipgone()"
@@ -9776,7 +9776,7 @@
       "label": ".BuildPong()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L223",
+      "source_location": "L222",
       "id": "net_protocol_protocol_buildpong",
       "community": 47,
       "norm_label": ".buildpong()"
@@ -9785,7 +9785,7 @@
       "label": ".WriteString()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L232",
+      "source_location": "L231",
       "id": "net_protocol_protocol_writestring",
       "community": 47,
       "norm_label": ".writestring()"
@@ -9794,7 +9794,7 @@
       "label": ".WriteHardpoints()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L239",
+      "source_location": "L238",
       "id": "net_protocol_protocol_writehardpoints",
       "community": 47,
       "norm_label": ".writehardpoints()"
@@ -9803,7 +9803,7 @@
       "label": "List<HardpointDef>",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L239",
+      "source_location": "L238",
       "id": "list_hardpointdef",
       "community": 47,
       "norm_label": "list<hardpointdef>"
@@ -9812,7 +9812,7 @@
       "label": ".BuildDefs()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L259",
+      "source_location": "L258",
       "id": "net_protocol_protocol_builddefs",
       "community": 47,
       "norm_label": ".builddefs()"
@@ -9821,7 +9821,7 @@
       "label": ".BuildLobbyState()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L327",
+      "source_location": "L326",
       "id": "net_protocol_protocol_buildlobbystate",
       "community": 47,
       "norm_label": ".buildlobbystate()"
@@ -9830,7 +9830,7 @@
       "label": "IReadOnlyList<LobbyEntry>",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L327",
+      "source_location": "L326",
       "id": "server_net_protocol_cs_ireadonlylist_lobbyentry",
       "community": 47,
       "norm_label": "ireadonlylist<lobbyentry>"
@@ -9839,7 +9839,7 @@
       "label": ".BuildChatRelay()",
       "file_type": "code",
       "source_file": "server/Net/Protocol.cs",
-      "source_location": "L354",
+      "source_location": "L353",
       "id": "net_protocol_protocol_buildchatrelay",
       "community": 47,
       "norm_label": ".buildchatrelay()"
@@ -12800,7 +12800,7 @@
       "label": "Create()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L269",
+      "source_location": "L268",
       "id": "shared_flightmodel_create",
       "community": 7,
       "norm_label": "create()"
@@ -12809,7 +12809,7 @@
       "label": "ShipStats",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L269",
+      "source_location": "L268",
       "id": "shared_flightmodel_cs_shipstats",
       "community": 7,
       "norm_label": "shipstats"
@@ -12818,7 +12818,7 @@
       "label": "FlightModel",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L320",
+      "source_location": "L319",
       "id": "shared_flightmodel_flightmodel",
       "community": 7,
       "norm_label": "flightmodel"
@@ -12827,7 +12827,7 @@
       "label": "byte",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L328",
+      "source_location": "L327",
       "id": "shared_flightmodel_cs_byte",
       "community": 7,
       "norm_label": "byte"
@@ -12836,7 +12836,7 @@
       "label": ".StatsFor()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L417",
+      "source_location": "L416",
       "id": "shared_flightmodel_flightmodel_statsfor",
       "community": 7,
       "norm_label": ".statsfor()"
@@ -12845,7 +12845,7 @@
       "label": ".WeaponSpreadRad()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L439",
+      "source_location": "L438",
       "id": "shared_flightmodel_flightmodel_weaponspreadrad",
       "community": 7,
       "norm_label": ".weaponspreadrad()"
@@ -12854,7 +12854,7 @@
       "label": ".SpreadDirection()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L453",
+      "source_location": "L452",
       "id": "shared_flightmodel_flightmodel_spreaddirection",
       "community": 7,
       "norm_label": ".spreaddirection()"
@@ -12863,7 +12863,7 @@
       "label": ".NormalizeVec()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L481",
+      "source_location": "L480",
       "id": "shared_flightmodel_flightmodel_normalizevec",
       "community": 7,
       "norm_label": ".normalizevec()"
@@ -12872,7 +12872,7 @@
       "label": ".Hash()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L491",
+      "source_location": "L490",
       "id": "shared_flightmodel_flightmodel_hash",
       "community": 7,
       "norm_label": ".hash()"
@@ -12881,7 +12881,7 @@
       "label": ".UnitFloat()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L505",
+      "source_location": "L504",
       "id": "shared_flightmodel_flightmodel_unitfloat",
       "community": 7,
       "norm_label": ".unitfloat()"
@@ -12890,7 +12890,7 @@
       "label": ".TorqueMultiplier()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L510",
+      "source_location": "L509",
       "id": "shared_flightmodel_flightmodel_torquemultiplier",
       "community": 7,
       "norm_label": ".torquemultiplier()"
@@ -12899,7 +12899,7 @@
       "label": ".Integrate()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L528",
+      "source_location": "L527",
       "id": "shared_flightmodel_flightmodel_integrate",
       "community": 7,
       "norm_label": ".integrate()"
@@ -12908,7 +12908,7 @@
       "label": "ShipState",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L528",
+      "source_location": "L527",
       "id": "shared_flightmodel_cs_shipstate",
       "community": 7,
       "norm_label": "shipstate"
@@ -12917,7 +12917,7 @@
       "label": "ShipInputState",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L528",
+      "source_location": "L527",
       "id": "shared_flightmodel_cs_shipinputstate",
       "community": 7,
       "norm_label": "shipinputstate"
@@ -12926,7 +12926,7 @@
       "label": ".SlewRate()",
       "file_type": "code",
       "source_file": "shared/FlightModel.cs",
-      "source_location": "L645",
+      "source_location": "L640",
       "id": "shared_flightmodel_flightmodel_slewrate",
       "community": 7,
       "norm_label": ".slewrate()"
@@ -15170,7 +15170,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L123",
-      "community": 101,
+      "community": 55,
       "norm_label": "shipclassdef",
       "id": "client_scripts_defregistry_cs_shipclassdef"
     },
@@ -15179,7 +15179,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L131",
-      "community": 101,
+      "community": 55,
       "norm_label": "basedef",
       "id": "client_scripts_defregistry_cs_basedef"
     },
@@ -39451,9 +39451,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L1225",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation",
-      "target": "sim_simulation_simulation_collisiondamage",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_collisiondamage"
     },
     {
       "relation": "method",
@@ -41134,9 +41134,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L1117",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolveshipimpulse",
-      "target": "sim_simulation_simulation_collisiondamage",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_collisiondamage"
     },
     {
       "relation": "calls",
@@ -41321,9 +41321,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L1184",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_bounceship",
-      "target": "sim_simulation_simulation_collisiondamage",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_collisiondamage"
     },
     {
       "relation": "calls",
@@ -41332,9 +41332,9 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L1219",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "sim_simulation_simulation_resolvestaticcollision",
-      "target": "sim_simulation_simulation_collisiondamage",
-      "confidence_score": 1.0
+      "target": "sim_simulation_simulation_collisiondamage"
     },
     {
       "relation": "calls",
@@ -48791,5 +48791,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "f0f65683df5d5f378bff9ba9786dcb0df2317866"
+  "built_at_commit": "4c5a1cbcb19836cbd1bcfdb51eb046e0cf76e560"
 }

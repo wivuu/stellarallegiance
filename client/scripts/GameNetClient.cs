@@ -190,7 +190,7 @@ public partial class GameNetClient : Node
         BitConverter.TryWriteBytes(f[17..], input.Yaw);
         BitConverter.TryWriteBytes(f[21..], input.Pitch);
         BitConverter.TryWriteBytes(f[25..], input.Roll);
-        f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0) | (input.Coast ? 4 : 0));
+        f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0));
         _tx.Writer.TryWrite(f.ToArray());
     }
 

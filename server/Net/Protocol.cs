@@ -53,7 +53,6 @@ public static class Protocol
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
-    public const byte FlagCoast = 4;
 
     // ShipRecord flags byte (server->client): how the client should render/classify the ship.
     public const byte ShipFlagPig = 1; // AI combat drone — HUD highlight, never predicted

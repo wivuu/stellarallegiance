@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782618355.544982,
-    "ast_hash": "7539642f95aab257fb077117e5e97b77",
+    "mtime": 1782649181.7861564,
+    "ast_hash": "face01a96238145b8db239d12a04a863",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782618296.945553,
-    "ast_hash": "78434f6f099dee926ca87f512e4844a4",
+    "mtime": 1782649138.9317038,
+    "ast_hash": "1193b4ecd378a4d33ae83eb0664d3beb",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
