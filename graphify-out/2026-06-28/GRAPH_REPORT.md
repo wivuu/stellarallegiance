@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-28)
 
 ## Corpus Check
-- 99 files · ~133,103 words
+- 99 files · ~133,164 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1778 nodes · 3063 edges · 105 communities (83 shown, 22 thin omitted)
+- 1778 nodes · 3063 edges · 106 communities (84 shown, 22 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4c5a1cbc`
+- Built from commit: `f0f65683`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -111,6 +111,7 @@
 - [[_COMMUNITY_Community 98|Community 98]]
 - [[_COMMUNITY_Community 99|Community 99]]
 - [[_COMMUNITY_Community 100|Community 100]]
+- [[_COMMUNITY_Community 101|Community 101]]
 - [[_COMMUNITY_Community 102|Community 102]]
 - [[_COMMUNITY_Community 104|Community 104]]
 - [[_COMMUNITY_Community 105|Community 105]]
@@ -145,7 +146,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (105 total, 22 thin omitted)
+## Communities (106 total, 22 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -316,8 +317,8 @@ Cohesion: 0.10
 Nodes (20): Gate, PigContext, PigPlan, PigState, bool, byte, Dictionary, float (+12 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.10
-Nodes (14): BaseDef, BaseDef, byte, ConnectionManager, DbConnection, Dictionary, IReadOnlyList, ShipClassDef (+6 more)
+Cohesion: 0.17
+Nodes (8): byte, ConnectionManager, DbConnection, Dictionary, ShipStats, Node, Node, DefRegistry
 
 ### Community 56 - "Community 56"
 Cohesion: 0.25
@@ -450,6 +451,10 @@ Nodes (6): HardpointDef, List, WeaponDef, hp, weapon, WeaponDef
 ### Community 100 - "Community 100"
 Cohesion: 0.29
 Nodes (4): ChannelReader, ConcurrentDictionary, PendingOffer, ServerConnectionManager
+
+### Community 101 - "Community 101"
+Cohesion: 0.22
+Nodes (6): BaseDef, BaseDef, IReadOnlyList, ShipClassDef, ShipClassDef, WorldConfig
 
 ### Community 104 - "Community 104"
 Cohesion: 0.27

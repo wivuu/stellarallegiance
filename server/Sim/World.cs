@@ -23,6 +23,9 @@ public sealed class World
     public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
     public const float ShipShipDamageScale = 1.2f;
     public const float MaxCollisionDamage = 30f;
+    // Below this closing normal speed (m/s) a collision is a harmless kiss: it still bounces, no damage.
+    public const float CollisionDamageMinSpeed = 4f; // ponytail: tune knob; raise to make hulls more forgiving
+
     public const float NoseOffset = 3f;
     public const float BoundaryBaseDps = 8f;
     public const float BoundaryRampDps = 0.12f;
@@ -86,7 +89,9 @@ public sealed class World
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
     // and the uniform scale mapping authored units → this rock's collision size.
-    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale);
+    // Rot is the SPAWN pose; SpinAxis/SpinSpeed give the live tumble — the resolver composes them at
+    // the current tick (Collide.RockRotationAt) so the hull rotates with the rendered rock.
+    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale, Vec3 SpinAxis, float SpinSpeed);
 
     // Per-class ship collision hulls, loaded from the same GLBs the client renders and pre-scaled
     // to the client's per-class silhouette length (ShipModelLoader.TargetLength), so the hull a
@@ -249,8 +254,12 @@ public sealed class World
             if (vm is null || vm.Hull.BoundingRadius <= 1e-3f)
                 continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
-            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale);
+            var (spinAxis, spinSpeed) = Collide.RockSpin(r.Id);
+            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale, spinAxis, spinSpeed);
         }
+        // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
+        // (assets dir not found by THIS running server — check the [SimAssets] line above it).
+        Console.WriteLine($"[World] rock hulls loaded: {RockBodies.Count}/{Asteroids.Count}");
     }
 
     private static Vec3 Normalize(Vec3 v)

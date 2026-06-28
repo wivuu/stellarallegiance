@@ -64,5 +64,27 @@ Check("enemy base: solid hull bounces ship out", Near(enemy.Pos.X, 1.5f));
 Check("touches: overlapping ship reports contact", Collide.Touches(new Vec3(1.4f, 0, 0), shipR, new[] { rock }, -1, CollisionConfig.DockDiscRadius));
 Check("touches: clear ship reports none", !Collide.Touches(new Vec3(3f, 0, 0), shipR, new[] { rock }, -1, CollisionConfig.DockDiscRadius));
 
+// 6) Rock tumble: the spin is deterministic (server/client parity) and the live rotation actually
+//    moves the collision surface, so the hull tracks the rendered rock instead of staying frozen.
+var (axis, speed) = Collide.RockSpin(0xABCDEF12);
+var (axisB, speedB) = Collide.RockSpin(0xABCDEF12);
+Check("rockspin: deterministic for an id", Near(axis.X, axisB.X) && Near(axis.Y, axisB.Y) && Near(axis.Z, axisB.Z) && Near(speed, speedB));
+Check("rockspin: unit axis", Near(axis.Length(), 1f));
+Check("rockspin: rate in 0.03..0.15 band", speed >= 0.03f && speed <= 0.15f);
+
+var spawn = Collide.RockRotation(0.3f, 0.7f, 1.1f);
+var probe = new Vec3(1, 2, 3);
+var at0 = Collide.RockRotationAt(spawn, axis, speed, 0f);
+Check("rockrotationat: t=0 is the spawn pose", Near(at0.Rotate(probe).X, spawn.Rotate(probe).X) && Near(at0.Rotate(probe).Y, spawn.Rotate(probe).Y));
+var at5 = Collide.RockRotationAt(spawn, axis, speed, 5f);
+Check("rockrotationat: advances with time", !Near(at5.Rotate(probe).X, spawn.Rotate(probe).X) || !Near(at5.Rotate(probe).Y, spawn.Rotate(probe).Y));
+
+// A sphere off the cube's +X face clears the axis-aligned face, but a 45° spin swings a corner out
+// to meet it — proving SphereVsHull honours the live rotation the server/client now feed it.
+var rot45 = Collide.RockRotationAt(Quat.Identity, new Vec3(0, 0, 1), (float)(System.Math.PI / 4), 1f);
+bool clearWhenAligned = !Collide.SphereVsHull(new Vec3(1.5f, 0, 0), 0.3f, cube, default, Quat.Identity, 1f, out _, out _);
+bool hitWhenSpun = Collide.SphereVsHull(new Vec3(1.5f, 0, 0), 0.3f, cube, default, rot45, 1f, out _, out _);
+Check("spin: rotating the hull changes the contact", clearWhenAligned && hitWhenSpun);
+
 Console.WriteLine(failures == 0 ? "ALL TESTS PASSED" : $"{failures} TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

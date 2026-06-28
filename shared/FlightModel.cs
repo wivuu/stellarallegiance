@@ -228,7 +228,6 @@ namespace StellarAllegiance.Shared
             Roll;
         public bool Firing;
         public bool Boost; // afterburner held: ramps AbPower, raising equilibrium speed
-        public bool Coast; // vector lock: engine thrust exactly cancels drag (hold velocity)
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)
@@ -586,17 +585,13 @@ namespace StellarAllegiance.Shared
                     drag = drag + backward * (abPower * st.AbThrust);
             }
 
-            // --- Step 4: engine thrust direction (manual-strafe / coast / throttle). ---
+            // --- Step 4: engine thrust direction (manual-strafe / throttle). ---
             // manual: any lateral strafe or reverse throttle → direct local thrust
-            // (forward still honoured via Thrust so you can strafe-and-advance). Else
-            // coast cancels drag exactly; else throttle commands a forward speed.
+            // (forward still honoured via Thrust so you can strafe-and-advance); else
+            // throttle commands a forward speed.
             bool manual = i.StrafeX != 0f || i.StrafeY != 0f || i.Thrust < 0f;
             Vec3 localThrust;
-            if (i.Coast && !afterburning)
-            {
-                localThrust = rot.Conjugate().Rotate(drag);
-            }
-            else if (manual)
+            if (manual)
             {
                 localThrust = new Vec3(i.StrafeX * thrust, i.StrafeY * thrust, i.Thrust * thrust);
             }
