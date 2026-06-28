@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782600399.8293097,
-    "ast_hash": "90c1a4e8bd868f88e90422a38287e320",
+    "mtime": 1782605036.1622314,
+    "ast_hash": "71f0fb9265b758cd2fbf5d57bfa95c62",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {

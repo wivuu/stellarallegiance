@@ -1294,7 +1294,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "scripts_defregistry_defregistry_load",
-      "community": 72,
+      "community": 104,
       "norm_label": ".load()"
     },
     {
@@ -1303,7 +1303,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "client_scripts_defregistry_cs_ireadonlylist",
-      "community": 72,
+      "community": 104,
       "norm_label": "ireadonlylist"
     },
     {
@@ -1312,7 +1312,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "shipclassdef",
-      "community": 72,
+      "community": 104,
       "norm_label": "shipclassdef"
     },
     {
@@ -1330,7 +1330,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "basedef",
-      "community": 72,
+      "community": 104,
       "norm_label": "basedef"
     },
     {
@@ -1339,7 +1339,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L38",
       "id": "worldconfig",
-      "community": 72,
+      "community": 104,
       "norm_label": "worldconfig"
     },
     {
@@ -1420,7 +1420,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L117",
       "id": "scripts_defregistry_defregistry_trygetshipdef",
-      "community": 72,
+      "community": 104,
       "norm_label": ".trygetshipdef()"
     },
     {
@@ -1438,7 +1438,7 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L122",
       "id": "scripts_defregistry_defregistry_getbasedef",
-      "community": 72,
+      "community": 104,
       "norm_label": ".getbasedef()"
     },
     {
@@ -11432,7 +11432,7 @@
       "label": ".Normalize()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L256",
+      "source_location": "L259",
       "id": "sim_world_world_normalize",
       "community": 46,
       "norm_label": ".normalize()"
@@ -11441,7 +11441,7 @@
       "label": ".Dot()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L262",
+      "source_location": "L265",
       "id": "sim_world_world_dot",
       "community": 46,
       "norm_label": ".dot()"
@@ -11450,7 +11450,7 @@
       "label": ".RockGrid()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L264",
+      "source_location": "L267",
       "id": "sim_world_world_rockgrid",
       "community": 46,
       "norm_label": ".rockgrid()"
@@ -11459,7 +11459,7 @@
       "label": "Rock",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L264",
+      "source_location": "L267",
       "id": "rock",
       "community": 46,
       "norm_label": "rock"
@@ -11468,7 +11468,7 @@
       "label": ".SectorRadius()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L267",
+      "source_location": "L270",
       "id": "sim_world_world_sectorradius",
       "community": 46,
       "norm_label": ".sectorradius()"
@@ -11477,7 +11477,7 @@
       "label": ".SeedAsteroidField()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L276",
+      "source_location": "L279",
       "id": "sim_world_world_seedasteroidfield",
       "community": 46,
       "norm_label": ".seedasteroidfield()"
@@ -11486,7 +11486,7 @@
       "label": "DetRng",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L276",
+      "source_location": "L279",
       "id": "detrng",
       "community": 46,
       "norm_label": "detrng"
@@ -11495,7 +11495,7 @@
       "label": ".SeedAsteroidBelt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L307",
+      "source_location": "L310",
       "id": "sim_world_world_seedasteroidbelt",
       "community": 46,
       "norm_label": ".seedasteroidbelt()"
@@ -11504,7 +11504,7 @@
       "label": ".NextShape()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L326",
+      "source_location": "L329",
       "id": "sim_world_world_nextshape",
       "community": 46,
       "norm_label": ".nextshape()"
@@ -11513,7 +11513,7 @@
       "label": "variant",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L326",
+      "source_location": "L329",
       "id": "variant",
       "community": 46,
       "norm_label": "variant"
@@ -11522,7 +11522,7 @@
       "label": "rx",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L326",
+      "source_location": "L329",
       "id": "rx",
       "community": 46,
       "norm_label": "rx"
@@ -11531,7 +11531,7 @@
       "label": "ry",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L326",
+      "source_location": "L329",
       "id": "ry",
       "community": 46,
       "norm_label": "ry"
@@ -11540,7 +11540,7 @@
       "label": "rz",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L326",
+      "source_location": "L329",
       "id": "rz",
       "community": 46,
       "norm_label": "rz"
@@ -11549,7 +11549,7 @@
       "label": ".RandomOuterPos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L335",
+      "source_location": "L338",
       "id": "sim_world_world_randomouterpos",
       "community": 46,
       "norm_label": ".randomouterpos()"
@@ -11558,7 +11558,7 @@
       "label": ".RandomBasePos()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L344",
+      "source_location": "L347",
       "id": "sim_world_world_randombasepos",
       "community": 46,
       "norm_label": ".randombasepos()"
@@ -11567,7 +11567,7 @@
       "label": "NextULong()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L363",
+      "source_location": "L366",
       "id": "sim_world_nextulong",
       "community": 46,
       "norm_label": "nextulong()"
@@ -11576,7 +11576,7 @@
       "label": "NextDouble()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L372",
+      "source_location": "L375",
       "id": "sim_world_nextdouble",
       "community": 46,
       "norm_label": "nextdouble()"
@@ -11585,7 +11585,7 @@
       "label": "NextRange()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L374",
+      "source_location": "L377",
       "id": "sim_world_nextrange",
       "community": 46,
       "norm_label": "nextrange()"
@@ -11594,7 +11594,7 @@
       "label": "NextInt()",
       "file_type": "code",
       "source_file": "server/Sim/World.cs",
-      "source_location": "L376",
+      "source_location": "L379",
       "id": "sim_world_nextint",
       "community": 46,
       "norm_label": "nextint()"
@@ -15134,7 +15134,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L123",
-      "community": 72,
+      "community": 104,
       "norm_label": "shipclassdef",
       "id": "client_scripts_defregistry_cs_shipclassdef"
     },
@@ -15143,7 +15143,7 @@
       "file_type": "code",
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L131",
-      "community": 72,
+      "community": 104,
       "norm_label": "basedef",
       "id": "client_scripts_defregistry_cs_basedef"
     },
@@ -48615,5 +48615,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "a8d50bc9495af4d89cc3ee8be809dba351ed1c39"
+  "built_at_commit": "f6cf25c6e9c1fbb363d05a31f8403730c941d24f"
 }

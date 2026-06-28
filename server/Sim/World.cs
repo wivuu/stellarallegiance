@@ -251,6 +251,9 @@ public sealed class World
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
             RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale);
         }
+        // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
+        // (assets dir not found by THIS running server — check the [SimAssets] line above it).
+        Console.WriteLine($"[World] rock hulls loaded: {RockBodies.Count}/{Asteroids.Count}");
     }
 
     private static Vec3 Normalize(Vec3 v)
