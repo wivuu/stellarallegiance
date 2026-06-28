@@ -1,11 +1,11 @@
 # Graph Report - wivuullegiance  (2026-06-28)
 
 ## Corpus Check
-- 150 files · ~146,429 words
+- 151 files · ~148,573 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2025 nodes · 3375 edges · 149 communities (123 shown, 26 thin omitted)
+- 2026 nodes · 3375 edges · 150 communities (124 shown, 26 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -163,7 +163,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (149 total, 26 thin omitted)
+## Communities (150 total, 26 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -540,7 +540,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 38`, `Community 69`, `Community 105`, `Target Markers HUD`, `Community 78`, `Community 114`, `Community 56`?**
   _High betweenness centrality (0.101) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `Community 66`, `Community 37`, `Client-Side Prediction`, `PigAI NPC Behavior`, `Community 104`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 86`, `Community 89`, `Starscape Background`?**
-  _High betweenness centrality (0.080) - this node is a cross-community bridge._
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
 - **Why does `Control` connect `Community 147` to `Chat System`, `Connection Overlay UI`, `Community 37`, `Lobby UI`, `Community 109`, `Target Markers HUD`, `Community 146`, `Community 90`?**
   _High betweenness centrality (0.077) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**

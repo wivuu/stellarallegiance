@@ -24,13 +24,15 @@ void Check(bool cond, string pass, string fail)
     }
 }
 
-// stock.yaml is copied next to the test binary (csproj Content), not the cwd `dotnet run` uses.
-string stockPath = Path.Combine(AppContext.BaseDirectory, "stock.yaml");
+// The stock bundle manifest is copied next to the test binary (csproj Content), not the cwd
+// `dotnet run` uses. ContentLoader.Load runs the full pipeline (CoreSerializer.Load → CoreValidator
+// → FactionsContentProjection), returning the projected runtime ContentSet.
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
 var stock = ContentLoader.Load(stockPath);
 
 // 1. The shipped bundle is valid content.
 var errors = ContentValidator.Validate(stock.Ships, stock.Weapons, stock.Bases);
-Check(errors.Count == 0, "stock.yaml passes ContentValidator", $"stock.yaml invalid: {string.Join("; ", errors)}");
+Check(errors.Count == 0, "stock bundle passes ContentValidator", $"stock bundle invalid: {string.Join("; ", errors)}");
 
 // 2a. The loader maps fields correctly (guards a mis-mapped/swapped key).
 var scout = stock.Ships.First(s => s.ClassId == FlightModel.ClassScout);

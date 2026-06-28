@@ -52,13 +52,14 @@ string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
 // iteration). Off by default: a real game readies up in the lobby.
 bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is "1" or "true";
 
-// Per-server content (Stage-1 content pipeline). Content is authored ENTIRELY in YAML — there is no
-// compile-in content. By DEFAULT the server loads the bundle shipped next to the binary
-// (content/stock.yaml in the output folder, resolved relative to the assembly — never an absolute
-// hardcoded path). --content/CONTENT_PATH overrides that LOCATION with a different complete bundle.
-// The file must exist + be valid (the YAML is the single source of truth, so there is no fallback);
-// a missing/malformed bundle fails fast. Mirrors the --secret/SIM_SECRET pattern.
-string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "stock.yaml");
+// Per-server content (Stage-1 content pipeline, canonical Allegiance.Factions format). Content is
+// authored ENTIRELY in YAML — there is no compile-in content. By DEFAULT the server loads the bundle
+// shipped next to the binary (content/factions/core.manifest.yaml in the output folder, resolved
+// relative to the assembly — never an absolute hardcoded path). --content/CONTENT_PATH overrides that
+// LOCATION with a different complete bundle MANIFEST. The bundle must exist + load + validate (the
+// YAML is the single source of truth, so there is no fallback); a missing/malformed/invalid bundle
+// fails fast. Mirrors the --secret/SIM_SECRET pattern.
+string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
 string? contentOverride = Environment.GetEnvironmentVariable("CONTENT_PATH");
 for (int i = 0; i < args.Length; i++)
 {

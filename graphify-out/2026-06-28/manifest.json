@@ -6285,8 +6285,8 @@
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Core.cs": {
-    "mtime": 1782680394.0207536,
-    "ast_hash": "b373d337dbcbcfa40de62328aac5c520",
+    "mtime": 1782682374.7164052,
+    "ast_hash": "6f9fa4716370e3dbb47597983ba72d7b",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Development.cs": {
@@ -6335,8 +6335,8 @@
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Hull.cs": {
-    "mtime": 1782680394.0226448,
-    "ast_hash": "bc9274168d825444645c4128e80a4190",
+    "mtime": 1782682355.4499989,
+    "ast_hash": "2b69c7b372828518745e5ed07e6ce40c",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Afterburner.cs": {
@@ -6370,8 +6370,8 @@
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Weapon.cs": {
-    "mtime": 1782680394.0242841,
-    "ast_hash": "5a0492edb1e65e8bde236689098d9c39",
+    "mtime": 1782682361.7253058,
+    "ast_hash": "75b51fab55397fc79ed32b2394d73970",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Projectile.cs": {
@@ -6380,8 +6380,8 @@
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Station.cs": {
-    "mtime": 1782680394.0247269,
-    "ast_hash": "0a636145134a342b0272e5a908b10800",
+    "mtime": 1782682366.5902731,
+    "ast_hash": "d6c47905161788e6d035abec3f23ad4c",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Team.cs": {
@@ -6550,13 +6550,53 @@
     "semantic_hash": ""
   },
   "tests/FactionsTest/FactionsTest.csproj": {
-    "mtime": 1782682199.9406273,
-    "ast_hash": "84a399e1f46741823de44f2ccdc111e2",
+    "mtime": 1782682524.52388,
+    "ast_hash": "ecc91d648d0c4e3e86eea3a588c81870",
     "semantic_hash": ""
   },
   "tests/FactionsTest/Program.cs": {
-    "mtime": 1782682211.2518158,
-    "ast_hash": "3088d1862d51b455131e2abdccb97084",
+    "mtime": 1782682550.9349415,
+    "ast_hash": "04793574f2a2267fe0de27e669650c24",
+    "semantic_hash": ""
+  },
+  "factions/src/Allegiance.Factions/Model/RuntimeData.cs": {
+    "mtime": 1782682331.5873191,
+    "ast_hash": "c74a1e910e85db2f9745e05f1e822749",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/core.manifest.yaml": {
+    "mtime": 1782682474.3232558,
+    "ast_hash": "f74d24552b593548e6805687b84ddcc9",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/factions/stock.yaml": {
+    "mtime": 1782682513.4787838,
+    "ast_hash": "d1a69e76107dab1ad3999939fb85f250",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/hulls.yaml": {
+    "mtime": 1782682490.4528215,
+    "ast_hash": "21d8dfc79c255b99e2599e9a20b2484d",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/projectiles.yaml": {
+    "mtime": 1782682495.1067896,
+    "ast_hash": "8a8f6593717cbceb5260f82ade1367de",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/stations.yaml": {
+    "mtime": 1782682505.191954,
+    "ast_hash": "b25a829253172e4e85a308d4c4fe2b0e",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/weapons.yaml": {
+    "mtime": 1782682500.4311464,
+    "ast_hash": "14756afabf0d01437586a2f25a261c5e",
+    "semantic_hash": ""
+  },
+  "server/Content/factions/world.yaml": {
+    "mtime": 1782682508.4970672,
+    "ast_hash": "dd20b02be2ab6c3dd6068b674088f85f",
     "semantic_hash": ""
   }
 }

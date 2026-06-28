@@ -7619,7 +7619,7 @@
       "label": "AllParts()",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L37",
+      "source_location": "L43",
       "id": "model_core_allparts",
       "community": 106,
       "norm_label": "allparts()"
@@ -7628,7 +7628,7 @@
       "label": "IEnumerable",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L37",
+      "source_location": "L43",
       "id": "factions_src_allegiance_factions_model_core_cs_ienumerable",
       "community": 106,
       "norm_label": "ienumerable"
@@ -7637,7 +7637,7 @@
       "label": "Part",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L37",
+      "source_location": "L43",
       "id": "part",
       "community": 106,
       "norm_label": "part"
@@ -7646,7 +7646,7 @@
       "label": "AllExpendables()",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L46",
+      "source_location": "L52",
       "id": "model_core_allexpendables",
       "community": 106,
       "norm_label": "allexpendables()"
@@ -7655,7 +7655,7 @@
       "label": "Expendable",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L46",
+      "source_location": "L52",
       "id": "expendable",
       "community": 106,
       "norm_label": "expendable"
@@ -7664,7 +7664,7 @@
       "label": "AllBuildables()",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L53",
+      "source_location": "L59",
       "id": "model_core_allbuildables",
       "community": 106,
       "norm_label": "allbuildables()"
@@ -7673,7 +7673,7 @@
       "label": "Buildable",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L53",
+      "source_location": "L59",
       "id": "factions_src_allegiance_factions_model_core_cs_buildable",
       "community": 106,
       "norm_label": "buildable"
@@ -7682,7 +7682,7 @@
       "label": "Merge()",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L61",
+      "source_location": "L67",
       "id": "model_core_merge",
       "community": 106,
       "norm_label": "merge()"
@@ -7691,7 +7691,7 @@
       "label": "Core",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Core.cs",
-      "source_location": "L61",
+      "source_location": "L67",
       "id": "factions_src_allegiance_factions_model_core_cs_core",
       "community": 106,
       "norm_label": "core"
@@ -7857,6 +7857,15 @@
       "id": "model_projectile",
       "community": 132,
       "norm_label": "projectile.cs"
+    },
+    {
+      "label": "RuntimeData.cs",
+      "file_type": "code",
+      "source_file": "factions/src/Allegiance.Factions/Model/RuntimeData.cs",
+      "source_location": "L1",
+      "id": "model_runtimedata",
+      "community": 149,
+      "norm_label": "runtimedata.cs"
     },
     {
       "label": "Station.cs",
@@ -34468,18 +34477,18 @@
       "confidence": "EXTRACTED",
       "source_file": "tests/FactionsTest/FactionsTest.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "factionstest_factionstest",
-      "target": "allegiance_factions_allegiance_factions",
-      "confidence_score": 1.0
+      "target": "allegiance_factions_allegiance_factions"
     },
     {
       "relation": "imports",
       "confidence": "EXTRACTED",
       "source_file": "server/SimServer.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "server_simserver",
-      "target": "allegiance_factions_allegiance_factions",
-      "confidence_score": 1.0
+      "target": "allegiance_factions_allegiance_factions"
     },
     {
       "relation": "references",
@@ -51617,18 +51626,18 @@
       "confidence": "EXTRACTED",
       "source_file": "tests/FactionsTest/FactionsTest.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "factionstest_factionstest",
-      "target": "tests_factionstest_factionstest_csproj_framework_net8_0",
-      "confidence_score": 1.0
+      "target": "tests_factionstest_factionstest_csproj_framework_net8_0"
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "tests/FactionsTest/FactionsTest.csproj",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "factionstest_factionstest",
-      "target": "tests_factionstest_factionstest_csproj_sdk_microsoft_net_sdk",
-      "confidence_score": 1.0
+      "target": "tests_factionstest_factionstest_csproj_sdk_microsoft_net_sdk"
     },
     {
       "relation": "references",

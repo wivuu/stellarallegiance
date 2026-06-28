@@ -15,7 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The stock bundle under test, copied next to the test binary so it loads by filename. -->
-    <Content Include="../../server/content/stock.yaml" Link="stock.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The stock bundle under test (canonical Allegiance.Factions format), copied next to the test
+         binary preserving the manifest/catalog/factions layout so CoreSerializer.Load resolves it. -->
+    <Content Include="../../server/content/factions/**/*.yaml" Link="content/factions/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
