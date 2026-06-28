@@ -1,0 +1,13 @@
+version: "2026.06.21"
+catalog:
+  - tech.yaml
+  - hulls.yaml
+  - parts.yaml
+  - stations.yaml
+  - developments.yaml
+  - drones.yaml
+  - expendables.yaml
+factions:
+  - factions/iron-coalition.yaml
+  - factions/bios.yaml
+  - factions/gigacorp.yaml

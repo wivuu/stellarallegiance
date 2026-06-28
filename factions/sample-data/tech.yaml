@@ -1,0 +1,11 @@
+techs:
+  - id: advanced-reactors
+    name: Advanced Reactors
+  - id: heavy-hulls
+    name: Heavy Hull Plating
+  - id: gun-tier-2
+    name: Class-2 Cannons
+  - id: cloak-tech
+    name: Cloaking Systems
+  - id: mining-boost
+    name: Improved Mining

@@ -20,6 +20,15 @@ static class Program
     const float Deg2Rad = 0.017453292519943295f;
     const float Rad2Deg = 57.29577951308232f;
 
+    // Reference flight stats for the determinism golden. These are TEST FIXTURES, not game content —
+    // production content is authored in YAML and reaches the sim/client as ShipClassDef (resolved via
+    // ShipStats.FromDef). Pinned here so the golden trajectory stays fixed regardless of the bundle.
+    //                                            maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
+    static readonly ShipStats Scout = ShipStats.Create(160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f);
+    static readonly ShipStats Fighter = ShipStats.Create(100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f);
+    static readonly ShipStats Bomber = ShipStats.Create(60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f);
+    static readonly ShipStats Pod = ShipStats.Create(60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f);
+
     // A fixed, reproducible input sequence — no randomness, no time reads.
     static ShipInputState InputAt(int tick)
     {
@@ -44,7 +53,7 @@ static class Program
             Rot = Quat.Identity,
             AngVel = new Vec3(0f, 0f, 0f),
         };
-        var stats = FlightModel.StatsFor(FlightModel.ClassScout);
+        var stats = Scout;
         for (int t = 0; t < Ticks; t++)
             s = FlightModel.Integrate(s, InputAt(t), stats);
         return s;
@@ -109,7 +118,7 @@ static class Program
             Console.WriteLine("PASS: matches golden within 1e-5");
         }
 
-        var scout = FlightModel.StatsFor(FlightModel.ClassScout);
+        var scout = Scout;
 
         // 3. Drag equilibrium (feel #1): full forward throttle asymptotes to
         //    MaxSpeed — the equilibrium IS the cap, no hard snap.
@@ -135,7 +144,7 @@ static class Program
         //    off when released. Tested on the Fighter — the only hull with an
         //    afterburner (the Scout and Bomber boost was removed by design).
         {
-            var fighter = FlightModel.StatsFor(FlightModel.ClassFighter);
+            var fighter = Fighter;
             var s = new ShipState { Rot = Quat.Identity };
             var boost = new ShipInputState { Thrust = 1f, Boost = true };
             for (int t = 0; t < 2000; t++)
@@ -165,9 +174,9 @@ static class Program
         {
             (string name, ShipStats st)[] noBoost =
             {
-                ("Scout", FlightModel.StatsFor(FlightModel.ClassScout)),
-                ("Bomber", FlightModel.StatsFor(FlightModel.ClassBomber)),
-                ("Pod", FlightModel.StatsFor(FlightModel.ClassScout, isPod: true)),
+                ("Scout", Scout),
+                ("Bomber", Bomber),
+                ("Pod", Pod),
             };
             foreach (var (name, st) in noBoost)
             {
@@ -300,37 +309,9 @@ static class Program
             }
         }
 
-        // 9. Content single-source integrity (Stage 0 consolidation guard). The sim no longer
-        //    keeps private stat tables: it resolves a ship's gun by its Weapon hardpoint's WeaponId
-        //    and its spawn hull from the class def. Assert every referenced WeaponId has a WeaponDef
-        //    and every non-pod class carries a positive hull, so those lookups can never silently
-        //    miss (a regression would otherwise surface only as a runtime KeyNotFound on the server).
-        {
-            var weapons = GameContent.Weapons();
-            var weaponIds = new HashSet<uint>();
-            foreach (var w in weapons)
-                weaponIds.Add(w.WeaponId);
-            int contentErrors = 0;
-            foreach (var d in GameContent.ShipClasses())
-            {
-                if (d.ClassId != GameContent.PodClassId && d.MaxHull <= 0f)
-                {
-                    Console.WriteLine($"FAIL: class {d.Name} ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
-                    contentErrors++;
-                }
-                foreach (var h in d.Hardpoints)
-                    if (h.Kind == HardpointKind.Weapon && !weaponIds.Contains(h.WeaponId))
-                    {
-                        Console.WriteLine($"FAIL: class {d.Name} weapon hardpoint references unknown WeaponId {h.WeaponId}");
-                        contentErrors++;
-                    }
-            }
-            failures += contentErrors;
-            if (contentErrors == 0)
-                Console.WriteLine(
-                    $"PASS: content single-source — {weapons.Count} weapon defs cover every ship weapon hardpoint; all hulls positive"
-                );
-        }
+        // (Content single-source integrity now lives in tests/ContentTest, which loads the YAML
+        // bundle and runs the shared ContentValidator — this test is purely the flight-model
+        // determinism + feel guard and depends on nothing but the shared integrator + the fixtures.)
 
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;

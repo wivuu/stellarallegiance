@@ -1,0 +1,150 @@
+# =====================================================================
+#  stock.yaml — the AUTHORITATIVE game content (the single source of truth).
+#
+#  The server loads this bundle at boot (it ships next to the binary as content/stock.yaml)
+#  and runs the game entirely from it — there is NO content hardcoded in code. To customize a
+#  server, edit this file, or copy it and point the server at your copy:
+#      dotnet SimServer.dll --content path/to/your.yaml
+#      CONTENT_PATH=path/to/your.yaml dotnet SimServer.dll
+#  --content/CONTENT_PATH overrides the LOCATION with a different COMPLETE bundle (not a partial
+#  overlay): the file must define the full content, and is validated at boot (a malformed/incomplete
+#  bundle refuses to start, since the client has no fallback).
+#
+#  Keys and enum values are kebab-case (max-speed, fire-interval-ticks, main-engine).
+#  Omitted numeric hardpoint fields default to 0.
+# =====================================================================
+
+ships:
+  # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
+  - class-id: 0
+    name: Scout
+    mass: 40
+    max-speed: 160
+    accel: 30
+    rate-yaw-deg: 50
+    rate-pitch-deg: 50
+    rate-roll-deg: 50
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    side-mult: 0.5
+    back-mult: 0.25
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    max-hull: 60
+    faction-id: 0
+    hardpoints:
+      - { kind: weapon, index: 0, off-z: 3, dir-z: 1, weapon-id: 0 }
+      - { kind: main-engine, index: 0, off-z: -2.25, dir-z: -1 }
+
+  # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
+  - class-id: 1
+    name: Fighter
+    mass: 36
+    max-speed: 100
+    accel: 25
+    rate-yaw-deg: 60
+    rate-pitch-deg: 60
+    rate-roll-deg: 60
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    side-mult: 0.5
+    back-mult: 0.5
+    ab-accel: 10
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    max-hull: 120
+    faction-id: 0
+    hardpoints:
+      - { kind: weapon, index: 0, off-x: -0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
+      - { kind: weapon, index: 1, off-x: 0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
+      - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
+      - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
+
+  # Bomber (class-id 2): the heavy hull — twin main engines; one slow, hard cannon.
+  - class-id: 2
+    name: Bomber
+    mass: 50
+    max-speed: 60
+    accel: 15
+    rate-yaw-deg: 20
+    rate-pitch-deg: 20
+    rate-roll-deg: 20
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    side-mult: 0.5
+    back-mult: 0.5
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    max-hull: 240
+    faction-id: 0
+    hardpoints:
+      - { kind: weapon, index: 0, off-z: 3, dir-z: 1, weapon-id: 2 }
+      - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
+      - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
+
+  # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint).
+  - class-id: 255
+    name: Pod
+    mass: 10
+    max-speed: 60
+    accel: 15
+    rate-yaw-deg: 40
+    rate-pitch-deg: 40
+    rate-roll-deg: 40
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    side-mult: 1.0
+    back-mult: 1.0
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    max-hull: 20
+    faction-id: 0
+    hardpoints:
+      - { kind: main-engine, index: 0, off-z: -2.25, dir-z: -1 }
+
+weapons:
+  - weapon-id: 0
+    name: Scout Cannon
+    damage: 4
+    fire-interval-ticks: 4
+    projectile-speed: 200
+    projectile-life-ticks: 16
+    projectile-radius: 1
+    spread-rad: 0.006
+  - weapon-id: 1
+    name: Fighter Cannon
+    damage: 10
+    fire-interval-ticks: 4
+    projectile-speed: 200
+    projectile-life-ticks: 16
+    projectile-radius: 1
+    spread-rad: 0.035
+  - weapon-id: 2
+    name: Bomber Cannon
+    damage: 22
+    fire-interval-ticks: 14
+    projectile-speed: 200
+    projectile-life-ticks: 16
+    projectile-radius: 1
+    spread-rad: 0.012
+
+bases:
+  - base-type-id: 0
+    name: Garrison
+    radius: 90
+    max-health: 2000
+    hardpoints:
+      - { kind: docking-entrance, index: 0, off-z: 90, dir-z: 1 }
+      - { kind: docking-exit, index: 0, off-z: 90, dir-z: 1 }
+      - { kind: light, index: 0, off-y: 90, dir-y: 1 }
+      - { kind: light, index: 1, off-y: -90, dir-y: -1 }
+
+world:
+  id: 0
+  sector-scale: 2.25
+  asteroid-density: 1.0
+  debug-freeze-brain: false
+  debug-no-fire: false

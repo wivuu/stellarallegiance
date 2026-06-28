@@ -1,0 +1,11 @@
+id: bios
+name: Bios Genetics
+hud-name: bios-hud
+income-money: 12
+bonus-money: 5000
+base-capabilities: [base, tactical-allowed]
+base-attributes:
+  max-speed: 1.1
+  scan-range: 1.2
+lifepod-hull-id: lifepod
+initial-station-id: garrison

@@ -1,0 +1,74 @@
+hulls:
+  - id: lifepod
+    name: Lifepod
+    speed: 30
+    armor-hit-points: 20
+    abilities: [is-lifepod, no-ripcord]
+    required-capabilities: [base]
+
+  - id: scout
+    name: Scout
+    price: 100
+    speed: 90
+    scanner-range: 4000
+    max-weapons: 1
+    armor-hit-points: 60
+    abilities: [is-fighter]
+    allowed-parts:
+      weapon: [light-cannon]
+      shield: [light-shield]
+    required-capabilities: [base]
+
+  - id: fighter
+    name: Fighter
+    price: 200
+    speed: 75
+    max-weapons: 2
+    armor-hit-points: 120
+    abilities: [is-fighter]
+    allowed-parts:
+      weapon: [light-cannon, heavy-cannon]
+      shield: [light-shield]
+      afterburner: [standard-burner]
+    preferred-parts: [light-cannon, light-shield]
+    required-capabilities: [base]
+
+  - id: heavy-fighter
+    name: Heavy Fighter
+    price: 400
+    speed: 60
+    max-weapons: 3
+    armor-hit-points: 260
+    abilities: [is-fighter, threat-to-station]
+    allowed-parts:
+      weapon: [heavy-cannon]
+      shield: [heavy-shield]
+    required-techs: [heavy-hulls]
+
+  - id: stealth-fighter
+    name: Stealth Fighter
+    price: 500
+    speed: 80
+    max-weapons: 2
+    armor-hit-points: 140
+    abilities: [is-fighter]
+    allowed-parts:
+      weapon: [light-cannon, heavy-cannon]
+      cloak: [field-cloak]
+    required-techs: [cloak-tech]
+
+  - id: constructor
+    name: Constructor
+    price: 300
+    speed: 50
+    armor-hit-points: 200
+    abilities: [is-builder]
+    required-capabilities: [shipyard-allowed]
+
+  - id: miner
+    name: Miner
+    price: 150
+    speed: 55
+    armor-hit-points: 150
+    abilities: [is-miner]
+    required-capabilities: [base]

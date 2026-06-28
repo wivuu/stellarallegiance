@@ -1,0 +1,20 @@
+{
+  "// note": "allegiance-core.schema.json is generated — run `dotnet run --project src/Allegiance.Factions.Cli -- schema --output .vscode/allegiance-core.schema.json` (or the Regenerate Faction JSON Schema workflow).",
+  "yaml.schemas": {
+    "./.vscode/allegiance-core.schema.json": [
+      "sample-data/developments.yaml",
+      "sample-data/drones.yaml",
+      "sample-data/expendables.yaml",
+      "sample-data/hulls.yaml",
+      "sample-data/parts.yaml",
+      "sample-data/stations.yaml",
+      "sample-data/tech.yaml",
+    ],
+    "./.vscode/allegiance-faction.schema.json": [
+      "sample-data/factions/*.yaml"
+    ],
+    "./.vscode/allegiance-manifest.schema.json": [
+      "sample-data/core.manifest.yaml"
+    ]
+  }
+}

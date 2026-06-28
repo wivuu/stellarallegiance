@@ -17,9 +17,34 @@ public partial class ConnectionManager : Node
 		Connected,
 		Failed,
 		Disconnected,
+		Reconnecting, // unexpected drop — auto-redialing the same server, world still rendered
 	}
 
 	public ConnState State { get; private set; } = ConnState.AwaitingAddress;
+
+	// How we last reached the current server, so a reconnect redials the same way.
+	private enum Transport
+	{
+		Ws,
+		WebRtc,
+	}
+
+	private Transport _mode = Transport.Ws;
+	private string _sessionId = ""; // WebRtc only: the public-lobby session to rejoin
+
+	// Auto-reconnect pacing. After an attempt settles (fails), the next one waits ReconnectInterval;
+	// the whole loop gives up after ReconnectMax, falling through to the manual overlay. A new
+	// attempt never starts while one is still in flight, so a slow WebRTC re-negotiation isn't
+	// cancelled out from under itself.
+	private const double ReconnectInterval = 1.5;
+	private const double ReconnectMax = 20.0;
+	private double _sinceAttempt;
+	private double _reconnectElapsed;
+	private int _reconnectAttempts;
+	private bool _attemptInFlight;
+
+	// Live attempt counter, surfaced to the overlay countdown.
+	public int ReconnectAttempt => _reconnectAttempts;
 
 	// The ws:// URL we're targeting, for the status overlay.
 	public string ServerUrl { get; private set; } = "";
@@ -76,6 +101,7 @@ public partial class ConnectionManager : Node
 	public void ConnectTo(string hostOrUrl)
 	{
 		ServerUrl = ToWsUrl(hostOrUrl);
+		_mode = Transport.Ws;
 		HideInput();
 		State = ConnState.Connecting;
 		GD.Print($"[ConnectionManager] connecting to {ServerUrl}");
@@ -86,6 +112,8 @@ public partial class ConnectionManager : Node
 	public void ConnectToLobby(string sessionId, string displayName)
 	{
 		ServerUrl = $"webrtc://{displayName}";
+		_mode = Transport.WebRtc;
+		_sessionId = sessionId;
 		HideInput();
 		State = ConnState.Connecting;
 		GD.Print($"[ConnectionManager] joining lobby server {displayName} ({sessionId})");
@@ -111,6 +139,9 @@ public partial class ConnectionManager : Node
 	public void NotifyConnected()
 	{
 		State = ConnState.Connected;
+		_reconnectElapsed = 0;
+		_reconnectAttempts = 0;
+		_attemptInFlight = false;
 		GD.Print("[ConnectionManager] connected");
 	}
 
@@ -127,7 +158,71 @@ public partial class ConnectionManager : Node
 		// offline"/"Connection lost" error overlay. Only a drop we didn't ask for counts.
 		if (State == ConnState.AwaitingAddress)
 			return;
-		State = State == ConnState.Connected ? ConnState.Disconnected : ConnState.Failed;
+		// A failed redial while already reconnecting: mark the attempt settled so the _Process
+		// driver paces and fires the next one (until ReconnectMax). Don't flip to an error overlay.
+		if (State == ConnState.Reconnecting)
+		{
+			_attemptInFlight = false;
+			_sinceAttempt = 0;
+			return;
+		}
+		// A live link that dropped out from under us: keep the stale world rendered and start
+		// auto-reconnecting to the same server (the driver in _Process redials). If the connect
+		// was never up (Connecting/Failed), there's nothing to reclaim — show the error overlay.
+		if (State == ConnState.Connected)
+		{
+			State = ConnState.Reconnecting;
+			_reconnectElapsed = 0;
+			_reconnectAttempts = 0;
+			_attemptInFlight = false;
+			_sinceAttempt = ReconnectInterval; // attempt on the next frame
+			GD.Print("[ConnectionManager] connection lost — auto-reconnecting");
+			return;
+		}
+		State = ConnState.Failed;
+	}
+
+	// Drives the auto-reconnect: while Reconnecting, redial the same server every ReconnectInterval
+	// until NotifyConnected flips us to Connected, or ReconnectMax elapses and we surface the
+	// manual "Connection lost" overlay.
+	public override void _Process(double delta)
+	{
+		if (State != ConnState.Reconnecting)
+			return;
+
+		_reconnectElapsed += delta;
+		if (_reconnectElapsed >= ReconnectMax)
+		{
+			GD.Print("[ConnectionManager] auto-reconnect timed out");
+			State = ConnState.Disconnected; // manual Retry overlay takes over
+			_attemptInFlight = false;
+			return;
+		}
+
+		if (_attemptInFlight)
+			return; // let the current dial settle (esp. a slow WebRTC negotiation) before retrying
+
+		_sinceAttempt += delta;
+		if (_sinceAttempt < ReconnectInterval)
+			return;
+		_sinceAttempt = 0;
+		_reconnectAttempts++;
+		_attemptInFlight = true;
+		GD.Print($"[ConnectionManager] reconnect attempt {_reconnectAttempts} to {ServerUrl}");
+		if (_mode == Transport.WebRtc)
+			_net.ConnectWebRtc(LobbyBase, _sessionId);
+		else
+			_net.Connect(ServerUrl);
+	}
+
+	// "Leave & Return to Lobby" during a reconnect: give up the ship the server may still be
+	// holding (clear the reconnect token + drop the stale world) but stay on the server — the
+	// auto-reconnect keeps running and we rejoin fresh into the team lobby instead of the ship.
+	public void AbandonReconnect()
+	{
+		GD.Print("[ConnectionManager] abandoning ship — rejoining lobby");
+		_net.GiveUpShip();
+		_sinceAttempt = ReconnectInterval; // redial promptly into the lobby
 	}
 
 	// ---- Address-input screen -------------------------------------------
