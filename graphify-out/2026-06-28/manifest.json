@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "shared/FlightModel.cs": {
-    "mtime": 1782666563.8746636,
-    "ast_hash": "e469250ee0eba0a4cc3b6518ad15d977",
+    "mtime": 1782672541.6111152,
+    "ast_hash": "441b2798d3fc535e25def10f93108168",
     "semantic_hash": ""
   },
   "shared/Shared.csproj": {
@@ -145,8 +145,8 @@
     "semantic_hash": ""
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1782667805.2988222,
-    "ast_hash": "debf52ae11e6ab8f983237e31f5557fc",
+    "mtime": 1782672976.6841707,
+    "ast_hash": "9c6ea5ce5972b612ab333399049eeb94",
     "semantic_hash": ""
   },
   "tools/asteroid-gen/asteroids.json": {
@@ -220,23 +220,23 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782671323.5250401,
-    "ast_hash": "1da11025f877756118dc74795c7d7c49",
+    "mtime": 1782672855.5166476,
+    "ast_hash": "59106abcccab94dbdfe1dbfefe9e2fed",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782667220.443642,
-    "ast_hash": "e823a4c45237157d55903d02ac6e5abc",
+    "mtime": 1782673169.3253288,
+    "ast_hash": "00a8ae96916ea75f1011ba587862db5f",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782671316.7869525,
-    "ast_hash": "eb96ad2329c2da2d8a5cd133f416606d",
+    "mtime": 1782672895.048006,
+    "ast_hash": "6100477ffabaae7440018f8f911ea908",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1782667925.2339406,
-    "ast_hash": "1ce3b05d935255be0479de2fcca96e0f",
+    "mtime": 1782673060.6061037,
+    "ast_hash": "0b42e8252c639d12b563e4647a096b5e",
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "shared/Defs.cs": {
-    "mtime": 1782568083.7234468,
-    "ast_hash": "8bb4348e36f24c92191c86b2f479ebdb",
+    "mtime": 1782672680.5579188,
+    "ast_hash": "db0d0223585ebfc01c3968da5864d0c9",
     "semantic_hash": ""
   },
   "client/scripts/SectorOverview.cs": {
@@ -6150,8 +6150,8 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782671333.6069942,
-    "ast_hash": "15170d6384ec6b4a577c5a801c1fcdfe",
+    "mtime": 1782672921.1404123,
+    "ast_hash": "42d9a26010be276f052c1397d45ad297",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
@@ -6465,18 +6465,18 @@
     "semantic_hash": ""
   },
   "server/Content/ContentLoader.cs": {
-    "mtime": 1782666777.5308533,
-    "ast_hash": "c07a5d4a60a274b8df8e0ebee84ec2e6",
+    "mtime": 1782672811.8704245,
+    "ast_hash": "cf0afd8e3fb420cd090d534037af1948",
     "semantic_hash": ""
   },
   "server/Content/ContentSet.cs": {
-    "mtime": 1782666740.1397135,
-    "ast_hash": "33015cafe9866eb0e079e704afaa544f",
+    "mtime": 1782672693.8188207,
+    "ast_hash": "640a00fb24693d3e2df0263fcfae5102",
     "semantic_hash": ""
   },
   "shared/ContentValidator.cs": {
-    "mtime": 1782666591.6129928,
-    "ast_hash": "fc8f1bb939a3f089980c3fc393d3d1b0",
+    "mtime": 1782672862.3779097,
+    "ast_hash": "6535d6055a51e8fba621dbb116079a2f",
     "semantic_hash": ""
   },
   "tests/ContentTest/ContentTest.csproj": {
@@ -6485,8 +6485,8 @@
     "semantic_hash": ""
   },
   "tests/ContentTest/Program.cs": {
-    "mtime": 1782670694.4420822,
-    "ast_hash": "85db54cea596173e39a68a9b634b7e43",
+    "mtime": 1782673024.737039,
+    "ast_hash": "64113e960d019e9f51aa7007749d96f8",
     "semantic_hash": ""
   },
   "factions/sample-data/core.manifest.yaml": {
@@ -6545,8 +6545,8 @@
     "semantic_hash": ""
   },
   "server/Content/stock.yaml": {
-    "mtime": 1782667753.9172907,
-    "ast_hash": "62c4b58d8cb437c56db8c9017ac91123",
+    "mtime": 1782673050.2868397,
+    "ast_hash": "337233ce52aba886b9aace2942cdf72c",
     "semantic_hash": ""
   }
 }

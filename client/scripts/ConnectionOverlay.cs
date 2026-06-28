@@ -48,8 +48,16 @@ public partial class ConnectionOverlay : Control
 
         var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         col.AddChild(row);
-        _retry = new Button { Text = "Retry", CustomMinimumSize = new Vector2(160, 40) };
-        _retry.Pressed += () => _cm.Connect();
+        _retry = new Button { Text = "Retry", CustomMinimumSize = new Vector2(220, 40) };
+        // While reconnecting the button abandons the held ship and drops to the lobby; otherwise
+        // it returns to the address screen.
+        _retry.Pressed += () =>
+        {
+            if (_cm.State == ConnectionManager.ConnState.Reconnecting)
+                _cm.AbandonReconnect();
+            else
+                _cm.Connect();
+        };
         row.AddChild(_retry);
     }
 
@@ -81,13 +89,28 @@ public partial class ConnectionOverlay : Control
                 _title.AddThemeColorOverride("font_color", Dim);
                 _detail.Text = _cm.ServerUrl;
                 // Only offer Retry if the connect is dragging — a fast connect shouldn't flash a button.
+                _retry.Text = "Retry";
                 _retry.Visible = _connectingFor > 5.0;
+                break;
+
+            case ConnectionManager.ConnState.Reconnecting:
+                _connectingFor += delta;
+                int rdots = 1 + (int)(_connectingFor * 2) % 3;
+                _title.Text = "Connection lost — reconnecting" + new string('.', rdots);
+                _title.AddThemeColorOverride("font_color", Dim);
+                _detail.Text =
+                    $"Lost connection to {_cm.ServerUrl}. Trying to rejoin"
+                    + (_cm.ReconnectAttempt > 0 ? $" (attempt {_cm.ReconnectAttempt})" : "")
+                    + "…\nYour ship is held for a few seconds.";
+                _retry.Text = "Leave & Return to Lobby";
+                _retry.Visible = true;
                 break;
 
             case ConnectionManager.ConnState.Disconnected:
                 _title.Text = "Connection lost";
                 _title.AddThemeColorOverride("font_color", Offline);
                 _detail.Text = $"Disconnected from {_cm.ServerUrl}.";
+                _retry.Text = "Retry";
                 _retry.Visible = true;
                 break;
 
@@ -99,6 +122,7 @@ public partial class ConnectionOverlay : Control
                 _detail.Text =
                     $"Couldn't reach {_cm.ServerUrl}.\n"
                     + "Check the server is running (scripts/run-server.sh), then Retry to enter an address.";
+                _retry.Text = "Retry";
                 _retry.Visible = true;
                 break;
         }

@@ -66,6 +66,12 @@ public partial class GameNetClient : Node
     private string _secret = "";
     private string _name = "";
 
+    // Reconnect token (hex) the server minted in our last Welcome. Re-presented in the next
+    // Hello so a reconnect after an unexpected drop can reclaim the ship the server held for us.
+    // Persists across BeginConnect (so an auto-reconnect carries it); cleared only on a voluntary
+    // Disconnect, where we explicitly give the ship up.
+    private string _reconnectToken = "";
+
     public override void _Ready()
     {
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -118,13 +124,42 @@ public partial class GameNetClient : Node
     // observes the cancelled token and tears its WebSocket / RTCPeerConnection down on its own.
     public void Disconnect()
     {
-        _socketCts?.Cancel();
+        // Tell the server this is a clean leave (MsgBye) so it frees our ship NOW instead of
+        // holding it for the 5s reconnect grace. The server can't otherwise tell a voluntary
+        // leave from a drop — both just close the socket. Queue the Bye, then cancel the socket
+        // a beat later so the send loop drains it first; cancelling immediately would race the
+        // flush and the server would wrongly park a 5s orphan for every "Leave".
+        _tx.Writer.TryWrite(new byte[] { 8 }); // MsgBye
+        var cts = _socketCts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(200);
+            }
+            catch { }
+            cts?.Cancel();
+        });
+
         Active = false;
         LocalShipId = 0;
         LocalClientId = 0;
+        _reconnectToken = ""; // voluntary leave gives the ship up — don't try to reclaim it
         _rows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
+        _world.Reset();
+    }
+
+    // Abandon the ship the server may still be holding for us (clear the reconnect token) and drop
+    // the stale rendered world, WITHOUT tearing the connection down. Used by "Leave & Return to
+    // Lobby" during a reconnect: the auto-reconnect keeps running and we rejoin fresh into the
+    // team lobby (no ship reclaim) instead of dropping back into the ship.
+    public void GiveUpShip()
+    {
+        _reconnectToken = "";
+        LocalShipId = 0;
+        _rows.Clear();
         _world.Reset();
     }
 
@@ -136,12 +171,14 @@ public partial class GameNetClient : Node
 
     // ---- Send API (used by the UI + ShipController) ----------------------
 
-    // Hello v7: secret + name. Sent automatically once the socket opens.
+    // Hello v9: secret + name + reconnect token. Sent automatically once the socket opens. The
+    // token (empty on a first connect) lets the server hand back a ship it's still holding for us.
     private void SendHello()
     {
         var sec = System.Text.Encoding.UTF8.GetBytes(_secret);
         var nm = System.Text.Encoding.UTF8.GetBytes(_name);
-        var f = new byte[2 + sec.Length + 1 + nm.Length];
+        var tok = System.Text.Encoding.UTF8.GetBytes(_reconnectToken);
+        var f = new byte[2 + sec.Length + 1 + nm.Length + 1 + tok.Length];
         int o = 0;
         f[o++] = 1; // Hello
         f[o++] = (byte)sec.Length;
@@ -149,6 +186,9 @@ public partial class GameNetClient : Node
         o += sec.Length;
         f[o++] = (byte)nm.Length;
         nm.CopyTo(f, o);
+        o += nm.Length;
+        f[o++] = (byte)tok.Length;
+        tok.CopyTo(f, o);
         _tx.Writer.TryWrite(f);
     }
 
@@ -446,7 +486,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
-    public const byte ProtocolVersion = 8;
+    public const byte ProtocolVersion = 9;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -465,6 +505,11 @@ public partial class GameNetClient : Node
         MyTeam = r.ReadByte();
         r.ReadUInt32(); // tick
         r.ReadSingle(); // dt
+
+        // Reconnect token: store it (each Welcome rotates it) so the next Hello can reclaim our
+        // ship if this connection drops.
+        byte tokenLen = r.ReadByte();
+        _reconnectToken = Convert.ToHexString(r.ReadBytes(tokenLen));
 
         ushort sectors = r.ReadUInt16();
         for (int i = 0; i < sectors; i++)

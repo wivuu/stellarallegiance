@@ -141,7 +141,21 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
     private readonly Queue<(int clientId, byte team, byte cls)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
+    // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
+    // back to the returning connection), both keyed by the connection's reconnect token.
+    private readonly Queue<(int clientId, string token)> _detachQueue = new();
+    private readonly Queue<(int clientId, string token)> _reclaimQueue = new();
     private readonly object _qLock = new();
+
+    // How long a disconnected player's ship is held in the sim before it's reaped — the window a
+    // reconnecting client has to reclaim it (5s @ 20Hz). The ship stays simulated and vulnerable.
+    private const uint GraceTicks = 5 * TickHz;
+
+    // Ships held alive after an unexpected drop, keyed by the connection's reconnect token (hex).
+    // Value is the still-bound OLD client id (the ship is still in _byClient[oldClientId]) plus
+    // the tick at which the hold expires. Keyed by old client id rather than ShipSim so a
+    // death->escape-pod swap during the grace window is followed transparently. Sim-thread only.
+    private readonly Dictionary<string, (int oldClientId, uint expiryTick)> _heldOrphans = new();
 
     // The ship a client currently controls — a combat ship, OR (after death) the escape pod
     // it's flying. Absent while the client is dead and waiting on a respawn. ShipId changes
@@ -265,6 +279,22 @@ public sealed partial class Simulation
             _leaveQueue.Enqueue(clientId);
     }
 
+    // Unexpected drop of a flying client: park its ship for the grace window instead of removing
+    // it, so the player can reconnect and reclaim it. Token is the connection's reconnect token.
+    public void EnqueueDetach(int clientId, string token)
+    {
+        lock (_qLock)
+            _detachQueue.Enqueue((clientId, token));
+    }
+
+    // A reconnecting client re-presented a token: hand it back the ship still held under that
+    // token, rebinding it to this new connection's id.
+    public void EnqueueReclaim(int newClientId, string token)
+    {
+        lock (_qLock)
+            _reclaimQueue.Enqueue((newClientId, token));
+    }
+
     public void EnqueueInput(int clientId, uint tick, ShipInputState input)
     {
         lock (_qLock)
@@ -288,6 +318,7 @@ public sealed partial class Simulation
         BasesChangedThisStep = false;
 
         DrainQueues(tick);
+        ExpireHeldOrphans(tick);
 
         // Lobby host: poll the matchmaker while waiting in the lobby, and return to the lobby
         // a few seconds after a match ends so the next one can be readied up.
@@ -434,6 +465,37 @@ public sealed partial class Simulation
                 _clientInfo.Remove(cid);
                 _clientRespawn.Remove(cid);
             }
+            // Detach: keep the dropped client's ship in _byClient/_ships/_order (still simulated
+            // and vulnerable) but zero its input so it coasts — no thrust, no fire — and record
+            // the held orphan with its expiry. _clientInfo/_clientRespawn are deliberately kept so
+            // a death->pod->respawn during the window still resolves and stays reclaimable.
+            while (_detachQueue.Count > 0)
+            {
+                var (cid, token) = _detachQueue.Dequeue();
+                if (_byClient.TryGetValue(cid, out var ship))
+                {
+                    ship.HeldInput = default;
+                    Array.Clear(ship.InputRingTick, 0, ship.InputRingTick.Length);
+                    _heldOrphans[token] = (cid, tick + GraceTicks);
+                }
+            }
+            // Reclaim: a returning client re-presented a held token — rebind that ship (or its
+            // current pod) from the old client id to the new connection. ShipIdOf(newCid) then
+            // returns it and AfterStep re-issues MsgYouAre next tick, so the client resumes.
+            while (_reclaimQueue.Count > 0)
+            {
+                var (newCid, token) = _reclaimQueue.Dequeue();
+                if (_heldOrphans.Remove(token, out var orphan)
+                    && _byClient.Remove(orphan.oldClientId, out var ship))
+                {
+                    ship.OwnerClientId = newCid;
+                    _byClient[newCid] = ship;
+                    if (_clientInfo.Remove(orphan.oldClientId, out var info))
+                        _clientInfo[newCid] = info;
+                    if (_clientRespawn.Remove(orphan.oldClientId, out var rt))
+                        _clientRespawn[newCid] = rt;
+                }
+            }
             while (_inputQueue.Count > 0)
             {
                 var (cid, stamp, input) = _inputQueue.Dequeue();
@@ -491,6 +553,9 @@ public sealed partial class Simulation
         _order.Clear();
         _byClient.Clear();
         _clientRespawn.Clear();
+        // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
+        // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
+        _heldOrphans.Clear();
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
         BasesChangedThisStep = true;
         Phase = PhaseLobby;
@@ -714,6 +779,30 @@ public sealed partial class Simulation
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         DeathsThisStep.Add(s.ShipId);
+    }
+
+    // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
+    // ship is removed exactly as a leave would (ShipGone emitted) and its slot cleared. Runs on
+    // the sim thread right after DrainQueues; collect-then-remove to avoid mutating mid-enumerate.
+    private void ExpireHeldOrphans(uint tick)
+    {
+        if (_heldOrphans.Count == 0)
+            return;
+        List<string>? due = null;
+        foreach (var kv in _heldOrphans)
+            if (tick >= kv.Value.expiryTick)
+                (due ??= new()).Add(kv.Key);
+        if (due == null)
+            return;
+        foreach (var token in due)
+        {
+            var orphan = _heldOrphans[token];
+            _heldOrphans.Remove(token);
+            if (_byClient.Remove(orphan.oldClientId, out var ship))
+                RemoveShipNow(ship);
+            _clientInfo.Remove(orphan.oldClientId);
+            _clientRespawn.Remove(orphan.oldClientId);
+        }
     }
 
     // Apply the structural changes collected during a pass: remove dead/docked ships (each a

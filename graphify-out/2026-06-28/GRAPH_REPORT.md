@@ -1,16 +1,16 @@
 # Graph Report - wivuullegiance  (2026-06-28)
 
 ## Corpus Check
-- 148 files · ~144,858 words
+- 148 files · ~143,849 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2009 nodes · 3347 edges · 150 communities (122 shown, 28 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.8)
+- 2011 nodes · 3357 edges · 151 communities (122 shown, 29 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ececeb5a`
+- Built from commit: `ea1acf10`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -134,6 +134,7 @@
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 93 edges
@@ -165,7 +166,7 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (150 total, 28 thin omitted)
+## Communities (151 total, 29 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
@@ -200,8 +201,8 @@ Cohesion: 0.12
 Nodes (20): Conjugate(), Create(), Cross(), byte, float, Quat, ShipClassDef, ShipInputState (+12 more)
 
 ### Community 8 - "Ship Controller Input"
-Cohesion: 0.09
-Nodes (17): bool, ConnectionManager, double, float, GameNetClient, InputEvent, int, ShipClass (+9 more)
+Cohesion: 0.11
+Nodes (15): bool, ConnectionManager, double, float, GameNetClient, int, ShipClass, ShipInputState (+7 more)
 
 ### Community 9 - "Engine Glow Effects"
 Cohesion: 0.08
@@ -240,7 +241,7 @@ Cohesion: 0.50
 Nodes (3): count, failures, models
 
 ### Community 20 - "Flight Model Tests"
-Cohesion: 0.21
+Cohesion: 0.22
 Nodes (7): Program, float, int, Quat, ShipInputState, ShipState, ShipStats
 
 ### Community 21 - "Asteroid Normal Baking"
@@ -332,11 +333,11 @@ Cohesion: 0.07
 Nodes (19): CancellationTokenSource, bool, byte, CancellationTokenSource, Channel, ClientWebSocket, ConcurrentQueue, ConnectionManager (+11 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.09
+Cohesion: 0.10
 Nodes (20): Gate, PigContext, PigPlan, PigState, bool, byte, Dictionary, float (+12 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (15): BaseDto, ContentDto, ContentLoader, HardpointDto, ShipDto, WeaponDto, WorldDto, ContentDto (+7 more)
 
 ### Community 56 - "Community 56"
@@ -380,8 +381,8 @@ Cohesion: 0.29
 Nodes (4): int, string, ConfigFile, UserPrefs
 
 ### Community 69 - "Community 69"
-Cohesion: 0.32
-Nodes (3): MeshInstance3D, ShipClass, MeshInstance3D
+Cohesion: 0.28
+Nodes (4): MeshInstance3D, Node, ShipClass, MeshInstance3D
 
 ### Community 70 - "Community 70"
 Cohesion: 0.21
@@ -504,8 +505,8 @@ Cohesion: 0.47
 Nodes (3): Dictionary, GameAttribute, AttributeModifiers
 
 ### Community 115 - "Community 115"
-Cohesion: 0.17
-Nodes (8): byte, ConnectionManager, DbConnection, Dictionary, ShipStats, Node, Node, DefRegistry
+Cohesion: 0.18
+Nodes (7): byte, ConnectionManager, DbConnection, Dictionary, ShipStats, Node, DefRegistry
 
 ### Community 144 - "Community 144"
 Cohesion: 0.24
@@ -532,21 +533,21 @@ Cohesion: 0.29
 Nodes (6): HardpointDef, List, WeaponDef, hp, weapon, WeaponDef
 
 ## Knowledge Gaps
-- **561 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+556 more)
+- **559 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+554 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `Community 69`, `Community 38`, `PigAI NPC Behavior`, `Community 105`, `Target Markers HUD`, `Community 78`, `Community 144`, `Community 114`, `Community 56`?**
-  _High betweenness centrality (0.106) - this node is a cross-community bridge._
-- **Why does `Control` connect `Community 147` to `Chat System`, `Connection Overlay UI`, `Community 37`, `Lobby UI`, `Community 109`, `Target Markers HUD`, `Community 146`, `Community 90`?**
-  _High betweenness centrality (0.085) - this node is a cross-community bridge._
+  _High betweenness centrality (0.103) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 144` to `AlephView World State`, `Community 66`, `Community 65`, `Community 37`, `Client-Side Prediction`, `Community 104`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 86`, `Community 89`, `Starscape Background`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
+- **Why does `Control` connect `Community 147` to `Chat System`, `Connection Overlay UI`, `Community 37`, `Lobby UI`, `Community 109`, `Target Markers HUD`, `Community 146`, `Community 90`?**
+  _High betweenness centrality (0.078) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _581 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _579 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
