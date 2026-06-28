@@ -136,10 +136,14 @@ public partial class PredictionController : Node3D
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-    // The local player's own nameplate. Unlike remote ships (always labelled), the local ship's
-    // label is shown ONLY while the F3 sector overview is open — in normal chase flight you don't
-    // want your own name floating in front of you. Created lazily once a name resolves; _Process
-    // toggles its visibility from SectorOverview.Active.
+    // When true, the local player's own nameplate is shown in normal chase flight too (like remote
+    // ships). When false it reverts to the original behavior — visible ONLY in the F3 sector overview,
+    // so your own name doesn't float in front of you while flying. A simple static toggle for now;
+    // wire it to a settings/UserPrefs entry later if it needs to be user-facing.
+    public static bool ShowOwnNameplate = true;
+
+    // The local player's own nameplate. Created lazily once a name resolves; _Process toggles its
+    // visibility from ShowOwnNameplate / SectorOverview.Active.
     private Label3D? _nameplate;
     private string _pilotName = "";
 
@@ -158,7 +162,7 @@ public partial class PredictionController : Node3D
         if (_nameplate is null)
         {
             _nameplate = Nameplate.Create(Team);
-            _nameplate.Visible = false; // visibility is driven by the F3 overview in _Process
+            _nameplate.Visible = false; // visibility is driven each frame in _Process
             AddChild(_nameplate);
         }
         _nameplate.Text = name;
@@ -413,9 +417,13 @@ public partial class PredictionController : Node3D
         ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
         _engine?.SetThrottle(_throttle, _afterburner);
 
-        // Show the local nameplate only in the F3 sector overview.
+        // Show the local nameplate when enabled (normal flight) or while the F3 overview is open,
+        // keeping its on-screen size constant across the flight / F3 camera FOVs.
         if (_nameplate is not null)
-            _nameplate.Visible = SectorOverview.Active && _pilotName.Length > 0;
+        {
+            _nameplate.Visible = (ShowOwnNameplate || SectorOverview.Active) && _pilotName.Length > 0;
+            Nameplate.UpdateFovScale(_nameplate, SectorOverview.ActiveCamera);
+        }
     }
 
     // Semi-implicit critically-damped (ζ=1) spring driving offset x and its
