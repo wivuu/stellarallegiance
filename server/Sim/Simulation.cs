@@ -225,6 +225,10 @@ public sealed partial class Simulation
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
 
+    // Set whenever per-team economy changed this step (paycheck accrued, economy (re)seeded), so
+    // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
+    public bool TeamStateChangedThisStep { get; private set; }
+
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
@@ -320,6 +324,7 @@ public sealed partial class Simulation
         DeathsThisStep.Clear();
         JustEnded = false;
         BasesChangedThisStep = false;
+        TeamStateChangedThisStep = false;
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -544,6 +549,7 @@ public sealed partial class Simulation
             return;
         foreach (var team in World.TeamStates.Values)
             team.Credits += income;
+        TeamStateChangedThisStep = true;
     }
 
     public void StartMatch()
@@ -559,6 +565,7 @@ public sealed partial class Simulation
             ring.Clear();
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
+        TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
     }
 

@@ -19,6 +19,7 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 60
+    price: 100
     required-capabilities: [base]
     hardpoints:
       - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 0 }
@@ -40,6 +41,7 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 120
+    price: 200
     required-capabilities: [base]
     hardpoints:
       - { kind: weapon, index: 0, off-x: -0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
@@ -63,6 +65,7 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 240
+    price: 350
     required-capabilities: [base]
     hardpoints:
       - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 2 }

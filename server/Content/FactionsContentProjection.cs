@@ -80,6 +80,8 @@ public static class FactionsContentProjection
             SideMult = (float)h.StrafeThrustMultiplier,
             BackMult = (float)h.ReverseThrustMultiplier,
             MaxHull = (float)h.ArmorHitPoints,
+            // Stage-2 economy: build cost from the buildable's authored price (whole credits).
+            Cost = h.Price,
             // Explicit runtime extend-fields (no clean Core source).
             DriftYawDeg = (float)h.DriftYawDeg,
             DriftPitchDeg = (float)h.DriftPitchDeg,

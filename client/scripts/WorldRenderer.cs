@@ -144,6 +144,10 @@ public partial class WorldRenderer : Node3D
 
     private byte? _localTeam;
 
+    // Latest per-team economy snapshot (credits/score) from MsgTeamState. Low-rate; read by the
+    // HUD credits readout and the chat slash-commands (/money, /score). Empty until the first frame.
+    private readonly Dictionary<byte, (int Credits, int Score)> _teamEconomy = new();
+
     // Scratch reused by EnemyShips()/FriendlyShips() so the per-frame marker pass allocates nothing.
     private readonly List<RemoteShip> _enemyScratch = new();
     private readonly List<RemoteShip> _friendlyScratch = new();
@@ -203,6 +207,14 @@ public partial class WorldRenderer : Node3D
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
+
+    // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
+    // base health). Read accessors return 0 for an unknown team so callers never need a null check.
+    public void NetUpdateTeamState(byte team, int credits, int score) => _teamEconomy[team] = (credits, score);
+
+    public int TeamCredits(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Credits : 0;
+
+    public int TeamScore(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Score : 0;
 
     // Live enemy ship nodes (team != local team). Returns a shared scratch list — read
     // it immediately, don't retain it. Empty until the local team is known.

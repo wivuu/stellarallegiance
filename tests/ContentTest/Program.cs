@@ -41,6 +41,13 @@ Check(
     "loader parsed scout flight stats",
     $"scout stats wrong (speed {scout.MaxSpeed}, mass {scout.Mass}, hull {scout.MaxHull})"
 );
+// Stage-2 economy: the buildable's authored price projects onto ShipClassDef.Cost (wire field).
+var bomber = stock.Ships.First(s => s.ClassId == FlightModel.ClassBomber);
+Check(
+    scout.Cost == 100 && bomber.Cost == 350,
+    "loader projected hull build cost (Buildable.Price -> ShipClassDef.Cost)",
+    $"hull cost wrong (scout {scout.Cost}, bomber {bomber.Cost})"
+);
 Check(
     scout.Hardpoints.Count == 2
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon

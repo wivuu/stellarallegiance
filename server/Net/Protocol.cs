@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 9;
+    public const byte Version = 10;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
@@ -54,6 +54,7 @@ public static class Protocol
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope, u8 fromTeam, str name, str text
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score) — low-rate per-team economy
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -219,6 +220,28 @@ public static class Protocol
         return buf;
     }
 
+    // Broadcast per-team economy (credits + score), same bytes to every client. Low-rate: built on
+    // coarse ticks / on change, NOT in the per-tick snapshot hot path (see ClientHub.AfterStep).
+    // Phase-5 will extend this with a per-team unlocked snapshot — append after score, bump Version.
+    public static byte[] BuildTeamState(World world)
+    {
+        var teams = world.TeamStates;
+        var buf = new byte[2 + teams.Count * 9];
+        buf[0] = MsgTeamState;
+        buf[1] = (byte)teams.Count;
+        int o = 2;
+        foreach (var kv in teams)
+        {
+            buf[o] = kv.Key;
+            o += 1;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Credits);
+            o += 4;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Score);
+            o += 4;
+        }
+        return buf;
+    }
+
     public static byte[] BuildShipGone(ulong shipId)
     {
         var buf = new byte[9];
@@ -291,6 +314,7 @@ public static class Protocol
             w.Write(s.AbOnRate);
             w.Write(s.AbOffRate);
             w.Write(s.MaxHull);
+            w.Write(s.Cost);
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
         }

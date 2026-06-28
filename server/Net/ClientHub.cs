@@ -584,6 +584,10 @@ public sealed class ClientHub
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
         byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
 
+        // Per-team economy (credits/score): same low-rate cadence as bases — on change or coarse
+        // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
+        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
+
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
         // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
@@ -627,6 +631,9 @@ public sealed class ClientHub
 
             if (basesFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(basesFrame));
+
+            if (teamStateFrame is not null)
+                client.Outbound.Writer.TryWrite(OutFrame.Whole(teamStateFrame));
 
             _dispatchList.Add(client);
         }

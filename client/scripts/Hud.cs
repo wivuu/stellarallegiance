@@ -12,6 +12,7 @@ public partial class Hud : CanvasLayer
     private ShipController _ship = null!;
     private Label _label = null!;
     private Label _sectorShips = null!;
+    private Label _credits = null!;
     private Control _menu = null!;
     private Label _warning = null!;
 
@@ -57,8 +58,15 @@ public partial class Hud : CanvasLayer
         _label.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_label);
 
+        // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
+        // match is live. Phase 6 adds per-ship cost to the spawn buttons; this is the running balance.
+        _credits = new Label { Position = new Vector2(16, 64), Visible = false };
+        _credits.AddThemeFontSizeOverride("font_size", 18);
+        _credits.AddThemeColorOverride("font_color", new Color(1f, 0.86f, 0.4f));
+        AddChild(_credits);
+
         // Spawn menu: one button per class, shown only when the player has no ship.
-        _menu = new VBoxContainer { Position = new Vector2(16, 64) };
+        _menu = new VBoxContainer { Position = new Vector2(16, 90) };
         AddChild(_menu);
         _menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
         _menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
@@ -123,6 +131,11 @@ public partial class Hud : CanvasLayer
         _sectorShips.Visible = inMatch;
         if (inMatch)
             _sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
+
+        // Running team balance (server-authoritative; accrues on the paycheck cadence).
+        _credits.Visible = inMatch;
+        if (inMatch)
+            _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? 0)}";
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.

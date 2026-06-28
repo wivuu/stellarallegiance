@@ -480,6 +480,9 @@ public partial class GameNetClient : Node
             case 9:
                 ApplyChat(r);
                 break;
+            case 10:
+                ApplyTeamState(r);
+                break;
         }
     }
 
@@ -496,9 +499,23 @@ public partial class GameNetClient : Node
             _world.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
     }
 
+    // Per-team economy (credits/score), mirrors Protocol.BuildTeamState. Low-rate — the renderer
+    // holds the latest snapshot for the HUD and the chat slash-commands to read.
+    private void ApplyTeamState(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+        {
+            byte team = r.ReadByte();
+            int credits = r.ReadInt32();
+            int score = r.ReadInt32();
+            _world.NetUpdateTeamState(team, credits, score);
+        }
+    }
+
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
-    public const byte ProtocolVersion = 9;
+    public const byte ProtocolVersion = 10;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -641,6 +658,7 @@ public partial class GameNetClient : Node
             d.AbOnRate = r.ReadSingle();
             d.AbOffRate = r.ReadSingle();
             d.MaxHull = r.ReadSingle();
+            d.Cost = r.ReadInt32();
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             ships.Add(d);
