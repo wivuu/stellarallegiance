@@ -220,18 +220,18 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782683450.2294643,
-    "ast_hash": "4c52240c9177058942e88119e4da3410",
+    "mtime": 1782686345.403652,
+    "ast_hash": "69d6159ff1ab471554b63531bf89a4fb",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782680394.0453687,
-    "ast_hash": "88c53738e6a4a0adc60987da1b4ea779",
+    "mtime": 1782686389.5650067,
+    "ast_hash": "d2e57c3e3a582e5410e5f0fbd5a12fdc",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782680394.045657,
-    "ast_hash": "6100477ffabaae7440018f8f911ea908",
+    "mtime": 1782686417.1076136,
+    "ast_hash": "ac16a56b15caec2fe077b83aef287830",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -6150,8 +6150,8 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782683508.2984016,
-    "ast_hash": "cdfde3e7804541adb73993c1f7f9682c",
+    "mtime": 1782686348.813328,
+    "ast_hash": "91a720b6a987c91ac05cf08d4c2f3ac9",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
@@ -6470,8 +6470,8 @@
     "semantic_hash": ""
   },
   "server/Content/ContentSet.cs": {
-    "mtime": 1782680394.0428941,
-    "ast_hash": "640a00fb24693d3e2df0263fcfae5102",
+    "mtime": 1782686272.6415598,
+    "ast_hash": "5a48890b347476515eb32c341824d6b3",
     "semantic_hash": ""
   },
   "shared/ContentValidator.cs": {
@@ -6565,12 +6565,12 @@
     "semantic_hash": ""
   },
   "server/Content/factions/factions/stock.yaml": {
-    "mtime": 1782682513.4787838,
-    "ast_hash": "d1a69e76107dab1ad3999939fb85f250",
+    "mtime": 1782686398.908035,
+    "ast_hash": "36dccc8bfce051009cc71ca3782ead10",
     "semantic_hash": ""
   },
   "server/Content/factions/hulls.yaml": {
-    "mtime": 1782682490.4528215,
+    "mtime": 1782684804.178018,
     "ast_hash": "21d8dfc79c255b99e2599e9a20b2484d",
     "semantic_hash": ""
   },
@@ -6595,8 +6595,23 @@
     "semantic_hash": ""
   },
   "server/Content/FactionsContentProjection.cs": {
-    "mtime": 1782683412.7590814,
-    "ast_hash": "031c6947c56ab19fe8c655c35c53cddb",
+    "mtime": 1782686279.7747357,
+    "ast_hash": "598f227499da76fa3269dc2adbd09025",
+    "semantic_hash": ""
+  },
+  "server/Content/FactionStart.cs": {
+    "mtime": 1782686261.3884711,
+    "ast_hash": "d88d8601945f1362f621b175c84fa0fc",
+    "semantic_hash": ""
+  },
+  "tests/StrategyTest/Program.cs": {
+    "mtime": 1782686489.5452754,
+    "ast_hash": "85180c8c9edf67f5969ca4fdb8b8e84e",
+    "semantic_hash": ""
+  },
+  "tests/StrategyTest/StrategyTest.csproj": {
+    "mtime": 1782686435.7766683,
+    "ast_hash": "97b336705b334918fde8472789619bac",
     "semantic_hash": ""
   }
 }

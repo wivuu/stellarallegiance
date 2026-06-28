@@ -15,16 +15,23 @@ public sealed class ContentSet
     public IReadOnlyList<BaseDef> Bases { get; }
     public WorldConfig World { get; }
 
+    // Stage-2 strategy spine: the team's per-match STARTING state (credits/income + tech/capability
+    // seed) projected from the faction. Server-only — NOT part of the wire defs (Protocol.BuildDefs
+    // encodes only Ships/Weapons/Bases/World).
+    public FactionStart Start { get; }
+
     public ContentSet(
         IReadOnlyList<ShipClassDef> ships,
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
-        WorldConfig world
+        WorldConfig world,
+        FactionStart start
     )
     {
         Ships = ships;
         Weapons = weapons;
         Bases = bases;
         World = world;
+        Start = start;
     }
 }

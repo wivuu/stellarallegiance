@@ -17,6 +17,10 @@ public sealed partial class Simulation
     public const uint TickHz = 20;
     private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
+    // Stage-2 economy: every team gets a flat credit paycheck this often (20 ticks = 1 s at 20 Hz).
+    // The amount per paycheck is the faction's authored income (Content.Start.IncomePerPaycheck).
+    public const uint PaycheckTicks = 20;
+
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
     private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
@@ -334,7 +338,10 @@ public sealed partial class Simulation
 
         ProcessRespawns(tick);
         if (Phase == PhaseActive)
+        {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+            AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+        }
         ResolveDueShots(tick);
         RebuildShipGrid();
 
@@ -525,6 +532,20 @@ public sealed partial class Simulation
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
+    // Stage-2 strategy spine: pay every team a flat credit paycheck on the paycheck cadence. Called
+    // only while the match is active (gated by the caller). The amount is the faction's authored
+    // income; a team with 0 income simply never gains credits. Server-only — no wire change yet.
+    private void AccrueTeamCredits(uint tick)
+    {
+        if (tick % PaycheckTicks != 0)
+            return;
+        int income = Content.Start.IncomePerPaycheck;
+        if (income == 0)
+            return;
+        foreach (var team in World.TeamStates.Values)
+            team.Credits += income;
+    }
+
     public void StartMatch()
     {
         if (Phase == PhaseActive)
@@ -536,6 +557,8 @@ public sealed partial class Simulation
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        // Fresh economy each match: reset every team to its starting credits + base unlocks.
+        World.SeedEconomy(Content.Start);
         Console.WriteLine("[Sim] match started");
     }
 

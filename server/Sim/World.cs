@@ -1,5 +1,10 @@
 using SimServer.Assets;
+using SimServer.Content;
 using StellarAllegiance.Shared;
+// Alias just the two library set types (TechSet/CapabilitySet) rather than `using` the whole model
+// namespace, which would collide with Shared.WorldConfig (the ctor's `cfg` type).
+using TechSet = Allegiance.Factions.Model.TechSet;
+using CapabilitySet = Allegiance.Factions.Model.CapabilitySet;
 
 namespace SimServer.Sim;
 
@@ -72,6 +77,22 @@ public sealed class World
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
 
+    // Stage-2 strategy spine: per-team economy/owned state, keyed by team byte (parallel to the
+    // per-team bases). Credits accrue in the sim step (Simulation.AccrueTeamCredits); OwnedTechs/
+    // OwnedCapabilities are mutable per-team clones of the faction seed, fed to the unlock-gating
+    // resolver in Phase 5. The sim mutates these; World only owns + (re)seeds them (SeedEconomy).
+    public sealed class TeamState
+    {
+        public int Credits;
+        public int Score; // placeholder (no scoring logic yet — wired to the client in Phase 4)
+        public TechSet OwnedTechs = new();
+        public CapabilitySet OwnedCapabilities = new();
+    }
+
+    // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot
+    // at construction and re-seeded on each match start (SeedEconomy).
+    public readonly Dictionary<byte, TeamState> TeamStates = new();
+
     // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
     // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
     // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
@@ -125,7 +146,7 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start)
     {
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
@@ -150,6 +171,11 @@ public sealed class World
         Bases.Add(new BaseSite(2, 1, VergeSector, vergeBasePos));
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
+
+        // One economy state per team (Stage-1 = both teams seed from the single stock faction).
+        foreach (var b in Bases)
+            TeamStates[b.Team] = new TeamState();
+        SeedEconomy(start);
 
         var rng = new DetRng(seed);
         ulong rockId = 1;
@@ -176,6 +202,21 @@ public sealed class World
         (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies();
+    }
+
+    // (Re)seed every team's economy from the faction snapshot: reset Credits to the starting grant,
+    // Score to 0, and re-clone the faction's base tech/capability sets into fresh per-team owned sets
+    // (so a prior match's unlocks don't carry over and the owned sets stay isolated per team). Called
+    // at construction and on each match start (Simulation.StartMatch).
+    public void SeedEconomy(FactionStart start)
+    {
+        foreach (var team in TeamStates.Values)
+        {
+            team.Credits = start.StartingCredits;
+            team.Score = 0;
+            team.OwnedTechs = start.BaseTechs.Clone();
+            team.OwnedCapabilities = start.BaseCapabilities.Clone();
+        }
     }
 
     // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the

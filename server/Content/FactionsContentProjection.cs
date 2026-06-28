@@ -44,7 +44,25 @@ public static class FactionsContentProjection
 
         var world = ProjectWorld(core.World);
 
-        return new ContentSet(ships, weapons, bases, world);
+        var start = ProjectFactionStart(core);
+
+        return new ContentSet(ships, weapons, bases, world, start);
+    }
+
+    // Stage-2: the single stock faction's per-match starting state (credits/income + tech/capability
+    // seed). Money is authored as a double but carried as whole-credit int (the wire type in P4); the
+    // tech/capability sets are cloned so the per-team OWNED copies stay isolated from this snapshot.
+    private static FactionStart ProjectFactionStart(Factions.Core core)
+    {
+        var f = core.Factions.Single();
+        return new FactionStart(
+            startingCredits: (int)f.BonusMoney,
+            incomePerPaycheck: (int)f.IncomeMoney,
+            baseTechs: f.BaseTechs.Clone(),
+            baseCapabilities: f.BaseCapabilities.Clone(),
+            lifepodHullId: f.LifepodHullId,
+            initialStationId: f.InitialStationId
+        );
     }
 
     private static ShipClassDef ProjectShip(Factions.Hull h) =>

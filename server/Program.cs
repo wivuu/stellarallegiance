@@ -123,7 +123,7 @@ IMatchResultSink results = new LoggingMatchResultSink();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth);
+var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
 var sim = new Simulation(world, content);
 var hub = new ClientHub(sim, auth, players, matchmaker);
 

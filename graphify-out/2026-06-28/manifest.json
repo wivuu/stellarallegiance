@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782680394.0443487,
-    "ast_hash": "59106abcccab94dbdfe1dbfefe9e2fed",
+    "mtime": 1782683450.2294643,
+    "ast_hash": "4c52240c9177058942e88119e4da3410",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
@@ -235,8 +235,8 @@
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1782682177.16389,
-    "ast_hash": "443072fb8c95fd7717a6fbb6e48b9784",
+    "mtime": 1782683523.5195472,
+    "ast_hash": "c396a873f674f589deec92787cee391b",
     "semantic_hash": ""
   },
   "tools/simbot/Program.cs": {
@@ -6150,8 +6150,8 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782680394.0421064,
-    "ast_hash": "42d9a26010be276f052c1397d45ad297",
+    "mtime": 1782683508.2984016,
+    "ast_hash": "cdfde3e7804541adb73993c1f7f9682c",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
@@ -6465,8 +6465,8 @@
     "semantic_hash": ""
   },
   "server/Content/ContentLoader.cs": {
-    "mtime": 1782680394.042574,
-    "ast_hash": "cf0afd8e3fb420cd090d534037af1948",
+    "mtime": 1782683431.0100403,
+    "ast_hash": "674feb2ca3ce016bc41a17b1650bfea0",
     "semantic_hash": ""
   },
   "server/Content/ContentSet.cs": {
@@ -6480,13 +6480,13 @@
     "semantic_hash": ""
   },
   "tests/ContentTest/ContentTest.csproj": {
-    "mtime": 1782680394.0471609,
-    "ast_hash": "3189e114ffd80038d6b2d4adee94e5bd",
+    "mtime": 1782683477.3497415,
+    "ast_hash": "c6b0f7577d336dad1ddfc6958c270db4",
     "semantic_hash": ""
   },
   "tests/ContentTest/Program.cs": {
-    "mtime": 1782680394.0474343,
-    "ast_hash": "64113e960d019e9f51aa7007749d96f8",
+    "mtime": 1782683513.3640525,
+    "ast_hash": "d232607c59389027dd2d66a4328ab997",
     "semantic_hash": ""
   },
   "factions/sample-data/core.manifest.yaml": {
@@ -6544,11 +6544,6 @@
     "ast_hash": "cddc486a13c58e522fdf1796a631535a",
     "semantic_hash": ""
   },
-  "server/Content/stock.yaml": {
-    "mtime": 1782680394.043191,
-    "ast_hash": "337233ce52aba886b9aace2942cdf72c",
-    "semantic_hash": ""
-  },
   "tests/FactionsTest/FactionsTest.csproj": {
     "mtime": 1782682524.52388,
     "ast_hash": "ecc91d648d0c4e3e86eea3a588c81870",
@@ -6597,6 +6592,11 @@
   "server/Content/factions/world.yaml": {
     "mtime": 1782682508.4970672,
     "ast_hash": "dd20b02be2ab6c3dd6068b674088f85f",
+    "semantic_hash": ""
+  },
+  "server/Content/FactionsContentProjection.cs": {
+    "mtime": 1782683412.7590814,
+    "ast_hash": "031c6947c56ab19fe8c655c35c53cddb",
     "semantic_hash": ""
   }
 }
