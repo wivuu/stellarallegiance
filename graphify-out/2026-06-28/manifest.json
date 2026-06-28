@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782667285.9487104,
-    "ast_hash": "dadcbf196ff2b89171d98adf51aae07c",
+    "mtime": 1782671323.5250401,
+    "ast_hash": "1da11025f877756118dc74795c7d7c49",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782650578.8562534,
-    "ast_hash": "1193b4ecd378a4d33ae83eb0664d3beb",
+    "mtime": 1782671316.7869525,
+    "ast_hash": "eb96ad2329c2da2d8a5cd133f416606d",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -6150,8 +6150,8 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782524272.049211,
-    "ast_hash": "7e7ea371a2ba25cc92ce1773d0aae0a7",
+    "mtime": 1782671333.6069942,
+    "ast_hash": "15170d6384ec6b4a577c5a801c1fcdfe",
     "semantic_hash": ""
   },
   "server/Assets/SimAssets.cs": {
@@ -6247,11 +6247,6 @@
   "factions/AllegianceModel.sln": {
     "mtime": 1782657011.6218781,
     "ast_hash": "a7e60afd0b6d2aeeef07c0a9ea6f2652",
-    "semantic_hash": ""
-  },
-  "factions/global.json": {
-    "mtime": 1782657011.6268487,
-    "ast_hash": "3a0feda876fe8ac69521baeebd3226b6",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions.Cli/Allegiance.Factions.Cli.csproj": {

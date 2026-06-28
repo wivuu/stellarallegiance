@@ -52,10 +52,14 @@ string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
 // iteration). Off by default: a real game readies up in the lobby.
 bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is "1" or "true";
 
-// Per-server content override (Stage-1 content pipeline). Empty (default) = built-in GameContent
-// defaults; a path = load that YAML and OVERLAY it onto the defaults. A --content flag overrides
-// CONTENT_PATH. Mirrors the --secret/SIM_SECRET pattern.
-string? contentPath = Environment.GetEnvironmentVariable("CONTENT_PATH");
+// Per-server content (Stage-1 content pipeline). Content is authored ENTIRELY in YAML — there is no
+// compile-in content. By DEFAULT the server loads the bundle shipped next to the binary
+// (content/stock.yaml in the output folder, resolved relative to the assembly — never an absolute
+// hardcoded path). --content/CONTENT_PATH overrides that LOCATION with a different complete bundle.
+// The file must exist + be valid (the YAML is the single source of truth, so there is no fallback);
+// a missing/malformed bundle fails fast. Mirrors the --secret/SIM_SECRET pattern.
+string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "stock.yaml");
+string? contentOverride = Environment.GetEnvironmentVariable("CONTENT_PATH");
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--autostart")
@@ -69,16 +73,18 @@ for (int i = 0; i < args.Length; i++)
     if (args[i] == "--secret")
         secret = args[i + 1];
     if (args[i] == "--content")
-        contentPath = args[i + 1];
+        contentOverride = args[i + 1];
 }
 
-// Resolve content BEFORE the sim: load + overlay any per-server YAML, then validate. The client
-// has no compile-time fallback, so a malformed/incomplete def set must fail HERE (clear error,
-// refuse to start) rather than surfacing mid-match as a server KeyNotFound or a client desync.
+// Resolve content BEFORE the sim: load the YAML bundle, then validate. The client has no
+// compile-time fallback, so a malformed/incomplete def set must fail HERE (clear error, refuse to
+// start) rather than surfacing mid-match as a server KeyNotFound or a client desync.
+bool explicitContent = !string.IsNullOrWhiteSpace(contentOverride);
+string contentPath = explicitContent ? contentOverride! : defaultContentPath;
 ContentSet content;
 try
 {
-    content = string.IsNullOrWhiteSpace(contentPath) ? ContentSet.Defaults() : ContentLoader.Load(contentPath);
+    content = ContentLoader.Load(contentPath);
 }
 catch (Exception ex)
 {
@@ -94,9 +100,9 @@ if (contentErrors.Count > 0)
     return;
 }
 Console.WriteLine(
-    string.IsNullOrWhiteSpace(contentPath)
-        ? "[SimServer] content: built-in defaults."
-        : $"[SimServer] content: loaded + overlaid '{contentPath}' onto defaults."
+    explicitContent
+        ? $"[SimServer] content: loaded '{contentPath}' (overrides default location)."
+        : $"[SimServer] content: loaded default '{contentPath}'."
 );
 
 // Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /
@@ -114,7 +120,9 @@ IPlayerDirectory players = new InMemoryPlayerDirectory();
 IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
 IMatchResultSink results = new LoggingMatchResultSink();
 
-var world = new World(seed, content.World);
+// Base health (the win-condition hull) comes from the content's base def — the validator guarantees
+// at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
+var world = new World(seed, content.World, content.Bases[0].MaxHealth);
 var sim = new Simulation(world, content);
 var hub = new ClientHub(sim, auth, players, matchmaker);
 

@@ -39,13 +39,10 @@
       Link="assets\ships\%(Filename)%(Extension)"
       CopyToOutputDirectory="PreserveNewest"
     />
-    <!-- Stage-1 content pipeline: ship the stock content bundle (the built-in defaults re-expressed
-         as YAML) next to the binary as a copy-me reference for content/CONTENT_PATH overrides. -->
-    <Content
-      Include="content\*.yaml"
-      Link="content\%(Filename)%(Extension)"
-      CopyToOutputDirectory="PreserveNewest"
-    />
+    <!-- Stage-1 content pipeline: ship the AUTHORITATIVE content bundle next to the binary. The
+         server loads content/stock.yaml at boot (content is YAML, never hardcoded); content/CONTENT_PATH
+         overrides the location with a different bundle. -->
+    <Content Include="content\*.yaml" Link="content\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />

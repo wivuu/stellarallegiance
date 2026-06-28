@@ -46,6 +46,11 @@ namespace StellarAllegiance.Shared
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
             }
 
+            // The map seeds a team base + the win condition reads its hull from content, so a bundle
+            // must define at least one base.
+            if (bases.Count == 0)
+                errors.Add("no base defs — content must define at least one base");
+
             var baseIds = new HashSet<byte>();
             foreach (var b in bases)
             {

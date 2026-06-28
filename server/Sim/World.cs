@@ -17,7 +17,7 @@ public sealed class World
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = CollisionConfig.BaseRadius;
     public const float DockDiscRadius = CollisionConfig.DockDiscRadius; // docking cone base-disc radius
-    public const float BaseMaxHealth = 2000f;
+    public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
     public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
@@ -40,11 +40,9 @@ public sealed class World
     public const int AsteroidCount = 4; // base count, scaled by cube law below
     public const int VergeAsteroidCount = 4;
     public const float VergeBeltRadius = 380f;
-    // Default world-scale baseline (mirrors GameContent.WorldDefaults). The LIVE values used for
-    // seeding come from the WorldConfig passed to the ctor, so a per-server YAML `world:` override
-    // (SectorScale / AsteroidDensity) actually changes the generated map — not just what's streamed.
-    public const float SectorScale = 2.25f;
-    public const float AsteroidDensity = 1.0f;
+    // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
+    // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
+    // the generated map, not just what's streamed. No compile-in defaults live here.
     public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
 
     public readonly record struct Sector(uint Id, float Radius);
@@ -127,10 +125,11 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth)
     {
         Seed = seed;
-        // Live world-scale knobs from the loaded content (defaults, or a YAML `world:` override).
+        BaseMaxHealth = baseMaxHealth;
+        // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
         float coreR = CoreRadius * sectorScale;

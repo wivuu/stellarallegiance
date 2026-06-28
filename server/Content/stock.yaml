@@ -1,17 +1,16 @@
 # =====================================================================
-#  stock.yaml — the built-in GameContent, re-expressed as YAML.
+#  stock.yaml — the AUTHORITATIVE game content (the single source of truth).
 #
-#  This is the canonical, copy-me reference for per-server content overrides. Point a
-#  server at it (or your edited copy) with:
+#  The server loads this bundle at boot (it ships next to the binary as content/stock.yaml)
+#  and runs the game entirely from it — there is NO content hardcoded in code. To customize a
+#  server, edit this file, or copy it and point the server at your copy:
 #      dotnet SimServer.dll --content path/to/your.yaml
 #      CONTENT_PATH=path/to/your.yaml dotnet SimServer.dll
-#
-#  Semantics: the server starts from these same built-in defaults and OVERLAYS your YAML
-#  on top — so you only need to list the ids + keys you want to change. Loading THIS file
-#  reproduces the stock game exactly (the ContentTest golden asserts byte-identical defs).
+#  --content/CONTENT_PATH overrides the LOCATION with a different COMPLETE bundle (not a partial
+#  overlay): the file must define the full content, and is validated at boot (a malformed/incomplete
+#  bundle refuses to start, since the client has no fallback).
 #
 #  Keys and enum values are kebab-case (max-speed, fire-interval-ticks, main-engine).
-#  Hardpoints, when present on a ship/base, REPLACE that entry's whole hardpoint list.
 #  Omitted numeric hardpoint fields default to 0.
 # =====================================================================
 

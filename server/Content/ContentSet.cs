@@ -4,10 +4,10 @@ using StellarAllegiance.Shared;
 namespace SimServer.Content;
 
 // The resolved content the server runs a match on and streams to clients: ship/weapon/base defs
-// plus the world-scale config. ONE source of truth — the sim resolves stats from it (Simulation)
-// and the wire encodes it verbatim (Protocol.BuildDefs), so server authority and client prediction
-// never drift. Built once at boot from GameContent defaults, optionally overlaid with per-server
-// YAML (ContentLoader). Immutable after construction.
+// plus the world-scale config. ONE source of truth — authored entirely in the YAML content bundle
+// and loaded at boot (ContentLoader); the sim resolves stats from it (Simulation) and the wire
+// encodes it verbatim (Protocol.BuildDefs), so server authority and client prediction never drift.
+// There are NO compile-in content defaults: the values come from YAML, never from code.
 public sealed class ContentSet
 {
     public IReadOnlyList<ShipClassDef> Ships { get; }
@@ -27,8 +27,4 @@ public sealed class ContentSet
         Bases = bases;
         World = world;
     }
-
-    // The compile-in defaults — what the server runs with when no --content/CONTENT_PATH is given.
-    public static ContentSet Defaults() =>
-        new(GameContent.ShipClasses(), GameContent.Weapons(), GameContent.Bases(), GameContent.WorldDefaults());
 }

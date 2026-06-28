@@ -315,10 +315,9 @@ namespace StellarAllegiance.Shared
             };
         }
 
-        // Build the ShipStats from a (possibly runtime-loaded) ShipClassDef's authored f32s — the
-        // SINGLE path both server authority and client prediction take, so a YAML-overridden def
-        // drives identical flight on both sides (the def is the source of truth, not the compile-in
-        // FlightModel.Scout/... blocks, which now only seed GameContent's defaults).
+        // Build the ShipStats from a ShipClassDef's authored f32s — the SINGLE path both server
+        // authority and client prediction take, so the YAML-authored def drives identical flight on
+        // both sides (the def, sourced from the content bundle, is the one source of truth).
         public static ShipStats FromDef(ShipClassDef d) =>
             Create(
                 d.MaxSpeed,
@@ -349,117 +348,11 @@ namespace StellarAllegiance.Shared
         public const byte ClassFighter = 1;
         public const byte ClassBomber = 2;
 
-        // Per-class seed stats from the extracted Allegiance hulls (.PLAN/CONFIG.md,
-        // .PLAN/ship_movement/06_extracted_hull_stats.md). Authored knobs only — the
-        // derived thrust/torques/drag are computed once by ShipStats.Create. These are
-        // the compile-in defaults; M1 seeds an identical row into ShipClassDef so an
-        // operator can retune at runtime. Note the faithful quirk: the Fighter
-        // out-TURNS the Scout (60 vs 50 °/s); the Scout's edge is speed and snap.
-        //                                 maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
-        public static readonly ShipStats Scout = ShipStats.Create(
-            160f,
-            30f,
-            40f,
-            50f,
-            50f,
-            50f,
-            5f,
-            5f,
-            0.5f,
-            0.25f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 0 → no afterburner: the Scout's edge is raw speed/snap, not boost.
-
-        public static readonly ShipStats Fighter = ShipStats.Create(
-            100f,
-            25f,
-            36f,
-            60f,
-            60f,
-            60f,
-            5f,
-            5f,
-            0.5f,
-            0.5f,
-            10f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 10 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
-
-        // Bomber: the heavy hull, straight from the extracted Allegiance numbers
-        // ("Bomber" row, 06_extracted_hull_stats.md). 20°/s rates at 8° drift give
-        // only rate²/(2·drift) = 25°/s² of angular accel — ~0.8-1.6 s to wind a turn
-        // up or stop it. This is the hull where the rotational inertia really shows.
-        public static readonly ShipStats Bomber = ShipStats.Create(
-            60f,
-            15f,
-            50f,
-            20f,
-            20f,
-            20f,
-            8f,
-            8f,
-            0.5f,
-            0.5f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 0 → no afterburner: the heavy hull lumbers at its base speed.
-
-        // Escape pod (server Ship.IsPod): a slow, unarmed lifeboat ejected on ship death.
-        // Full strafe/reverse (1.0) and no afterburner (AbAccel 0) — it crawls home and
-        // gets shoved around in collisions (light mass). Selected via StatsFor(class,
-        // isPod) so server authority and client prediction integrate pods identically.
-        public static readonly ShipStats Pod = ShipStats.Create(
-            60f,
-            15f,
-            10f,
-            40f,
-            40f,
-            40f,
-            8f,
-            8f,
-            1.0f,
-            1.0f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        public static ShipStats StatsFor(byte shipClass) =>
-            shipClass == ClassFighter ? Fighter
-            : shipClass == ClassBomber ? Bomber
-            : Scout;
-
-        // Pod-aware stats selection: a pod ignores its class and flies the slow,
-        // boost-less Pod profile. Callers pass ship.IsPod so server authority and
-        // client prediction agree on which stats a pod integrates with.
-        public static ShipStats StatsFor(byte shipClass, bool isPod) => isPod ? Pod : StatsFor(shipClass);
-
-        // ---- Weapon spread -------------------------------------------------
-        //
-        // Per-weapon shot scatter as a cone HALF-ANGLE in radians. Tweak these to
-        // taste: 0 is pinpoint, larger is sloppier. Tied to ship class for now (one
-        // weapon per class); the standard Scout cannon is the "default" weapon and is
-        // near-pinpoint, while the Fighter's heavier gun scatters more. Lives here in
-        // the shared model so the authoritative server and the predicting client read
-        // the SAME value (no mirrored-constant drift).
-        public const float ScoutSpread = 0.006f; // ~0.34° — minimal (default weapon)
-        public const float FighterSpread = 0.035f; // ~2.0°
-        public const float BomberSpread = 0.012f; // ~0.7° — slow heavy slugs, fairly true
-
-        public static float WeaponSpreadRad(byte shipClass) =>
-            shipClass == ClassFighter ? FighterSpread
-            : shipClass == ClassBomber ? BomberSpread
-            : ScoutSpread;
+        // NOTE: the per-class flight numbers (mass/speed/turn rates/afterburner) and per-weapon
+        // spread are CONTENT, not code — they are authored in the YAML content bundle and reach the
+        // sim/client as ShipClassDef/WeaponDef (resolved via ShipStats.FromDef + WeaponDef.SpreadRad).
+        // This file owns only the deterministic INTEGRATOR and the cross-runtime scatter function.
+        // (The determinism golden's reference stats live as fixtures in tests/FlightModelTest.)
 
         // Deterministically scatter a unit fire direction within a cone of the given
         // half-angle. Keyed by (shipId, fireTick) so the wasm server and the mono

@@ -84,10 +84,10 @@ public sealed partial class Simulation
         return WeaponDefs[m.Length > 0 ? m[0].WeaponId : GameContent.ScoutWeaponId];
     }
 
-    // Flight stats for a class, derived from the LOADED def (YAML-overridable) via the SAME path the
+    // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
     // client takes (ShipStats.FromDef) — so server authority and client prediction integrate
     // bit-identically. A pod ignores its class and flies the Pod profile; an unknown class falls
-    // back to the Scout def, matching the old FlightModel.StatsFor behavior. Precomputed in the ctor.
+    // back to the Scout def. Precomputed in the ctor from the content set.
     private ShipStats StatsFor(byte cls, bool isPod)
     {
         byte defId = isPod ? GameContent.PodClassId : cls;

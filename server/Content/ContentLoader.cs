@@ -7,19 +7,19 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace SimServer.Content;
 
-// Loads per-server content from YAML and OVERLAYS it onto the GameContent defaults, producing the
-// ContentSet the match runs on. Reuses the existing def → MsgDefs → client path (no client change):
-// the loader only builds the same shared def objects GameContent does, then the server streams them.
+// Loads the authoritative content from YAML — there is NO compile-in content; the values live only
+// in the YAML bundle. Builds the same shared def objects the sim/wire consume, so the existing
+// def → MsgDefs → client path is unchanged (no client change).
 //
-// Overlay semantics (README Stage 1: "GameContent is the default; YAML overrides and extends"):
-//   - an entry whose id matches a default PATCHES that default — only the keys present in YAML
-//     change; everything else keeps the compile-in value.
-//   - an entry with a new id is ADDED (authored from scratch; absent keys default to 0/empty, and
-//     the boot-time ContentValidator catches anything malformed).
-//   - `hardpoints:`, when present, REPLACES the whole list (no per-hardpoint merge).
+//   - LoadBaseline(path): parse a COMPLETE bundle (e.g. the shipped content/stock.yaml) into a full
+//     ContentSet from scratch. This is the authoritative baseline.
+//   - ApplyOverride(baseline, path): overlay a (possibly partial) per-server override onto a fresh
+//     baseline — an entry whose id matches PATCHES it (only the keys present in YAML change); a new
+//     id is ADDED. `hardpoints:`, when present, REPLACES that entry's whole list.
 //
 // Keys + enum values are kebab-case (max-speed, fire-interval-ticks, main-engine), matching the
-// Allegiance.Factions YAML convention; unknown keys are ignored so authoring stays forgiving.
+// Allegiance.Factions YAML convention; unknown keys are ignored so authoring stays forgiving. The
+// boot-time ContentValidator catches anything malformed (dangling refs, bad hull, dup ids).
 public static class ContentLoader
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -28,61 +28,56 @@ public static class ContentLoader
         .IgnoreUnmatchedProperties()
         .Build();
 
-    // Reads a YAML file and overlays it onto GameContent defaults. Throws IOException if the path
-    // doesn't exist and InvalidDataException on a YAML parse error (the caller fails fast at boot).
-    public static ContentSet Load(string path)
+    // Parse a YAML file into a DTO. Throws FileNotFoundException if absent and InvalidDataException
+    // on a parse error, so the caller fails fast at boot.
+    public static ContentDto Parse(string path)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException($"content YAML not found: {path}");
-
-        ContentDto dto;
         try
         {
-            dto = Deserializer.Deserialize<ContentDto>(File.ReadAllText(path)) ?? new ContentDto();
+            return Deserializer.Deserialize<ContentDto>(File.ReadAllText(path)) ?? new ContentDto();
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
             throw new InvalidDataException($"content YAML '{path}' failed to parse: {ex.Message}", ex);
         }
-
-        return Overlay(dto);
     }
 
-    // The default-seeded overlay (exposed for tests).
-    public static ContentSet Overlay(ContentDto dto)
-    {
-        var ships = GameContent.ShipClasses();
-        var weapons = GameContent.Weapons();
-        var bases = GameContent.Bases();
-        var world = GameContent.WorldDefaults();
+    // Load a complete content bundle from a YAML file. Each entry must carry its id; other absent
+    // keys default to 0/empty (the ContentValidator catches a malformed bundle at boot).
+    public static ContentSet Load(string path) => Build(Parse(path));
 
+    public static ContentSet Build(ContentDto dto)
+    {
+        var ships = new List<ShipClassDef>();
         foreach (var s in dto.Ships ?? Enumerable.Empty<ShipDto>())
         {
             byte id = s.ClassId ?? throw new InvalidDataException("a ship def is missing required 'class-id'");
-            var target = ships.FirstOrDefault(d => d.ClassId == id);
-            if (target is null)
-                ships.Add(target = new ShipClassDef { ClassId = id });
-            s.ApplyTo(target);
+            var def = new ShipClassDef { ClassId = id };
+            s.ApplyTo(def);
+            ships.Add(def);
         }
 
+        var weapons = new List<WeaponDef>();
         foreach (var wp in dto.Weapons ?? Enumerable.Empty<WeaponDto>())
         {
             uint id = wp.WeaponId ?? throw new InvalidDataException("a weapon def is missing required 'weapon-id'");
-            var target = weapons.FirstOrDefault(d => d.WeaponId == id);
-            if (target is null)
-                weapons.Add(target = new WeaponDef { WeaponId = id });
-            wp.ApplyTo(target);
+            var def = new WeaponDef { WeaponId = id };
+            wp.ApplyTo(def);
+            weapons.Add(def);
         }
 
+        var bases = new List<BaseDef>();
         foreach (var b in dto.Bases ?? Enumerable.Empty<BaseDto>())
         {
             byte id = b.BaseTypeId ?? throw new InvalidDataException("a base def is missing required 'base-type-id'");
-            var target = bases.FirstOrDefault(d => d.BaseTypeId == id);
-            if (target is null)
-                bases.Add(target = new BaseDef { BaseTypeId = id });
-            b.ApplyTo(target);
+            var def = new BaseDef { BaseTypeId = id };
+            b.ApplyTo(def);
+            bases.Add(def);
         }
 
+        var world = new WorldConfig();
         dto.World?.ApplyTo(world);
 
         return new ContentSet(ships, weapons, bases, world);
