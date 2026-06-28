@@ -36,4 +36,15 @@ public record Station : Buildable
 
     /// <summary>The construction drone this station produces; references a drone id.</summary>
     public string? ConstructionDroneId { get; set; }
+
+    // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------
+
+    /// <summary>
+    /// Stable wire base-type id for this station as a runtime base (Garrison 0). Null = not a runtime
+    /// base. Authored explicitly (the game's content id constants depend on it).
+    /// </summary>
+    public byte? BaseTypeId { get; set; }
+
+    /// <summary>Local-space mount points (docking entrance/exit, nav lights) the client renders from.</summary>
+    public List<Hardpoint> Hardpoints { get; set; } = new();
 }

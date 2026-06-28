@@ -401,6 +401,9 @@
           "items": {
             "$ref": "#/$defs/Weapon"
           }
+        },
+        "world": {
+          "$ref": "#/$defs/WorldConfig"
         }
       }
     },
@@ -658,10 +661,52 @@
         "development-time"
       ]
     },
+    "Hardpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir-x": {
+          "type": "number"
+        },
+        "dir-y": {
+          "type": "number"
+        },
+        "dir-z": {
+          "type": "number"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeHardpointKind"
+        },
+        "off-x": {
+          "type": "number"
+        },
+        "off-y": {
+          "type": "number"
+        },
+        "off-z": {
+          "type": "number"
+        },
+        "weapon-id": {
+          "type": "integer"
+        }
+      }
+    },
     "Hull": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "ab-accel": {
+          "type": "number"
+        },
+        "ab-off-rate": {
+          "type": "number"
+        },
+        "ab-on-rate": {
+          "type": "number"
+        },
         "abilities": {
           "type": "array",
           "items": {
@@ -689,6 +734,9 @@
         "chaff-launcher-capacity": {
           "type": "integer"
         },
+        "class-id": {
+          "type": "integer"
+        },
         "defense-type": {
           "type": "string"
         },
@@ -697,6 +745,12 @@
         },
         "dispenser-capacity": {
           "type": "integer"
+        },
+        "drift-pitch-deg": {
+          "type": "number"
+        },
+        "drift-yaw-deg": {
+          "type": "number"
         },
         "ecm": {
           "type": "number"
@@ -718,6 +772,12 @@
         },
         "group": {
           "type": "string"
+        },
+        "hardpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hardpoint"
+          }
         },
         "icon-name": {
           "type": "string"
@@ -1129,6 +1189,25 @@
         }
       }
     },
+    "RuntimeHardpointKind": {
+      "type": "string",
+      "enum": [
+        "weapon",
+        "main-engine",
+        "booster",
+        "thruster",
+        "turret",
+        "light",
+        "docking-entrance",
+        "docking-exit"
+      ]
+    },
+    "RuntimeWeaponKind": {
+      "type": "string",
+      "enum": [
+        "bolt"
+      ]
+    },
     "Shield": {
       "type": "object",
       "additionalProperties": false,
@@ -1217,6 +1296,9 @@
         "armor-regen": {
           "type": "number"
         },
+        "base-type-id": {
+          "type": "integer"
+        },
         "build-time-seconds": {
           "type": "integer"
         },
@@ -1255,6 +1337,12 @@
         },
         "group": {
           "type": "string"
+        },
+        "hardpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hardpoint"
+          }
         },
         "icon-name": {
           "type": "string"
@@ -1400,6 +1488,9 @@
         "energy-per-shot": {
           "type": "number"
         },
+        "fire-interval-ticks": {
+          "type": "integer"
+        },
         "granted-capabilities": {
           "type": "array",
           "items": {
@@ -1421,6 +1512,9 @@
         "id": {
           "type": "string"
         },
+        "kind": {
+          "$ref": "#/$defs/RuntimeWeaponKind"
+        },
         "mass": {
           "type": "number"
         },
@@ -1435,6 +1529,9 @@
         },
         "projectile-id": {
           "type": "string"
+        },
+        "projectile-life-ticks": {
+          "type": "integer"
         },
         "reload-time": {
           "type": "number"
@@ -1459,6 +1556,30 @@
         },
         "successor-part-id": {
           "type": "string"
+        },
+        "weapon-id": {
+          "type": "integer"
+        }
+      }
+    },
+    "WorldConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asteroid-density": {
+          "type": "number"
+        },
+        "debug-freeze-brain": {
+          "type": "boolean"
+        },
+        "debug-no-fire": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "sector-scale": {
+          "type": "number"
         }
       }
     }

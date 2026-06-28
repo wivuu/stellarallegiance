@@ -1,0 +1,11 @@
+# The single stock faction (Stage-1 = one bundle; multi-faction asymmetry is a Stage-4 concern on
+# this same model). Seeds the team's owned tech/capability state and names the lifepod + start base.
+# bonus-money/income-money feed Stage-2 credits; base-capabilities [base] makes the stock catalog
+# buildable.
+id: stock
+name: Stock
+base-capabilities: [base]
+bonus-money: 0
+income-money: 0
+lifepod-hull-id: pod
+initial-station-id: garrison

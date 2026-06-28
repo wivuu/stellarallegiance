@@ -1,0 +1,19 @@
+# Projectiles — the bolt each cannon fires. power→WeaponDef.damage, speed→projectile-speed,
+# width→projectile-radius (the per-weapon fire-interval/life ticks live on the weapon, in the
+# tick domain, to avoid seconds→tick rounding drift). Numbers reproduce stock.yaml exactly.
+projectiles:
+  - id: scout-bolt
+    name: Scout Bolt
+    power: 4
+    speed: 200
+    width: 1
+  - id: fighter-bolt
+    name: Fighter Bolt
+    power: 10
+    speed: 200
+    width: 1
+  - id: bomber-bolt
+    name: Bomber Bolt
+    power: 22
+    speed: 200
+    width: 1

@@ -1,0 +1,17 @@
+# Stations — the team base. radius→BaseDef.radius, max-armor→BaseDef.max-health. base-type-id and
+# hardpoints (docking entrance/exit + nav lights) are explicit runtime extensions. The faction's
+# initial station MUST carry the 'restart' ability (CoreValidator). Reproduces stock.yaml's Garrison.
+stations:
+  - id: garrison
+    name: Garrison
+    base-type-id: 0
+    class: garrison
+    radius: 90
+    max-armor: 2000
+    abilities: [start, restart]
+    required-capabilities: [base]
+    hardpoints:
+      - { kind: docking-entrance, off-z: 90, dir-z: 1 }
+      - { kind: docking-exit, off-z: 90, dir-z: 1 }
+      - { kind: light, index: 0, off-y: 90, dir-y: 1 }
+      - { kind: light, index: 1, off-y: -90, dir-y: -1 }

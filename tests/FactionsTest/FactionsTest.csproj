@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Stage-1 PIVOT smoke test: prove the in-repo Allegiance.Factions library is referenced and
+         loadable inside this repo (load + validate + per-faction gating). The library is server-only,
+         so we reference it directly (not through SimServer). -->
+    <ProjectReference Include="../../factions/src/Allegiance.Factions/Allegiance.Factions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The runnable 3-faction sample bundle, copied next to the test binary (preserving the
+         manifest/catalog/factions layout) so CoreSerializer.Load resolves it by filename. -->
+    <Content Include="../../factions/sample-data/**/*.yaml" Link="sample-data/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The authored stock bundle under test (the canonical-format reproduction of stock.yaml). -->
+    <Content Include="../../server/content/factions/**/*.yaml" Link="stock-bundle/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
