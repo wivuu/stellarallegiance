@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using StellarAllegiance.Shared;
+using Factions = Allegiance.Factions.Model;
 
 namespace SimServer.Content;
 
@@ -15,16 +16,30 @@ public sealed class ContentSet
     public IReadOnlyList<BaseDef> Bases { get; }
     public WorldConfig World { get; }
 
+    // Stage-2 strategy spine: the team's per-match STARTING state (credits/income + tech/capability
+    // seed) projected from the faction. Server-only — NOT part of the wire defs (Protocol.BuildDefs
+    // encodes only Ships/Weapons/Bases/World).
+    public FactionStart Start { get; }
+
+    // The source catalog this set was projected from. Server-only (never streamed): the Stage-2
+    // unlock gate resolves per-team buildables against it (Simulation.ResolveTeamUnlocks via
+    // BuildableResolver). The projected defs above stay the sole wire/sim runtime model.
+    public Factions.Core Catalog { get; }
+
     public ContentSet(
         IReadOnlyList<ShipClassDef> ships,
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
-        WorldConfig world
+        WorldConfig world,
+        FactionStart start,
+        Factions.Core catalog
     )
     {
         Ships = ships;
         Weapons = weapons;
         Bases = bases;
         World = world;
+        Start = start;
+        Catalog = catalog;
     }
 }

@@ -78,6 +78,7 @@ namespace StellarAllegiance.Shared
             AbOffRate;
 
         public float MaxHull; // starting/spawn hull
+        public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
     }

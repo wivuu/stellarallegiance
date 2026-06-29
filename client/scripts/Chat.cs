@@ -36,7 +36,8 @@ public partial class Chat : Control
     private LineEdit _entry = null!;
 
     // One rendered line: the wire chat plus its local arrival time (the wire carries no stamp).
-    private readonly List<(ChatLine Line, string Time)> _messages = new();
+    // System lines (slash-command output) are rendered locally and never sent to the server.
+    private readonly List<(ChatLine Line, string Time, bool System)> _messages = new();
     private bool _teamChannel;
     private double _sinceLastMsg = FadeDelay + FadeDur;
     private Input.MouseModeEnum _savedMouseMode = Input.MouseModeEnum.Visible;
@@ -84,10 +85,15 @@ public partial class Chat : Control
         Render();
     }
 
-    private void OnChat(ChatLine line)
+    private void OnChat(ChatLine line) => Push(line, system: false);
+
+    // A locally-generated system line (slash-command output, never relayed to the server).
+    private void AddSystemLine(string text) => Push(new ChatLine(0, 0, "", text), system: true);
+
+    private void Push(ChatLine line, bool system)
     {
         string time = DateTime.Now.ToString("HH:mm");
-        _messages.Add((line, time));
+        _messages.Add((line, time, system));
         if (_messages.Count > Backlog)
             _messages.RemoveRange(0, _messages.Count - Backlog);
         _sinceLastMsg = 0;
@@ -153,9 +159,53 @@ public partial class Chat : Control
     private void OnSubmit(string text)
     {
         text = text.Trim();
+        if (text.StartsWith("/"))
+        {
+            HandleCommand(text);
+            CloseInput();
+            return;
+        }
         if (text.Length > 0)
             _net.SendChat(text, _teamChannel);
         CloseInput();
+    }
+
+    // Local "/" slash-commands: barebones in-game introspection (money, score, team, server info).
+    // Handled entirely client-side — the answer is rendered as a system line, never relayed.
+    private void HandleCommand(string text)
+    {
+        string cmd = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0].ToLowerInvariant();
+        switch (cmd)
+        {
+            case "/help":
+                AddSystemLine(
+                    "Commands:\n"
+                        + "  /help — this list\n"
+                        + "  /money (/credits) — your team's credit balance\n"
+                        + "  /score — both teams' scores\n"
+                        + "  /team — which team you're on\n"
+                        + "  /server — server address & connection info"
+                );
+                break;
+            case "/money":
+            case "/credits":
+                AddSystemLine($"Credits: {_world.TeamCredits(_net.MyTeam)}");
+                break;
+            case "/score":
+                AddSystemLine($"Score — Blue {_world.TeamScore(0)}  ·  Red {_world.TeamScore(1)}");
+                break;
+            case "/team":
+                AddSystemLine($"You are on {(_net.MyTeam == 0 ? "Blue" : "Red")} team.");
+                break;
+            case "/server":
+                AddSystemLine(
+                    $"Server: {(_cm.ServerUrl.Length > 0 ? _cm.ServerUrl : "—")}  ·  {_cm.State}  ·  protocol v{GameNetClient.ProtocolVersion}  ·  phase {_world.Phase}"
+                );
+                break;
+            default:
+                AddSystemLine($"Unknown command '{cmd}'. Type /help.");
+                break;
+        }
     }
 
     private void ToggleChannel()
@@ -201,13 +251,16 @@ public partial class Chat : Control
         int start = Math.Max(0, _messages.Count - MaxShown);
         var sb = new StringBuilder();
         for (int i = start; i < _messages.Count; i++)
-            sb.Append(FormatLine(_messages[i].Line, _messages[i].Time)).Append('\n');
+            sb.Append(FormatLine(_messages[i].Line, _messages[i].Time, _messages[i].System)).Append('\n');
         _log.Text = sb.ToString();
     }
 
-    private static string FormatLine(ChatLine line, string time)
+    private static string FormatLine(ChatLine line, string time, bool system)
     {
         string stamp = $"[color=#7a8088]{time}[/color]";
+        // System lines (slash-command output): a muted diamond-prefixed note, no team-name coloring.
+        if (system)
+            return $"{stamp} [color=#9aa0a6]◆ {Escape(line.Text)}[/color]";
         Color nameColor = line.FromTeam == 0 ? Team0 : Team1;
         string tag = line.Scope == 1 ? "[color=#9aa0a6]\\[team][/color] " : "";
         string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";

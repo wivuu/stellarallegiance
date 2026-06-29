@@ -1,0 +1,94 @@
+# Hulls — the playable ships + the escape pod. Flight stats derive onto the runtime ShipClassDef:
+#   mass→mass, speed→max-speed, thrust→accel, max-turn-rates→rate-*-deg, armor-hit-points→max-hull,
+#   strafe/reverse-thrust-multiplier→side/back-mult. class-id, drift-*-deg, ab-*, and hardpoints are
+#   explicit runtime extensions. Numbers reproduce server/Content/stock.yaml exactly.
+hulls:
+  # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
+  - id: scout
+    name: Scout
+    class-id: 0
+    mass: 40
+    speed: 160
+    thrust: 30
+    max-turn-rates: { yaw: 50, pitch: 50, roll: 50 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.25
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 60
+    price: 100
+    required-capabilities: [base]
+    hardpoints:
+      - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 0 }
+      - { kind: main-engine, off-z: -2.25, dir-z: -1 }
+
+  # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
+  - id: fighter
+    name: Fighter
+    class-id: 1
+    mass: 36
+    speed: 100
+    thrust: 25
+    max-turn-rates: { yaw: 60, pitch: 60, roll: 60 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-accel: 10
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 120
+    price: 200
+    required-capabilities: [base]
+    hardpoints:
+      - { kind: weapon, index: 0, off-x: -0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
+      - { kind: weapon, index: 1, off-x: 0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
+      - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
+      - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
+
+  # Bomber (class-id 2): the heavy hull — twin main engines; one slow, hard cannon.
+  - id: bomber
+    name: Bomber
+    class-id: 2
+    mass: 50
+    speed: 60
+    thrust: 15
+    max-turn-rates: { yaw: 20, pitch: 20, roll: 20 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 240
+    price: 350
+    required-capabilities: [base]
+    hardpoints:
+      - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 2 }
+      - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
+      - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
+
+  # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
+  - id: pod
+    name: Pod
+    class-id: 255
+    mass: 10
+    speed: 60
+    thrust: 15
+    max-turn-rates: { yaw: 40, pitch: 40, roll: 40 }
+    strafe-thrust-multiplier: 1.0
+    reverse-thrust-multiplier: 1.0
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 20
+    abilities: [is-lifepod, no-ripcord]
+    required-capabilities: [base]
+    hardpoints:
+      - { kind: main-engine, off-z: -2.25, dir-z: -1 }

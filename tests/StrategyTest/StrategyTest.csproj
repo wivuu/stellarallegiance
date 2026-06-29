@@ -7,16 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The loader/overlay + wire encoder live server-side (YamlDotNet is server-only); the shared
-         validator + def records come transitively. Referencing SimServer pulls its assembly only —
-         its Main is never invoked. -->
+    <!-- The sim + content loader live server-side; the Allegiance.Factions set types come
+         transitively. Referencing SimServer pulls its assembly only — its Main is never invoked. -->
     <ProjectReference Include="../../shared/Shared.csproj" />
     <ProjectReference Include="../../server/SimServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The stock bundle under test (canonical Allegiance.Factions format), copied next to the test
-         binary preserving the manifest/catalog/factions layout so CoreSerializer.Load resolves it. -->
+    <!-- The stock bundle under test, copied next to the test binary preserving the
+         manifest/catalog/factions layout so CoreSerializer.Load resolves it. -->
     <Content Include="../../server/content/factions/**/*.yaml" Link="content/factions/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

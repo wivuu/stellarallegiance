@@ -144,6 +144,14 @@ public partial class WorldRenderer : Node3D
 
     private byte? _localTeam;
 
+    // Latest per-team economy snapshot (credits/score) from MsgTeamState. Low-rate; read by the
+    // HUD credits readout and the chat slash-commands (/money, /score). Empty until the first frame.
+    private readonly Dictionary<byte, (int Credits, int Score)> _teamEconomy = new();
+
+    // Latest per-team unlocked-hull snapshot (ClassIds the team may build) from MsgTeamState. The
+    // spawn pre-check and the buy menu read it to gray out / suppress locked buys. Server-authoritative.
+    private readonly Dictionary<byte, HashSet<byte>> _teamUnlocks = new();
+
     // Scratch reused by EnemyShips()/FriendlyShips() so the per-frame marker pass allocates nothing.
     private readonly List<RemoteShip> _enemyScratch = new();
     private readonly List<RemoteShip> _friendlyScratch = new();
@@ -203,6 +211,50 @@ public partial class WorldRenderer : Node3D
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
+
+    // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
+    // base health). Read accessors return 0 for an unknown team so callers never need a null check.
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked)
+    {
+        _teamEconomy[team] = (credits, score);
+        if (!_teamUnlocks.TryGetValue(team, out var set))
+            _teamUnlocks[team] = set = new HashSet<byte>();
+        set.Clear();
+        foreach (byte cls in unlocked)
+            set.Add(cls);
+    }
+
+    public int TeamCredits(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Credits : 0;
+
+    public int TeamScore(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Score : 0;
+
+    // True once a MsgTeamState snapshot has arrived for this team. The spawn pre-check only suppresses
+    // a buy when we POSITIVELY know it's locked/unaffordable — before the first snapshot it defers to
+    // the server (credits read 0 when unknown, which must not be mistaken for "broke").
+    public bool HasTeamState(byte team) => _teamEconomy.ContainsKey(team);
+
+    // Whether this team may currently build the given hull ClassId (Stage-2 unlock gating). Meaningful
+    // only once HasTeamState(team) is true; the caller guards on that.
+    public bool TeamUnlocked(byte team, byte cls) =>
+        _teamUnlocks.TryGetValue(team, out var set) && set.Contains(cls);
+
+    // Client-side pre-flight for a spawn (the buy seam), mirroring the server's TryReserveSpawn gate.
+    // ONLY returns a positive block when the latest snapshot proves it, so a doomed buy isn't spammed;
+    // before the first snapshot (or for an unknown cost) it returns Allow and defers to the server's
+    // authoritative gate (the spawn-pending timeout backstops any race-reject). Cost = ShipClassDef.Cost.
+    public enum SpawnGate { Allow, Locked, TooPoor }
+
+    public SpawnGate CheckSpawnGate(byte team, byte cls)
+    {
+        if (!HasTeamState(team))
+            return SpawnGate.Allow; // no economy data yet — let the server decide
+        if (!TeamUnlocked(team, cls))
+            return SpawnGate.Locked;
+        int cost = _defs.TryGetShipDef(cls, out var d) ? d.Cost : 0;
+        if (TeamCredits(team) < cost)
+            return SpawnGate.TooPoor;
+        return SpawnGate.Allow;
+    }
 
     // Live enemy ship nodes (team != local team). Returns a shared scratch list — read
     // it immediately, don't retain it. Empty until the local team is known.

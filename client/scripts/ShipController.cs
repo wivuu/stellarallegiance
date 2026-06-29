@@ -61,6 +61,10 @@ public partial class ShipController : Node
     private ShipClass? _spawnRequest; // class chosen via HUD menu / 1-2 keys; cleared once flying
     private bool _spawnPending;
     private double _spawnRetry;
+
+    // Why the last buy was suppressed by the client pre-check (locked / can't afford), or null when
+    // the buy went through / none is pending. Read by Hud to surface a one-line hint near the menu.
+    public string? SpawnHint { get; private set; }
     private bool _perturbHeld; // edge-detect the P debug key
 
     // Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
@@ -222,14 +226,31 @@ public partial class ShipController : Node
         {
             _spawnPending = false;
             _spawnRequest = null;
+            SpawnHint = null;
         }
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {
-            // Spawn on the authoritative sim server (honored only while the match is Active;
-            // the request simply retries until then).
-            _net?.RequestSpawn((byte)cls);
-            _spawnPending = true;
-            _spawnRetry = 1.0;
+            // Stage-2 buy pre-check: don't spam a request the latest snapshot says will fail (locked
+            // hull / can't afford). The server stays authoritative; this only suppresses the doomed
+            // send and surfaces a reason. The request stays queued so it auto-fires once affordable
+            // (e.g. when the paycheck lands). Team pre-spawn comes from the Welcome assignment.
+            byte team = _world.LocalTeam ?? _net?.MyTeam ?? 0;
+            var gate = _world.CheckSpawnGate(team, (byte)cls);
+            if (gate == WorldRenderer.SpawnGate.Allow)
+            {
+                // Spawn on the authoritative sim server (honored only while the match is Active;
+                // the request simply retries until then).
+                _net?.RequestSpawn((byte)cls);
+                _spawnPending = true;
+                _spawnRetry = 1.0;
+                SpawnHint = null;
+            }
+            else
+            {
+                SpawnHint = gate == WorldRenderer.SpawnGate.Locked
+                    ? $"{cls} is locked"
+                    : $"Not enough credits for {cls}";
+            }
         }
 
         // Prediction. The prediction tick lives in SERVER-tick space and is kept a

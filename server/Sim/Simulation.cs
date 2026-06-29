@@ -17,6 +17,10 @@ public sealed partial class Simulation
     public const uint TickHz = 20;
     private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
+    // Stage-2 economy: every team gets a flat credit paycheck this often (1200 ticks = 1 min at 20 Hz).
+    // The amount per paycheck is the faction's authored income (Content.Start.IncomePerPaycheck).
+    public const uint PaycheckTicks = TickHz * 60;
+
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
     private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
@@ -221,6 +225,10 @@ public sealed partial class Simulation
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
 
+    // Set whenever per-team economy changed this step (paycheck accrued, economy (re)seeded), so
+    // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
+    public bool TeamStateChangedThisStep { get; private set; }
+
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
@@ -316,6 +324,7 @@ public sealed partial class Simulation
         DeathsThisStep.Clear();
         JustEnded = false;
         BasesChangedThisStep = false;
+        TeamStateChangedThisStep = false;
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -334,7 +343,10 @@ public sealed partial class Simulation
 
         ProcessRespawns(tick);
         if (Phase == PhaseActive)
+        {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+            AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+        }
         ResolveDueShots(tick);
         RebuildShipGrid();
 
@@ -525,6 +537,21 @@ public sealed partial class Simulation
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
+    // Stage-2 strategy spine: pay every team a flat credit paycheck on the paycheck cadence. Called
+    // only while the match is active (gated by the caller). The amount is the faction's authored
+    // income; a team with 0 income simply never gains credits. Server-only — no wire change yet.
+    private void AccrueTeamCredits(uint tick)
+    {
+        if (tick % PaycheckTicks != 0)
+            return;
+        int income = Content.Start.IncomePerPaycheck;
+        if (income == 0)
+            return;
+        foreach (var team in World.TeamStates.Values)
+            team.Credits += income;
+        TeamStateChangedThisStep = true;
+    }
+
     public void StartMatch()
     {
         if (Phase == PhaseActive)
@@ -536,7 +563,26 @@ public sealed partial class Simulation
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        // Fresh economy each match: reset every team to its starting credits + base unlocks.
+        World.SeedEconomy(Content.Start);
+        ResolveTeamUnlocks();
+        TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
+    }
+
+    // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,
+    // riding the library's forward-closure so it stays correct when Stage-4 grants techs mid-match).
+    // Runs at match start — Stage-2 teams don't gain techs mid-match and spawns only happen while
+    // Active. The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
+    private void ResolveTeamUnlocks()
+    {
+        foreach (var ts in World.TeamStates.Values)
+            ts.UnlockedClasses = Allegiance.Factions.Resolution.BuildableResolver
+                .GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities)
+                .OfType<Allegiance.Factions.Model.Hull>()
+                .Where(h => h.ClassId is not null)
+                .Select(h => h.ClassId!.Value)
+                .ToHashSet();
     }
 
     // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
@@ -662,8 +708,33 @@ public sealed partial class Simulation
                 continue; // disconnected
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
+            // Stage-2 economy gate: a locked or unaffordable buy is dropped (no ship, no charge,
+            // no reschedule). The client's spawn-pending retry times out and its pre-check stops it
+            // re-spamming a request it can predict will fail.
+            if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
+                continue;
             SpawnCombatShip(cid, info.team, info.cls, tick);
         }
+    }
+
+    public enum SpawnDecision { Allowed, Locked, TooPoor }
+
+    // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
+    // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
+    // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
+    // Authority is bootstrap-simple (any-player-spends / auto) — no commander.
+    public SpawnDecision TryReserveSpawn(byte team, byte cls)
+    {
+        if (!World.TeamStates.TryGetValue(team, out var ts))
+            return SpawnDecision.Locked;
+        if (!ts.UnlockedClasses.Contains(cls))
+            return SpawnDecision.Locked;
+        int cost = ShipDefs.TryGetValue(cls, out var d) ? d.Cost : 0;
+        if (ts.Credits < cost)
+            return SpawnDecision.TooPoor;
+        ts.Credits -= cost;
+        TeamStateChangedThisStep = true;
+        return SpawnDecision.Allowed;
     }
 
     // The input that drives a ship this tick: PIGs are server-brained, players (incl. their

@@ -39,13 +39,19 @@
       Link="assets\ships\%(Filename)%(Extension)"
       CopyToOutputDirectory="PreserveNewest"
     />
-    <!-- Stage-1 content pipeline: ship the AUTHORITATIVE content bundle next to the binary. The
-         server loads content/stock.yaml at boot (content is YAML, never hardcoded); content/CONTENT_PATH
-         overrides the location with a different bundle. -->
-    <Content Include="content\*.yaml" Link="content\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Stage-1 content pipeline (canonical Allegiance.Factions format): ship the AUTHORITATIVE
+         content bundle next to the binary, preserving the manifest/catalog/factions layout. The
+         server loads content/factions/core.manifest.yaml at boot (content is YAML, never hardcoded);
+         the content/CONTENT_PATH override points at a different bundle manifest. -->
+    <Content Include="content\factions\**\*.yaml" Link="content\factions\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />
+    <!-- Stage-1 PIVOT: the in-repo Allegiance.Factions library is the canonical content model
+         (factions/tech tree/ship catalog). Server-only — it pulls YamlDotNet (already referenced
+         here), and its output projects to the existing shared/ def records, so shared/client/wasm
+         never reference it. See .PLAN/STAGE-1-2-PHASES.md. -->
+    <ProjectReference Include="../factions/src/Allegiance.Factions/Allegiance.Factions.csproj" />
     <!-- Pure-managed WebRTC (DataChannels) for the NAT-traversal transport. The same library
          runs on the Godot client and (optionally) simbot, so the offerer/answerer interop on one
          codebase. WebSocket stays the direct/LAN transport; WebRTC is the public-lobby path. -->

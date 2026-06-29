@@ -1,0 +1,28 @@
+# Weapons — the cannons. dispersion→WeaponDef.spread-rad; damage/speed/radius come from the
+# referenced projectile. weapon-id (referenced by hull hardpoints) and the tick-domain ballistics
+# (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions. Reproduces stock.yaml.
+weapons:
+  - id: scout-cannon
+    name: Scout Cannon
+    weapon-id: 0
+    dispersion: 0.006
+    fire-interval-ticks: 4
+    projectile-life-ticks: 16
+    projectile-id: scout-bolt
+    required-capabilities: [base]
+  - id: fighter-cannon
+    name: Fighter Cannon
+    weapon-id: 1
+    dispersion: 0.035
+    fire-interval-ticks: 4
+    projectile-life-ticks: 16
+    projectile-id: fighter-bolt
+    required-capabilities: [base]
+  - id: bomber-cannon
+    name: Bomber Cannon
+    weapon-id: 2
+    dispersion: 0.012
+    fire-interval-ticks: 14
+    projectile-life-ticks: 16
+    projectile-id: bomber-bolt
+    required-capabilities: [base]

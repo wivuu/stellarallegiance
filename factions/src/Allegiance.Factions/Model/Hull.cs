@@ -55,4 +55,25 @@ public record Hull : Buildable
     public Dictionary<EquipmentSlot, List<string>> AllowedParts { get; set; } = new();
 
     public List<HullAbility> Abilities { get; set; } = new();
+
+    // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------
+
+    /// <summary>
+    /// Stable wire class id for this hull as a playable ship (Scout 0 / Fighter 1 / Bomber 2 /
+    /// Pod 255). Null = not a runtime-playable hull. The game's <c>ShipClass</c> enum + content id
+    /// constants depend on these exact bytes, so they are authored explicitly (not derived).
+    /// </summary>
+    public byte? ClassId { get; set; }
+
+    /// <summary>Drift (turn-rate slop) knobs the game's flight model needs; no clean Core source.</summary>
+    public double DriftYawDeg { get; set; }
+    public double DriftPitchDeg { get; set; }
+
+    /// <summary>Afterburner flight knobs (extra accel + spool on/off rates); no clean Core source.</summary>
+    public double AbAccel { get; set; }
+    public double AbOnRate { get; set; }
+    public double AbOffRate { get; set; }
+
+    /// <summary>Local-space mount points (weapon muzzles, engine nozzles, lights) the client renders from.</summary>
+    public List<Hardpoint> Hardpoints { get; set; } = new();
 }

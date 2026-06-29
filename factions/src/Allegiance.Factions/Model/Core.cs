@@ -33,6 +33,12 @@ public record Core
 
     public List<Faction> Factions { get; set; } = [];
 
+    /// <summary>
+    /// StellarAllegiance runtime extension: world-scale map-seeding knobs (see RuntimeData.cs).
+    /// Optional / omit-when-null so the library's own sample-data is unaffected.
+    /// </summary>
+    public WorldConfig? World { get; set; }
+
     /// <summary>Every mountable part across all part collections.</summary>
     public IEnumerable<Part> AllParts() =>
         Weapons.Cast<Part>()
@@ -62,6 +68,8 @@ public record Core
     {
         if (other.Version is not null)
             Version ??= other.Version;
+
+        World ??= other.World;
 
         Techs.AddRange(other.Techs);
         Hulls.AddRange(other.Hulls);
