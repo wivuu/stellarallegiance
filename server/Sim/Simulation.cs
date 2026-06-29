@@ -17,9 +17,9 @@ public sealed partial class Simulation
     public const uint TickHz = 20;
     private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
-    // Stage-2 economy: every team gets a flat credit paycheck this often (20 ticks = 1 s at 20 Hz).
+    // Stage-2 economy: every team gets a flat credit paycheck this often (1200 ticks = 1 min at 20 Hz).
     // The amount per paycheck is the faction's authored income (Content.Start.IncomePerPaycheck).
-    public const uint PaycheckTicks = 20;
+    public const uint PaycheckTicks = TickHz * 60;
 
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile

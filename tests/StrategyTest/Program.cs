@@ -67,7 +67,7 @@ Check(world.TeamStates[0].Credits == 1000 && !world.TeamStates[0].OwnedCapabilit
 
 uint before = sim.Tick;
 int creditsBefore = world.TeamStates[0].Credits;
-const int activeSteps = 45; // span > 2 paycheck windows to prove cadence, not alignment
+int activeSteps = 2 * (int)Simulation.PaycheckTicks + 50; // span > 2 paycheck windows to prove cadence, not alignment
 for (int i = 0; i < activeSteps; i++)
     sim.Step();
 uint after = sim.Tick;

@@ -4,7 +4,7 @@
 # buildable.
 #
 # Economy (Stage-2, tunable): each team starts a match with bonus-money credits and earns income-money
-# credits per paycheck (every Simulation.PaycheckTicks = 20 ticks = 1 s). So: start 1000, +100/s.
+# credits per paycheck (every Simulation.PaycheckTicks = 1200 ticks = 1 min at 20 Hz). So: start 1000, +100/min.
 id: stock
 name: Stock
 base-capabilities: [base]

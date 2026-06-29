@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782692460.0876365,
-    "ast_hash": "e40dadad0bef5dc35670e46bad50d7ea",
+    "mtime": 1782692944.0050137,
+    "ast_hash": "2de26cc9f582446a9bb9c429e139ad3d",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
@@ -6565,8 +6565,8 @@
     "semantic_hash": ""
   },
   "server/Content/factions/factions/stock.yaml": {
-    "mtime": 1782686398.908035,
-    "ast_hash": "36dccc8bfce051009cc71ca3782ead10",
+    "mtime": 1782692968.4564886,
+    "ast_hash": "19a175cb4eb64ab5fb7e9c583941cd00",
     "semantic_hash": ""
   },
   "server/Content/factions/hulls.yaml": {
@@ -6605,8 +6605,8 @@
     "semantic_hash": ""
   },
   "tests/StrategyTest/Program.cs": {
-    "mtime": 1782692505.8178837,
-    "ast_hash": "99fb55bc861d596d79ff3ba185e3e506",
+    "mtime": 1782692950.3868303,
+    "ast_hash": "c28d4c97e154c06c9094bec4bcb32770",
     "semantic_hash": ""
   },
   "tests/StrategyTest/StrategyTest.csproj": {
