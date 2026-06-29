@@ -14,6 +14,7 @@ public partial class Hud : CanvasLayer
     private Label _sectorShips = null!;
     private Label _credits = null!;
     private Control _menu = null!;
+    private Label _spawnHint = null!;
     private Label _warning = null!;
 
     // Previous-frame visibility, so UI sounds fire once on the transition (the spawn
@@ -71,6 +72,13 @@ public partial class Hud : CanvasLayer
         _menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
         _menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
         _menu.AddChild(SpawnButton("Spawn Bomber  [3]  — heavy & ponderous", ShipClass.Bomber));
+
+        // One-line feedback when a buy is suppressed by the client pre-check (locked / can't afford).
+        // The full def-driven gray-out lives in Phase 6; this just tells the player why nothing spawned.
+        _spawnHint = new Label { Position = new Vector2(16, 200), Visible = false };
+        _spawnHint.AddThemeFontSizeOverride("font_size", 16);
+        _spawnHint.AddThemeColorOverride("font_color", new Color(1f, 0.5f, 0.4f));
+        AddChild(_spawnHint);
 
         // Out-of-bounds warning (sector boundary): centered in the upper third, hidden
         // until the local ship strays past its sector radius and starts taking damage.
@@ -136,6 +144,12 @@ public partial class Hud : CanvasLayer
         _credits.Visible = inMatch;
         if (inMatch)
             _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? 0)}";
+
+        // Buy feedback: only while the spawn menu is up, and only when the pre-check flagged a reason.
+        string? hint = _menu.Visible ? _ship.SpawnHint : null;
+        _spawnHint.Visible = hint != null;
+        if (hint != null)
+            _spawnHint.Text = hint;
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.

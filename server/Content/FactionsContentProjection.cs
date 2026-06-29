@@ -46,7 +46,7 @@ public static class FactionsContentProjection
 
         var start = ProjectFactionStart(core);
 
-        return new ContentSet(ships, weapons, bases, world, start);
+        return new ContentSet(ships, weapons, bases, world, start, core);
     }
 
     // Stage-2: the single stock faction's per-match starting state (credits/income + tech/capability

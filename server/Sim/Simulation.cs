@@ -565,8 +565,24 @@ public sealed partial class Simulation
             ring.Clear();
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
+        ResolveTeamUnlocks();
         TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
+    }
+
+    // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,
+    // riding the library's forward-closure so it stays correct when Stage-4 grants techs mid-match).
+    // Runs at match start — Stage-2 teams don't gain techs mid-match and spawns only happen while
+    // Active. The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
+    private void ResolveTeamUnlocks()
+    {
+        foreach (var ts in World.TeamStates.Values)
+            ts.UnlockedClasses = Allegiance.Factions.Resolution.BuildableResolver
+                .GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities)
+                .OfType<Allegiance.Factions.Model.Hull>()
+                .Where(h => h.ClassId is not null)
+                .Select(h => h.ClassId!.Value)
+                .ToHashSet();
     }
 
     // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
@@ -692,8 +708,33 @@ public sealed partial class Simulation
                 continue; // disconnected
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
+            // Stage-2 economy gate: a locked or unaffordable buy is dropped (no ship, no charge,
+            // no reschedule). The client's spawn-pending retry times out and its pre-check stops it
+            // re-spamming a request it can predict will fail.
+            if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
+                continue;
             SpawnCombatShip(cid, info.team, info.cls, tick);
         }
+    }
+
+    public enum SpawnDecision { Allowed, Locked, TooPoor }
+
+    // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
+    // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
+    // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
+    // Authority is bootstrap-simple (any-player-spends / auto) — no commander.
+    public SpawnDecision TryReserveSpawn(byte team, byte cls)
+    {
+        if (!World.TeamStates.TryGetValue(team, out var ts))
+            return SpawnDecision.Locked;
+        if (!ts.UnlockedClasses.Contains(cls))
+            return SpawnDecision.Locked;
+        int cost = ShipDefs.TryGetValue(cls, out var d) ? d.Cost : 0;
+        if (ts.Credits < cost)
+            return SpawnDecision.TooPoor;
+        ts.Credits -= cost;
+        TeamStateChangedThisStep = true;
+        return SpawnDecision.Allowed;
     }
 
     // The input that drives a ship this tick: PIGs are server-brained, players (incl. their

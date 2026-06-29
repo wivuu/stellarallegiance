@@ -8,7 +8,7 @@
 > (Phases 0–2) being complete. Mark status inline as you go: `☐` not started · `◐` in progress ·
 > `✅` done, and update the status line below. Run `graphify update .` after any code change.
 >
-> **Status:** ✅ P0 · ✅ P1 · ✅ P2 · ✅ P3 · ✅ P4 · ☐ P5 · ☐ P6
+> **Status:** ✅ P0 · ✅ P1 · ✅ P2 · ✅ P3 · ✅ P4 · ✅ P5 · ☐ P6
 
 ---
 

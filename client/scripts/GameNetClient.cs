@@ -509,13 +509,17 @@ public partial class GameNetClient : Node
             byte team = r.ReadByte();
             int credits = r.ReadInt32();
             int score = r.ReadInt32();
-            _world.NetUpdateTeamState(team, credits, score);
+            byte nUnlocked = r.ReadByte();
+            var unlocked = new byte[nUnlocked];
+            for (int j = 0; j < nUnlocked; j++)
+                unlocked[j] = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked);
         }
     }
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
-    public const byte ProtocolVersion = 10;
+    public const byte ProtocolVersion = 11;
 
     private void ApplyWelcome(BinaryReader r)
     {

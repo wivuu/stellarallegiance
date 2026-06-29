@@ -45,8 +45,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1782688246.6608531,
-    "ast_hash": "f457076b98e0e8ff847ec99e7c572606",
+    "mtime": 1782692431.6240501,
+    "ast_hash": "cd2feb217d72c206f404ba0450172b26",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1782650578.8452637,
-    "ast_hash": "4a323886349f7a5ca0f43ebca095ce9c",
+    "mtime": 1782692406.715455,
+    "ast_hash": "a40b873708981bc805578fa1a9adb91a",
     "semantic_hash": ""
   },
   "client/scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782688226.798851,
-    "ast_hash": "ccbcbd9d02be8ca9add632a09e8a2673",
+    "mtime": 1782692386.8410966,
+    "ast_hash": "d232505213cccf58d2125f7df0160fab",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -215,8 +215,8 @@
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1782688134.7806275,
-    "ast_hash": "722bfcbbbbe5e0c7452074dd36345d36",
+    "mtime": 1782692261.588529,
+    "ast_hash": "4a69652dd90c2bc33849373f4b5b236b",
     "semantic_hash": ""
   },
   "server/Program.cs": {
@@ -225,13 +225,13 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782688165.0214784,
-    "ast_hash": "544a8516c9285c9ec6674b4366e5b2e5",
+    "mtime": 1782692460.0876365,
+    "ast_hash": "e40dadad0bef5dc35670e46bad50d7ea",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782686417.1076136,
-    "ast_hash": "ac16a56b15caec2fe077b83aef287830",
+    "mtime": 1782692185.7414927,
+    "ast_hash": "2096a0bf8d9f394772a08eadb06c2e8e",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782688214.4917233,
-    "ast_hash": "ad22e3fd2ab889e40d26a9d5463f61e6",
+    "mtime": 1782692274.755562,
+    "ast_hash": "3f9f7228eb98714c3a4985cce51720d3",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {
@@ -6470,8 +6470,8 @@
     "semantic_hash": ""
   },
   "server/Content/ContentSet.cs": {
-    "mtime": 1782686272.6415598,
-    "ast_hash": "5a48890b347476515eb32c341824d6b3",
+    "mtime": 1782692161.431167,
+    "ast_hash": "9ab2b7fc9bdaf0f0d69f9771dc834689",
     "semantic_hash": ""
   },
   "shared/ContentValidator.cs": {
@@ -6595,8 +6595,8 @@
     "semantic_hash": ""
   },
   "server/Content/FactionsContentProjection.cs": {
-    "mtime": 1782688115.1686525,
-    "ast_hash": "8c437519cb508df74dc8d4e7162d5629",
+    "mtime": 1782692165.908404,
+    "ast_hash": "2cece8d7ba775a5cafec8d03d908fa15",
     "semantic_hash": ""
   },
   "server/Content/FactionStart.cs": {
@@ -6605,8 +6605,8 @@
     "semantic_hash": ""
   },
   "tests/StrategyTest/Program.cs": {
-    "mtime": 1782686489.5452754,
-    "ast_hash": "85180c8c9edf67f5969ca4fdb8b8e84e",
+    "mtime": 1782692505.8178837,
+    "ast_hash": "99fb55bc861d596d79ff3ba185e3e506",
     "semantic_hash": ""
   },
   "tests/StrategyTest/StrategyTest.csproj": {

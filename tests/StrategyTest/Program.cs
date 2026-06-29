@@ -81,5 +81,36 @@ Check(world.TeamStates[0].Credits == expectedCredits,
     $"team 0 credits wrong: got {world.TeamStates[0].Credits}, want {expectedCredits}");
 Check(world.TeamStates[1].Credits == expectedCredits, "both teams accrue identically", $"team 1 credits {world.TeamStates[1].Credits} != team 0 {world.TeamStates[0].Credits}");
 
+// ---- 5. Unlock resolution (Phase 5): StartMatch resolves each team's buildable hulls. ----
+// The stock faction owns the `base` capability, which all three combat hulls require, so the seeded
+// team unlocks Scout/Fighter/Bomber (ClassIds 0/1/2). (StartMatch was already called above.)
+var unlocked = world.TeamStates[0].UnlockedClasses;
+Check(unlocked.Contains(0) && unlocked.Contains(1) && unlocked.Contains(2),
+    "StartMatch unlocks all three stock combat hulls (ClassId 0/1/2) for the seeded team",
+    $"unlocked set missing a combat hull: [{string.Join(",", unlocked)}]");
+
+// ---- 6. Spawn gate + charge (Phase 5): TryReserveSpawn enforces unlock + cost and deducts. ----
+int scoutCost = content.Ships.First(s => s.ClassId == 0).Cost;
+int bomberCost = content.Ships.First(s => s.ClassId == 2).Cost;
+Check(scoutCost > 0 && bomberCost > scoutCost, $"stock hull costs are sane (scout {scoutCost} < bomber {bomberCost})", "hull costs not authored as expected");
+
+// accept + deduct: an affordable, unlocked hull spawns and deducts exactly its cost.
+world.TeamStates[0].Credits = 1000;
+var accept = sim.TryReserveSpawn(0, 0);
+Check(accept == Simulation.SpawnDecision.Allowed, "affordable unlocked Scout buy is Allowed", $"Scout buy not allowed ({accept})");
+Check(world.TeamStates[0].Credits == 1000 - scoutCost, $"Scout buy deducts exactly its cost (1000 -> {1000 - scoutCost})", $"Scout deduct wrong: {world.TeamStates[0].Credits}");
+
+// reject-locked: a hull not in the unlocked set is refused, no charge.
+int beforeLocked = world.TeamStates[0].Credits;
+var locked = sim.TryReserveSpawn(0, 99); // ClassId 99 is no stock hull → never unlocked
+Check(locked == Simulation.SpawnDecision.Locked, "locked hull buy is rejected (Locked)", $"locked buy not rejected ({locked})");
+Check(world.TeamStates[0].Credits == beforeLocked, "a locked rejection deducts nothing", $"credits changed on locked reject: {world.TeamStates[0].Credits}");
+
+// reject-poor: an unlocked hull the team can't afford is refused, no charge.
+world.TeamStates[0].Credits = bomberCost - 1;
+var poor = sim.TryReserveSpawn(0, 2);
+Check(poor == Simulation.SpawnDecision.TooPoor, "unaffordable Bomber buy is rejected (TooPoor)", $"poor buy not rejected ({poor})");
+Check(world.TeamStates[0].Credits == bomberCost - 1, "a too-poor rejection deducts nothing", $"credits changed on poor reject: {world.TeamStates[0].Credits}");
+
 Console.WriteLine(failures == 0 ? "\nALL STRATEGY TESTS PASSED" : $"\n{failures} STRATEGY TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

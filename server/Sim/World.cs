@@ -87,6 +87,12 @@ public sealed class World
         public int Score; // placeholder (no scoring logic yet — wired to the client in Phase 4)
         public TechSet OwnedTechs = new();
         public CapabilitySet OwnedCapabilities = new();
+
+        // Hull ClassIds this team may currently build, resolved from OwnedTechs/OwnedCapabilities via
+        // BuildableResolver (Simulation.ResolveTeamUnlocks, refreshed at match start). The spawn gate
+        // checks membership here; the wire snapshot (Protocol.BuildTeamState) streams it so the client
+        // can predict locks and gray out the buy menu.
+        public HashSet<byte> UnlockedClasses = new();
     }
 
     // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot

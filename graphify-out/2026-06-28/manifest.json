@@ -10,8 +10,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
-    "mtime": 1782524272.0365367,
-    "ast_hash": "abda1a640112ea5fa553c45c09d9bc25",
+    "mtime": 1782688308.4990458,
+    "ast_hash": "3b1992ddd2b6c7d5ee8b0b804e9aece0",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
@@ -45,8 +45,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1782524272.0390728,
-    "ast_hash": "8c56dd659d8fced0bdaa51a60a0ee0e8",
+    "mtime": 1782688246.6608531,
+    "ast_hash": "f457076b98e0e8ff847ec99e7c572606",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782680394.0133934,
-    "ast_hash": "f4df07746f840e65d8dfb961c4bf3f76",
+    "mtime": 1782688226.798851,
+    "ast_hash": "ccbcbd9d02be8ca9add632a09e8a2673",
     "semantic_hash": ""
   },
   "client/wivuullegiance.csproj": {
@@ -210,13 +210,13 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1782680394.043554,
-    "ast_hash": "f1483df84ccae361497998690d5283c3",
+    "mtime": 1782688183.8666723,
+    "ast_hash": "81e138391f83bfbb751590de89dec259",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1782680394.0440125,
-    "ast_hash": "6912183151c751c19c332d3b4562b55d",
+    "mtime": 1782688134.7806275,
+    "ast_hash": "722bfcbbbbe5e0c7452074dd36345d36",
     "semantic_hash": ""
   },
   "server/Program.cs": {
@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782686389.5650067,
-    "ast_hash": "d2e57c3e3a582e5410e5f0fbd5a12fdc",
+    "mtime": 1782688165.0214784,
+    "ast_hash": "544a8516c9285c9ec6674b4366e5b2e5",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782680394.0131273,
-    "ast_hash": "4c5dbcf8ba8b266c0bdc742d923951c2",
+    "mtime": 1782688214.4917233,
+    "ast_hash": "ad22e3fd2ab889e40d26a9d5463f61e6",
     "semantic_hash": ""
   },
   "shared/JoinTokens.cs": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "shared/Defs.cs": {
-    "mtime": 1782680394.0465152,
-    "ast_hash": "db0d0223585ebfc01c3968da5864d0c9",
+    "mtime": 1782688112.8265195,
+    "ast_hash": "7f019a2b07b413e9456a25c6f7de2e3c",
     "semantic_hash": ""
   },
   "client/scripts/SectorOverview.cs": {
@@ -6485,8 +6485,8 @@
     "semantic_hash": ""
   },
   "tests/ContentTest/Program.cs": {
-    "mtime": 1782683513.3640525,
-    "ast_hash": "d232607c59389027dd2d66a4328ab997",
+    "mtime": 1782688663.8282533,
+    "ast_hash": "4752e70db7063dfe762b309755985a5e",
     "semantic_hash": ""
   },
   "factions/sample-data/core.manifest.yaml": {
@@ -6570,8 +6570,8 @@
     "semantic_hash": ""
   },
   "server/Content/factions/hulls.yaml": {
-    "mtime": 1782684804.178018,
-    "ast_hash": "21d8dfc79c255b99e2599e9a20b2484d",
+    "mtime": 1782688613.046819,
+    "ast_hash": "1f7f73a5df610232c4292056fd9570b1",
     "semantic_hash": ""
   },
   "server/Content/factions/projectiles.yaml": {
@@ -6595,8 +6595,8 @@
     "semantic_hash": ""
   },
   "server/Content/FactionsContentProjection.cs": {
-    "mtime": 1782686279.7747357,
-    "ast_hash": "598f227499da76fa3269dc2adbd09025",
+    "mtime": 1782688115.1686525,
+    "ast_hash": "8c437519cb508df74dc8d4e7162d5629",
     "semantic_hash": ""
   },
   "server/Content/FactionStart.cs": {
