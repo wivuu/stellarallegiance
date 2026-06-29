@@ -10,12 +10,20 @@ public partial class Hud : CanvasLayer
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
     private ShipController _ship = null!;
+    private GameNetClient _net = null!;
+    private DefRegistry _defs = null!;
     private Label _label = null!;
     private Label _sectorShips = null!;
     private Label _credits = null!;
-    private Control _menu = null!;
+    private VBoxContainer _menu = null!;
     private Label _spawnHint = null!;
     private Label _warning = null!;
+
+    // The buy-menu buttons, rebuilt from the streamed ship defs once they arrive (BuildSpawnMenu).
+    // Each carries its ClassId so _Process can refresh price/affordability/lock state per frame. The
+    // count of buttons currently built, so the menu only rebuilds when the buildable set changes.
+    private readonly System.Collections.Generic.List<(byte classId, Button button)> _spawnButtons = new();
+    private int _builtShipCount = -1;
 
     // Previous-frame visibility, so UI sounds fire once on the transition (the spawn
     // menu opening/closing, the sector warning first appearing) rather than every frame.
@@ -27,6 +35,8 @@ public partial class Hud : CanvasLayer
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         _ship = GetNode<ShipController>("../ShipController");
+        _net = GetNode<GameNetClient>("../GameNetClient");
+        _defs = GetNode<DefRegistry>("../DefRegistry");
 
         // Sun lens flare (added first so it sits UNDER every HUD element while still drawing over
         // the 3D viewport — it's a light effect on the sky, not a readout).
@@ -66,15 +76,14 @@ public partial class Hud : CanvasLayer
         _credits.AddThemeColorOverride("font_color", new Color(1f, 0.86f, 0.4f));
         AddChild(_credits);
 
-        // Spawn menu: one button per class, shown only when the player has no ship.
+        // Buy menu: one button per buildable ship class, built lazily from the streamed defs once they
+        // arrive (BuildSpawnMenu, driven from _Process) and refreshed each frame for price/balance/lock
+        // state. Shown only when the player has no ship. The 1/2/3 keys still spawn the first three.
         _menu = new VBoxContainer { Position = new Vector2(16, 90) };
         AddChild(_menu);
-        _menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
-        _menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
-        _menu.AddChild(SpawnButton("Spawn Bomber  [3]  — heavy & ponderous", ShipClass.Bomber));
 
         // One-line feedback when a buy is suppressed by the client pre-check (locked / can't afford).
-        // The full def-driven gray-out lives in Phase 6; this just tells the player why nothing spawned.
+        // The buttons gray out the unaffordable/locked options; this names the reason for a queued buy.
         _spawnHint = new Label { Position = new Vector2(16, 200), Visible = false };
         _spawnHint.AddThemeFontSizeOverride("font_size", 16);
         _spawnHint.AddThemeColorOverride("font_color", new Color(1f, 0.5f, 0.4f));
@@ -112,12 +121,42 @@ public partial class Hud : CanvasLayer
         conn.Init(_cm);
     }
 
-    private Button SpawnButton(string text, ShipClass cls)
+    // Rebuild the buy menu from the current ship defs — one button per buildable hull, in ClassId order.
+    // Called once the defs arrive (and again if the buildable set changes); per-frame price/lock state
+    // is applied in RefreshSpawnButtons. Reuses the Lobby.MakeButton click+sfx pattern.
+    private void BuildSpawnMenu(System.Collections.Generic.IReadOnlyList<StellarAllegiance.Shared.ShipClassDef> ships)
     {
-        var b = new Button { Text = text, CustomMinimumSize = new Vector2(280, 36) };
-        b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
-        b.Pressed += () => _ship.RequestSpawn(cls);
-        return b;
+        foreach (var child in _menu.GetChildren())
+            child.QueueFree();
+        _spawnButtons.Clear();
+        foreach (var def in ships)
+        {
+            byte classId = def.ClassId;
+            var b = new Button { CustomMinimumSize = new Vector2(300, 36) };
+            b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+            b.Pressed += () => _ship.RequestSpawn((ShipClass)classId);
+            _menu.AddChild(b);
+            _spawnButtons.Add((classId, b));
+        }
+    }
+
+    // Per-frame buy-menu state: each button shows "Spawn <name>  [hotkey] — <cost> credits" and grays
+    // out (Disabled) when the team can't afford it or the hull is locked — mirroring the server's spawn
+    // gate via WorldRenderer.CheckSpawnGate. Team pre-spawn = the lobby/Welcome assignment (LocalTeam is
+    // null until a ship exists), matching ShipController's gate path so the menu agrees with the server.
+    private void RefreshSpawnButtons()
+    {
+        byte team = _world.LocalTeam ?? _net.MyTeam;
+        foreach (var (classId, button) in _spawnButtons)
+        {
+            if (!_defs.TryGetShipDef(classId, out var def))
+                continue;
+            var gate = _world.CheckSpawnGate(team, classId);
+            button.Disabled = gate != WorldRenderer.SpawnGate.Allow;
+            string hotkey = classId < 3 ? $"  [{classId + 1}]" : "";
+            string suffix = gate == WorldRenderer.SpawnGate.Locked ? "   (locked)" : "";
+            button.Text = $"Spawn {def.Name}{hotkey} — {def.Cost} credits{suffix}";
+        }
     }
 
     public override void _Process(double delta)
@@ -136,14 +175,29 @@ public partial class Hud : CanvasLayer
             SfxManager.Instance?.PlayUi(_menu.Visible ? SfxManager.SfxId.MenuOpen : SfxManager.SfxId.MenuClose);
             _menuWasVisible = _menu.Visible;
         }
+
+        // Buy menu, built from the streamed defs (they arrive once, after Welcome). Rebuild when the
+        // buildable set changes; refresh price/balance/lock state each frame the menu is up.
+        if (_menu.Visible)
+        {
+            var ships = _defs.BuildableShips();
+            if (ships.Count != _builtShipCount)
+            {
+                BuildSpawnMenu(ships);
+                _builtShipCount = ships.Count;
+            }
+            RefreshSpawnButtons();
+        }
+
         _sectorShips.Visible = inMatch;
         if (inMatch)
             _sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
 
-        // Running team balance (server-authoritative; accrues on the paycheck cadence).
+        // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
+        // source as the buy menu so the balance shown matches what gates the buttons.
         _credits.Visible = inMatch;
         if (inMatch)
-            _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? 0)}";
+            _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
 
         // Buy feedback: only while the spawn menu is up, and only when the pre-check flagged a reason.
         string? hint = _menu.Visible ? _ship.SpawnHint : null;

@@ -105,7 +105,7 @@ everything downstream is authored as data + a behavior module rather than rebuil
 - ☐ *Deferred:* lift sim-only tuning constants (`LaunchSpeed`, `DockRadiusFrac`, pod-eject params)
   into the tuning config *when they need runtime tuning* (folds into Stage 1's YAML).
 
-### Stage 1 — Content pipeline (YAML authoring + per-server override)
+### Stage 1 — Content pipeline (YAML authoring + per-server override) — ✅ DONE (2026-06-28)
 
 Make all content editable data the server loads, not C# — the substrate for every later def
 (weapons, costs, factions, tech, mechanics knobs). Reuses the existing def→`MsgDefs`→client path
@@ -129,45 +129,56 @@ Make all content editable data the server loads, not C# — the substrate for ev
   clear error and a refuse-to-start (the client has no fallback). `tests/ContentTest` loads the bundle,
   validates it, spot-checks the loader, and asserts deterministic wire defs; `tests/FlightModelTest`
   is now a pure flight-model determinism guard (its golden uses inline stat fixtures).
-- ☐ **PIVOT — adopt `Allegiance.Factions` as the canonical content model** *(in progress)*. The
-  bespoke `ContentLoader`/`ContentSet`/`ContentValidator` above shipped as a working **v1**, but the
-  through-line is to make the in-repo `Allegiance.Factions` library (`factions/`) the **source of
-  the configuration mechanism itself**, not a dormant Stage-2/4 substrate. Concretely:
-  - **Author content as a factions `Core` bundle** — manifest split (shared catalog fragments +
-    `factions/*.yaml`) with the library's checked-in **JSON schemas** for editor validation/
-    autocomplete, replacing the single `stock.yaml`.
-  - **Load + validate with the library's own machinery** — `CoreSerializer.Load` and
-    `CoreValidator.Validate` (referential integrity), instead of the bespoke loader/validator.
-  - **Project `Core` → runtime defs** — a thin server-side projection maps `Hull`/`Part`/`Station`
-    buildables (+ world config) onto the existing `ShipClassDef`/`WeaponDef`/`BaseDef`/`WorldConfig`
-    records, so the **`MsgDefs` wire path and the determinism contract are unchanged** (no client
-    change). The projection owns the runtime-only data the def records need — **hardpoint geometry
-    and the 13 flight f32s** — so the `Hull`/`Part` model is extended with those fields where the
-    runtime requires them (keeping `Core` the single authored source).
-  - **One data layer, no second migration** — the same `Core` then feeds Stage 2's unlock gating
-    (`TechSet`/`Capability` forward-closure) and Stage 4's tech tree + factions for free, rather
-    than a parallel def schema that would later need reconciling.
-- *(The `Allegiance.Factions` library — `factions/`, formerly TMP_INCORPORATE — is in the solution
-  and **builds + tests green** (16/16). The pivot above promotes it from dormant substrate to the
-  Stage-1 content source; the v1 bespoke loader stays the live path until the projection lands.)*
+- ✅ **PIVOT — adopt `Allegiance.Factions` as the canonical content model** *(DONE 2026-06-28)*. The
+  bespoke v1 `ContentLoader`/`ContentSet`/`ContentValidator` is gone; the in-repo
+  `Allegiance.Factions` library (`factions/`) is now the **source of the configuration mechanism
+  itself**. The server boots from the factions bundle and projects it into the unchanged `MsgDefs`
+  wire path — in-game ships/weapons/base are byte-identical to pre-pivot and the **client is
+  untouched**. Concretely:
+  - ✅ **Author content as a factions `Core` bundle** — the single `stock.yaml` is replaced by a
+    manifest split under `server/content/factions/` (shared catalog fragments + `factions/stock.yaml`)
+    with the library's checked-in **JSON schemas** for editor validation/autocomplete. The schemas are
+    regenerated from the model via the library CLI.
+  - ✅ **Load + validate with the library's own machinery** — `ContentLoader` now calls
+    `CoreSerializer.Load` + `CoreValidator.Validate` (referential integrity, refuse-to-start on
+    error), then runs the existing shared `ContentValidator` on the projected defs as a second gate.
+  - ✅ **Project `Core` → runtime defs** — `server/Content/FactionsContentProjection.cs` maps
+    `Hull`/`Weapon`/`Station` buildables (+ world config) onto the existing
+    `ShipClassDef`/`WeaponDef`/`BaseDef`/`WorldConfig` records, so the **wire path and determinism
+    contract are unchanged**. The runtime-only data the records need — **hardpoint geometry, the 13
+    flight f32s, stable byte ids, tick-domain ballistics** — is carried by optional omit-when-default
+    fields added to the `Hull`/`Weapon`/`Station` model + a `Core`-level world-config record (the
+    library's 16 tests stay green; `sample-data` is unaffected).
+  - ✅ **One data layer, no second migration** — the same `Core` now feeds Stage 2's unlock gating
+    (`TechSet`/`Capability` forward-closure) below, and is ready for Stage 4's tech tree + factions,
+    rather than a parallel def schema that would later need reconciling.
 
-### Stage 2 — Thin strategy spine
+### Stage 2 — Thin strategy spine — ✅ DONE (2026-06-28)
 
 Cheap foundations that unblock economy, buying, and gating. Costs/unlocks are authored in the
 Stage-1 YAML. Build minimally; enrich in Stage 4.
 
-- ☐ **Per-team shared state** — a per-team container (today only base health, in `server/Sim/World.cs`)
-  to home credits, unlocked content, and score.
-- ☐ **Team credits + flat paycheck** — a per-team balance that accrues over time. The simplest
+- ✅ **Per-team shared state** — a per-team `TeamState` container in `server/Sim/World.cs` (keyed by
+  team byte, parallel to base health) homing `Credits`, `OwnedTechs`/`OwnedCapabilities` (seeded from
+  the stock faction's `BaseTechs`/`BaseCapabilities`), and `Score`.
+- ✅ **Team credits + flat paycheck** — a per-team balance that accrues on a fixed tick cadence
+  (`Faction.BonusMoney` at start + `Faction.IncomeMoney` rate), driven from the sim step. The simplest
   "money"; the real mining economy replaces the income source in Stage 4.
-- ☐ **Per-team unlock-set (def gating hook)** — defs filtered by what a team has unlocked. With the
-  Stage-1 pivot this rides the `Core` model's **`TechSet`/`Capability` forward-closure**
-  (`requiredTechs ⊆ ownedTechs` + required capabilities) — `BuildableResolver.GetBuildables` already
-  computes availability — rather than an ad-hoc `UnlockId`. The tech tree's *enforcement* mechanism,
-  in place before the tree UI exists.
-- ☐ **Buy menu** — extend the existing in-match spawn menu (`client/scripts/Hud.cs`): show cost +
-  team balance, gray out unaffordable/locked options. Reuse `Lobby.MakeButton()`.
-- ☐ **Authority: bootstrap-simple** — any-player-spends or auto; **no commander yet**.
+- ✅ **Per-team unlock-set (def gating hook)** — spawns are gated by the `Core` model's
+  **`TechSet`/`Capability` forward-closure** via `BuildableResolver.GetBuildables(core, ownedTechs,
+  ownedCapabilities)` (no ad-hoc `UnlockId`). The tech tree's *enforcement* mechanism, in place before
+  the tree UI exists.
+- ✅ **Server spawn-cost enforcement** — the `EnqueueJoin → ProcessRespawns → SpawnCombatShip` path
+  rejects a spawn whose hull is locked or unaffordable and deducts `Cost` on success
+  (server-authoritative); the client's pre-check (`WorldRenderer.CheckSpawnGate`) suppresses doomed
+  buys and surfaces the reason without hanging `_spawnPending`.
+- ✅ **Wire: per-team state + ship cost** — proto bumped 9→10; `ShipClassDef.Cost` rides `MsgDefs`,
+  and a low-rate `MsgTeamState` carries per-team `Credits`/`Score` + the unlocked-class snapshot to
+  the client (`WorldRenderer.NetUpdateTeamState`).
+- ✅ **Buy menu** — the in-match spawn menu (`client/scripts/Hud.cs`) is now def-driven
+  (`DefRegistry.BuildableShips`): one button per hull showing `Spawn <name> — <cost> credits`, grayed
+  out when unaffordable or locked, with a running team-credits readout. Reuses `Lobby.MakeButton()`.
+- ✅ **Authority: bootstrap-simple** — any-player-spends / auto; **no commander yet** (Stage 4).
 
 ### Stage 3 — Combat feel & depth
 

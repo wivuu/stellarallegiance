@@ -45,8 +45,8 @@
     "semantic_hash": ""
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1782692431.6240501,
-    "ast_hash": "cd2feb217d72c206f404ba0450172b26",
+    "mtime": 1782693239.524582,
+    "ast_hash": "c32404c0d59ec7ff3a4e20fa4e61a48d",
     "semantic_hash": ""
   },
   "client/scripts/Lobby.cs": {
@@ -195,8 +195,8 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "client/scripts/DefRegistry.cs": {
-    "mtime": 1782680394.0128994,
-    "ast_hash": "c7bc0d9bbdee7390a22cffd18ca7f455",
+    "mtime": 1782693145.5269055,
+    "ast_hash": "6d2bcaece6ccf6ab3f065867a5277039",
     "semantic_hash": ""
   },
   "client/scripts/ShipModelLoader.cs": {
