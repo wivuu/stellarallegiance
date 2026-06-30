@@ -5650,7 +5650,7 @@
       "source_file": "",
       "source_location": "",
       "id": "meshinstance3d",
-      "community": 157,
+      "community": 38,
       "norm_label": "meshinstance3d"
     },
     {
@@ -6460,7 +6460,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1",
       "id": "scripts_worldrenderer",
-      "community": 65,
+      "community": 1,
       "norm_label": "worldrenderer.cs"
     },
     {
@@ -6559,7 +6559,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L136",
       "id": "scripts_worldrenderer_worldrenderer_setviewsector",
-      "community": 65,
+      "community": 1,
       "norm_label": ".setviewsector()"
     },
     {
@@ -6730,7 +6730,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L294",
       "id": "client_scripts_worldrenderer_cs_vector3",
-      "community": 154,
+      "community": 38,
       "norm_label": "vector3"
     },
     {
@@ -6973,7 +6973,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L529",
       "id": "scripts_worldrenderer_worldrenderer_checkcollisions",
-      "community": 154,
+      "community": 1,
       "norm_label": ".checkcollisions()"
     },
     {
@@ -6982,7 +6982,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L555",
       "id": "scripts_worldrenderer_worldrenderer_shipteamof",
-      "community": 154,
+      "community": 1,
       "norm_label": ".shipteamof()"
     },
     {
@@ -6991,7 +6991,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L564",
       "id": "scripts_worldrenderer_worldrenderer_playcollisionsfx",
-      "community": 154,
+      "community": 1,
       "norm_label": ".playcollisionsfx()"
     },
     {
@@ -7045,7 +7045,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L654",
       "id": "scripts_worldrenderer_worldrenderer_findmeshinstance",
-      "community": 157,
+      "community": 38,
       "norm_label": ".findmeshinstance()"
     },
     {
@@ -7063,7 +7063,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L654",
       "id": "client_scripts_worldrenderer_cs_meshinstance3d",
-      "community": 157,
+      "community": 38,
       "norm_label": "meshinstance3d"
     },
     {
@@ -7144,7 +7144,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L953",
       "id": "scripts_worldrenderer_worldrenderer_spawnlocalbolt",
-      "community": 154,
+      "community": 38,
       "norm_label": ".spawnlocalbolt()"
     },
     {
@@ -7153,7 +7153,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L956",
       "id": "scripts_worldrenderer_worldrenderer_addbolt",
-      "community": 154,
+      "community": 38,
       "norm_label": ".addbolt()"
     },
     {
@@ -7171,7 +7171,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L994",
       "id": "scripts_worldrenderer_worldrenderer_clipboltttl",
-      "community": 154,
+      "community": 38,
       "norm_label": ".clipboltttl()"
     },
     {
@@ -7180,7 +7180,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1015",
       "id": "scripts_worldrenderer_worldrenderer_clipsphere",
-      "community": 154,
+      "community": 38,
       "norm_label": ".clipsphere()"
     },
     {
@@ -7189,7 +7189,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1036",
       "id": "scripts_worldrenderer_worldrenderer_newprojectilemesh",
-      "community": 157,
+      "community": 38,
       "norm_label": ".newprojectilemesh()"
     },
     {
@@ -7198,7 +7198,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1056",
       "id": "scripts_worldrenderer_worldrenderer_process",
-      "community": 154,
+      "community": 1,
       "norm_label": "._process()"
     },
     {
@@ -7207,7 +7207,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1098",
       "id": "scripts_worldrenderer_worldrenderer_checkboltimpacts",
-      "community": 154,
+      "community": 1,
       "norm_label": ".checkboltimpacts()"
     },
     {
@@ -7216,7 +7216,7 @@
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L1134",
       "id": "scripts_worldrenderer_worldrenderer_closestpointonsegment",
-      "community": 154,
+      "community": 1,
       "norm_label": ".closestpointonsegment()"
     },
     {
@@ -7737,7 +7737,7 @@
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Model/Capability.cs",
       "source_location": "L32",
-      "id": "factions_src_allegiance_factions_model_capability_cs_capability",
+      "id": "capability",
       "community": 101,
       "norm_label": "capability"
     },
@@ -8327,195 +8327,6 @@
       "norm_label": "buildable"
     },
     {
-      "label": "TechTreeReport.cs",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L1",
-      "id": "resolution_techtreereport",
-      "community": 153,
-      "norm_label": "techtreereport.cs"
-    },
-    {
-      "label": "TechTreeReport",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L16",
-      "id": "resolution_techtreereport_techtreereport",
-      "community": 153,
-      "norm_label": "techtreereport"
-    },
-    {
-      "label": ".Build()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "id": "resolution_techtreereport_techtreereport_build",
-      "community": 153,
-      "norm_label": ".build()"
-    },
-    {
-      "label": "Core",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_core",
-      "community": 153,
-      "norm_label": "core"
-    },
-    {
-      "label": "TechTreeDump",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_techtreedump",
-      "community": 153,
-      "norm_label": "techtreedump"
-    },
-    {
-      "label": ".AnalyzeFaction()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "id": "resolution_techtreereport_techtreereport_analyzefaction",
-      "community": 153,
-      "norm_label": ".analyzefaction()"
-    },
-    {
-      "label": "Faction",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_faction",
-      "community": 153,
-      "norm_label": "faction"
-    },
-    {
-      "label": "FactionAnalysis",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_factionanalysis",
-      "community": 153,
-      "norm_label": "factionanalysis"
-    },
-    {
-      "label": ".DescribeTech()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L63",
-      "id": "resolution_techtreereport_techtreereport_describetech",
-      "community": 153,
-      "norm_label": ".describetech()"
-    },
-    {
-      "label": "TechInfo",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L63",
-      "id": "techinfo",
-      "community": 153,
-      "norm_label": "techinfo"
-    },
-    {
-      "label": ".DescribeBuildable()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "id": "resolution_techtreereport_techtreereport_describebuildable",
-      "community": 153,
-      "norm_label": ".describebuildable()"
-    },
-    {
-      "label": "Buildable",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_buildable",
-      "community": 153,
-      "norm_label": "buildable"
-    },
-    {
-      "label": "BuildableInfo",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "id": "buildableinfo",
-      "community": 153,
-      "norm_label": "buildableinfo"
-    },
-    {
-      "label": ".KindOf()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L117",
-      "id": "resolution_techtreereport_techtreereport_kindof",
-      "community": 153,
-      "norm_label": ".kindof()"
-    },
-    {
-      "label": ".Sorted()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L132",
-      "id": "resolution_techtreereport_techtreereport_sorted",
-      "community": 153,
-      "norm_label": ".sorted()"
-    },
-    {
-      "label": "TechSet",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L132",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_techset",
-      "community": 153,
-      "norm_label": "techset"
-    },
-    {
-      "label": "List",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L132",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_list",
-      "community": 153,
-      "norm_label": "list"
-    },
-    {
-      "label": ".SortedIds()",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L134",
-      "id": "resolution_techtreereport_techtreereport_sortedids",
-      "community": 153,
-      "norm_label": ".sortedids()"
-    },
-    {
-      "label": "IEnumerable",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L134",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_ienumerable",
-      "community": 153,
-      "norm_label": "ienumerable"
-    },
-    {
-      "label": "CapabilitySet",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_capabilityset",
-      "community": 153,
-      "norm_label": "capabilityset"
-    },
-    {
-      "label": "Capability",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "id": "factions_src_allegiance_factions_resolution_techtreereport_cs_capability",
-      "community": 153,
-      "norm_label": "capability"
-    },
-    {
       "label": "CoreSerializer.cs",
       "file_type": "code",
       "source_file": "factions/src/Allegiance.Factions/Serialization/CoreSerializer.cs",
@@ -9081,114 +8892,6 @@
       "id": "allegiance_factions_tests_serializationtests_serializationtests_deserialize_techsetiscasesensitivesetofstrings",
       "community": 110,
       "norm_label": ".deserialize_techsetiscasesensitivesetofstrings()"
-    },
-    {
-      "label": "TechTreeReportTests.cs",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L1",
-      "id": "allegiance_factions_tests_techtreereporttests",
-      "community": 155,
-      "norm_label": "techtreereporttests.cs"
-    },
-    {
-      "label": "TechTreeReportTests",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L7",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "community": 155,
-      "norm_label": "techtreereporttests"
-    },
-    {
-      "label": ".Sample()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L9",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "community": 155,
-      "norm_label": ".sample()"
-    },
-    {
-      "label": "Core",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L9",
-      "id": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_core",
-      "community": 155,
-      "norm_label": "core"
-    },
-    {
-      "label": ".Iron()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "community": 155,
-      "norm_label": ".iron()"
-    },
-    {
-      "label": "TechTreeDump",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "id": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_techtreedump",
-      "community": 155,
-      "norm_label": "techtreedump"
-    },
-    {
-      "label": "FactionAnalysis",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "id": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_factionanalysis",
-      "community": 155,
-      "norm_label": "factionanalysis"
-    },
-    {
-      "label": ".Build_AnalyzesEveryFaction_WithStartingBuildables()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L13",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_build_analyzeseveryfaction_withstartingbuildables",
-      "community": 155,
-      "norm_label": ".build_analyzeseveryfaction_withstartingbuildables()"
-    },
-    {
-      "label": "Fact",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L13",
-      "id": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_fact",
-      "community": 155,
-      "norm_label": "fact"
-    },
-    {
-      "label": ".TechInfo_CapturesGrantersGatedItemsAndPrerequisites()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L28",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_techinfo_capturesgrantersgateditemsandprerequisites",
-      "community": 155,
-      "norm_label": ".techinfo_capturesgrantersgateditemsandprerequisites()"
-    },
-    {
-      "label": ".BuildableInfo_DistinguishesStartAvailableFromGated()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L45",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_buildableinfo_distinguishesstartavailablefromgated",
-      "community": 155,
-      "norm_label": ".buildableinfo_distinguishesstartavailablefromgated()"
-    },
-    {
-      "label": ".Dump_SerializesToSelfContainedYaml_ThatReparses()",
-      "file_type": "code",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L70",
-      "id": "allegiance_factions_tests_techtreereporttests_techtreereporttests_dump_serializestoselfcontainedyaml_thatreparses",
-      "community": 155,
-      "norm_label": ".dump_serializestoselfcontainedyaml_thatreparses()"
     },
     {
       "label": "ValidationTests.cs",
@@ -11569,7 +11272,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L1",
       "id": "net_iclienttransport",
-      "community": 156,
+      "community": 44,
       "norm_label": "iclienttransport.cs"
     },
     {
@@ -11578,7 +11281,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L9",
       "id": "net_iclienttransport_iclienttransport",
-      "community": 156,
+      "community": 44,
       "norm_label": "iclienttransport"
     },
     {
@@ -11587,7 +11290,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "net_iclienttransport_iclienttransport_receiveasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".receiveasync()"
     },
     {
@@ -11596,7 +11299,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "server_net_iclienttransport_cs_cancellationtoken",
-      "community": 156,
+      "community": 44,
       "norm_label": "cancellationtoken"
     },
     {
@@ -11605,7 +11308,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L13",
       "id": "server_net_iclienttransport_cs_valuetask",
-      "community": 156,
+      "community": 44,
       "norm_label": "valuetask"
     },
     {
@@ -11614,7 +11317,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L16",
       "id": "net_iclienttransport_iclienttransport_sendasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".sendasync()"
     },
     {
@@ -11623,7 +11326,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L16",
       "id": "server_net_iclienttransport_cs_readonlymemory",
-      "community": 156,
+      "community": 44,
       "norm_label": "readonlymemory"
     },
     {
@@ -11632,7 +11335,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L19",
       "id": "net_iclienttransport_iclienttransport_closeasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".closeasync()"
     },
     {
@@ -11641,7 +11344,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L24",
       "id": "net_iclienttransport_websockettransport",
-      "community": 156,
+      "community": 44,
       "norm_label": "websockettransport"
     },
     {
@@ -11659,7 +11362,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L30",
       "id": "net_iclienttransport_websockettransport_receiveasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".receiveasync()"
     },
     {
@@ -11668,7 +11371,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L36",
       "id": "net_iclienttransport_websockettransport_sendasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".sendasync()"
     },
     {
@@ -11677,7 +11380,7 @@
       "source_file": "server/Net/IClientTransport.cs",
       "source_location": "L39",
       "id": "net_iclienttransport_websockettransport_closeasync",
-      "community": 156,
+      "community": 44,
       "norm_label": ".closeasync()"
     },
     {
@@ -12712,7 +12415,7 @@
       "source_file": "server/Sim/Simulation.Pig.cs",
       "source_location": "L337",
       "id": "sim_simulation_pig_simulation_spawnpig",
-      "community": 53,
+      "community": 42,
       "norm_label": ".spawnpig()"
     },
     {
@@ -13504,7 +13207,7 @@
       "source_file": "server/Sim/Simulation.cs",
       "source_location": "L742",
       "id": "sim_simulation_simulation_inputfor",
-      "community": 53,
+      "community": 42,
       "norm_label": ".inputfor()"
     },
     {
@@ -17038,15 +16741,6 @@
       "norm_label": "microsoft.net.sdk"
     },
     {
-      "label": "Capability",
-      "file_type": "code",
-      "source_file": "factions/src/Allegiance.Factions/Model/Capability.cs",
-      "source_location": "L32",
-      "community": 101,
-      "norm_label": "capability",
-      "id": "capability"
-    },
-    {
       "label": "Control",
       "file_type": "code",
       "source_file": "client/scripts/Hud.cs",
@@ -17492,7 +17186,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L492",
-      "community": 154,
+      "community": 1,
       "norm_label": ".overlapsobstruction()",
       "id": "scripts_worldrenderer_worldrenderer_overlapsobstruction"
     },
@@ -17978,7 +17672,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 65,
+      "community": 5,
       "norm_label": ".healthcolor()",
       "id": "scripts_worldrenderer_worldrenderer_healthcolor"
     },
@@ -17987,7 +17681,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L460",
-      "community": 65,
+      "community": 5,
       "norm_label": "color",
       "id": "client_scripts_worldrenderer_cs_color"
     },
@@ -17996,7 +17690,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L892",
-      "community": 154,
+      "community": 1,
       "norm_label": ".billboardbasehealthbars()",
       "id": "scripts_worldrenderer_worldrenderer_billboardbasehealthbars"
     },
@@ -18896,7 +18590,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L751",
-      "community": 157,
+      "community": 38,
       "norm_label": ".spawnpredictedprojectile()",
       "id": "scripts_worldrenderer_worldrenderer_spawnpredictedprojectile"
     },
@@ -18950,7 +18644,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L893",
-      "community": 157,
+      "community": 65,
       "norm_label": ".buildshipmesh()",
       "id": "scripts_worldrenderer_worldrenderer_buildshipmesh"
     },
@@ -18959,7 +18653,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L893",
-      "community": 157,
+      "community": 65,
       "norm_label": "shipclass",
       "id": "client_scripts_worldrenderer_cs_shipclass"
     },
@@ -18968,7 +18662,7 @@
       "file_type": "code",
       "source_file": "client/scripts/WorldRenderer.cs",
       "source_location": "L947",
-      "community": 157,
+      "community": 65,
       "norm_label": ".attachengineglow()",
       "id": "scripts_worldrenderer_worldrenderer_attachengineglow"
     },
@@ -20602,9 +20296,9 @@
       "source_file": "client/scripts/Chat.cs",
       "source_location": "L14",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_chat_chat",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -20844,9 +20538,9 @@
       "source_file": "client/scripts/ConnectionOverlay.cs",
       "source_location": "L8",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_connectionoverlay_connectionoverlay",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -20865,9 +20559,9 @@
       "source_file": "client/scripts/LensFlare.cs",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_lensflare_lensflare",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -20875,9 +20569,9 @@
       "source_file": "client/scripts/Lobby.cs",
       "source_location": "L13",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -20885,9 +20579,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L14",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -20895,9 +20589,9 @@
       "source_file": "client/scripts/ServerInputOverlay.cs",
       "source_location": "L20",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_serverinputoverlay_serverinputoverlay",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -20915,9 +20609,9 @@
       "source_file": "client/scripts/VelocityIndicator.cs",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_velocityindicator_velocityindicator",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -22237,9 +21931,9 @@
       "source_file": "client/scripts/DefRegistry.cs",
       "source_location": "L107",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_defregistry_defregistry",
-      "target": "scripts_defregistry_defregistry_buildableships"
+      "target": "scripts_defregistry_defregistry_buildableships",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -22457,9 +22151,9 @@
       "source_location": "L107",
       "weight": 1.0,
       "context": "generic_arg",
-      "confidence_score": 1.0,
       "source": "scripts_defregistry_defregistry_buildableships",
-      "target": "client_scripts_defregistry_cs_shipclassdef"
+      "target": "client_scripts_defregistry_cs_shipclassdef",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -22611,9 +22305,9 @@
       "source_location": "L107",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_defregistry_defregistry_buildableships",
-      "target": "client_scripts_defregistry_cs_list"
+      "target": "client_scripts_defregistry_cs_list",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25304,9 +24998,9 @@
       "source_location": "L14",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "client_scripts_hud_cs_defregistry"
+      "target": "client_scripts_hud_cs_defregistry",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25315,9 +25009,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "client_scripts_hud_cs_gamenetclient"
+      "target": "client_scripts_hud_cs_gamenetclient",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25326,9 +25020,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "client_scripts_hud_cs_int"
+      "target": "client_scripts_hud_cs_int",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25359,9 +25053,9 @@
       "source_location": "L18",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "client_scripts_hud_cs_vboxcontainer"
+      "target": "client_scripts_hud_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -25402,9 +25096,9 @@
       "source_location": "L25",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "list_byte_classid_button_button"
+      "target": "list_byte_classid_button_button",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25412,9 +25106,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L127",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "scripts_hud_hud_buildspawnmenu"
+      "target": "scripts_hud_hud_buildspawnmenu",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25452,9 +25146,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L147",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "scripts_hud_hud_refreshspawnbuttons"
+      "target": "scripts_hud_hud_refreshspawnbuttons",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -25484,9 +25178,9 @@
       "source_location": "L127",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud_buildspawnmenu",
-      "target": "client_scripts_hud_cs_shipclassdef"
+      "target": "client_scripts_hud_cs_shipclassdef",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25495,9 +25189,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L186",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud_process",
-      "target": "scripts_hud_hud_buildspawnmenu"
+      "target": "scripts_hud_hud_buildspawnmenu",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -25506,9 +25200,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L189",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud_process",
-      "target": "scripts_hud_hud_refreshspawnbuttons"
+      "target": "scripts_hud_hud_refreshspawnbuttons",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28979,9 +28673,9 @@
       "source_location": "L42",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_serverinputoverlay_serverinputoverlay",
-      "target": "client_scripts_serverinputoverlay_cs_vboxcontainer"
+      "target": "client_scripts_serverinputoverlay_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -36465,17 +36159,6 @@
       "target": "capability"
     },
     {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Model/Capability.cs",
-      "source_location": "L32",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "model_capability_capabilityset",
-      "target": "factions_src_allegiance_factions_model_capability_cs_capability",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "factions/src/Allegiance.Factions/Model/Capability.cs",
@@ -36998,394 +36681,6 @@
       "confidence_score": 1.0,
       "source": "resolution_techresolver_techresolver_trygrant",
       "target": "factions_src_allegiance_factions_resolution_techresolver_cs_buildable"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "source": "resolution_techtreereport",
-      "target": "resolution_techtreereport_techtreereport",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_analyzefaction",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_build",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_describebuildable",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_describetech",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L117",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_kindof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_sorted",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport",
-      "target": "resolution_techtreereport_techtreereport_sortedids",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_build",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_core",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L18",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_build",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_techtreedump",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L22",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_build",
-      "target": "resolution_techtreereport_techtreereport_analyzefaction",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_core",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_core",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_describetech",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_core",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_faction",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L27",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_factionanalysis",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L39",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "resolution_techtreereport_techtreereport_describebuildable",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "resolution_techtreereport_techtreereport_describetech",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L47",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "resolution_techtreereport_techtreereport_sorted",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L54",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_analyzefaction",
-      "target": "resolution_techtreereport_techtreereport_sortedids",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_faction",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L77",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_describetech",
-      "target": "resolution_techtreereport_techtreereport_sorted",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_describetech",
-      "target": "resolution_techtreereport_techtreereport_sortedids",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_describetech",
-      "target": "techinfo",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "buildableinfo",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L81",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_buildable",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L104",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "resolution_techtreereport_techtreereport_kindof",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L108",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "resolution_techtreereport_techtreereport_sorted",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L113",
-      "weight": 1.0,
-      "source": "resolution_techtreereport_techtreereport_describebuildable",
-      "target": "resolution_techtreereport_techtreereport_sortedids",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L117",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_kindof",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_buildable",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "source": "resolution_techtreereport_techtreereport_sorted",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_capability",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_sorted",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_capabilityset",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L137",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_sorted",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L132",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_sorted",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_techset",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "resolution_techtreereport_techtreereport_sortedids",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_list",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "resolution_techtreereport_techtreereport_sortedids",
-      "target": "factions_src_allegiance_factions_resolution_techtreereport_cs_ienumerable",
-      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38288,219 +37583,6 @@
       "confidence_score": 1.0,
       "source": "allegiance_factions_tests_serializationtests_serializationtests_serialize_useskebabcasekeysandenumvalues",
       "target": "factions_tests_allegiance_factions_tests_serializationtests_cs_fact"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L7",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_build_analyzeseveryfaction_withstartingbuildables",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L45",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_buildableinfo_distinguishesstartavailablefromgated",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L70",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_dump_serializestoselfcontainedyaml_thatreparses",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L9",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "method",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L28",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_techinfo_capturesgrantersgateditemsandprerequisites",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_build_analyzeseveryfaction_withstartingbuildables",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_buildableinfo_distinguishesstartavailablefromgated",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L73",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_dump_serializestoselfcontainedyaml_thatreparses",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L9",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_core",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L31",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_techinfo_capturesgrantersgateditemsandprerequisites",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_sample",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_buildableinfo_distinguishesstartavailablefromgated",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_factionanalysis",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L11",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_techtreedump",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L31",
-      "weight": 1.0,
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_techinfo_capturesgrantersgateditemsandprerequisites",
-      "target": "allegiance_factions_tests_techtreereporttests_techtreereporttests_iron",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L13",
-      "weight": 1.0,
-      "context": "attribute",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_build_analyzeseveryfaction_withstartingbuildables",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_fact",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L45",
-      "weight": 1.0,
-      "context": "attribute",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_buildableinfo_distinguishesstartavailablefromgated",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_fact",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L70",
-      "weight": 1.0,
-      "context": "attribute",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_dump_serializestoselfcontainedyaml_thatreparses",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_fact",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs",
-      "source_location": "L28",
-      "weight": 1.0,
-      "context": "attribute",
-      "source": "allegiance_factions_tests_techtreereporttests_techtreereporttests_techinfo_capturesgrantersgateditemsandprerequisites",
-      "target": "factions_tests_allegiance_factions_tests_techtreereporttests_cs_fact",
-      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -56788,5 +55870,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "2233fa2091a783588c184770f79e97d057950e8c"
+  "built_at_commit": "a19a848ba31bd83d0fd3f8e833f979963a0f2dd7"
 }

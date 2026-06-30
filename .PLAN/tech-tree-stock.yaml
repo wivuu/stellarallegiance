@@ -1,0 +1,277 @@
+catalog:
+  version: 2026.06.28-stock
+  hulls:
+  - mass: 40
+    speed: 160
+    max-turn-rates:
+      yaw: 50
+      pitch: 50
+      roll: 50
+    turn-torques: &o0 {}
+    thrust: 30
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.25
+    armor-hit-points: 60
+    class-id: 0
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-on-rate: 2
+    ab-off-rate: 1
+    hardpoints:
+    - off-z: 3
+      dir-z: 1
+    - &o1
+      kind: main-engine
+      off-z: -2.25
+      dir-z: -1
+    id: scout
+    name: Scout
+    price: 100
+    required-capabilities:
+    - base
+  - mass: 36
+    speed: 100
+    max-turn-rates:
+      yaw: 60
+      pitch: 60
+      roll: 60
+    turn-torques: *o0
+    thrust: 25
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    armor-hit-points: 120
+    class-id: 1
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-accel: 10
+    ab-on-rate: 2
+    ab-off-rate: 1
+    hardpoints:
+    - off-x: -0.9
+      off-z: 3
+      dir-z: 1
+      weapon-id: 1
+    - index: 1
+      off-x: 0.9
+      off-z: 3
+      dir-z: 1
+      weapon-id: 1
+    - kind: booster
+      off-x: -1.1
+      off-z: -2.75
+      dir-z: -1
+    - kind: booster
+      index: 1
+      off-x: 1.1
+      off-z: -2.75
+      dir-z: -1
+    id: fighter
+    name: Fighter
+    price: 200
+    required-capabilities:
+    - base
+  - mass: 50
+    speed: 60
+    max-turn-rates:
+      yaw: 20
+      pitch: 20
+      roll: 20
+    turn-torques: *o0
+    thrust: 15
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    armor-hit-points: 240
+    class-id: 2
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-on-rate: 2
+    ab-off-rate: 1
+    hardpoints:
+    - off-z: 3
+      dir-z: 1
+      weapon-id: 2
+    - kind: main-engine
+      off-x: -1.4
+      off-z: -3.4
+      dir-z: -1
+    - kind: main-engine
+      index: 1
+      off-x: 1.4
+      off-z: -3.4
+      dir-z: -1
+    id: bomber
+    name: Bomber
+    price: 350
+    required-capabilities:
+    - base
+  - mass: 10
+    speed: 60
+    max-turn-rates:
+      yaw: 40
+      pitch: 40
+      roll: 40
+    turn-torques: *o0
+    thrust: 15
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 20
+    abilities:
+    - is-lifepod
+    - no-ripcord
+    class-id: 255
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-on-rate: 2
+    ab-off-rate: 1
+    hardpoints:
+    - *o1
+    id: pod
+    name: Pod
+    required-capabilities:
+    - base
+  weapons:
+  - dispersion: 0.006
+    projectile-id: scout-bolt
+    weapon-id: 0
+    fire-interval-ticks: 4
+    projectile-life-ticks: 16
+    id: scout-cannon
+    name: Scout Cannon
+    required-capabilities:
+    - base
+  - dispersion: 0.035
+    projectile-id: fighter-bolt
+    weapon-id: 1
+    fire-interval-ticks: 4
+    projectile-life-ticks: 16
+    id: fighter-cannon
+    name: Fighter Cannon
+    required-capabilities:
+    - base
+  - dispersion: 0.012
+    projectile-id: bomber-bolt
+    weapon-id: 2
+    fire-interval-ticks: 14
+    projectile-life-ticks: 16
+    id: bomber-cannon
+    name: Bomber Cannon
+    required-capabilities:
+    - base
+  stations:
+  - max-armor: 2000
+    radius: 90
+    class: garrison
+    abilities:
+    - start
+    - restart
+    base-type-id: 0
+    hardpoints:
+    - kind: docking-entrance
+      off-z: 90
+      dir-z: 1
+    - kind: docking-exit
+      off-z: 90
+      dir-z: 1
+    - kind: light
+      off-y: 90
+      dir-y: 1
+    - kind: light
+      index: 1
+      off-y: -90
+      dir-y: -1
+    id: garrison
+    name: Garrison
+    required-capabilities:
+    - base
+  projectiles:
+  - id: scout-bolt
+    name: Scout Bolt
+    power: 4
+    speed: 200
+    width: 1
+  - id: fighter-bolt
+    name: Fighter Bolt
+    power: 10
+    speed: 200
+    width: 1
+  - id: bomber-bolt
+    name: Bomber Bolt
+    power: 22
+    speed: 200
+    width: 1
+  factions:
+  - id: stock
+    name: Stock
+    income-money: 100
+    bonus-money: 1000
+    base-capabilities:
+    - base
+    lifepod-hull-id: pod
+    initial-station-id: garrison
+  world:
+    sector-scale: 2.25
+    asteroid-density: 1
+analysis:
+  stock:
+    starting:
+      credits: 1000
+      income: 100
+      base-capabilities:
+      - base
+      initial-station-id: garrison
+      lifepod-hull-id: pod
+    reachable-capabilities:
+    - base
+    available-at-start:
+    - bomber
+    - bomber-cannon
+    - fighter
+    - fighter-cannon
+    - garrison
+    - pod
+    - scout
+    - scout-cannon
+    buildables:
+      bomber:
+        kind: hull
+        price: 350
+        needs-capabilities:
+        - base
+        available-at-start: true
+      bomber-cannon:
+        kind: weapon
+        needs-capabilities:
+        - base
+        available-at-start: true
+      fighter:
+        kind: hull
+        price: 200
+        needs-capabilities:
+        - base
+        available-at-start: true
+      fighter-cannon:
+        kind: weapon
+        needs-capabilities:
+        - base
+        available-at-start: true
+      garrison:
+        kind: station
+        needs-capabilities:
+        - base
+        available-at-start: true
+      pod:
+        kind: hull
+        needs-capabilities:
+        - base
+        available-at-start: true
+      scout:
+        kind: hull
+        price: 100
+        needs-capabilities:
+        - base
+        available-at-start: true
+      scout-cannon:
+        kind: weapon
+        needs-capabilities:
+        - base
+        available-at-start: true

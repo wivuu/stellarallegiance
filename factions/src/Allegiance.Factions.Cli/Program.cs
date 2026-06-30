@@ -33,6 +33,24 @@ switch (command)
         return command == "validate" ? Validate(manifestPath) : RoundTrip(manifestPath);
     }
 
+    case "dump":
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("'dump' requires a <manifest.yaml> path.");
+            return 2;
+        }
+
+        var manifestPath = args[1];
+        if (!File.Exists(manifestPath))
+        {
+            Console.Error.WriteLine($"Manifest not found: {manifestPath}");
+            return 2;
+        }
+
+        return Dump(manifestPath, args);
+    }
+
     case "schema":
         return Schema(args);
 
@@ -48,9 +66,10 @@ static void PrintUsage() =>
         Allegiance faction model tool.
 
         Usage:
-          validate  <manifest.yaml>      Load a core and report reference/integrity errors.
-          roundtrip <manifest.yaml>      Load, re-serialize, re-parse, and confirm a stable round-trip.
-          schema [--output <file.json>]  Emit the JSON schema for the data model (stdout if no output).
+          validate  <manifest.yaml>            Load a core and report reference/integrity errors.
+          roundtrip <manifest.yaml>            Load, re-serialize, re-parse, and confirm a stable round-trip.
+          dump      <manifest.yaml> [-o <f>]   Flatten + annotate the tech tree to YAML (stdout if no --output).
+          schema [--output <file.json>]        Emit the JSON schema for the data model (stdout if no output).
         """);
 
 static int Validate(string manifestPath)
@@ -99,6 +118,46 @@ static int RoundTrip(string manifestPath)
 
     Console.WriteLine("FAILED — re-serialized YAML differs from the original.");
     return 1;
+}
+
+static int Dump(string manifestPath, string[] args)
+{
+    string? output = null;
+    for (var i = 2; i < args.Length; i++)
+    {
+        switch (args[i])
+        {
+            case "--output" or "-o":
+                if (i + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("--output requires a file path.");
+                    return 2;
+                }
+                output = args[++i];
+                break;
+            default:
+                Console.Error.WriteLine($"Unknown option for 'dump': {args[i]}");
+                return 2;
+        }
+    }
+
+    var core = CoreSerializer.Load(manifestPath);
+    // The merged Core is already fragment-free, so serializing the annotated dump yields one
+    // self-contained YAML (flattened catalog + per-faction tech-tree analysis).
+    var yaml = CoreSerializer.Serialize(TechTreeReport.Build(core));
+
+    if (output is null)
+    {
+        Console.WriteLine(yaml);
+        return 0;
+    }
+
+    var directory = Path.GetDirectoryName(Path.GetFullPath(output));
+    if (!string.IsNullOrEmpty(directory))
+        Directory.CreateDirectory(directory);
+    File.WriteAllText(output, yaml);
+    Console.WriteLine($"Wrote tech-tree dump to {output}.");
+    return 0;
 }
 
 static int Schema(string[] args)
