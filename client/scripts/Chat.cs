@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Ui;
 
 // Lobby + in-game chat overlay. Top-center message log with a hidden input box that opens on
 // Enter; Tab switches the team/all channel, Esc cancels, Enter sends. The server relays chat
@@ -15,9 +16,10 @@ public partial class Chat : Control
 {
     public static bool Capturing { get; private set; }
 
-    private static readonly Color Team0 = new(0.30f, 0.55f, 1.00f);
-    private static readonly Color Team1 = new(1.00f, 0.40f, 0.34f);
-    private static readonly Color AllColor = new(0.92f, 0.96f, 1.00f);
+    // Team identity stays the faction colours (NOT the cyan structural accent).
+    private static readonly Color Team0 = DesignTokens.Faction0;
+    private static readonly Color Team1 = DesignTokens.Faction1;
+    private static readonly Color AllColor = DesignTokens.TextHi;
 
     private const float LogWidth = 760f;
     private const int MaxShown = 5;
@@ -50,6 +52,7 @@ public partial class Chat : Control
 
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
+        UiTheme.Apply(this); // themes the log + input box with the design fonts
 
         _log = new RichTextLabel
         {
@@ -69,6 +72,7 @@ public partial class Chat : Control
         AddChild(_inputRow);
 
         _chip = new Label();
+        _chip.AddThemeFontOverride("font", UiFonts.MonoMedium);
         _chip.AddThemeFontSizeOverride("font_size", 16);
         _inputRow.AddChild(_chip);
 
@@ -255,14 +259,17 @@ public partial class Chat : Control
         _log.Text = sb.ToString();
     }
 
+    private static readonly string DimHex = DesignTokens.TextDim.ToHtml(false);
+    private static readonly string MuteHex = DesignTokens.Text2.ToHtml(false);
+
     private static string FormatLine(ChatLine line, string time, bool system)
     {
-        string stamp = $"[color=#7a8088]{time}[/color]";
+        string stamp = $"[color=#{DimHex}]{time}[/color]";
         // System lines (slash-command output): a muted diamond-prefixed note, no team-name coloring.
         if (system)
-            return $"{stamp} [color=#9aa0a6]◆ {Escape(line.Text)}[/color]";
+            return $"{stamp} [color=#{MuteHex}]◆ {Escape(line.Text)}[/color]";
         Color nameColor = line.FromTeam == 0 ? Team0 : Team1;
-        string tag = line.Scope == 1 ? "[color=#9aa0a6]\\[team][/color] " : "";
+        string tag = line.Scope == 1 ? $"[color=#{MuteHex}]\\[team][/color] " : "";
         string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";
         return $"{stamp} {tag}{name}: {Escape(line.Text)}";
     }

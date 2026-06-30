@@ -1,6 +1,7 @@
 using System.Text;
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Ui;
 
 // Lobby / pre-match / post-match overlay. Shown whenever the local player isn't in a live
 // match:
@@ -12,10 +13,10 @@ using StellarAllegiance.Net;
 // balance rules are enforced server-side; this just drives them. Created by the Hud.
 public partial class Lobby : Control
 {
-    private static readonly Color Team0 = new(0.30f, 0.55f, 1.00f);
-    private static readonly Color Team1 = new(1.00f, 0.40f, 0.34f);
-    private static readonly Color Dim = new(0.92f, 0.96f, 1.00f);
-    private static new readonly Color Ready = new(0.45f, 0.90f, 0.50f);
+    // Team identity stays the faction colours (NOT the cyan structural accent).
+    private static readonly Color Team0 = DesignTokens.Faction0;
+    private static readonly Color Team1 = DesignTokens.Faction1;
+    private static new readonly Color Ready = DesignTokens.Ok;
 
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
@@ -26,10 +27,10 @@ public partial class Lobby : Control
     private RichTextLabel _roster = null!;
     private Label _status = null!;
     private HBoxContainer _teamRow = null!;
-    private Button _joinBlue = null!;
-    private Button _joinRed = null!;
-    private Button _ready = null!;
-    private Button _leave = null!;
+    private ChamferButton _joinBlue = null!;
+    private ChamferButton _joinRed = null!;
+    private ChamferButton _ready = null!;
+    private ChamferButton _leave = null!;
 
     public void Init(ConnectionManager cm, WorldRenderer world)
     {
@@ -39,13 +40,14 @@ public partial class Lobby : Control
 
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
+        UiTheme.Apply(this); // cascades the design theme to the roster/sliders/etc. below
 
-        var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f, 0.78f) };
+        var bg = new ColorRect { Color = new Color(DesignTokens.Void, 0.78f) };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(bg);
 
-        var panel = new PanelContainer();
+        var panel = new BracketPanel();
         panel.SetAnchorsPreset(LayoutPreset.TopLeft);
         panel.GrowHorizontal = GrowDirection.End;
         panel.GrowVertical = GrowDirection.End;
@@ -57,18 +59,18 @@ public partial class Lobby : Control
         col.AddThemeConstantOverride("separation", 12);
         panel.AddChild(col);
 
-        _winner = Centered("", 40);
+        _winner = Centered(UiKit.TextStyle.Display, "");
         _winner.Visible = false;
         col.AddChild(_winner);
 
-        _title = Centered("LOBBY", 30);
+        _title = Centered(UiKit.TextStyle.Title, "LOBBY");
         col.AddChild(_title);
 
-        _status = Centered("Pick a side and ready up.", 16);
+        _status = Centered(UiKit.TextStyle.Body, "Pick a side and ready up.");
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         col.AddChild(_status);
 
-        col.AddChild(new HSeparator());
+        col.AddChild(new DiamondDivider());
 
         _roster = new RichTextLabel
         {
@@ -80,54 +82,37 @@ public partial class Lobby : Control
         _roster.AddThemeFontSizeOverride("normal_font_size", 16);
         col.AddChild(_roster);
 
-        col.AddChild(new HSeparator());
+        col.AddChild(new DiamondDivider());
 
         _teamRow = new HBoxContainer();
         _teamRow.AddThemeConstantOverride("separation", 8);
         _teamRow.Alignment = BoxContainer.AlignmentMode.Center;
         col.AddChild(_teamRow);
-        _joinBlue = MakeButton("Join BLUE", () => _net.SetTeam(0));
-        _joinRed = MakeButton("Join RED", () => _net.SetTeam(1));
-        _ready = MakeButton("Ready", ToggleReady);
+        // Team-join buttons carry their faction colour; Ready is the primary accent action.
+        _joinBlue = MakeButton("Join BLUE", () => _net.SetTeam(0), ButtonVariant.Primary, Team0);
+        _joinRed = MakeButton("Join RED", () => _net.SetTeam(1), ButtonVariant.Primary, Team1);
+        _ready = MakeButton("Ready", ToggleReady, ButtonVariant.Primary);
         _teamRow.AddChild(_joinBlue);
         _teamRow.AddChild(_joinRed);
         _teamRow.AddChild(_ready);
 
-        col.AddChild(new HSeparator());
+        col.AddChild(new DiamondDivider());
 
         // Audio settings: one slider per bus, persisted + applied live via UserPrefs.
-        col.AddChild(Centered("Audio", 16));
+        col.AddChild(Centered(UiKit.TextStyle.Label, "AUDIO"));
         foreach (var bus in UserPrefs.AudioBuses)
-            col.AddChild(VolumeRow(bus));
+        {
+            string b = bus;
+            col.AddChild(UiKit.MakeSliderRow(b, 0, 1, 0.05, UserPrefs.GetBusVolume(b), v => UserPrefs.SetBusVolume(b, (float)v)));
+        }
 
-        col.AddChild(new HSeparator());
+        col.AddChild(new DiamondDivider());
 
         // Always-available exit back to the server-address screen.
         var leaveRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         col.AddChild(leaveRow);
-        _leave = MakeButton("Leave Server", () => _cm.Leave());
+        _leave = MakeButton("Leave Server", () => _cm.Leave(), ButtonVariant.Ghost);
         leaveRow.AddChild(_leave);
-    }
-
-    // A "<bus>  [====slider====]" row that writes through to UserPrefs (which persists and
-    // applies the new volume live) on every change.
-    private static HBoxContainer VolumeRow(string bus)
-    {
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
-        row.AddChild(new Label { Text = bus, CustomMinimumSize = new Vector2(70, 0) });
-        var slider = new HSlider
-        {
-            MinValue = 0,
-            MaxValue = 1,
-            Step = 0.05,
-            Value = UserPrefs.GetBusVolume(bus),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(260, 0),
-        };
-        slider.ValueChanged += v => UserPrefs.SetBusVolume(bus, (float)v);
-        row.AddChild(slider);
-        return row;
     }
 
     private LobbyPlayer? Me()
@@ -144,17 +129,17 @@ public partial class Lobby : Control
             _net.SetReady(!me.Ready);
     }
 
-    private static Label Centered(string text, int size)
+    private static Label Centered(UiKit.TextStyle style, string text)
     {
-        var l = new Label { Text = text, HorizontalAlignment = HorizontalAlignment.Center };
-        l.AddThemeFontSizeOverride("font_size", size);
+        var l = UiKit.MakeLabel(text, style);
+        l.HorizontalAlignment = HorizontalAlignment.Center;
         return l;
     }
 
-    private static Button MakeButton(string text, System.Action onPressed)
+    // ChamferButton bakes in the UI click sound, so we only wire the action here.
+    private static ChamferButton MakeButton(string text, System.Action onPressed, ButtonVariant variant = ButtonVariant.Secondary, Color? accent = null)
     {
-        var b = new Button { Text = text, CustomMinimumSize = new Vector2(130, 36) };
-        b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+        var b = new ChamferButton { Text = text, Variant = variant, AccentOverride = accent, CustomMinimumSize = new Vector2(130, 36) };
         b.Pressed += onPressed;
         return b;
     }

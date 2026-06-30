@@ -8,6 +8,15 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
+## UI / design tasks
+
+For any UI, styling, or design-system work in the Godot client, read [DESIGN.md](DESIGN.md)
+first. It is the source of truth for the "Stellar Allegiance" design system — palette/type
+tokens (`DesignTokens`), fonts (`UiFonts`), theme wiring, and the reusable components in
+`client/scripts/ui/`. Build UI from those tokens and components rather than hardcoding colors,
+fonts, or sizes; verify changes against the `UiShowcase` gallery (F9 in-game, or
+`--ui-showcase`).
+
 ## dotnet restore hangs
 
 If `dotnet restore` hangs/takes forever, stopped (`T` state) `aspire-managed` processes are likely holding a NuGet scratch lock file in `/private/var/folders/.../NuGetScratch/lock/`. Kill them:

@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
+using StellarAllegiance.Ui;
 // Godot ships its own HttpClient; the lobby uses the BCL one.
 using HttpClient = System.Net.Http.HttpClient;
 
@@ -19,9 +20,9 @@ using HttpClient = System.Net.Http.HttpClient;
 // Either hands off to ConnectionManager, which opens the single native connection.
 public partial class ServerInputOverlay : Control
 {
-    private static readonly Color Dim = new(0.85f, 0.9f, 1f);
-    private static readonly Color Bad = new(1f, 0.45f, 0.4f);
-    private static readonly Color Faint = new(0.6f, 0.66f, 0.78f);
+    private static readonly Color Dim = DesignTokens.Text2;
+    private static readonly Color Bad = DesignTokens.Danger;
+    private static readonly Color Faint = DesignTokens.TextDim;
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
@@ -58,8 +59,9 @@ public partial class ServerInputOverlay : Control
 
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
+        UiTheme.Apply(this); // themes the LineEdits / list / labels below
 
-        var bg = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f, 0.95f) };
+        var bg = new ColorRect { Color = new Color(DesignTokens.Void, 0.95f) };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         bg.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(bg);
@@ -85,7 +87,9 @@ public partial class ServerInputOverlay : Control
         _updateBanner.MetaClicked += meta => OS.ShellOpen(meta.AsString());
         col.AddChild(_updateBanner);
 
-        col.AddChild(Centered("STELLAR ALLEGIANCE", 38));
+        var title = Centered("STELLAR ALLEGIANCE", 38);
+        title.AddThemeColorOverride("font_color", DesignTokens.TextHi);
+        col.AddChild(title);
 
         // ---- Pilot name (persisted; pre-filled from the last run) ----
         col.AddChild(Centered("Pilot name", 16));
@@ -106,10 +110,10 @@ public partial class ServerInputOverlay : Control
         col.AddChild(header);
         var listTitle = new Label { Text = "Public servers", HorizontalAlignment = HorizontalAlignment.Left };
         listTitle.AddThemeFontSizeOverride("font_size", 18);
-        listTitle.AddThemeColorOverride("font_color", Dim);
+        listTitle.AddThemeColorOverride("font_color", DesignTokens.TextHi);
         listTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(listTitle);
-        var refresh = new Button { Text = "Refresh" };
+        var refresh = new ChamferButton { Text = "Refresh", Variant = ButtonVariant.Secondary, CustomMinimumSize = new Vector2(120, 36) };
         refresh.Pressed += Reload;
         header.AddChild(refresh);
 
@@ -142,7 +146,7 @@ public partial class ServerInputOverlay : Control
         _field.TextSubmitted += _ => Submit();
         row.AddChild(_field);
 
-        var connect = new Button { Text = "Connect", CustomMinimumSize = new Vector2(140, 44) };
+        var connect = new ChamferButton { Text = "Connect", Variant = ButtonVariant.Primary, CustomMinimumSize = new Vector2(140, 44) };
         connect.Pressed += Submit;
         row.AddChild(connect);
 
@@ -373,13 +377,13 @@ public partial class ServerInputOverlay : Control
             string occupancy = $"({s.Players}/{max})";
             string state = string.IsNullOrEmpty(s.State) ? "" : $"   ·   {s.State}";
             string label = $"{s.Name}   ·   {occupancy}{state}";
-            var btn = new Button
+            var btn = new ChamferButton
             {
                 Text = label,
+                Variant = ButtonVariant.Secondary,
                 CustomMinimumSize = new Vector2(0, 40),
                 Alignment = HorizontalAlignment.Left,
             };
-            btn.AddThemeFontSizeOverride("font_size", 17);
             string sid = s.SessionId,
                 name = s.Name,
                 endpoint = s.PublicEndpoint ?? "";
@@ -418,7 +422,9 @@ public partial class ServerInputOverlay : Control
 
     private static Label Centered(string text, int size)
     {
+        UiFonts.EnsureLoaded();
         var l = new Label { Text = text, HorizontalAlignment = HorizontalAlignment.Center };
+        l.AddThemeFontOverride("font", size >= 30 ? UiFonts.SairaBold : UiFonts.Saira);
         l.AddThemeFontSizeOverride("font_size", size);
         l.AddThemeColorOverride("font_color", Dim);
         return l;

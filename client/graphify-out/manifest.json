@@ -10,18 +10,18 @@
     "semantic_hash": ""
   },
   "scripts/Chat.cs": {
-    "mtime": 1782524272.0365367,
-    "ast_hash": "abda1a640112ea5fa553c45c09d9bc25",
+    "mtime": 1782861542.860022,
+    "ast_hash": "a9de2d76db0de7e156939248d29386bb",
     "semantic_hash": ""
   },
   "scripts/ConnectionManager.cs": {
-    "mtime": 1782650578.8447912,
-    "ast_hash": "84e820a3ac60d9f33db7a52d99a0fd86",
+    "mtime": 1782694607.6793945,
+    "ast_hash": "956ee8b01f84506b6b9b0309439752d9",
     "semantic_hash": ""
   },
   "scripts/ConnectionOverlay.cs": {
-    "mtime": 1782524272.0369964,
-    "ast_hash": "0d0aac4388b514df4ceb52654398975f",
+    "mtime": 1782861394.31437,
+    "ast_hash": "8c93d63efd376e117c6accd68c99670b",
     "semantic_hash": ""
   },
   "scripts/DustField.cs": {
@@ -45,13 +45,13 @@
     "semantic_hash": ""
   },
   "scripts/Hud.cs": {
-    "mtime": 1782524272.0390728,
-    "ast_hash": "8c56dd659d8fced0bdaa51a60a0ee0e8",
+    "mtime": 1782861582.2977889,
+    "ast_hash": "e20400b809585191fbe8ed318d8b4f15",
     "semantic_hash": ""
   },
   "scripts/Lobby.cs": {
-    "mtime": 1782600399.8191485,
-    "ast_hash": "f77682ffed1ae5aeb046a4ca7a448d9b",
+    "mtime": 1782861318.72115,
+    "ast_hash": "d2d26ed7513ac12cadc40dd9552a4151",
     "semantic_hash": ""
   },
   "scripts/Minimap.cs": {
@@ -60,8 +60,8 @@
     "semantic_hash": ""
   },
   "scripts/PredictionController.cs": {
-    "mtime": 1782651560.6898353,
-    "ast_hash": "c8ead3583e1932a4bc6c4ba4e4a5ffb7",
+    "mtime": 1782652087.5692987,
+    "ast_hash": "c7685db45db1498e76a4abfdfe7f7e1c",
     "semantic_hash": ""
   },
   "scripts/ProjectileView.cs": {
@@ -70,13 +70,13 @@
     "semantic_hash": ""
   },
   "scripts/RemoteShip.cs": {
-    "mtime": 1782524272.041442,
-    "ast_hash": "fc80ba4d7056ecf3dfef046caff43c3c",
+    "mtime": 1782652087.5695608,
+    "ast_hash": "bf5ac1a44c315e6dd0e002a6bf6b6dbe",
     "semantic_hash": ""
   },
   "scripts/ShipController.cs": {
-    "mtime": 1782650578.8452637,
-    "ast_hash": "4a323886349f7a5ca0f43ebca095ce9c",
+    "mtime": 1782694609.1887844,
+    "ast_hash": "a40b873708981bc805578fa1a9adb91a",
     "semantic_hash": ""
   },
   "scripts/ShipMath.cs": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "scripts/WorldRenderer.cs": {
-    "mtime": 1782650578.845513,
-    "ast_hash": "34857e0b59d0fab6bba1cc4b30c8d195",
+    "mtime": 1782694609.1890633,
+    "ast_hash": "d232505213cccf58d2125f7df0160fab",
     "semantic_hash": ""
   },
   "wivuullegiance.csproj": {
@@ -125,13 +125,13 @@
     "semantic_hash": ""
   },
   "scripts/DefRegistry.cs": {
-    "mtime": 1782524272.0372317,
-    "ast_hash": "10f37ada45b3e346fde488f3fad10f1d",
+    "mtime": 1782694609.188157,
+    "ast_hash": "6d2bcaece6ccf6ab3f065867a5277039",
     "semantic_hash": ""
   },
   "scripts/GameNetClient.cs": {
-    "mtime": 1782650578.8450549,
-    "ast_hash": "888f2c730ef1e2f8ede26a44b3fbd5a8",
+    "mtime": 1782694609.1883543,
+    "ast_hash": "3f9f7228eb98714c3a4985cce51720d3",
     "semantic_hash": ""
   },
   "scripts/GlbLoader.cs": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "scripts/ServerInputOverlay.cs": {
-    "mtime": 1782601233.6997802,
-    "ast_hash": "6cc36638dbe2bf6209ef82f56c1d05f9",
+    "mtime": 1782861493.8894966,
+    "ast_hash": "f28b39726e26cd7160a427e445225ed6",
     "semantic_hash": ""
   },
   "scripts/ShipModelLoader.cs": {
@@ -165,8 +165,8 @@
     "semantic_hash": ""
   },
   "scripts/Nameplate.cs": {
-    "mtime": 1782651469.5548291,
-    "ast_hash": "faf6b9febc3e9cd6fed562ef51c26d5c",
+    "mtime": 1782652087.5690536,
+    "ast_hash": "03c45cf83f766480a1a8865c2f98dd36",
     "semantic_hash": ""
   },
   "scripts/UserPrefs.cs": {
@@ -197,6 +197,56 @@
   "scripts/CollisionWorld.cs": {
     "mtime": 1782650578.8445945,
     "ast_hash": "c6a87e7d055912f803464f711f12fa19",
+    "semantic_hash": ""
+  },
+  "scripts/ui/ChamferButton.cs": {
+    "mtime": 1782861486.6677632,
+    "ast_hash": "b73212eece49815c283918d1a4a01964",
+    "semantic_hash": ""
+  },
+  "scripts/ui/DataFeedback.cs": {
+    "mtime": 1782860489.7396,
+    "ast_hash": "cb4c7aa6fea64b9de1660a412332d44e",
+    "semantic_hash": ""
+  },
+  "scripts/ui/DesignTokens.cs": {
+    "mtime": 1782860150.5856278,
+    "ast_hash": "f1ad652565a2b96dbc3d5257c680e2fb",
+    "semantic_hash": ""
+  },
+  "scripts/ui/GameElements.cs": {
+    "mtime": 1782860525.2222826,
+    "ast_hash": "250c8368e8d7e6230535c0cddb43a211",
+    "semantic_hash": ""
+  },
+  "scripts/ui/Surfaces.cs": {
+    "mtime": 1782860443.96032,
+    "ast_hash": "5cfc5a3bf6342f75bda8486db39445b0",
+    "semantic_hash": ""
+  },
+  "scripts/ui/UiDraw.cs": {
+    "mtime": 1782860198.7493365,
+    "ast_hash": "c72d89a563682e9663bd57c6cba69174",
+    "semantic_hash": ""
+  },
+  "scripts/ui/UiFonts.cs": {
+    "mtime": 1782860572.2097628,
+    "ast_hash": "27f4dad25ce40e2f36d2f73c9abc6c1c",
+    "semantic_hash": ""
+  },
+  "scripts/ui/UiKit.cs": {
+    "mtime": 1782860340.6256683,
+    "ast_hash": "e968e5abf64ad93df349448a9794fc62",
+    "semantic_hash": ""
+  },
+  "scripts/ui/UiShowcase.cs": {
+    "mtime": 1782860905.6294224,
+    "ast_hash": "5b5e78a3d0c7343619ef70138eeba255",
+    "semantic_hash": ""
+  },
+  "scripts/ui/UiTheme.cs": {
+    "mtime": 1782860235.4055634,
+    "ast_hash": "32a61c3534ea9d2f182b6c585889826b",
     "semantic_hash": ""
   }
 }

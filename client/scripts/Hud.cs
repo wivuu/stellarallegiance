@@ -1,5 +1,6 @@
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Ui;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
 // UI; the Hud's own spawn menu only appears once you're teamed in an active match and
@@ -19,10 +20,13 @@ public partial class Hud : CanvasLayer
     private Label _spawnHint = null!;
     private Label _warning = null!;
 
+    // The design-system gallery overlay (F9), instantiated on demand.
+    private Control? _showcase;
+
     // The buy-menu buttons, rebuilt from the streamed ship defs once they arrive (BuildSpawnMenu).
     // Each carries its ClassId so _Process can refresh price/affordability/lock state per frame. The
     // count of buttons currently built, so the menu only rebuilds when the buildable set changes.
-    private readonly System.Collections.Generic.List<(byte classId, Button button)> _spawnButtons = new();
+    private readonly System.Collections.Generic.List<(byte classId, ChamferButton button)> _spawnButtons = new();
     private int _builtShipCount = -1;
 
     // Previous-frame visibility, so UI sounds fire once on the transition (the spawn
@@ -32,6 +36,14 @@ public partial class Hud : CanvasLayer
 
     public override void _Ready()
     {
+        // Boot straight into the design-system gallery for headless screenshot CI:
+        //   godot --path client -- --ui-showcase
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--ui-showcase") >= 0)
+        {
+            CallDeferred(nameof(LoadShowcaseScene));
+            return;
+        }
+
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         _ship = GetNode<ShipController>("../ShipController");
@@ -60,20 +72,21 @@ public partial class Hud : CanvasLayer
         minimap.Init(_cm, _world);
 
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
-        // match is live (the lobby overlay owns the screen otherwise).
-        _sectorShips = new Label { Position = new Vector2(16, 12), Visible = false };
-        _sectorShips.AddThemeFontSizeOverride("font_size", 18);
+        // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
+        _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
+        _sectorShips.Position = new Vector2(16, 12);
+        _sectorShips.Visible = false;
         AddChild(_sectorShips);
 
-        _label = new Label { Position = new Vector2(16, 38) };
-        _label.AddThemeFontSizeOverride("font_size", 18);
+        _label = UiKit.MakeLabel("", UiKit.TextStyle.Data);
+        _label.Position = new Vector2(16, 38);
         AddChild(_label);
 
         // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
-        // match is live. Phase 6 adds per-ship cost to the spawn buttons; this is the running balance.
-        _credits = new Label { Position = new Vector2(16, 64), Visible = false };
-        _credits.AddThemeFontSizeOverride("font_size", 18);
-        _credits.AddThemeColorOverride("font_color", new Color(1f, 0.86f, 0.4f));
+        // match is live. The Secondary token replaces the old inline gold.
+        _credits = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Secondary);
+        _credits.Position = new Vector2(16, 64);
+        _credits.Visible = false;
         AddChild(_credits);
 
         // Buy menu: one button per buildable ship class, built lazily from the streamed defs once they
@@ -84,22 +97,18 @@ public partial class Hud : CanvasLayer
 
         // One-line feedback when a buy is suppressed by the client pre-check (locked / can't afford).
         // The buttons gray out the unaffordable/locked options; this names the reason for a queued buy.
-        _spawnHint = new Label { Position = new Vector2(16, 200), Visible = false };
-        _spawnHint.AddThemeFontSizeOverride("font_size", 16);
-        _spawnHint.AddThemeColorOverride("font_color", new Color(1f, 0.5f, 0.4f));
+        _spawnHint = UiKit.MakeLabel("", UiKit.TextStyle.Body, DesignTokens.Warn);
+        _spawnHint.Position = new Vector2(16, 200);
+        _spawnHint.Visible = false;
         AddChild(_spawnHint);
 
         // Out-of-bounds warning (sector boundary): centered in the upper third, hidden
         // until the local ship strays past its sector radius and starts taking damage.
-        _warning = new Label
-        {
-            Visible = false,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            AnchorRight = 1f,
-            OffsetTop = 90f,
-        };
-        _warning.AddThemeFontSizeOverride("font_size", 30);
-        _warning.AddThemeColorOverride("font_color", new Color(1f, 0.35f, 0.3f));
+        _warning = UiKit.MakeLabel("", UiKit.TextStyle.Display, DesignTokens.Danger);
+        _warning.Visible = false;
+        _warning.HorizontalAlignment = HorizontalAlignment.Center;
+        _warning.AnchorRight = 1f;
+        _warning.OffsetTop = 90f;
         AddChild(_warning);
 
         // Lobby / pre-match / post-match overlay. Owns the team picker, ready-up, and
@@ -119,6 +128,50 @@ public partial class Hud : CanvasLayer
         var conn = new ConnectionOverlay { Name = "ConnectionOverlay" };
         AddChild(conn);
         conn.Init(_cm);
+
+        CaptureLiveUiIfRequested();
+    }
+
+    private void LoadShowcaseScene() => GetTree().ChangeSceneToFile("res://scenes/UiShowcase.tscn");
+
+    // `--ui-shot=<path>` (without --ui-showcase) screenshots the live game UI after a short
+    // settle and quits — used to verify the migrated screens render with the design system.
+    private void CaptureLiveUiIfRequested()
+    {
+        string outPath = null;
+        foreach (string a in OS.GetCmdlineUserArgs())
+            if (a.StartsWith("--ui-shot="))
+                outPath = a.Substring("--ui-shot=".Length);
+        if (outPath == null)
+            return;
+        var t = GetTree().CreateTimer(2.0);
+        t.Timeout += () =>
+        {
+            GetViewport().GetTexture().GetImage().SavePng(outPath);
+            GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
+            GetTree().Quit();
+        };
+    }
+
+    // F9 toggles the design-system gallery as a live overlay, for eyeballing the shared
+    // components against the real screens. The showcase self-themes, so it can hang
+    // straight off this CanvasLayer.
+    public override void _ShortcutInput(InputEvent @event)
+    {
+        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F9 })
+        {
+            if (_showcase != null && GodotObject.IsInstanceValid(_showcase))
+            {
+                _showcase.QueueFree();
+                _showcase = null;
+            }
+            else
+            {
+                _showcase = new UiShowcase();
+                AddChild(_showcase);
+            }
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     // Rebuild the buy menu from the current ship defs — one button per buildable hull, in ClassId order.
@@ -132,8 +185,8 @@ public partial class Hud : CanvasLayer
         foreach (var def in ships)
         {
             byte classId = def.ClassId;
-            var b = new Button { CustomMinimumSize = new Vector2(300, 36) };
-            b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+            // ChamferButton (Primary) bakes in the UI click sound, so we only wire the spawn.
+            var b = new ChamferButton { Variant = ButtonVariant.Primary, CustomMinimumSize = new Vector2(300, 36) };
             b.Pressed += () => _ship.RequestSpawn((ShipClass)classId);
             _menu.AddChild(b);
             _spawnButtons.Add((classId, b));
