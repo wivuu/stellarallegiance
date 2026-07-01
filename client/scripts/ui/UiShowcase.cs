@@ -48,7 +48,7 @@ public partial class UiShowcase : Control
     // `--ui-shot[=path]` renders one frame and saves a PNG, for screenshot verification.
     private void MaybeCaptureAndQuit()
     {
-        string outPath = null;
+        string? outPath = null;
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a == "--ui-shot")
@@ -303,7 +303,7 @@ public partial class UiShowcase : Control
         s.AddChild(row);
     }
 
-    private static ToastHost _toast;
+    private static ToastHost? _toast;
 
     private static ToastHost GetToast(Node anchor)
     {

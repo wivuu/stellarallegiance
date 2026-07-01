@@ -35,7 +35,7 @@ public static class UiKit
         return l;
     }
 
-    public static ChamferButton MakeButton(string text, Action onPressed, ButtonVariant variant = ButtonVariant.Secondary)
+    public static ChamferButton MakeButton(string text, Action? onPressed, ButtonVariant variant = ButtonVariant.Secondary)
     {
         var b = new ChamferButton
         {
@@ -56,7 +56,7 @@ public static class UiKit
         double max,
         double step,
         double value,
-        Action<double> onChanged,
+        Action<double>? onChanged,
         bool readout = true
     )
     {
@@ -76,7 +76,7 @@ public static class UiKit
         };
         row.AddChild(slider);
 
-        Label pct = null;
+        Label? pct = null;
         if (readout)
         {
             pct = MakeLabel(Percent(value, min, max), TextStyle.Data);
@@ -93,23 +93,25 @@ public static class UiKit
         return row;
     }
 
-    public static CheckButton MakeToggle(string label, bool on, Action<bool> onToggled)
+    public static CheckButton MakeToggle(string label, bool on, Action<bool>? onToggled)
     {
         var c = new CheckButton { Text = label, ButtonPressed = on };
         c.AddThemeColorOverride("font_color", DesignTokens.TextHi);
-        c.Toggled += p => onToggled?.Invoke(p);
+        if (onToggled != null)
+            c.Toggled += p => onToggled.Invoke(p);
         return c;
     }
 
-    public static CheckBox MakeCheckbox(string label, bool on, Action<bool> onToggled)
+    public static CheckBox MakeCheckbox(string label, bool on, Action<bool>? onToggled)
     {
         var c = new CheckBox { Text = label, ButtonPressed = on };
-        c.Toggled += p => onToggled?.Invoke(p);
+        if (onToggled != null)
+            c.Toggled += p => onToggled.Invoke(p);
         return c;
     }
 
     // A segmented control: one button per option, the active one rendered Primary.
-    public static HBoxContainer MakeSegmented(string[] options, int selected, Action<int> onSelect)
+    public static HBoxContainer MakeSegmented(string[] options, int selected, Action<int>? onSelect)
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 2);
@@ -134,8 +136,8 @@ public static class UiKit
         return row;
     }
 
-    // "<label>  [ – NN + ]" integer stepper, clamped to [min, max].
-    public static HBoxContainer MakeStepper(string label, int value, int min, int max, Action<int> onChanged)
+    // "<label>  [ - NN + ]" integer stepper, clamped to [min, max].
+    public static HBoxContainer MakeStepper(string label, int value, int min, int max, Action<int>? onChanged)
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
@@ -148,7 +150,7 @@ public static class UiKit
 
         var box = new HBoxContainer();
         box.AddThemeConstantOverride("separation", 0);
-        var minus = MakeButton("–", null, ButtonVariant.Secondary);
+        var minus = MakeButton("-", null, ButtonVariant.Secondary);
         var plus = MakeButton("+", null, ButtonVariant.Secondary);
         minus.CustomMinimumSize = plus.CustomMinimumSize = new Vector2(34, 32);
         void Step(int d)
@@ -166,7 +168,7 @@ public static class UiKit
         return row;
     }
 
-    public static OptionButton MakeSelect(string[] options, int selected, Action<int> onSelect)
+    public static OptionButton MakeSelect(string[] options, int selected, Action<int>? onSelect)
     {
         var o = new OptionButton();
         foreach (string s in options)

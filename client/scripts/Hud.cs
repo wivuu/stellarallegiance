@@ -144,7 +144,7 @@ public partial class Hud : CanvasLayer
     // settle and quits — used to verify the migrated screens render with the design system.
     private void CaptureLiveUiIfRequested()
     {
-        string outPath = null;
+        string? outPath = null;
         foreach (string a in OS.GetCmdlineUserArgs())
             if (a.StartsWith("--ui-shot="))
                 outPath = a.Substring("--ui-shot=".Length);

@@ -107,7 +107,7 @@ public partial class StatusPill : PanelContainer
     }
 
     private Label _label = null!;
-    private Tween _tween;
+    private Tween? _tween;
 
     public override void _Ready() => EnsureLabel();
 
@@ -248,13 +248,13 @@ public partial class StatReadout : PanelContainer
 // Data table — header row + data rows on a hairline panel. Columns share width by weight.
 public partial class DataTable : VBoxContainer
 {
-    private float[] _weights = System.Array.Empty<float>();
-    private string[] _headers = System.Array.Empty<string>();
-    private Control _header;
+    private float[] _weights = [];
+    private string[] _headers = [];
+    private Control? _header;
 
     public override void _Ready() => AddThemeConstantOverride("separation", 0);
 
-    public void SetColumns(string[] headers, float[] weights = null)
+    public void SetColumns(string[] headers, float[]? weights = null)
     {
         _headers = headers;
         _weights = weights ?? Filled(headers.Length);
