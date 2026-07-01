@@ -1,32 +1,28 @@
-# logo-gen — Stellar Allegiance brand logo lockup
+# logo-gen — Stellar Allegiance brand logo
 
-Generates the brand logo used as the engine **boot splash**
-(`client/assets/ui/logo.svg` → `client/assets/ui/logo.png`).
+Produces the brand logo used as the engine **boot splash**
+(`client/assets/ui/logo.png`) from the source artwork (`source_logo.png`, the
+finished Stellar Allegiance emblem + `STELLAR / ALLEGIANCE` wordmark).
 
-The emblem is the Claude Design splash reference
-([Splash.dc.html](https://claude.ai/design/p/28bf0d21-5959-4554-8bfc-a1f92113ea28),
-animations stripped); the `STELLAR / ALLEGIANCE` wordmark is set in **Michroma**
-(`client/assets/fonts/michroma.ttf`) and baked to outline paths so it renders
-without a font engine (Godot's SVG importer / ThorVG has none).
+`gen_logo.py` keys the artwork's near-black background out to a true-transparent
+alpha by **un-premultiplying** it (subtract the flat bg, derive alpha from the
+residual luminance, divide it back out). That yields clean soft edges with no dark
+fringe on any background — the emblem's own dark interior keys out too, which is
+correct: on the dark boot screen the transparent areas show the matching
+`bg_color`, reproducing the artwork. The output is trimmed to content and scaled.
 
 ## Regenerate
 
 ```sh
-# 1. build the self-contained transparent SVG (needs fonttools)
-python3 -m venv .venv && .venv/bin/pip install fonttools
+python3 -m venv .venv && .venv/bin/pip install pillow
 .venv/bin/python tools/logo-gen/gen_logo.py
-
-# 2. rasterize it to a transparent PNG headlessly (Godot's CPU SVG loader)
-godot --headless --path client -s "$PWD/tools/logo-gen/rasterize_logo.gd"
-
-# 3. re-import so res:// picks up the new PNG
-godot --headless --import --path client
+godot --headless --import --path client   # re-import so res:// picks up the new PNG
 ```
 
-Commit both `logo.svg` (source) and `logo.png` (the boot image — force-added past
-`.gitignore`). Tune wordmark size in `gen_logo.py`; tune the PNG resolution via
-`SCALE` in `rasterize_logo.gd`.
+Commit both `source_logo.png` (the master art) and `client/assets/ui/logo.png`
+(the boot image — force-added past `.gitignore`). Tune the cutout / size via the
+constants at the top of `gen_logo.py` (`TARGET_H`, `FLOOR`, `KNEE`, `PAD`).
 
-The boot splash is wired in `client/project.godot`
-(`application/boot_splash/*`): `image` → `logo.png`, `bg_color` → the design
-`Void` (`#05070F`), so the transparent logo reads as logo-on-dark.
+The boot splash is wired in `client/project.godot` (`application/boot_splash/*`):
+`image` → `logo.png`, `bg_color` → the design `Void` (`#05070F`), so the
+transparent logo reads as logo-on-dark like the source art.
