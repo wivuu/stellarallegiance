@@ -105,12 +105,13 @@ public partial class WorldRenderer : Node3D
     // (sector not yet known) disables the warning.
     public uint LocalSector => _localSector;
 
-    // Number of ships currently in the local player's sector: every remote ship node tagged
-    // with this sector (each carries a "sector" meta, see SetNodeSector) plus the local ship
-    // itself (which is always in _localSector while flying; it lives in LocalShip, not _shipNodes).
+    // Number of ships currently in the local player's sector: every ship node tagged with this
+    // sector (each carries a "sector" meta, see SetNodeSector). The local ship IS one of these
+    // nodes while flying (InsertShip stores its PredictionController in _shipNodes and keeps its
+    // sector meta current on warp), so it must NOT be added again — doing so double-counted it.
     public int ShipsInLocalSector()
     {
-        int n = LocalShip != null ? 1 : 0;
+        int n = 0;
         foreach (var node in _shipNodes.Values)
             if (node.HasMeta("sector") && (int)node.GetMeta("sector") == (int)_localSector)
                 n++;
