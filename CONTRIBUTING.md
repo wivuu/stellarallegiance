@@ -56,12 +56,3 @@ Code is formatted with [CSharpier](https://csharpier.com) (pinned in `dotnet-too
 dotnet tool restore
 dotnet csharpier format .
 ```
-
-## Knowledge graph
-
-The repo keeps a [graphify](https://github.com/safishamsi/graphify) graph in `graphify-out/`.
-After changing code, refresh it (AST-only, no API cost):
-
-```bash
-graphify update .
-```
