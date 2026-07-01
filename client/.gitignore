@@ -14,6 +14,10 @@
 assets/**/*.import
 assets/**/*.png
 
+# ...except the brand boot-splash logo, which is a committed source-of-truth asset
+# (regenerate with tools/logo-gen — see its README). Godot still re-imports it.
+!assets/ui/logo.png
+
 # dotenv files
 .env
 

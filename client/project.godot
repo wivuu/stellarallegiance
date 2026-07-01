@@ -13,6 +13,10 @@ config_version=5
 config/name="wivuullegiance"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6", "C#")
+boot_splash/bg_color=Color(0.019608, 0.027451, 0.058824, 1)
+boot_splash/image="res://assets/ui/logo.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
 
 [display]
 
