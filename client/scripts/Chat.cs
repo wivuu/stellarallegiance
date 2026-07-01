@@ -207,8 +207,15 @@ public partial class Chat : Control
                         + "  /money (/credits) — your team's credit balance\n"
                         + "  /score — both teams' scores\n"
                         + "  /team — which team you're on\n"
-                        + "  /server — server address & connection info"
+                        + "  /server — server address & connection info\n"
+                        + "  /pigs on|off — toggle AI drone spawns (server-wide)"
                 );
+                break;
+            case "/pigs":
+                // Server-side command: relay the raw text so the sim toggles PigsEnabled
+                // and broadcasts the result. Scope is irrelevant — the server intercepts
+                // '/'-prefixed chat before any relay.
+                _net.SendChat(text, false);
                 break;
             case "/money":
             case "/credits":

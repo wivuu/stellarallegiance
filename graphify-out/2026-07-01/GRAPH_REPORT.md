@@ -1,7 +1,7 @@
-# Graph Report - wivuullegiance  (2026-07-01)
+# Graph Report - wivuullegiance  (2026-06-30)
 
 ## Corpus Check
-- 168 files · ~161,412 words
+- 168 files · ~161,359 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `48875b8a`
+- Built from commit: `1c3f4b66`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -412,8 +412,8 @@ Cohesion: 0.14
 Nodes (12): SimModel, SimModelCache, SimModel, Forward, Name, int, Pos, SimModel (+4 more)
 
 ### Community 72 - "Community 72"
-Cohesion: 0.18
-Nodes (9): Color, ConnectionManager, Dictionary, float, HashSet, List, Vector2, WorldRenderer (+1 more)
+Cohesion: 0.16
+Nodes (10): Control, Color, ConnectionManager, Dictionary, float, HashSet, List, Vector2 (+2 more)
 
 ### Community 73 - "Community 73"
 Cohesion: 0.28
@@ -528,16 +528,16 @@ Cohesion: 0.11
 Nodes (14): FactionsContentProjection, Hardpoint, Hull, IReadOnlyDictionary, BaseDef, ContentSet, Core, FactionStart (+6 more)
 
 ### Community 144 - "Community 144"
-Cohesion: 0.19
-Nodes (5): float, HBoxContainer, string, DataTable, RadialGauge
+Cohesion: 0.14
+Nodes (7): float, HBoxContainer, string, DataTable, RadialGauge, ToastHost, VBoxContainer
 
 ### Community 145 - "Community 145"
 Cohesion: 0.32
 Nodes (4): Node, VBoxContainer, ToastHost, UiShowcase
 
 ### Community 150 - "Community 150"
-Cohesion: 0.21
-Nodes (8): Control, bool, Camera3D, Color, float, Vector2, WorldRenderer, VelocityIndicator
+Cohesion: 0.23
+Nodes (7): bool, Camera3D, Color, float, Vector2, WorldRenderer, VelocityIndicator
 
 ### Community 151 - "Community 151"
 Cohesion: 0.18
@@ -576,8 +576,8 @@ Cohesion: 0.26
 Nodes (5): Color, Label, HBoxContainer, LoadoutSlot, ResourceReadout
 
 ### Community 160 - "Community 160"
-Cohesion: 0.33
-Nodes (3): float, string, ContactChip
+Cohesion: 0.20
+Nodes (5): float, string, Control, ContactChip, DiamondDivider
 
 ### Community 161 - "Community 161"
 Cohesion: 0.31
@@ -596,12 +596,12 @@ Cohesion: 0.31
 Nodes (5): bool, long, string, Font, UiFonts
 
 ### Community 165 - "Community 165"
-Cohesion: 0.20
-Nodes (6): Kind, Label, Tween, AlertBox, StatReadout, StatusPill
+Cohesion: 0.39
+Nodes (3): Kind, Tween, StatusPill
 
 ### Community 166 - "Community 166"
-Cohesion: 0.25
-Nodes (4): Control, ToastHost, DiamondDivider, VBoxContainer
+Cohesion: 0.36
+Nodes (3): Label, AlertBox, StatReadout
 
 ### Community 167 - "Community 167"
 Cohesion: 0.38
@@ -619,7 +619,7 @@ Nodes (3): Color, int, SegmentedBar
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TargetMarkers` connect `Target Markers HUD` to `Hit Flash Effect`, `Community 166`, `Community 150`?**
+- **Why does `TargetMarkers` connect `Target Markers HUD` to `Community 72`, `Hit Flash Effect`, `Community 160`?**
   _High betweenness centrality (0.079) - this node is a cross-community bridge._
 - **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 38`, `Community 105`, `Target Markers HUD`, `Community 78`, `Community 114`, `Community 56`, `Starscape Background`, `Community 157`?**
   _High betweenness centrality (0.075) - this node is a cross-community bridge._

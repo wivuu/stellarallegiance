@@ -565,7 +565,7 @@
       "source_file": "",
       "source_location": "",
       "id": "control",
-      "community": 166,
+      "community": 160,
       "norm_label": "control"
     },
     {
@@ -815,7 +815,7 @@
       "label": ".ToggleChannel()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L241",
+      "source_location": "L234",
       "id": "scripts_chat_chat_togglechannel",
       "community": 2,
       "norm_label": ".togglechannel()"
@@ -824,7 +824,7 @@
       "label": ".UpdateChip()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L247",
+      "source_location": "L240",
       "id": "scripts_chat_chat_updatechip",
       "community": 2,
       "norm_label": ".updatechip()"
@@ -833,7 +833,7 @@
       "label": "._Process()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L257",
+      "source_location": "L250",
       "id": "scripts_chat_chat_process",
       "community": 2,
       "norm_label": "._process()"
@@ -842,7 +842,7 @@
       "label": ".Render()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L284",
+      "source_location": "L277",
       "id": "scripts_chat_chat_render",
       "community": 2,
       "norm_label": ".render()"
@@ -851,7 +851,7 @@
       "label": "string",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L293",
+      "source_location": "L286",
       "id": "client_scripts_chat_cs_string",
       "community": 2,
       "norm_label": "string"
@@ -860,7 +860,7 @@
       "label": ".FormatLine()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L296",
+      "source_location": "L289",
       "id": "scripts_chat_chat_formatline",
       "community": 2,
       "norm_label": ".formatline()"
@@ -869,7 +869,7 @@
       "label": ".Escape()",
       "file_type": "code",
       "source_file": "client/scripts/Chat.cs",
-      "source_location": "L308",
+      "source_location": "L301",
       "id": "scripts_chat_chat_escape",
       "community": 2,
       "norm_label": ".escape()"
@@ -2914,7 +2914,7 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L24",
       "id": "client_scripts_hud_cs_control",
-      "community": 150,
+      "community": 72,
       "norm_label": "control"
     },
     {
@@ -7576,7 +7576,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L1",
       "id": "ui_datafeedback",
-      "community": 165,
+      "community": 144,
       "norm_label": "datafeedback.cs"
     },
     {
@@ -7711,7 +7711,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L109",
       "id": "client_scripts_ui_datafeedback_cs_label",
-      "community": 165,
+      "community": 166,
       "norm_label": "label"
     },
     {
@@ -7774,7 +7774,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L161",
       "id": "ui_datafeedback_alertbox",
-      "community": 165,
+      "community": 166,
       "norm_label": "alertbox"
     },
     {
@@ -7783,7 +7783,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L166",
       "id": "ui_datafeedback_alertbox_ready",
-      "community": 165,
+      "community": 166,
       "norm_label": "._ready()"
     },
     {
@@ -7792,7 +7792,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L168",
       "id": "ui_datafeedback_alertbox_ensurebuilt",
-      "community": 165,
+      "community": 166,
       "norm_label": ".ensurebuilt()"
     },
     {
@@ -7810,7 +7810,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L210",
       "id": "ui_datafeedback_statreadout",
-      "community": 165,
+      "community": 166,
       "norm_label": "statreadout"
     },
     {
@@ -7819,7 +7819,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L215",
       "id": "ui_datafeedback_statreadout_ready",
-      "community": 165,
+      "community": 166,
       "norm_label": "._ready()"
     },
     {
@@ -7828,7 +7828,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L217",
       "id": "ui_datafeedback_statreadout_ensurebuilt",
-      "community": 165,
+      "community": 166,
       "norm_label": ".ensurebuilt()"
     },
     {
@@ -7837,7 +7837,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L239",
       "id": "ui_datafeedback_statreadout_set",
-      "community": 165,
+      "community": 166,
       "norm_label": ".set()"
     },
     {
@@ -7855,7 +7855,7 @@
       "source_file": "",
       "source_location": "",
       "id": "vboxcontainer",
-      "community": 166,
+      "community": 144,
       "norm_label": "vboxcontainer"
     },
     {
@@ -7927,7 +7927,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L302",
       "id": "ui_datafeedback_toasthost",
-      "community": 166,
+      "community": 144,
       "norm_label": "toasthost"
     },
     {
@@ -7936,7 +7936,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L306",
       "id": "ui_datafeedback_toasthost_ready",
-      "community": 166,
+      "community": 144,
       "norm_label": "._ready()"
     },
     {
@@ -7945,7 +7945,7 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L315",
       "id": "ui_datafeedback_toasthost_show",
-      "community": 166,
+      "community": 144,
       "norm_label": ".show()"
     },
     {
@@ -8377,7 +8377,7 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L77",
       "id": "ui_surfaces_diamonddivider",
-      "community": 166,
+      "community": 160,
       "norm_label": "diamonddivider"
     },
     {
@@ -8386,7 +8386,7 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L79",
       "id": "ui_surfaces_diamonddivider_ready",
-      "community": 166,
+      "community": 160,
       "norm_label": "._ready()"
     },
     {
@@ -8395,7 +8395,7 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L85",
       "id": "ui_surfaces_diamonddivider_draw",
-      "community": 166,
+      "community": 160,
       "norm_label": "._draw()"
     },
     {
@@ -8717,7 +8717,7 @@
       "label": ".MakeCheckbox()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L105",
+      "source_location": "L104",
       "id": "ui_uikit_uikit_makecheckbox",
       "community": 109,
       "norm_label": ".makecheckbox()"
@@ -8726,7 +8726,7 @@
       "label": "CheckBox",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L105",
+      "source_location": "L104",
       "id": "checkbox",
       "community": 109,
       "norm_label": "checkbox"
@@ -8735,7 +8735,7 @@
       "label": ".MakeSegmented()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L114",
+      "source_location": "L112",
       "id": "ui_uikit_uikit_makesegmented",
       "community": 109,
       "norm_label": ".makesegmented()"
@@ -8744,7 +8744,7 @@
       "label": ".MakeStepper()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L140",
+      "source_location": "L138",
       "id": "ui_uikit_uikit_makestepper",
       "community": 109,
       "norm_label": ".makestepper()"
@@ -8753,7 +8753,7 @@
       "label": ".MakeSelect()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L171",
+      "source_location": "L169",
       "id": "ui_uikit_uikit_makeselect",
       "community": 109,
       "norm_label": ".makeselect()"
@@ -8762,7 +8762,7 @@
       "label": "OptionButton",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L171",
+      "source_location": "L169",
       "id": "optionbutton",
       "community": 109,
       "norm_label": "optionbutton"
@@ -8771,7 +8771,7 @@
       "label": ".Percent()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L182",
+      "source_location": "L180",
       "id": "ui_uikit_uikit_percent",
       "community": 109,
       "norm_label": ".percent()"
@@ -8780,7 +8780,7 @@
       "label": ".With()",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L189",
+      "source_location": "L187",
       "id": "ui_uikit_uikit_with",
       "community": 109,
       "norm_label": ".with()"
@@ -8789,7 +8789,7 @@
       "label": "T",
       "file_type": "code",
       "source_file": "client/scripts/ui/UiKit.cs",
-      "source_location": "L189",
+      "source_location": "L187",
       "id": "client_scripts_ui_uikit_cs_t",
       "community": 109,
       "norm_label": "t"
@@ -22418,9 +22418,9 @@
       "source_location": "L287",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_chat_chat",
-      "target": "client_scripts_chat_cs_string"
+      "target": "client_scripts_chat_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -22429,9 +22429,9 @@
       "source_location": "L39",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_chat_chat",
-      "target": "client_scripts_chat_cs_styleboxflat"
+      "target": "client_scripts_chat_cs_styleboxflat",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -22763,9 +22763,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L12",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22794,9 +22794,9 @@
       "source_location": "L253",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22804,9 +22804,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22814,9 +22814,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L62",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22824,9 +22824,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L302",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_toasthost",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22834,9 +22834,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L53",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22844,9 +22844,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L151",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22854,9 +22854,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L77",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_diamonddivider",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -22864,9 +22864,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "control"
+      "target": "control",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -24017,9 +24017,9 @@
       "source_location": "L15",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_connectionoverlay_connectionoverlay",
-      "target": "client_scripts_connectionoverlay_cs_chamferbutton"
+      "target": "client_scripts_connectionoverlay_cs_chamferbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -24082,9 +24082,9 @@
       "source_location": "L17",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_connectionoverlay_connectionoverlay",
-      "target": "connstate"
+      "target": "connstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -24123,9 +24123,9 @@
       "source_location": "L14",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_connectionoverlay_connectionoverlay",
-      "target": "statuspill"
+      "target": "statuspill",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -24167,9 +24167,9 @@
       "source_location": "L71",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_connectionoverlay_connectionoverlay_centered",
-      "target": "client_scripts_connectionoverlay_cs_textstyle"
+      "target": "client_scripts_connectionoverlay_cs_textstyle",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27406,9 +27406,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "list_byte_classid_chamferbutton_button"
+      "target": "list_byte_classid_chamferbutton_button",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -27426,9 +27426,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L145",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "scripts_hud_hud_captureliveuiifrequested"
+      "target": "scripts_hud_hud_captureliveuiifrequested",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -27436,9 +27436,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L141",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "scripts_hud_hud_loadshowcasescene"
+      "target": "scripts_hud_hud_loadshowcasescene",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -27486,9 +27486,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L165",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud",
-      "target": "scripts_hud_hud_shortcutinput"
+      "target": "scripts_hud_hud_shortcutinput",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -27567,9 +27567,9 @@
       "source_file": "client/scripts/Hud.cs",
       "source_location": "L138",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud_ready",
-      "target": "scripts_hud_hud_captureliveuiifrequested"
+      "target": "scripts_hud_hud_captureliveuiifrequested",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -27589,9 +27589,9 @@
       "source_location": "L165",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_hud_hud_shortcutinput",
-      "target": "client_scripts_hud_cs_inputevent"
+      "target": "client_scripts_hud_cs_inputevent",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -27964,9 +27964,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby",
-      "target": "client_scripts_lobby_cs_chamferbutton"
+      "target": "client_scripts_lobby_cs_chamferbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28152,9 +28152,9 @@
       "source_location": "L140",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby_makebutton",
-      "target": "client_scripts_lobby_cs_color"
+      "target": "client_scripts_lobby_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28207,9 +28207,9 @@
       "source_location": "L140",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby_makebutton",
-      "target": "client_scripts_lobby_cs_chamferbutton"
+      "target": "client_scripts_lobby_cs_chamferbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28306,9 +28306,9 @@
       "source_location": "L132",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby_centered",
-      "target": "client_scripts_lobby_cs_textstyle"
+      "target": "client_scripts_lobby_cs_textstyle",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28350,9 +28350,9 @@
       "source_location": "L140",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_lobby_lobby_makebutton",
-      "target": "client_scripts_lobby_cs_buttonvariant"
+      "target": "client_scripts_lobby_cs_buttonvariant",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28503,9 +28503,9 @@
       "source_location": "L52",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap",
-      "target": "client_scripts_minimap_cs_vector2"
+      "target": "client_scripts_minimap_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28524,9 +28524,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L202",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap",
-      "target": "scripts_minimap_minimap_closeddiamond"
+      "target": "scripts_minimap_minimap_closeddiamond",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -28534,9 +28534,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L193",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap",
-      "target": "scripts_minimap_minimap_diamondpoints"
+      "target": "scripts_minimap_minimap_diamondpoints",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -28564,9 +28564,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L190",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap",
-      "target": "scripts_minimap_minimap_iscontested"
+      "target": "scripts_minimap_minimap_iscontested",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -28617,9 +28617,9 @@
       "source_location": "L202",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap_closeddiamond",
-      "target": "client_scripts_minimap_cs_vector2"
+      "target": "client_scripts_minimap_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28628,9 +28628,9 @@
       "source_location": "L193",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap_diamondpoints",
-      "target": "client_scripts_minimap_cs_vector2"
+      "target": "client_scripts_minimap_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -28650,9 +28650,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L163",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap_draw",
-      "target": "scripts_minimap_minimap_closeddiamond"
+      "target": "scripts_minimap_minimap_closeddiamond",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28661,9 +28661,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L161",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap_draw",
-      "target": "scripts_minimap_minimap_diamondpoints"
+      "target": "scripts_minimap_minimap_diamondpoints",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28672,9 +28672,9 @@
       "source_file": "client/scripts/Minimap.cs",
       "source_location": "L139",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_minimap_minimap_draw",
-      "target": "scripts_minimap_minimap_iscontested"
+      "target": "scripts_minimap_minimap_iscontested",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -33362,9 +33362,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L12",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring",
-      "target": "scripts_systemring_systemring"
+      "target": "scripts_systemring_systemring",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33373,9 +33373,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "client_scripts_systemring_cs_camera3d"
+      "target": "client_scripts_systemring_cs_camera3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33384,9 +33384,9 @@
       "source_location": "L23",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "client_scripts_systemring_cs_float"
+      "target": "client_scripts_systemring_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33395,9 +33395,9 @@
       "source_location": "L21",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "client_scripts_systemring_cs_int"
+      "target": "client_scripts_systemring_cs_int",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33406,9 +33406,9 @@
       "source_location": "L25",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "client_scripts_systemring_cs_worldrenderer"
+      "target": "client_scripts_systemring_cs_worldrenderer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33416,9 +33416,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L49",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_draw"
+      "target": "scripts_systemring_systemring_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33426,9 +33426,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L102",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_drawtagvalue"
+      "target": "scripts_systemring_systemring_drawtagvalue",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33436,9 +33436,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L120",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_healthcolor"
+      "target": "scripts_systemring_systemring_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33446,9 +33446,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L33",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_init"
+      "target": "scripts_systemring_systemring_init",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33456,9 +33456,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L42",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_process"
+      "target": "scripts_systemring_systemring_process",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -33466,9 +33466,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L86",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring",
-      "target": "scripts_systemring_systemring_segmentedarc"
+      "target": "scripts_systemring_systemring_segmentedarc",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33477,9 +33477,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_init",
-      "target": "client_scripts_systemring_cs_worldrenderer"
+      "target": "client_scripts_systemring_cs_worldrenderer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33488,9 +33488,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_init",
-      "target": "client_scripts_systemring_cs_camera3d"
+      "target": "client_scripts_systemring_cs_camera3d",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -33499,9 +33499,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L79",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_draw",
-      "target": "scripts_systemring_systemring_drawtagvalue"
+      "target": "scripts_systemring_systemring_drawtagvalue",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -33510,9 +33510,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L72",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_draw",
-      "target": "scripts_systemring_systemring_healthcolor"
+      "target": "scripts_systemring_systemring_healthcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -33521,9 +33521,9 @@
       "source_file": "client/scripts/SystemRing.cs",
       "source_location": "L72",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_draw",
-      "target": "scripts_systemring_systemring_segmentedarc"
+      "target": "scripts_systemring_systemring_segmentedarc",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33532,9 +33532,9 @@
       "source_location": "L86",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_segmentedarc",
-      "target": "client_scripts_systemring_cs_color"
+      "target": "client_scripts_systemring_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33543,9 +33543,9 @@
       "source_location": "L86",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_segmentedarc",
-      "target": "client_scripts_systemring_cs_vector2"
+      "target": "client_scripts_systemring_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33554,9 +33554,9 @@
       "source_location": "L102",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_drawtagvalue",
-      "target": "client_scripts_systemring_cs_vector2"
+      "target": "client_scripts_systemring_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33565,9 +33565,9 @@
       "source_location": "L102",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_drawtagvalue",
-      "target": "client_scripts_systemring_cs_color"
+      "target": "client_scripts_systemring_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -33576,9 +33576,9 @@
       "source_location": "L120",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_systemring_systemring_healthcolor",
-      "target": "client_scripts_systemring_cs_color"
+      "target": "client_scripts_systemring_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -33796,9 +33796,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L488",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers",
-      "target": "scripts_targetmarkers_targetmarkers_drawfocustag"
+      "target": "scripts_targetmarkers_targetmarkers_drawfocustag",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -34114,9 +34114,9 @@
       "source_location": "L488",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawfocustag",
-      "target": "client_scripts_targetmarkers_cs_vector2"
+      "target": "client_scripts_targetmarkers_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -34202,9 +34202,9 @@
       "source_location": "L488",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawfocustag",
-      "target": "predictioncontroller"
+      "target": "predictioncontroller",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -34301,9 +34301,9 @@
       "source_location": "L488",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawfocustag",
-      "target": "client_scripts_targetmarkers_cs_remoteship"
+      "target": "client_scripts_targetmarkers_cs_remoteship",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -34389,9 +34389,9 @@
       "source_file": "client/scripts/TargetMarkers.cs",
       "source_location": "L283",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_draw",
-      "target": "scripts_targetmarkers_targetmarkers_drawfocustag"
+      "target": "scripts_targetmarkers_targetmarkers_drawfocustag",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -34433,9 +34433,9 @@
       "source_location": "L326",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_kindof",
-      "target": "client_scripts_targetmarkers_cs_kind"
+      "target": "client_scripts_targetmarkers_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -34455,9 +34455,9 @@
       "source_location": "L421",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawclassglyph",
-      "target": "client_scripts_targetmarkers_cs_kind"
+      "target": "client_scripts_targetmarkers_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -34466,9 +34466,9 @@
       "source_location": "L339",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "scripts_targetmarkers_targetmarkers_drawentity",
-      "target": "client_scripts_targetmarkers_cs_kind"
+      "target": "client_scripts_targetmarkers_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38023,9 +38023,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L22",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton",
-      "target": "ui_chamferbutton_chamferbutton"
+      "target": "ui_chamferbutton_chamferbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38033,9 +38033,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L22",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "button"
+      "target": "button",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38044,9 +38044,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "client_scripts_ui_chamferbutton_cs_buttonvariant"
+      "target": "client_scripts_ui_chamferbutton_cs_buttonvariant",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38055,9 +38055,9 @@
       "source_location": "L28",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "client_scripts_ui_chamferbutton_cs_color"
+      "target": "client_scripts_ui_chamferbutton_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38066,9 +38066,9 @@
       "source_location": "L30",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "client_scripts_ui_chamferbutton_cs_float"
+      "target": "client_scripts_ui_chamferbutton_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38076,9 +38076,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L55",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "ui_chamferbutton_chamferbutton_draw"
+      "target": "ui_chamferbutton_chamferbutton_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38086,9 +38086,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L128",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "ui_chamferbutton_chamferbutton_drawlabel"
+      "target": "ui_chamferbutton_chamferbutton_drawlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38096,9 +38096,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L44",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "ui_chamferbutton_chamferbutton_process"
+      "target": "ui_chamferbutton_chamferbutton_process",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38106,9 +38106,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L34",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton",
-      "target": "ui_chamferbutton_chamferbutton_ready"
+      "target": "ui_chamferbutton_chamferbutton_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38128,9 +38128,9 @@
       "source_location": "L128",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton_drawlabel",
-      "target": "client_scripts_ui_chamferbutton_cs_color"
+      "target": "client_scripts_ui_chamferbutton_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38139,9 +38139,9 @@
       "source_file": "client/scripts/ui/ChamferButton.cs",
       "source_location": "L125",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_chamferbutton_chamferbutton_draw",
-      "target": "ui_chamferbutton_chamferbutton_drawlabel"
+      "target": "ui_chamferbutton_chamferbutton_drawlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38149,9 +38149,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L161",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_alertbox"
+      "target": "ui_datafeedback_alertbox",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38159,9 +38159,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L249",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_datatable"
+      "target": "ui_datafeedback_datatable",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38169,9 +38169,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_radialgauge"
+      "target": "ui_datafeedback_radialgauge",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38179,9 +38179,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L62",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_segmentedbar"
+      "target": "ui_datafeedback_segmentedbar",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38189,9 +38189,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L210",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_statreadout"
+      "target": "ui_datafeedback_statreadout",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38199,9 +38199,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L98",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_statuspill"
+      "target": "ui_datafeedback_statuspill",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38209,9 +38209,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L302",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback",
-      "target": "ui_datafeedback_toasthost"
+      "target": "ui_datafeedback_toasthost",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38220,9 +38220,9 @@
       "source_location": "L11",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "client_scripts_ui_datafeedback_cs_color"
+      "target": "client_scripts_ui_datafeedback_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38231,9 +38231,9 @@
       "source_location": "L15",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "client_scripts_ui_datafeedback_cs_float"
+      "target": "client_scripts_ui_datafeedback_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38242,9 +38242,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "client_scripts_ui_datafeedback_cs_string"
+      "target": "client_scripts_ui_datafeedback_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38252,9 +38252,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L34",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "ui_datafeedback_radialgauge_draw"
+      "target": "ui_datafeedback_radialgauge_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38262,9 +38262,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L17",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "ui_datafeedback_radialgauge_ready"
+      "target": "ui_datafeedback_radialgauge_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38272,9 +38272,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L25",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_radialgauge",
-      "target": "ui_datafeedback_radialgauge_setvalue"
+      "target": "ui_datafeedback_radialgauge_setvalue",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38283,9 +38283,9 @@
       "source_location": "L65",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "client_scripts_ui_datafeedback_cs_color"
+      "target": "client_scripts_ui_datafeedback_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38294,9 +38294,9 @@
       "source_location": "L239",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout_set",
-      "target": "client_scripts_ui_datafeedback_cs_color"
+      "target": "client_scripts_ui_datafeedback_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38305,9 +38305,9 @@
       "source_location": "L122",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_colorof",
-      "target": "client_scripts_ui_datafeedback_cs_color"
+      "target": "client_scripts_ui_datafeedback_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38316,9 +38316,9 @@
       "source_location": "L252",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "client_scripts_ui_datafeedback_cs_string"
+      "target": "client_scripts_ui_datafeedback_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38327,9 +38327,9 @@
       "source_location": "L251",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "client_scripts_ui_datafeedback_cs_float"
+      "target": "client_scripts_ui_datafeedback_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38338,9 +38338,9 @@
       "source_location": "L67",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "client_scripts_ui_datafeedback_cs_int"
+      "target": "client_scripts_ui_datafeedback_cs_int",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38348,9 +38348,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L85",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "ui_datafeedback_segmentedbar_draw"
+      "target": "ui_datafeedback_segmentedbar_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38358,9 +38358,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L69",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "ui_datafeedback_segmentedbar_ready"
+      "target": "ui_datafeedback_segmentedbar_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38368,9 +38368,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L76",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_segmentedbar",
-      "target": "ui_datafeedback_segmentedbar_set"
+      "target": "ui_datafeedback_segmentedbar_set",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38379,9 +38379,9 @@
       "source_location": "L109",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "client_scripts_ui_datafeedback_cs_label"
+      "target": "client_scripts_ui_datafeedback_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38389,9 +38389,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L98",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38400,9 +38400,9 @@
       "source_location": "L110",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "tween"
+      "target": "tween",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38410,9 +38410,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L122",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "ui_datafeedback_statuspill_colorof"
+      "target": "ui_datafeedback_statuspill_colorof",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38420,9 +38420,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L132",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "ui_datafeedback_statuspill_configure"
+      "target": "ui_datafeedback_statuspill_configure",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38430,9 +38430,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L114",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "ui_datafeedback_statuspill_ensurelabel"
+      "target": "ui_datafeedback_statuspill_ensurelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38440,9 +38440,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L112",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill",
-      "target": "ui_datafeedback_statuspill_ready"
+      "target": "ui_datafeedback_statuspill_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38450,9 +38450,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L161",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38460,9 +38460,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L210",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38470,9 +38470,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38480,9 +38480,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L11",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_bracketpanel",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38490,9 +38490,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L64",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_insetwell",
-      "target": "panelcontainer"
+      "target": "panelcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38501,9 +38501,9 @@
       "source_location": "L164",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox",
-      "target": "client_scripts_ui_datafeedback_cs_label"
+      "target": "client_scripts_ui_datafeedback_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38512,9 +38512,9 @@
       "source_location": "L213",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout",
-      "target": "client_scripts_ui_datafeedback_cs_label"
+      "target": "client_scripts_ui_datafeedback_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38523,9 +38523,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L112",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_ready",
-      "target": "ui_datafeedback_statuspill_ensurelabel"
+      "target": "ui_datafeedback_statuspill_ensurelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38534,9 +38534,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L134",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_configure",
-      "target": "ui_datafeedback_statuspill_ensurelabel"
+      "target": "ui_datafeedback_statuspill_ensurelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38545,9 +38545,9 @@
       "source_location": "L122",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_colorof",
-      "target": "client_scripts_ui_datafeedback_cs_kind"
+      "target": "client_scripts_ui_datafeedback_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38556,9 +38556,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L135",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_configure",
-      "target": "ui_datafeedback_statuspill_colorof"
+      "target": "ui_datafeedback_statuspill_colorof",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38567,9 +38567,9 @@
       "source_location": "L183",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox_configure",
-      "target": "client_scripts_ui_datafeedback_cs_kind"
+      "target": "client_scripts_ui_datafeedback_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38578,9 +38578,9 @@
       "source_location": "L132",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statuspill_configure",
-      "target": "client_scripts_ui_datafeedback_cs_kind"
+      "target": "client_scripts_ui_datafeedback_cs_kind",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38588,9 +38588,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L183",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox",
-      "target": "ui_datafeedback_alertbox_configure"
+      "target": "ui_datafeedback_alertbox_configure",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38598,9 +38598,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L168",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox",
-      "target": "ui_datafeedback_alertbox_ensurebuilt"
+      "target": "ui_datafeedback_alertbox_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38608,9 +38608,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L166",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox",
-      "target": "ui_datafeedback_alertbox_ready"
+      "target": "ui_datafeedback_alertbox_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38619,9 +38619,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L166",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox_ready",
-      "target": "ui_datafeedback_statreadout_ensurebuilt"
+      "target": "ui_datafeedback_statreadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38630,9 +38630,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L185",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_alertbox_configure",
-      "target": "ui_datafeedback_statreadout_ensurebuilt"
+      "target": "ui_datafeedback_statreadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38640,9 +38640,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L217",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout",
-      "target": "ui_datafeedback_statreadout_ensurebuilt"
+      "target": "ui_datafeedback_statreadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38650,9 +38650,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L215",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout",
-      "target": "ui_datafeedback_statreadout_ready"
+      "target": "ui_datafeedback_statreadout_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38660,9 +38660,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L239",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout",
-      "target": "ui_datafeedback_statreadout_set"
+      "target": "ui_datafeedback_statreadout_set",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38671,9 +38671,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L215",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout_ready",
-      "target": "ui_datafeedback_statreadout_ensurebuilt"
+      "target": "ui_datafeedback_statreadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38682,9 +38682,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L241",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_statreadout_set",
-      "target": "ui_datafeedback_statreadout_ensurebuilt"
+      "target": "ui_datafeedback_statreadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38692,9 +38692,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L267",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_addrow"
+      "target": "ui_datafeedback_datatable_addrow",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38702,9 +38702,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L269",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_clear"
+      "target": "ui_datafeedback_datatable_clear",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38712,9 +38712,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L292",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_filled"
+      "target": "ui_datafeedback_datatable_filled",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38722,9 +38722,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L255",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_ready"
+      "target": "ui_datafeedback_datatable_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38732,9 +38732,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L276",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_row"
+      "target": "ui_datafeedback_datatable_row",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38742,9 +38742,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L257",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "ui_datafeedback_datatable_setcolumns"
+      "target": "ui_datafeedback_datatable_setcolumns",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -38752,9 +38752,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L249",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable",
-      "target": "vboxcontainer"
+      "target": "vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38763,9 +38763,9 @@
       "source_location": "L304",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_toasthost",
-      "target": "vboxcontainer"
+      "target": "vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38774,9 +38774,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L260",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable_setcolumns",
-      "target": "ui_datafeedback_datatable_filled"
+      "target": "ui_datafeedback_datatable_filled",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38785,9 +38785,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L262",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable_setcolumns",
-      "target": "ui_datafeedback_datatable_row"
+      "target": "ui_datafeedback_datatable_row",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38796,9 +38796,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L267",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable_addrow",
-      "target": "ui_datafeedback_datatable_row"
+      "target": "ui_datafeedback_datatable_row",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38807,9 +38807,9 @@
       "source_location": "L276",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_datatable_row",
-      "target": "client_scripts_ui_datafeedback_cs_hboxcontainer"
+      "target": "client_scripts_ui_datafeedback_cs_hboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38817,9 +38817,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L306",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_toasthost",
-      "target": "ui_datafeedback_toasthost_ready"
+      "target": "ui_datafeedback_toasthost_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38827,9 +38827,9 @@
       "source_file": "client/scripts/ui/DataFeedback.cs",
       "source_location": "L315",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_datafeedback_toasthost",
-      "target": "ui_datafeedback_toasthost_show"
+      "target": "ui_datafeedback_toasthost_show",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38837,9 +38837,9 @@
       "source_file": "client/scripts/ui/DesignTokens.cs",
       "source_location": "L13",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_designtokens",
-      "target": "ui_designtokens_designtokens"
+      "target": "ui_designtokens_designtokens",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38848,9 +38848,9 @@
       "source_location": "L46",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens",
-      "target": "client_scripts_ui_designtokens_cs_color"
+      "target": "client_scripts_ui_designtokens_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38859,9 +38859,9 @@
       "source_location": "L63",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens",
-      "target": "client_scripts_ui_designtokens_cs_float"
+      "target": "client_scripts_ui_designtokens_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38870,9 +38870,9 @@
       "source_location": "L59",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens",
-      "target": "client_scripts_ui_designtokens_cs_int"
+      "target": "client_scripts_ui_designtokens_cs_int",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38880,9 +38880,9 @@
       "source_file": "client/scripts/ui/DesignTokens.cs",
       "source_location": "L48",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens",
-      "target": "ui_designtokens_designtokens_faction"
+      "target": "ui_designtokens_designtokens_faction",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38890,9 +38890,9 @@
       "source_file": "client/scripts/ui/DesignTokens.cs",
       "source_location": "L67",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens",
-      "target": "ui_designtokens_designtokens_setteamaccenttint"
+      "target": "ui_designtokens_designtokens_setteamaccenttint",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38901,9 +38901,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens_faction",
-      "target": "client_scripts_ui_designtokens_cs_color"
+      "target": "client_scripts_ui_designtokens_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -38912,9 +38912,9 @@
       "source_file": "client/scripts/ui/DesignTokens.cs",
       "source_location": "L75",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_designtokens_designtokens_setteamaccenttint",
-      "target": "ui_designtokens_designtokens_faction"
+      "target": "ui_designtokens_designtokens_faction",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38922,9 +38922,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L53",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements",
-      "target": "ui_gameelements_contactchip"
+      "target": "ui_gameelements_contactchip",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38932,9 +38932,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements",
-      "target": "ui_gameelements_loadoutslot"
+      "target": "ui_gameelements_loadoutslot",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38942,9 +38942,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L151",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements",
-      "target": "ui_gameelements_radarframe"
+      "target": "ui_gameelements_radarframe",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -38952,9 +38952,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L99",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements",
-      "target": "ui_gameelements_resourcereadout"
+      "target": "ui_gameelements_resourcereadout",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -38963,9 +38963,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot",
-      "target": "client_scripts_ui_gameelements_cs_label"
+      "target": "client_scripts_ui_gameelements_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38973,9 +38973,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L43",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot",
-      "target": "ui_gameelements_loadoutslot_configure"
+      "target": "ui_gameelements_loadoutslot_configure",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38983,9 +38983,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L17",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot",
-      "target": "ui_gameelements_loadoutslot_ensurebuilt"
+      "target": "ui_gameelements_loadoutslot_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -38993,9 +38993,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot",
-      "target": "ui_gameelements_loadoutslot_ready"
+      "target": "ui_gameelements_loadoutslot_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39004,9 +39004,9 @@
       "source_location": "L103",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "client_scripts_ui_gameelements_cs_label"
+      "target": "client_scripts_ui_gameelements_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39015,9 +39015,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot_ready",
-      "target": "ui_gameelements_resourcereadout_ensurebuilt"
+      "target": "ui_gameelements_resourcereadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39026,9 +39026,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L45",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_loadoutslot_configure",
-      "target": "ui_gameelements_resourcereadout_ensurebuilt"
+      "target": "ui_gameelements_resourcereadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39037,9 +39037,9 @@
       "source_location": "L58",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "client_scripts_ui_gameelements_cs_color"
+      "target": "client_scripts_ui_gameelements_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39048,9 +39048,9 @@
       "source_location": "L57",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "client_scripts_ui_gameelements_cs_float"
+      "target": "client_scripts_ui_gameelements_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39059,9 +39059,9 @@
       "source_location": "L56",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "client_scripts_ui_gameelements_cs_string"
+      "target": "client_scripts_ui_gameelements_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39069,9 +39069,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L77",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "ui_gameelements_contactchip_draw"
+      "target": "ui_gameelements_contactchip_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39079,9 +39079,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L60",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "ui_gameelements_contactchip_ready"
+      "target": "ui_gameelements_contactchip_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39089,9 +39089,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L68",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_contactchip",
-      "target": "ui_gameelements_contactchip_set"
+      "target": "ui_gameelements_contactchip_set",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39100,9 +39100,9 @@
       "source_location": "L186",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_drawselfdiamond",
-      "target": "client_scripts_ui_gameelements_cs_color"
+      "target": "client_scripts_ui_gameelements_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39111,9 +39111,9 @@
       "source_location": "L163",
       "weight": 1.0,
       "context": "generic_arg",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_setblips",
-      "target": "client_scripts_ui_gameelements_cs_color"
+      "target": "client_scripts_ui_gameelements_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39122,9 +39122,9 @@
       "source_location": "L104",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "client_scripts_ui_gameelements_cs_color"
+      "target": "client_scripts_ui_gameelements_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39133,9 +39133,9 @@
       "source_location": "L136",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout_set",
-      "target": "client_scripts_ui_gameelements_cs_color"
+      "target": "client_scripts_ui_gameelements_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -39143,9 +39143,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L99",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "hboxcontainer"
+      "target": "hboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39153,9 +39153,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L108",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "ui_gameelements_resourcereadout_ensurebuilt"
+      "target": "ui_gameelements_resourcereadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39163,9 +39163,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L106",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "ui_gameelements_resourcereadout_ready"
+      "target": "ui_gameelements_resourcereadout_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39173,9 +39173,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L136",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout",
-      "target": "ui_gameelements_resourcereadout_set"
+      "target": "ui_gameelements_resourcereadout_set",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39184,9 +39184,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L106",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout_ready",
-      "target": "ui_gameelements_resourcereadout_ensurebuilt"
+      "target": "ui_gameelements_resourcereadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39195,9 +39195,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L138",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_resourcereadout_set",
-      "target": "ui_gameelements_resourcereadout_ensurebuilt"
+      "target": "ui_gameelements_resourcereadout_ensurebuilt",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39206,9 +39206,9 @@
       "source_location": "L153",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "client_scripts_ui_gameelements_cs_list"
+      "target": "client_scripts_ui_gameelements_cs_list",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39216,9 +39216,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L170",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "ui_gameelements_radarframe_draw"
+      "target": "ui_gameelements_radarframe_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39226,9 +39226,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L186",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "ui_gameelements_radarframe_drawselfdiamond"
+      "target": "ui_gameelements_radarframe_drawselfdiamond",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39236,9 +39236,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L155",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "ui_gameelements_radarframe_ready"
+      "target": "ui_gameelements_radarframe_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39246,9 +39246,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L163",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe",
-      "target": "ui_gameelements_radarframe_setblips"
+      "target": "ui_gameelements_radarframe_setblips",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39257,9 +39257,9 @@
       "source_location": "L163",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_setblips",
-      "target": "client_scripts_ui_gameelements_cs_ienumerable"
+      "target": "client_scripts_ui_gameelements_cs_ienumerable",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39268,9 +39268,9 @@
       "source_location": "L163",
       "weight": 1.0,
       "context": "generic_arg",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_setblips",
-      "target": "client_scripts_ui_gameelements_cs_pos"
+      "target": "client_scripts_ui_gameelements_cs_pos",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39279,9 +39279,9 @@
       "source_location": "L163",
       "weight": 1.0,
       "context": "generic_arg",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_setblips",
-      "target": "client_scripts_ui_gameelements_cs_vector2"
+      "target": "client_scripts_ui_gameelements_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39290,9 +39290,9 @@
       "source_location": "L186",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_drawselfdiamond",
-      "target": "client_scripts_ui_gameelements_cs_vector2"
+      "target": "client_scripts_ui_gameelements_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39301,9 +39301,9 @@
       "source_file": "client/scripts/ui/GameElements.cs",
       "source_location": "L181",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_gameelements_radarframe_draw",
-      "target": "ui_gameelements_radarframe_drawselfdiamond"
+      "target": "ui_gameelements_radarframe_drawselfdiamond",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39311,9 +39311,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L11",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces",
-      "target": "ui_surfaces_bracketpanel"
+      "target": "ui_surfaces_bracketpanel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39321,9 +39321,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L77",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces",
-      "target": "ui_surfaces_diamonddivider"
+      "target": "ui_surfaces_diamonddivider",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39331,9 +39331,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L34",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces",
-      "target": "ui_surfaces_hairlinepanel"
+      "target": "ui_surfaces_hairlinepanel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39341,9 +39341,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L64",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces",
-      "target": "ui_surfaces_insetwell"
+      "target": "ui_surfaces_insetwell",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39352,9 +39352,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_surfaces_bracketpanel",
-      "target": "client_scripts_ui_surfaces_cs_color"
+      "target": "client_scripts_ui_surfaces_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39363,9 +39363,9 @@
       "source_location": "L14",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_surfaces_bracketpanel",
-      "target": "client_scripts_ui_surfaces_cs_float"
+      "target": "client_scripts_ui_surfaces_cs_float",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39373,9 +39373,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L24",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_bracketpanel",
-      "target": "ui_surfaces_bracketpanel_draw"
+      "target": "ui_surfaces_bracketpanel_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39383,9 +39383,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L16",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_bracketpanel",
-      "target": "ui_surfaces_bracketpanel_ready"
+      "target": "ui_surfaces_bracketpanel_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39394,9 +39394,9 @@
       "source_location": "L36",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_surfaces_hairlinepanel",
-      "target": "client_scripts_ui_surfaces_cs_string"
+      "target": "client_scripts_ui_surfaces_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "inherits",
@@ -39404,9 +39404,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L34",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_hairlinepanel",
-      "target": "margincontainer"
+      "target": "margincontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39414,9 +39414,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L48",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_hairlinepanel",
-      "target": "ui_surfaces_hairlinepanel_draw"
+      "target": "ui_surfaces_hairlinepanel_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39424,9 +39424,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L38",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_hairlinepanel",
-      "target": "ui_surfaces_hairlinepanel_ready"
+      "target": "ui_surfaces_hairlinepanel_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39434,9 +39434,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L66",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_insetwell",
-      "target": "ui_surfaces_insetwell_ready"
+      "target": "ui_surfaces_insetwell_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39444,9 +39444,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L85",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_diamonddivider",
-      "target": "ui_surfaces_diamonddivider_draw"
+      "target": "ui_surfaces_diamonddivider_draw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39454,9 +39454,9 @@
       "source_file": "client/scripts/ui/Surfaces.cs",
       "source_location": "L79",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_surfaces_diamonddivider",
-      "target": "ui_surfaces_diamonddivider_ready"
+      "target": "ui_surfaces_diamonddivider_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39464,9 +39464,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw",
-      "target": "ui_uidraw_uidraw"
+      "target": "ui_uidraw_uidraw",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39474,9 +39474,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L50",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_chamfer"
+      "target": "ui_uidraw_uidraw_chamfer",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39484,9 +39484,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L13",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_chamferpoints"
+      "target": "ui_uidraw_uidraw_chamferpoints",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39494,9 +39494,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L88",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_close"
+      "target": "ui_uidraw_uidraw_close",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39504,9 +39504,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L60",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_cornerbrackets"
+      "target": "ui_uidraw_uidraw_cornerbrackets",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39514,9 +39514,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L81",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_hairline"
+      "target": "ui_uidraw_uidraw_hairline",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39524,9 +39524,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L33",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw",
-      "target": "ui_uidraw_uidraw_tabpoints"
+      "target": "ui_uidraw_uidraw_tabpoints",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39535,9 +39535,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L52",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamfer",
-      "target": "ui_uidraw_uidraw_chamferpoints"
+      "target": "ui_uidraw_uidraw_chamferpoints",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39546,9 +39546,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamferpoints",
-      "target": "client_scripts_ui_uidraw_cs_vector2"
+      "target": "client_scripts_ui_uidraw_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39557,9 +39557,9 @@
       "source_location": "L13",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamferpoints",
-      "target": "rect2"
+      "target": "rect2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39568,9 +39568,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamfer",
-      "target": "rect2"
+      "target": "rect2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39579,9 +39579,9 @@
       "source_location": "L60",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_cornerbrackets",
-      "target": "rect2"
+      "target": "rect2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39590,9 +39590,9 @@
       "source_location": "L81",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_hairline",
-      "target": "rect2"
+      "target": "rect2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39601,9 +39601,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_tabpoints",
-      "target": "rect2"
+      "target": "rect2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39612,9 +39612,9 @@
       "source_location": "L88",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_close",
-      "target": "client_scripts_ui_uidraw_cs_vector2"
+      "target": "client_scripts_ui_uidraw_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39623,9 +39623,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_tabpoints",
-      "target": "client_scripts_ui_uidraw_cs_vector2"
+      "target": "client_scripts_ui_uidraw_cs_vector2",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39634,9 +39634,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamfer",
-      "target": "canvasitem"
+      "target": "canvasitem",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39645,9 +39645,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamfer",
-      "target": "client_scripts_ui_uidraw_cs_color"
+      "target": "client_scripts_ui_uidraw_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39656,9 +39656,9 @@
       "source_file": "client/scripts/ui/UiDraw.cs",
       "source_location": "L56",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_chamfer",
-      "target": "ui_uidraw_uidraw_close"
+      "target": "ui_uidraw_uidraw_close",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39667,9 +39667,9 @@
       "source_location": "L60",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_cornerbrackets",
-      "target": "canvasitem"
+      "target": "canvasitem",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39678,9 +39678,9 @@
       "source_location": "L81",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_hairline",
-      "target": "canvasitem"
+      "target": "canvasitem",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39689,9 +39689,9 @@
       "source_location": "L60",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_cornerbrackets",
-      "target": "client_scripts_ui_uidraw_cs_color"
+      "target": "client_scripts_ui_uidraw_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39700,9 +39700,9 @@
       "source_location": "L81",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uidraw_uidraw_hairline",
-      "target": "client_scripts_ui_uidraw_cs_color"
+      "target": "client_scripts_ui_uidraw_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39710,9 +39710,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L18",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts",
-      "target": "ui_uifonts_uifonts"
+      "target": "ui_uifonts_uifonts",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39721,9 +39721,9 @@
       "source_location": "L30",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "client_scripts_ui_uifonts_cs_bool"
+      "target": "client_scripts_ui_uifonts_cs_bool",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39732,9 +39732,9 @@
       "source_location": "L72",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "client_scripts_ui_uifonts_cs_long"
+      "target": "client_scripts_ui_uifonts_cs_long",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39743,9 +39743,9 @@
       "source_location": "L21",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "client_scripts_ui_uifonts_cs_string"
+      "target": "client_scripts_ui_uifonts_cs_string",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39753,9 +39753,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L32",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "ui_uifonts_uifonts_ensureloaded"
+      "target": "ui_uifonts_uifonts_ensureloaded",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39763,9 +39763,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L50",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "ui_uifonts_uifonts_loadorfallback"
+      "target": "ui_uifonts_uifonts_loadorfallback",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39773,9 +39773,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L61",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts",
-      "target": "ui_uifonts_uifonts_weight"
+      "target": "ui_uifonts_uifonts_weight",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39784,9 +39784,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L39",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts_ensureloaded",
-      "target": "ui_uifonts_uifonts_loadorfallback"
+      "target": "ui_uifonts_uifonts_loadorfallback",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39795,9 +39795,9 @@
       "source_file": "client/scripts/ui/UiFonts.cs",
       "source_location": "L42",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts_ensureloaded",
-      "target": "ui_uifonts_uifonts_weight"
+      "target": "ui_uifonts_uifonts_weight",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39806,9 +39806,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts_loadorfallback",
-      "target": "font"
+      "target": "font",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39817,9 +39817,9 @@
       "source_location": "L61",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uifonts_uifonts_weight",
-      "target": "font"
+      "target": "font",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -39827,9 +39827,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit",
-      "target": "ui_uikit_uikit"
+      "target": "ui_uikit_uikit",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39837,9 +39837,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L38",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makebutton"
+      "target": "ui_uikit_uikit_makebutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39847,9 +39847,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L104",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makecheckbox"
+      "target": "ui_uikit_uikit_makecheckbox",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39857,9 +39857,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L20",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makelabel"
+      "target": "ui_uikit_uikit_makelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39867,9 +39867,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L112",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makesegmented"
+      "target": "ui_uikit_uikit_makesegmented",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39877,9 +39877,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L169",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makeselect"
+      "target": "ui_uikit_uikit_makeselect",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39887,9 +39887,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L53",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makesliderrow"
+      "target": "ui_uikit_uikit_makesliderrow",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39897,9 +39897,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L138",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_makestepper"
+      "target": "ui_uikit_uikit_makestepper",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39907,9 +39907,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L96",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_maketoggle"
+      "target": "ui_uikit_uikit_maketoggle",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39917,9 +39917,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L180",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_percent"
+      "target": "ui_uikit_uikit_percent",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -39927,9 +39927,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L187",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit",
-      "target": "ui_uikit_uikit_with"
+      "target": "ui_uikit_uikit_with",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39938,9 +39938,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makelabel",
-      "target": "client_scripts_ui_uikit_cs_color"
+      "target": "client_scripts_ui_uikit_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39949,9 +39949,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makelabel",
-      "target": "client_scripts_ui_uikit_cs_label"
+      "target": "client_scripts_ui_uikit_cs_label",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39960,9 +39960,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makelabel",
-      "target": "client_scripts_ui_uikit_cs_textstyle"
+      "target": "client_scripts_ui_uikit_cs_textstyle",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39971,9 +39971,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L65",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesliderrow",
-      "target": "ui_uikit_uikit_makelabel"
+      "target": "ui_uikit_uikit_makelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -39982,9 +39982,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L142",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makestepper",
-      "target": "ui_uikit_uikit_makelabel"
+      "target": "ui_uikit_uikit_makelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -39993,9 +39993,9 @@
       "source_location": "L38",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makebutton",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40004,9 +40004,9 @@
       "source_location": "L38",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makebutton",
-      "target": "client_scripts_ui_uikit_cs_buttonvariant"
+      "target": "client_scripts_ui_uikit_cs_buttonvariant",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40015,9 +40015,9 @@
       "source_location": "L38",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makebutton",
-      "target": "client_scripts_ui_uikit_cs_chamferbutton"
+      "target": "client_scripts_ui_uikit_cs_chamferbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40026,9 +40026,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L120",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesegmented",
-      "target": "ui_uikit_uikit_makebutton"
+      "target": "ui_uikit_uikit_makebutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40037,9 +40037,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L151",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makestepper",
-      "target": "ui_uikit_uikit_makebutton"
+      "target": "ui_uikit_uikit_makebutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40048,9 +40048,9 @@
       "source_location": "L104",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makecheckbox",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40059,9 +40059,9 @@
       "source_location": "L112",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesegmented",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40070,9 +40070,9 @@
       "source_location": "L169",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makeselect",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40081,9 +40081,9 @@
       "source_location": "L53",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesliderrow",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40092,9 +40092,9 @@
       "source_location": "L138",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makestepper",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40103,9 +40103,9 @@
       "source_location": "L96",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_maketoggle",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40114,9 +40114,9 @@
       "source_location": "L187",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_with",
-      "target": "client_scripts_ui_uikit_cs_action"
+      "target": "client_scripts_ui_uikit_cs_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40125,9 +40125,9 @@
       "source_location": "L53",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesliderrow",
-      "target": "client_scripts_ui_uikit_cs_hboxcontainer"
+      "target": "client_scripts_ui_uikit_cs_hboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40136,9 +40136,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L82",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesliderrow",
-      "target": "ui_uikit_uikit_percent"
+      "target": "ui_uikit_uikit_percent",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40147,9 +40147,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L65",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesliderrow",
-      "target": "ui_uikit_uikit_with"
+      "target": "ui_uikit_uikit_with",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40158,9 +40158,9 @@
       "source_location": "L112",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makesegmented",
-      "target": "client_scripts_ui_uikit_cs_hboxcontainer"
+      "target": "client_scripts_ui_uikit_cs_hboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40169,9 +40169,9 @@
       "source_location": "L138",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makestepper",
-      "target": "client_scripts_ui_uikit_cs_hboxcontainer"
+      "target": "client_scripts_ui_uikit_cs_hboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40180,9 +40180,9 @@
       "source_location": "L96",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_maketoggle",
-      "target": "checkbutton"
+      "target": "checkbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40191,9 +40191,9 @@
       "source_location": "L104",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makecheckbox",
-      "target": "checkbox"
+      "target": "checkbox",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40202,9 +40202,9 @@
       "source_file": "client/scripts/ui/UiKit.cs",
       "source_location": "L142",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makestepper",
-      "target": "ui_uikit_uikit_with"
+      "target": "ui_uikit_uikit_with",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40213,9 +40213,9 @@
       "source_location": "L169",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_makeselect",
-      "target": "optionbutton"
+      "target": "optionbutton",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40224,9 +40224,9 @@
       "source_location": "L187",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uikit_uikit_with",
-      "target": "client_scripts_ui_uikit_cs_t"
+      "target": "client_scripts_ui_uikit_cs_t",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -40234,9 +40234,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase",
-      "target": "ui_uishowcase_uishowcase"
+      "target": "ui_uishowcase_uishowcase",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40245,9 +40245,9 @@
       "source_location": "L306",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "toasthost"
+      "target": "toasthost",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40255,9 +40255,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L151",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_buttons"
+      "target": "ui_uishowcase_uishowcase_buttons",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40265,9 +40265,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L168",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_controls"
+      "target": "ui_uishowcase_uishowcase_controls",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40275,9 +40275,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L199",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_dataandfeedback"
+      "target": "ui_uishowcase_uishowcase_dataandfeedback",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40285,9 +40285,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L96",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_foundations"
+      "target": "ui_uishowcase_uishowcase_foundations",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40295,9 +40295,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L269",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_gameelements"
+      "target": "ui_uishowcase_uishowcase_gameelements",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40305,9 +40305,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L308",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_gettoast"
+      "target": "ui_uishowcase_uishowcase_gettoast",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40315,9 +40315,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L71",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_masthead"
+      "target": "ui_uishowcase_uishowcase_masthead",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40325,9 +40325,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L49",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_maybecaptureandquit"
+      "target": "ui_uishowcase_uishowcase_maybecaptureandquit",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40335,9 +40335,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L11",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_ready"
+      "target": "ui_uishowcase_uishowcase_ready",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40345,9 +40345,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L78",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40355,9 +40355,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L123",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase",
-      "target": "ui_uishowcase_uishowcase_surfaces"
+      "target": "ui_uishowcase_uishowcase_surfaces",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40366,9 +40366,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L40",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_buttons"
+      "target": "ui_uishowcase_uishowcase_buttons",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40377,9 +40377,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L41",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_controls"
+      "target": "ui_uishowcase_uishowcase_controls",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40388,9 +40388,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L42",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_dataandfeedback"
+      "target": "ui_uishowcase_uishowcase_dataandfeedback",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40399,9 +40399,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L38",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_foundations"
+      "target": "ui_uishowcase_uishowcase_foundations",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40410,9 +40410,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L43",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_gameelements"
+      "target": "ui_uishowcase_uishowcase_gameelements",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40421,9 +40421,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L37",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_masthead"
+      "target": "ui_uishowcase_uishowcase_masthead",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40432,9 +40432,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L45",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_maybecaptureandquit"
+      "target": "ui_uishowcase_uishowcase_maybecaptureandquit",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40443,9 +40443,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L39",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_ready",
-      "target": "ui_uishowcase_uishowcase_surfaces"
+      "target": "ui_uishowcase_uishowcase_surfaces",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40454,9 +40454,9 @@
       "source_location": "L71",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_masthead",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40465,9 +40465,9 @@
       "source_location": "L151",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_buttons",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40476,9 +40476,9 @@
       "source_location": "L168",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_controls",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40487,9 +40487,9 @@
       "source_location": "L199",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_dataandfeedback",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40498,9 +40498,9 @@
       "source_location": "L96",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_foundations",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40509,9 +40509,9 @@
       "source_location": "L269",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_gameelements",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40520,9 +40520,9 @@
       "source_location": "L78",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_section",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40531,9 +40531,9 @@
       "source_location": "L123",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_surfaces",
-      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer"
+      "target": "client_scripts_ui_uishowcase_cs_vboxcontainer",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40542,9 +40542,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L153",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_buttons",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40553,9 +40553,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L170",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_controls",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40564,9 +40564,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L201",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_dataandfeedback",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40575,9 +40575,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L98",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_foundations",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40586,9 +40586,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L271",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_gameelements",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40597,9 +40597,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L125",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_surfaces",
-      "target": "ui_uishowcase_uishowcase_section"
+      "target": "ui_uishowcase_uishowcase_section",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40608,9 +40608,9 @@
       "source_file": "client/scripts/ui/UiShowcase.cs",
       "source_location": "L254",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_dataandfeedback",
-      "target": "ui_uishowcase_uishowcase_gettoast"
+      "target": "ui_uishowcase_uishowcase_gettoast",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40619,9 +40619,9 @@
       "source_location": "L308",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_gettoast",
-      "target": "toasthost"
+      "target": "toasthost",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40630,9 +40630,9 @@
       "source_location": "L308",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uishowcase_uishowcase_gettoast",
-      "target": "client_scripts_ui_uishowcase_cs_node"
+      "target": "client_scripts_ui_uishowcase_cs_node",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -40640,9 +40640,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L12",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme",
-      "target": "ui_uitheme_uitheme"
+      "target": "ui_uitheme_uitheme",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40651,9 +40651,9 @@
       "source_location": "L14",
       "weight": 1.0,
       "context": "field",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme",
-      "target": "theme"
+      "target": "theme",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40661,9 +40661,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L26",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme",
-      "target": "ui_uitheme_uitheme_apply"
+      "target": "ui_uitheme_uitheme_apply",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40671,9 +40671,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L70",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme",
-      "target": "ui_uitheme_uitheme_box"
+      "target": "ui_uitheme_uitheme_box",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40681,9 +40681,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L28",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme",
-      "target": "ui_uitheme_uitheme_build"
+      "target": "ui_uitheme_uitheme_build",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -40691,9 +40691,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L66",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme",
-      "target": "ui_uitheme_uitheme_panelbox"
+      "target": "ui_uitheme_uitheme_panelbox",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40702,9 +40702,9 @@
       "source_location": "L28",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_build",
-      "target": "theme"
+      "target": "theme",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40713,9 +40713,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_apply",
-      "target": "client_scripts_ui_uitheme_cs_control"
+      "target": "client_scripts_ui_uitheme_cs_control",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40724,9 +40724,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L48",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_build",
-      "target": "ui_uitheme_uitheme_box"
+      "target": "ui_uitheme_uitheme_box",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40735,9 +40735,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L44",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_build",
-      "target": "ui_uitheme_uitheme_panelbox"
+      "target": "ui_uitheme_uitheme_panelbox",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40746,9 +40746,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_panelbox",
-      "target": "client_scripts_ui_uitheme_cs_styleboxflat"
+      "target": "client_scripts_ui_uitheme_cs_styleboxflat",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -40757,9 +40757,9 @@
       "source_file": "client/scripts/ui/UiTheme.cs",
       "source_location": "L66",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_panelbox",
-      "target": "ui_uitheme_uitheme_box"
+      "target": "ui_uitheme_uitheme_box",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40768,9 +40768,9 @@
       "source_location": "L70",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_box",
-      "target": "client_scripts_ui_uitheme_cs_styleboxflat"
+      "target": "client_scripts_ui_uitheme_cs_styleboxflat",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -40779,9 +40779,9 @@
       "source_location": "L70",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "ui_uitheme_uitheme_box",
-      "target": "client_scripts_ui_uitheme_cs_color"
+      "target": "client_scripts_ui_uitheme_cs_color",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -42793,9 +42793,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "context": "parameter_type",
-      "confidence_score": 1.0,
       "source": "serialization_coreserializer_coreserializer_serialize",
-      "target": "factions_src_allegiance_factions_serialization_coreserializer_cs_t"
+      "target": "factions_src_allegiance_factions_serialization_coreserializer_cs_t",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -42870,9 +42870,9 @@
       "source_location": "L39",
       "weight": 1.0,
       "context": "return_type",
-      "confidence_score": 1.0,
       "source": "serialization_coreserializer_coreserializer_deserialize",
-      "target": "factions_src_allegiance_factions_serialization_coreserializer_cs_t"
+      "target": "factions_src_allegiance_factions_serialization_coreserializer_cs_t",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -62083,5 +62083,5 @@
       "source_file": ".github/workflows/build-godot-client.yml"
     }
   ],
-  "built_at_commit": "48875b8afb14049ab2c7f6d0f0d625e7abfa79e2"
+  "built_at_commit": "1c3f4b66c72b21c378b237057fa9e632bfa739a3"
 }
