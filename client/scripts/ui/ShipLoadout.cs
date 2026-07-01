@@ -21,12 +21,21 @@ namespace StellarAllegiance.Ui;
 //  the server-side persistence (MsgSetLoadout) lands.
 //
 //  Layout mirrors the design: top bar / [ship list | 3D render | hardpoints+arsenal] /
-//  launch bar. While open, `Active` gates flight input (ShipController) and hides the
-//  spawn menu (Hud).
+//  launch bar. While open, `Active` gates flight input (ShipController).
+//
+//  This IS the ship-select screen: the Hud auto-opens it (OpenedForSpawn) whenever
+//  you're in an active match without a ship and closes it once the ship spawns —
+//  LAUNCH is the only way out of a spawn hangar (no ESC/F4 dismiss). F4 while flying
+//  opens it as a browsable loadout viewer instead.
 // =====================================================================
 public partial class ShipLoadout : Control
 {
     public static bool Active { get; private set; }
+
+    // True when this hangar is the mandatory ship-select (Hud auto-open, no dismiss);
+    // false for a browse-while-flying F4 open. The Hud promotes an open browse hangar
+    // to for-spawn if the ship dies under it.
+    public bool OpenedForSpawn;
 
     private DefRegistry _defs = null!;
     private ShipController _ship = null!;
@@ -77,9 +86,15 @@ public partial class ShipLoadout : Control
     private ChamferButton _launch = null!;
     private ChamferButton _reset = null!;
     private ChamferButton? _firstCargoPlus;
+    private Label _launchHint = null!;
 
     private byte? _classId;
     private byte? _selectedHp;
+
+    // A LAUNCH was clicked and the spawn hasn't landed yet — the button holds
+    // "LAUNCHING…" until the ship exists (Hud then closes us) or the gate refuses
+    // (ShipController.SpawnHint names why; re-enabled for a retry).
+    private bool _launchPending;
 
     public void Init(DefRegistry defs, ShipController ship, WorldRenderer world, GameNetClient net)
     {
@@ -93,9 +108,15 @@ public partial class ShipLoadout : Control
     {
         Active = true;
         Input.MouseMode = Input.MouseModeEnum.Visible; // cursor UI; flight re-captures on click after close
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
     }
 
-    public override void _ExitTree() => Active = false;
+    public override void _ExitTree()
+    {
+        Active = false;
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
+        DemoAfterLaunch();
+    }
 
     public override void _Ready()
     {
@@ -445,6 +466,13 @@ public partial class ShipLoadout : Control
         row.AddChild(_costReadout);
         row.AddChild(_payloadReadout);
         row.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+
+        // Why a queued launch was refused (locked / can't afford) — the old buy menu's
+        // hint line, relocated next to the button it explains.
+        _launchHint = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Warn);
+        _launchHint.Visible = false;
+        row.AddChild(_launchHint);
+
         _reset = UiKit.MakeButton("RESET", OnReset, ButtonVariant.Ghost);
         row.AddChild(_reset);
         _launch = UiKit.MakeButton("◆ LAUNCH", OnLaunch, ButtonVariant.Primary);
@@ -463,24 +491,45 @@ public partial class ShipLoadout : Control
             c.Text = "00";
     }
 
-    // LAUNCH = the buy-menu spawn. The local weapon/cargo assignments do NOT ship with
-    // the request — the server spawns the authored loadout until MsgSetLoadout exists.
+    // LAUNCH = the spawn request. The screen stays open showing "LAUNCHING…" until the
+    // ship actually exists (the Hud closes a spawn hangar then) or the gate refuses.
+    // The local weapon/cargo assignments do NOT ship with the request — the server
+    // spawns the authored loadout until MsgSetLoadout exists.
     private void OnLaunch()
     {
         if (_classId is not byte classId)
             return;
+        _launchPending = true;
         _ship.RequestSpawn((ShipClass)classId);
-        Close();
     }
 
     private void Close() => QueueFree();
 
     public override void _UnhandledKeyInput(InputEvent @event)
     {
-        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key)
+            return;
+
+        // ESC only dismisses a browse-while-flying hangar; the spawn select has no exit
+        // but LAUNCH (mirrors the old always-there buy menu).
+        if (key.Keycode == Key.Escape && !OpenedForSpawn)
         {
             Close();
             GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // 1..9 select the Nth hull — the old buy menu's 1/2/3 spawn hotkeys, now scoped
+        // to selection (LAUNCH/Enter-free so chat and launch stay deliberate).
+        int slot = (int)(key.Keycode - Key.Key1);
+        if (slot >= 0 && slot < 9)
+        {
+            List<ShipClassDef> ships = _defs.BuildableShips();
+            if (slot < ships.Count)
+            {
+                SelectShip(ships[slot].ClassId);
+                GetViewport().SetInputAsHandled();
+            }
         }
     }
 
@@ -513,17 +562,25 @@ public partial class ShipLoadout : Control
     {
         if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out var def))
             return;
-        bool overCap = IsOverCapacity(def);
         bool flying = _world.LocalShip != null;
+        string? hint = _ship.SpawnHint;
+        if (flying || hint != null)
+            _launchPending = false; // landed, or refused (the hint names why) — let the pilot retry
+        bool overCap = IsOverCapacity(def);
         var gate = _world.CheckSpawnGate(team, classId);
-        _launch.Disabled = overCap || flying || gate != WorldRenderer.SpawnGate.Allow;
+        _launch.Disabled = overCap || flying || _launchPending || gate != WorldRenderer.SpawnGate.Allow;
         _launch.Text = flying
             ? "IN FLIGHT"
-            : gate == WorldRenderer.SpawnGate.Locked
-                ? "⚿ LOCKED"
-                : overCap
-                    ? "OVER CAPACITY"
-                    : "◆ LAUNCH";
+            : _launchPending
+                ? "LAUNCHING…"
+                : gate == WorldRenderer.SpawnGate.Locked
+                    ? "⚿ LOCKED"
+                    : overCap
+                        ? "OVER CAPACITY"
+                        : "◆ LAUNCH";
+        _launchHint.Visible = hint != null;
+        if (hint != null)
+            _launchHint.Text = hint;
     }
 
     private void SelectShip(byte classId)
@@ -765,8 +822,30 @@ public partial class ShipLoadout : Control
             case 8: ClickAt(_firstCargoPlus!.GetGlobalRect().GetCenter()); break;
             case 9: Snap("05-overcap"); break;
             case 10: ClickAt(_reset.GetGlobalRect().GetCenter()); break;
-            case 11: Snap("06-reset"); GetTree().Quit(); break;
+            case 11: Snap("06-reset"); break;
+            case 12: _demoLaunched = true; ClickAt(_launch.GetGlobalRect().GetCenter()); break;
+            // Only reached if the spawn never landed — the ship spawning closes this
+            // screen first and DemoAfterLaunch takes the final shot instead.
+            case 13: Snap("07-launch-stuck"); GetTree().Quit(); break;
         }
+    }
+
+    private bool _demoLaunched;
+
+    // The demo's LAUNCH landed: this hangar was auto-closed by the Hud, so the final
+    // "back in flight" frame is captured from the surviving tree, then quit.
+    private void DemoAfterLaunch()
+    {
+        if (_demoDir is not string dir || !_demoLaunched)
+            return;
+        SceneTree tree = GetTree();
+        SceneTreeTimer t = tree.CreateTimer(1.0);
+        t.Timeout += () =>
+        {
+            tree.Root.GetTexture().GetImage().SavePng($"{dir}/07-after-launch.png");
+            GD.Print("HANGAR_DEMO_SHOT:07-after-launch");
+            tree.Quit();
+        };
     }
 
     private void Snap(string name)

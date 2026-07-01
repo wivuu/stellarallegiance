@@ -3,9 +3,10 @@ using StellarAllegiance.Net;
 using StellarAllegiance.Ui;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
-// UI; the Hud's own spawn menu only appears once you're teamed in an active match and
-// not currently flying, and while flying it shows a speed + reconcile readout.
-// The 1/2 keyboard shortcuts in ShipController do the same thing as the spawn buttons.
+// UI; ship selection is the ShipLoadout hangar overlay, auto-opened whenever you're in
+// an active match without a ship (first spawn, respawn after death) and closed once the
+// ship exists. While flying the Hud shows a speed + reconcile readout; F4 reopens the
+// hangar read-only (LAUNCH gated to "IN FLIGHT").
 public partial class Hud : CanvasLayer
 {
     private ConnectionManager _cm = null!;
@@ -16,8 +17,6 @@ public partial class Hud : CanvasLayer
     private Label _label = null!;
     private Label _sectorShips = null!;
     private Label _credits = null!;
-    private VBoxContainer _menu = null!;
-    private Label _spawnHint = null!;
     private Label _warning = null!;
 
     // The design-system gallery overlay (F9), instantiated on demand.
@@ -26,20 +25,9 @@ public partial class Hud : CanvasLayer
     // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
     private ShipLoadout? _hangar;
 
-    // The buy-menu buttons, rebuilt from the streamed ship defs once they arrive (BuildSpawnMenu).
-    // Each carries its ClassId so _Process can refresh price/affordability/lock state per frame. The
-    // count of buttons currently built, so the menu only rebuilds when the buildable set changes.
-    private readonly System.Collections.Generic.List<(byte classId, ChamferButton button)> _spawnButtons = new();
-    private int _builtShipCount = -1;
-
-    // Previous-frame visibility, so UI sounds fire once on the transition (the spawn
-    // menu opening/closing, the sector warning first appearing) rather than every frame.
-    private bool _menuWasVisible;
+    // Previous-frame visibility, so UI sounds fire once on the transition (the sector
+    // warning first appearing) rather than every frame.
     private bool _warnWasVisible;
-
-    // `--hangar`: auto-open the loadout screen once the ship defs land — the hangar
-    // counterpart of --ui-showcase for screenshot verification (pairs with --ui-shot).
-    private bool _autoHangar;
 
     public override void _Ready()
     {
@@ -50,8 +38,6 @@ public partial class Hud : CanvasLayer
             CallDeferred(nameof(LoadShowcaseScene));
             return;
         }
-
-        _autoHangar = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--hangar") >= 0;
 
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -103,19 +89,6 @@ public partial class Hud : CanvasLayer
         _credits.Position = new Vector2(16, 64);
         _credits.Visible = false;
         AddChild(_credits);
-
-        // Buy menu: one button per buildable ship class, built lazily from the streamed defs once they
-        // arrive (BuildSpawnMenu, driven from _Process) and refreshed each frame for price/balance/lock
-        // state. Shown only when the player has no ship. The 1/2/3 keys still spawn the first three.
-        _menu = new VBoxContainer { Position = new Vector2(16, 90) };
-        AddChild(_menu);
-
-        // One-line feedback when a buy is suppressed by the client pre-check (locked / can't afford).
-        // The buttons gray out the unaffordable/locked options; this names the reason for a queued buy.
-        _spawnHint = UiKit.MakeLabel("", UiKit.TextStyle.Body, DesignTokens.Warn);
-        _spawnHint.Position = new Vector2(16, 200);
-        _spawnHint.Visible = false;
-        AddChild(_spawnHint);
 
         // Out-of-bounds warning (sector boundary): centered in the upper third, hidden
         // until the local ship strays past its sector radius and starts taking damage.
@@ -201,64 +174,22 @@ public partial class Hud : CanvasLayer
     {
         if (_hangar != null && GodotObject.IsInstanceValid(_hangar))
         {
+            if (_hangar.OpenedForSpawn)
+                return; // the active ship-select can't be F4-dismissed — launch to leave
             _hangar.QueueFree();
             _hangar = null;
         }
         else
         {
-            _hangar = new ShipLoadout();
-            _hangar.Init(_defs, _ship, _world, _net);
-            AddChild(_hangar);
+            OpenHangar(forSpawn: false);
         }
     }
 
-    // Rebuild the buy menu from the current ship defs — one button per buildable hull, in ClassId order.
-    // Called once the defs arrive (and again if the buildable set changes); per-frame price/lock state
-    // is applied in RefreshSpawnButtons. Reuses the Lobby.MakeButton click+sfx pattern.
-    private void BuildSpawnMenu(System.Collections.Generic.IReadOnlyList<StellarAllegiance.Shared.ShipClassDef> ships)
+    private void OpenHangar(bool forSpawn)
     {
-        foreach (var child in _menu.GetChildren())
-            child.QueueFree();
-        _spawnButtons.Clear();
-        foreach (var def in ships)
-        {
-            byte classId = def.ClassId;
-            // ChamferButton (Primary) bakes in the UI click sound, so we only wire the spawn.
-            var b = new ChamferButton { Variant = ButtonVariant.Primary, CustomMinimumSize = new Vector2(300, 36) };
-            b.Pressed += () => _ship.RequestSpawn((ShipClass)classId);
-            _menu.AddChild(b);
-            _spawnButtons.Add((classId, b));
-        }
-
-        // The hangar entry point: same overlay as F4, opened from the buy menu where hull
-        // choice already happens. Secondary variant so the spawn buttons stay the headline.
-        var hangar = new ChamferButton
-        {
-            Variant = ButtonVariant.Secondary,
-            Text = "Hangar — loadout  [F4]",
-            CustomMinimumSize = new Vector2(300, 36),
-        };
-        hangar.Pressed += ToggleHangar;
-        _menu.AddChild(hangar);
-    }
-
-    // Per-frame buy-menu state: each button shows "Spawn <name>  [hotkey] — <cost> credits" and grays
-    // out (Disabled) when the team can't afford it or the hull is locked — mirroring the server's spawn
-    // gate via WorldRenderer.CheckSpawnGate. Team pre-spawn = the lobby/Welcome assignment (LocalTeam is
-    // null until a ship exists), matching ShipController's gate path so the menu agrees with the server.
-    private void RefreshSpawnButtons()
-    {
-        byte team = _world.LocalTeam ?? _net.MyTeam;
-        foreach (var (classId, button) in _spawnButtons)
-        {
-            if (!_defs.TryGetShipDef(classId, out var def))
-                continue;
-            var gate = _world.CheckSpawnGate(team, classId);
-            button.Disabled = gate != WorldRenderer.SpawnGate.Allow;
-            string hotkey = classId < 3 ? $"  [{classId + 1}]" : "";
-            string suffix = gate == WorldRenderer.SpawnGate.Locked ? "   (locked)" : "";
-            button.Text = $"Spawn {def.Name}{hotkey} — {def.Cost} credits{suffix}";
-        }
+        _hangar = new ShipLoadout { OpenedForSpawn = forSpawn };
+        _hangar.Init(_defs, _ship, _world, _net);
+        AddChild(_hangar);
     }
 
     public override void _Process(double delta)
@@ -266,37 +197,27 @@ public partial class Hud : CanvasLayer
         var ship = _world.LocalShip;
         bool flying = ship != null;
 
-        if (_autoHangar && _defs.BuildableShips().Count > 0)
-        {
-            _autoHangar = false;
-            ToggleHangar();
-        }
-
         // The Lobby overlay owns everything outside a live match. The spawn menu appears once a
         // match is Active and you're not currently flying — keying off "not flying" means it also
         // reopens when a pod is destroyed/docked and you're awaiting your next ship.
         bool inMatch = _world.Phase == MatchPhase.Active;
-        bool teamedInMatch = inMatch;
-        // The hangar overlay covers the screen; hide the buy menu under it so there's a
-        // single spawn path while it's open (its LAUNCH button).
-        _menu.Visible = teamedInMatch && !flying && !ShipLoadout.Active;
-        if (_menu.Visible != _menuWasVisible)
+        // The hangar IS the ship-select screen. While in an active match with no ship
+        // (first spawn, respawn after death): open it if it isn't up, and promote a
+        // hangar the player had open manually — either way it becomes the mandatory
+        // select (LAUNCH to leave). Once the ship exists — or the match leaves Active
+        // and the lobby overlay takes over — the spawn hangar closes itself.
+        bool hangarUp = _hangar != null && GodotObject.IsInstanceValid(_hangar);
+        if (inMatch && !flying)
         {
-            SfxManager.Instance?.PlayUi(_menu.Visible ? SfxManager.SfxId.MenuOpen : SfxManager.SfxId.MenuClose);
-            _menuWasVisible = _menu.Visible;
+            if (hangarUp)
+                _hangar!.OpenedForSpawn = true;
+            else if (_defs.BuildableShips().Count > 0)
+                OpenHangar(forSpawn: true);
         }
-
-        // Buy menu, built from the streamed defs (they arrive once, after Welcome). Rebuild when the
-        // buildable set changes; refresh price/balance/lock state each frame the menu is up.
-        if (_menu.Visible)
+        else if (hangarUp && _hangar!.OpenedForSpawn)
         {
-            var ships = _defs.BuildableShips();
-            if (ships.Count != _builtShipCount)
-            {
-                BuildSpawnMenu(ships);
-                _builtShipCount = ships.Count;
-            }
-            RefreshSpawnButtons();
+            _hangar.QueueFree();
+            _hangar = null;
         }
 
         _sectorShips.Visible = inMatch;
@@ -308,12 +229,6 @@ public partial class Hud : CanvasLayer
         _credits.Visible = inMatch;
         if (inMatch)
             _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
-
-        // Buy feedback: only while the spawn menu is up, and only when the pre-check flagged a reason.
-        string? hint = _menu.Visible ? _ship.SpawnHint : null;
-        _spawnHint.Visible = hint != null;
-        if (hint != null)
-            _spawnHint.Text = hint;
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.
@@ -339,8 +254,8 @@ public partial class Hud : CanvasLayer
         if (_warning.Visible && !_warnWasVisible)
             SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiNotify);
         _warnWasVisible = _warning.Visible;
-        // Top-left readout: the controls hint while choosing a ship (teamed, pre-spawn),
-        // the live flight stats while flying, and nothing while the lobby overlay is up.
+        // Top-left readout: the live flight stats while flying; nothing otherwise (the
+        // hangar owns the pre-spawn screen, the lobby overlay everything outside a match).
         _label.Text = flying
             ? ship!.IsPod
                 // Ejected: flying the escape pod. Just the resolve hint — hull/speed now read
@@ -349,8 +264,6 @@ public partial class Hud : CanvasLayer
                 // HP + Speed are shown graphically (HULL gauge / velocity marker), so the text
                 // line keeps only the network telemetry: ping and reconcile stats.
                 : $"Ping: {_ship.PingMs, 3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
-            : teamedInMatch
-                ? "Choose your ship:\nW/S throttle · Shift afterburner · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
-                : "";
+            : "";
     }
 }
