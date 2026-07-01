@@ -1,16 +1,16 @@
-# Graph Report - wivuullegiance  (2026-06-28)
+# Graph Report - wivuullegiance  (2026-06-30)
 
 ## Corpus Check
-- 155 files · ~151,566 words
+- 157 files · ~152,924 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2089 nodes · 3470 edges · 153 communities (125 shown, 28 thin omitted)
+- 2123 nodes · 3527 edges · 158 communities (129 shown, 29 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a19a848b`
+- Built from commit: `2233fa20`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -134,6 +134,11 @@
 - [[_COMMUNITY_Community 150|Community 150]]
 - [[_COMMUNITY_Community 151|Community 151]]
 - [[_COMMUNITY_Community 152|Community 152]]
+- [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 156|Community 156]]
+- [[_COMMUNITY_Community 157|Community 157]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `WorldRenderer` - 100 edges
@@ -165,14 +170,14 @@
 ## Hyperedges (group relationships)
 - **CI Pipeline: Build and Upload Game Artifacts** — workflows_asteroids, workflows_build_godot_client, concept_asteroid_gen [INFERRED 0.85]
 
-## Communities (153 total, 28 thin omitted)
+## Communities (158 total, 29 thin omitted)
 
 ### Community 0 - "SpaceTimeDB Module Core"
 Cohesion: 0.09
 Nodes (13): IAuthenticator, IMatchmaker, IMatchResultSink, InMemoryPlayerDirectory, IPlayerDirectory, LoggingMatchResultSink, OpenAuthenticator, ReadyUpMatchmaker (+5 more)
 
 ### Community 1 - "AlephView World State"
-Cohesion: 0.06
+Cohesion: 0.07
 Nodes (17): bool, byte, ConnectionManager, DefRegistry, Dictionary, double, float, HashSet (+9 more)
 
 ### Community 2 - "Chat System"
@@ -188,8 +193,8 @@ Cohesion: 0.09
 Nodes (20): CancellationToken, CancellationTokenSource, Color, ConcurrentQueue, ConnectionManager, Dictionary, HttpClient, JsonSerializerOptions (+12 more)
 
 ### Community 5 - "PigAI NPC Behavior"
-Cohesion: 0.24
-Nodes (7): Base, Base, Color, EventContext, Projectile, EventContext, Projectile
+Cohesion: 0.29
+Nodes (6): Base, Base, EventContext, Projectile, EventContext, Projectile
 
 ### Community 6 - "Client-Side Prediction"
 Cohesion: 0.06
@@ -296,8 +301,8 @@ Cohesion: 0.09
 Nodes (17): bool, Camera3D, Color, float, ImmediateMesh, InputEvent, Label, MeshInstance3D (+9 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.13
-Nodes (10): IReadOnlyList, LobbyPlayer, MeshInstance3D, Pos, RemoteShip, Vector3, Frac, MeshInstance3D (+2 more)
+Cohesion: 0.20
+Nodes (7): IReadOnlyList, LobbyPlayer, Pos, RemoteShip, Frac, Pos, Team
 
 ### Community 41 - "Community 41"
 Cohesion: 0.13
@@ -312,8 +317,8 @@ Cohesion: 0.21
 Nodes (12): GlbModel, GlbReader, TransformDir(), TransformPoint(), Trs(), JsonElement, Mat4, IEnumerable (+4 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.06
-Nodes (41): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+33 more)
+Cohesion: 0.07
+Nodes (36): CancellationToken, Channel, ConcurrentDictionary, IAuthenticator, IMatchmaker, IPlayerDirectory, Lobby, long (+28 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.12
@@ -332,7 +337,7 @@ Cohesion: 0.07
 Nodes (19): CancellationTokenSource, bool, byte, CancellationTokenSource, Channel, ClientWebSocket, ConcurrentQueue, ConnectionManager (+11 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.10
+Cohesion: 0.09
 Nodes (20): Gate, PigContext, PigPlan, PigState, bool, byte, Dictionary, float (+12 more)
 
 ### Community 55 - "Community 55"
@@ -368,8 +373,8 @@ Cohesion: 0.15
 Nodes (13): DateTimeOffset, PendingOffer, CancellationToken, ConcurrentDictionary, IReadOnlyList, List, PendingOffer, string (+5 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.18
-Nodes (6): Node3D, Ship, ShipClass, StandardMaterial3D, Node3D, BaseHealthBar
+Cohesion: 0.17
+Nodes (6): Node3D, Color, Ship, StandardMaterial3D, Node3D, BaseHealthBar
 
 ### Community 66 - "Community 66"
 Cohesion: 0.14
@@ -476,8 +481,8 @@ Cohesion: 0.29
 Nodes (4): ChannelReader, ConcurrentDictionary, PendingOffer, ServerConnectionManager
 
 ### Community 101 - "Community 101"
-Cohesion: 0.20
-Nodes (4): Capability, HashSet, CapabilitySet, TechSet
+Cohesion: 0.18
+Nodes (5): Capability, Capability, HashSet, CapabilitySet, TechSet
 
 ### Community 104 - "Community 104"
 Cohesion: 0.22
@@ -531,25 +536,41 @@ Nodes (7): Button, Color, ConnectionManager, double, Label, Control, ConnectionO
 Cohesion: 0.40
 Nodes (3): Button, Button, ShipClass
 
+### Community 153 - "Community 153"
+Cohesion: 0.17
+Nodes (13): BuildableInfo, Buildable, Capability, CapabilitySet, Core, Faction, FactionAnalysis, IEnumerable (+5 more)
+
+### Community 155 - "Community 155"
+Cohesion: 0.30
+Nodes (5): TechTreeReportTests, Core, Fact, FactionAnalysis, TechTreeDump
+
+### Community 156 - "Community 156"
+Cohesion: 0.35
+Nodes (5): IClientTransport, WebSocketTransport, CancellationToken, ReadOnlyMemory, ValueTask
+
+### Community 157 - "Community 157"
+Cohesion: 0.32
+Nodes (3): MeshInstance3D, ShipClass, MeshInstance3D
+
 ## Knowledge Gaps
-- **592 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+587 more)
+- **604 isolated node(s):** `float`, `int`, `ShaderMaterial`, `bool`, `Marker3D` (+599 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 38`, `Community 105`, `Target Markers HUD`, `Community 78`, `Community 114`, `Community 56`?**
-  _High betweenness centrality (0.086) - this node is a cross-community bridge._
-- **Why does `Node` connect `Community 109` to `Ship Controller Input`, `Community 51`, `Community 59`, `Community 38`?**
-  _High betweenness centrality (0.060) - this node is a cross-community bridge._
+- **Why does `WorldRenderer` connect `AlephView World State` to `Community 65`, `PigAI NPC Behavior`, `Community 38`, `Community 105`, `Target Markers HUD`, `Community 78`, `Community 114`, `Community 56`, `Community 154`, `Community 157`?**
+  _High betweenness centrality (0.066) - this node is a cross-community bridge._
 - **Why does `Node3D` connect `Community 65` to `AlephView World State`, `Community 66`, `Community 37`, `Client-Side Prediction`, `Community 104`, `Engine Glow Effects`, `Hit Flash Effect`, `Explosion Effect`, `Community 45`, `Remote Ship Networked`, `Community 86`, `Community 89`, `Starscape Background`?**
-  _High betweenness centrality (0.059) - this node is a cross-community bridge._
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **Why does `Node` connect `Community 109` to `Ship Controller Input`, `Community 51`, `Community 59`, `Community 157`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
 - **What connects `float`, `int`, `ShaderMaterial` to the rest of the system?**
-  _612 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _624 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `SpaceTimeDB Module Core` be split into smaller, more focused modules?**
   _Cohesion score 0.09116809116809117 - nodes in this community are weakly interconnected._
 - **Should `AlephView World State` be split into smaller, more focused modules?**
-  _Cohesion score 0.059233449477351915 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06854838709677419 - nodes in this community are weakly interconnected._
 - **Should `Chat System` be split into smaller, more focused modules?**
   _Cohesion score 0.07171717171717172 - nodes in this community are weakly interconnected._

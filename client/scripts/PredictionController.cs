@@ -133,6 +133,11 @@ public partial class PredictionController : Node3D
     public float Health { get; private set; }
     public float MaxHealth { get; private set; }
 
+    // Afterburner power ramp, 0..1 (synced each snapshot into _state.AbPower; rises while
+    // boosting, decays otherwise — it's a ramp, not a depleting reserve). Read by the HUD
+    // SystemRing to draw the BOOST gauge.
+    public float AbPower => _state.AbPower;
+
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
 

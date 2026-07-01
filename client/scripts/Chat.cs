@@ -33,8 +33,10 @@ public partial class Chat : Control
     private GameNetClient _net = null!;
 
     private RichTextLabel _log = null!;
+    private Label _header = null!;
     private HBoxContainer _inputRow = null!;
     private Label _chip = null!;
+    private StyleBoxFlat _chipStyle = null!;
     private LineEdit _entry = null!;
 
     // One rendered line: the wire chat plus its local arrival time (the wire carries no stamp).
@@ -67,6 +69,14 @@ public partial class Chat : Control
         _log.AddThemeColorOverride("default_color", AllColor);
         AddChild(_log);
 
+        // Faint mono comms strip above the log, matching the design's "▌ COMMS" header. Fades
+        // with the log (see _Process).
+        _header = new Label { Text = "▌ COMMS", MouseFilter = MouseFilterEnum.Ignore };
+        _header.AddThemeFontOverride("font", UiFonts.Mono);
+        _header.AddThemeFontSizeOverride("font_size", 11);
+        _header.AddThemeColorOverride("font_color", DesignTokens.TextDim);
+        AddChild(_header);
+
         _inputRow = new HBoxContainer { Visible = false };
         _inputRow.AddThemeConstantOverride("separation", 8);
         AddChild(_inputRow);
@@ -74,6 +84,15 @@ public partial class Chat : Control
         _chip = new Label();
         _chip.AddThemeFontOverride("font", UiFonts.MonoMedium);
         _chip.AddThemeFontSizeOverride("font_size", 16);
+        // Bordered pill (design's channel tag): translucent fill + a 1px border tinted to the
+        // active channel colour (set in UpdateChip).
+        _chipStyle = new StyleBoxFlat { BgColor = DesignTokens.PanelFill, BorderColor = AllColor };
+        _chipStyle.SetBorderWidthAll(1);
+        _chipStyle.ContentMarginLeft = 8f;
+        _chipStyle.ContentMarginRight = 8f;
+        _chipStyle.ContentMarginTop = 2f;
+        _chipStyle.ContentMarginBottom = 2f;
+        _chip.AddThemeStyleboxOverride("normal", _chipStyle);
         _inputRow.AddChild(_chip);
 
         _entry = new LineEdit
@@ -221,7 +240,9 @@ public partial class Chat : Control
     private void UpdateChip()
     {
         _chip.Text = _teamChannel ? "[TEAM]" : "[ALL]";
-        _chip.AddThemeColorOverride("font_color", _teamChannel ? (_net.MyTeam == 0 ? Team0 : Team1) : AllColor);
+        Color col = _teamChannel ? (_net.MyTeam == 0 ? Team0 : Team1) : AllColor;
+        _chip.AddThemeColorOverride("font_color", col);
+        _chipStyle.BorderColor = col; // pill border tracks the active channel colour
     }
 
     // ---- rendering & fade ---------------------------------------------
@@ -231,7 +252,9 @@ public partial class Chat : Control
         _sinceLastMsg += delta;
 
         Vector2 vp = GetViewportRect().Size;
-        _log.Position = new Vector2((vp.X - LogWidth) * 0.5f, 12f);
+        float logX = (vp.X - LogWidth) * 0.5f;
+        _header.Position = new Vector2(logX, 10f);
+        _log.Position = new Vector2(logX, 28f);
         if (_inputRow.Visible)
             _inputRow.Position = new Vector2((vp.X - _inputRow.Size.X) * 0.5f, vp.Y * 0.72f);
 
@@ -248,6 +271,7 @@ public partial class Chat : Control
         Color m = _log.Modulate;
         m.A = Mathf.MoveToward(m.A, target, (float)delta * 4f);
         _log.Modulate = m;
+        _header.Modulate = new Color(_header.Modulate, m.A); // comms strip fades with the log
     }
 
     private void Render()

@@ -10,17 +10,17 @@
     "semantic_hash": ""
   },
   "client/scripts/Chat.cs": {
-    "mtime": 1782688308.4990458,
+    "mtime": 1782694609.1879597,
     "ast_hash": "3b1992ddd2b6c7d5ee8b0b804e9aece0",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionManager.cs": {
-    "mtime": 1782680394.0120459,
+    "mtime": 1782694607.6793945,
     "ast_hash": "956ee8b01f84506b6b9b0309439752d9",
     "semantic_hash": ""
   },
   "client/scripts/ConnectionOverlay.cs": {
-    "mtime": 1782680394.012373,
+    "mtime": 1782694607.6795983,
     "ast_hash": "70dc9e4ecb1e3549a3aaf28216c13766",
     "semantic_hash": ""
   },
@@ -45,7 +45,7 @@
     "semantic_hash": ""
   },
   "client/scripts/Hud.cs": {
-    "mtime": 1782693239.524582,
+    "mtime": 1782694609.1885853,
     "ast_hash": "c32404c0d59ec7ff3a4e20fa4e61a48d",
     "semantic_hash": ""
   },
@@ -75,7 +75,7 @@
     "semantic_hash": ""
   },
   "client/scripts/ShipController.cs": {
-    "mtime": 1782692406.715455,
+    "mtime": 1782694609.1887844,
     "ast_hash": "a40b873708981bc805578fa1a9adb91a",
     "semantic_hash": ""
   },
@@ -105,7 +105,7 @@
     "semantic_hash": ""
   },
   "client/scripts/WorldRenderer.cs": {
-    "mtime": 1782692386.8410966,
+    "mtime": 1782694609.1890633,
     "ast_hash": "d232505213cccf58d2125f7df0160fab",
     "semantic_hash": ""
   },
@@ -130,7 +130,7 @@
     "semantic_hash": ""
   },
   "shared/FlightModel.cs": {
-    "mtime": 1782680394.0468085,
+    "mtime": 1782694607.703238,
     "ast_hash": "441b2798d3fc535e25def10f93108168",
     "semantic_hash": ""
   },
@@ -145,7 +145,7 @@
     "semantic_hash": ""
   },
   "tests/FlightModelTest/Program.cs": {
-    "mtime": 1782680394.0477567,
+    "mtime": 1782694607.7038033,
     "ast_hash": "9c6ea5ce5972b612ab333399049eeb94",
     "semantic_hash": ""
   },
@@ -195,7 +195,7 @@
     "semantic_hash": "bf1a045c41435faa179f737e983f3821"
   },
   "client/scripts/DefRegistry.cs": {
-    "mtime": 1782693145.5269055,
+    "mtime": 1782694609.188157,
     "ast_hash": "6d2bcaece6ccf6ab3f065867a5277039",
     "semantic_hash": ""
   },
@@ -210,32 +210,32 @@
     "semantic_hash": ""
   },
   "server/Net/ClientHub.cs": {
-    "mtime": 1782688183.8666723,
+    "mtime": 1782694609.1998699,
     "ast_hash": "81e138391f83bfbb751590de89dec259",
     "semantic_hash": ""
   },
   "server/Net/Protocol.cs": {
-    "mtime": 1782692261.588529,
+    "mtime": 1782694609.2002072,
     "ast_hash": "4a69652dd90c2bc33849373f4b5b236b",
     "semantic_hash": ""
   },
   "server/Program.cs": {
-    "mtime": 1782686345.403652,
+    "mtime": 1782694609.2004604,
     "ast_hash": "69d6159ff1ab471554b63531bf89a4fb",
     "semantic_hash": ""
   },
   "server/Sim/Simulation.cs": {
-    "mtime": 1782692944.0050137,
+    "mtime": 1782694609.20075,
     "ast_hash": "2de26cc9f582446a9bb9c429e139ad3d",
     "semantic_hash": ""
   },
   "server/Sim/World.cs": {
-    "mtime": 1782692185.7414927,
+    "mtime": 1782694609.2009847,
     "ast_hash": "2096a0bf8d9f394772a08eadb06c2e8e",
     "semantic_hash": ""
   },
   "server/SimServer.csproj": {
-    "mtime": 1782683523.5195472,
+    "mtime": 1782694609.2011983,
     "ast_hash": "c396a873f674f589deec92787cee391b",
     "semantic_hash": ""
   },
@@ -250,7 +250,7 @@
     "semantic_hash": ""
   },
   "client/scripts/GameNetClient.cs": {
-    "mtime": 1782692274.755562,
+    "mtime": 1782694609.1883543,
     "ast_hash": "3f9f7228eb98714c3a4985cce51720d3",
     "semantic_hash": ""
   },
@@ -260,7 +260,7 @@
     "semantic_hash": ""
   },
   "server/Sim/Simulation.Pig.cs": {
-    "mtime": 1782680394.0447078,
+    "mtime": 1782694607.7016685,
     "ast_hash": "7596b3d9f90b0ca8f33086ec892e8048",
     "semantic_hash": ""
   },
@@ -325,7 +325,7 @@
     "semantic_hash": ""
   },
   "shared/Defs.cs": {
-    "mtime": 1782688112.8265195,
+    "mtime": 1782694609.201389,
     "ast_hash": "7f019a2b07b413e9456a25c6f7de2e3c",
     "semantic_hash": ""
   },
@@ -6150,7 +6150,7 @@
     "semantic_hash": ""
   },
   "server/Assets/SelfTest.cs": {
-    "mtime": 1782686348.813328,
+    "mtime": 1782694609.1979036,
     "ast_hash": "91a720b6a987c91ac05cf08d4c2f3ac9",
     "semantic_hash": ""
   },
@@ -6245,373 +6245,383 @@
     "semantic_hash": ""
   },
   "factions/AllegianceModel.sln": {
-    "mtime": 1782680394.0148237,
+    "mtime": 1782694607.6814644,
     "ast_hash": "a7e60afd0b6d2aeeef07c0a9ea6f2652",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions.Cli/Allegiance.Factions.Cli.csproj": {
-    "mtime": 1782680394.0184054,
+    "mtime": 1782694607.6837895,
     "ast_hash": "9bdc089560e85cacc4f8ff157c36bedd",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions.Cli/JsonSchemaGenerator.cs": {
-    "mtime": 1782680394.018721,
+    "mtime": 1782694607.6839883,
     "ast_hash": "a0f4f7c980abeb15f11260c315f7fd3d",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions.Cli/Program.cs": {
-    "mtime": 1782680394.0190983,
-    "ast_hash": "5f8f0ee1f4d4e7bf76ecd94409049993",
+    "mtime": 1782823892.5630808,
+    "ast_hash": "3ad56efe247844559452d72bca025255",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Allegiance.Factions.csproj": {
-    "mtime": 1782680394.0193849,
+    "mtime": 1782694607.684327,
     "ast_hash": "439d5325d94495935f14a8ab162f4ab4",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/AttributeModifiers.cs": {
-    "mtime": 1782680394.0197387,
+    "mtime": 1782694607.6845312,
     "ast_hash": "0d21ce5d6f8dee5a445d76daaa74c62c",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Buildable.cs": {
-    "mtime": 1782680394.01998,
+    "mtime": 1782694607.6846905,
     "ast_hash": "14cb7e7d927f17419023a590fe171000",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Capability.cs": {
-    "mtime": 1782680394.0202384,
+    "mtime": 1782694607.6848116,
     "ast_hash": "9548f49de37c5a06c25114b696af8944",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Core.cs": {
-    "mtime": 1782682374.7164052,
+    "mtime": 1782694609.189605,
     "ast_hash": "6f9fa4716370e3dbb47597983ba72d7b",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Development.cs": {
-    "mtime": 1782680394.020876,
+    "mtime": 1782694607.6850808,
     "ast_hash": "415f77c4c676b7301cf532de3b6894d9",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Drone.cs": {
-    "mtime": 1782680394.0209904,
+    "mtime": 1782694607.685249,
     "ast_hash": "9ec749469ce75c78886cdcd37a087547",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Enums.cs": {
-    "mtime": 1782680394.0212183,
+    "mtime": 1782694607.6854153,
     "ast_hash": "b4cff52e9efba2fe45db3067d82be5b2",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Expendables/Chaff.cs": {
-    "mtime": 1782680394.0215278,
+    "mtime": 1782694607.6856308,
     "ast_hash": "a37f2dad20f3670d3b7cae34e4426233",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Expendables/Expendable.cs": {
-    "mtime": 1782680394.022001,
+    "mtime": 1782694607.6857734,
     "ast_hash": "131c273497c354035a95ea71af0b2dff",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Expendables/Mine.cs": {
-    "mtime": 1782680394.0221276,
+    "mtime": 1782694607.6859152,
     "ast_hash": "1f4b0cdb7caca2cd9959469b7543a9db",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Expendables/Missile.cs": {
-    "mtime": 1782680394.0222485,
+    "mtime": 1782694607.6860354,
     "ast_hash": "c163ed9d900e5b320a285264cf5c0e1e",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Expendables/Probe.cs": {
-    "mtime": 1782680394.0223818,
+    "mtime": 1782694607.686181,
     "ast_hash": "7fdd882f845f0d1e899b8f5c30f44c32",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Faction.cs": {
-    "mtime": 1782680394.0225189,
+    "mtime": 1782694607.686305,
     "ast_hash": "2690f533e93f3a6f5798176294d1e990",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Hull.cs": {
-    "mtime": 1782682355.4499989,
+    "mtime": 1782694609.1897714,
     "ast_hash": "2b69c7b372828518745e5ed07e6ce40c",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Afterburner.cs": {
-    "mtime": 1782680394.0229008,
+    "mtime": 1782694607.686627,
     "ast_hash": "2380d55e43edf958e8ece77ea08f4b3e",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/AmmoPack.cs": {
-    "mtime": 1782680394.0230658,
+    "mtime": 1782694607.6867776,
     "ast_hash": "da738918b658d731ca79df7786ec6236",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Cloak.cs": {
-    "mtime": 1782680394.0233243,
+    "mtime": 1782694607.6869218,
     "ast_hash": "56754883f2fc322830f21d668e582fa0",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Launcher.cs": {
-    "mtime": 1782680394.023557,
+    "mtime": 1782694607.6870594,
     "ast_hash": "9d96c89ae0b05e096fb8ae4b97b0dd55",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Part.cs": {
-    "mtime": 1782680394.0237696,
+    "mtime": 1782694607.687203,
     "ast_hash": "3e762b4d8458a9795000f46193084170",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Shield.cs": {
-    "mtime": 1782680394.0239952,
+    "mtime": 1782694607.6873384,
     "ast_hash": "ee357877be2946f4f8e6a5b32637f84e",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Parts/Weapon.cs": {
-    "mtime": 1782682361.7253058,
+    "mtime": 1782694609.1899462,
     "ast_hash": "75b51fab55397fc79ed32b2394d73970",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Projectile.cs": {
-    "mtime": 1782680394.0245435,
+    "mtime": 1782694607.687766,
     "ast_hash": "176e11b5144a3d95f101daa36ea9d9e9",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Station.cs": {
-    "mtime": 1782682366.5902731,
+    "mtime": 1782694609.1902232,
     "ast_hash": "d6c47905161788e6d035abec3f23ad4c",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Team.cs": {
-    "mtime": 1782680394.0249376,
+    "mtime": 1782694607.6880913,
     "ast_hash": "acfcaa36e6620865c9ca1952d044e49d",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/Tech.cs": {
-    "mtime": 1782680394.0251517,
+    "mtime": 1782694607.6882055,
     "ast_hash": "d2e31b121b943a13c2e5e3c176f00046",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/TechSet.cs": {
-    "mtime": 1782680394.0253313,
+    "mtime": 1782694607.6883278,
     "ast_hash": "a510de4d917f79155ecea9bcd98d2ffd",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Resolution/AttributeResolver.cs": {
-    "mtime": 1782680394.0256383,
+    "mtime": 1782694607.6885252,
     "ast_hash": "5cfd6caa419d1779dac044d6224b45d0",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Resolution/BuildableResolver.cs": {
-    "mtime": 1782680394.0258574,
+    "mtime": 1782694607.688667,
     "ast_hash": "0d6ad90374647c0b213455f94d39892b",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Resolution/TechResolver.cs": {
-    "mtime": 1782680394.0262043,
+    "mtime": 1782694607.6888068,
     "ast_hash": "904b7ac9209b8305255061e5c09a0a90",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Serialization/CoreSerializer.cs": {
-    "mtime": 1782680394.0287433,
+    "mtime": 1782694607.6890373,
     "ast_hash": "5c1bf99ccaca62e065d1450f689cc760",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Serialization/Manifest.cs": {
-    "mtime": 1782680394.0290942,
+    "mtime": 1782694607.68917,
     "ast_hash": "c89c9d883dfbba422349341e7642147b",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Validation/CoreValidator.cs": {
-    "mtime": 1782680394.0294158,
+    "mtime": 1782694607.6893673,
     "ast_hash": "7cb4e074e5c2600f0b33c5eea8ca50e0",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Validation/ValidationResult.cs": {
-    "mtime": 1782680394.0298915,
+    "mtime": 1782694607.6895022,
     "ast_hash": "6e5b60f6e115d30430544b5aefdf2267",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/Allegiance.Factions.Tests.csproj": {
-    "mtime": 1782680394.0303066,
+    "mtime": 1782694607.6896594,
     "ast_hash": "ab7ce6fe422b2da7fd7146ea2338707b",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/AttributeTests.cs": {
-    "mtime": 1782680394.0305805,
+    "mtime": 1782694607.6900158,
     "ast_hash": "577d43a1151a8576d318fa7b7f5b3818",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/ResolutionTests.cs": {
-    "mtime": 1782680394.0338032,
+    "mtime": 1782694607.6901813,
     "ast_hash": "2908db19461ceb47b5b45d613fbabae4",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/SampleData.cs": {
-    "mtime": 1782680394.034168,
+    "mtime": 1782694607.6902957,
     "ast_hash": "1ef7c6929919620484cd8cfd2b4ad833",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/SerializationTests.cs": {
-    "mtime": 1782680394.034392,
+    "mtime": 1782694607.690413,
     "ast_hash": "87f7221df61406a515b70582d48b5e6d",
     "semantic_hash": ""
   },
   "factions/tests/Allegiance.Factions.Tests/ValidationTests.cs": {
-    "mtime": 1782680394.0345387,
+    "mtime": 1782694607.6905515,
     "ast_hash": "cfa4b0175bafc13162642b97f1c3615b",
     "semantic_hash": ""
   },
   "server/Content/ContentLoader.cs": {
-    "mtime": 1782683431.0100403,
+    "mtime": 1782694609.198135,
     "ast_hash": "674feb2ca3ce016bc41a17b1650bfea0",
     "semantic_hash": ""
   },
   "server/Content/ContentSet.cs": {
-    "mtime": 1782692161.431167,
+    "mtime": 1782694609.1983178,
     "ast_hash": "9ab2b7fc9bdaf0f0d69f9771dc834689",
     "semantic_hash": ""
   },
   "shared/ContentValidator.cs": {
-    "mtime": 1782680394.0461903,
+    "mtime": 1782694607.7027678,
     "ast_hash": "6535d6055a51e8fba621dbb116079a2f",
     "semantic_hash": ""
   },
   "tests/ContentTest/ContentTest.csproj": {
-    "mtime": 1782683477.3497415,
+    "mtime": 1782694609.201545,
     "ast_hash": "c6b0f7577d336dad1ddfc6958c270db4",
     "semantic_hash": ""
   },
   "tests/ContentTest/Program.cs": {
-    "mtime": 1782688663.8282533,
+    "mtime": 1782694609.2018032,
     "ast_hash": "4752e70db7063dfe762b309755985a5e",
     "semantic_hash": ""
   },
   "factions/sample-data/core.manifest.yaml": {
-    "mtime": 1782680394.01573,
+    "mtime": 1782694607.6821144,
     "ast_hash": "ba697f5c506a0b6e8ef3d75d87aaeec0",
     "semantic_hash": ""
   },
   "factions/sample-data/developments.yaml": {
-    "mtime": 1782680394.0165403,
+    "mtime": 1782694607.6823187,
     "ast_hash": "3c7cc200c5493f4242c50b339c659464",
     "semantic_hash": ""
   },
   "factions/sample-data/drones.yaml": {
-    "mtime": 1782680394.0167124,
+    "mtime": 1782694607.6824791,
     "ast_hash": "a20eab7d1b5ddbcd661bfe1cdc6af1a5",
     "semantic_hash": ""
   },
   "factions/sample-data/expendables.yaml": {
-    "mtime": 1782680394.0168917,
+    "mtime": 1782694607.6826353,
     "ast_hash": "05c46a9a89bca22ed61f6185a6c42ec2",
     "semantic_hash": ""
   },
   "factions/sample-data/factions/bios.yaml": {
-    "mtime": 1782680394.0171099,
+    "mtime": 1782694607.6828055,
     "ast_hash": "363991b67aea50061edeb893a1284537",
     "semantic_hash": ""
   },
   "factions/sample-data/factions/gigacorp.yaml": {
-    "mtime": 1782680394.0172527,
+    "mtime": 1782694607.6829453,
     "ast_hash": "6c82d659d905e867e884e755c5e93d45",
     "semantic_hash": ""
   },
   "factions/sample-data/factions/iron-coalition.yaml": {
-    "mtime": 1782680394.017392,
+    "mtime": 1782694607.683061,
     "ast_hash": "25f1f88a204c751b618ee7dd8a5aece3",
     "semantic_hash": ""
   },
   "factions/sample-data/hulls.yaml": {
-    "mtime": 1782680394.017644,
+    "mtime": 1782694607.6832197,
     "ast_hash": "617717e69291a57396066c0d8950a0ee",
     "semantic_hash": ""
   },
   "factions/sample-data/parts.yaml": {
-    "mtime": 1782680394.0178053,
+    "mtime": 1782694607.6833668,
     "ast_hash": "979107c44cfd1c7c7f9108a947fa61a6",
     "semantic_hash": ""
   },
   "factions/sample-data/stations.yaml": {
-    "mtime": 1782680394.017949,
+    "mtime": 1782694607.6835172,
     "ast_hash": "5b18ed8171d2f8ff687811bdab50703c",
     "semantic_hash": ""
   },
   "factions/sample-data/tech.yaml": {
-    "mtime": 1782680394.0181172,
+    "mtime": 1782694607.6836326,
     "ast_hash": "cddc486a13c58e522fdf1796a631535a",
     "semantic_hash": ""
   },
   "tests/FactionsTest/FactionsTest.csproj": {
-    "mtime": 1782682524.52388,
+    "mtime": 1782694609.201957,
     "ast_hash": "ecc91d648d0c4e3e86eea3a588c81870",
     "semantic_hash": ""
   },
   "tests/FactionsTest/Program.cs": {
-    "mtime": 1782682550.9349415,
+    "mtime": 1782694609.2021117,
     "ast_hash": "04793574f2a2267fe0de27e669650c24",
     "semantic_hash": ""
   },
   "factions/src/Allegiance.Factions/Model/RuntimeData.cs": {
-    "mtime": 1782682331.5873191,
+    "mtime": 1782694609.1900816,
     "ast_hash": "c74a1e910e85db2f9745e05f1e822749",
     "semantic_hash": ""
   },
   "server/Content/factions/core.manifest.yaml": {
-    "mtime": 1782682474.3232558,
+    "mtime": 1782694609.198788,
     "ast_hash": "f74d24552b593548e6805687b84ddcc9",
     "semantic_hash": ""
   },
   "server/Content/factions/factions/stock.yaml": {
-    "mtime": 1782692968.4564886,
+    "mtime": 1782694609.198942,
     "ast_hash": "19a175cb4eb64ab5fb7e9c583941cd00",
     "semantic_hash": ""
   },
   "server/Content/factions/hulls.yaml": {
-    "mtime": 1782688613.046819,
+    "mtime": 1782694609.1990519,
     "ast_hash": "1f7f73a5df610232c4292056fd9570b1",
     "semantic_hash": ""
   },
   "server/Content/factions/projectiles.yaml": {
-    "mtime": 1782682495.1067896,
+    "mtime": 1782694609.199172,
     "ast_hash": "8a8f6593717cbceb5260f82ade1367de",
     "semantic_hash": ""
   },
   "server/Content/factions/stations.yaml": {
-    "mtime": 1782682505.191954,
+    "mtime": 1782694609.1993153,
     "ast_hash": "b25a829253172e4e85a308d4c4fe2b0e",
     "semantic_hash": ""
   },
   "server/Content/factions/weapons.yaml": {
-    "mtime": 1782682500.4311464,
+    "mtime": 1782694609.1994274,
     "ast_hash": "14756afabf0d01437586a2f25a261c5e",
     "semantic_hash": ""
   },
   "server/Content/factions/world.yaml": {
-    "mtime": 1782682508.4970672,
+    "mtime": 1782694609.1995842,
     "ast_hash": "dd20b02be2ab6c3dd6068b674088f85f",
     "semantic_hash": ""
   },
   "server/Content/FactionsContentProjection.cs": {
-    "mtime": 1782692165.908404,
+    "mtime": 1782694609.1985965,
     "ast_hash": "2cece8d7ba775a5cafec8d03d908fa15",
     "semantic_hash": ""
   },
   "server/Content/FactionStart.cs": {
-    "mtime": 1782686261.3884711,
+    "mtime": 1782694609.1984336,
     "ast_hash": "d88d8601945f1362f621b175c84fa0fc",
     "semantic_hash": ""
   },
   "tests/StrategyTest/Program.cs": {
-    "mtime": 1782692950.3868303,
+    "mtime": 1782694609.2023036,
     "ast_hash": "c28d4c97e154c06c9094bec4bcb32770",
     "semantic_hash": ""
   },
   "tests/StrategyTest/StrategyTest.csproj": {
-    "mtime": 1782686435.7766683,
+    "mtime": 1782694609.2024267,
     "ast_hash": "97b336705b334918fde8472789619bac",
+    "semantic_hash": ""
+  },
+  "factions/src/Allegiance.Factions/Resolution/TechTreeReport.cs": {
+    "mtime": 1782823869.9346304,
+    "ast_hash": "b1b863f1aad159eb44822663632faecf",
+    "semantic_hash": ""
+  },
+  "factions/tests/Allegiance.Factions.Tests/TechTreeReportTests.cs": {
+    "mtime": 1782823916.1270294,
+    "ast_hash": "7eabaad7bfafc2404c058bd9c75a52e6",
     "semantic_hash": ""
   }
 }

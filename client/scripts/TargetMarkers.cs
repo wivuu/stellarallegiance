@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Ui;
 
 // On-screen + off-screen HUD indicators for every relevant entity — friendly AND enemy
 // ships AND bases — plus enemy target focus and a lead-indicator reticle.
@@ -46,14 +47,16 @@ public partial class TargetMarkers : Control
     private const float MaxLeadTime = 2.5f;
     private const float DefaultAimRange = 500f; // where the aim reticle sits when no target is focused
 
-    private static readonly Color FocusColor = new(1f, 0.92f, 0.45f);
-    private static readonly Color LeadColor = new(0.5f, 1f, 0.65f);
-    private static readonly Color AimColor = new(0.6f, 0.85f, 1f);
+    // Chrome pulls from the shared design tokens. Focus = the amber "selection" highlight
+    // (Secondary), lead solution = Ok green, aim reticle = the cyan structural accent.
+    private static readonly Color FocusColor = DesignTokens.Secondary;
+    private static readonly Color LeadColor = DesignTokens.Ok;
+    private static readonly Color AimColor = DesignTokens.TeamAccent;
 
-    // Team palette, matching WorldRenderer's 3D ship/base materials (_team0Mat / _team1Mat)
-    // so a marker reads as the SAME color as the ship it points at — not a separate HUD tint.
-    private static readonly Color Team0Color = new(0.25f, 0.50f, 0.95f); // blue
-    private static readonly Color Team1Color = new(0.95f, 0.30f, 0.25f); // red
+    // Team palette = the faction identity tokens (same colours as WorldRenderer's 3D ship/
+    // base materials) so a marker reads as the SAME colour as the ship it points at.
+    private static readonly Color Team0Color = DesignTokens.Faction0; // blue
+    private static readonly Color Team1Color = DesignTokens.Faction1; // red
 
     // Warp gates are team-neutral navigation landmarks, so they get their own cyan tint
     // matching the AlephView vortex rather than a team color.
@@ -100,6 +103,7 @@ public partial class TargetMarkers : Control
         _camera = camera;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
+        UiFonts.EnsureLoaded(); // mono font for the focused-target tag, read directly (no Theme)
     }
 
     public override void _Process(double delta)
@@ -272,6 +276,11 @@ public partial class TargetMarkers : Control
             Color color = focused ? FocusColor : TeamColor(e.Team);
             DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false);
         }
+
+        // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
+        // target chrome (the game has no callsigns or missile-lock states to show).
+        if (focusedShip != null)
+            DrawFocusTag(view, focusedShip, local);
 
         // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
         // view axis — and the chase camera is offset above/behind the ship, so screen
@@ -471,6 +480,27 @@ public partial class TargetMarkers : Control
         // bottom-right
         DrawLine(p + new Vector2(h, h), p + new Vector2(h - t, h), color, width, true);
         DrawLine(p + new Vector2(h, h), p + new Vector2(h, h - t), color, width, true);
+    }
+
+    // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only
+    // drawn when the focus is on screen; skipped when behind the camera or off-screen (the
+    // edge arrow already points the way). Range is in world units, matching the HUD's u/s.
+    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController local)
+    {
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(ship.GlobalPosition))
+            return;
+        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
+        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+            return;
+
+        Font font = UiFonts.Mono;
+        const string tag = "▣ TARGET";
+        string info = $"{(ship.GlobalPosition - local.GlobalPosition).Length():0} u";
+        float tagW = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 11).X;
+        float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
+        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, FocusColor);
+        DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
     }
 
     // A gunsight at p marking the firing line: a ring with four short spokes and a
