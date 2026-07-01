@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 
@@ -5,12 +6,31 @@ namespace StellarAllegiance.Ui;
 
 // ── 06 GAME ELEMENTS ─────────────────────────────────────────────────────────
 
-// Loadout slot — an accent-framed card for an equipped weapon/module.
+// Loadout slot — an accent-framed card for an equipped weapon/module. Optionally
+// interactive (the hangar's hardpoint rows): set Accent/Selected and listen to Pressed.
 public partial class LoadoutSlot : PanelContainer
 {
     private Label _slot = null!;
     private Label _name = null!;
     private Label _stats = null!;
+
+    public Color Accent = DesignTokens.TeamAccent;
+
+    // Left-click anywhere on the card. Only meaningful when a handler is attached; the
+    // static showcase cards simply never connect it.
+    public event Action? Pressed;
+
+    private bool _selected;
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            _selected = value;
+            if (_name != null)
+                Restyle();
+        }
+    }
 
     public override void _Ready() => EnsureBuilt();
 
@@ -18,12 +38,6 @@ public partial class LoadoutSlot : PanelContainer
     {
         if (_name != null)
             return;
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccent, 0.10f), BorderColor = new Color(DesignTokens.TeamAccent, 0.45f), AntiAliasing = false };
-        sb.SetCornerRadiusAll(0);
-        sb.SetBorderWidthAll(1);
-        sb.SetContentMarginAll(12);
-        AddThemeStyleboxOverride("panel", sb);
-
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 6);
         _slot = UiKit.MakeLabel("PRIMARY  ◆", UiKit.TextStyle.Data);
@@ -38,6 +52,23 @@ public partial class LoadoutSlot : PanelContainer
         col.AddChild(_name);
         col.AddChild(_stats);
         AddChild(col);
+        Restyle();
+    }
+
+    private void Restyle()
+    {
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(Accent, _selected ? 0.18f : 0.10f),
+            BorderColor = new Color(Accent, _selected ? 1f : 0.45f),
+            AntiAliasing = false,
+        };
+        sb.SetCornerRadiusAll(0);
+        sb.SetBorderWidthAll(1);
+        sb.BorderWidthLeft = 3;
+        sb.SetContentMarginAll(12);
+        AddThemeStyleboxOverride("panel", sb);
+        _slot.AddThemeColorOverride("font_color", Accent);
     }
 
     public void Configure(string slotLabel, string name, string stats)
@@ -46,6 +77,17 @@ public partial class LoadoutSlot : PanelContainer
         _slot.Text = slotLabel;
         _name.Text = name;
         _stats.Text = stats;
+        _stats.Visible = !string.IsNullOrEmpty(stats);
+        Restyle();
+    }
+
+    public override void _GuiInput(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        {
+            Pressed?.Invoke();
+            AcceptEvent();
+        }
     }
 }
 

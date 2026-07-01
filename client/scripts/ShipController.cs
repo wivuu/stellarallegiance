@@ -1,6 +1,7 @@
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Ui;
 
 // Reads local input, runs the fixed-rate (20 Hz) input/prediction loop, and
 // calls the ApplyInput reducer. Also handles the (temporary) spawn key for T4.
@@ -179,11 +180,12 @@ public partial class ShipController : Node
 
     public override void _Process(double delta)
     {
-        // Neutral input while the chat box is open or the sector overview map is up, so
-        // typing/panning never steers or fires — the ship coasts on held/neutral input.
+        // Neutral input while the chat box is open, the sector overview map is up, or the
+        // hangar screen is open, so typing/panning/clicking never steers or fires — the
+        // ship coasts on held/neutral input.
         _input = _autoFly
             ? AutoInput()
-            : (Chat.Capturing || SectorOverview.Active ? new ShipInputState() : ReadInput(delta));
+            : (Chat.Capturing || SectorOverview.Active || ShipLoadout.Active ? new ShipInputState() : ReadInput(delta));
 
         // Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
         // the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
@@ -206,7 +208,7 @@ public partial class ShipController : Node
 
         HandleMouseCapture(hasShip);
 
-        if (!hasShip && !Chat.Capturing)
+        if (!hasShip && !Chat.Capturing && !ShipLoadout.Active)
         {
             if (Input.IsPhysicalKeyPressed(Key.Key1))
                 _spawnRequest = ShipClass.Scout;
@@ -282,7 +284,7 @@ public partial class ShipController : Node
         // ShipInput so the server integrates the same boost the client predicted (no
         // reconcile storm), and still drives the engine glow. Autofly pins it on so
         // headless runs exercise the boost + exhaust path.
-        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && Input.IsPhysicalKeyPressed(Key.Shift));
+        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsPhysicalKeyPressed(Key.Shift));
         _input.Boost = boost;
         pc.SetAfterburner(boost ? 1f : 0f);
 
@@ -391,7 +393,7 @@ public partial class ShipController : Node
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
             _mouseDelta += mm.Relative;
 
-        if (_autoFly || !_hasShip || Chat.Capturing || SectorOverview.Active)
+        if (_autoFly || !_hasShip || Chat.Capturing || SectorOverview.Active || ShipLoadout.Active)
             return;
 
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
@@ -412,7 +414,7 @@ public partial class ShipController : Node
     // capture/release lives in _Input; this only handles the no-ship menu case each frame.
     private void HandleMouseCapture(bool flying)
     {
-        if (_autoFly || Chat.Capturing || SectorOverview.Active)
+        if (_autoFly || Chat.Capturing || SectorOverview.Active || ShipLoadout.Active)
             return;
         if (!flying && Input.MouseMode == Input.MouseModeEnum.Captured)
             Input.MouseMode = Input.MouseModeEnum.Visible; // free cursor for the menu

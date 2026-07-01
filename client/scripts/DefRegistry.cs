@@ -116,6 +116,16 @@ public partial class DefRegistry : Node
 
     public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;
 
+    // Every streamed weapon def, ascending by WeaponId so lists built from it have a stable
+    // order regardless of dictionary iteration — the hangar's arsenal list. Empty until the
+    // defs arrive.
+    public List<WeaponDef> AllWeapons()
+    {
+        var list = new List<WeaponDef>(_weapons.Values);
+        list.Sort((a, b) => a.WeaponId.CompareTo(b.WeaponId));
+        return list;
+    }
+
     // A base type's def (radius/health/hardpoints), for the base-mesh loader. Null until it arrives.
     public BaseDef? GetBaseDef(byte baseTypeId) => _bases.TryGetValue(baseTypeId, out var b) ? b : null;
 }

@@ -23,6 +23,9 @@ public partial class Hud : CanvasLayer
     // The design-system gallery overlay (F9), instantiated on demand.
     private Control? _showcase;
 
+    // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
+    private ShipLoadout? _hangar;
+
     // The buy-menu buttons, rebuilt from the streamed ship defs once they arrive (BuildSpawnMenu).
     // Each carries its ClassId so _Process can refresh price/affordability/lock state per frame. The
     // count of buttons currently built, so the menu only rebuilds when the buildable set changes.
@@ -34,6 +37,10 @@ public partial class Hud : CanvasLayer
     private bool _menuWasVisible;
     private bool _warnWasVisible;
 
+    // `--hangar`: auto-open the loadout screen once the ship defs land — the hangar
+    // counterpart of --ui-showcase for screenshot verification (pairs with --ui-shot).
+    private bool _autoHangar;
+
     public override void _Ready()
     {
         // Boot straight into the design-system gallery for headless screenshot CI:
@@ -43,6 +50,8 @@ public partial class Hud : CanvasLayer
             CallDeferred(nameof(LoadShowcaseScene));
             return;
         }
+
+        _autoHangar = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--hangar") >= 0;
 
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -178,6 +187,29 @@ public partial class Hud : CanvasLayer
             }
             GetViewport().SetInputAsHandled();
         }
+
+        // F4 toggles the hangar / loadout screen (same lifecycle as the showcase). Guarded
+        // on _defs: in --ui-showcase boot the game nodes were never resolved.
+        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F4 } && _defs != null)
+        {
+            ToggleHangar();
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    private void ToggleHangar()
+    {
+        if (_hangar != null && GodotObject.IsInstanceValid(_hangar))
+        {
+            _hangar.QueueFree();
+            _hangar = null;
+        }
+        else
+        {
+            _hangar = new ShipLoadout();
+            _hangar.Init(_defs, _ship, _world, _net);
+            AddChild(_hangar);
+        }
     }
 
     // Rebuild the buy menu from the current ship defs — one button per buildable hull, in ClassId order.
@@ -197,6 +229,17 @@ public partial class Hud : CanvasLayer
             _menu.AddChild(b);
             _spawnButtons.Add((classId, b));
         }
+
+        // The hangar entry point: same overlay as F4, opened from the buy menu where hull
+        // choice already happens. Secondary variant so the spawn buttons stay the headline.
+        var hangar = new ChamferButton
+        {
+            Variant = ButtonVariant.Secondary,
+            Text = "Hangar — loadout  [F4]",
+            CustomMinimumSize = new Vector2(300, 36),
+        };
+        hangar.Pressed += ToggleHangar;
+        _menu.AddChild(hangar);
     }
 
     // Per-frame buy-menu state: each button shows "Spawn <name>  [hotkey] — <cost> credits" and grays
@@ -223,12 +266,20 @@ public partial class Hud : CanvasLayer
         var ship = _world.LocalShip;
         bool flying = ship != null;
 
+        if (_autoHangar && _defs.BuildableShips().Count > 0)
+        {
+            _autoHangar = false;
+            ToggleHangar();
+        }
+
         // The Lobby overlay owns everything outside a live match. The spawn menu appears once a
         // match is Active and you're not currently flying — keying off "not flying" means it also
         // reopens when a pod is destroyed/docked and you're awaiting your next ship.
         bool inMatch = _world.Phase == MatchPhase.Active;
         bool teamedInMatch = inMatch;
-        _menu.Visible = teamedInMatch && !flying;
+        // The hangar overlay covers the screen; hide the buy menu under it so there's a
+        // single spawn path while it's open (its LAUNCH button).
+        _menu.Visible = teamedInMatch && !flying && !ShipLoadout.Active;
         if (_menu.Visible != _menuWasVisible)
         {
             SfxManager.Instance?.PlayUi(_menu.Visible ? SfxManager.SfxId.MenuOpen : SfxManager.SfxId.MenuClose);
