@@ -138,6 +138,12 @@ public partial class PredictionController : Node3D
     // SystemRing to draw the BOOST gauge.
     public float AbPower => _state.AbPower;
 
+    // Fuel reserve (T14). MaxFuel is 0 until this class's def arrives — NEVER a baked
+    // fallback (see _hasStats) — and also 0 for hulls where fuel is unmodeled, so the HUD
+    // gauge only appears once there's a real tank to draw.
+    public float Fuel => _state.Fuel;
+    public float MaxFuel => _hasStats ? _stats.MaxFuel : 0f;
+
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
 
@@ -178,9 +184,14 @@ public partial class PredictionController : Node3D
     // the visual exhaust; ShipController sets it from the same Shift key each frame.
     // Gated on the hull actually HAVING an afterburner (AbThrust > 0) so a boost-less
     // class (Scout/Bomber/Pod) shows no plume even while Shift is held — mirroring the
-    // FlightModel's own `i.Boost && st.AbThrust > 0` gate so VFX matches authority.
+    // FlightModel's own `i.Boost && st.AbThrust > 0` gate so VFX matches authority. Also
+    // dies on an empty tank (MaxFuel > 0 && Fuel <= 0) exactly like FlightModel.Integrate's
+    // `afterburning` gate, so the exhaust plume cuts out the instant the server's does.
     public void SetAfterburner(float boost) =>
-        _afterburner = _hasStats && _stats.AbThrust > 0f ? Mathf.Clamp(boost, 0f, 1f) : 0f;
+        _afterburner =
+            _hasStats && _stats.AbThrust > 0f && (_stats.MaxFuel <= 0f || _state.Fuel > 0f)
+                ? Mathf.Clamp(boost, 0f, 1f)
+                : 0f;
 
     public void Initialize(Ship row, DefRegistry defs)
     {

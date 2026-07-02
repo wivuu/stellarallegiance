@@ -82,6 +82,10 @@ public record Hull : Buildable
     public double AbOnRate { get; set; }
     public double AbOffRate { get; set; }
 
+    /// <summary>Afterburner fuel drain/recharge (per second); pairs with the Core <see cref="MaxFuel"/> field above.</summary>
+    public double AbFuelDrain { get; set; }
+    public double AbFuelRecharge { get; set; }
+
     /// <summary>Local-space mount points (weapon muzzles, engine nozzles, lights) the client renders from.</summary>
     public List<Hardpoint> Hardpoints { get; set; } = new();
 }

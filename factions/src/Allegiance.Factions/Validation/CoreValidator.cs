@@ -58,6 +58,26 @@ public static class CoreValidator
                 result.Error($"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}.");
         }
 
+        // Runtime hulls: afterburner and fuel are authored as a pair, and the drain/recharge
+        // rates must actually behave like a gauge (never net-zero, never negative).
+        foreach (var hull in core.Hulls)
+        {
+            if (hull.ClassId is null)
+                continue;
+            if (hull.AbAccel > 0 && hull.MaxFuel <= 0)
+                result.Error($"hull '{hull.Id}' has an afterburner (ab-accel > 0) but no max-fuel.");
+            if (hull.MaxFuel > 0 && hull.AbAccel <= 0)
+                result.Error($"hull '{hull.Id}' has max-fuel but no afterburner (ab-accel <= 0) — dead data.");
+            if (hull.MaxFuel > 0 && hull.AbFuelDrain <= 0)
+                result.Error($"hull '{hull.Id}' has max-fuel but no ab-fuel-drain — never drains, an unlimited boost with a gauge.");
+            if (hull.MaxFuel > 0 && hull.AbFuelRecharge >= hull.AbFuelDrain)
+                result.Error($"hull '{hull.Id}' ab-fuel-recharge >= ab-fuel-drain — fuel never net-depletes.");
+            if (hull.AbFuelDrain < 0)
+                result.Error($"hull '{hull.Id}' has negative ab-fuel-drain.");
+            if (hull.AbFuelRecharge < 0)
+                result.Error($"hull '{hull.Id}' has negative ab-fuel-recharge.");
+        }
+
         // Runtime cargo items: wire ids must be unique.
         var cargoIds = new HashSet<uint>();
         foreach (var expendable in core.AllExpendables())

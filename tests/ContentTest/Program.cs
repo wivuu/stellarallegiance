@@ -77,6 +77,19 @@ Check(
     "loader projected cargo items from expendables",
     $"cargo items wrong (count {stock.CargoItems.Count})"
 );
+// Booster fuel: only the fighter is authored with a fuel gauge (max-fuel/ab-fuel-drain/
+// ab-fuel-recharge); the scout carries none (all-zero, unmodeled/unlimited boost).
+var fighter = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter);
+Check(
+    fighter.MaxFuel == 15f && fighter.AbFuelDrain == 3f && fighter.AbFuelRecharge == 0.5f,
+    "loader projected fighter booster-fuel stats",
+    $"fighter fuel wrong (max {fighter.MaxFuel}, drain {fighter.AbFuelDrain}, recharge {fighter.AbFuelRecharge})"
+);
+Check(
+    scout.MaxFuel == 0f && scout.AbFuelDrain == 0f && scout.AbFuelRecharge == 0f,
+    "loader projected scout as fuel-unmodeled (no afterburner)",
+    $"scout fuel wrong (max {scout.MaxFuel}, drain {scout.AbFuelDrain}, recharge {scout.AbFuelRecharge})"
+);
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
 Check(
@@ -131,6 +144,59 @@ Check(
     !atCapErrors.Any(e => e.Contains("PayloadCapacity")),
     "validator accepts a loadout exactly at capacity",
     $"validator wrongly flagged an at-capacity loadout: {string.Join("; ", atCapErrors)}"
+);
+
+// 3d. Booster fuel authoring rules: ab-accel/max-fuel are authored as a pair, the drain must be
+// positive, and recharge must actually lag drain — otherwise the hull ships with a broken/free
+// fuel gauge. Mirrors factions/ CoreValidator's identical rules over the raw YAML hull.
+ShipClassDef FuelShip(byte classId, float abAccel, float maxFuel, float fuelDrain, float fuelRecharge) =>
+    new ShipClassDef
+    {
+        ClassId = classId,
+        Name = $"Fuel{classId}",
+        MaxHull = 50f,
+        AbAccel = abAccel,
+        MaxFuel = maxFuel,
+        AbFuelDrain = fuelDrain,
+        AbFuelRecharge = fuelRecharge,
+    };
+List<string> FuelErrors(ShipClassDef ship) => ContentValidator.Validate(new[] { ship }, System.Array.Empty<WeaponDef>(), new[] { okBase });
+
+Check(
+    FuelErrors(FuelShip(20, abAccel: 5f, maxFuel: 0f, fuelDrain: 0f, fuelRecharge: 0f)).Any(e => e.Contains("no MaxFuel")),
+    "validator flags an afterburner (AbAccel>0) with no MaxFuel",
+    "validator missed an afterburner with no MaxFuel"
+);
+Check(
+    FuelErrors(FuelShip(21, abAccel: 0f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f)).Any(e => e.Contains("no afterburner")),
+    "validator flags MaxFuel with no afterburner (dead data)",
+    "validator missed MaxFuel with no afterburner"
+);
+Check(
+    FuelErrors(FuelShip(22, abAccel: 5f, maxFuel: 10f, fuelDrain: 0f, fuelRecharge: 0f)).Any(e => e.Contains("no AbFuelDrain")),
+    "validator flags MaxFuel with no AbFuelDrain",
+    "validator missed MaxFuel with no AbFuelDrain"
+);
+Check(
+    FuelErrors(FuelShip(23, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 3f)).Any(e => e.Contains("AbFuelRecharge >= AbFuelDrain")),
+    "validator flags AbFuelRecharge >= AbFuelDrain (never net-depletes)",
+    "validator missed AbFuelRecharge >= AbFuelDrain"
+);
+Check(
+    FuelErrors(FuelShip(24, abAccel: 5f, maxFuel: 10f, fuelDrain: -1f, fuelRecharge: 0.5f)).Any(e => e.Contains("negative AbFuelDrain")),
+    "validator flags negative AbFuelDrain",
+    "validator missed negative AbFuelDrain"
+);
+Check(
+    FuelErrors(FuelShip(25, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: -0.5f)).Any(e => e.Contains("negative AbFuelRecharge")),
+    "validator flags negative AbFuelRecharge",
+    "validator missed negative AbFuelRecharge"
+);
+var goodFuelErrors = FuelErrors(FuelShip(26, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f));
+Check(
+    goodFuelErrors.Count == 0,
+    "validator accepts a correctly-authored fueled hull",
+    $"validator wrongly flagged a correctly-authored fueled hull: {string.Join("; ", goodFuelErrors)}"
 );
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");

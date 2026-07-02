@@ -21,7 +21,8 @@ namespace StellarAllegiance.Shared
         // Returns a (possibly empty) list of human-readable errors. Empty == valid.
         // Checks: unique ids per kind; every non-pod class carries a positive hull; every
         // Weapon hardpoint (on a ship OR a base) resolves to a known WeaponDef; every ship's
-        // authored default loadout fits its payload capacity (no hull ships overburdened).
+        // authored default loadout fits its payload capacity (no hull ships overburdened);
+        // afterburner/fuel are authored as a consistent pair (see ValidateFuel).
         public static List<string> Validate(
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
@@ -51,6 +52,7 @@ namespace StellarAllegiance.Shared
 
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
                 ValidatePayload(d, weaponsById, errors);
+                ValidateFuel(d, errors);
             }
 
             // The map seeds a team base + the win condition reads its hull from content, so a bundle
@@ -86,6 +88,24 @@ namespace StellarAllegiance.Shared
                     used += w.Mass;
             if (used > ship.PayloadCapacity)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
+        }
+
+        // Afterburner and fuel are authored as a pair, and the drain/recharge rates must
+        // actually behave like a gauge (never net-zero, never negative).
+        private static void ValidateFuel(ShipClassDef ship, List<string> errors)
+        {
+            if (ship.AbAccel > 0 && ship.MaxFuel <= 0)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has an afterburner (AbAccel > 0) but no MaxFuel");
+            if (ship.MaxFuel > 0 && ship.AbAccel <= 0)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no afterburner (AbAccel <= 0) — dead data");
+            if (ship.MaxFuel > 0 && ship.AbFuelDrain <= 0)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no AbFuelDrain — never drains, an unlimited boost with a gauge");
+            if (ship.MaxFuel > 0 && ship.AbFuelRecharge >= ship.AbFuelDrain)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) AbFuelRecharge >= AbFuelDrain — fuel never net-depletes");
+            if (ship.AbFuelDrain < 0)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelDrain");
+            if (ship.AbFuelRecharge < 0)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelRecharge");
         }
 
         private static void ValidateWeaponHardpoints(

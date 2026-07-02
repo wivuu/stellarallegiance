@@ -628,6 +628,7 @@ public sealed partial class Simulation
         };
         PlaceAtBase(s, World.ShipRadius, tick);
         s.State.Mass = StatsFor(cls, false).Mass;
+        s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -804,6 +805,7 @@ public sealed partial class Simulation
                 AngVel = spin * PodEjectSpin,
                 Mass = StatsFor(dead.Class, true).Mass,
                 AbPower = 0f,
+                Fuel = StatsFor(dead.Class, true).MaxFuel, // 0 today; content-driven if pods ever get boost
             },
         };
         return pod;

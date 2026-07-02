@@ -90,6 +90,12 @@ Check(
     "stock hulls/weapons carry payload-capacity + mass",
     $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, cannon mass {scoutCannon.Mass})"
 );
+// Booster fuel: kebab-case (max-fuel/ab-fuel-drain/ab-fuel-recharge) binds onto the fighter hull.
+Check(
+    fighter.MaxFuel == 15 && fighter.AbFuelDrain == 3.0 && fighter.AbFuelRecharge == 0.5,
+    "stock fighter carries booster-fuel stats (max-fuel/ab-fuel-drain/ab-fuel-recharge)",
+    $"stock fighter fuel wrong (max {fighter.MaxFuel}, drain {fighter.AbFuelDrain}, recharge {fighter.AbFuelRecharge})"
+);
 var seeker = stock.Missiles.Single(m => m.Id == "seeker-missile");
 Check(
     seeker.CargoId == 1 && seeker.Mass == 4 && !string.IsNullOrEmpty(seeker.Glyph) && !string.IsNullOrEmpty(seeker.Description),

@@ -589,7 +589,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 13;
+    public const byte ProtocolVersion = 14;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -737,6 +737,9 @@ public partial class GameNetClient : Node
             d.AbAccel = r.ReadSingle();
             d.AbOnRate = r.ReadSingle();
             d.AbOffRate = r.ReadSingle();
+            d.MaxFuel = r.ReadSingle();
+            d.AbFuelDrain = r.ReadSingle();
+            d.AbFuelRecharge = r.ReadSingle();
             d.MaxHull = r.ReadSingle();
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
@@ -865,6 +868,7 @@ public partial class GameNetClient : Node
                 ay = r.ReadUInt16(),
                 az = r.ReadUInt16();
             ushort ab = r.ReadUInt16();
+            ushort fuel = r.ReadUInt16();
             ushort hp = r.ReadUInt16();
             uint lastInput = r.ReadUInt32();
             uint lastFire = r.ReadUInt32();
@@ -894,6 +898,7 @@ public partial class GameNetClient : Node
             row.AngVelY = WireQuant.UnpackHalf(ay);
             row.AngVelZ = WireQuant.UnpackHalf(az);
             row.AbPower = WireQuant.UnpackHalf(ab);
+            row.Fuel = WireQuant.UnpackHalf(fuel);
             row.Health = WireQuant.UnpackHalf(hp);
             row.LastInputTick = lastInput;
             row.LastFireTick = lastFire;

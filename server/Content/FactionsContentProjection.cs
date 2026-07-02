@@ -95,6 +95,9 @@ public static class FactionsContentProjection
             AbAccel = (float)h.AbAccel,
             AbOnRate = (float)h.AbOnRate,
             AbOffRate = (float)h.AbOffRate,
+            MaxFuel = (float)h.MaxFuel,
+            AbFuelDrain = (float)h.AbFuelDrain,
+            AbFuelRecharge = (float)h.AbFuelRecharge,
             Hardpoints = h.Hardpoints.Select(ProjectHardpoint).ToList(),
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
         };

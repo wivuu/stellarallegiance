@@ -100,8 +100,19 @@ public partial class EngineGlow : Node3D
     // _Process so the sound spools with the glow rather than snapping on input.
     private AudioStreamPlayer3D? _engineSfx;
     private AudioStreamPlayer3D? _boostSfx;
+    private AudioStreamPlayer3D? _boostStartSfx;
     private const float EngineUnitSize = 50f;
     private const float EngineMaxDistance = 1400f;
+
+    // Rising/falling-edge detection on the eased boost level, so the ignition one-shot
+    // fires exactly once per afterburner engagement and the sustain loop gets a brief
+    // release fade instead of an instant cut. See _Process/BuildAudio.
+    private const float BoostEdgeThreshold = 0.05f;
+    private const float BoostReleaseRate = 12f; // release fade rate (1/s); ~0.25s to settle near -80dB
+    private bool _boosting;
+    private float _boostAudioDb = -80f; // actual played volume for _boostSfx: tracks DriveToDb on the
+    // way up (riding the existing spool-up ramp) but eases independently on the way down, since
+    // _shownBoost itself snaps straight to 0 (EaseToward cuts down instantly for the visual flame).
 
     // Feed the current drive each frame. throttle (0..1) is forward thrust and
     // always glows the engines; boost (0..1) is the afterburner — a SEPARATE input
@@ -187,6 +198,24 @@ public partial class EngineGlow : Node3D
             };
             AddChild(_boostSfx);
             _boostSfx.Play();
+        }
+        // Ignition one-shot: a second, non-looping player so ramping up the afterburner
+        // gets a distinct "kick" (the recorded attack transient) instead of the sustain
+        // loop's steady middle re-firing that attack every loop restart. Fired once per
+        // rising edge in _Process; the sustain loop (_boostSfx) keeps ramping in underneath
+        // via the existing DriveToDb mapping.
+        var boostStart = sfx.GetStream(SfxManager.SfxId.BoosterStart);
+        if (boostStart != null)
+        {
+            _boostStartSfx = new AudioStreamPlayer3D
+            {
+                Stream = boostStart,
+                Bus = "Engines",
+                UnitSize = EngineUnitSize,
+                MaxDistance = EngineMaxDistance,
+                Position = rear,
+            };
+            AddChild(_boostStartSfx);
         }
     }
 
@@ -360,7 +389,28 @@ public partial class EngineGlow : Node3D
         }
         if (_boostSfx != null)
         {
-            _boostSfx.VolumeDb = DriveToDb(_shownBoost);
+            // Rising/falling edge on the eased boost level: fire the ignition one-shot once
+            // per engagement, and let the sustain loop release with a brief fade rather than
+            // snapping silent the instant the pilot lets off (EaseToward cuts _shownBoost down
+            // instantly for the visual flame, so the loop's volume can't just follow it).
+            bool boostingNow = _shownBoost > BoostEdgeThreshold;
+            if (boostingNow && !_boosting)
+            {
+                _boostStartSfx?.Play();
+            }
+            else if (!boostingNow && _boosting)
+            {
+                if (_boostStartSfx is { Playing: true })
+                    _boostStartSfx.Stop();
+            }
+            _boosting = boostingNow;
+
+            float targetDb = DriveToDb(_shownBoost);
+            _boostAudioDb =
+                targetDb > _boostAudioDb
+                    ? targetDb // ride the existing spool-up ramp on the way in
+                    : Mathf.Lerp(_boostAudioDb, targetDb, 1f - Mathf.Exp(-BoostReleaseRate * dt)); // ease out (~0.25s)
+            _boostSfx.VolumeDb = _boostAudioDb;
             _boostSfx.PitchScale = Mathf.Lerp(0.9f, 1.3f, _shownBoost);
         }
     }

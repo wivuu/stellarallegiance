@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 13;
+    public const byte Version = 14;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -32,7 +32,7 @@ public static class Protocol
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 47;
+    public const int ShipRecordSize = 49;
 
     // client -> server
     // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
@@ -79,7 +79,7 @@ public static class Protocol
     // Serialize one quantized ship record (exactly ShipRecordSize bytes) into dst. Layout:
     //   u64 id | u8 team | u8 class | u8 flags | u16 sector
     //   3x i16 pos(sector-local) | u32 rot(smallest-three)
-    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 health
+    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health
     //   u32 lastInputTick | u32 lastFireTick
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
     {
@@ -128,13 +128,15 @@ public static class Protocol
 
         BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.State.AbPower));
         o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.State.Fuel));
+        o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.Health));
         o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastInputTick);
         o += 4;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastFireTick);
         o += 4;
-        // o == ShipRecordSize (47)
+        // o == ShipRecordSize (49)
     }
 
     public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick, byte[] reconnectToken)
@@ -328,6 +330,9 @@ public static class Protocol
             w.Write(s.AbAccel);
             w.Write(s.AbOnRate);
             w.Write(s.AbOffRate);
+            w.Write(s.MaxFuel);
+            w.Write(s.AbFuelDrain);
+            w.Write(s.AbFuelRecharge);
             w.Write(s.MaxHull);
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);

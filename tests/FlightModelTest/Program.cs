@@ -24,10 +24,19 @@ static class Program
     // production content is authored in YAML and reaches the sim/client as ShipClassDef (resolved via
     // ShipStats.FromDef). Pinned here so the golden trajectory stays fixed regardless of the bundle.
     //                                            maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
-    static readonly ShipStats Scout = ShipStats.Create(160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f);
-    static readonly ShipStats Fighter = ShipStats.Create(100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f);
-    static readonly ShipStats Bomber = ShipStats.Create(60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f);
-    static readonly ShipStats Pod = ShipStats.Create(60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f);
+    static readonly ShipStats Scout = ShipStats.Create(160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
+    static readonly ShipStats Fighter = ShipStats.Create(100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f, 0f, 0f, 0f);
+    static readonly ShipStats Bomber = ShipStats.Create(60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
+    static readonly ShipStats Pod = ShipStats.Create(60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
+
+    // Fueled-fighter fixture for the booster-fuel feel tests (#9 below): identical to Fighter above
+    // but with a fuel gauge (maxFuel/fuelDrain/fuelRecharge). Kept independent of the authored
+    // fighter content numbers (covered separately by ContentTest/FactionsTest) so this file's feel
+    // tests aren't coupled to YAML tuning.
+    static readonly ShipStats FueledFighter = ShipStats.Create(
+        100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f,
+        maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f
+    );
 
     // A fixed, reproducible input sequence — no randomness, no time reads.
     static ShipInputState InputAt(int tick)
@@ -73,7 +82,8 @@ static class Program
         && a.AngVel.X == b.AngVel.X
         && a.AngVel.Y == b.AngVel.Y
         && a.AngVel.Z == b.AngVel.Z
-        && a.AbPower == b.AbPower;
+        && a.AbPower == b.AbPower
+        && a.Fuel == b.Fuel;
 
     static int Main()
     {
@@ -306,6 +316,201 @@ static class Program
                 Console.WriteLine(
                     $"PASS: heavier ship accelerates slower ({heavy.Vel.Length():R} < {light.Vel.Length():R}); zero-mass fallback exact"
                 );
+            }
+        }
+
+        // 9. Booster fuel (afterburner fuel gauge): a hull with MaxFuel > 0 gates the
+        //    afterburner on fuel, drains/recharges per second, and never regresses into a
+        //    free/unlimited boost. FueledFighter mirrors Fighter but with a 10-unit tank,
+        //    3/s drain, 0.5/s recharge.
+        ShipState fuelGateEmptyState;
+        {
+            var stats = FueledFighter;
+
+            // 9a. Fuel gate: full thrust + Boost held drains a full tank in ~MaxFuel/FuelDrain
+            //     seconds; afterburning gates on PRE-tick fuel, so the tick that empties the tank
+            //     still fires, then the gate cuts — AbPower decays and speed falls back to ~MaxSpeed.
+            var s = new ShipState { Rot = Quat.Identity, Fuel = stats.MaxFuel };
+            var boost = new ShipInputState { Thrust = 1f, Boost = true };
+            float expectedEmptySeconds = stats.MaxFuel / stats.FuelDrain; // 10/3 ~= 3.333s
+            int expectedEmptyTicks = (int)Math.Ceiling(expectedEmptySeconds / FlightModel.Dt);
+            int emptyTick = -1;
+            int runTicks = expectedEmptyTicks + 800; // plenty of headroom for AbPower decay + drag settle
+            for (int t = 0; t < runTicks; t++)
+            {
+                s = FlightModel.Integrate(s, boost, stats);
+                if (emptyTick < 0 && s.Fuel <= 0f)
+                    emptyTick = t;
+            }
+            float emptySeconds = (emptyTick + 1) * FlightModel.Dt;
+            float speedAfterEmpty = s.Vel.Length();
+            if (emptyTick < 0 || emptySeconds > expectedEmptySeconds + 0.25f)
+            {
+                Console.WriteLine(
+                    $"FAIL: fuel gate — tank emptied at {(emptyTick < 0 ? -1f : emptySeconds):0.000}s, expected <= {expectedEmptySeconds + 0.25f:0.000}s"
+                );
+                failures++;
+            }
+            else if (s.AbPower > 1e-3f)
+            {
+                Console.WriteLine($"FAIL: fuel gate — AbPower {s.AbPower:R} did not decay to 0 after the tank ran dry");
+                failures++;
+            }
+            else if (speedAfterEmpty > stats.MaxSpeed * 1.02f)
+            {
+                Console.WriteLine(
+                    $"FAIL: fuel gate — speed {speedAfterEmpty:R} did not fall back to ~MaxSpeed {stats.MaxSpeed} after the tank ran dry"
+                );
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"PASS: fuel gate — tank emptied at {emptySeconds:0.000}s (~{expectedEmptySeconds:0.000}s), AbPower decayed to {s.AbPower:R}, speed settled at {speedAfterEmpty:R} <= MaxSpeed"
+                );
+            }
+            fuelGateEmptyState = s; // Fuel == 0, Boost still held — feeds 9b (release Boost)
+        }
+
+        // 9b. Recharge: releasing Boost on the drained tank from 9a refills it, clamped exactly
+        //     at MaxFuel, in ~MaxFuel/FuelRecharge seconds.
+        {
+            var stats = FueledFighter;
+            var s = fuelGateEmptyState;
+            var noBoost = new ShipInputState();
+            float expectedFullSeconds = stats.MaxFuel / stats.FuelRecharge; // 10/0.5 = 20s
+            int expectedFullTicks = (int)Math.Ceiling(expectedFullSeconds / FlightModel.Dt);
+            int fullTick = -1;
+            int runTicks = expectedFullTicks + 40;
+            for (int t = 0; t < runTicks; t++)
+            {
+                s = FlightModel.Integrate(s, noBoost, stats);
+                if (fullTick < 0 && s.Fuel >= stats.MaxFuel)
+                    fullTick = t;
+            }
+            float fullSeconds = (fullTick + 1) * FlightModel.Dt;
+            if (fullTick < 0 || fullSeconds > expectedFullSeconds + 0.25f)
+            {
+                Console.WriteLine(
+                    $"FAIL: recharge — tank reached MaxFuel at {(fullTick < 0 ? -1f : fullSeconds):0.000}s, expected <= {expectedFullSeconds + 0.25f:0.000}s"
+                );
+                failures++;
+            }
+            else if (s.Fuel != stats.MaxFuel)
+            {
+                Console.WriteLine($"FAIL: recharge — fuel {s.Fuel:R} not clamped exactly at MaxFuel {stats.MaxFuel}");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"PASS: recharge — tank refilled to MaxFuel {stats.MaxFuel} at {fullSeconds:0.000}s (~{expectedFullSeconds:0.000}s), clamped exactly"
+                );
+            }
+        }
+
+        // 9c. Dock-only (FuelRecharge == 0): once the tank is drained, releasing Boost never
+        //     refills it — fuel stays pinned at 0 forever (a real refuel needs an outside dock
+        //     event, out of scope for the flight model).
+        {
+            var stats = ShipStats.Create(
+                100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f,
+                maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0f
+            );
+            var s = new ShipState { Rot = Quat.Identity, Fuel = stats.MaxFuel };
+            var boost = new ShipInputState { Thrust = 1f, Boost = true };
+            for (int t = 0; t < 200; t++) // well past 10/3s (~67 ticks) to fully drain
+                s = FlightModel.Integrate(s, boost, stats);
+            bool drained = s.Fuel == 0f;
+
+            var noBoost = new ShipInputState();
+            for (int t = 0; t < 400; t++) // ~20s with Boost released
+                s = FlightModel.Integrate(s, noBoost, stats);
+
+            if (!drained || s.Fuel != 0f)
+            {
+                Console.WriteLine($"FAIL: dock-only — fuel {s.Fuel:R} did not stay pinned at 0 (drained={drained})");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: dock-only — FuelRecharge=0 keeps the tank pinned at 0 with Boost released ({s.Fuel:R})");
+            }
+        }
+
+        // 9d. Fumes flutter guard: Boost HELD on an empty tank with a live trickle recharge must
+        //     never let the tank "flutter" (recharge a sliver, spend it right back) into
+        //     effectively-free boost. Per-tick fuel is bounded by the recharge trickle, and the
+        //     average speed must stay far below the full-boost equilibrium from 9a/test #4.
+        {
+            var stats = FueledFighter;
+            var s = new ShipState { Rot = Quat.Identity, Fuel = 0f };
+            var boost = new ShipInputState { Thrust = 1f, Boost = true };
+            const int ticks = 3000; // 150s — many flutter cycles, long enough to reach steady state
+            const int steadyStart = ticks - 1000; // average only the tail (steady-state window)
+            float fuelMax = 0f;
+            float speedSum = 0f;
+            int speedSamples = 0;
+            for (int t = 0; t < ticks; t++)
+            {
+                s = FlightModel.Integrate(s, boost, stats);
+                if (s.Fuel > fuelMax)
+                    fuelMax = s.Fuel;
+                if (t >= steadyStart)
+                {
+                    speedSum += s.Vel.Length();
+                    speedSamples++;
+                }
+            }
+            float avgSpeed = speedSum / speedSamples;
+            float fuelBound = stats.FuelRecharge * FlightModel.Dt * 2f; // headroom over one recharge trickle
+            float boostCap = stats.MaxSpeed * (1f + stats.AbThrust / stats.Thrust);
+            float farBelowBound = stats.MaxSpeed + (boostCap - stats.MaxSpeed) * 0.5f; // halfway to full-boost cap
+            if (fuelMax > fuelBound + 1e-4f)
+            {
+                Console.WriteLine($"FAIL: fumes flutter — fuel peaked at {fuelMax:R}, expected <= {fuelBound:R}");
+                failures++;
+            }
+            else if (avgSpeed > farBelowBound)
+            {
+                Console.WriteLine(
+                    $"FAIL: fumes flutter — average speed {avgSpeed:R} too close to the full-boost equilibrium {boostCap:R} (expected <= {farBelowBound:R})"
+                );
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"PASS: fumes flutter guard — fuel peak {fuelMax:R} <= {fuelBound:R}, average speed {avgSpeed:0.00} far below full-boost equilibrium {boostCap:R}"
+                );
+            }
+        }
+
+        // 9e. Unmodeled (MaxFuel <= 0): the gate never engages — Boost held indefinitely reaches
+        //     the ordinary boost equilibrium (test #4) and Fuel is left untouched at 0. Legacy
+        //     path, bit-identical to before fuel existed (the determinism/golden tests above
+        //     already cover the exact bits).
+        {
+            var fighter = Fighter; // MaxFuel == 0 (unmodeled)
+            var s = new ShipState { Rot = Quat.Identity };
+            var boost = new ShipInputState { Thrust = 1f, Boost = true };
+            for (int t = 0; t < 2000; t++)
+                s = FlightModel.Integrate(s, boost, fighter);
+            float speed = s.Vel.Length();
+            float boostCap = fighter.MaxSpeed * (1f + fighter.AbThrust / fighter.Thrust);
+            if (speed <= fighter.MaxSpeed + 0.5f || speed > boostCap + 0.5f)
+            {
+                Console.WriteLine($"FAIL: unmodeled fuel — boosted speed {speed:R} not in ({fighter.MaxSpeed}, {boostCap}]");
+                failures++;
+            }
+            else if (fighter.MaxFuel != 0f || s.Fuel != 0f)
+            {
+                Console.WriteLine($"FAIL: unmodeled fuel — Fuel {s.Fuel:R} != 0 (MaxFuel<=0 must leave Fuel untouched)");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"PASS: unmodeled fuel — boosted speed {speed:R} reaches boost equilibrium, Fuel stays {s.Fuel:R}");
             }
         }
 

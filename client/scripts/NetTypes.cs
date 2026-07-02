@@ -55,6 +55,7 @@ namespace StellarAllegiance.Net
             AngVelY,
             AngVelZ;
         public float AbPower;
+        public float Fuel;
         public float Health;
         public float Mass;
         public uint LastInputTick;

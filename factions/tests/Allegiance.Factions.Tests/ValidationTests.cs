@@ -142,6 +142,95 @@ public class ValidationTests
         Assert.Contains(result.Errors, e => e.Contains("cargo-id") && e.Contains("n1"));
     }
 
+    // Booster fuel: ab-accel and max-fuel are authored as a pair, and the drain/recharge rates
+    // must actually behave like a gauge (never net-zero, never negative).
+    [Fact]
+    public void AfterburnerWithoutMaxFuel_IsReported()
+    {
+        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 0, fuelDrain: 0, fuelRecharge: 0);
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("no max-fuel"));
+    }
+
+    [Fact]
+    public void MaxFuelWithoutAfterburner_IsReported()
+    {
+        var core = MakeFuelHullCore(abAccel: 0, maxFuel: 10, fuelDrain: 3, fuelRecharge: 0.5);
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("no afterburner"));
+    }
+
+    [Fact]
+    public void MaxFuelWithoutFuelDrain_IsReported()
+    {
+        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 0, fuelRecharge: 0);
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("no ab-fuel-drain"));
+    }
+
+    [Fact]
+    public void FuelRechargeAtOrAboveDrain_IsReported()
+    {
+        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: 3);
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("ab-fuel-recharge >= ab-fuel-drain"));
+    }
+
+    [Fact]
+    public void NegativeFuelDrainOrRecharge_IsReported()
+    {
+        var negativeDrain = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: -1, fuelRecharge: 0.5);
+        var negativeRecharge = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: -0.5);
+
+        var drainResult = CoreValidator.Validate(negativeDrain);
+        var rechargeResult = CoreValidator.Validate(negativeRecharge);
+
+        Assert.False(drainResult.IsValid);
+        Assert.Contains(drainResult.Errors, e => e.Contains("negative ab-fuel-drain"));
+        Assert.False(rechargeResult.IsValid);
+        Assert.Contains(rechargeResult.Errors, e => e.Contains("negative ab-fuel-recharge"));
+    }
+
+    [Fact]
+    public void CorrectlyAuthoredFueledHull_IsValid()
+    {
+        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: 0.5);
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.True(result.IsValid, string.Join("\n", result.Errors));
+    }
+
+    private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>
+        new()
+        {
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "scout",
+                    Name = "Scout",
+                    ClassId = 0,
+                    AbAccel = abAccel,
+                    MaxFuel = maxFuel,
+                    AbFuelDrain = fuelDrain,
+                    AbFuelRecharge = fuelRecharge,
+                },
+            },
+        };
+
     private static Core MakeArmedHullCore(double payloadCapacity) =>
         new()
         {

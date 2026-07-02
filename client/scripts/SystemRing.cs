@@ -1,14 +1,18 @@
 using Godot;
 using StellarAllegiance.Ui;
 
-// HUD system ring: the HULL + BOOST gauges from the "Stellar Allegiance" Game-HUD design.
+// HUD system ring: the HULL + FUEL/BOOST gauges from the "Stellar Allegiance" Game-HUD design.
 // Two concentric segmented arc gauges framing the aim reticle (centre of screen space) —
-// HULL on the right span, BOOST on the left span, top and bottom left open so vertical aim
-// stays clear. The game has no shield, so the design's SHLD arc is omitted.
+// HULL on the right span, FUEL (or legacy BOOST) on the left span, top and bottom left open
+// so vertical aim stays clear. The game has no shield, so the design's SHLD arc is omitted.
 //
-// Pure overlay: reads the local ship's authoritative-derived state (Health/MaxHealth, the
-// synced afterburner ramp AbPower) and the active camera, and draws. Never touches
-// authoritative state. Created and wired up by the Hud, like the other combat overlays.
+// The left gauge reads FUEL (Fuel/MaxFuel) on hulls with a modeled tank (MaxFuel > 0); on
+// legacy hulls (MaxFuel <= 0, fuel unmodeled) it falls back to the old AbPower ramp so those
+// classes keep a BOOST readout instead of a meaningless empty gauge.
+//
+// Pure overlay: reads the local ship's authoritative-derived state (Health/MaxHealth, Fuel/
+// MaxFuel, the synced afterburner ramp AbPower) and the active camera, and draws. Never
+// touches authoritative state. Created and wired up by the Hud, like the other combat overlays.
 public partial class SystemRing : Control
 {
     // Muzzle constants mirrored from TargetMarkers / PredictionController so the ring centres
@@ -71,13 +75,17 @@ public partial class SystemRing : Control
         float hullFrac = local.MaxHealth > 0f ? Mathf.Clamp(local.Health / local.MaxHealth, 0f, 1f) : 0f;
         SegmentedArc(c, 0f, hullFrac, HealthColor(hullFrac), track, litFromEnd: true);
 
-        // BOOST — left span (centre 180°). AbPower is already 0..1.
-        float boostFrac = Mathf.Clamp(local.AbPower, 0f, 1f);
-        SegmentedArc(c, 180f, boostFrac, DesignTokens.Warn, track, litFromEnd: false);
+        // FUEL — left span (centre 180°), on hulls with a modeled tank. Legacy hulls
+        // (MaxFuel <= 0) keep the old BOOST/AbPower ramp instead.
+        bool hasFuel = local.MaxFuel > 0f;
+        float leftFrac = hasFuel ? Mathf.Clamp(local.Fuel / local.MaxFuel, 0f, 1f) : Mathf.Clamp(local.AbPower, 0f, 1f);
+        Color leftColor = hasFuel ? FuelColor(leftFrac) : DesignTokens.Warn;
+        SegmentedArc(c, 180f, leftFrac, leftColor, track, litFromEnd: false);
 
         // Mono labels just outside each gauge: tag in the token colour, value in TextHi.
         DrawTagValue(c + new Vector2(Radius + 12f, 4f), "HULL", $"{local.Health:0}", HealthColor(hullFrac), rightAlign: false);
-        DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), "BST", $"{boostFrac * 100f:0}", DesignTokens.Warn, rightAlign: true);
+        string leftTag = hasFuel ? "FUEL" : "BST";
+        DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), leftTag, $"{leftFrac * 100f:0}", leftColor, rightAlign: true);
     }
 
     // One segmented arc gauge centred at `centerDeg`, sweeping `SpanDeg`. Each block is a
@@ -121,4 +129,8 @@ public partial class SystemRing : Control
         frac > 0.5f ? DesignTokens.Ok
         : frac > 0.25f ? DesignTokens.Warn
         : DesignTokens.Danger;
+
+    // Amber tank, red when critically low (<=25%) — mirrors HealthColor's low-end tier so an
+    // empty-tank warning reads the same way a failing hull does.
+    private static Color FuelColor(float frac) => frac > 0.25f ? DesignTokens.Warn : DesignTokens.Danger;
 }

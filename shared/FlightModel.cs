@@ -211,6 +211,10 @@ namespace StellarAllegiance.Shared
         // authority and the client's prediction ramp the afterburner identically
         // (it climbs at AbOnRate while Boost is held, falls at AbOffRate otherwise).
         public float AbPower;
+
+        // Afterburner fuel. Drained/gated in Integrate only when st.MaxFuel > 0; a hull
+        // with MaxFuel <= 0 leaves this unused (legacy unlimited boost).
+        public float Fuel;
     }
 
     public struct ShipInputState
@@ -251,6 +255,9 @@ namespace StellarAllegiance.Shared
         public float AbAccel; // extra forward accel at full afterburner
         public float AbOnRate,
             AbOffRate; // afterburner power ramp per second
+        public float MaxFuel; // afterburner fuel capacity; <= 0 = unmodeled (unlimited boost)
+        public float FuelDrain,
+            FuelRecharge; // fuel per second while afterburning / not
 
         // --- Derived once by Create() (NOT authored, NOT stored in a row) ---
         public float Thrust; // Mass·Accel — engine force capacity (clip magnitude)
@@ -278,7 +285,10 @@ namespace StellarAllegiance.Shared
             float backMult,
             float abAccel,
             float abOnRate,
-            float abOffRate
+            float abOffRate,
+            float maxFuel = 0f,
+            float fuelDrain = 0f,
+            float fuelRecharge = 0f
         )
         {
             return new ShipStats
@@ -296,6 +306,9 @@ namespace StellarAllegiance.Shared
                 AbAccel = abAccel,
                 AbOnRate = abOnRate,
                 AbOffRate = abOffRate,
+                MaxFuel = maxFuel,
+                FuelDrain = fuelDrain,
+                FuelRecharge = fuelRecharge,
 
                 Thrust = mass * accel,
                 AbThrust = mass * abAccel,
@@ -332,7 +345,10 @@ namespace StellarAllegiance.Shared
                 d.BackMult,
                 d.AbAccel,
                 d.AbOnRate,
-                d.AbOffRate
+                d.AbOffRate,
+                d.MaxFuel,
+                d.AbFuelDrain,
+                d.AbFuelRecharge
             );
     }
 
@@ -477,7 +493,10 @@ namespace StellarAllegiance.Shared
             Vec3 drag = s.Vel * (st.OneMinusDrag / ttv);
 
             // --- Step 3: afterburner power ramp + fold into drag. ---
-            bool afterburning = i.Boost && st.AbThrust > 0f;
+            // Fuel gates entry (read pre-tick, so a tick that empties the tank still fires the
+            // afterburner that tick); a hull with MaxFuel <= 0 is unmodeled and never gates.
+            bool fuelModeled = st.MaxFuel > 0f;
+            bool afterburning = i.Boost && st.AbThrust > 0f && (!fuelModeled || s.Fuel > 0f);
             float thrustRatio = 0f;
             float abPower = s.AbPower;
             if (st.AbThrust > 0f)
@@ -497,6 +516,28 @@ namespace StellarAllegiance.Shared
                 }
                 if (abPower != 0f)
                     drag = drag + backward * (abPower * st.AbThrust);
+            }
+
+            // Flat drain while engaged (not scaled by AbPower); recharge only while the boost
+            // input is RELEASED, hard clamped to [0, MaxFuel]. No hysteresis — afterburning
+            // re-gates the instant fuel > 0. Recharging on every non-burning tick would let a
+            // held trigger on an empty tank alternate burn/recharge each tick (the 0-clamp
+            // discards most of the drain), saturating AbPower into effectively free boost.
+            float fuel = s.Fuel;
+            if (fuelModeled)
+            {
+                if (afterburning)
+                {
+                    fuel -= dt * st.FuelDrain;
+                    if (fuel < 0f)
+                        fuel = 0f;
+                }
+                else if (!i.Boost)
+                {
+                    fuel += dt * st.FuelRecharge;
+                    if (fuel > st.MaxFuel)
+                        fuel = st.MaxFuel;
+                }
             }
 
             // --- Step 4: engine thrust direction (manual-strafe / throttle). ---
@@ -547,6 +588,7 @@ namespace StellarAllegiance.Shared
                 AngVel = angVel,
                 Mass = s.Mass,
                 AbPower = abPower,
+                Fuel = fuel,
             };
         }
 

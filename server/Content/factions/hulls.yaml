@@ -4,6 +4,13 @@
 #   explicit runtime extensions. Numbers reproduce server/Content/stock.yaml exactly.
 #   payload-capacity = the hull's payload budget (mounted weapon mass + cargo hold). Every armed
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
+#   Afterburner fuel (optional, gauges the afterburner): max-fuel is the tank size; ab-fuel-drain is
+#   burned per second while the afterburner is engaged; ab-fuel-recharge trickles back per second
+#   while the boost input is released. A hull authoring ab-accel > 0 MUST also author max-fuel (and vice versa) —
+#   CoreValidator refuses to boot on a mismatched pair. ab-fuel-recharge: 0 is a valid, deliberate
+#   convention meaning "dock-only": the tank never refills in flight, only on relaunch (spawn-time
+#   init refuels — see Simulation.SpawnCombatShip). Scout/Bomber/Pod have no afterburner and
+#   author none of these keys (max-fuel <= 0 = unmodeled, i.e. legacy unlimited boost).
 hulls:
   # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
   - id: scout
@@ -43,6 +50,9 @@ hulls:
     ab-accel: 10
     ab-on-rate: 2.0
     ab-off-rate: 1.0
+    max-fuel: 15          # burn time = max-fuel / ab-fuel-drain = 5 s
+    ab-fuel-drain: 3.0    # per second while the afterburner is engaged
+    ab-fuel-recharge: 0.5 # per second while boost is released (~30 s to full); 0 = dock-only (relaunch refills)
     armor-hit-points: 120
     price: 200
     payload-capacity: 16 # twin cannons 2x5 -> 6 free for cargo
@@ -52,6 +62,18 @@ hulls:
       - { kind: weapon, index: 1, off-x: 0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
       - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
       - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
+
+  # Interceptor (stub — no model/class-id yet): the dock-only booster hull. Uncomment + assign
+  # class-id when the hull lands.
+  # - id: interceptor
+  #   name: Interceptor
+  #   class-id: 3
+  #   ab-accel: 14
+  #   ab-on-rate: 2.5
+  #   ab-off-rate: 1.5
+  #   max-fuel: 20
+  #   ab-fuel-drain: 4.0
+  #   ab-fuel-recharge: 0 # dock-only: no in-flight regen, full tank only on relaunch
 
   # Bomber (class-id 2): the heavy hull — twin main engines; one slow, hard cannon.
   - id: bomber

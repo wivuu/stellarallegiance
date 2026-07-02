@@ -16,6 +16,7 @@ public static class ShipMath
             AngVel = new Vec3(r.AngVelX, r.AngVelY, r.AngVelZ),
             Mass = r.Mass,
             AbPower = r.AbPower,
+            Fuel = r.Fuel,
         };
 
     public static Vector3 ToGodot(Vec3 v) => new Vector3(v.X, v.Y, v.Z);

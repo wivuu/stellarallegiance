@@ -76,6 +76,10 @@ namespace StellarAllegiance.Shared
         public float AbAccel,
             AbOnRate,
             AbOffRate;
+        // 0 max-fuel = unmodeled (unlimited boost); 0 recharge = dock-only (relaunch refills).
+        public float MaxFuel;
+        public float AbFuelDrain,
+            AbFuelRecharge;
 
         public float MaxHull; // starting/spawn hull
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
