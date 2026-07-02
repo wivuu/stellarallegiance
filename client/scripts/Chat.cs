@@ -126,9 +126,14 @@ public partial class Chat : Control
 
     // ---- input ---------------------------------------------------------
 
+    // The Game Lobby overlay owns the screen — and its own comms panel — whenever we're
+    // connected and not flying, so this floating overlay steps aside then (it stays the in-flight
+    // chat unchanged).
+    private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null;
+
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (_inputRow.Visible || _cm.State != ConnectionManager.ConnState.Connected)
+        if (_inputRow.Visible || _cm.State != ConnectionManager.ConnState.Connected || LobbyOwnsScreen)
             return;
         if (@event is InputEventKey k && k.Pressed && !k.Echo && (k.Keycode == Key.Enter || k.Keycode == Key.KpEnter))
         {
@@ -256,6 +261,16 @@ public partial class Chat : Control
 
     public override void _Process(double delta)
     {
+        // Hidden while the Game Lobby is up (it hosts its own comms panel).
+        if (LobbyOwnsScreen)
+        {
+            if (_inputRow.Visible)
+                CloseInput();
+            Visible = false;
+            return;
+        }
+        Visible = true;
+
         _sinceLastMsg += delta;
 
         Vector2 vp = GetViewportRect().Size;

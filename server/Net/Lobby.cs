@@ -26,20 +26,12 @@ public sealed class Lobby
     {
         lock (_lock)
         {
-            // Balance: drop the newcomer on the smaller side so untouched rosters stay even.
-            int t0 = 0,
-                t1 = 0;
-            foreach (var r in _players.Values)
-            {
-                if (r.Team == 0)
-                    t0++;
-                else
-                    t1++;
-            }
+            // A fresh joiner starts with no team (NOAT). They see the sides in the lobby and pick
+            // one before deploying — the server no longer auto-balances them onto a side.
             _players[clientId] = new Rec
             {
                 Name = name,
-                Team = (byte)(t0 <= t1 ? 0 : 1),
+                Team = Protocol.NoTeam,
                 Ready = false,
             };
         }
@@ -53,9 +45,13 @@ public sealed class Lobby
 
     public void SetTeam(int clientId, byte team)
     {
+        // Accept the two real sides plus NoTeam (a pilot standing back down to spectate); ignore
+        // any other value rather than clamping it onto a real side.
+        if (team != 0 && team != 1 && team != Protocol.NoTeam)
+            return;
         lock (_lock)
             if (_players.TryGetValue(clientId, out var r))
-                r.Team = team > 1 ? (byte)1 : team;
+                r.Team = team;
     }
 
     public void SetReady(int clientId, bool ready)
@@ -68,7 +64,7 @@ public sealed class Lobby
     public byte TeamOf(int clientId)
     {
         lock (_lock)
-            return _players.TryGetValue(clientId, out var r) ? r.Team : (byte)0;
+            return _players.TryGetValue(clientId, out var r) ? r.Team : Protocol.NoTeam;
     }
 
     // Drop everyone's ready flag — called when a match ends and the server returns to lobby,

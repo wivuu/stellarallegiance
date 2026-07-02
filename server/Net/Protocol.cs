@@ -22,7 +22,13 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 11;
+    public const byte Version = 12;
+
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
+    // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
+    // wire anywhere a team byte does (Welcome, lobby roster, chat fromTeam) and never indexes a
+    // real team array — only teams 0/1 have bases, economy, or ships.
+    public const byte NoTeam = 0xFF;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.

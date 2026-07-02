@@ -589,7 +589,12 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 11;
+    public const byte ProtocolVersion = 12;
+
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
+    // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
+    // must pick BLUE/RED before deploying.
+    public const byte NoTeam = 0xFF;
 
     private void ApplyWelcome(BinaryReader r)
     {

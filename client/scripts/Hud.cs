@@ -25,6 +25,12 @@ public partial class Hud : CanvasLayer
     // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
     private ShipLoadout? _hangar;
 
+    // Deploy intent, raised by the Lobby's LAUNCH. The mandatory ship-select hangar only opens
+    // once the pilot asks to deploy — until then the Lobby overlay owns the not-flying screen
+    // (even mid-match), so a joiner can pick a team and read the roster first. Consumed once
+    // flying; cleared when the match ends.
+    private bool _deployRequested;
+
     // Previous-frame visibility, so UI sounds fire once on the transition (the sector
     // warning first appearing) rather than every frame.
     private bool _warnWasVisible;
@@ -195,22 +201,32 @@ public partial class Hud : CanvasLayer
         AddChild(_hangar);
     }
 
+    // The Lobby's LAUNCH expresses intent to deploy. While a match is Active this promotes the
+    // pilot from the lobby overlay into the mandatory ship-select hangar; set pre-match (on ready)
+    // it carries that intent through match-start so readying flows straight into the hangar.
+    public void RequestDeploy(bool on = true) => _deployRequested = on;
+
     public override void _Process(double delta)
     {
         var ship = _world.LocalShip;
         bool flying = ship != null;
 
-        // The Lobby overlay owns everything outside a live match. The spawn menu appears once a
-        // match is Active and you're not currently flying — keying off "not flying" means it also
-        // reopens when a pod is destroyed/docked and you're awaiting your next ship.
+        // The Lobby overlay owns the not-flying screen — pre-match, post-match, AND mid-match
+        // until the pilot presses LAUNCH — so a joiner can see the teams and pick a side before
+        // deploying. The spawn hangar opens only once deploy is requested (Hud.RequestDeploy).
         bool inMatch = _world.Phase == MatchPhase.Active;
-        // The hangar IS the ship-select screen. While in an active match with no ship
-        // (first spawn, respawn after death): open it if it isn't up, and promote a
-        // hangar the player had open manually — either way it becomes the mandatory
-        // select (LAUNCH to leave). Once the ship exists — or the match leaves Active
-        // and the lobby overlay takes over — the spawn hangar closes itself.
+        // Deploy intent is consumed once you're flying, and cleared when the match ends (back to
+        // the post-match lobby). It persists across the lobby→active flip so a pre-match LAUNCH
+        // (ready) flows straight into the ship-select when the match starts.
+        if (flying || _world.Phase == MatchPhase.Ended)
+            _deployRequested = false;
+        // The hangar IS the ship-select screen. While in an active match with no ship and deploy
+        // requested (first spawn, respawn after death): open it if it isn't up, and promote a
+        // hangar the player had open manually — either way it becomes the mandatory select
+        // (LAUNCH to leave). Once the ship exists — or the match leaves Active / deploy is no
+        // longer requested — the spawn hangar closes itself and the lobby overlay takes over.
         bool hangarUp = _hangar != null && GodotObject.IsInstanceValid(_hangar);
-        if (inMatch && !flying)
+        if (inMatch && !flying && _deployRequested)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;

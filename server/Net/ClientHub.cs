@@ -425,6 +425,12 @@ public sealed class ClientHub
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
+                        // Can't deploy without a side — a NOAT pilot must pick BLUE/RED first.
+                        if (team != 0 && team != 1)
+                        {
+                            SystemTo(client, "Pick a team before launching.");
+                            break;
+                        }
                         client.Team = team;
                         _sim.EnqueueJoin(client.Id, team, cls);
                     }
@@ -433,6 +439,9 @@ public sealed class ClientHub
                 case Protocol.MsgSetTeam when count >= 2:
                 {
                     _lobby.SetTeam(client.Id, buffer[1]);
+                    // Keep the connection's team in sync with the lobby so chat scope (and any
+                    // later spawn) reflect the pick immediately, not just at deploy time.
+                    client.Team = _lobby.TeamOf(client.Id);
                     BroadcastLobby();
                     break;
                 }
