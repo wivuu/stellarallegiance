@@ -21,6 +21,7 @@ public partial class UiShowcase : Control
         var scroll = new ScrollContainer();
         scroll.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(scroll);
+        _scroll = scroll;
 
         var page = new MarginContainer();
         page.AddThemeConstantOverride("margin_left", 48);
@@ -45,26 +46,39 @@ public partial class UiShowcase : Control
         MaybeCaptureAndQuit();
     }
 
+    private ScrollContainer? _scroll;
+
     // `--ui-shot[=path]` renders one frame and saves a PNG, for screenshot verification.
+    // `--ui-scroll=<px>` scrolls the gallery down first so below-the-fold sections land in shot.
     private void MaybeCaptureAndQuit()
     {
         string? outPath = null;
+        int scrollTo = 0;
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a == "--ui-shot")
                 outPath = "user://ui_showcase.png";
             else if (a.StartsWith("--ui-shot="))
                 outPath = a.Substring("--ui-shot=".Length);
+            else if (a.StartsWith("--ui-scroll=") && int.TryParse(a.Substring("--ui-scroll=".Length), out var px))
+                scrollTo = px;
         }
         if (outPath == null)
             return;
-        var timer = GetTree().CreateTimer(0.8);
-        timer.Timeout += () =>
+        // Scroll first, then capture on a later frame so the scrolled layout is what renders.
+        var scrollTimer = GetTree().CreateTimer(0.8);
+        scrollTimer.Timeout += () =>
         {
-            Image img = GetViewport().GetTexture().GetImage();
-            img.SavePng(outPath);
-            GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
-            GetTree().Quit();
+            if (scrollTo > 0 && _scroll != null)
+                _scroll.ScrollVertical = scrollTo;
+            var shotTimer = GetTree().CreateTimer(0.2);
+            shotTimer.Timeout += () =>
+            {
+                Image img = GetViewport().GetTexture().GetImage();
+                img.SavePng(outPath);
+                GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
+                GetTree().Quit();
+            };
         };
     }
 
@@ -301,6 +315,34 @@ public partial class UiShowcase : Control
         row.AddChild(radar);
 
         s.AddChild(row);
+
+        var mapRow = new HBoxContainer();
+        mapRow.AddThemeConstantOverride("separation", 18);
+        var sectorMap = new SectorMapPreview { CustomMinimumSize = new Vector2(340, 150) };
+        sectorMap.SetMap(
+            new SectorMapPreview.MapModel(
+                new()
+                {
+                    new SectorMapPreview.SectorModel(
+                        0,
+                        2100f,
+                        new() { new SectorMapPreview.BaseMark(0, new Vector2(-812f, 402f)) },
+                        new() { new Vector2(1500f, -901f) }
+                    ),
+                    new SectorMapPreview.SectorModel(
+                        1,
+                        700f,
+                        new() { new SectorMapPreview.BaseMark(1, new Vector2(210f, -95f)) },
+                        new() { new Vector2(-520f, 310f) }
+                    ),
+                }
+            )
+        );
+        mapRow.AddChild(sectorMap);
+        var emptyMap = new SectorMapPreview { CustomMinimumSize = new Vector2(220, 150) };
+        emptyMap.SetMap(null);
+        mapRow.AddChild(emptyMap);
+        s.AddChild(mapRow);
     }
 
     private static ToastHost? _toast;

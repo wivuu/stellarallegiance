@@ -21,13 +21,37 @@ public record RegisterRequest(
     int Players = 0,
     int MaxPlayers = 0,
     string? State = null,
-    int ProtocolVersion = 0
+    int ProtocolVersion = 0,
+    string? HostedBy = null,
+    MapLayout? Map = null,
+    LobbyRosterEntry[]? Roster = null
 );
 
 // Periodic liveness ping. Carries the current player count, capacity, and game state so the
 // browser list stays fresh between (re)registrations. All optional — a body-less ping just
-// refreshes LastSeen.
-public record HeartbeatRequest(int Players = 0, int MaxPlayers = 0, string? State = null);
+// refreshes LastSeen. Roster is null when unchanged/unsupported (keep the stored one); an
+// empty array explicitly clears it.
+public record HeartbeatRequest(
+    int Players = 0,
+    int MaxPlayers = 0,
+    string? State = null,
+    LobbyRosterEntry[]? Roster = null
+);
+
+// One player on a registered server, as shown in the server-browser detail panel. Team is the
+// side index (0/1); Flying means the player has an active ship (vs waiting in the lobby).
+public record LobbyRosterEntry(string Name, int Team, bool Ready = false, bool Flying = false);
+
+// Compact sector-graph layout of a server's map — enough for the browser's sector-map preview
+// (sector circles, team base positions, aleph gates), deliberately excluding asteroids or any
+// other bulk geometry. Coordinates are world X/Z within the owning sector.
+public record MapBase(int Team, float X, float Z);
+
+public record MapGate(uint ToSector, float X, float Z);
+
+public record MapSector(uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null);
+
+public record MapLayout(MapSector[] Sectors);
 
 // What the registry stores and hands back. IceServers is the STUN/TURN config this box owns
 // (from its env) so every client + game server gets one consistent ICE configuration to dial.
@@ -42,7 +66,10 @@ public record ServerEntry(
     int Players = 0,
     int MaxPlayers = 0,
     string? State = null,
-    int ProtocolVersion = 0
+    int ProtocolVersion = 0,
+    string? HostedBy = null,
+    MapLayout? Map = null,
+    IReadOnlyList<LobbyRosterEntry>? Roster = null
 );
 
 // A single ICE server entry, mirroring the WebRTC RTCIceServer shape. Urls is one or more

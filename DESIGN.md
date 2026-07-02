@@ -61,7 +61,7 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 ## Wiring & gotchas
 
 - **Theme is applied per top-level overlay**, not globally: call `UiTheme.Apply(control)` on each
-  full-screen overlay's root (Lobby, ConnectionOverlay, ServerInputOverlay, Chat). A Theme can't
+  full-screen overlay's root (Lobby, ConnectionOverlay, ServerLobbyOverlay, Chat). A Theme can't
   live on a `CanvasLayer`, and wrapping the Hud in one extra Control would break the
   `GetNode("../../GameNetClient")` relative lookups in Lobby/Chat — don't do that.
 - **`ChamferButton` draws on top of the stock Button**, so it blanks both the stock styleboxes

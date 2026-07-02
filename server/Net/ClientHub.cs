@@ -190,6 +190,9 @@ public sealed class ClientHub
             _ => "lobby",
         };
 
+    // Per-player roster (name/team/ready/ship) advertised to the public lobby's server browser.
+    public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id));
+
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
     public double TakeAvgRecordsPerSnapshot()

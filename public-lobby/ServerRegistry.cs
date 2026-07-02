@@ -78,7 +78,10 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             Players: Math.Max(0, req.Players),
             MaxPlayers: Math.Max(0, req.MaxPlayers),
             State: NormalizeState(req.State),
-            ProtocolVersion: Math.Max(0, req.ProtocolVersion)
+            ProtocolVersion: Math.Max(0, req.ProtocolVersion),
+            HostedBy: NormalizeHostedBy(req.HostedBy),
+            Map: SanitizeMap(req.Map),
+            Roster: SanitizeRoster(req.Roster, req.MaxPlayers)
         );
 
         // 256-bit capability secret handed back only in the registration response (never broadcast).
@@ -101,6 +104,10 @@ public sealed class InMemoryServerRegistry : IServerRegistry
                 Players = Math.Max(0, status.Players),
                 MaxPlayers = Math.Max(0, status.MaxPlayers),
                 State = NormalizeState(status.State) ?? existing.State,
+                // Null roster = "unchanged" (bare ping / pre-roster server); [] explicitly clears.
+                Roster = status.Roster is null
+                    ? existing.Roster
+                    : SanitizeRoster(status.Roster, Math.Max(0, status.MaxPlayers)),
             };
         _servers[sessionId] = updated;
         // Only fan out SSE when a visible field actually changed — suppresses noise from bare pings.
@@ -110,6 +117,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
                 updated.Players != existing.Players
                 || updated.MaxPlayers != existing.MaxPlayers
                 || updated.State != existing.State
+                || !RosterEquals(updated.Roster, existing.Roster)
             )
         )
             _bus.Publish(new LobbyEvent(LobbyEventKind.Updated, Entry: updated));
@@ -121,6 +129,82 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     {
         var s = state?.Trim();
         return string.IsNullOrEmpty(s) ? null : (s.Length > 20 ? s[..20] : s);
+    }
+
+    // Hosted-by label: trimmed, control chars stripped, capped. Null when absent/empty.
+    static string? NormalizeHostedBy(string? hostedBy) => CleanShortText(hostedBy, 24);
+
+    // Player-name / short-label hygiene shared by hostedBy and roster names: the lobby is a
+    // public service, so cap length and strip control characters before anything reaches the
+    // broadcast list JSON.
+    static string? CleanShortText(string? text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        var sb = new StringBuilder(Math.Min(text.Length, max));
+        foreach (var c in text.Trim())
+        {
+            if (char.IsControl(c))
+                continue;
+            sb.Append(c);
+            if (sb.Length >= max)
+                break;
+        }
+        return sb.Length == 0 ? null : sb.ToString();
+    }
+
+    // Roster caps: at most min(maxPlayers, 64) entries, names cleaned, team clamped to 0/1.
+    // Null in, null out (meaning "no roster data"); an empty array stays an empty array.
+    static LobbyRosterEntry[]? SanitizeRoster(LobbyRosterEntry[]? roster, int maxPlayers)
+    {
+        if (roster is null)
+            return null;
+        var cap = Math.Min(maxPlayers > 0 ? maxPlayers : 64, 64);
+        return roster
+            .Select(r => r with { Name = CleanShortText(r.Name, 24) ?? "?", Team = Math.Clamp(r.Team, 0, 1) })
+            .Take(cap)
+            .ToArray();
+    }
+
+    // Map layout caps: a handful of sectors with a handful of markers each, radii/coords clamped
+    // and rounded — bounds the public list payload no matter what a registrant sends.
+    static MapLayout? SanitizeMap(MapLayout? map)
+    {
+        if (map?.Sectors is null or { Length: 0 })
+            return null;
+        var sectors = map
+            .Sectors.Take(8)
+            .Select(s =>
+            {
+                var radius = float.IsFinite(s.Radius) ? Math.Clamp(s.Radius, 1f, 100_000f) : 1f;
+                return s with
+                {
+                    Radius = MathF.Round(radius),
+                    Bases = s
+                        .Bases?.Take(8)
+                        .Select(b => b with { Team = Math.Clamp(b.Team, 0, 1), X = ClampCoord(b.X, radius), Z = ClampCoord(b.Z, radius) })
+                        .ToArray(),
+                    Gates = s
+                        .Gates?.Take(8)
+                        .Select(g => g with { X = ClampCoord(g.X, radius), Z = ClampCoord(g.Z, radius) })
+                        .ToArray(),
+                };
+            })
+            .ToArray();
+        return new MapLayout(sectors);
+    }
+
+    static float ClampCoord(float v, float radius) =>
+        MathF.Round(float.IsFinite(v) ? Math.Clamp(v, -radius, radius) : 0f, 1);
+
+    // Value-compare two rosters (order matters; the registrant sends them pre-sorted).
+    static bool RosterEquals(IReadOnlyList<LobbyRosterEntry>? a, IReadOnlyList<LobbyRosterEntry>? b)
+    {
+        if (ReferenceEquals(a, b))
+            return true;
+        if (a is null || b is null)
+            return false;
+        return a.SequenceEqual(b);
     }
 
     public ServerEntry? Get(string sessionId)

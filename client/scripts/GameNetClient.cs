@@ -94,6 +94,10 @@ public partial class GameNetClient : Node
     // next connect's Hello frame; the overlay always commits before calling ConnectTo.
     public void SetPilotName(string name) => _name = UserPrefs.Clamp(name);
 
+    // Set the shared-secret password typed in the direct-connect modal (via ConnectionManager).
+    // Same slot the SIM_SECRET env seeds; empty = open server. Carried by the next Hello.
+    public void SetJoinSecret(string secret) => _secret = secret ?? "";
+
     // Direct join: open (or re-open) a WebSocket to the given ws:// URL (LAN / dev / typed
     // address). Called by ConnectionManager once it has resolved an address.
     public void Connect(string uri)
@@ -518,7 +522,7 @@ public partial class GameNetClient : Node
     }
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-    // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
+    // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
     public const byte ProtocolVersion = 11;
 
     private void ApplyWelcome(BinaryReader r)

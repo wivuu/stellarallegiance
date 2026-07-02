@@ -15,6 +15,7 @@
 #   scripts/run-server.sh --secret hunter2      # require a shared-secret password
 #   scripts/run-server.sh --autostart           # skip ready-up (bots / benchmarking)
 #   SIM_PUBLIC_NAME="My Server" scripts/run-server.sh   # custom lobby name (else hostname)
+#   SIM_HOSTED_BY="Vex" scripts/run-server.sh   # "hosted by ..." attribution in the browser
 #   SIM_PORT=9000 scripts/run-server.sh         # different port
 set -euo pipefail
 

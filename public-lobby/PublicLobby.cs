@@ -308,23 +308,22 @@ static async Task KeepaliveLoop(Stream body, CancellationToken ct)
 
 static async Task WsRecvServerUpdates(WebSocket ws, string sessionId, IServerRegistry registry, CancellationToken ct)
 {
-    var buf = new byte[4096];
     try
     {
         while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
         {
-            var result = await ws.ReceiveAsync(buf, ct);
-            if (result.MessageType == WebSocketMessageType.Close)
-                return;
-            var msg = JsonSerializer.Deserialize<WsServerMsg>(
-                buf.AsSpan(0, result.Count),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            // Roster-bearing updates can span multiple frames / exceed one 4 KB buffer, so
+            // accumulate to EndOfMessage before parsing.
+            var msg = await WsReceiveJsonAsync<WsServerMsg>(ws, ct);
             if (msg is null)
+            {
+                if (ws.State != WebSocketState.Open)
+                    return;
                 continue;
+            }
 
             if (msg.Type == "update")
-                registry.Heartbeat(sessionId, new HeartbeatRequest(msg.Players, msg.MaxPlayers, msg.State));
+                registry.Heartbeat(sessionId, new HeartbeatRequest(msg.Players, msg.MaxPlayers, msg.State, msg.Roster));
             else if (msg.Type == "ping")
                 registry.Heartbeat(sessionId); // bare touch; no SSE event (values unchanged)
         }
@@ -398,7 +397,13 @@ static IReadOnlyList<IceServer> BuildStunServers()
 // Inbound from game server over WS. Secret is the per-session capability from registration.
 file sealed record WsAuthMsg(string? Type, string? SessionId, string? Secret);
 
-file sealed record WsServerMsg(string? Type, int Players = 0, int MaxPlayers = 0, string? State = null);
+file sealed record WsServerMsg(
+    string? Type,
+    int Players = 0,
+    int MaxPlayers = 0,
+    string? State = null,
+    LobbyRosterEntry[]? Roster = null
+);
 
 static class LobbyJson
 {

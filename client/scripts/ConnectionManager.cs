@@ -4,7 +4,7 @@ using Godot;
 // Owns "which server, and are we connected" — the front of the single native connection.
 // SpacetimeDB is gone: there is exactly one link, the WebSocket to the standalone sim server
 // (GameNetClient). If the client was launched without --host the FIRST thing the player sees
-// is the address-input screen (ServerInputOverlay); with --host ip-or-hostname:port it connects
+// is the address-input screen (ServerLobbyOverlay); with --host ip-or-hostname:port it connects
 // straight away. GameNetClient calls the Notify* methods back as the socket's state changes.
 public partial class ConnectionManager : Node
 {
@@ -55,7 +55,7 @@ public partial class ConnectionManager : Node
 	private const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
 
 	private GameNetClient _net = null!;
-	private ServerInputOverlay? _input;
+	private ServerLobbyOverlay? _input;
 
 	public override void _Ready()
 	{
@@ -96,6 +96,9 @@ public partial class ConnectionManager : Node
 	// Hand the pilot name the player typed on the start screen to the net client so the next
 	// connect's Hello carries it. The overlay calls this before either ConnectTo/ConnectToLobby.
 	public void SetPilotName(string name) => _net.SetPilotName(name);
+
+	// Shared-secret password from the direct-connect modal; rides the next Hello frame.
+	public void SetJoinSecret(string secret) => _net.SetJoinSecret(secret);
 
 	// Submit handler for the address screen, and the entry point for --host. Direct WebSocket join.
 	public void ConnectTo(string hostOrUrl)
@@ -237,7 +240,7 @@ public partial class ConnectionManager : Node
 		}
 		var layer = new CanvasLayer { Name = "ServerInputLayer", Layer = 100 };
 		AddChild(layer);
-		_input = new ServerInputOverlay();
+		_input = new ServerLobbyOverlay();
 		layer.AddChild(_input);
 		_input.Init(this);
 	}
