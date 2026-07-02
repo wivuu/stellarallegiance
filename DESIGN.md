@@ -58,6 +58,11 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
   `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
+- **Backgrounds** — `NebulaBackground` (animated warm/blue gas-cloud fill from the `Nebula.dc.html`
+  spec; a single `canvas_item` shader — drifting screen-blended clouds, Void vignette, star-dot
+  grid, scanlines; `Intensity` 0..1). Use it behind full-screen menu overlays whose backdrop is
+  **not** the live 3D space scene (e.g. the server browser); overlays shown over the running game
+  keep letting the real space show through instead.
 - **Draw helpers** — `UiDraw.Chamfer`/`ChamferPoints`/`TabPoints`/`CornerBrackets`/`Hairline`/`Diamond`.
 
 ## Wiring & gotchas

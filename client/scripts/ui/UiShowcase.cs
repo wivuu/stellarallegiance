@@ -42,6 +42,7 @@ public partial class UiShowcase : Control
         Controls(col);
         DataAndFeedback(col);
         GameElements(col);
+        Backgrounds(col);
 
         MaybeCaptureAndQuit();
     }
@@ -358,6 +359,28 @@ public partial class UiShowcase : Control
         emptyMap.SetMap(null);
         mapRow.AddChild(emptyMap);
         s.AddChild(mapRow);
+    }
+
+    private static void Backgrounds(VBoxContainer parent)
+    {
+        var s = Section(parent, "08 — BACKGROUNDS");
+        s.AddChild(UiKit.MakeLabel(
+            "NebulaBackground — animated gas-cloud backdrop for menu screens with no live space behind them (server browser). Intensity 0.35 vs 0.7.",
+            UiKit.TextStyle.Body, DesignTokens.Text2));
+
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 14);
+        foreach (float intensity in new[] { 0.35f, 0.7f })
+        {
+            // Clip the full-screen backdrop into a framed preview tile for the gallery.
+            var frame = new HairlinePanel { CustomMinimumSize = new Vector2(360, 200), ClipContents = true };
+            var neb = new NebulaBackground { Intensity = intensity };
+            neb.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            frame.AddChild(neb);
+            frame.AddChild(UiKit.MakeLabel($"INTENSITY {intensity:0.00}", UiKit.TextStyle.Label));
+            row.AddChild(frame);
+        }
+        s.AddChild(row);
     }
 
     private static ToastHost? _toast;

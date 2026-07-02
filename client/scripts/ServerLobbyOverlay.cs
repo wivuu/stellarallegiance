@@ -89,9 +89,10 @@ public partial class ServerLobbyOverlay : Control
         UiTheme.Apply(this);
         UiFonts.EnsureLoaded();
 
-        var bg = new ColorRect { Color = new Color(DesignTokens.Void, 0.97f) };
+        // The server browser is the first screen a player sees — there's no live 3D space
+        // behind it, so it sits on the animated Nebula backdrop rather than flat Void.
+        var bg = new NebulaBackground();
         bg.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        bg.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(bg);
 
         var margin = new MarginContainer();
