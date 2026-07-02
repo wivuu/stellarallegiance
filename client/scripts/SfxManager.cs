@@ -106,14 +106,24 @@ public partial class SfxManager : Node
             _poolUi.Add(p);
         }
 
+        // The ambient bed is created here but does NOT start at boot — the hum is a
+        // hangar-only atmosphere, gated by StartAmbient/StopAmbient (see ShipLoadout's
+        // enter/exit). Menus, the lobby, and flight run silent of it.
         _ambient = new AudioStreamPlayer { Bus = "Ambient" };
         AddChild(_ambient);
         if (_streams.TryGetValue(SfxId.AmbientHum, out var hum))
-        {
             _ambient.Stream = hum;
-            _ambient.Play();
-        }
     }
+
+    // Start/stop the looping ambient hum. Currently driven by the hangar (ShipLoadout):
+    // the bed plays only while the player is in the ship-select/loadout screen.
+    public void StartAmbient()
+    {
+        if (_ambient is { Stream: not null, Playing: false })
+            _ambient.Play();
+    }
+
+    public void StopAmbient() => _ambient?.Stop();
 
     private void LoadStreams()
     {

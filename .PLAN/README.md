@@ -22,8 +22,6 @@ Archives:
 - Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- Remove ambient background noise until the user is in the hangar
-- When docked, I go back to team selection screen instead of hangar
 - Booster should have fuel, the booster UI should display fuel level. Some ships can recharge, some ships must dock to recharge
 - Booster audio loops weird; sound effect needs to not loop the whole file, or perhaps there is a supplemental audio file that is the 'looped' version in @./pick-asets/ folder and this is just the 'start boost' file
 ---

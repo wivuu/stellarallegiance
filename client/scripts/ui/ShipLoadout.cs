@@ -111,12 +111,14 @@ public partial class ShipLoadout : Control
         Active = true;
         Input.MouseMode = Input.MouseModeEnum.Visible; // cursor UI; flight re-captures on click after close
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
+        SfxManager.Instance?.StartAmbient(); // the hangar owns the ambient hum bed
     }
 
     public override void _ExitTree()
     {
         Active = false;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
+        SfxManager.Instance?.StopAmbient();
         DemoAfterLaunch();
     }
 
