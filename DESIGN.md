@@ -55,13 +55,15 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   (1px border + optional clipped tab header), `InsetWell`, `DiamondDivider`.
 - **Data & feedback** — `RadialGauge`, `SegmentedBar`, `StatusPill` (optional pulse), `AlertBox`,
   `StatReadout`, `DataTable`, `ToastHost`.
+- **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
+  `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
-- **Draw helpers** — `UiDraw.Chamfer`/`ChamferPoints`/`TabPoints`/`CornerBrackets`/`Hairline`.
+- **Draw helpers** — `UiDraw.Chamfer`/`ChamferPoints`/`TabPoints`/`CornerBrackets`/`Hairline`/`Diamond`.
 
 ## Wiring & gotchas
 
 - **Theme is applied per top-level overlay**, not globally: call `UiTheme.Apply(control)` on each
-  full-screen overlay's root (Lobby, ConnectionOverlay, ServerLobbyOverlay, Chat). A Theme can't
+  full-screen overlay's root (Lobby, ConnectLinkModal, ServerLobbyOverlay, Chat). A Theme can't
   live on a `CanvasLayer`, and wrapping the Hud in one extra Control would break the
   `GetNode("../../GameNetClient")` relative lookups in Lobby/Chat — don't do that.
 - **`ChamferButton` draws on top of the stock Button**, so it blanks both the stock styleboxes

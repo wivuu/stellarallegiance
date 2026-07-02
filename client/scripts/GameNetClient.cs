@@ -103,7 +103,8 @@ public partial class GameNetClient : Node
     public void Connect(string uri)
     {
         var ct = BeginConnect($"ws {uri}");
-        _ = Task.Run(() => RunWebSocket(uri, ct));
+        int seq = _connectSeq;
+        _ = Task.Run(() => RunWebSocket(uri, seq, ct));
     }
 
     // Public-lobby join: reach a (possibly NAT'd) server via a WebRTC DataChannel, with the SDP
@@ -112,19 +113,64 @@ public partial class GameNetClient : Node
     public void ConnectWebRtc(string shareBase, string sessionId)
     {
         var ct = BeginConnect($"webrtc {sessionId} via {shareBase}");
-        _ = Task.Run(() => RunWebRtc(shareBase, sessionId, ct));
+        int seq = _connectSeq;
+        _ = Task.Run(() => RunWebRtc(shareBase, sessionId, seq, ct));
     }
+
+    // Monotonic connect-attempt id. Background tasks stamp their progress/error callbacks with
+    // the seq they were started under; deliveries from a superseded (cancelled) attempt are
+    // dropped so they can't touch the CURRENT attempt's stage log.
+    private int _connectSeq;
 
     // Reset per-connection state and arm a fresh cancellation token (cancelling any prior link).
     private CancellationToken BeginConnect(string what)
     {
         _socketCts?.Cancel();
+        _connectSeq++;
         Active = true;
         LocalShipId = 0;
         _rows.Clear();
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         GD.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
+    }
+
+    // ---- Connect-progress plumbing (background task -> main thread) --------
+
+    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) => CallDeferred(nameof(DeliverStage), seq, (int)stage);
+
+    private void DeliverStage(int seq, int stage)
+    {
+        if (seq == _connectSeq)
+            _cm.NotifyStage((ConnectionManager.ConnectStage)stage);
+    }
+
+    // A connect attempt died before its channel ever opened — surface the reason to the
+    // failed-link modal (post-open drops keep going through OnSocketClosed instead).
+    private void DeliverConnectError(int seq, string reason)
+    {
+        if (seq == _connectSeq)
+            _cm.NotifyFailed(reason);
+    }
+
+    // Cancel the in-flight connect with no Bye and no reconnect intent — the connecting modal's
+    // Cancel/Back. Unlike Disconnect there is nothing established to say goodbye to, and a Bye
+    // queued into _tx would linger (the channel is shared across connections) and poison the
+    // NEXT connect's first frame.
+    public void Abort()
+    {
+        _socketCts?.Cancel();
+        _connectSeq++; // stragglers from the dead task are dropped by the seq guard
+        while (_tx.Reader.TryRead(out _)) { } // drop frames queued for the dead link
+        Active = false;
+        LocalShipId = 0;
+        LocalClientId = 0;
+        _reconnectToken = "";
+        _worldLoaded = false;
+        _rows.Clear();
+        LobbyPlayers = Array.Empty<LobbyPlayer>();
+        LobbyChanged?.Invoke();
+        _world.Reset();
     }
 
     // Voluntarily leave the current server: cancel the live socket/peer connection and drop all
@@ -254,13 +300,15 @@ public partial class GameNetClient : Node
 
     // ---- Socket I/O (background) ------------------------------------------
 
-    private async Task RunWebSocket(string uri, CancellationToken ct)
+    private async Task RunWebSocket(string uri, int seq, CancellationToken ct)
     {
+        bool opened = false;
         try
         {
             _ws = new ClientWebSocket();
             await _ws.ConnectAsync(new Uri(uri), ct);
-            CallDeferred(nameof(OnSocketOpen));
+            opened = true;
+            CallDeferred(nameof(OnSocketOpen), seq);
 
             var send = Task.Run(
                 async () =>
@@ -292,23 +340,30 @@ public partial class GameNetClient : Node
         catch (Exception e)
         {
             GD.PrintErr($"[GameNet] socket error: {e.Message}");
-            CallDeferred(nameof(OnSocketClosed));
+            // Never-opened socket = the connect itself failed (carry the reason); a post-open
+            // drop keeps flowing through NotifyDisconnected so auto-reconnect can kick in.
+            if (opened)
+                CallDeferred(nameof(OnSocketClosed));
+            else
+                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
     }
 
     // WebRTC offerer: build a peer connection + DataChannel, exchange SDP through the public lobby
     // (non-trickle ICE so one offer/answer round trip suffices), then pump _tx -> DataChannel.
     // Inbound frames arrive via onmessage into _rx and are applied in _Process like the WS path.
-    private async Task RunWebRtc(string shareBase, string sessionId, CancellationToken ct)
+    private async Task RunWebRtc(string shareBase, string sessionId, int seq, CancellationToken ct)
     {
         shareBase = shareBase.TrimEnd('/');
         RTCPeerConnection? pc = null;
+        bool opened = false;
         try
         {
             // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
             var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
             if (entry is null)
                 throw new Exception("server not found in lobby");
+            EmitStage(seq, ConnectionManager.ConnectStage.Negotiate); // entry located
 
             var iceServers = ToIceServers(entry.IceServers);
             pc = new RTCPeerConnection(new RTCConfiguration { iceServers = iceServers });
@@ -322,7 +377,7 @@ public partial class GameNetClient : Node
 
             dc.onopen += () =>
             {
-                CallDeferred(nameof(OnSocketOpen));
+                CallDeferred(nameof(OnSocketOpen), seq);
                 dcOpen.TrySetResult();
             };
             dc.onmessage += (_, _, data) => _rx.Enqueue(data);
@@ -380,10 +435,12 @@ public partial class GameNetClient : Node
             var set = pc.setRemoteDescription(new RTCSessionDescriptionInit { type = RTCSdpType.answer, sdp = answerSdp });
             if (set != SetDescriptionResultEnum.OK)
                 throw new Exception($"bad answer ({set})");
+            EmitStage(seq, ConnectionManager.ConnectStage.Channel); // negotiated — channel opening
 
             // Wait for the DataChannel to open, then drain outbound frames into it. The foreach
             // ends when this connection's token is cancelled (reconnect / shutdown).
             await dcOpen.Task.WaitAsync(ct);
+            opened = true;
             await foreach (var frame in _tx.Reader.ReadAllAsync(ct))
                 if (dc.readyState == RTCDataChannelState.open)
                     dc.send(frame);
@@ -392,7 +449,10 @@ public partial class GameNetClient : Node
         catch (Exception e)
         {
             GD.PrintErr($"[GameNet] webrtc error: {e.Message}");
-            CallDeferred(nameof(OnSocketClosed));
+            if (opened)
+                CallDeferred(nameof(OnSocketClosed));
+            else
+                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
         finally
         {
@@ -433,7 +493,13 @@ public partial class GameNetClient : Node
 
     private sealed record AnswerDto(string SdpAnswer);
 
-    private void OnSocketOpen() => SendHello();
+    private void OnSocketOpen(int seq)
+    {
+        if (seq != _connectSeq)
+            return; // a superseded attempt's channel opened late — ignore it
+        _cm.NotifyStage(ConnectionManager.ConnectStage.Auth);
+        SendHello();
+    }
 
     private void OnSocketClosed() => _cm.NotifyDisconnected();
 
@@ -538,6 +604,7 @@ public partial class GameNetClient : Node
             _cm.NotifyFailed($"server protocol v{version} ≠ client v{ProtocolVersion}");
             return;
         }
+        _cm.NotifyStage(ConnectionManager.ConnectStage.Sync); // authenticated — applying the world
         LocalClientId = r.ReadInt32();
         MyTeam = r.ReadByte();
         r.ReadUInt32(); // tick

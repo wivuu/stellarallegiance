@@ -146,7 +146,7 @@ public partial class Lobby : Control
 
     public override void _Process(double delta)
     {
-        // Only drive the lobby once we're truly connected; the ConnectionOverlay owns the
+        // Only drive the lobby once we're truly connected; the ConnectLinkModal owns the
         // screen until then.
         if (_cm.State != ConnectionManager.ConnState.Connected)
         {

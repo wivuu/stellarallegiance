@@ -710,7 +710,7 @@ public partial class ServerLobbyOverlay : Control
     {
         CommitName();
         if (!string.IsNullOrEmpty(s.PublicEndpoint))
-            _cm.ConnectTo(s.PublicEndpoint);
+            _cm.ConnectTo(s.PublicEndpoint, s.Name); // keep the lobby name for the connect modal
         else
             _cm.ConnectToLobby(s.SessionId, s.Name);
     }

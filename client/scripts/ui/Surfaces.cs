@@ -12,6 +12,7 @@ public partial class BracketPanel : PanelContainer
 {
     public Color Accent = DesignTokens.TeamAccent;
     public float BracketLength = DesignTokens.BracketLength;
+    public Color? FillOverride; // opaque body for modals; default translucent PanelFill
 
     public override void _Ready()
     {
@@ -24,7 +25,7 @@ public partial class BracketPanel : PanelContainer
     public override void _Draw()
     {
         var r = new Rect2(Vector2.Zero, Size);
-        DrawRect(r, DesignTokens.PanelFill, filled: true);
+        DrawRect(r, FillOverride ?? DesignTokens.PanelFill, filled: true);
         UiDraw.CornerBrackets(this, r, BracketLength, Accent, 2f);
     }
 }

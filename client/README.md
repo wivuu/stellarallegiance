@@ -26,7 +26,7 @@ assets/                  ships/, asteroids/, bases/, audio/, fonts/ — GLBs, so
 
 Roughly grouped by responsibility:
 
-- **Networking & state** — `GameNetClient`, `ConnectionManager`, `ConnectionOverlay`,
+- **Networking & state** — `GameNetClient`, `ConnectionManager`, `ConnectLinkModal`,
   `NetTypes`, `DefRegistry` (content defs downloaded from the server).
 - **Prediction & flight** — `PredictionController` (predict + reconcile against snapshots),
   `ShipController`, `ShipMath` (uses the shared deterministic `FlightModel`).

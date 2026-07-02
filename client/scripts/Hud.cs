@@ -111,11 +111,14 @@ public partial class Hud : CanvasLayer
         AddChild(chat);
         chat.Init(_cm, _world);
 
-        // Connection-status overlay (added last so it draws on top of everything,
-        // including the lobby). Shows "Server offline" / "Connecting…" until we're live.
-        var conn = new ConnectionOverlay { Name = "ConnectionOverlay" };
-        AddChild(conn);
-        conn.Init(_cm);
+        // Connecting modal on its own high CanvasLayer so it draws above the server
+        // browser (ServerInputLayer, layer 100) — the browser stays visible underneath
+        // while a join is in flight, and mid-game reconnects overlay the world.
+        var connLayer = new CanvasLayer { Name = "ConnectLayer", Layer = 150 };
+        AddChild(connLayer);
+        var conn = new ConnectLinkModal { Name = "ConnectLinkModal" };
+        connLayer.AddChild(conn);
+        conn.Init(_cm, _ship);
 
         CaptureLiveUiIfRequested();
     }

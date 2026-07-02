@@ -254,7 +254,9 @@ public partial class UiShowcase : Control
         p2.Configure("▲ LOW FUEL", StatusPill.Kind.Warn);
         var p3 = new StatusPill();
         p3.Configure("⚠ MISSILE LOCK", StatusPill.Kind.Danger, pulse: true);
-        foreach (var p in new[] { p1, p2, p3 })
+        var p4 = new StatusPill();
+        p4.Configure("◆ NEGOTIATING", StatusPill.Kind.Accent, pulse: true);
+        foreach (var p in new[] { p1, p2, p3, p4 })
             pills.AddChild(p);
         scol.AddChild(pills);
         stats.AddChild(scol);
@@ -267,6 +269,19 @@ public partial class UiShowcase : Control
         feedback.AddChild(alert);
         feedback.AddChild(UiKit.MakeButton("TRIGGER TOAST", () => GetToast(parent).Show("Tech researched: Capacitor Mk II"), ButtonVariant.Secondary));
         row.AddChild(feedback);
+
+        var connect = new HairlinePanel { Title = "CONNECT", CustomMinimumSize = new Vector2(300, 0) };
+        var ccol = new VBoxContainer();
+        ccol.AddThemeConstantOverride("separation", 12);
+        var radar = new LinkRadar { SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
+        radar.SetProgress(0.62f);
+        ccol.AddChild(radar);
+        var sweep = new ProgressSweepBar { Sweep = true };
+        sweep.Set(0.62f, DesignTokens.TeamAccent);
+        ccol.AddChild(UiKit.MakeLabel("LINK PROGRESS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        ccol.AddChild(sweep);
+        connect.AddChild(ccol);
+        row.AddChild(connect);
 
         s.AddChild(row);
 

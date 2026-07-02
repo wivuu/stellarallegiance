@@ -18,6 +18,8 @@ public static class DesignTokens
     public static readonly Color PanelHi = Color.FromHtml("16243A"); // raised surface
     public static readonly Color PanelFill = new(8f / 255f, 14f / 255f, 24f / 255f, 0.60f); // translucent panel body
     public static readonly Color Well = new(0.02f, 0.027f, 0.06f, 1f); // recessed data well (≈ Void, opaque)
+    public static readonly Color PanelDeep = Color.FromHtml("070B14"); // modal body — between Void and Panel
+    public static readonly Color Scrim = new(3f / 255f, 5f / 255f, 11f / 255f, 0.78f); // modal backdrop dim
     public static readonly Color BorderHi = new(120f / 255f, 190f / 255f, 255f / 255f, 0.25f); // strong hairline
     public static readonly Color BorderLo = new(120f / 255f, 190f / 255f, 255f / 255f, 0.16f); // faint hairline
 

@@ -104,6 +104,7 @@ public partial class StatusPill : PanelContainer
         Danger,
         Data,
         Neutral,
+        Accent, // structural cyan — in-progress / negotiating states
     }
 
     private Label _label = null!;
@@ -126,6 +127,7 @@ public partial class StatusPill : PanelContainer
             Kind.Warn => DesignTokens.Warn,
             Kind.Danger => DesignTokens.DangerText,
             Kind.Data => DesignTokens.Data,
+            Kind.Accent => DesignTokens.TeamAccent,
             _ => DesignTokens.Text2,
         };
 

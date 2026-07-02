@@ -77,6 +77,19 @@ public static class UiDraw
         ci.DrawLine(new Vector2(x2, y2), new Vector2(x2, y2 - len), c, width, true);
     }
 
+    // Axis-aligned diamond (rotated square) — the design's marker dot / blip glyph.
+    public static void Diamond(CanvasItem ci, Vector2 center, float size, Color c)
+    {
+        var pts = new[]
+        {
+            center + new Vector2(0, -size),
+            center + new Vector2(size, 0),
+            center + new Vector2(0, size),
+            center + new Vector2(-size, 0),
+        };
+        ci.DrawColoredPolygon(pts, c);
+    }
+
     // Filled rect with a crisp 1px hairline border (no AA so the 1px edge stays sharp).
     public static void Hairline(CanvasItem ci, Rect2 r, Color fill, Color border, float width = 1f)
     {
