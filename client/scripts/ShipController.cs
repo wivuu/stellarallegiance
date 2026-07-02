@@ -76,13 +76,17 @@ public partial class ShipController : Node
     // accumulated (in _Input) into a persistent deflection (_stickYaw/_stickPitch) that
     // eases back toward center each frame when the mouse stops. Push to turn, release to
     // straighten. This is purely an input-sampling change; the flight dynamics are untouched.
-    // The cursor is captured while flying (Esc releases, click recaptures); arrow keys still
-    // work as a fallback and sum with the stick. STDB_MOUSE_SENS tunes feel (px->deflection),
-    // STDB_MOUSE_INVERT=1 flips pitch. (Sens + return rate below want a quick in-flight tune.)
+    // The cursor is captured while flying (first Esc releases, click recaptures; a second Esc
+    // with the cursor already free opens the escape menu); arrow keys still work as a fallback
+    // and sum with the stick. Feel comes from the settings (UserPrefs sensitivity multiplier +
+    // invert-Y, live via RefreshMousePrefs); the STDB_MOUSE_SENS / STDB_MOUSE_INVERT env vars
+    // pin it for a run (testing override that wins over the saved prefs).
     private const float DefaultMouseSens = 0.01f; // px -> stick deflection per frame
     private const float MouseReturnPerSec = 8f; // how fast the virtual stick eases back to center
     private float _mouseSens = DefaultMouseSens;
     private bool _mouseInvert;
+    private bool _sensFromEnv,
+        _invertFromEnv; // STDB_MOUSE_* env override present — pin the value, ignore prefs
     private Vector2 _mouseDelta; // captured-cursor motion accumulated since last sample
     private float _stickYaw,
         _stickPitch; // persistent self-centering virtual-stick deflection (-1..1)
@@ -135,8 +139,18 @@ public partial class ShipController : Node
         }
 
         if (float.TryParse(OS.GetEnvironment("STDB_MOUSE_SENS"), out var sens) && sens > 0f)
+        {
             _mouseSens = sens;
-        _mouseInvert = OS.GetEnvironment("STDB_MOUSE_INVERT") is "1" or "true";
+            _sensFromEnv = true; // testing override — wins over the saved pref
+        }
+        string invertEnv = OS.GetEnvironment("STDB_MOUSE_INVERT");
+        if (!string.IsNullOrEmpty(invertEnv))
+        {
+            _mouseInvert = invertEnv is "1" or "true";
+            _invertFromEnv = true;
+        }
+        RefreshMousePrefs();
+        UserPrefs.Changed += RefreshMousePrefs; // settings dialog writes through UserPrefs
 
         // Latency for the adaptive lead / HUD readout is sampled in native mode via the
         // Ping/Pong probe (the in-STDB ApplyInput reducer-ack path was removed with the sim).
@@ -168,6 +182,21 @@ public partial class ShipController : Node
             Engine.MaxFps = 60;
             _spawnRequest = autoClass; // autofly flies Scout, or Fighter with --fighter
         }
+    }
+
+    public override void _ExitTree()
+    {
+        UserPrefs.Changed -= RefreshMousePrefs; // static event — would leak this node otherwise
+    }
+
+    // Mouse feel follows the saved settings unless an STDB_MOUSE_* env var pinned it for this
+    // run. Re-run on every UserPrefs.Changed so slider/toggle changes apply mid-flight.
+    private void RefreshMousePrefs()
+    {
+        if (!_sensFromEnv)
+            _mouseSens = DefaultMouseSens * UserPrefs.MouseSensMultiplier;
+        if (!_invertFromEnv)
+            _mouseInvert = UserPrefs.MouseInvertY;
     }
 
     // Called by the HUD spawn menu. Picks the class to spawn; the actual reducer
@@ -385,20 +414,38 @@ public partial class ShipController : Node
     // cursor's hide/show in lockstep with the mode: on macOS a Captured set from _Process
     // leaves a ghost cursor pinned at screen center until the next motion event.
     //
-    // Esc always RELEASES the cursor (one-way, so the OS cursor is reachable mid-flight); a
-    // left click in the viewport recaptures it. Skipped under --autofly (headless has no real
-    // cursor) and while Chat/SectorOverview own the cursor (they restore it on close).
+    // Esc is two-step: the first press RELEASES the cursor (so the OS cursor is reachable
+    // mid-flight); with the cursor already free a second press opens the escape menu. A left
+    // click in the viewport recaptures. Skipped under --autofly (headless has no real cursor),
+    // while Chat/SectorOverview own the cursor (they restore it on close), and while the
+    // escape menu / settings dialog are up (so clicking their buttons never recaptures).
     public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
             _mouseDelta += mm.Relative;
 
-        if (_autoFly || !_hasShip || Chat.Capturing || SectorOverview.Active || ShipLoadout.Active)
+        if (
+            _autoFly
+            || !_hasShip
+            || Chat.Capturing
+            || SectorOverview.Active
+            || ShipLoadout.Active
+            || EscapeMenu.Active
+            || SettingsDialog.Active
+        )
             return;
 
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
         {
-            Input.MouseMode = Input.MouseModeEnum.Visible;
+            if (Input.MouseMode == Input.MouseModeEnum.Captured)
+            {
+                Input.MouseMode = Input.MouseModeEnum.Visible;
+            }
+            else
+            {
+                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                GetViewport().SetInputAsHandled();
+            }
         }
         else if (
             @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }
@@ -414,7 +461,14 @@ public partial class ShipController : Node
     // capture/release lives in _Input; this only handles the no-ship menu case each frame.
     private void HandleMouseCapture(bool flying)
     {
-        if (_autoFly || Chat.Capturing || SectorOverview.Active || ShipLoadout.Active)
+        if (
+            _autoFly
+            || Chat.Capturing
+            || SectorOverview.Active
+            || ShipLoadout.Active
+            || EscapeMenu.Active
+            || SettingsDialog.Active
+        )
             return;
         if (!flying && Input.MouseMode == Input.MouseModeEnum.Captured)
             Input.MouseMode = Input.MouseModeEnum.Visible; // free cursor for the menu

@@ -20,8 +20,8 @@ using StellarAllegiance.Ui;
 //
 // PLACEHOLDERS (data the wire doesn't carry yet — rendered but clearly stubbed): per-player
 // SHIP/K/D/EJ/PTS stats and team kill totals; the NOAT ("not on a team") tab + chat channel
-// (spectator/unassigned — the team byte is always 0/1 today); match name/mode/sector/clock;
-// the settings gear. TeamName() is the single hook for future streamed team names.
+// (spectator/unassigned — the team byte is always 0/1 today); match name/mode/sector/clock.
+// TeamName() is the single hook for future streamed team names.
 public partial class Lobby : Control
 {
     // Team identity stays the faction colours (NOT the cyan structural accent).
@@ -68,8 +68,6 @@ public partial class Lobby : Control
     // "watch another group" channel — the group channel just follows your own side.
     private readonly ChamferButton[] _channelBtns = new ChamferButton[2];
     private readonly List<(ChatLine Line, string Time)> _messages = new();
-
-    private ToastHost _toast = null!;
 
     private int _selectedTeam; // which roster/tab is shown (0, 1, or NoatTeam)
     private int _chatChannel = 1; // 0 = ALL, 1 = your group (scope 1); default to the group channel
@@ -118,11 +116,6 @@ public partial class Lobby : Control
         root.AddChild(Hairline());
         root.AddChild(BuildComms());
 
-        // Transient-notification host (used by the settings-gear stub). Drawn on top.
-        _toast = new ToastHost();
-        _toast.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(_toast);
-
         _net.LobbyChanged += OnLobbyChanged;
         _net.ChatReceived += OnChat;
 
@@ -163,8 +156,7 @@ public partial class Lobby : Control
         right.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         _online = UiKit.MakeLabel("● 0 ONLINE", UiKit.TextStyle.Data, DesignTokens.Ok);
         right.AddChild(_online);
-        // Settings gear — stub (see class header). Opens a "coming soon" toast for now.
-        var gear = UiKit.MakeButton("⚙", () => _toast.Show("Settings coming soon."), ButtonVariant.Icon);
+        var gear = UiKit.MakeButton("⚙", () => SettingsDialog.Open(this), ButtonVariant.Icon);
         gear.CustomMinimumSize = new Vector2(34, 34);
         gear.FocusMode = FocusModeEnum.None;
         right.AddChild(gear);
@@ -439,6 +431,19 @@ public partial class Lobby : Control
         }
     }
 
+    // Esc opens the escape menu. _UnhandledKeyInput so anything that owns Esc first — a
+    // focused LineEdit, the chat box, the hangar, or the menus themselves — wins naturally.
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (!Visible || ShipLoadout.Active || EscapeMenu.Active || SettingsDialog.Active || Chat.Capturing)
+            return;
+        if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
+        {
+            EscapeMenu.Open(this, EscapeMenu.Context.Lobby);
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
     // ---- per-frame ----------------------------------------------------------
 
     public override void _Process(double delta)
@@ -480,9 +485,10 @@ public partial class Lobby : Control
         // The comms input is the only keyboard-focusable control in the lobby (every button is
         // FocusMode.None), so keep the caret in it whenever focus would otherwise be on nothing.
         // This is what lets the player keep typing after Enter or a SEND/tab click, regardless of
-        // what transiently dropped focus. Suppressed while a higher overlay (hangar / sector map)
-        // is up so it never fights their controls.
-        if (!ShipLoadout.Active && !SectorOverview.Active && GetViewport().GuiGetFocusOwner() == null)
+        // what transiently dropped focus. Suppressed while a higher overlay (hangar / sector map /
+        // escape menu / settings) is up so it never fights (or types under) their controls.
+        if (!ShipLoadout.Active && !SectorOverview.Active && !EscapeMenu.Active && !SettingsDialog.Active
+            && GetViewport().GuiGetFocusOwner() == null)
             _commsInput.GrabFocus();
     }
 

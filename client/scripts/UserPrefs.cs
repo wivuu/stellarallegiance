@@ -2,19 +2,31 @@ using Godot;
 
 // Local, persistent player preferences — the project's first use of user:// storage. Backed by a
 // Godot ConfigFile at user://settings.cfg (a real on-disk path per platform, e.g. macOS
-// ~/Library/Application Support/Godot/app_userdata/<project>/). Today it holds only the pilot name
-// the player typed on the start screen so it pre-fills next launch; audio / mouse settings (the
-// "deferred" settings UI) can park their keys here later.
+// ~/Library/Application Support/Godot/app_userdata/<project>/). Holds the pilot name the player
+// typed on the start screen, the per-bus audio volumes, and the mouse-feel prefs the settings
+// dialog drives (SettingsDialog reads and writes everything here).
 public static class UserPrefs
 {
     private const string Path = "user://settings.cfg";
     private const string PlayerSection = "player";
     private const string NameKey = "name";
     private const string AudioSection = "audio";
+    private const string InputSection = "input";
+    private const string MouseSensKey = "mouse_sens_mult";
+    private const string InvertYKey = "invert_y";
 
     // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
     // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
-    public static readonly string[] AudioBuses = { "SFX", "UI", "Ambient" };
+    public static readonly string[] AudioBuses = { "Master", "SFX", "Engines", "Ambient", "UI" };
+
+    // Defaults the settings dialog's RESTORE DEFAULTS lands on.
+    public const float DefaultMouseSensMultiplier = 1f;
+    public const bool DefaultMouseInvertY = false;
+
+    // Raised at the end of every setter so live consumers (ShipController mouse feel, the server
+    // browser's name field) can re-read. Setters only run on the main thread, so subscribers may
+    // touch the scene tree directly.
+    public static event System.Action? Changed;
 
     // A pilot name is sent in MsgHello with a single-byte length prefix and floats above the ship as
     // a nameplate, so keep it short.
@@ -46,6 +58,7 @@ public static class UserPrefs
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
             GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+        Changed?.Invoke();
     }
 
     // Trim surrounding whitespace and cap the length so it fits the wire format and the nameplate.
@@ -55,25 +68,61 @@ public static class UserPrefs
         return name.Length > MaxNameLength ? name[..MaxNameLength] : name;
     }
 
-    // Saved 0..1 linear volume for a bus (defaults to 1 = full on first run).
-    public static float GetBusVolume(string bus) =>
-        Mathf.Clamp((float)(double)Cfg.GetValue(AudioSection, bus, 1.0), 0f, 1f);
+    // Authored linear volume per bus, captured from the audio server before the first ApplyBus.
+    // default_bus_layout.tres ships offsets (Engines −3 dB, Ambient −12 dB, UI −4 dB); defaulting
+    // to 1.0 and applying it would stomp that mix at startup, so the authored values are the real
+    // first-run defaults.
+    private static System.Collections.Generic.Dictionary<string, float>? _audioDefaults;
+
+    // Snapshot each bus's authored volume on first use. Safe ordering: SfxManager._Ready calls
+    // ApplyAudioPrefs() (which lands here first) before any sound plays or slider is touched.
+    private static void EnsureAudioDefaults()
+    {
+        if (_audioDefaults is not null)
+            return;
+        _audioDefaults = new System.Collections.Generic.Dictionary<string, float>();
+        foreach (var bus in AudioBuses)
+        {
+            int idx = AudioServer.GetBusIndex(bus);
+            if (idx < 0)
+                continue; // bus not in the layout — DefaultBusVolume falls back to 1
+            _audioDefaults[bus] = Mathf.Clamp(Mathf.DbToLinear(AudioServer.GetBusVolumeDb(idx)), 0f, 1f);
+        }
+    }
+
+    // The authored 0..1 linear volume for a bus — what RESTORE DEFAULTS lands on (1 = full for a
+    // bus the layout doesn't define).
+    public static float DefaultBusVolume(string bus)
+    {
+        EnsureAudioDefaults();
+        return _audioDefaults!.TryGetValue(bus, out float v) ? v : 1f;
+    }
+
+    // Saved 0..1 linear volume for a bus (defaults to the authored layout volume on first run).
+    public static float GetBusVolume(string bus)
+    {
+        EnsureAudioDefaults();
+        return Mathf.Clamp((float)(double)Cfg.GetValue(AudioSection, bus, DefaultBusVolume(bus)), 0f, 1f);
+    }
 
     // Persist a bus volume and apply it live. Writes through immediately like SetPilotName.
     public static void SetBusVolume(string bus, float linear)
     {
+        EnsureAudioDefaults();
         linear = Mathf.Clamp(linear, 0f, 1f);
         Cfg.SetValue(AudioSection, bus, linear);
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
             GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
         ApplyBus(bus, linear);
+        Changed?.Invoke();
     }
 
     // Push every saved bus volume to the audio server. Call once at startup so persisted
     // settings take effect before any sound plays.
     public static void ApplyAudioPrefs()
     {
+        EnsureAudioDefaults();
         foreach (var bus in AudioBuses)
             ApplyBus(bus, GetBusVolume(bus));
     }
@@ -91,5 +140,33 @@ public static class UserPrefs
             AudioServer.SetBusMute(idx, false);
             AudioServer.SetBusVolumeDb(idx, Mathf.LinearToDb(linear));
         }
+    }
+
+    // Mouse-look sensitivity as a multiplier over ShipController's baseline (clamped so a stray
+    // config edit can't make the ship unflyable).
+    public static float MouseSensMultiplier =>
+        Mathf.Clamp((float)(double)Cfg.GetValue(InputSection, MouseSensKey, (double)DefaultMouseSensMultiplier), 0.1f, 3f);
+
+    // Persist the sensitivity multiplier. Writes through immediately like SetPilotName.
+    public static void SetMouseSensMultiplier(float v)
+    {
+        Cfg.SetValue(InputSection, MouseSensKey, Mathf.Clamp(v, 0.1f, 3f));
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+        Changed?.Invoke();
+    }
+
+    // Whether mouse pitch is inverted (push forward = nose down).
+    public static bool MouseInvertY => (bool)Cfg.GetValue(InputSection, InvertYKey, DefaultMouseInvertY);
+
+    // Persist the invert-Y toggle. Writes through immediately like SetPilotName.
+    public static void SetMouseInvertY(bool v)
+    {
+        Cfg.SetValue(InputSection, InvertYKey, v);
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+        Changed?.Invoke();
     }
 }

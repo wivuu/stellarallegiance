@@ -42,6 +42,7 @@ public partial class UiShowcase : Control
         Controls(col);
         DataAndFeedback(col);
         GameElements(col);
+        Modals(col);
         Backgrounds(col);
 
         MaybeCaptureAndQuit();
@@ -51,10 +52,12 @@ public partial class UiShowcase : Control
 
     // `--ui-shot[=path]` renders one frame and saves a PNG, for screenshot verification.
     // `--ui-scroll=<px>` scrolls the gallery down first so below-the-fold sections land in shot.
+    // `--ui-open=settings|escape` opens that modal before the shot (dialog verification).
     private void MaybeCaptureAndQuit()
     {
         string? outPath = null;
         int scrollTo = 0;
+        string? openModal = null;
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a == "--ui-shot")
@@ -63,6 +66,8 @@ public partial class UiShowcase : Control
                 outPath = a.Substring("--ui-shot=".Length);
             else if (a.StartsWith("--ui-scroll=") && int.TryParse(a.Substring("--ui-scroll=".Length), out var px))
                 scrollTo = px;
+            else if (a.StartsWith("--ui-open="))
+                openModal = a.Substring("--ui-open=".Length);
         }
         if (outPath == null)
             return;
@@ -72,6 +77,10 @@ public partial class UiShowcase : Control
         {
             if (scrollTo > 0 && _scroll != null)
                 _scroll.ScrollVertical = scrollTo;
+            if (openModal == "settings")
+                SettingsDialog.Open(this);
+            else if (openModal == "escape")
+                EscapeMenu.Open(this, EscapeMenu.Context.Browser);
             var shotTimer = GetTree().CreateTimer(0.2);
             shotTimer.Timeout += () =>
             {
@@ -200,6 +209,7 @@ public partial class UiShowcase : Control
         v2.AddThemeConstantOverride("separation", 14);
         v2.AddChild(UiKit.MakeSegmented(new[] { "SHIPS", "WEAPONS", "TECH" }, 0, null));
         v2.AddChild(UiKit.MakeSliderRow("THROTTLE", 0, 1, 0.01, 0.72, null));
+        v2.AddChild(UiKit.MakeSliderRow("SENSITIVITY", 0.1, 3.0, 0.05, 1.0, null, true, v => $"{v:0.00}×"));
         v2.AddChild(UiKit.MakeStepper("SQUAD SIZE", 4, 1, 9, null));
         c2.AddChild(v2);
         row.AddChild(c2);
@@ -359,6 +369,19 @@ public partial class UiShowcase : Control
         emptyMap.SetMap(null);
         mapRow.AddChild(emptyMap);
         s.AddChild(mapRow);
+    }
+
+    private static void Modals(VBoxContainer parent)
+    {
+        var s = Section(parent, "07 — MODALS");
+        s.AddChild(UiKit.MakeLabel(
+            "SettingsDialog (audio / controls / pilot) and EscapeMenu (pause) — open live over the gallery; Esc dismisses.",
+            UiKit.TextStyle.Body, DesignTokens.Text2));
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 14);
+        row.AddChild(UiKit.MakeButton("OPEN SETTINGS DIALOG", () => SettingsDialog.Open(parent), ButtonVariant.Ghost));
+        row.AddChild(UiKit.MakeButton("OPEN ESCAPE MENU", () => EscapeMenu.Open(parent, EscapeMenu.Context.Browser), ButtonVariant.Ghost));
+        s.AddChild(row);
     }
 
     private static void Backgrounds(VBoxContainer parent)

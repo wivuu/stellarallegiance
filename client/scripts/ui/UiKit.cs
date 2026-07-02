@@ -49,7 +49,8 @@ public static class UiKit
     }
 
     // "<label>  [====slider====]  NN%" — writes through onChanged live; the optional mono
-    // readout shows the value as a percentage of its range (matching the spec).
+    // readout shows the value as a percentage of its range (matching the spec), or via a
+    // custom formatter when one is supplied (e.g. "1.25×" for a multiplier).
     public static HBoxContainer MakeSliderRow(
         string label,
         double min,
@@ -57,7 +58,8 @@ public static class UiKit
         double step,
         double value,
         Action<double>? onChanged,
-        bool readout = true
+        bool readout = true,
+        Func<double, string>? format = null
     )
     {
         var row = new HBoxContainer();
@@ -79,7 +81,7 @@ public static class UiKit
         Label? pct = null;
         if (readout)
         {
-            pct = MakeLabel(Percent(value, min, max), TextStyle.Data);
+            pct = MakeLabel(format?.Invoke(value) ?? Percent(value, min, max), TextStyle.Data);
             pct.CustomMinimumSize = new Vector2(46, 0);
             pct.HorizontalAlignment = HorizontalAlignment.Right;
             row.AddChild(pct);
@@ -88,7 +90,7 @@ public static class UiKit
         {
             onChanged?.Invoke(v);
             if (pct != null)
-                pct.Text = Percent(v, min, max);
+                pct.Text = format?.Invoke(v) ?? Percent(v, min, max);
         };
         return row;
     }

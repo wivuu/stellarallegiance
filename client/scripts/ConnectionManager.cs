@@ -104,9 +104,19 @@ public partial class ConnectionManager : Node
 	private GameNetClient _net = null!;
 	private ServerLobbyOverlay? _input;
 
+	// Set once QuitGracefully has started — a second close request (impatient re-click of the
+	// window ✕, Cmd+Q spam) must not restart the Bye drain or double-Quit.
+	private bool _quitting;
+
 	public override void _Ready()
 	{
 		_net = GetNode<GameNetClient>("../GameNetClient");
+
+		// Window close (and macOS Cmd+Q) no longer kills the process outright — it raises
+		// NotificationWMCloseRequest instead, which routes through QuitGracefully so the MsgBye
+		// gets flushed to the server before we exit. Explicit GetTree().Quit() calls (--ui-shot,
+		// showcase) are unaffected.
+		GetTree().AutoAcceptQuit = false;
 
 		// --host ip-or-hostname:port connects immediately; otherwise show the input screen.
 		// --lobby host:port overrides the public-lobby address (else PUBLIC_LOBBY env, else default).
@@ -229,6 +239,33 @@ public partial class ConnectionManager : Node
 		_net.Disconnect();
 		ServerUrl = "";
 		ShowInput();
+	}
+
+	// AutoAcceptQuit is off (see _Ready): the window ✕ / Cmd+Q arrives here instead of
+	// terminating the process, so the quit can say goodbye first.
+	public override void _Notification(int what)
+	{
+		if (what == NotificationWMCloseRequest)
+			QuitGracefully();
+	}
+
+	// Quit to desktop, but cleanly: send MsgBye so the server frees our ship immediately instead
+	// of parking a 5s reconnect-grace orphan. Only call GameNetClient.Disconnect() when a link is
+	// (or may be) up — Disconnect unconditionally queues the Bye byte into the lifetime _tx
+	// channel, so queuing it while idle would leave a stale Bye poisoning the NEXT connection.
+	// Used by the escape menu's QUIT TO DESKTOP and the window-close path above.
+	public async void QuitGracefully()
+	{
+		if (_quitting)
+			return;
+		_quitting = true;
+		GD.Print("[ConnectionManager] quitting to desktop");
+		if (State is ConnState.Connected or ConnState.Connecting or ConnState.Reconnecting)
+			_net.Disconnect();
+		// 0.3s covers Disconnect's internal 200ms delay-then-cancel, letting the send loop
+		// drain the Bye frame before the process goes away.
+		await ToSignal(GetTree().CreateTimer(0.3), SceneTreeTimer.SignalName.Timeout);
+		GetTree().Quit();
 	}
 
 	// ---- Connect-stage tracking ------------------------------------------

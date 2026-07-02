@@ -130,6 +130,10 @@ public partial class ServerLobbyOverlay : Control
 
         BuildConnectModal();
 
+        // Keep the header callsign field in sync when the settings dialog changes the saved
+        // pilot name (unsubscribed in _ExitTree — UserPrefs.Changed is static).
+        UserPrefs.Changed += OnPrefsChanged;
+
         // Subscribe to the lobby SSE stream for live server list updates.
         StartSse();
 
@@ -141,8 +145,41 @@ public partial class ServerLobbyOverlay : Control
 
     public override void _ExitTree()
     {
+        UserPrefs.Changed -= OnPrefsChanged;
         StopSse();
         base._ExitTree();
+    }
+
+    // Refresh the callsign field from prefs — skipped while the player is typing in it (and
+    // benign when the change came from our own gear handler: same text, no signal re-fires,
+    // since _name has no TextChanged wiring).
+    private void OnPrefsChanged()
+    {
+        if (!_name.HasFocus() && _name.Text != UserPrefs.PilotName)
+            _name.Text = UserPrefs.PilotName;
+    }
+
+    // Esc: dismiss the direct-connect modal first; otherwise open the escape menu (CLOSE /
+    // SETTINGS / QUIT) — only while this is the active screen (browsing, not connecting).
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
+            return;
+        if (_modal.Visible)
+        {
+            HideConnectModal();
+            GetViewport().SetInputAsHandled();
+        }
+        else if (
+            Visible
+            && _cm.State == ConnectionManager.ConnState.AwaitingAddress
+            && !EscapeMenu.Active
+            && !SettingsDialog.Active
+        )
+        {
+            EscapeMenu.Open(this, EscapeMenu.Context.Browser);
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     // ---- Layout ------------------------------------------------------------
@@ -180,6 +217,19 @@ public partial class ServerLobbyOverlay : Control
 
         _online = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Ok);
         bar.AddChild(_online);
+
+        var gear = UiKit.MakeButton("⚙", OpenSettings, ButtonVariant.Icon);
+        gear.CustomMinimumSize = new Vector2(34, 34);
+        gear.FocusMode = FocusModeEnum.None;
+        bar.AddChild(gear);
+    }
+
+    // Settings gear — sync the typed callsign into prefs first (SetPilotName clamps) so the
+    // dialog's PILOT tab shows what's on screen.
+    private void OpenSettings()
+    {
+        UserPrefs.SetPilotName(_name.Text);
+        SettingsDialog.Open(this);
     }
 
     // Solid-accent chip (the design's active-tab marker): accent fill, void text.

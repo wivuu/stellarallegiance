@@ -311,10 +311,14 @@ public sealed class ClientHub
             // Voluntary leave (MsgBye) or a client with no live ship frees immediately. An
             // unexpected drop of a flying client parks the ship for the grace window so the
             // player can reconnect and reclaim it; the orphan is keyed by this connection's token.
-            if (client.Leaving || _sim.ShipIdOf(client.Id) == 0)
+            bool cleanLeave = client.Leaving || _sim.ShipIdOf(client.Id) == 0;
+            if (cleanLeave)
                 _sim.EnqueueLeave(client.Id);
             else
                 _sim.EnqueueDetach(client.Id, client.Token);
+            Console.WriteLine(
+                $"[Hub] client {client.Id} disconnected (bye={client.Leaving}, {(cleanLeave ? "clean leave" : "holding ship for reconnect grace")})"
+            );
             _lobby.Remove(client.Id);
             _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
