@@ -20,7 +20,8 @@ namespace StellarAllegiance.Shared
     {
         // Returns a (possibly empty) list of human-readable errors. Empty == valid.
         // Checks: unique ids per kind; every non-pod class carries a positive hull; every
-        // Weapon hardpoint (on a ship OR a base) resolves to a known WeaponDef.
+        // Weapon hardpoint (on a ship OR a base) resolves to a known WeaponDef; every ship's
+        // authored default loadout fits its payload capacity (no hull ships overburdened).
         public static List<string> Validate(
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
@@ -30,9 +31,14 @@ namespace StellarAllegiance.Shared
             var errors = new List<string>();
 
             var weaponIds = new HashSet<uint>();
+            var weaponsById = new Dictionary<uint, WeaponDef>();
             foreach (var w in weapons)
+            {
                 if (!weaponIds.Add(w.WeaponId))
                     errors.Add($"duplicate WeaponId {w.WeaponId} (\"{w.Name}\")");
+                else
+                    weaponsById[w.WeaponId] = w;
+            }
 
             var classIds = new HashSet<byte>();
             foreach (var d in ships)
@@ -44,6 +50,7 @@ namespace StellarAllegiance.Shared
                     errors.Add($"class \"{d.Name}\" ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
 
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
+                ValidatePayload(d, weaponsById, errors);
             }
 
             // The map seeds a team base + the win condition reads its hull from content, so a bundle
@@ -61,6 +68,24 @@ namespace StellarAllegiance.Shared
             }
 
             return errors;
+        }
+
+        // The hangar blocks launch when a loadout exceeds PayloadCapacity, so a def set whose
+        // AUTHORED default weapons already overflow would soft-lock that class out of the box.
+        private static void ValidatePayload(
+            ShipClassDef ship,
+            Dictionary<uint, WeaponDef> weaponsById,
+            List<string> errors
+        )
+        {
+            if (ship.Hardpoints is null)
+                return;
+            float used = 0f;
+            foreach (var h in ship.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon && weaponsById.TryGetValue(h.WeaponId, out var w))
+                    used += w.Mass;
+            if (used > ship.PayloadCapacity)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
         }
 
         private static void ValidateWeaponHardpoints(

@@ -17,12 +17,13 @@
 #  on the model (see factions/src/.../Model/RuntimeData.cs); everything else derives from Core.
 # =====================================================================
 
-version: "2026.06.28-stock"
+version: "2026.07.02-payload"
 
 catalog:
   - hulls.yaml
   - projectiles.yaml
   - weapons.yaml
+  - expendables.yaml
   - stations.yaml
   - world.yaml
 

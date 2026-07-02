@@ -589,7 +589,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 12;
+    public const byte ProtocolVersion = 13;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -739,6 +739,7 @@ public partial class GameNetClient : Node
             d.AbOffRate = r.ReadSingle();
             d.MaxHull = r.ReadSingle();
             d.Cost = r.ReadInt32();
+            d.PayloadCapacity = r.ReadSingle();
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             ships.Add(d);
@@ -758,6 +759,21 @@ public partial class GameNetClient : Node
                     ProjectileLifeTicks = r.ReadUInt32(),
                     ProjectileRadius = r.ReadSingle(),
                     SpreadRad = r.ReadSingle(),
+                    Mass = r.ReadSingle(),
+                }
+            );
+
+        var cargoItems = new List<CargoItemDef>();
+        byte cargoCount = r.ReadByte();
+        for (int i = 0; i < cargoCount; i++)
+            cargoItems.Add(
+                new CargoItemDef
+                {
+                    CargoId = r.ReadUInt32(),
+                    Name = ReadStr(r),
+                    Glyph = ReadStr(r),
+                    Mass = r.ReadSingle(),
+                    Description = ReadStr(r),
                 }
             );
 
@@ -785,8 +801,8 @@ public partial class GameNetClient : Node
             DebugNoFire = r.ReadBoolean(),
         };
 
-        _defs.Load(ships, weapons, bases, cfg);
-        GD.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {bases.Count} bases");
+        _defs.Load(ships, weapons, bases, cargoItems, cfg);
+        GD.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
         DefsReceived?.Invoke();
     }
 

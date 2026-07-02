@@ -62,6 +62,21 @@ Check(
     "loader parsed scout weapon",
     $"scout weapon wrong (dmg {scoutW.Damage}, fire {scoutW.FireIntervalTicks}, spread {scoutW.SpreadRad})"
 );
+// Payload: hull capacity + weapon mass are authored (hulls/weapons.yaml), cargo items project
+// from expendables carrying a cargo-id (expendables.yaml).
+Check(
+    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 20f && scoutW.Mass == 2f,
+    "loader projected payload capacity + weapon mass",
+    $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
+);
+Check(
+    stock.CargoItems.Count == 3
+        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 1, 2, 3 })
+        && stock.CargoItems.First(c => c.CargoId == 1).Mass == 4f
+        && stock.CargoItems.First(c => c.CargoId == 1).Glyph.Length > 0,
+    "loader projected cargo items from expendables",
+    $"cargo items wrong (count {stock.CargoItems.Count})"
+);
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
 Check(
@@ -91,6 +106,32 @@ Check(danglingErrors.Any(e => e.Contains("9999")), "validator flags a dangling w
 // 3b. The validator catches a bundle with no base def (the win condition + map need one).
 var noBaseErrors = ContentValidator.Validate(stock.Ships, stock.Weapons, System.Array.Empty<BaseDef>());
 Check(noBaseErrors.Any(e => e.Contains("base")), "validator flags a bundle with no base def", "validator missed a missing base def");
+
+// 3c. The validator catches an overburdened AUTHORED default loadout (would soft-lock the class
+//     in the hangar — the original fighter/bomber bug).
+var heavyGun = new WeaponDef { WeaponId = 5, Name = "Heavy", Mass = 10f };
+var overShip = new ShipClassDef
+{
+    ClassId = 8,
+    Name = "Over",
+    MaxHull = 50f,
+    PayloadCapacity = 1f,
+    Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 5 } },
+};
+var overErrors = ContentValidator.Validate(new[] { overShip }, new[] { heavyGun }, new[] { okBase });
+Check(
+    overErrors.Any(e => e.Contains("PayloadCapacity")),
+    "validator flags an overburdened default loadout",
+    "validator missed an overburdened default loadout"
+);
+// ...and accepts one exactly AT capacity (> is over, == is not).
+overShip.PayloadCapacity = 10f;
+var atCapErrors = ContentValidator.Validate(new[] { overShip }, new[] { heavyGun }, new[] { okBase });
+Check(
+    !atCapErrors.Any(e => e.Contains("PayloadCapacity")),
+    "validator accepts a loadout exactly at capacity",
+    $"validator wrongly flagged an at-capacity loadout: {string.Join("; ", atCapErrors)}"
+);
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

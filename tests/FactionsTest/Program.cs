@@ -83,6 +83,20 @@ Check(
 var scoutBolt = stock.Projectiles.Single(p => p.Id == "scout-bolt");
 Check(scoutBolt.Power == 4 && scoutBolt.Speed == 200 && scoutBolt.Width == 1, "stock scout bolt carries power/speed/width", $"stock scout bolt wrong (power {scoutBolt.Power})");
 
+// Payload authoring: hull capacity, weapon mass, and cargo-id expendables (the hangar's hold).
+var fighter = stock.Hulls.Single(h => h.Id == "fighter");
+Check(
+    scout.PayloadCapacity == 8 && fighter.PayloadCapacity == 16 && scoutCannon.Mass == 2,
+    "stock hulls/weapons carry payload-capacity + mass",
+    $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, cannon mass {scoutCannon.Mass})"
+);
+var seeker = stock.Missiles.Single(m => m.Id == "seeker-missile");
+Check(
+    seeker.CargoId == 1 && seeker.Mass == 4 && !string.IsNullOrEmpty(seeker.Glyph) && !string.IsNullOrEmpty(seeker.Description),
+    "stock seeker missile carries cargo-id + mass + glyph",
+    $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass})"
+);
+
 var garrison = stock.Stations.Single(s => s.Id == "garrison");
 Check(
     garrison.BaseTypeId == 0 && garrison.Radius == 90 && garrison.MaxArmor == 2000 && garrison.Hardpoints.Count == 4,

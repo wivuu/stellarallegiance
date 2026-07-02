@@ -1,10 +1,12 @@
 # Weapons — the cannons. dispersion→WeaponDef.spread-rad; damage/speed/radius come from the
 # referenced projectile. weapon-id (referenced by hull hardpoints) and the tick-domain ballistics
 # (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions. Reproduces stock.yaml.
+# mass = payload units the weapon occupies when mounted (counts against the hull's payload-capacity).
 weapons:
   - id: scout-cannon
     name: Scout Cannon
     weapon-id: 0
+    mass: 2
     dispersion: 0.006
     fire-interval-ticks: 4
     projectile-life-ticks: 16
@@ -13,6 +15,7 @@ weapons:
   - id: fighter-cannon
     name: Fighter Cannon
     weapon-id: 1
+    mass: 5
     dispersion: 0.035
     fire-interval-ticks: 4
     projectile-life-ticks: 16
@@ -21,6 +24,7 @@ weapons:
   - id: bomber-cannon
     name: Bomber Cannon
     weapon-id: 2
+    mass: 11
     dispersion: 0.012
     fire-interval-ticks: 14
     projectile-life-ticks: 16

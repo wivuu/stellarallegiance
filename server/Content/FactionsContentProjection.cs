@@ -42,11 +42,17 @@ public static class FactionsContentProjection
             .Select(ProjectBase)
             .ToList();
 
+        // AllExpendables() iterates Missiles→Mines→Chaffs→Probes in list order — deterministic.
+        var cargoItems = core.AllExpendables()
+            .Where(e => e.CargoId is not null)
+            .Select(ProjectCargoItem)
+            .ToList();
+
         var world = ProjectWorld(core.World);
 
         var start = ProjectFactionStart(core);
 
-        return new ContentSet(ships, weapons, bases, world, start, core);
+        return new ContentSet(ships, weapons, bases, cargoItems, world, start, core);
     }
 
     // Stage-2: the single stock faction's per-match starting state (credits/income + tech/capability
@@ -82,6 +88,7 @@ public static class FactionsContentProjection
             MaxHull = (float)h.ArmorHitPoints,
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
+            PayloadCapacity = (float)h.PayloadCapacity,
             // Explicit runtime extend-fields (no clean Core source).
             DriftYawDeg = (float)h.DriftYawDeg,
             DriftPitchDeg = (float)h.DriftPitchDeg,
@@ -108,11 +115,22 @@ public static class FactionsContentProjection
             ProjectileSpeed = (float)proj.Speed,
             ProjectileRadius = (float)proj.Width,
             SpreadRad = (float)w.Dispersion,
+            Mass = (float)w.Mass,
             FireIntervalTicks = w.FireIntervalTicks,
             ProjectileLifeTicks = w.ProjectileLifeTicks,
             Kind = (WeaponKind)(byte)w.Kind,
         };
     }
+
+    private static CargoItemDef ProjectCargoItem(Factions.Expendable e) =>
+        new()
+        {
+            CargoId = e.CargoId!.Value,
+            Name = e.Name,
+            Glyph = e.Glyph ?? "",
+            Mass = (float)e.Mass,
+            Description = e.Description ?? "",
+        };
 
     private static BaseDef ProjectBase(Factions.Station s) =>
         new()

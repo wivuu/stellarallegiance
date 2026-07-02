@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 12;
+    public const byte Version = 13;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -57,7 +57,7 @@ public static class Protocol
     public const byte MsgShipGone = 4; // u64 shipId (death or disconnect — free the node)
     public const byte MsgBases = 5; // u8 count, count x (u64 baseId, f32 health) — streamed base health
     public const byte MsgPong = 6; // u32 nonce (echo of the client's MsgPing)
-    public const byte MsgDefs = 7; // full content defs (ship classes/weapons/bases/world cfg) — sent once after Welcome
+    public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope, u8 fromTeam, str name, str text
     public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
@@ -330,6 +330,7 @@ public static class Protocol
             w.Write(s.AbOffRate);
             w.Write(s.MaxHull);
             w.Write(s.Cost);
+            w.Write(s.PayloadCapacity);
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
         }
@@ -346,6 +347,18 @@ public static class Protocol
             w.Write(wp.ProjectileLifeTicks);
             w.Write(wp.ProjectileRadius);
             w.Write(wp.SpreadRad);
+            w.Write(wp.Mass);
+        }
+
+        var cargoItems = content.CargoItems;
+        w.Write((byte)cargoItems.Count);
+        foreach (var c in cargoItems)
+        {
+            w.Write(c.CargoId);
+            WriteString(w, c.Name);
+            WriteString(w, c.Glyph);
+            w.Write(c.Mass);
+            WriteString(w, c.Description);
         }
 
         var bases = content.Bases;

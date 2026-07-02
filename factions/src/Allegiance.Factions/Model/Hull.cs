@@ -65,6 +65,14 @@ public record Hull : Buildable
     /// </summary>
     public byte? ClassId { get; set; }
 
+    /// <summary>
+    /// Total payload budget the hull can carry: the summed <see cref="Part.Mass"/> of mounted
+    /// weapons plus the cargo hold (expendable <see cref="Expendable.Mass"/> × count). 0 = no hold
+    /// (e.g. the pod). Runtime hulls with weapon hardpoints must author enough capacity for their
+    /// default loadout — <c>CoreValidator</c> enforces this at load.
+    /// </summary>
+    public double PayloadCapacity { get; set; }
+
     /// <summary>Drift (turn-rate slop) knobs the game's flight model needs; no clean Core source.</summary>
     public double DriftYawDeg { get; set; }
     public double DriftPitchDeg { get; set; }

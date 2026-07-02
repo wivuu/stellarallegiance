@@ -14,11 +14,12 @@ public sealed class ContentSet
     public IReadOnlyList<ShipClassDef> Ships { get; }
     public IReadOnlyList<WeaponDef> Weapons { get; }
     public IReadOnlyList<BaseDef> Bases { get; }
+    public IReadOnlyList<CargoItemDef> CargoItems { get; }
     public WorldConfig World { get; }
 
     // Stage-2 strategy spine: the team's per-match STARTING state (credits/income + tech/capability
     // seed) projected from the faction. Server-only — NOT part of the wire defs (Protocol.BuildDefs
-    // encodes only Ships/Weapons/Bases/World).
+    // encodes only Ships/Weapons/CargoItems/Bases/World).
     public FactionStart Start { get; }
 
     // The source catalog this set was projected from. Server-only (never streamed): the Stage-2
@@ -30,6 +31,7 @@ public sealed class ContentSet
         IReadOnlyList<ShipClassDef> ships,
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
+        IReadOnlyList<CargoItemDef> cargoItems,
         WorldConfig world,
         FactionStart start,
         Factions.Core catalog
@@ -38,6 +40,7 @@ public sealed class ContentSet
         Ships = ships;
         Weapons = weapons;
         Bases = bases;
+        CargoItems = cargoItems;
         World = world;
         Start = start;
         Catalog = catalog;

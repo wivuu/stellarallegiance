@@ -41,6 +41,29 @@ public static class CoreValidator
                     CheckRef(result, partIds, partId, $"hull '{hull.Id}' allowed-parts[{slot}]");
         }
 
+        // Runtime hulls: the authored default loadout (hardpoint weapons) must fit the payload budget.
+        var runtimeWeapons = new Dictionary<uint, Weapon>();
+        foreach (var weapon in core.Weapons)
+            if (weapon.WeaponId is uint wid)
+                runtimeWeapons.TryAdd(wid, weapon); // dup wire ids are the shared ContentValidator's error, not a throw here
+        foreach (var hull in core.Hulls)
+        {
+            if (hull.ClassId is null)
+                continue;
+            double defaultPayload = 0;
+            foreach (var hp in hull.Hardpoints)
+                if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeapons.TryGetValue(hp.WeaponId, out var weapon))
+                    defaultPayload += weapon.Mass;
+            if (defaultPayload > hull.PayloadCapacity)
+                result.Error($"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}.");
+        }
+
+        // Runtime cargo items: wire ids must be unique.
+        var cargoIds = new HashSet<uint>();
+        foreach (var expendable in core.AllExpendables())
+            if (expendable.CargoId is uint cid && !cargoIds.Add(cid))
+                result.Error($"duplicate cargo-id {cid} (expendable '{expendable.Id}').");
+
         // Parts.
         foreach (var part in core.AllParts())
             CheckRef(result, partIds, part.SuccessorPartId, $"{Describe(part)} successor-part-id");

@@ -78,7 +78,9 @@ public partial class ShipLoadout : Control
     private Label _arsenalTitle = null!;
     private Label _arsenalFit = null!;
     private VBoxContainer _arsenalRows = null!;
-    private readonly List<Label> _cargoCounts = new();
+    private VBoxContainer _cargoList = null!;
+    private readonly List<(uint itemId, Label count)> _cargoCounts = new();
+    private int _builtCargoCount = -1;
 
     private Label _topReadout = null!;
     private StatReadout _costReadout = null!;
@@ -386,13 +388,24 @@ public partial class ShipLoadout : Control
     private Control BuildCargoSection()
     {
         var panel = new HairlinePanel { Title = "CARGO HOLD" };
-        var col = new VBoxContainer();
-        col.AddThemeConstantOverride("separation", 6);
-        panel.AddChild(col);
+        _cargoList = new VBoxContainer();
+        _cargoList.AddThemeConstantOverride("separation", 6);
+        panel.AddChild(_cargoList);
+        // Rows are streamed content (CargoItemDef) — populated by RefreshCargoSection once
+        // the defs land (_Process), never from baked stubs.
+        return panel;
+    }
 
-        foreach (LoadoutState.CargoStub item in LoadoutState.CargoCatalog)
+    private void RefreshCargoSection(List<CargoItemDef> items)
+    {
+        foreach (var child in _cargoList.GetChildren())
+            child.QueueFree();
+        _cargoCounts.Clear();
+        _firstCargoPlus = null;
+
+        foreach (CargoItemDef item in items)
         {
-            uint itemId = item.Id;
+            uint itemId = item.CargoId;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
             var glyph = UiKit.MakeLabel(item.Glyph, UiKit.TextStyle.Data, DesignTokens.Secondary);
@@ -400,9 +413,9 @@ public partial class ShipLoadout : Control
             row.AddChild(glyph);
             var nameCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             nameCol.AddThemeConstantOverride("separation", 0);
-            var name = UiKit.MakeLabel(item.Name, UiKit.TextStyle.Data, DesignTokens.TextHi);
+            var name = UiKit.MakeLabel(item.Name.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
             name.AddThemeFontSizeOverride("font_size", 12);
-            var sub = UiKit.MakeLabel($"{item.UnitPayload:0} PAYLOAD EA · {item.Desc}", UiKit.TextStyle.Data, DesignTokens.TextDim);
+            var sub = UiKit.MakeLabel($"{item.Mass:0} PAYLOAD EA · {item.Description}", UiKit.TextStyle.Data, DesignTokens.TextDim);
             sub.AddThemeFontSizeOverride("font_size", 9);
             sub.ClipText = true;
             sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
@@ -419,20 +432,21 @@ public partial class ShipLoadout : Control
             count.CustomMinimumSize = new Vector2(32, 0);
             count.HorizontalAlignment = HorizontalAlignment.Center;
             count.VerticalAlignment = VerticalAlignment.Center;
+            if (_classId is byte classId)
+                count.Text = _state.GetCargoCount(classId, itemId).ToString("00");
             minus.Pressed += () => StepCargo(itemId, -1, count);
             plus.Pressed += () => StepCargo(itemId, +1, count);
             _firstCargoPlus ??= plus;
             row.AddChild(minus);
             row.AddChild(count);
             row.AddChild(plus);
-            col.AddChild(row);
-            _cargoCounts.Add(count);
+            _cargoList.AddChild(row);
+            _cargoCounts.Add((itemId, count));
         }
 
         var note = UiKit.MakeLabel("CONSUMABLES — STAGE 2 · NOT YET LIVE", UiKit.TextStyle.Data, DesignTokens.TextDim);
         note.AddThemeFontSizeOverride("font_size", 9);
-        col.AddChild(note);
-        return panel;
+        _cargoList.AddChild(note);
     }
 
     private void StepCargo(uint itemId, int delta, Label count)
@@ -487,8 +501,8 @@ public partial class ShipLoadout : Control
             return;
         _state.ResetClass(classId);
         RefreshLoadoutViews();
-        foreach (Label c in _cargoCounts)
-            c.Text = "00";
+        foreach ((uint _, Label count) in _cargoCounts)
+            count.Text = "00";
     }
 
     // LAUNCH = the spawn request. The screen stays open showing "LAUNCHING…" until the
@@ -552,6 +566,14 @@ public partial class ShipLoadout : Control
             SelectShip(_classId ?? ships[0].ClassId);
         }
 
+        // Same for the cargo hold — its items are streamed defs too.
+        List<CargoItemDef> cargoItems = _defs.AllCargoItems();
+        if (cargoItems.Count != _builtCargoCount)
+        {
+            _builtCargoCount = cargoItems.Count;
+            RefreshCargoSection(cargoItems);
+        }
+
         // Live telemetry + spawn gating.
         byte team = _world.LocalTeam ?? _net.MyTeam;
         _topReadout.Text = $"CREDITS {_world.TeamCredits(team)}   ·   PING {_ship.PingMs,3:0} ms";
@@ -601,11 +623,8 @@ public partial class ShipLoadout : Control
 
         RefreshStatBars(def);
         _preview.ShowShip(_defs, classId);
-        foreach (Label c in _cargoCounts)
-            c.Text = "00"; // counts are per-class; re-read below
-        int i = 0;
-        foreach (LoadoutState.CargoStub item in LoadoutState.CargoCatalog)
-            _cargoCounts[i++].Text = _state.GetCargoCount(classId, item.Id).ToString("00");
+        foreach ((uint itemId, Label count) in _cargoCounts)
+            count.Text = _state.GetCargoCount(classId, itemId).ToString("00"); // counts are per-class
 
         RefreshLoadoutViews();
     }
@@ -622,10 +641,10 @@ public partial class ShipLoadout : Control
         {
             maxSpeed = MathF.Max(maxSpeed, s.MaxSpeed);
             maxHull = MathF.Max(maxHull, s.MaxHull);
-            maxCap = MathF.Max(maxCap, LoadoutState.PayloadCapacity(s));
+            maxCap = MathF.Max(maxCap, s.PayloadCapacity);
             maxMass = MathF.Max(maxMass, s.Mass);
         }
-        float cap = LoadoutState.PayloadCapacity(def);
+        float cap = def.PayloadCapacity;
         Span<(float frac, string text)> vals =
         [
             (def.MaxSpeed / maxSpeed, $"{def.MaxSpeed:0} u/s"),
@@ -701,13 +720,13 @@ public partial class ShipLoadout : Control
     {
         if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out ShipClassDef def))
             return;
-        float used = _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon);
-        float cap = LoadoutState.PayloadCapacity(def);
+        float used = _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem);
+        float cap = def.PayloadCapacity;
         bool over = used > cap;
         _payloadText.Text = $"{used:0} / {cap:0}";
         _payloadText.AddThemeColorOverride("font_color", over ? DesignTokens.DangerText : DesignTokens.Data);
         _payloadBar.Fill = over ? DesignTokens.Danger : DesignTokens.TeamAccent;
-        _payloadBar.Set(Mathf.RoundToInt(Mathf.Min(1f, used / cap) * PayloadSegments));
+        _payloadBar.Set(cap <= 0f ? 0 : Mathf.RoundToInt(Mathf.Min(1f, used / cap) * PayloadSegments)); // pod: no hold
         _payloadBar.QueueRedraw(); // Fill changes don't self-invalidate
         _overCapacity.Visible = over;
         _payloadReadout.Set($"{used:0}/{cap:0}", "PAYLOAD", over ? DesignTokens.DangerText : null);
@@ -715,7 +734,7 @@ public partial class ShipLoadout : Control
     }
 
     private bool IsOverCapacity(ShipClassDef def) =>
-        _classId is byte classId && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon) > LoadoutState.PayloadCapacity(def);
+        _classId is byte classId && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem) > def.PayloadCapacity;
 
     // The arsenal: every streamed weapon that fits the selected slot, plus the empty-slot
     // row and a placeholder tech-locked entry (the lock becomes real with the tech tree).
@@ -767,7 +786,7 @@ public partial class ShipLoadout : Control
             row.Configure(
                 isEquipped ? "◆ EQUIPPED" : "+ EQUIP",
                 w.Name.ToUpperInvariant(),
-                $"{WeaponStatLine(w)} · PAYLOAD {LoadoutState.WeaponPayload(w):0}"
+                $"{WeaponStatLine(w)} · PAYLOAD {w.Mass:0}"
             );
             row.Pressed += () =>
             {

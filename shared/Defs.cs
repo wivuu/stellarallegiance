@@ -79,6 +79,7 @@ namespace StellarAllegiance.Shared
 
         public float MaxHull; // starting/spawn hull
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
+        public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
     }
@@ -101,11 +102,24 @@ namespace StellarAllegiance.Shared
         public uint ProjectileLifeTicks; // ticks before the bolt is culled
         public float ProjectileRadius; // projectile hit sphere
         public float SpreadRad; // cone half-angle (rad); 0 = pinpoint
+        public float Mass; // payload units this weapon occupies when mounted (Part.Mass)
 
         // Behavior dispatch, consumed SERVER-SIDE only (Simulation.TryFire). Defaults to Bolt and is
         // deliberately NOT sent over the wire yet (Protocol.MsgDefs) — the client renders bolts
         // regardless, so a kind only needs wiring when it must render differently (Stage 2/missiles).
         public WeaponKind Kind;
+    }
+
+    // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).
+    // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
+    // Cargo is hangar/UI-side today — the sim doesn't consume these yet (Stage 2 consumables).
+    public sealed class CargoItemDef
+    {
+        public uint CargoId;
+        public string Name = "";
+        public string Glyph = ""; // single-character UI glyph
+        public float Mass; // payload units per unit carried
+        public string Description = "";
     }
 
     // One per base type.

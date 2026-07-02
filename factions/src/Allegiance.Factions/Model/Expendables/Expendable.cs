@@ -11,6 +11,10 @@ public abstract record Expendable
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string? IconName { get; set; }
+    public string? Description { get; set; }
+
+    /// <summary>Payload units one carried unit occupies in a hull's hold (see <see cref="Hull.PayloadCapacity"/>).</summary>
+    public double Mass { get; set; }
 
     /// <summary>Time to load/ready the expendable, in seconds.</summary>
     public double LoadTime { get; set; }
@@ -24,4 +28,15 @@ public abstract record Expendable
     public string? DefenseType { get; set; }
 
     public List<ExpendableAbility> Abilities { get; set; } = new();
+
+    // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------
+
+    /// <summary>
+    /// Stable wire id for this expendable as a runtime cargo item the hangar can stock. Null = not
+    /// a runtime cargo item. Authored explicitly, like <see cref="Hull.ClassId"/> / weapon ids.
+    /// </summary>
+    public uint? CargoId { get; set; }
+
+    /// <summary>Single-character UI glyph the hangar cargo list renders.</summary>
+    public string? Glyph { get; set; }
 }

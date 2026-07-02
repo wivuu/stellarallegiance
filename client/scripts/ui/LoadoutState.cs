@@ -20,7 +20,8 @@ public sealed class LoadoutState
     // slot was deliberately emptied; an absent key means "authored default" (hp.WeaponId).
     private readonly Dictionary<byte, Dictionary<byte, uint?>> _weaponOverrides = new();
 
-    // classId -> (cargo item Id -> count). Purely local stub until cargo defs stream.
+    // classId -> (CargoItemDef.CargoId -> count). Counts are local until MsgSetLoadout lands;
+    // the items themselves are streamed defs (DefRegistry.AllCargoItems).
     private readonly Dictionary<byte, Dictionary<uint, int>> _cargo = new();
 
     // The weapon currently shown in a slot: the player's override if one exists, else the
@@ -47,18 +48,8 @@ public sealed class LoadoutState
     }
 
     // ---- Cargo (consumables) ----------------------------------------------
-
-    // A consumable the hold can carry. Hardcoded stubs until a CargoItemDef table is
-    // authored server-side and streamed like the other defs (Stage 2 — the sim has no
-    // missile/mine behaviors yet, see Simulation's reserved WeaponKind seams).
-    public sealed record CargoStub(uint Id, string Name, string Glyph, float UnitPayload, string Desc);
-
-    public static readonly CargoStub[] CargoCatalog =
-    [
-        new(1, "SEEKER MISSILE", "➤", 4f, "Lock-on ordnance. Fired from the hold."),
-        new(2, "PROXIMITY MINE", "◈", 6f, "Dropped behind the ship; arms after 2s."),
-        new(3, "SENSOR DECOY", "◇", 3f, "Fakes the ship's signature for pursuers."),
-    ];
+    // The catalog itself is streamed content: authored expendables with a cargo-id
+    // (expendables.yaml -> CargoItemDef via MsgDefs). Only the per-class COUNTS live here.
 
     public int GetCargoCount(byte classId, uint itemId) =>
         _cargo.TryGetValue(classId, out var hold) && hold.TryGetValue(itemId, out int n) ? n : 0;
@@ -70,19 +61,18 @@ public sealed class LoadoutState
         hold[itemId] = Math.Max(0, count);
     }
 
-    // ---- Payload accounting (placeholder derivations) ----------------------
-    // Neither hulls nor weapons carry authored payload numbers yet. These stand-ins give
-    // the capacity bar real behavior (equip a heavy gun + fill the hold -> over capacity)
-    // until `payload-mass` / `payload-capacity` fields land in the content YAML.
-
-    // Hull capacity from mass: heavier hulls carry more (scout ~ fighter ~ bomber tiers).
-    public static float PayloadCapacity(ShipClassDef def) => MathF.Max(8f, MathF.Round(def.Mass * 0.04f));
-
-    // A weapon's payload cost from its damage — the only per-weapon "weight" signal we have.
-    public static float WeaponPayload(WeaponDef w) => MathF.Max(2f, MathF.Round(w.Damage * 0.5f));
+    // ---- Payload accounting -------------------------------------------------
+    // Capacity and weights are AUTHORED content (hulls.yaml payload-capacity, weapon/expendable
+    // mass) streamed via MsgDefs — never derived client-side. CoreValidator/ContentValidator
+    // prove at server boot that every authored default loadout fits its hull's capacity.
 
     // Total payload the current loadout uses: every assigned weapon plus the hold.
-    public float PayloadUsed(byte classId, IReadOnlyList<HardpointDef> hardpoints, Func<uint, WeaponDef?> weaponById)
+    public float PayloadUsed(
+        byte classId,
+        IReadOnlyList<HardpointDef> hardpoints,
+        Func<uint, WeaponDef?> weaponById,
+        Func<uint, CargoItemDef?> cargoById
+    )
     {
         float used = 0f;
         foreach (HardpointDef hp in hardpoints)
@@ -91,10 +81,12 @@ public sealed class LoadoutState
                 continue;
             uint? id = AssignedWeapon(classId, hp);
             if (id is uint wid && weaponById(wid) is WeaponDef w)
-                used += WeaponPayload(w);
+                used += w.Mass;
         }
-        foreach (CargoStub item in CargoCatalog)
-            used += GetCargoCount(classId, item.Id) * item.UnitPayload;
+        if (_cargo.TryGetValue(classId, out var hold))
+            foreach ((uint itemId, int count) in hold)
+                if (count > 0 && cargoById(itemId) is CargoItemDef item)
+                    used += count * item.Mass;
         return used;
     }
 
