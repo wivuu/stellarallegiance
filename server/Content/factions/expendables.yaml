@@ -114,7 +114,7 @@ chaffs:
     name: Countermeasures
     description: Fakes the ship's signature for pursuers.
     cargo-id: 3
-    mass: 3
+    mass: 1
     glyph: "◇"
     model-name: acs40    # GLB the client instances for the decoy (assets/chaff/acs40.glb)
     lifespan: 3          # puff lifetime, s

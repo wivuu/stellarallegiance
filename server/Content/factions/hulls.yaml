@@ -44,6 +44,7 @@ hulls:
       - { kind: main-engine, off-z: -2.25, dir-z: -1 }
     # Default hold: cannon 2 + sensor-decoy (3) = 5 <= 8; 3 free for hangar extras (e.g. mines).
     default-cargo:
+      - { item: proximity-mine, count: 3 }
       - { item: sensor-decoy, count: 1 }
 
   # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
