@@ -96,7 +96,7 @@ mines:
     name: Proximity Mine
     description: Dropped behind the ship; arms after 2s.
     cargo-id: 2
-    mass: 6
+    mass: 1             # light per-mine payload cost: a full cloud-count hold must fit a bomber
     glyph: "◈"
     lifespan: 60         # field lifetime, s
     radius: 30           # per-mine proximity trigger radius, u

@@ -147,7 +147,7 @@ Check(
 Check(
     stock.CargoItems.Count == 2
         && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 2, 3 })
-        && stock.CargoItems.First(c => c.CargoId == 2).Mass == 6f
+        && stock.CargoItems.First(c => c.CargoId == 2).Mass == 1f
         && stock.CargoItems.First(c => c.CargoId == 3).Mass == 3f
         && stock.CargoItems.First(c => c.CargoId == 3).Glyph.Length > 0,
     "loader projected cargo items from expendables (mine + decoy only)",

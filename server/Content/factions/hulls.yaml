@@ -106,9 +106,10 @@ hulls:
       - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 5 }
       - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
       - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
-    # Default hold: cannon 11 + torpedo rack 4 = 15, + proximity-mine (6) + sensor-decoy (3) = 24 <= 26.
+    # Default hold: cannon 11 + torpedo rack 4 = 15, + 8x proximity-mine (8) + sensor-decoy (3) = 26 <= 26.
+    # 8 mines = one full cloud-count deploy; mine mass 1 keeps the whole field affordable.
     default-cargo:
-      - { item: proximity-mine, count: 1 }
+      - { item: proximity-mine, count: 8 }
       - { item: sensor-decoy, count: 1 }
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.

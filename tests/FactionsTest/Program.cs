@@ -146,7 +146,7 @@ Check(
 // Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
 var mine = stock.Mines.Single(m => m.Id == "proximity-mine");
 Check(
-    mine.CargoId == 2 && mine.Mass == 6 && mine.Radius == 30 && mine.Power == 25
+    mine.CargoId == 2 && mine.Mass == 1 && mine.Radius == 30 && mine.Power == 25
         && mine.BlastRadius == 40 && mine.CloudRadius == 80 && mine.CloudCount == 8
         && mine.ArmDelay == 2.0 && mine.Lifespan == 60,
     "stock proximity-mine carries field/blast/arming stats",
@@ -166,7 +166,7 @@ Check(
     "stock chaff/mine dispensers carry weapon-id + expendable-id + cadence",
     $"dispensers wrong (chaff wid {decoyDispenser.WeaponId} exp {decoyDispenser.ExpendableId}, mine wid {mineDispenser.WeaponId} exp {mineDispenser.ExpendableId})"
 );
-// Fighter/bomber default-cargo (raw YAML): fighter 2x sensor-decoy; bomber 1x mine + 1x decoy.
+// Fighter/bomber default-cargo (raw YAML): fighter 2x sensor-decoy; bomber 8x mine + 1x decoy.
 Check(
     fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "sensor-decoy" && fighter.DefaultCargo[0].Count == 2,
     "stock fighter default-cargo = 2x sensor-decoy",
