@@ -88,4 +88,22 @@ public record Hull : Buildable
 
     /// <summary>Local-space mount points (weapon muzzles, engine nozzles, lights) the client renders from.</summary>
     public List<Hardpoint> Hardpoints { get; set; } = new();
+
+    /// <summary>
+    /// Default consumable hold this hull spawns with: each entry names an expendable (by id) and a
+    /// count. Consumes payload-capacity alongside mounted weapon mass — <c>CoreValidator</c> proves
+    /// the summed loadout fits at load. Omit-when-empty. Projected onto <c>ShipClassDef.DefaultCargo</c>
+    /// (resolving each expendable id to its cargo-id).
+    /// </summary>
+    public List<CargoLoad> DefaultCargo { get; set; } = new();
+}
+
+/// <summary>One entry in a hull's default consumable hold: an expendable id + a count.</summary>
+public record CargoLoad
+{
+    /// <summary>References an <see cref="Expendable.Id"/> that carries a cargo-id.</summary>
+    public string Item { get; set; } = "";
+
+    /// <summary>How many units of that expendable the hull spawns with.</summary>
+    public int Count { get; set; }
 }

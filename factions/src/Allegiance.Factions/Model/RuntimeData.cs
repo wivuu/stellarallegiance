@@ -70,6 +70,8 @@ public enum RuntimeWeaponKind : byte
 {
     Bolt,
     Missile,
+    Mine,
+    Chaff,
 }
 
 /// <summary>

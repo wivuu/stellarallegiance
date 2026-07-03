@@ -66,11 +66,21 @@ public partial class GameNetClient : Node
     // wherever _rows resets (reconnect / world rebuild / voluntary leave).
     private readonly Dictionary<ulong, Missile> _missileRows = new();
 
+    // Last-decoded minefield per fieldId (from MsgMinefields). Maintained by ApplyMinefields /
+    // ApplyMineGone. Cleared wherever _missileRows resets (reconnect / world rebuild / leave).
+    private readonly Dictionary<ulong, Minefield> _minefieldRows = new();
+
     // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
     // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
     public IReadOnlyDictionary<ulong, Missile> MissileRows => _missileRows;
     public byte LocalMissileAmmo { get; private set; }
     public byte LocalLockState { get; private set; } // bit7 = locked, bits0-6 = lock progress 0..100
+
+    // The local ship's authoritative chaff/mine dispenser ammo + being-locked threat state, decoded
+    // from its snapshot ShipRecord (not predicted). Read by the HUD (WeaponsPanel / TargetMarkers).
+    public byte LocalChaffAmmo { get; private set; }
+    public byte LocalMineAmmo { get; private set; }
+    public byte LocalThreatLock { get; private set; } // 0 none, 1 being locked, 2 locked
 
     // Optional connect credentials. Secret = shared-secret password (env SIM_SECRET, empty =
     // open server); name labels the lobby roster (env PILOT_NAME).
@@ -142,6 +152,7 @@ public partial class GameNetClient : Node
         LocalShipId = 0;
         _rows.Clear();
         _missileRows.Clear();
+        _minefieldRows.Clear();
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         GD.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
@@ -181,6 +192,7 @@ public partial class GameNetClient : Node
         _worldLoaded = false;
         _rows.Clear();
         _missileRows.Clear();
+        _minefieldRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -215,6 +227,7 @@ public partial class GameNetClient : Node
         _worldLoaded = false;
         _rows.Clear();
         _missileRows.Clear();
+        _minefieldRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -231,6 +244,7 @@ public partial class GameNetClient : Node
         LocalShipId = 0;
         _rows.Clear();
         _missileRows.Clear();
+        _minefieldRows.Clear();
         _world.Reset();
     }
 
@@ -263,10 +277,24 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
-    // Request to spawn the chosen class (honored server-side only while a match is Active).
-    public void RequestSpawn(byte shipClass)
+    // Request to spawn the chosen class with a consumable hold (honored server-side only while a
+    // match is Active). Wire: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)]; a bare [4][cls]
+    // (empty cargo) makes the server seed the hull's default hold.
+    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null)
     {
-        _tx.Writer.TryWrite(new byte[] { 4, shipClass }); // MsgSpawn
+        cargo ??= Array.Empty<(uint, byte)>();
+        var f = new byte[3 + cargo.Length * 5];
+        int o = 0;
+        f[o++] = 4; // MsgSpawn
+        f[o++] = shipClass;
+        f[o++] = (byte)cargo.Length;
+        foreach (var (cargoId, count) in cargo)
+        {
+            BitConverter.TryWriteBytes(f.AsSpan(o), cargoId);
+            o += 4;
+            f[o++] = count;
+        }
+        _tx.Writer.TryWrite(f);
     }
 
     public void SetTeam(byte team)
@@ -301,7 +329,13 @@ public partial class GameNetClient : Node
         BitConverter.TryWriteBytes(f[17..], input.Yaw);
         BitConverter.TryWriteBytes(f[21..], input.Pitch);
         BitConverter.TryWriteBytes(f[25..], input.Roll);
-        f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0) | (input.Firing2 ? 4 : 0));
+        f[29] = (byte)(
+            (input.Firing ? 1 : 0)
+            | (input.Boost ? 2 : 0)
+            | (input.Firing2 ? 4 : 0)
+            | (input.DropChaff ? 8 : 0)
+            | (input.DropMine ? 16 : 0)
+        );
         BitConverter.TryWriteBytes(f[30..], input.LockTargetId); // u64 Tab-target for server-authoritative missile lock
         _tx.Writer.TryWrite(f.ToArray());
     }
@@ -575,6 +609,15 @@ public partial class GameNetClient : Node
             case 12:
                 ApplyMissileGone(r);
                 break;
+            case 13:
+                ApplyMinefields(r);
+                break;
+            case 14:
+                ApplyMineGone(r);
+                break;
+            case 15:
+                ApplyChaff(r);
+                break;
         }
     }
 
@@ -645,6 +688,106 @@ public partial class GameNetClient : Node
         _world.NetMissileGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
+    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). The full
+    // set for the sector is (re)sent on change + coarse keepalive, so a field that stops appearing has
+    // been removed — reconcile the cache + hand each field to the renderer to regenerate its cloud.
+    private void ApplyMinefields(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var seen = new HashSet<ulong>();
+        uint frameSector = 0;
+        bool haveSector = false;
+        for (int i = 0; i < count; i++)
+        {
+            ulong fieldId = r.ReadUInt64();
+            uint weaponId = r.ReadUInt32();
+            byte team = r.ReadByte();
+            ushort sector = r.ReadUInt16();
+            short cx = r.ReadInt16(),
+                cy = r.ReadInt16(),
+                cz = r.ReadInt16();
+            uint seed = r.ReadUInt32();
+            uint armAt = r.ReadUInt32();
+            uint expireAt = r.ReadUInt32();
+            ulong aliveMask = r.ReadUInt64();
+
+            var row = new Minefield
+            {
+                FieldId = fieldId,
+                WeaponId = weaponId,
+                Team = team,
+                SectorId = sector,
+                CenterX = WireQuant.UnpackPos(cx),
+                CenterY = WireQuant.UnpackPos(cy),
+                CenterZ = WireQuant.UnpackPos(cz),
+                Seed = seed,
+                ArmAtTick = armAt,
+                ExpireAtTick = expireAt,
+                AliveMask = aliveMask,
+            };
+            _minefieldRows[fieldId] = row;
+            seen.Add(fieldId);
+            frameSector = sector;
+            haveSector = true;
+            _world.NetUpsertMinefield(row);
+        }
+
+        // Reconcile the cache: any cached field in this frame's sector the frame no longer lists has
+        // expired/been cleared — drop it from the cache. (When the frame is empty we can't know its
+        // sector, so this only prunes when the frame carried at least one field.) The renderer's
+        // MinefieldViews frees its own nodes on expiry/reconcile — no separate removal delegate.
+        if (haveSector)
+        {
+            List<ulong>? gone = null;
+            foreach (var kv in _minefieldRows)
+                if (kv.Value.SectorId == frameSector && !seen.Contains(kv.Key))
+                    (gone ??= new()).Add(kv.Key);
+            if (gone is not null)
+                foreach (var id in gone)
+                    _minefieldRows.Remove(id);
+        }
+    }
+
+    // A single mine popped (mirrors Protocol.BuildMineGone): reconcile the field's aliveMask and let
+    // the renderer play the pop FX at the reported position.
+    private void ApplyMineGone(BinaryReader r)
+    {
+        ulong fieldId = r.ReadUInt64();
+        byte mineIndex = r.ReadByte();
+        byte reason = r.ReadByte();
+        ushort sector = r.ReadUInt16();
+        short px = r.ReadInt16(),
+            py = r.ReadInt16(),
+            pz = r.ReadInt16();
+        if (_minefieldRows.TryGetValue(fieldId, out var mf))
+            mf.AliveMask &= ~(1UL << mineIndex);
+        _world.NetMineGone(fieldId, mineIndex, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
+    }
+
+    // A one-shot chaff spawn (mirrors Protocol.BuildChaff): the renderer animates the puff and ages
+    // it out locally from the weapon's ProjectileLifeTicks — there is no gone-message (D2).
+    private void ApplyChaff(BinaryReader r)
+    {
+        ulong id = r.ReadUInt64();
+        byte team = r.ReadByte();
+        ushort sector = r.ReadUInt16();
+        short px = r.ReadInt16(),
+            py = r.ReadInt16(),
+            pz = r.ReadInt16();
+        ushort vx = r.ReadUInt16(),
+            vy = r.ReadUInt16(),
+            vz = r.ReadUInt16();
+        uint weaponId = r.ReadUInt32();
+        _world.NetSpawnChaff(
+            id,
+            team,
+            sector,
+            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)),
+            new Vec3(WireQuant.UnpackHalf(vx), WireQuant.UnpackHalf(vy), WireQuant.UnpackHalf(vz)),
+            weaponId
+        );
+    }
+
     // Per-team economy (credits/score), mirrors Protocol.BuildTeamState. Low-rate — the renderer
     // holds the latest snapshot for the HUD and the chat slash-commands to read.
     private void ApplyTeamState(BinaryReader r)
@@ -707,6 +850,7 @@ public partial class GameNetClient : Node
         {
             _world.Reset();
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
+            _minefieldRows.Clear();
         }
         _worldLoaded = true;
 
@@ -824,6 +968,11 @@ public partial class GameNetClient : Node
             d.PayloadCapacity = r.ReadSingle();
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
+            // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
+            byte cargoN = r.ReadByte();
+            d.DefaultCargo = new List<CargoLoadDef>(cargoN);
+            for (int c = 0; c < cargoN; c++)
+                d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
             ships.Add(d);
         }
 
@@ -859,6 +1008,15 @@ public partial class GameNetClient : Node
                     TrailLifetime = r.ReadSingle(),
                     TrailScale = r.ReadSingle(),
                     TrailColor = r.ReadUInt32(),
+                    // Chaff / mine dispenser block (mirror of Protocol.BuildDefs, exact field order).
+                    ChaffResistance = r.ReadSingle(),
+                    ChaffStrength = r.ReadSingle(),
+                    DecoyRadius = r.ReadSingle(),
+                    MineCloudRadius = r.ReadSingle(),
+                    MineCloudCount = r.ReadByte(),
+                    MineArmTicks = r.ReadUInt32(),
+                    MineTriggerRadius = r.ReadSingle(),
+                    CargoId = r.ReadUInt32(),
                 }
             );
 
@@ -970,6 +1128,10 @@ public partial class GameNetClient : Node
             uint lastFire = r.ReadUInt32();
             byte missileAmmo = r.ReadByte();
             byte lockState = r.ReadByte();
+            byte chaffAmmo = r.ReadByte();
+            byte mineAmmo = r.ReadByte();
+            // Being-locked threat from the flags byte (ShipFlagLockingMe=4, ShipFlagLockedMe=8).
+            byte threatLock = (byte)((flags & 8) != 0 ? 2 : (flags & 4) != 0 ? 1 : 0);
 
             _rows.TryGetValue(id, out var prev);
             var row = new Ship
@@ -979,6 +1141,9 @@ public partial class GameNetClient : Node
                 Class = (ShipClass)cls,
                 IsPig = (flags & 1) != 0,
                 IsPod = (flags & 2) != 0,
+                ChaffAmmo = chaffAmmo,
+                MineAmmo = mineAmmo,
+                ThreatLock = threatLock,
                 SectorId = sector,
             };
             row.PosX = WireQuant.UnpackPos(px);
@@ -1002,11 +1167,14 @@ public partial class GameNetClient : Node
             row.LastFireTick = lastFire;
             row.MissileAmmo = missileAmmo;
             row.LockState = lockState;
-            // Surface the LOCAL ship's authoritative missile ammo + lock state for the HUD.
+            // Surface the LOCAL ship's authoritative missile/chaff/mine ammo + lock/threat state for the HUD.
             if (id == LocalShipId)
             {
                 LocalMissileAmmo = missileAmmo;
                 LocalLockState = lockState;
+                LocalChaffAmmo = chaffAmmo;
+                LocalMineAmmo = mineAmmo;
+                LocalThreatLock = threatLock;
             }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
             // seeds from), so a YAML-overridden mass matches server authority. No compile-time

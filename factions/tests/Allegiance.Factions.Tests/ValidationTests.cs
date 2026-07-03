@@ -213,24 +213,138 @@ public class ValidationTests
         Assert.True(result.IsValid, string.Join("\n", result.Errors));
     }
 
-    // A launcher carrying a weapon-id projects to a missile-kind WeaponDef, so its expendable MUST be
-    // a Missile — pointing it at a mine/chaff/probe is a boot-refusing authoring error.
+    // A launcher carrying a weapon-id projects to a Missile / Mine / Chaff WeaponDef dispatched off
+    // its expendable — pointing it at a Probe (no projected weapon kind) is a boot-refusing error.
     [Fact]
-    public void LauncherPointingAtNonMissileExpendable_IsReported()
+    public void LauncherPointingAtProbeExpendable_IsReported()
     {
         var core = new Core
         {
-            Mines = { new Mine { Id = "mine1", Name = "Mine", Lifespan = 60 } },
+            Probes = { new Probe { Id = "probe1", Name = "Probe" } },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "mine1" },
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "probe1" },
             },
         };
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile") && e.Contains("rack"));
+        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile, mine, or chaff") && e.Contains("rack"));
+    }
+
+    // A mine dispenser (launcher → Mine) with a bad cloud-count must refuse boot.
+    [Fact]
+    public void MineDispenserWithBadCloudCount_IsReported()
+    {
+        var mine = ValidMine();
+        mine.CloudCount = 0; // must be 1..64
+        var core = new Core
+        {
+            Mines = { mine },
+            Launchers =
+            {
+                new Launcher { Id = "mine-rack", Name = "Mine Rack", WeaponId = 7, Amount = 4, FireIntervalTicks = 100, ExpendableId = "proximity-mine" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("cloud-count") && e.Contains("mine-rack"));
+    }
+
+    // A correctly-authored mine dispenser passes clean (guards against a false-positive rule).
+    [Fact]
+    public void CorrectlyAuthoredMineDispenser_IsValid()
+    {
+        var core = new Core
+        {
+            Mines = { ValidMine() },
+            Launchers =
+            {
+                new Launcher { Id = "mine-rack", Name = "Mine Rack", WeaponId = 7, Amount = 4, FireIntervalTicks = 100, ExpendableId = "proximity-mine" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("mine-rack"));
+    }
+
+    // A chaff launcher (launcher → Chaff) with zero chaff-strength must refuse boot.
+    [Fact]
+    public void ChaffLauncherWithZeroStrength_IsReported()
+    {
+        var chaff = ValidChaff();
+        chaff.ChaffStrength = 0;
+        var core = new Core
+        {
+            Chaffs = { chaff },
+            Launchers =
+            {
+                new Launcher { Id = "chaff-rack", Name = "Chaff Rack", WeaponId = 6, Amount = 1, FireIntervalTicks = 40, ExpendableId = "sensor-decoy" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("chaff-strength") && e.Contains("chaff-rack"));
+    }
+
+    // A hull default-cargo entry pointing at an unknown expendable is dangling data — refuse boot.
+    [Fact]
+    public void DanglingDefaultCargoItem_IsReported()
+    {
+        var core = new Core
+        {
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "fighter",
+                    Name = "Fighter",
+                    ClassId = 1,
+                    PayloadCapacity = 20,
+                    DefaultCargo = { new CargoLoad { Item = "does-not-exist", Count = 2 } },
+                },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("default-cargo") && e.Contains("does-not-exist"));
+    }
+
+    // A hull whose weapon mass + default-cargo mass together overflow payload-capacity is
+    // overburdened just as if its weapons alone were — refuse boot.
+    [Fact]
+    public void OverburdenedDefaultCargo_IsReported()
+    {
+        var core = new Core
+        {
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "fighter",
+                    Name = "Fighter",
+                    ClassId = 1,
+                    PayloadCapacity = 12,
+                    Hardpoints = { new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 0, WeaponId = 1 } },
+                    DefaultCargo = { new CargoLoad { Item = "sensor-decoy", Count = 3 } }, // gun 5 + 3×3 = 14 > 12
+                },
+            },
+            Weapons = { new Weapon { Id = "cannon", Name = "Cannon", WeaponId = 1, Mass = 5 } },
+            Chaffs = { ValidChaff() },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("payload-capacity") && e.Contains("fighter"));
     }
 
     // A launcher with an empty magazine (amount 0) is dead data — refuse boot.
@@ -370,6 +484,36 @@ public class ValidationTests
             BlastPower = 30,
             BlastRadius = 25,
             DirectHitMultiplier = 1.5,
+        };
+
+    // A mine with all the field/blast stats the dispenser projection needs (positive, arm < life).
+    private static Mine ValidMine(string id = "proximity-mine") =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            CargoId = 2,
+            Mass = 6,
+            Lifespan = 60,
+            Radius = 30,
+            Power = 25,
+            BlastRadius = 40,
+            CloudRadius = 80,
+            CloudCount = 8,
+            ArmDelay = 2,
+        };
+
+    // A chaff with the decoy stats the launcher projection needs (positive strength/decoy/life).
+    private static Chaff ValidChaff(string id = "sensor-decoy") =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            CargoId = 3,
+            Mass = 3,
+            Lifespan = 10,
+            ChaffStrength = 1,
+            DecoyRadius = 60,
         };
 
     private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>

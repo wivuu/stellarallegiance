@@ -65,6 +65,9 @@ hulls:
       - { kind: weapon, index: 2, off-y: -0.6, off-z: 2, dir-z: 1, weapon-id: 3 }
       - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
       - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
+    # Default hold: twin cannons 2x5 + seeker rack 4 = 14, + 2x sensor-decoy (3) = 20 == capacity.
+    default-cargo:
+      - { item: sensor-decoy, count: 2 }
 
   # Interceptor (stub — no model/class-id yet): the dock-only booster hull. Uncomment + assign
   # class-id when the hull lands.
@@ -103,6 +106,10 @@ hulls:
       - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 5 }
       - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
       - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
+    # Default hold: cannon 11 + torpedo rack 4 = 15, + proximity-mine (6) + sensor-decoy (3) = 24 <= 26.
+    default-cargo:
+      - { item: proximity-mine, count: 1 }
+      - { item: sensor-decoy, count: 1 }
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod

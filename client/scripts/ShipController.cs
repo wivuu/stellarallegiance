@@ -107,6 +107,8 @@ public partial class ShipController : Node
         && a.Firing == b.Firing
         && a.Boost == b.Boost
         && a.Firing2 == b.Firing2
+        && a.DropChaff == b.DropChaff
+        && a.DropMine == b.DropMine
         && a.LockTargetId == b.LockTargetId;
 
     private bool _autoFly;
@@ -274,8 +276,9 @@ public partial class ShipController : Node
             if (gate == WorldRenderer.SpawnGate.Allow)
             {
                 // Spawn on the authoritative sim server (honored only while the match is Active;
-                // the request simply retries until then).
-                _net?.RequestSpawn((byte)cls);
+                // the request simply retries until then), carrying the hangar's chosen consumable
+                // hold for this class (server validates + falls back to the hull default if invalid).
+                _net?.RequestSpawn((byte)cls, LoadoutState.Shared.CargoFor((byte)cls));
                 _spawnPending = true;
                 _spawnRetry = 1.0;
                 SpawnHint = null;
@@ -327,6 +330,8 @@ public partial class ShipController : Node
         {
             _input.Firing = false;
             _input.Firing2 = false;
+            _input.DropChaff = false;
+            _input.DropMine = false;
         }
 
         UpdateAdaptiveLead();
@@ -530,6 +535,11 @@ public partial class ShipController : Node
             // capture gate the LMB primary uses so a right-click on a menu never launches. The
             // lock target is whatever TargetMarkers has Tab-focused (0 = none; server needs a lock).
             Firing2 = Input.IsPhysicalKeyPressed(Key.F) || (look && Input.IsMouseButtonPressed(MouseButton.Right)),
+            // Dispensers: C ejects chaff, B lays a mine field. Held-input replay re-fires the flag,
+            // so the SERVER's cadence gate is the debounce — we do NOT client-edge-detect (that would
+            // desync from the authoritative cadence).
+            DropChaff = Input.IsPhysicalKeyPressed(Key.C),
+            DropMine = Input.IsPhysicalKeyPressed(Key.B),
             LockTargetId = TargetMarkers.FocusedId,
         };
     }

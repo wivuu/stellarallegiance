@@ -86,6 +86,10 @@ namespace StellarAllegiance.Shared
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
+
+        // Default consumable hold this hull spawns with (authored order). The hangar seeds its
+        // stepper counts from this; MsgSpawn rides the chosen counts back to the server.
+        public List<CargoLoadDef> DefaultCargo = new();
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -93,6 +97,8 @@ namespace StellarAllegiance.Shared
     {
         Bolt, // instant analytic ray-cast bolt
         Missile, // guided homing missile (projected from a Launcher + its missile expendable)
+        Mine, // proximity mine dispenser (projected from a Launcher + its mine expendable)
+        Chaff, // sensor-decoy dispenser (projected from a Launcher + its chaff expendable)
     }
 
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
@@ -131,6 +137,26 @@ namespace StellarAllegiance.Shared
         public float TrailLifetime; // client smoke-trail plume lifetime, s
         public float TrailScale; // client smoke-trail plume size scale
         public uint TrailColor; // client smoke-trail tint, 0xRRGGBBAA
+
+        // --- Chaff / Mine dispenser fields (all zero for Bolt/Missile weapons) ---
+        // Appended AFTER TrailColor and streamed last in BuildDefs so the missile-kind block above
+        // stays byte-stable. Omit-when-default on the library side keeps sample-data unaffected.
+        public float ChaffResistance; // missile: how strongly it shrugs off chaff (vs chaff ChaffStrength)
+        public float ChaffStrength; // chaff: how strongly this puff decoys a missile lock
+        public float DecoyRadius; // chaff: u radius within which a missile can be decoyed onto this puff
+        public float MineCloudRadius; // mine: u radius the field scatters its cloud of mines within
+        public byte MineCloudCount; // mine: mines scattered per deploy (<= 64, seed-based aliveMask)
+        public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
+        public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
+        public uint CargoId; // dispenser: the cargo item (Chaff/Mine expendable) this launcher consumes
+    }
+
+    // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
+    // Hull.default-cargo list, streamed after each ship's hardpoints (Protocol.BuildDefs).
+    public struct CargoLoadDef
+    {
+        public uint CargoId;
+        public byte Count;
     }
 
     // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).

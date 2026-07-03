@@ -19,9 +19,7 @@ missiles:
   - id: seeker-missile
     name: Seeker Missile
     description: Lock-on ordnance. Fired from the hold.
-    cargo-id: 1
     mass: 4
-    glyph: "➤"
     lifespan: 8
     initial-speed: 90
     acceleration: 40
@@ -30,6 +28,7 @@ missiles:
     lock-time: 2.0      # seconds in-cone to lock
     lock-angle: 0.5     # lock cone half-angle, radians
     max-lock: 1200      # lock range, u
+    chaff-resistance: 1.0  # baseline: shrugs off a lone chaff puff about half the time
     power: 45
     width: 1            # proximity-fuse margin
     direct-hit-multiplier: 1.5
@@ -53,6 +52,7 @@ missiles:
     lock-time: 1.0
     lock-angle: 0.4
     max-lock: 1000
+    chaff-resistance: 0.5  # a cheap harasser is easily decoyed
     power: 18
     width: 2
     direct-hit-multiplier: 1.25
@@ -76,6 +76,7 @@ missiles:
     lock-time: 3.0
     lock-angle: 0.35
     max-lock: 1500
+    chaff-resistance: 2.5  # heavy siege guidance barely notices chaff
     power: 200
     width: 1             # minimal fuse margin — vs the base it's ignored anyway (exact hull contact)
     direct-hit-multiplier: 1.0
@@ -88,13 +89,22 @@ missiles:
     trail-color: "ff9060ff"
 
 mines:
+  # Deployed as a FIELD: one drop scatters cloud-count mines within cloud-radius behind the ship;
+  # each arms after arm-delay, then triggers any enemy within radius (proximity) for a power blast
+  # that splashes out to blast-radius. lifespan bounds the whole field.
   - id: proximity-mine
     name: Proximity Mine
     description: Dropped behind the ship; arms after 2s.
     cargo-id: 2
     mass: 6
     glyph: "◈"
-    lifespan: 60
+    lifespan: 60         # field lifetime, s
+    radius: 30           # per-mine proximity trigger radius, u
+    power: 25            # per-mine detonation power (direct + splash source)
+    blast-radius: 40     # per-mine splash cutoff, u
+    cloud-radius: 80     # radius the field scatters its mines within, u
+    cloud-count: 8       # mines scattered per deploy (<= 64)
+    arm-delay: 2.0       # seconds before the field arms
 
 chaffs:
   - id: sensor-decoy
@@ -103,4 +113,6 @@ chaffs:
     cargo-id: 3
     mass: 3
     glyph: "◇"
-    lifespan: 10
+    lifespan: 10         # puff lifetime, s
+    chaff-strength: 1.0  # decoy strength vs a missile's chaff-resistance
+    decoy-radius: 60     # u within which a missile can be lured onto this puff

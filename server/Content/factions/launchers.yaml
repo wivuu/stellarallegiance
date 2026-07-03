@@ -32,3 +32,26 @@ launchers:
     weapon-id: 5
     fire-interval-ticks: 60
     required-capabilities: [base]
+
+  # Chaff / mine dispensers. Unlike the racks above these are NOT mounted on a hull hardpoint —
+  # they project to Chaff/Mine-kind WeaponDefs the sim resolves from a ship's spawn cargo via the
+  # dispensed expendable's cargo-id (D8). mass 0: the payload cost is the carried consumables, not
+  # the dispenser. amount is a nominal magazine; the real ammo is the cargo count chosen in the hangar.
+  - id: decoy-dispenser
+    name: Decoy Dispenser
+    slot: chaff-launcher
+    mass: 0
+    amount: 1
+    expendable-id: sensor-decoy
+    weapon-id: 6
+    fire-interval-ticks: 40
+    required-capabilities: [base]
+  - id: mine-dispenser
+    name: Mine Dispenser
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: proximity-mine
+    weapon-id: 7
+    fire-interval-ticks: 100
+    required-capabilities: [base]

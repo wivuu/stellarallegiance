@@ -176,6 +176,18 @@
         "supremacy-allowed"
       ]
     },
+    "CargoLoad": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        }
+      }
+    },
     "Chaff": {
       "type": "object",
       "additionalProperties": false,
@@ -190,6 +202,9 @@
           "type": "integer"
         },
         "chaff-strength": {
+          "type": "number"
+        },
+        "decoy-radius": {
           "type": "number"
         },
         "defense-type": {
@@ -755,6 +770,12 @@
         "class-id": {
           "type": "integer"
         },
+        "default-cargo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CargoLoad"
+          }
+        },
         "defense-type": {
           "type": "string"
         },
@@ -1004,8 +1025,20 @@
             "$ref": "#/$defs/ExpendableAbility"
           }
         },
+        "arm-delay": {
+          "type": "number"
+        },
+        "blast-radius": {
+          "type": "number"
+        },
         "cargo-id": {
           "type": "integer"
+        },
+        "cloud-count": {
+          "type": "integer"
+        },
+        "cloud-radius": {
+          "type": "number"
         },
         "damage-type": {
           "type": "string"
@@ -1074,8 +1107,7 @@
           "type": "number"
         },
         "can-damage-base": {
-          "type": "boolean",
-          "description": "True if this missile's warhead applies damage to bases (station siege ordnance)."
+          "type": "boolean"
         },
         "cargo-id": {
           "type": "integer"
@@ -1291,7 +1323,9 @@
       "type": "string",
       "enum": [
         "bolt",
-        "missile"
+        "missile",
+        "mine",
+        "chaff"
       ]
     },
     "Shield": {
@@ -1566,8 +1600,7 @@
           "type": "number"
         },
         "can-damage-base": {
-          "type": "boolean",
-          "description": "True if this weapon's shots/warheads apply damage to bases (station siege ordnance)."
+          "type": "boolean"
         },
         "description": {
           "type": "string"

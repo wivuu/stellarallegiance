@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 17;
+    public const byte Version = 18;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -32,11 +32,15 @@ public static class Protocol
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 51;
+    public const int ShipRecordSize = 53;
 
     // Fixed serialized size of one in-flight guided-missile record (see WriteMissile). The hub
     // strides a second per-tick scratch by this, mirroring the ship-record scratch.
     public const int MissileRecordSize = 35;
+
+    // Fixed serialized size of one minefield record (see WriteMinefield). The hub assembles a
+    // MsgMinefields frame as [13][u8 count] + count x MinefieldRecordSize.
+    public const int MinefieldRecordSize = 41;
 
     // client -> server
     // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
@@ -67,14 +71,21 @@ public static class Protocol
     public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
+    public const byte MsgMinefields = 13; // u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change + coarse keepalive)
+    public const byte MsgMineGone = 14; // u64 fieldId, u8 mineIndex, u8 reason, u16 sector, 3x i16 pos — per-mine pop FX
+    public const byte MsgChaff = 15; // u64 id, u8 team, u16 sector, 3x i16 pos, 3x f16 vel, u32 weaponId — one-shot chaff spawn broadcast
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
     public const byte FlagFiring2 = 4; // secondary fire (missile launch)
+    public const byte FlagDropChaff = 8; // eject a chaff puff (dispenser cadence-gated server-side)
+    public const byte FlagDropMine = 16; // deploy a mine field (dispenser cadence-gated server-side)
 
     // ShipRecord flags byte (server->client): how the client should render/classify the ship.
     public const byte ShipFlagPig = 1; // AI combat drone — HUD highlight, never predicted
     public const byte ShipFlagPod = 2; // escape pod — pod mesh, smaller/weaker
+    public const byte ShipFlagLockingMe = 4; // a missile-armed enemy is locking THIS ship (ThreatLockState >= 1)
+    public const byte ShipFlagLockedMe = 8; // that lock completed — a launch can come any moment (ThreatLockState == 2)
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -89,6 +100,9 @@ public static class Protocol
     //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health
     //   u32 lastInputTick | u32 lastFireTick
     //   u8 missileAmmo | u8 lockState (bit7 = locked, bits0-6 = lock progress 0..100)
+    //   u8 chaffAmmo | u8 mineAmmo
+    // Flags byte also carries the being-locked threat bits (ShipFlagLockingMe/LockedMe) from
+    // ShipSim.ThreatLockState — the target always gets its own record, so it costs no AOI work.
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
     {
         byte flags = 0;
@@ -96,6 +110,10 @@ public static class Protocol
             flags |= ShipFlagPig;
         if (s.IsPod)
             flags |= ShipFlagPod;
+        if (s.ThreatLockState >= 1)
+            flags |= ShipFlagLockingMe;
+        if (s.ThreatLockState >= 2)
+            flags |= ShipFlagLockedMe;
 
         int o = 0;
         BitConverter.TryWriteBytes(dst.Slice(o), s.ShipId);
@@ -146,7 +164,9 @@ public static class Protocol
         o += 4;
         dst[o++] = s.MissileAmmo;
         dst[o++] = s.LockState; // bit7 = locked, bits0-6 = lock progress 0..100 (computed sim-side)
-        // o == ShipRecordSize (51)
+        dst[o++] = s.ChaffAmmo;
+        dst[o++] = s.MineAmmo;
+        // o == ShipRecordSize (53)
     }
 
     // Serialize one in-flight missile record (exactly MissileRecordSize bytes) into dst. Layout:
@@ -198,6 +218,89 @@ public static class Protocol
         BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Z));
         o += 2;
         return buf;
+    }
+
+    // One-shot chaff spawn broadcast (28 bytes): the client animates the puff and expires it locally
+    // from the weapon's ProjectileLifeTicks — there is no gone-message (D2). Same bytes to every
+    // client that can see it. Layout: [15][u64 id][u8 team][u16 sector][3x i16 pos][3x f16 vel][u32 weaponId].
+    public static byte[] BuildChaff(Simulation.ChaffSim c)
+    {
+        var buf = new byte[28];
+        buf[0] = MsgChaff;
+        int o = 1;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), c.ChaffId);
+        o += 8;
+        buf[o++] = c.Team;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)c.SectorId);
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(c.Pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(c.Pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(c.Pos.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackHalf(c.Vel.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackHalf(c.Vel.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackHalf(c.Vel.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), c.WeaponId);
+        o += 4;
+        return buf; // o == 28
+    }
+
+    // A single mine popped (19 bytes): drives the client's per-mine pop FX + aliveMask reconcile.
+    // Layout: [14][u64 fieldId][u8 mineIndex][u8 reason][u16 sector][3x i16 pos].
+    public static byte[] BuildMineGone(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos)
+    {
+        var buf = new byte[19];
+        buf[0] = MsgMineGone;
+        int o = 1;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), fieldId);
+        o += 8;
+        buf[o++] = mineIndex;
+        buf[o++] = reason;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)sector);
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Z));
+        o += 2;
+        return buf; // o == 19
+    }
+
+    // Serialize one minefield record (exactly MinefieldRecordSize bytes) into dst. The client
+    // regenerates the mine cloud offsets from Seed (shared MinefieldLayout) + this Center; AliveMask
+    // (CloudCount capped at 64) self-heals a missed MsgMineGone. Layout: u64 fieldId | u32 weaponId |
+    // u8 team | u16 sector | 3x i16 center | u32 seed | u32 armAtTick | u32 expireAtTick | u64 aliveMask.
+    public static void WriteMinefield(Span<byte> dst, Simulation.MineFieldSim f)
+    {
+        int o = 0;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.FieldId);
+        o += 8;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.WeaponId);
+        o += 4;
+        dst[o++] = f.Team;
+        BitConverter.TryWriteBytes(dst.Slice(o), (ushort)f.SectorId);
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(f.Center.X));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(f.Center.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(f.Center.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.Seed);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.ArmAtTick);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.ExpireAtTick);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), f.AliveMask);
+        o += 8;
+        // o == MinefieldRecordSize (41)
     }
 
     public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick, byte[] reconnectToken)
@@ -399,6 +502,13 @@ public static class Protocol
             w.Write(s.PayloadCapacity);
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
+            // Default consumable hold (authored order): u8 count, then n x (u32 cargoId, u8 count).
+            w.Write((byte)s.DefaultCargo.Count);
+            foreach (var c in s.DefaultCargo)
+            {
+                w.Write(c.CargoId);
+                w.Write(c.Count);
+            }
         }
 
         var weapons = content.Weapons;
@@ -431,6 +541,15 @@ public static class Protocol
             w.Write(wp.TrailLifetime);
             w.Write(wp.TrailScale);
             w.Write(wp.TrailColor);
+            // Chaff / mine dispenser block (zero for Bolt/Missile weapons). Reader mirrors this order.
+            w.Write(wp.ChaffResistance);
+            w.Write(wp.ChaffStrength);
+            w.Write(wp.DecoyRadius);
+            w.Write(wp.MineCloudRadius);
+            w.Write(wp.MineCloudCount);
+            w.Write(wp.MineArmTicks);
+            w.Write(wp.MineTriggerRadius);
+            w.Write(wp.CargoId);
         }
 
         var cargoItems = content.CargoItems;

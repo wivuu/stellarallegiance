@@ -26,10 +26,21 @@ namespace StellarAllegiance.Shared
         public static List<string> Validate(
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
-            IReadOnlyList<BaseDef> bases
+            IReadOnlyList<BaseDef> bases,
+            IReadOnlyList<CargoItemDef>? cargoItems = null
         )
         {
             var errors = new List<string>();
+
+            // Cargo items a dispenser-kind weapon / a hull default-cargo entry can reference.
+            var cargoIds = new HashSet<uint>();
+            var cargoById = new Dictionary<uint, CargoItemDef>();
+            if (cargoItems is not null)
+                foreach (var c in cargoItems)
+                {
+                    cargoIds.Add(c.CargoId);
+                    cargoById[c.CargoId] = c;
+                }
 
             var weaponIds = new HashSet<uint>();
             var weaponsById = new Dictionary<uint, WeaponDef>();
@@ -62,6 +73,40 @@ namespace StellarAllegiance.Shared
                     if (w.DirectHitMult <= 0f)
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}");
                 }
+                else if (w.Kind == WeaponKind.Mine)
+                {
+                    // Mine-kind dispenser: the field/blast/arming block must be live, and it must link
+                    // to a stockable cargo item (the mine expendable it consumes).
+                    if (w.MineCloudCount < 1 || w.MineCloudCount > 64)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64");
+                    if (w.MineCloudRadius <= 0f)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}");
+                    if (w.MineTriggerRadius <= 0f)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineTriggerRadius {w.MineTriggerRadius}");
+                    if (w.BlastRadius <= 0f)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
+                    if (w.BlastPower <= 0f)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
+                    if (w.ProjectileLifeTicks == 0)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — never lives");
+                    if (w.MineArmTicks >= w.ProjectileLifeTicks)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms");
+                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+                }
+                else if (w.Kind == WeaponKind.Chaff)
+                {
+                    // Chaff-kind dispenser: decoy strength/radius/life must be live, and it must link
+                    // to a stockable cargo item (the chaff expendable it consumes).
+                    if (w.ChaffStrength <= 0f)
+                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}");
+                    if (w.DecoyRadius <= 0f)
+                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
+                    if (w.ProjectileLifeTicks == 0)
+                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+                }
             }
 
             var classIds = new HashSet<byte>();
@@ -74,7 +119,7 @@ namespace StellarAllegiance.Shared
                     errors.Add($"class \"{d.Name}\" ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
 
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
-                ValidatePayload(d, weaponsById, errors);
+                ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
                 ValidateFuel(d, errors);
             }
 
@@ -102,6 +147,8 @@ namespace StellarAllegiance.Shared
         private static void ValidatePayload(
             ShipClassDef ship,
             Dictionary<uint, WeaponDef> weaponsById,
+            Dictionary<uint, CargoItemDef> cargoById,
+            bool haveCargo,
             List<string> errors
         )
         {
@@ -111,6 +158,16 @@ namespace StellarAllegiance.Shared
             foreach (var h in ship.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon && weaponsById.TryGetValue(h.WeaponId, out var w))
                     used += w.Mass;
+            // Default consumable hold: each entry must resolve to a streamed cargo item, and its mass
+            // counts against the same budget as mounted weapons (the hangar seeds these counts).
+            if (ship.DefaultCargo is not null)
+                foreach (var load in ship.DefaultCargo)
+                {
+                    if (cargoById.TryGetValue(load.CargoId, out var item))
+                        used += load.Count * item.Mass;
+                    else if (haveCargo)
+                        errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default cargo id {load.CargoId} resolves to no cargo item");
+                }
             if (used > ship.PayloadCapacity)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
         }
