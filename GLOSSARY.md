@@ -71,14 +71,48 @@ Guidance system that locks onto and tracks targets; disrupted by chaff clouds.
 - **Notes:** ResolveSeekerTarget checks chaff clouds; seekers can be spoofed
 
 ### Chaff
-Expendable countermeasure that disperses into a cloud, substitutes as missile target.
+Expendable sensor-decoy puff a ship ejects (key `C`); a seeker rolls a stateless hash
+(`ChaffStrength` vs the missile's `ChaffResistance`) to break its lock and home on the puff.
 - **Frequency:** Common
 - **Key Files:**
-  - `factions/src/Allegiance.Factions/Model/Expendables/Chaff.cs` — chaff model
-  - `server/Sim/Simulation.cs` — chaff cloud collision and seeker substitution
-  - `client/scripts/ProjectileView.cs` — chaff particle rendering
-- **Related:** [[Missile]], [[Seeker]], [[Expendables]]
-- **Notes:** Proto v15 seams: chaff in its own message stride, seeker substitution in ResolveSeekerTarget
+  - `factions/src/Allegiance.Factions/Model/Expendables/Chaff.cs` — chaff model (ChaffStrength, DecoyRadius)
+  - `server/Sim/Simulation.Chaff.cs` — ChaffSim + TryDropChaff/StepChaff/TryChaffAim (Track A fills)
+  - `server/Net/Protocol.cs` — `MsgChaff=15` one-shot spawn broadcast (28 B); dispenser WeaponDef (Chaff kind)
+  - `client/scripts/ChaffFx.cs` — client puff sprites (Track A fills)
+- **Related:** [[Missile]], [[Seeker]], [[Expendables]], [[Minefield]]
+- **Notes:** Proto v18: chaff is a launcher-projected `WeaponKind.Chaff` WeaponDef linked to its cargo item
+  by `CargoId`; ammo comes from spawn cargo counts, not a rack; TryChaffAim is the D5 substitution seam
+
+### Minefield
+A deployed cloud of proximity mines (key `B`): one deploy scatters `MineCloudCount` mines within
+`MineCloudRadius`, arms after `MineArmTicks`, then each triggers an enemy within `MineTriggerRadius`
+for a `BlastPower`/`BlastRadius` splash; the field depletes mine-by-mine.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Expendables/Mine.cs` — mine model (CloudRadius/CloudCount/ArmDelay/BlastRadius)
+  - `shared/MinefieldLayout.cs` — splitmix64 seed→cloud offsets, shared by sim/client/tests
+  - `server/Sim/Simulation.Mines.cs` — MineFieldSim + TryDeployMine/StepMines (Track B fills)
+  - `server/Net/Protocol.cs` — `MsgMinefields=13` (41-B seed records, per anchor sector) + `MsgMineGone=14`
+  - `client/scripts/MinefieldViews.cs` — client sprite clouds (Track B fills)
+- **Related:** [[Chaff]], [[Blast Radius]], [[Expendables]]
+- **Notes:** Proto v18: seed-based wire (client regenerates offsets); `aliveMask` (CloudCount ≤ 64) self-heals a resync
+
+### Threat Lock (being-locked warning)
+Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockState` (0 none / 1 locking /
+2 locked) rides free bits in the snapshot flags byte (`ShipFlagLockingMe=4`, `ShipFlagLockedMe=8`).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.cs` — per-tick ThreatLockState reset before Pass A; UpdateLock raises it (Track A)
+  - `client/scripts/GameNetClient.cs` — decodes flags → `Ship.ThreatLock` / `LocalThreatLock`
+- **Related:** [[Target Lock]], [[Missile]]
+
+### Dock Refund
+Voluntary dock at your own base refunds the ship's `PaidCost` to team credits (relaunch pays again →
+net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.cs` — `ShipSim.PaidCost` set in SpawnCombatShip; DockShip refunds (Track A)
+- **Related:** [[Hull]], [[Payload]]
 
 ### Blast Radius
 Damage falloff zone around explosion epicenter; damps based on distance and intervening obstacles.

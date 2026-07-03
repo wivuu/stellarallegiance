@@ -28,6 +28,10 @@ public partial class MissileView : Node3D
     // Team, kept for the impact-blast tint when the missile detonates (WorldRenderer looks it up).
     public byte Team { get; private set; }
 
+    // The launching weapon's splash radius, kept so the impact FX (ExplosionEffect.CreateBlast)
+    // scales to the warhead — a torpedo booms bigger than a seeker. 0 until the def resolved.
+    public float BlastRadius { get; private set; }
+
     // Dead-reckoned authoritative position (advanced by _vel each frame) and the last known
     // velocity. The node's own Position eases toward _targetPos.
     private Vector3 _targetPos;
@@ -41,6 +45,7 @@ public partial class MissileView : Node3D
     public void Initialize(Vector3 pos, Vector3 vel, byte team, WeaponDef? def)
     {
         Team = team;
+        BlastRadius = def?.BlastRadius ?? 0f;
         Position = pos;
         _targetPos = pos;
         _vel = vel;

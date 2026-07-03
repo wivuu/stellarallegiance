@@ -98,9 +98,12 @@ Check(
 );
 var seeker = stock.Missiles.Single(m => m.Id == "seeker-missile");
 Check(
-    seeker.CargoId == 1 && seeker.Mass == 4 && !string.IsNullOrEmpty(seeker.Glyph) && !string.IsNullOrEmpty(seeker.Description),
-    "stock seeker missile carries cargo-id + mass + glyph",
-    $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass})"
+    // The seeker lost its cargo-id/glyph (missiles aren't hangar-stocked consumables — a fighter's
+    // payload can't fit mass-4 seekers) and gained a chaff-resistance stat.
+    seeker.CargoId == null && seeker.Mass == 4 && string.IsNullOrEmpty(seeker.Glyph)
+        && seeker.ChaffResistance == 1.0 && !string.IsNullOrEmpty(seeker.Description),
+    "stock seeker missile carries mass + chaff-resistance and NO cargo-id/glyph",
+    $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass}, chaff-res {seeker.ChaffResistance}, glyph '{seeker.Glyph}')"
 );
 // Guided-missile guidance/lock block + smoke-trail runtime extension fields (projected onto the
 // missile-kind WeaponDef).
@@ -140,6 +143,36 @@ Check(
     "stock torpedo-rack carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",
     $"stock torpedo-rack wrong (weapon-id {torpedoRack.WeaponId}, amount {torpedoRack.Amount}, fire {torpedoRack.FireIntervalTicks}, expendable {torpedoRack.ExpendableId})"
 );
+// Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
+var mine = stock.Mines.Single(m => m.Id == "proximity-mine");
+Check(
+    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 20
+        && mine.CloudRadius == 15 && mine.CloudCount == 64
+        && mine.ArmDelay == 2.0 && mine.Lifespan == 60 && mine.ModelName == "acs41",
+    "stock proximity-mine carries field/blast/arming stats",
+    $"proximity-mine wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay})"
+);
+var decoy = stock.Chaffs.Single(c => c.Id == "sensor-decoy");
+Check(
+    decoy.CargoId == 3 && decoy.Mass == 3 && decoy.ChaffStrength == 1.0 && decoy.DecoyRadius == 60 && decoy.Lifespan == 3 && decoy.ModelName == "acs40",
+    "stock sensor-decoy carries chaff-strength + decoy-radius",
+    $"sensor-decoy wrong (cargo {decoy.CargoId}, strength {decoy.ChaffStrength}, decoy {decoy.DecoyRadius})"
+);
+var decoyDispenser = stock.Launchers.Single(l => l.Id == "decoy-dispenser");
+var mineDispenser = stock.Launchers.Single(l => l.Id == "mine-dispenser");
+Check(
+    decoyDispenser.WeaponId == 6 && decoyDispenser.ExpendableId == "sensor-decoy" && decoyDispenser.FireIntervalTicks == 40
+        && mineDispenser.WeaponId == 7 && mineDispenser.ExpendableId == "proximity-mine" && mineDispenser.FireIntervalTicks == 100,
+    "stock chaff/mine dispensers carry weapon-id + expendable-id + cadence",
+    $"dispensers wrong (chaff wid {decoyDispenser.WeaponId} exp {decoyDispenser.ExpendableId}, mine wid {mineDispenser.WeaponId} exp {mineDispenser.ExpendableId})"
+);
+// Fighter/bomber default-cargo (raw YAML): fighter 2x sensor-decoy; bomber 8x mine + 1x decoy.
+Check(
+    fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "sensor-decoy" && fighter.DefaultCargo[0].Count == 2,
+    "stock fighter default-cargo = 2x sensor-decoy",
+    $"fighter default-cargo wrong ({string.Join(",", fighter.DefaultCargo.Select(c => $"{c.Item}x{c.Count}"))})"
+);
+
 // The bomber's missile hardpoint (index 1) was repointed from the seeker rack (weapon-id 3) to the
 // torpedo rack (weapon-id 5) — the fighter keeps its seeker rack untouched.
 var bomberHull = stock.Hulls.Single(h => h.Id == "bomber");

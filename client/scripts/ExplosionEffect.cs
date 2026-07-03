@@ -39,6 +39,21 @@ public partial class ExplosionEffect : Node3D
             _team = team,
         };
 
+    // A warhead-scaled detonation blast (missile impact / mine pop). TRACK A scales it by
+    // blastRadius/25 (the seeker's reference radius) so a torpedo booms bigger than a seeker; the
+    // Track-0 stub reproduces today's Scout-scale visual EXACTLY regardless of radius, so the impact
+    // FX is behaviourally unchanged until Track A lands.
+    public static ExplosionEffect CreateBlast(float blastRadius, byte team) =>
+        new()
+        {
+            Name = "Explosion",
+            // Scale to the warhead: the seeker's 25 u blast is the 1.0 reference, so a wider-radius
+            // torpedo booms proportionally bigger. Clamp low so a 0-radius (splash-less) weapon still
+            // shows the small default pop, and cap high so a huge radius doesn't fill the screen.
+            _classScale = Mathf.Clamp(blastRadius / 25f, 0.6f, 3.0f),
+            _team = team,
+        };
+
     public override void _Ready()
     {
         float s = _classScale;

@@ -146,6 +146,30 @@ public sealed partial class Simulation
         public bool Locked; // LockProgress reached LockTicks — a missile may launch
         public byte LockState; // wire byte: bit7 = Locked, bits0-6 = progress 0..100 (computed in UpdateLock)
 
+        // ---- Chaff / mine dispenser state (0 on hulls carrying no matching cargo) ----
+        // Ammo comes from the validated spawn cargo (D6), NOT a rack MagazineSize; the weapon ids are
+        // the class's chaff/mine dispenser WeaponDefs (resolved at spawn). Last*Tick are the
+        // authoritative cadence gates for held-input replay (mirror LastMissileTick).
+        public byte ChaffAmmo;
+        public byte MineAmmo;
+        public uint LastChaffTick;
+        public uint LastMineTick;
+        public uint ChaffWeaponId;
+        public uint MineWeaponId;
+
+        // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
+        // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
+        public uint LastMineFxTick;
+
+        // Being-locked warning: 0 = no enemy locking me, 1 = a lock is progressing, 2 = a lock
+        // completed. Reset to 0 every tick before Pass A, raised by UpdateLock on the TARGET; the
+        // wire flags byte carries it to the client (ShipFlagLockingMe/LockedMe).
+        public byte ThreatLockState;
+
+        // Credits this ship's spawn deducted from the team (D7 dock refund). Set in SpawnCombatShip
+        // from the class Cost that TryReserveSpawn charged; 0 for PIGs/pods (they pay nothing).
+        public int PaidCost;
+
         // Tick-stamped input ring (module ShipInput buffer equivalent): an input stamped
         // for tick T is applied exactly AT tick T, so the server replays the same input
         // sequence the client predicted with — the contract client prediction relies on.
@@ -169,6 +193,10 @@ public sealed partial class Simulation
         public Vec3 Vel;
         public ulong TargetShipId; // the ship the seeker homes on (0 / invalid → coast)
         public uint ExpireAtTick; // launch tick + ProjectileLifeTicks
+
+        // Chaff substitution latch (D5): once a chaff puff wins the decoy roll, the seeker breaks its
+        // ship lock (TargetShipId=0) and homes on this puff instead. 0 = not decoyed. Track A fills.
+        public ulong DecoyChaffId;
     }
 
     // Live missiles (appended by TryFireMissile in Pass A, stepped in StepMissiles). Exposed to the
@@ -179,6 +207,23 @@ public sealed partial class Simulation
     // Missiles that detonated / expired this step, drained by the hub into MsgMissileGone frames.
     // Reason 0 = expired/coasted out, 1 = impact. Cleared at the top of Step (like DeathsThisStep).
     public readonly List<(ulong id, byte reason, uint sector, Vec3 pos)> MissileGoneThisStep = new();
+
+    // Chaff puffs ejected this step, drained by the hub into one-shot MsgChaff broadcasts (D2 — the
+    // client animates + expires them locally, so there's no gone-message). Cleared at top of Step.
+    public readonly List<ChaffSim> ChaffSpawnedThisStep = new();
+
+    // Individual mines that popped this step (triggered/expired), drained by the hub into MsgMineGone
+    // frames for per-mine pop FX + aliveMask reconcile. Reason 0 = field expired, 1 = triggered.
+    // Cleared at top of Step.
+    public readonly List<(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos)> MineGoneThisStep = new();
+
+    // Live minefields (deployed by TryDeployMine, stepped in StepMines). The hub streams the client's
+    // anchor-sector fields on change + coarse keepalive (a lethal static hazard must not AOI-pop).
+    public IReadOnlyList<MineFieldSim> Minefields => _minefields;
+
+    // Set whenever a field was added/removed or its aliveMask changed this step, so the hub sends a
+    // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
+    public bool MinefieldsChangedThisStep { get; private set; }
 
     private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage);
 
@@ -195,7 +240,7 @@ public sealed partial class Simulation
 
     // Inputs/joins from socket threads, drained by the sim thread each step.
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
-    private readonly Queue<(int clientId, byte team, byte cls)> _joinQueue = new();
+    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
     // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
     // back to the returning connection), both keyed by the connection's reconnect token.
@@ -218,8 +263,15 @@ public sealed partial class Simulation
     // across combat->pod->respawn, so the hub re-sends YouAre whenever this ship flips.
     private readonly Dictionary<int, ShipSim> _byClient = new();
 
-    // Remembered join class/team per connected client, so a respawn re-creates the same ship.
-    private readonly Dictionary<int, (byte team, byte cls)> _clientInfo = new();
+    // Remembered join class/team/cargo per connected client, so a respawn re-creates the same ship
+    // with the same validated consumable hold.
+    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo)> _clientInfo = new();
+
+    // Chaff/mine dispenser WeaponDefs keyed by the cargo id they consume (D8 — dispensers are not
+    // hardpoint-mounted; a spawn's cargo id names which dispenser its ammo feeds). Cargo item mass
+    // by id, for the spawn-time payload validation. Built once from Content in the ctor.
+    private readonly Dictionary<uint, WeaponDef> _dispenserByCargo = new();
+    private readonly Dictionary<uint, float> _cargoMass = new();
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -322,6 +374,14 @@ public sealed partial class Simulation
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
 
+        // Dispenser (chaff/mine) WeaponDefs indexed by the cargo item they consume, + cargo masses
+        // for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
+        foreach (var w in content.Weapons)
+            if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine) && w.CargoId != 0)
+                _dispenserByCargo[w.CargoId] = w;
+        foreach (var c in content.CargoItems)
+            _cargoMass[c.CargoId] = c.Mass;
+
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
         var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
         PigShotSpeed = pigShot.ProjectileSpeed;
@@ -337,11 +397,18 @@ public sealed partial class Simulation
 
     // ---- Thread-safe intake (called from socket tasks) -------------------
 
-    public void EnqueueJoin(int clientId, byte team, byte cls)
+    // Join with an explicit consumable hold (chaff/mine counts from MsgSpawn). Empty cargo ⇒ the
+    // hull's authored DefaultCargo is seeded at spawn.
+    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)
     {
         lock (_qLock)
-            _joinQueue.Enqueue((clientId, team, cls));
+            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>()));
     }
+
+    // Compat overload (no cargo): the hull's DefaultCargo is used. Kept for tests / callers that
+    // don't carry a hold.
+    public void EnqueueJoin(int clientId, byte team, byte cls) =>
+        EnqueueJoin(clientId, team, cls, System.Array.Empty<(uint, byte)>());
 
     public void EnqueueLeave(int clientId)
     {
@@ -385,6 +452,9 @@ public sealed partial class Simulation
         float dt = FlightModel.Dt;
         DeathsThisStep.Clear();
         MissileGoneThisStep.Clear();
+        ChaffSpawnedThisStep.Clear();
+        MineGoneThisStep.Clear();
+        MinefieldsChangedThisStep = false;
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
@@ -413,6 +483,11 @@ public sealed partial class Simulation
         ResolveDueShots(tick);
         RebuildShipGrid();
 
+        // Being-locked warning is recomputed from scratch each tick: clear every ship's threat
+        // state, then Pass A's UpdateLock raises it on whatever ships are currently being locked.
+        foreach (var s in _order)
+            s.ThreatLockState = 0;
+
         // Pass A: integrate + fire + warp (mirrors module Pass A). Every ship in _order is
         // live (dead ships were removed at the end of the step that killed them); PIGs are
         // server-driven, players (incl. their pods) replay their held/exact-tick input.
@@ -422,7 +497,7 @@ public sealed partial class Simulation
             var stats = StatsFor(s.Class, s.IsPod);
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
-            // Pods are unarmed — only an armed combat ship fires / locks.
+            // Pods are unarmed — only an armed combat ship fires / locks / dispenses.
             if (!s.IsPod)
             {
                 UpdateLock(s, input, tick); // missile lock timer (no-op on hulls with no rack)
@@ -430,13 +505,24 @@ public sealed partial class Simulation
                     TryFire(s, tick);
                 if (input.Firing2)
                     TryFireMissile(s, tick);
+                if (input.DropChaff)
+                    TryDropChaff(s, tick); // dispenser cadence-gated (Simulation.Chaff.cs)
+                if (input.DropMine)
+                    TryDeployMine(s, tick); // dispenser cadence-gated (Simulation.Mines.cs)
             }
             TryWarp(s);
         }
 
+        // Chaff drifts (drag + expiry) before missiles resolve their aim, so a puff ejected this
+        // tick is a candidate decoy this tick. StepMines runs after missiles (mines are static).
+        StepChaff(tick); // Simulation.Chaff.cs
+
         // Guided missiles: steer + sweep + damage, between Pass A (which may have launched some this
         // tick) and Pass C. A missile launched this tick coasts its first partial segment next tick.
         StepMissiles(tick, dt);
+
+        // Mines: expire/deplete fields + proximity-trigger armed mines against the ship grid.
+        StepMines(tick); // Simulation.Mines.cs
 
         // Pass C: enemy ship-vs-ship collisions (mass-weighted impulse, module-identical),
         // O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -537,9 +623,9 @@ public sealed partial class Simulation
         {
             while (_joinQueue.Count > 0)
             {
-                var (cid, team, cls) = _joinQueue.Dequeue();
-                // Remember the slot and spawn this very step (ProcessRespawns, tick now).
-                _clientInfo[cid] = (team, cls);
+                var (cid, team, cls, cargo) = _joinQueue.Dequeue();
+                // Remember the slot (team/cls/hold) and spawn this very step (ProcessRespawns, tick now).
+                _clientInfo[cid] = (team, cls, cargo);
                 _clientRespawn[cid] = tick;
             }
             while (_leaveQueue.Count > 0)
@@ -668,6 +754,11 @@ public sealed partial class Simulation
         foreach (var mis in _missiles)
             MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
         _missiles.Clear();
+        // Tear down chaff + minefields too (a fresh match starts with none). Flag the change so the
+        // hub streams an empty minefield frame and live clients drop any lingering field.
+        _chaff.Clear();
+        _minefields.Clear();
+        MinefieldsChangedThisStep = true;
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
@@ -693,7 +784,7 @@ public sealed partial class Simulation
 
     // Spawn a combat ship for a connected client at its team base, facing the sector center
     // and launched clear of the base sphere (mirrors the module's SpawnShip).
-    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick)
+    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo)
     {
         var s = new ShipSim
         {
@@ -709,11 +800,74 @@ public sealed partial class Simulation
         s.Health = HullFor(cls);
         if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
             s.MissileAmmo = mw.MagazineSize;
+        // D7: remember what the team paid for this hull (TryReserveSpawn just deducted it) so a
+        // voluntary dock can refund it. PIGs/pods never go through here, so they keep PaidCost 0.
+        s.PaidCost = ShipDefs.TryGetValue(cls, out var cd) ? cd.Cost : 0;
+        // D6/D9: seed the chaff/mine dispenser ammo from the validated spawn cargo (empty ⇒ hull default).
+        SeedDispenserAmmo(s, cls, cargo);
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
             _byClient[clientId] = s;
         return s;
+    }
+
+    // Validate a requested consumable hold and seed the ship's dispenser ammo/weapon-ids from it.
+    // A cargo id must resolve to a Chaff/Mine dispenser WeaponDef, and mounted-weapon mass + the
+    // hold's mass must fit PayloadCapacity — otherwise the whole request is rejected (logged) and the
+    // hull's authored DefaultCargo is used instead.
+    private void SeedDispenserAmmo(ShipSim s, byte cls, (uint cargoId, byte count)[] cargo)
+    {
+        var chosen = ResolveCargo(cls, cargo);
+        foreach (var (cargoId, count) in chosen)
+        {
+            if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
+                continue;
+            if (w.Kind == WeaponKind.Chaff)
+            {
+                s.ChaffAmmo = count;
+                s.ChaffWeaponId = w.WeaponId;
+            }
+            else if (w.Kind == WeaponKind.Mine)
+            {
+                s.MineAmmo = count;
+                s.MineWeaponId = w.WeaponId;
+            }
+        }
+    }
+
+    // Resolve the hold to seed: the requested cargo if it's valid (all ids are dispenser cargo AND
+    // mounted-weapon mass + hold mass ≤ PayloadCapacity), else the hull's authored DefaultCargo.
+    private (uint cargoId, byte count)[] ResolveCargo(byte cls, (uint cargoId, byte count)[] requested)
+    {
+        ShipDefs.TryGetValue(cls, out var def);
+        (uint, byte)[] fallback = def is null
+            ? System.Array.Empty<(uint, byte)>()
+            : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
+        if (requested is null || requested.Length == 0)
+            return fallback;
+
+        float used = 0f;
+        if (def is not null)
+            foreach (var h in def.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon && WeaponDefs.TryGetValue(h.WeaponId, out var wm))
+                    used += wm.Mass;
+        foreach (var (cargoId, count) in requested)
+        {
+            if (!_dispenserByCargo.ContainsKey(cargoId))
+            {
+                Console.WriteLine($"[Sim] spawn cargo {cargoId} is not a dispenser cargo — using hull default");
+                return fallback;
+            }
+            used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
+        }
+        float cap = def?.PayloadCapacity ?? 0f;
+        if (used > cap)
+        {
+            Console.WriteLine($"[Sim] spawn cargo payload {used} exceeds capacity {cap} — using hull default");
+            return fallback;
+        }
+        return requested;
     }
 
     // Position a ship just outside its team base, launched out of the base's DOCKING-EXIT
@@ -793,7 +947,7 @@ public sealed partial class Simulation
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo);
         }
     }
 
@@ -907,6 +1061,17 @@ public sealed partial class Simulation
     // rejoins the wave.
     private void DockShip(ShipSim s, uint tick)
     {
+        // Dock refund (D7): a voluntary dock returns the hull's paid cost to the team, so dock→relaunch
+        // is a net-free full rearm/repair. Only real player hulls that actually paid (PaidCost>0)
+        // refund — pods never inherit PaidCost via MakePod and PIGs pay nothing, so death refunds
+        // nothing. Capped at exactly what was paid (zeroed after) → no exploit.
+        if (!s.IsPod && !s.IsPig && s.OwnerClientId >= 0 && s.PaidCost > 0
+            && World.TeamStates.TryGetValue(s.Team, out var ts))
+        {
+            ts.Credits += s.PaidCost;
+            s.PaidCost = 0;
+            TeamStateChangedThisStep = true;
+        }
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
@@ -1174,6 +1339,7 @@ public sealed partial class Simulation
 
         ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
         bool valid = false;
+        ShipSim? threatTarget = null; // the ship being locked (A2 being-locked warning), if any
         if (GameContent.IsBaseLock(input.LockTargetId))
         {
             // Base lock: only a CanDamageBase weapon may lock a base at all (D3); otherwise
@@ -1208,7 +1374,10 @@ public sealed partial class Simulation
             {
                 Vec3 nose = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
                 if (Dot(nose, to * (1f / d)) >= MathF.Cos(w.LockAngleRad))
+                {
                     valid = true;
+                    threatTarget = t; // resolve its warning below, after ship.Locked updates this tick
+                }
             }
         }
 
@@ -1223,6 +1392,13 @@ public sealed partial class Simulation
             ship.LockProgress = 0;
             ship.Locked = false;
         }
+
+        // Being-locked warning (A2): raise the threat state on the TARGET ship so its wire record
+        // carries the amber (locking) / red (locked) flag bits. Uses the freshly-updated ship.Locked
+        // so the red banner fires the same tick the lock completes. A completed lock wins over a
+        // merely-progressing one from another attacker (max, not overwrite). Base locks never warn.
+        if (threatTarget is not null)
+            threatTarget.ThreatLockState = ship.Locked ? (byte)2 : Math.Max(threatTarget.ThreatLockState, (byte)1);
 
         uint pct = w.LockTicks > 0 ? ship.LockProgress * 100u / w.LockTicks : 100u;
         if (pct > 100u)
@@ -1299,7 +1475,18 @@ public sealed partial class Simulation
             // missile coasts unguided — D4) → (2) steer + accelerate. ResolveSeekerTarget stays the
             // untouched chaff substitution seam.
             Vec3? aimPos = null;
-            if (GameContent.IsBaseLock(mis.TargetShipId))
+            bool chaffDetonate = false;
+            Vec3 chaffDetonatePos = default;
+            // Chaff substitution seam (Track A fills TryChaffAim; the Track-0 stub returns false so a
+            // seeker behaves exactly as before). A decoyed missile homes on the puff, and once it
+            // reaches the puff `detonateAtChaff` forces a proximity detonation at the chaff position.
+            if (TryChaffAim(mis, out Vec3 chaffAim, out bool detonateAtChaff))
+            {
+                aimPos = chaffAim;
+                chaffDetonate = detonateAtChaff;
+                chaffDetonatePos = chaffAim;
+            }
+            else if (GameContent.IsBaseLock(mis.TargetShipId))
             {
                 if (TryGetLockableBase(mis.TargetShipId, mis.Team, mis.SectorId, out int aimBase))
                     aimPos = World.Bases[aimBase].Pos;
@@ -1322,6 +1509,17 @@ public sealed partial class Simulation
                 newSpeed = w.MissileMaxSpeed;
             Vec3 vel = dir * newSpeed;
             mis.Vel = vel;
+
+            // Chaff detonation: TryChaffAim reported the missile is now within fuse range of the puff
+            // it was decoyed onto — detonate here (splash only; no direct-hit ship) and drop it.
+            if (chaffDetonate)
+            {
+                var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
+                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg);
+                MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
+                (remove ??= new()).Add(mis);
+                continue;
+            }
 
             // (3) sweep the tick segment (mp + vel·t, t∈[0,dt]) against enemy bases + ships + rocks.
             // Bases go first (mirrors FireBolt's base-then-grid order): EVERY missile sweeps bases
@@ -1422,7 +1620,7 @@ public sealed partial class Simulation
                     victim.Health -= w.Damage * w.DirectHitMult; // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
                     ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
-                ApplyBlast(mis, w, hitPos, hitShip, shipGrid);
+                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1448,7 +1646,7 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
-    private void ApplyBlast(MissileSim mis, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid)
+    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid)
     {
         if (shipGrid is null || w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
@@ -1467,7 +1665,7 @@ public sealed partial class Simulation
                         continue;
                     foreach (var s in shipsInCell)
                     {
-                        if (s.Team == mis.Team || !s.Alive || s.IsPod || s.ShipId == directHitShip)
+                        if (s.Team == team || !s.Alive || s.IsPod || s.ShipId == directHitShip)
                             continue;
                         float d = (s.State.Pos - hitPos).Length();
                         if (d > w.BlastRadius)

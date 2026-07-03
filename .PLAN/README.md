@@ -22,6 +22,9 @@ Archives:
 - Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
+- Use mine (acs41.glb) and chaff meshes (acs40.glb) from pick-assets folder
+- Rename 'wivuullegiance' to 'stellar allegiance' throughout
+- Default to fullscreen mode for production builds
 ---
 
 ## Content philosophy (the through-line)
@@ -189,14 +192,26 @@ Stage-2 economy, no rework.
 - ✅ **Escape pods** — ships eject a pod on death; the pod must die or be rescued by a teammate
   before the player respawns.
 - ✅ **Booster / smoke-trail FX** — booster smoke trail reacting to thrust.
-- ◐ **Missiles** — guided missiles shipped (2026-07-02, proto 15): `WeaponKind.Missile` launchers
+- ✅ **Missiles** — guided missiles shipped (2026-07-02, proto 15): `WeaponKind.Missile` launchers
   authored as factions `Launcher`+`Missile` YAML (turn rate/accel/speed/lock/damage/trail all
   data), hung on fighter/bomber hardpoints; server-authoritative lock + `MissileSim` pursuit
   streamed via `MsgMissiles`/`MsgMissileGone`; finite racks; lock/ammo/incoming-warning HUD with
   original Allegiance models+SFX; PIGs fire them; `tests/MissileTest` determinism guard.
-  Remaining from this item: **chaff/flare** (seam: `ResolveSeekerTarget`; `ChaffResistance`
-  authored), blast-radius splash, pre-launch "being locked" warning, rearm at base.
-- ☐ **Mines & fields** — deployable mines/minefields as a `WeaponKind` behavior module.
+  Completed 2026-07-03 (proto 18): **chaff** (`WeaponKind.Chaff` decoy-dispenser YAML; drop with
+  `C`; deterministic pure-hash decoy roll vs authored `chaff-resistance` at the `TryChaffAim`
+  seam; `MsgChaff` puffs), blast-radius splash (`ApplyBlast` + client `CreateBlast` VFX scaled by
+  `blast-radius`), pre-launch "being locked" warning (ship-record threat flags → amber/red HUD
+  banner + original lock tone), rearm at base (voluntary dock refunds the ship's `PaidCost`;
+  dock→relaunch = free full rearm+repair; death refunds nothing). *Deferred: PIG auto-chaff.*
+- ✅ **Mines & fields** — shipped 2026-07-03 (proto 18): `WeaponKind.Mine` mine-dispenser
+  authored as factions `Launcher`+`Mine` YAML (trigger/power/blast/cloud radius+count/arm-delay/
+  lifespan all data); `B` deploys a seed-based pseudo-random field (`shared/MinefieldLayout`,
+  ≤64 mines, `aliveMask`) streamed via `MsgMinefields`/`MsgMineGone` for the anchor sector; mines
+  arm after a delay, trigger per-mine on enemy proximity (grid-cube scan), splash via
+  `ApplyBlast`, and the field depletes gradually; team-tinted billboard sprites client-side;
+  default hold authored per hull (`default-cargo`, payload-costed, hangar steppers live via
+  `MsgSpawn` cargo). `tests/MineTest` determinism guard. *Deferred: mine-vs-mine chains,
+  shootable mines, PIG mine-laying.*
 - ☐ **Shields & damage systems** — regenerating shields over the raw-health model; damage-type
   interactions.
 - ☐ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
@@ -209,6 +224,8 @@ Stage-2 economy, no rework.
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
   scores/ranks are Stage 5.
+- ☐ **Control settings and mappings** — allow players to configure keybindings, input devices,
+  and control schemes for the game from the settings -> controls menu.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 

@@ -62,8 +62,29 @@ namespace StellarAllegiance.Net
         public uint LastFireTick;
         public byte MissileAmmo; // rounds left in the missile rack (0 if this hull has none)
         public byte LockState; // bit7 = locked, bits0-6 = lock progress 0..100
+        public byte ChaffAmmo; // chaff puffs left in the dispenser
+        public byte MineAmmo; // mine fields left in the dispenser
+        public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
         public bool IsPig; // AI combat drone
         public bool IsPod; // escape pod
+    }
+
+    // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The
+    // client regenerates the mine cloud offsets from Seed via shared MinefieldLayout + Center; AliveMask
+    // (CloudCount capped at 64) tracks which mines are still live. Streamed per anchor sector.
+    public sealed class Minefield
+    {
+        public ulong FieldId;
+        public uint WeaponId; // which WeaponDef (mine-kind) laid it — cloud/blast come from here
+        public byte Team;
+        public uint SectorId;
+        public float CenterX,
+            CenterY,
+            CenterZ;
+        public uint Seed;
+        public uint ArmAtTick;
+        public uint ExpireAtTick;
+        public ulong AliveMask;
     }
 
     // One in-flight guided missile, decoded from MsgMissiles (server/Net/Protocol.cs WriteMissile).

@@ -16,6 +16,15 @@ namespace StellarAllegiance.Ui;
 // =====================================================================
 public sealed class LoadoutState
 {
+    // Process-wide shared loadout so the hangar's chosen hold persists across open/close and is the
+    // single source RequestSpawn reads (the counts ride MsgSpawn to the server). Per-class state, so
+    // one instance covers every hull.
+    public static readonly LoadoutState Shared = new();
+
+    // Classes whose default hold has been seeded from ShipClassDef.DefaultCargo (once each, so a
+    // later edit isn't stomped by a re-seed).
+    private readonly HashSet<byte> _seeded = new();
+
     // classId -> (weapon-hardpoint Index -> assigned WeaponId). A null value means the
     // slot was deliberately emptied; an absent key means "authored default" (hp.WeaponId).
     private readonly Dictionary<byte, Dictionary<byte, uint?>> _weaponOverrides = new();
@@ -59,6 +68,31 @@ public sealed class LoadoutState
         if (!_cargo.TryGetValue(classId, out var hold))
             _cargo[classId] = hold = new Dictionary<uint, int>();
         hold[itemId] = Math.Max(0, count);
+    }
+
+    // Seed a class's hold from its authored DefaultCargo the first time it's shown, so the hangar
+    // opens on the hull's real default loadout (matching what the server would spawn). Idempotent.
+    public void SeedDefaults(byte classId, ShipClassDef def)
+    {
+        if (def is null || !_seeded.Add(classId))
+            return;
+        if (def.DefaultCargo is null)
+            return;
+        foreach (var c in def.DefaultCargo)
+            SetCargoCount(classId, c.CargoId, c.Count);
+    }
+
+    // The class's current hold as (cargoId, count) pairs (positive counts only) — the array
+    // RequestSpawn ships to the server on MsgSpawn.
+    public (uint cargoId, byte count)[] CargoFor(byte classId)
+    {
+        if (!_cargo.TryGetValue(classId, out var hold))
+            return Array.Empty<(uint, byte)>();
+        var list = new List<(uint, byte)>();
+        foreach (var kv in hold)
+            if (kv.Value > 0)
+                list.Add((kv.Key, (byte)Math.Min(kv.Value, 255)));
+        return list.ToArray();
     }
 
     // ---- Payload accounting -------------------------------------------------

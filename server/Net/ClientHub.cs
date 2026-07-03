@@ -427,10 +427,30 @@ public sealed class ClientHub
                 case Protocol.MsgSpawn when count >= 2:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team
-                    // comes from the lobby (authoritative), not the client.
+                    // comes from the lobby (authoritative), not the client. The optional consumable
+                    // hold rides after the class: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)].
+                    // A bare length-2 frame carries no cargo (the sim seeds the hull default).
                     byte cls = buffer[1];
                     if (cls > 2)
                         cls = 0;
+                    (uint cargoId, byte count)[] cargo = System.Array.Empty<(uint, byte)>();
+                    if (count >= 3)
+                    {
+                        int nCargo = buffer[2];
+                        int o = 3;
+                        if (nCargo > 0 && count >= o + nCargo * 5)
+                        {
+                            cargo = new (uint, byte)[nCargo];
+                            for (int i = 0; i < nCargo; i++)
+                            {
+                                uint cargoId = BitConverter.ToUInt32(buffer, o);
+                                o += 4;
+                                byte cnt = buffer[o];
+                                o += 1;
+                                cargo[i] = (cargoId, cnt);
+                            }
+                        }
+                    }
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
@@ -441,7 +461,7 @@ public sealed class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo);
                     }
                     break;
                 }
@@ -503,6 +523,8 @@ public sealed class ClientHub
                         Firing = (flags & Protocol.FlagFiring) != 0,
                         Boost = (flags & Protocol.FlagBoost) != 0,
                         Firing2 = (flags & Protocol.FlagFiring2) != 0,
+                        DropChaff = (flags & Protocol.FlagDropChaff) != 0,
+                        DropMine = (flags & Protocol.FlagDropMine) != 0,
                         LockTargetId = BitConverter.ToUInt64(buffer, 30),
                     };
                     _sim.EnqueueInput(client.Id, tick, input);
@@ -621,6 +643,29 @@ public sealed class ClientHub
         var missiles = _sim.Missiles;
         SerializeMissiles(missiles);
 
+        // Chaff spawns + mine pops — broadcast to every client (cheap, rare), like missile-gones.
+        byte[][]? chaffFrames = null;
+        if (_sim.ChaffSpawnedThisStep.Count > 0)
+        {
+            chaffFrames = new byte[_sim.ChaffSpawnedThisStep.Count][];
+            for (int i = 0; i < _sim.ChaffSpawnedThisStep.Count; i++)
+                chaffFrames[i] = Protocol.BuildChaff(_sim.ChaffSpawnedThisStep[i]);
+        }
+        byte[][]? mineGoneFrames = null;
+        if (_sim.MineGoneThisStep.Count > 0)
+        {
+            mineGoneFrames = new byte[_sim.MineGoneThisStep.Count][];
+            for (int i = 0; i < _sim.MineGoneThisStep.Count; i++)
+            {
+                var g = _sim.MineGoneThisStep[i];
+                mineGoneFrames[i] = Protocol.BuildMineGone(g.fieldId, g.mineIndex, g.reason, g.sector, g.pos);
+            }
+        }
+
+        // Minefields stream per anchor sector, on change OR the coarse keepalive — a lethal static
+        // hazard must not AOI-pop, and the empty frame on removal must reach the client too.
+        bool sendMinefields = _sim.MinefieldsChangedThisStep || coarse;
+
         // Stream base health when it changed (a hit landed / match ended) or on coarse
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
         byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
@@ -679,6 +724,19 @@ public sealed class ClientHub
             if (missileGoneFrames is not null)
                 foreach (var f in missileGoneFrames)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+
+            if (chaffFrames is not null)
+                foreach (var f in chaffFrames)
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+
+            if (mineGoneFrames is not null)
+                foreach (var f in mineGoneFrames)
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+
+            // Minefield frame for this client's anchor sector (change + coarse keepalive). Always
+            // sent when flagged — an empty frame is how a removal propagates.
+            if (sendMinefields)
+                client.Outbound.Writer.TryWrite(OutFrame.Whole(BuildMinefieldsFor(client.AnchorSector)));
 
             // In-flight missiles this client can see: same-sector within full-rate radius of its
             // anchor, OR homing on its own ship (incoming warning at any range). Built from the
@@ -853,6 +911,28 @@ public sealed class ClientHub
             Buffer.BlockCopy(_missileScratch, picks[i] * Protocol.MissileRecordSize, buf, dst, Protocol.MissileRecordSize);
             dst += Protocol.MissileRecordSize;
         }
+        return buf;
+    }
+
+    // Build the MsgMinefields frame for one anchor sector: [13][u8 count] + count x 41-B records.
+    // Always returns a frame (an empty one when the sector has no fields) so a removal propagates.
+    private byte[] BuildMinefieldsFor(uint sector)
+    {
+        var fields = _sim.Minefields;
+        int cnt = 0;
+        for (int i = 0; i < fields.Count; i++)
+            if (fields[i].SectorId == sector)
+                cnt++;
+        byte[] buf = new byte[2 + cnt * Protocol.MinefieldRecordSize];
+        buf[0] = Protocol.MsgMinefields;
+        buf[1] = (byte)Math.Min(cnt, 255);
+        int dst = 2;
+        for (int i = 0; i < fields.Count; i++)
+            if (fields[i].SectorId == sector)
+            {
+                Protocol.WriteMinefield(buf.AsSpan(dst, Protocol.MinefieldRecordSize), fields[i]);
+                dst += Protocol.MinefieldRecordSize;
+            }
         return buf;
     }
 

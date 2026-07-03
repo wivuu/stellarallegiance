@@ -51,6 +51,10 @@ public static class CoreValidator
         foreach (var launcher in core.Launchers)
             if (launcher.WeaponId is uint lid)
                 runtimeWeaponMass.TryAdd(lid, launcher.Mass);
+        // Expendable-by-id (all kinds) for default-cargo resolution + mass accounting.
+        var expendableById = new Dictionary<string, Expendable>(StringComparer.Ordinal);
+        foreach (var e in core.AllExpendables())
+            expendableById[e.Id] = e;
         foreach (var hull in core.Hulls)
         {
             if (hull.ClassId is null)
@@ -59,16 +63,39 @@ public static class CoreValidator
             foreach (var hp in hull.Hardpoints)
                 if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeaponMass.TryGetValue(hp.WeaponId, out var mass))
                     defaultPayload += mass;
+            // Default cargo hold: each entry must resolve to a known expendable that carries a
+            // cargo-id (a hangar-stockable consumable), and its mass counts against the budget.
+            foreach (var load in hull.DefaultCargo)
+            {
+                if (!expendableById.TryGetValue(load.Item, out var item))
+                {
+                    result.Error($"hull '{hull.Id}' default-cargo references unknown expendable '{load.Item}'.");
+                    continue;
+                }
+                if (item.CargoId is null)
+                    result.Error($"hull '{hull.Id}' default-cargo item '{load.Item}' has no cargo-id (not a stockable consumable).");
+                if (load.Count < 0)
+                    result.Error($"hull '{hull.Id}' default-cargo item '{load.Item}' has negative count {load.Count}.");
+                defaultPayload += Math.Max(0, load.Count) * item.Mass;
+            }
             if (defaultPayload > hull.PayloadCapacity)
                 result.Error($"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}.");
         }
 
-        // Runtime launchers: a launcher carrying a weapon id projects to a missile-kind WeaponDef, so
-        // its referenced expendable MUST be a Missile (not a mine/chaff/probe) with sane guidance
-        // stats, and the launcher itself must carry a real magazine + launch cadence.
+        // Runtime launchers: a launcher carrying a weapon id projects to a runtime WeaponDef whose
+        // KIND is dispatched off the referenced expendable — a Missile launcher, a Mine dispenser, or
+        // a Chaff launcher, each with its own per-type sanity rules. The launcher itself must always
+        // carry a real magazine + launch cadence. A Probe (or an unknown/unresolved) expendable is an
+        // authoring error (no projected weapon kind).
         var missilesById = new Dictionary<string, Missile>(StringComparer.Ordinal);
         foreach (var missile in core.Missiles)
             missilesById[missile.Id] = missile;
+        var minesById = new Dictionary<string, Mine>(StringComparer.Ordinal);
+        foreach (var mine in core.Mines)
+            minesById[mine.Id] = mine;
+        var chaffsById = new Dictionary<string, Chaff>(StringComparer.Ordinal);
+        foreach (var chaff in core.Chaffs)
+            chaffsById[chaff.Id] = chaff;
         foreach (var launcher in core.Launchers)
         {
             if (launcher.WeaponId is null)
@@ -78,35 +105,61 @@ public static class CoreValidator
                 result.Error($"{ctx} has non-positive amount {launcher.Amount} — an empty magazine.");
             if (launcher.FireIntervalTicks == 0)
                 result.Error($"{ctx} has fire-interval-ticks 0 — no launch cadence.");
-            if (string.IsNullOrEmpty(launcher.ExpendableId) || !missilesById.TryGetValue(launcher.ExpendableId, out var missile))
+            if (!string.IsNullOrEmpty(launcher.ExpendableId) && missilesById.TryGetValue(launcher.ExpendableId, out var missile))
             {
-                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile.");
-                continue;
+                if (missile.InitialSpeed <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs initial-speed > 0.");
+                if (missile.Lifespan <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs lifespan > 0.");
+                if (missile.Power <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs power > 0.");
+                if (missile.LockTime <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs lock-time > 0.");
+                if (missile.LockAngle <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs lock-angle > 0.");
+                if (missile.MaxLock <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs max-lock > 0.");
+                if (missile.TurnRate < 0)
+                    result.Error($"{ctx} missile '{missile.Id}' has negative turn-rate.");
+                if (missile.Width <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius).");
+                if (missile.BlastPower <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs blast-power > 0.");
+                if (missile.BlastRadius <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs blast-radius > 0.");
+                if (missile.DirectHitMultiplier <= 0)
+                    result.Error($"{ctx} missile '{missile.Id}' needs direct-hit-multiplier > 0.");
+                if (!string.IsNullOrEmpty(missile.TrailColor) && !IsHexColor(missile.TrailColor))
+                    result.Error($"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string.");
             }
-            if (missile.InitialSpeed <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs initial-speed > 0.");
-            if (missile.Lifespan <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs lifespan > 0.");
-            if (missile.Power <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs power > 0.");
-            if (missile.LockTime <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs lock-time > 0.");
-            if (missile.LockAngle <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs lock-angle > 0.");
-            if (missile.MaxLock <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs max-lock > 0.");
-            if (missile.TurnRate < 0)
-                result.Error($"{ctx} missile '{missile.Id}' has negative turn-rate.");
-            if (missile.Width <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius).");
-            if (missile.BlastPower <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs blast-power > 0.");
-            if (missile.BlastRadius <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs blast-radius > 0.");
-            if (missile.DirectHitMultiplier <= 0)
-                result.Error($"{ctx} missile '{missile.Id}' needs direct-hit-multiplier > 0.");
-            if (!string.IsNullOrEmpty(missile.TrailColor) && !IsHexColor(missile.TrailColor))
-                result.Error($"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string.");
+            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && minesById.TryGetValue(launcher.ExpendableId, out var mine))
+            {
+                if (mine.Lifespan <= 0)
+                    result.Error($"{ctx} mine '{mine.Id}' needs lifespan > 0.");
+                if (mine.CloudCount < 1 || mine.CloudCount > 64)
+                    result.Error($"{ctx} mine '{mine.Id}' needs cloud-count in 1..64 (got {mine.CloudCount}).");
+                if (mine.CloudRadius <= 0)
+                    result.Error($"{ctx} mine '{mine.Id}' needs cloud-radius > 0 (scatter + lethal sphere radius).");
+                if (mine.Power <= 0)
+                    result.Error($"{ctx} mine '{mine.Id}' needs power > 0 (damage/sec at reference speed).");
+                if (mine.ArmDelay < 0)
+                    result.Error($"{ctx} mine '{mine.Id}' has negative arm-delay.");
+                if (mine.ArmDelay >= mine.Lifespan)
+                    result.Error($"{ctx} mine '{mine.Id}' arm-delay {mine.ArmDelay} >= lifespan {mine.Lifespan} — never arms.");
+            }
+            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && chaffsById.TryGetValue(launcher.ExpendableId, out var chaff))
+            {
+                if (chaff.Lifespan <= 0)
+                    result.Error($"{ctx} chaff '{chaff.Id}' needs lifespan > 0.");
+                if (chaff.ChaffStrength <= 0)
+                    result.Error($"{ctx} chaff '{chaff.Id}' needs chaff-strength > 0.");
+                if (chaff.DecoyRadius <= 0)
+                    result.Error($"{ctx} chaff '{chaff.Id}' needs decoy-radius > 0.");
+            }
+            else
+            {
+                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile, mine, or chaff.");
+            }
         }
 
         // Runtime hulls: afterburner and fuel are authored as a pair, and the drain/recharge

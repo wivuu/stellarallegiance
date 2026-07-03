@@ -239,6 +239,13 @@ namespace StellarAllegiance.Shared
         // deterministic (they default false/0, keeping existing FlightModel goldens unchanged).
         public bool Firing2;
         public ulong LockTargetId;
+
+        // Dispenser triggers (chaff / mine). Like Firing2/LockTargetId they ride the input ring /
+        // HeldInput replay untouched by Integrate — the server's TryDropChaff/TryDeployMine read
+        // them directly with authoritative cadence gates, so flight stays deterministic and the
+        // existing FlightModel goldens are unchanged (they default false).
+        public bool DropChaff;
+        public bool DropMine;
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)

@@ -28,10 +28,16 @@ public static class FactionsContentProjection
     {
         var projectileById = core.Projectiles.ToDictionary(p => p.Id);
         var missileById = core.Missiles.ToDictionary(m => m.Id);
+        var mineById = core.Mines.ToDictionary(m => m.Id);
+        var chaffById = core.Chaffs.ToDictionary(c => c.Id);
+        // expendable id -> stable cargo id, for a hull's default-cargo (authored by expendable id).
+        var cargoIdByExpendable = core.AllExpendables()
+            .Where(e => e.CargoId is not null)
+            .ToDictionary(e => e.Id, e => e.CargoId!.Value);
 
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
-            .Select(ProjectShip)
+            .Select(h => ProjectShip(h, cargoIdByExpendable))
             .ToList();
 
         // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
@@ -42,7 +48,7 @@ public static class FactionsContentProjection
             .Select(w => ProjectWeapon(w, projectileById))
             .Concat(core.Launchers
                 .Where(l => l.WeaponId is not null)
-                .Select(l => ProjectLauncher(l, missileById)))
+                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById)))
             .ToList();
 
         var bases = core.Stations
@@ -79,7 +85,7 @@ public static class FactionsContentProjection
         );
     }
 
-    private static ShipClassDef ProjectShip(Factions.Hull h) =>
+    private static ShipClassDef ProjectShip(Factions.Hull h, IReadOnlyDictionary<string, uint> cargoIdByExpendable) =>
         new()
         {
             ClassId = h.ClassId!.Value,
@@ -108,6 +114,12 @@ public static class FactionsContentProjection
             AbFuelRecharge = (float)h.AbFuelRecharge,
             Hardpoints = h.Hardpoints.Select(ProjectHardpoint).ToList(),
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
+            // Default consumable hold: authored by expendable id, projected to (cargo-id, count) in
+            // authored list order (deterministic). CoreValidator already proved each id resolves.
+            DefaultCargo = h.DefaultCargo
+                .Where(c => cargoIdByExpendable.ContainsKey(c.Item))
+                .Select(c => new CargoLoadDef { CargoId = cargoIdByExpendable[c.Item], Count = (byte)c.Count })
+                .ToList(),
         };
 
     private static WeaponDef ProjectWeapon(Factions.Weapon w, IReadOnlyDictionary<string, Factions.Projectile> projectileById)
@@ -138,41 +150,87 @@ public static class FactionsContentProjection
     // its referenced Missile expendable, the magazine/cadence/mass from the launcher. Seconds→ticks
     // rounds identically every load (same double math) so projection stays deterministic. CoreValidator
     // already proved the expendable resolves to a Missile with sane stats.
-    private static WeaponDef ProjectLauncher(Factions.Launcher l, IReadOnlyDictionary<string, Factions.Missile> missileById)
+    // A launcher carrying a weapon id projects to a runtime WeaponDef whose KIND is dispatched off
+    // the referenced expendable: a Missile → guided-missile launcher, a Mine → proximity-mine
+    // dispenser, a Chaff → sensor-decoy dispenser. CoreValidator already proved the expendable
+    // resolves (and rejects a Probe / unknown), so an unresolved id here is a projection invariant.
+    private static WeaponDef ProjectLauncher(
+        Factions.Launcher l,
+        IReadOnlyDictionary<string, Factions.Missile> missileById,
+        IReadOnlyDictionary<string, Factions.Mine> mineById,
+        IReadOnlyDictionary<string, Factions.Chaff> chaffById
+    )
     {
-        if (string.IsNullOrEmpty(l.ExpendableId) || !missileById.TryGetValue(l.ExpendableId, out var m))
-            throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile expendable-id");
+        if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
+            return new WeaponDef
+            {
+                WeaponId = l.WeaponId!.Value,
+                Name = l.Name,
+                Kind = WeaponKind.Missile,
+                // Ballistics reused from the referenced missile.
+                Damage = (float)m.Power,
+                ProjectileSpeed = (float)m.InitialSpeed,
+                ProjectileLifeTicks = (uint)Math.Round(m.Lifespan * 20.0),
+                ProjectileRadius = (float)m.Width, // proximity-fuse swept-sphere margin
+                SpreadRad = 0f,
+                Mass = (float)l.Mass,
+                FireIntervalTicks = l.FireIntervalTicks,
+                CanDamageBase = m.CanDamageBase,
+                // Missile-kind extension fields.
+                MagazineSize = (byte)l.Amount,
+                LockTicks = (uint)Math.Round(m.LockTime * 20.0),
+                LockAngleRad = (float)m.LockAngle,
+                LockRange = (float)m.MaxLock,
+                MissileAccel = (float)m.Acceleration,
+                MissileTurnRateRad = (float)(m.TurnRate * Math.PI / 180.0),
+                MissileMaxSpeed = (float)m.MaxSpeed,
+                BlastPower = (float)m.BlastPower,
+                BlastRadius = (float)m.BlastRadius,
+                DirectHitMult = (float)m.DirectHitMultiplier,
+                ChaffResistance = (float)m.ChaffResistance, // authored-but-previously-dropped; now projected
+                ModelName = m.ModelName ?? "",
+                TrailLifetime = (float)m.TrailLifetime,
+                TrailScale = (float)m.TrailScale,
+                TrailColor = ParseTrailColor(m.TrailColor),
+            };
 
-        return new WeaponDef
-        {
-            WeaponId = l.WeaponId!.Value,
-            Name = l.Name,
-            Kind = WeaponKind.Missile,
-            // Ballistics reused from the referenced missile.
-            Damage = (float)m.Power,
-            ProjectileSpeed = (float)m.InitialSpeed,
-            ProjectileLifeTicks = (uint)Math.Round(m.Lifespan * 20.0),
-            ProjectileRadius = (float)m.Width, // proximity-fuse swept-sphere margin
-            SpreadRad = 0f,
-            Mass = (float)l.Mass,
-            FireIntervalTicks = l.FireIntervalTicks,
-            CanDamageBase = m.CanDamageBase,
-            // Missile-kind extension fields.
-            MagazineSize = (byte)l.Amount,
-            LockTicks = (uint)Math.Round(m.LockTime * 20.0),
-            LockAngleRad = (float)m.LockAngle,
-            LockRange = (float)m.MaxLock,
-            MissileAccel = (float)m.Acceleration,
-            MissileTurnRateRad = (float)(m.TurnRate * Math.PI / 180.0),
-            MissileMaxSpeed = (float)m.MaxSpeed,
-            BlastPower = (float)m.BlastPower,
-            BlastRadius = (float)m.BlastRadius,
-            DirectHitMult = (float)m.DirectHitMultiplier,
-            ModelName = m.ModelName ?? "",
-            TrailLifetime = (float)m.TrailLifetime,
-            TrailScale = (float)m.TrailScale,
-            TrailColor = ParseTrailColor(m.TrailColor),
-        };
+        if (!string.IsNullOrEmpty(l.ExpendableId) && mineById.TryGetValue(l.ExpendableId, out var mn))
+            return new WeaponDef
+            {
+                WeaponId = l.WeaponId!.Value,
+                Name = l.Name,
+                Kind = WeaponKind.Mine,
+                // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
+                // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
+                ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0), // field lifespan
+                Mass = (float)l.Mass,
+                FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
+                MagazineSize = (byte)l.Amount,
+                BlastPower = (float)mn.Power, // damage-per-second at reference speed (speed-scaled)
+                MineCloudRadius = (float)mn.CloudRadius, // scatter radius AND lethal sphere radius
+                MineCloudCount = (byte)mn.CloudCount, // cosmetic mesh count
+                MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
+                CargoId = mn.CargoId ?? 0,
+                ModelName = mn.ModelName ?? "",
+            };
+
+        if (!string.IsNullOrEmpty(l.ExpendableId) && chaffById.TryGetValue(l.ExpendableId, out var ch))
+            return new WeaponDef
+            {
+                WeaponId = l.WeaponId!.Value,
+                Name = l.Name,
+                Kind = WeaponKind.Chaff,
+                ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0), // puff lifespan
+                Mass = (float)l.Mass,
+                FireIntervalTicks = l.FireIntervalTicks, // eject cadence
+                MagazineSize = (byte)l.Amount,
+                ChaffStrength = (float)ch.ChaffStrength,
+                DecoyRadius = (float)ch.DecoyRadius,
+                CargoId = ch.CargoId ?? 0,
+                ModelName = ch.ModelName ?? "",
+            };
+
+        throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff expendable-id");
     }
 
     // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).

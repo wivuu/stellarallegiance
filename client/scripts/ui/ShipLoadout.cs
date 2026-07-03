@@ -42,7 +42,9 @@ public partial class ShipLoadout : Control
     private WorldRenderer _world = null!;
     private GameNetClient _net = null!;
 
-    private readonly LoadoutState _state = new();
+    // The shared process-wide loadout: the hangar edits it and RequestSpawn reads it, so the chosen
+    // hold persists across open/close and rides MsgSpawn to the server.
+    private readonly LoadoutState _state = LoadoutState.Shared;
 
     // Per-class presentation strings (roles/blurbs are client flavor, not authored
     // content yet; keyed by ClassId with a generic fallback for future hulls).
@@ -445,19 +447,25 @@ public partial class ShipLoadout : Control
             _cargoList.AddChild(row);
             _cargoCounts.Add((itemId, count));
         }
-
-        var note = UiKit.MakeLabel("CONSUMABLES — STAGE 2 · NOT YET LIVE", UiKit.TextStyle.Data, DesignTokens.TextDim);
-        note.AddThemeFontSizeOverride("font_size", 9);
-        _cargoList.AddChild(note);
     }
 
     private void StepCargo(uint itemId, int delta, Label count)
     {
-        if (_classId is not byte classId)
+        if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out ShipClassDef def))
             return;
-        int n = Math.Clamp(_state.GetCargoCount(classId, itemId) + delta, 0, 12);
-        _state.SetCargoCount(classId, itemId, n);
-        count.Text = n.ToString("00");
+        int cur = _state.GetCargoCount(classId, itemId);
+        int want = Math.Clamp(cur + delta, 0, 12);
+        // A bump is additionally clamped to the hull's REMAINING payload budget — you can't stock
+        // past what the hull can carry (the server would just fall back to the hull default anyway).
+        if (want > cur && _defs.GetCargoItem(itemId) is CargoItemDef item && item.Mass > 0f)
+        {
+            float used = _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem);
+            int canAdd = Mathf.FloorToInt((def.PayloadCapacity - used) / item.Mass);
+            if (canAdd < want - cur)
+                want = cur + Math.Max(0, canAdd);
+        }
+        _state.SetCargoCount(classId, itemId, want);
+        count.Text = want.ToString("00");
         RefreshPayload();
     }
 
@@ -613,6 +621,7 @@ public partial class ShipLoadout : Control
             return;
         _classId = classId;
         _selectedHp = null;
+        _state.SeedDefaults(classId, def); // open on the hull's authored default hold (once per class)
 
         foreach ((byte id, LoadoutSlot row) in _shipRows)
             row.Selected = id == classId;

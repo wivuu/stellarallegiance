@@ -31,7 +31,7 @@ string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions",
 var stock = ContentLoader.Load(stockPath);
 
 // 1. The shipped bundle is valid content.
-var errors = ContentValidator.Validate(stock.Ships, stock.Weapons, stock.Bases);
+var errors = ContentValidator.Validate(stock.Ships, stock.Weapons, stock.Bases, stock.CargoItems);
 Check(errors.Count == 0, "stock bundle passes ContentValidator", $"stock bundle invalid: {string.Join("; ", errors)}");
 
 // 2a. The loader maps fields correctly (guards a mis-mapped/swapped key).
@@ -72,9 +72,9 @@ Check(
 // Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 6,
-    "loader projected guns + missile launchers (3 guns + 3 racks)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 6)"
+    stock.Weapons.Count == 8,
+    "loader projected guns + missile launchers + dispensers (3 guns + 3 racks + chaff + mine)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 8)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
@@ -84,11 +84,38 @@ Check(
         && seekerW.MagazineSize == 6 && seekerW.LockTicks == 40 && seekerW.LockAngleRad == 0.5f
         && seekerW.LockRange == 1200f && seekerW.MissileAccel == 40f && seekerW.MissileMaxSpeed == 220f
         && seekerW.BlastPower == 30f && seekerW.BlastRadius == 25f && seekerW.DirectHitMult == 1.5f
+        && seekerW.ChaffResistance == 1f
         && seekerW.ModelName == "mis09" && seekerW.TrailColor == 0xffc890ffu
         && !seekerW.CanDamageBase
         && System.MathF.Abs(seekerW.MissileTurnRateRad - (80f * System.MathF.PI / 180f)) < 0.0001f,
-    "loader projected seeker missile launcher (missile-kind WeaponDef)",
-    $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, lock {seekerW.LockTicks}/{seekerW.LockRange}, color {seekerW.TrailColor:x})"
+    "loader projected seeker missile launcher (missile-kind WeaponDef, incl. chaff-resistance)",
+    $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, chaffRes {seekerW.ChaffResistance}, color {seekerW.TrailColor:x})"
+);
+// Chaff dispenser (weapon-id 6): Chaff-kind, decoy stats + linked cargo id, puff lifespan in ticks.
+var chaffW = stock.Weapons.First(w => w.WeaponId == 6);
+Check(
+    chaffW.Kind == WeaponKind.Chaff
+        && chaffW.ChaffStrength == 1f && chaffW.DecoyRadius == 60f
+        && chaffW.ProjectileLifeTicks == 60 && chaffW.CargoId == 3 && chaffW.ModelName == "acs40",
+    "loader projected the decoy-dispenser (chaff-kind WeaponDef)",
+    $"chaff weapon wrong (kind {chaffW.Kind}, strength {chaffW.ChaffStrength}, decoy {chaffW.DecoyRadius}, life {chaffW.ProjectileLifeTicks}, cargo {chaffW.CargoId})"
+);
+// Mine dispenser (weapon-id 7): Mine-kind, cloud/arm/trigger stats + linked cargo id.
+var mineW = stock.Weapons.First(w => w.WeaponId == 7);
+Check(
+    mineW.Kind == WeaponKind.Mine
+        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 40
+        && mineW.MineCloudRadius == 15f && mineW.BlastPower == 20f
+        && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "acs41",
+    "loader projected the mine-dispenser (mine-kind WeaponDef)",
+    $"mine weapon wrong (kind {mineW.Kind}, cloudCount {mineW.MineCloudCount}, arm {mineW.MineArmTicks}, trigger {mineW.MineTriggerRadius}, cloudR {mineW.MineCloudRadius}, cargo {mineW.CargoId})"
+);
+// Fighter default consumable hold: 2x sensor-decoy (cargo-id 3), authored order.
+var fighterCargo = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter).DefaultCargo;
+Check(
+    fighterCargo.Count == 1 && fighterCargo[0].CargoId == 3 && fighterCargo[0].Count == 2,
+    "loader projected fighter default-cargo ([(3,2)])",
+    $"fighter default-cargo wrong (count {fighterCargo.Count})"
 );
 // Anti-base torpedo (weapon-id 5): the only weapon flagged CanDamageBase — a base is a lockable
 // target only for a weapon carrying this flag (D3), and only this warhead applies damage to one.
@@ -107,17 +134,24 @@ Check(
 Check(
     scoutW.Kind == WeaponKind.Bolt && scoutW.MagazineSize == 0 && scoutW.LockTicks == 0
         && scoutW.LockRange == 0f && scoutW.MissileMaxSpeed == 0f && scoutW.ModelName == "" && scoutW.TrailColor == 0u
-        && scoutW.BlastPower == 0f && scoutW.BlastRadius == 0f && scoutW.DirectHitMult == 0f,
-    "loader left bolt weapon's missile fields zero/empty",
-    $"scout bolt has stray missile fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, lock {scoutW.LockTicks})"
+        && scoutW.BlastPower == 0f && scoutW.BlastRadius == 0f && scoutW.DirectHitMult == 0f
+        // ...and the 8 chaff/mine dispenser fields stay zero/empty on a bolt gun too.
+        && scoutW.ChaffResistance == 0f && scoutW.ChaffStrength == 0f && scoutW.DecoyRadius == 0f
+        && scoutW.MineCloudRadius == 0f && scoutW.MineCloudCount == 0 && scoutW.MineArmTicks == 0u
+        && scoutW.MineTriggerRadius == 0f && scoutW.CargoId == 0u,
+    "loader left bolt weapon's missile + dispenser fields zero/empty",
+    $"scout bolt has stray missile/dispenser fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, chaffStr {scoutW.ChaffStrength}, cloudCount {scoutW.MineCloudCount})"
 );
+// Cargo items: the seeker lost its cargo-id (missiles aren't hold consumables — payload can't fit
+// mass-4 seekers), so the hold lists only the real consumables — proximity-mine (2) + sensor-decoy (3).
 Check(
-    stock.CargoItems.Count == 3
-        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 1, 2, 3 })
-        && stock.CargoItems.First(c => c.CargoId == 1).Mass == 4f
-        && stock.CargoItems.First(c => c.CargoId == 1).Glyph.Length > 0,
-    "loader projected cargo items from expendables",
-    $"cargo items wrong (count {stock.CargoItems.Count})"
+    stock.CargoItems.Count == 2
+        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 2, 3 })
+        && stock.CargoItems.First(c => c.CargoId == 2).Mass == 1f
+        && stock.CargoItems.First(c => c.CargoId == 3).Mass == 3f
+        && stock.CargoItems.First(c => c.CargoId == 3).Glyph.Length > 0,
+    "loader projected cargo items from expendables (mine + decoy only)",
+    $"cargo items wrong (count {stock.CargoItems.Count}, ids {string.Join(",", stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id))})"
 );
 // Booster fuel: only the fighter is authored with a fuel gauge (max-fuel/ab-fuel-drain/
 // ab-fuel-recharge); the scout carries none (all-zero, unmodeled/unlimited boost).

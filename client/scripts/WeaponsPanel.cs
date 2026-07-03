@@ -97,7 +97,13 @@ public partial class WeaponsPanel : Control
             primaryIdx = 0; // pathological all-missile hull: still show something as primary
         WeaponDef primary = _weapons[primaryIdx];
 
-        int secCount = _weapons.Count - 1;
+        // Dispenser rows (chaff / mine) — NOT hardpoint-mounted, so absent from _weapons; resolved
+        // from the class's default hold OR live ammo (the spawned hold can differ from the default).
+        byte cls = (byte)local.Class;
+        WeaponDef? chaffDisp = DispenserFor(cls, WeaponKind.Chaff, _net.LocalChaffAmmo);
+        WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
+
+        int secCount = _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0);
         float panelH =
             PadTop
             + HeaderH
@@ -151,6 +157,54 @@ public partial class WeaponsPanel : Control
             DrawSecondaryRow(_weapons[i], slot++, left, right, y, mono, local);
             y += SecRowH;
         }
+
+        // ---- Dispenser rows (chaff [C] / mine [B]), keyed to their hotkeys ----
+        if (chaffDisp != null)
+        {
+            DrawDispenserRow("C", chaffDisp.Name, _net.LocalChaffAmmo, left, right, y, mono);
+            y += SecRowH;
+        }
+        if (mineDisp != null)
+        {
+            DrawDispenserRow("B", mineDisp.Name, _net.LocalMineAmmo, left, right, y, mono);
+            y += SecRowH;
+        }
+    }
+
+    // The chaff/mine dispenser WeaponDef the local ship carries, or null if it carries none of that
+    // kind. Dispensers aren't hardpoint-mounted (not in WeaponMounts): the class's default hold names
+    // one (shown EMPTY once spent), but live ammo alone also earns the row — the spawned hold can
+    // differ from the default (e.g. decoys added to a scout in the hangar), and the authoritative
+    // per-kind count is all the wire carries.
+    private WeaponDef? DispenserFor(byte classId, WeaponKind kind, int liveAmmo)
+    {
+        if (_defs.TryGetShipDef(classId, out var def) && def.DefaultCargo is not null)
+            foreach (var load in def.DefaultCargo)
+                foreach (var w in _defs.AllWeapons())
+                    if (w.Kind == kind && w.CargoId == load.CargoId)
+                        return w;
+        if (liveAmmo > 0)
+            foreach (var w in _defs.AllWeapons())
+                if (w.Kind == kind)
+                    return w;
+        return null;
+    }
+
+    // One dispenser row: "[key]  NAME  <pips>  READY/EMPTY". Ammo is the local ship's authoritative
+    // dispenser count (LocalChaffAmmo / LocalMineAmmo). Mirrors the missile row's pip cluster.
+    private void DrawDispenserRow(string keyHint, string name, int ammo, float left, float right, float y, Font mono)
+    {
+        float mid = y + SecRowH * 0.5f;
+        DrawString(mono, new Vector2(left, mid + 4f), $"[{keyHint}]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
+
+        (string txt, Color col) = ammo == 0 ? ("EMPTY", DesignTokens.TextDim) : ("READY", DesignTokens.Ok);
+        DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, col);
+
+        float pipsRight = right - MonoWidth(mono, txt, 10) - 10f;
+        float clusterLeft = DrawPips(pipsRight, mid, ammo, System.Math.Max(ammo, 1));
+
+        float nameX = left + 26f;
+        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), name.ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
     }
 
     // One secondary weapon row: "[n]  NAME  <pips|bar>  STATE".

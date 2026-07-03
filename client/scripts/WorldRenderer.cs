@@ -32,6 +32,8 @@ public partial class WorldRenderer : Node3D
     private Node3D _projectiles = null!;
     private Node3D _alephs = null!;
     private Node3D _effects = null!; // transient FX (explosions, hit flashes); self-freeing
+    private ChaffFx _chaffFx = null!; // live chaff-puff sprites (Track A fills the visuals)
+    private MinefieldViews _minefieldViews = null!; // live minefield sprite clouds (Track B fills the visuals)
 
     private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 
@@ -357,12 +359,16 @@ public partial class WorldRenderer : Node3D
         _projectiles = new Node3D { Name = "Projectiles" };
         _alephs = new Node3D { Name = "Alephs" };
         _effects = new Node3D { Name = "Effects" };
+        _chaffFx = new ChaffFx { Name = "ChaffFx" };
+        _minefieldViews = new MinefieldViews { Name = "MinefieldViews" };
         AddChild(_bases);
         AddChild(_asteroids);
         AddChild(_ships);
         AddChild(_projectiles);
         AddChild(_alephs);
         AddChild(_effects);
+        AddChild(_chaffFx);
+        AddChild(_minefieldViews);
 
         _asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
         _team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
@@ -413,7 +419,15 @@ public partial class WorldRenderer : Node3D
     public void NetSetMatch(uint tick, byte phase, byte winner)
     {
         ServerTick = tick;
-        Phase = (MatchPhase)phase;
+        var newPhase = (MatchPhase)phase;
+        // On the transition back to the lobby, drop transient chaff/minefield visuals so a stale
+        // hazard from the finished match doesn't linger into the next one.
+        if (newPhase == MatchPhase.Lobby && Phase != MatchPhase.Lobby)
+        {
+            _chaffFx?.Clear();
+            _minefieldViews?.Clear();
+        }
+        Phase = newPhase;
         Winner = winner == 255 ? (byte?)null : winner;
     }
 
@@ -472,12 +486,26 @@ public partial class WorldRenderer : Node3D
         if (reason == 1)
         {
             Vector3 p = new(pos.X, pos.Y, pos.Z);
-            var boom = ExplosionEffect.Create(ShipClass.Scout, view.Team);
+            // Blast scaled to the warhead (Track A); the Track-0 stub keeps today's Scout-scale look.
+            var boom = ExplosionEffect.CreateBlast(view.BlastRadius, view.Team);
             SpawnEffect(boom, p, sector);
             SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, p, pitch: 1.25f);
         }
         view.QueueFree();
     }
+
+    // ---- Chaff + minefields (render stubs — Track A/B fill ChaffFx / MinefieldViews) ----
+    // GameNetClient decodes MsgChaff / MsgMinefields / MsgMineGone and calls these; they forward to
+    // the ChaffFx / MinefieldViews child nodes (compilable no-op skeletons in Track 0).
+
+    public void NetSpawnChaff(ulong id, byte team, uint sector, Vec3 pos, Vec3 vel, uint weaponId) =>
+        _chaffFx.Spawn(id, team, sector, new Vector3(pos.X, pos.Y, pos.Z), new Vector3(vel.X, vel.Y, vel.Z), _defs.GetWeapon(weaponId));
+
+    public void NetUpsertMinefield(Minefield row) =>
+        _minefieldViews.Upsert(row, _defs.GetWeapon(row.WeaponId), ServerTick);
+
+    public void NetMineGone(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos) =>
+        _minefieldViews.MineGone(fieldId, mineIndex, reason, new Vector3(pos.X, pos.Y, pos.Z));
 
     // ShipId -> pilot name, rebuilt from each MsgLobbyState roster. The roster is the only source of
     // names (snapshots carry no identity); it's sent on every roster change including spawn/death, so
@@ -525,6 +553,8 @@ public partial class WorldRenderer : Node3D
         _asteroidSpins.Clear();
         _shipNodes.Clear();
         _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
+        _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
+        _minefieldViews.Clear();
         _collidingShips.Clear();
         _alephNodes.Clear();
         _asteroidClip.Clear();

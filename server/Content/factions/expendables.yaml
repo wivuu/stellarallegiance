@@ -19,9 +19,7 @@ missiles:
   - id: seeker-missile
     name: Seeker Missile
     description: Lock-on ordnance. Fired from the hold.
-    cargo-id: 1
     mass: 4
-    glyph: "➤"
     lifespan: 8
     initial-speed: 90
     acceleration: 40
@@ -30,6 +28,7 @@ missiles:
     lock-time: 2.0      # seconds in-cone to lock
     lock-angle: 0.5     # lock cone half-angle, radians
     max-lock: 1200      # lock range, u
+    chaff-resistance: 1.0  # baseline: shrugs off a lone chaff puff about half the time
     power: 45
     width: 1            # proximity-fuse margin
     direct-hit-multiplier: 1.5
@@ -53,6 +52,7 @@ missiles:
     lock-time: 1.0
     lock-angle: 0.4
     max-lock: 1000
+    chaff-resistance: 0.5  # a cheap harasser is easily decoyed
     power: 18
     width: 2
     direct-hit-multiplier: 1.25
@@ -76,6 +76,7 @@ missiles:
     lock-time: 3.0
     lock-angle: 0.35
     max-lock: 1500
+    chaff-resistance: 2.5  # heavy siege guidance barely notices chaff
     power: 200
     width: 1             # minimal fuse margin — vs the base it's ignored anyway (exact hull contact)
     direct-hit-multiplier: 1.0
@@ -88,13 +89,25 @@ missiles:
     trail-color: "ff9060ff"
 
 mines:
+  # Deployed as a FIELD that behaves as ONE damage VOLUME: a drop scatters cloud-count mine MESHES
+  # within cloud-radius behind the ship (cosmetic only — the meshes are never hit-detected). After
+  # arm-delay the whole cloud-radius sphere is lethal: any enemy inside takes power damage-per-second
+  # SCALED BY ITS OWN SPEED (mines are static, so a fast plow-through hurts and a near-stationary ship
+  # takes ~0), every tick, for the field's lifespan. One deploy costs ONE mine-cargo unit regardless of
+  # cloud-count (the meshes are decoration, not per-mine ammo). model-name is the GLB the client
+  # instances per visual mine (assets/mines/<name>.glb).
   - id: proximity-mine
     name: Proximity Mine
     description: Dropped behind the ship; arms after 2s.
     cargo-id: 2
-    mass: 6
+    mass: 1             # payload cost per deployable field (one drop = one field)
     glyph: "◈"
-    lifespan: 60
+    model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
+    lifespan: 60         # field lifetime, s
+    power: 20            # damage-PER-SECOND at reference speed, scaled by the victim's speed
+    cloud-radius: 30     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
+    cloud-count: 48      # mine meshes scattered per deploy — cosmetic density (<= 64)
+    arm-delay: 2.0       # seconds before the field arms
 
 chaffs:
   - id: sensor-decoy
@@ -103,4 +116,7 @@ chaffs:
     cargo-id: 3
     mass: 3
     glyph: "◇"
-    lifespan: 10
+    model-name: acs40    # GLB the client instances for the decoy (assets/chaff/acs40.glb)
+    lifespan: 3          # puff lifetime, s
+    chaff-strength: 1.0  # decoy strength vs a missile's chaff-resistance
+    decoy-radius: 60     # u within which a missile can be lured onto this puff

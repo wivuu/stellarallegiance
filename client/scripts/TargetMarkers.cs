@@ -88,6 +88,14 @@ public partial class TargetMarkers : Control
     private Vector3? _inbound; // nearest inbound-missile world position, or null
     private double _warnCd; // seconds until the incoming-missile warning tone may re-fire
 
+    // Being-locked warning (A2): the server-reported threat state on the local ship (0 none / 1 an
+    // enemy lock is progressing / 2 a lock completed), cached in _Process and drawn as a banner.
+    // The tone fires on the rising edge into a full lock (state 2), then re-arms on a cooldown while
+    // still locked — the same idiom as the incoming-missile warning.
+    private byte _threat;
+    private byte _prevThreat;
+    private double _lockWarnCd; // seconds until the lock-warning tone may re-fire
+
     // The camera the indicators project through: the F3 overview camera while the sector
     // map is open (so every bracket / glyph / arrow reprojects onto the map), otherwise the
     // flight chase camera. Resolved per-access so it follows the F3 toggle live.
@@ -352,6 +360,26 @@ public partial class TargetMarkers : Control
         {
             _warnCd = 0;
         }
+
+        // Being-locked warning: the server raises LocalThreatLock on us while an enemy is locking
+        // (1) or has locked (2). Play the alarm on the rising edge into a full lock (a fresh 2), then
+        // re-fire on a cooldown while the lock holds. State drops to 0 the tick the lock breaks.
+        _threat = local != null ? _net.LocalThreatLock : (byte)0;
+        if (_lockWarnCd > 0)
+            _lockWarnCd -= delta;
+        if (_threat >= 2)
+        {
+            if (_prevThreat < 2 || _lockWarnCd <= 0)
+            {
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.LockWarning);
+                _lockWarnCd = 3.0;
+            }
+        }
+        else
+        {
+            _lockWarnCd = 0;
+        }
+        _prevThreat = _threat;
     }
 
     public override void _Draw()
@@ -468,6 +496,30 @@ public partial class TargetMarkers : Control
         // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
         // missile homing on us (drawn last so it sits over everything). State cached in _Process.
         DrawIncomingWarning(view);
+
+        // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
+        DrawLockWarning(view);
+    }
+
+    // The being-locked warning banner (A2): "⚠ MISSILE LOCK" flashing amber (state 1, a lock is
+    // progressing) or red (state 2, an enemy has a full lock and can launch a guided missile). Sits
+    // just below the incoming-missile banner so the two never overlap. State cached in _Process.
+    private void DrawLockWarning(Vector2 view)
+    {
+        if (_threat == 0)
+            return;
+
+        bool locked = _threat >= 2;
+        Color baseColor = locked ? DesignTokens.Danger : DesignTokens.Warn;
+        // Pulse faster/harder once locked so a completed lock reads as more urgent than a progressing
+        // one. Same throb idiom as the incoming banner (no timer node).
+        float hz = locked ? 8f : 5f;
+        float pulse = 0.55f + 0.45f * Mathf.Sin(Time.GetTicksMsec() / 1000f * hz);
+        Color c = new(baseColor, pulse);
+        Font font = UiFonts.Mono;
+        string txt = locked ? "⚠  MISSILE LOCK" : "⚠  MISSILE LOCKING";
+        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 15).X;
+        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.37f), txt, HorizontalAlignment.Left, -1, 15, c);
     }
 
     // The missile lock-progress arc wrapping the focused target's bracket, driven by the local
