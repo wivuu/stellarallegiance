@@ -98,10 +98,10 @@ public partial class WeaponsPanel : Control
         WeaponDef primary = _weapons[primaryIdx];
 
         // Dispenser rows (chaff / mine) — NOT hardpoint-mounted, so absent from _weapons; resolved
-        // from the class's default hold. Shown whenever the class can carry that kind.
+        // from the class's default hold OR live ammo (the spawned hold can differ from the default).
         byte cls = (byte)local.Class;
-        WeaponDef? chaffDisp = DispenserFor(cls, WeaponKind.Chaff);
-        WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine);
+        WeaponDef? chaffDisp = DispenserFor(cls, WeaponKind.Chaff, _net.LocalChaffAmmo);
+        WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
 
         int secCount = _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0);
         float panelH =
@@ -171,16 +171,21 @@ public partial class WeaponsPanel : Control
         }
     }
 
-    // The chaff/mine dispenser WeaponDef the local ship's class carries, or null if it carries none of
-    // that kind. Dispensers aren't hardpoint-mounted (not in WeaponMounts), so they're resolved from
-    // the class's default hold: a cargo id there that maps to a Chaff/Mine-kind WeaponDef.
-    private WeaponDef? DispenserFor(byte classId, WeaponKind kind)
+    // The chaff/mine dispenser WeaponDef the local ship carries, or null if it carries none of that
+    // kind. Dispensers aren't hardpoint-mounted (not in WeaponMounts): the class's default hold names
+    // one (shown EMPTY once spent), but live ammo alone also earns the row — the spawned hold can
+    // differ from the default (e.g. decoys added to a scout in the hangar), and the authoritative
+    // per-kind count is all the wire carries.
+    private WeaponDef? DispenserFor(byte classId, WeaponKind kind, int liveAmmo)
     {
-        if (!_defs.TryGetShipDef(classId, out var def) || def.DefaultCargo is null)
-            return null;
-        foreach (var load in def.DefaultCargo)
+        if (_defs.TryGetShipDef(classId, out var def) && def.DefaultCargo is not null)
+            foreach (var load in def.DefaultCargo)
+                foreach (var w in _defs.AllWeapons())
+                    if (w.Kind == kind && w.CargoId == load.CargoId)
+                        return w;
+        if (liveAmmo > 0)
             foreach (var w in _defs.AllWeapons())
-                if (w.Kind == kind && w.CargoId == load.CargoId)
+                if (w.Kind == kind)
                     return w;
         return null;
     }

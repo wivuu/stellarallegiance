@@ -67,6 +67,11 @@ public partial class MinefieldViews : Node3D
             };
             AddChild(fv.Container);
             _fields[row.FieldId] = fv;
+            // Deploy cue: a field first seen while still arming was just laid (fields discovered
+            // mid-life — sector entry, reconnect — stay silent). The layer has no HUD row focus,
+            // so this is the pilot's confirmation the drop happened.
+            if (!armed)
+                SfxManager.Instance?.PlayAt(SfxManager.SfxId.MissileLaunch, fv.Container.Position, pitch: 0.7f, volumeDb: -6f);
         }
 
         fv.BlastRadius = def.BlastRadius;

@@ -278,7 +278,12 @@ public partial class ShipController : Node
                 // Spawn on the authoritative sim server (honored only while the match is Active;
                 // the request simply retries until then), carrying the hangar's chosen consumable
                 // hold for this class (server validates + falls back to the hull default if invalid).
-                _net?.RequestSpawn((byte)cls, LoadoutState.Shared.CargoFor((byte)cls));
+                // Autofly ships a fixed test hold (3 mines + 1 decoy fit the scout's free payload)
+                // so headless runs exercise the MsgSpawn cargo path the hangar uses.
+                var hold = _autoFly
+                    ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1) }
+                    : LoadoutState.Shared.CargoFor((byte)cls);
+                _net?.RequestSpawn((byte)cls, hold);
                 _spawnPending = true;
                 _spawnRetry = 1.0;
                 SpawnHint = null;
@@ -563,6 +568,12 @@ public partial class ShipController : Node
             Yaw = 0.4f * Mathf.Sin(t * 0.6f), // weave, ~10 s period
             Pitch = 0.2f * Mathf.Sin(t * 0.37f),
             Firing = true, // exercise projectile spawn/cull
+            // Pin the dispensers on like boost/Firing: the server cadence gate turns the held
+            // flags into periodic drops, so headless runs exercise the full chaff/mine wire
+            // (input flag -> sim -> MsgChaff/MsgMinefields -> client FX) with whatever the
+            // spawned hold carried.
+            DropChaff = true,
+            DropMine = true,
         };
     }
 }

@@ -24,6 +24,8 @@ public partial class Hud : CanvasLayer
     // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
     // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
     private bool _firing2Held;
+    private bool _chaffHeld;
+    private bool _mineHeld;
     private double _emptyClickCd;
 
     // The design-system gallery overlay (F9), instantiated on demand.
@@ -293,6 +295,25 @@ public partial class Hud : CanvasLayer
             _emptyClickCd = 0.5;
         }
         _firing2Held = firing2;
+
+        // Same "no rounds" blip for the dispenser keys (C chaff / B mine): an empty (or absent)
+        // dispenser otherwise swallows the press silently — the drop itself is server-authoritative,
+        // so this client-side edge detect is cosmetic feedback only.
+        bool dispensersLive = flying && !ship!.IsPod;
+        bool chaffKey = inputFree && Input.IsPhysicalKeyPressed(Key.C);
+        if (chaffKey && !_chaffHeld && dispensersLive && _net.LocalChaffAmmo == 0 && _emptyClickCd <= 0)
+        {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+            _emptyClickCd = 0.5;
+        }
+        _chaffHeld = chaffKey;
+        bool mineKey = inputFree && Input.IsPhysicalKeyPressed(Key.B);
+        if (mineKey && !_mineHeld && dispensersLive && _net.LocalMineAmmo == 0 && _emptyClickCd <= 0)
+        {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+            _emptyClickCd = 0.5;
+        }
+        _mineHeld = mineKey;
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.
