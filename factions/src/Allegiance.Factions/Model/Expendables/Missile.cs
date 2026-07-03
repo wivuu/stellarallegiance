@@ -30,6 +30,9 @@ public record Missile : Expendable
     /// <summary>Speed cap once boosted, in u/s; 0 = uncapped (projected onto WeaponDef.MissileMaxSpeed).</summary>
     public double MaxSpeed { get; set; }
 
+    /// <summary>Damage multiplier applied to <see cref="Power"/> on a direct (fuse-triggering) hit.</summary>
+    public double DirectHitMultiplier { get; set; }
+
     /// <summary>GLB model basename the client loads from <c>assets/missiles/</c> (no extension).</summary>
     public string? ModelName { get; set; }
 

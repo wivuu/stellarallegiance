@@ -10,7 +10,7 @@
 // Scenarios:
 //   1. Lock -> fire -> hit: hold LockTargetId on the attacker for LockTicks, assert Locked flips,
 //      then hold Firing2 and assert ammo decrements, a MissileSim appears, and the target's Health
-//      drops by exactly Damage within the missile's lifetime (impact gone-reason 1).
+//      drops by exactly Damage * DirectHitMult within the missile's lifetime (impact gone-reason 1).
 //   2. Coast and expire: kill the target (Alive = false) right after launch — the seeker's target
 //      seam (ResolveSeekerTarget) invalidates it, so the missile must NOT retarget/hit anything and
 //      must eventually expire (gone-reason 0).
@@ -22,6 +22,9 @@
 //      impact tick and final target health.
 //   5. Dumbfire: Firing2 with no completed lock still launches — unguided (TargetShipId 0), flying
 //      dead straight and expiring harmlessly when aimed at nothing.
+//   6. Blast splash: an enemy bystander inside BlastRadius takes exactly the inverse-square splash
+//      (BlastPower * (fuse/d)^2, d measured from the reported detonation point); a friendly at the
+//      same offset and an enemy parked outside BlastRadius take nothing.
 
 using System.Linq;
 using SimServer.Content;
@@ -170,10 +173,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     Check(impactSeen, "missile resolves within its lifetime (MissileGoneThisStep fires)", "missile never resolved (no MissileGoneThisStep entry) within ProjectileLifeTicks");
     Check(impactReason == 1, $"missile gone-reason is impact (1), got {impactReason}", $"missile gone-reason was {impactReason}, expected impact (1)");
     Check(sim.Missiles.Count == 0, "missile removed from Missiles after resolving", $"missile list still has {sim.Missiles.Count} entries");
+    float directDamage = seeker.Damage * seeker.DirectHitMult;
     Check(
-        target.Health == healthBeforeImpact - seeker.Damage,
-        $"target took exactly {seeker.Damage} damage (health {healthBeforeImpact} -> {target.Health})",
-        $"target health wrong after impact: {healthBeforeImpact} -> {target.Health}, expected {healthBeforeImpact - seeker.Damage}"
+        target.Health == healthBeforeImpact - directDamage,
+        $"target took exactly Damage * DirectHitMult = {directDamage} damage (health {healthBeforeImpact} -> {target.Health})",
+        $"target health wrong after impact: {healthBeforeImpact} -> {target.Health}, expected {healthBeforeImpact - directDamage}"
     );
 }
 
@@ -392,6 +396,98 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
         expiredSeen && !impactSeen && target.Health == targetHealthBefore,
         "off-boresight dumbfire expires harmlessly (no homing, no damage)",
         $"dumbfire resolved wrong (expired={expiredSeen}, impact={impactSeen}, target health {targetHealthBefore} -> {target.Health})"
+    );
+}
+
+// ---- 6. Blast splash (inverse-square indirect damage) ---------------------------------------------
+{
+    var (sim, attacker, target, seeker) = SetupDuel(seed: 6);
+
+    // Three bystanders around the target at (0,0,300): an enemy 15u off (inside BlastRadius 25), a
+    // friendly at the mirrored offset, and an enemy 500u downrange (far outside the blast). 15u
+    // lateral also keeps them clear of the missile's sweep corridor (hull bounding + fuse width).
+    sim.EnqueueJoin(3, team: 1, cls: FlightModel.ClassFighter);
+    sim.EnqueueJoin(4, team: 0, cls: FlightModel.ClassFighter);
+    sim.EnqueueJoin(5, team: 1, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var enemyNear = sim.Ships.First(s => s.OwnerClientId == 3);
+    var friendlyNear = sim.Ships.First(s => s.OwnerClientId == 4);
+    var enemyFar = sim.Ships.First(s => s.OwnerClientId == 5);
+    foreach (var (s, pos) in new[]
+    {
+        (enemyNear, new Vec3(15f, 0f, 300f)),
+        (friendlyNear, new Vec3(-15f, 0f, 300f)),
+        (enemyFar, new Vec3(0f, 0f, 800f)),
+    })
+    {
+        s.SectorId = EmptySector;
+        s.State.Pos = pos;
+        s.State.Vel = new Vec3(0f, 0f, 0f);
+        s.State.Rot = Quat.Identity;
+        s.State.AngVel = new Vec3(0f, 0f, 0f);
+    }
+
+    for (uint i = 0; i < seeker.LockTicks; i++)
+    {
+        attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId };
+        sim.Step();
+    }
+    attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId, Firing2 = true };
+    sim.Step();
+    Check(sim.Missiles.Count == 1, "blast scenario launched one missile", $"expected 1 missile in flight, found {sim.Missiles.Count}");
+    ulong missileId = sim.Missiles[0].MissileId;
+    attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId, Firing2 = false };
+
+    float targetBefore = target.Health;
+    float enemyNearBefore = enemyNear.Health;
+    float friendlyNearBefore = friendlyNear.Health;
+    float enemyFarBefore = enemyFar.Health;
+    bool impactSeen = false;
+    Vec3 hitPos = default;
+    for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !impactSeen; i++)
+    {
+        sim.Step();
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == missileId && g.reason == 1)
+            {
+                impactSeen = true;
+                hitPos = g.pos;
+            }
+    }
+    Check(impactSeen, "blast scenario missile impacts its target", "blast scenario missile never impacted");
+
+    // Direct victim: multiplied damage only — it is excluded from its own splash.
+    Check(
+        target.Health == targetBefore - seeker.Damage * seeker.DirectHitMult,
+        "direct victim took Damage * DirectHitMult and no splash on top",
+        $"direct victim health wrong ({targetBefore} -> {target.Health}, expected {targetBefore - seeker.Damage * seeker.DirectHitMult})"
+    );
+
+    // Enemy bystander: exact inverse-square splash, replicating the sim's f32 math bit-for-bit
+    // (distance from the REPORTED detonation point; falloff = (fuse/d)^2 since d > fuse width).
+    float d = (enemyNear.State.Pos - hitPos).Length();
+    Check(
+        d > seeker.ProjectileRadius && d <= seeker.BlastRadius,
+        $"enemy bystander sits in the falloff band (fuse {seeker.ProjectileRadius} < d {d} <= blast {seeker.BlastRadius})",
+        $"blast scenario geometry broken: bystander distance {d} not in ({seeker.ProjectileRadius}, {seeker.BlastRadius}]"
+    );
+    float expectedSplash = seeker.BlastPower * ((seeker.ProjectileRadius / d) * (seeker.ProjectileRadius / d));
+    Check(
+        enemyNear.Health == enemyNearBefore - expectedSplash,
+        $"enemy bystander took exactly the inverse-square splash ({expectedSplash} at d {d})",
+        $"enemy bystander health wrong ({enemyNearBefore} -> {enemyNear.Health}, expected {enemyNearBefore - expectedSplash})"
+    );
+
+    // No friendly fire, no over-range splash.
+    Check(
+        friendlyNear.Health == friendlyNearBefore,
+        "friendly bystander inside the blast took nothing",
+        $"friendly bystander took splash ({friendlyNearBefore} -> {friendlyNear.Health})"
+    );
+    Check(
+        enemyFar.Health == enemyFarBefore,
+        "enemy outside BlastRadius took nothing",
+        $"out-of-range enemy took splash ({enemyFarBefore} -> {enemyFar.Health})"
     );
 }
 

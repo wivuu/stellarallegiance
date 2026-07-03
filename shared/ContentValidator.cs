@@ -55,6 +55,12 @@ namespace StellarAllegiance.Shared
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
                     if (w.ProjectileLifeTicks == 0)
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                    if (w.BlastPower <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
+                    if (w.BlastRadius <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
+                    if (w.DirectHitMult <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}");
                 }
             }
 

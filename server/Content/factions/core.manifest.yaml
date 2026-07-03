@@ -17,7 +17,7 @@
 #  on the model (see factions/src/.../Model/RuntimeData.cs); everything else derives from Core.
 # =====================================================================
 
-version: "2026.07.02-guided-missiles"
+version: "2026.07.02-missile-blast"
 
 catalog:
   - hulls.yaml

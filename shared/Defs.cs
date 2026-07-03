@@ -123,6 +123,9 @@ namespace StellarAllegiance.Shared
         public float MissileAccel; // booster acceleration, u/s^2
         public float MissileTurnRateRad; // guidance turn-rate limit, rad/s (authored deg/s -> rad/s)
         public float MissileMaxSpeed; // speed cap once boosted, u/s; 0 = uncapped
+        public float BlastPower; // splash damage at the detonation point (inverse-square falloff)
+        public float BlastRadius; // splash cutoff radius, u; ships beyond it take nothing
+        public float DirectHitMult; // multiplier on Damage for the ship that triggers the fuse
         public string ModelName = ""; // GLB basename under assets/missiles/ (no extension)
         public float TrailLifetime; // client smoke-trail plume lifetime, s
         public float TrailScale; // client smoke-trail plume size scale

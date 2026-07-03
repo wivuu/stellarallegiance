@@ -1088,6 +1088,9 @@
         "description": {
           "type": "string"
         },
+        "direct-hit-multiplier": {
+          "type": "number"
+        },
         "directional": {
           "type": "boolean"
         },

@@ -665,7 +665,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 15;
+    public const byte ProtocolVersion = 16;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -851,6 +851,9 @@ public partial class GameNetClient : Node
                     MissileAccel = r.ReadSingle(),
                     MissileTurnRateRad = r.ReadSingle(),
                     MissileMaxSpeed = r.ReadSingle(),
+                    BlastPower = r.ReadSingle(),
+                    BlastRadius = r.ReadSingle(),
+                    DirectHitMult = r.ReadSingle(),
                     ModelName = ReadStr(r),
                     TrailLifetime = r.ReadSingle(),
                     TrailScale = r.ReadSingle(),

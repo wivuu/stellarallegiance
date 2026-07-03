@@ -6,7 +6,10 @@
 # Missiles that a launcher fires (launchers.yaml, weapon-id racks) also carry a guidance/lock stat
 # block projected onto the missile-kind WeaponDef: acceleration/turn-rate (deg/s)/initial-speed/
 # max-speed drive flight; lock-time (s)/lock-angle (rad cone half-angle)/max-lock (u range) drive the
-# server lock timer; power/width are damage + proximity-fuse radius; lifespan (s) is flight time. The
+# server lock timer; power/width are damage + proximity-fuse radius; lifespan (s) is flight time.
+# Warhead: a direct (fuse-triggering) hit deals power * direct-hit-multiplier; every OTHER enemy ship
+# within blast-radius (u) of the detonation takes blast-power splash — full inside the fuse radius
+# (width), inverse-square falloff beyond it, nothing past blast-radius. The
 # smoke trail is YAML-tweakable: model-name (assets/missiles/<name>.glb), trail-lifetime/trail-scale
 # (client EngineGlow plume) and trail-color (RRGGBB[AA] hex). CoreValidator refuses to boot a launcher
 # whose missile leaves any of these unauthored.
@@ -27,7 +30,10 @@ missiles:
     lock-angle: 0.5     # lock cone half-angle, radians
     max-lock: 1200      # lock range, u
     power: 45
-    width: 3            # proximity-fuse margin
+    width: 1            # proximity-fuse margin
+    direct-hit-multiplier: 1.5
+    blast-power: 30     # splash at the detonation point
+    blast-radius: 25    # splash cutoff, u
     model-name: mis09
     trail-lifetime: 0.7
     trail-scale: 0.45
@@ -48,6 +54,9 @@ missiles:
     max-lock: 1000
     power: 18
     width: 2
+    direct-hit-multiplier: 1.25
+    blast-power: 10     # thin splash — a harasser, not a bomber
+    blast-radius: 12
     model-name: mis01
     trail-lifetime: 0.4
     trail-scale: 0.3

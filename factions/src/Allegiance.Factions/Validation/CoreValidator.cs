@@ -97,6 +97,14 @@ public static class CoreValidator
                 result.Error($"{ctx} missile '{missile.Id}' needs max-lock > 0.");
             if (missile.TurnRate < 0)
                 result.Error($"{ctx} missile '{missile.Id}' has negative turn-rate.");
+            if (missile.Width <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius).");
+            if (missile.BlastPower <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs blast-power > 0.");
+            if (missile.BlastRadius <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs blast-radius > 0.");
+            if (missile.DirectHitMultiplier <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs direct-hit-multiplier > 0.");
             if (!string.IsNullOrEmpty(missile.TrailColor) && !IsHexColor(missile.TrailColor))
                 result.Error($"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string.");
         }

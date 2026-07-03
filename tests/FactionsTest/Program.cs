@@ -105,9 +105,10 @@ Check(
 // Guided-missile guidance/lock block + smoke-trail runtime extension fields (projected onto the
 // missile-kind WeaponDef).
 Check(
-    seeker.InitialSpeed == 90 && seeker.Acceleration == 40 && seeker.MaxSpeed == 220 && seeker.TurnRate == 90
+    seeker.InitialSpeed == 90 && seeker.Acceleration == 40 && seeker.MaxSpeed == 220 && seeker.TurnRate == 80
         && seeker.LockTime == 2.0 && seeker.LockAngle == 0.5 && seeker.MaxLock == 1200 && seeker.Power == 45
-        && seeker.Width == 3 && seeker.Lifespan == 8,
+        && seeker.Width == 3 && seeker.Lifespan == 8
+        && seeker.BlastPower == 30 && seeker.BlastRadius == 25 && seeker.DirectHitMultiplier == 1.5,
     "stock seeker carries guidance/lock stats",
     $"stock seeker guidance wrong (speed {seeker.InitialSpeed}/{seeker.MaxSpeed}, accel {seeker.Acceleration}, turn {seeker.TurnRate}, lock {seeker.LockTime}/{seeker.LockAngle}/{seeker.MaxLock}, power {seeker.Power})"
 );

@@ -1262,9 +1262,10 @@ public sealed partial class Simulation
     }
 
     // Step every in-flight missile: steer (turn-rate-limited pure pursuit) + accelerate, sweep this
-    // tick's segment for the first enemy ship (skip owner, friendlies, pods) or rock, apply direct
-    // Power damage on a ship hit, and detonate/expire. Deterministic f32 math, no RNG. Between
-    // Pass A and Pass C. Removals collected then applied post-loop.
+    // tick's segment for the first enemy ship (skip owner, friendlies, pods) or rock, detonate
+    // (direct Damage * DirectHitMult on the fuse-triggering ship + ApplyBlast splash around the
+    // detonation point) or expire. Deterministic f32 math, no RNG. Between Pass A and Pass C.
+    // Removals collected then applied post-loop.
     private void StepMissiles(uint tick, float dt)
     {
         if (_missiles.Count == 0)
@@ -1362,7 +1363,8 @@ public sealed partial class Simulation
             {
                 Vec3 hitPos = mp + vel * bestT;
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
-                    victim.Health -= w.Damage; // end-of-step death pass resolves 0 health
+                    victim.Health -= w.Damage * w.DirectHitMult; // end-of-step death pass resolves 0 health
+                ApplyBlast(mis, w, hitPos, hitShip, shipGrid);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1380,6 +1382,42 @@ public sealed partial class Simulation
         if (remove is not null)
             foreach (var mis in remove)
                 _missiles.Remove(mis);
+    }
+
+    // Warhead splash on detonation (ship OR rock impact): every enemy ship within BlastRadius of the
+    // detonation point takes BlastPower, full inside the fuse radius (ProjectileRadius = authored
+    // width) and inverse-square beyond it — falloff = (fuse/d)². The direct-hit victim is excluded
+    // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
+    // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
+    // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
+    private void ApplyBlast(MissileSim mis, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid)
+    {
+        if (shipGrid is null || w.BlastRadius <= 0f || w.BlastPower <= 0f)
+            return;
+        float fuseR = w.ProjectileRadius;
+        int x0 = World.CellOf(hitPos.X - w.BlastRadius),
+            x1 = World.CellOf(hitPos.X + w.BlastRadius);
+        int y0 = World.CellOf(hitPos.Y - w.BlastRadius),
+            y1 = World.CellOf(hitPos.Y + w.BlastRadius);
+        int z0 = World.CellOf(hitPos.Z - w.BlastRadius),
+            z1 = World.CellOf(hitPos.Z + w.BlastRadius);
+        for (int cx = x0; cx <= x1; cx++)
+            for (int cy = y0; cy <= y1; cy++)
+                for (int cz = z0; cz <= z1; cz++)
+                {
+                    if (!shipGrid.TryGetValue((cx, cy, cz), out var shipsInCell))
+                        continue;
+                    foreach (var s in shipsInCell)
+                    {
+                        if (s.Team == mis.Team || !s.Alive || s.IsPod || s.ShipId == directHitShip)
+                            continue;
+                        float d = (s.State.Pos - hitPos).Length();
+                        if (d > w.BlastRadius)
+                            continue;
+                        float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
+                        s.Health -= w.BlastPower * falloff; // end-of-step death pass resolves 0 health
+                    }
+                }
     }
 
     // Rotate unit `dir` toward unit `desired` by at most `maxRad`. Linear blend + renormalize (a

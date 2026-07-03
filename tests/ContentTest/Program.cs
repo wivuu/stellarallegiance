@@ -83,15 +83,17 @@ Check(
         && seekerW.ProjectileRadius == 3f && seekerW.Mass == 4f && seekerW.FireIntervalTicks == 30
         && seekerW.MagazineSize == 6 && seekerW.LockTicks == 40 && seekerW.LockAngleRad == 0.5f
         && seekerW.LockRange == 1200f && seekerW.MissileAccel == 40f && seekerW.MissileMaxSpeed == 220f
+        && seekerW.BlastPower == 30f && seekerW.BlastRadius == 25f && seekerW.DirectHitMult == 1.5f
         && seekerW.ModelName == "mis09" && seekerW.TrailColor == 0xffc890ffu
-        && System.MathF.Abs(seekerW.MissileTurnRateRad - (90f * System.MathF.PI / 180f)) < 0.0001f,
+        && System.MathF.Abs(seekerW.MissileTurnRateRad - (80f * System.MathF.PI / 180f)) < 0.0001f,
     "loader projected seeker missile launcher (missile-kind WeaponDef)",
     $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, lock {seekerW.LockTicks}/{seekerW.LockRange}, color {seekerW.TrailColor:x})"
 );
 // A bolt gun leaves every missile field zero/empty (guards the projection's Bolt path).
 Check(
     scoutW.Kind == WeaponKind.Bolt && scoutW.MagazineSize == 0 && scoutW.LockTicks == 0
-        && scoutW.LockRange == 0f && scoutW.MissileMaxSpeed == 0f && scoutW.ModelName == "" && scoutW.TrailColor == 0u,
+        && scoutW.LockRange == 0f && scoutW.MissileMaxSpeed == 0f && scoutW.ModelName == "" && scoutW.TrailColor == 0u
+        && scoutW.BlastPower == 0f && scoutW.BlastRadius == 0f && scoutW.DirectHitMult == 0f,
     "loader left bolt weapon's missile fields zero/empty",
     $"scout bolt has stray missile fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, lock {scoutW.LockTicks})"
 );

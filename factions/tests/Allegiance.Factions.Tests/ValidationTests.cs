@@ -306,7 +306,32 @@ public class ValidationTests
         Assert.DoesNotContain(result.Errors, e => e.Contains("rack"));
     }
 
-    // A missile with all the guidance/lock stats the launcher projection needs (positive).
+    // A launcher-fired missile with no warhead stats (blast-power/blast-radius/direct-hit-multiplier
+    // all unauthored) must refuse boot — the sim's detonation math has no compiled-in defaults.
+    [Fact]
+    public void LauncherMissileWithoutWarheadStats_IsReported()
+    {
+        var missile = ValidMissile();
+        missile.BlastPower = 0;
+        missile.BlastRadius = 0;
+        missile.DirectHitMultiplier = 0;
+        var core = new Core
+        {
+            Missiles = { missile },
+            Launchers =
+            {
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.Contains(result.Errors, e => e.Contains("blast-power"));
+        Assert.Contains(result.Errors, e => e.Contains("blast-radius"));
+        Assert.Contains(result.Errors, e => e.Contains("direct-hit-multiplier"));
+    }
+
+    // A missile with all the guidance/lock/warhead stats the launcher projection needs (positive).
     private static Missile ValidMissile(string id = "seeker") =>
         new()
         {
@@ -320,6 +345,9 @@ public class ValidationTests
             MaxLock = 1200,
             TurnRate = 90,
             Width = 3,
+            BlastPower = 30,
+            BlastRadius = 25,
+            DirectHitMultiplier = 1.5,
         };
 
     private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>
