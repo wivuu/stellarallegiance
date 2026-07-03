@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/client/">
+    <Project Path="client/wivuullegiance.csproj" />
+  </Folder>
+  <Folder Name="/factions/" />
+  <Folder Name="/factions/src/">
+    <Project Path="factions/src/Allegiance.Factions.Cli/Allegiance.Factions.Cli.csproj" />
+    <Project Path="factions/src/Allegiance.Factions/Allegiance.Factions.csproj" />
+  </Folder>
+  <Folder Name="/factions/tests/">
+    <Project Path="factions/tests/Allegiance.Factions.Tests/Allegiance.Factions.Tests.csproj" />
+  </Folder>
+  <Folder Name="/public-lobby/">
+    <Project Path="public-lobby/PublicLobby.csproj" />
+  </Folder>
+  <Folder Name="/server/">
+    <Project Path="server/SimServer.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="shared/Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CollisionTest/CollisionTest.csproj" />
+    <Project Path="tests/ContentTest/ContentTest.csproj" />
+    <Project Path="tests/CryptoTest/CryptoTest.csproj" />
+    <Project Path="tests/FactionsTest/FactionsTest.csproj" />
+    <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />
+    <Project Path="tests/MissileTest/MissileTest.csproj" />
+    <Project Path="tests/StrategyTest/StrategyTest.csproj" />
+  </Folder>
+  <Folder Name="/tools/" />
+  <Folder Name="/tools/simbot/">
+    <Project Path="tools/simbot/SimBot.csproj" />
+  </Folder>
+</Solution>
