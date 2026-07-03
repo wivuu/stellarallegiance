@@ -228,11 +228,13 @@ public partial class ShipController : Node
         bool hasShip = _world.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
 
-        // Headless autofly: the server gates spawning behind the lobby ready-up, so ready up once
-        // on connect to drive the match to Active before requesting a ship (teams are balanced
-        // server-side). Run the server with --autostart for fully unattended benchmarks.
+        // Headless autofly: the server gates spawning behind BOTH a team pick ("Pick a team before
+        // launching") and the lobby ready-up, so QuickJoin once on connect — take a side (BLUE) then
+        // ready up to drive the match to Active before requesting a ship. Run the server with
+        // --autostart for a perpetual match (this readies straight through it).
         if (_autoFly && connected && !_autoJoined)
         {
+            _net?.SetTeam(0);
             _net?.SetReady(true);
             _autoJoined = true;
         }

@@ -19,7 +19,6 @@ public partial class Hud : CanvasLayer
     private Label _label = null!;
     private Label _sectorShips = null!;
     private Label _credits = null!;
-    private Label _missileAmmo = null!;
     private Label _warning = null!;
 
     // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
@@ -88,6 +87,12 @@ public partial class Hud : CanvasLayer
         AddChild(minimap);
         minimap.Init(_cm, _world);
 
+        // Weapons readout, bottom-right (symmetric to the minimap): the local ship's armament —
+        // primary gun cadence + launcher ammo/lock. Added here so the top-left text draws over it.
+        var weapons = new WeaponsPanel { Name = "WeaponsPanel" };
+        AddChild(weapons);
+        weapons.Init(_world, _net, _defs);
+
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
         // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
         _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
@@ -105,14 +110,6 @@ public partial class Hud : CanvasLayer
         _credits.Position = new Vector2(16, 64);
         _credits.Visible = false;
         AddChild(_credits);
-
-        // Missile ammo counter (guided missiles): under the credits line, shown only while flying
-        // a hull that carries a launcher. Mono telemetry in the cyan Data hue (a weapons readout is
-        // ship chrome, not a team color); hidden until a missile-armed ship is in flight.
-        _missileAmmo = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TeamAccent);
-        _missileAmmo.Position = new Vector2(16, 90);
-        _missileAmmo.Visible = false;
-        AddChild(_missileAmmo);
 
         // Out-of-bounds warning (sector boundary): centered in the upper third, hidden
         // until the local ship strays past its sector radius and starts taking damage.
@@ -154,12 +151,17 @@ public partial class Hud : CanvasLayer
     private void CaptureLiveUiIfRequested()
     {
         string? outPath = null;
+        double delay = 2.0; // default settle; --ui-shot-delay=<sec> waits longer (e.g. for an autofly spawn)
         foreach (string a in OS.GetCmdlineUserArgs())
+        {
             if (a.StartsWith("--ui-shot="))
                 outPath = a.Substring("--ui-shot=".Length);
+            else if (a.StartsWith("--ui-shot-delay="))
+                double.TryParse(a.Substring("--ui-shot-delay=".Length), System.Globalization.CultureInfo.InvariantCulture, out delay);
+        }
         if (outPath == null)
             return;
-        var t = GetTree().CreateTimer(2.0);
+        var t = GetTree().CreateTimer(delay);
         t.Timeout += () =>
         {
             GetViewport().GetTexture().GetImage().SavePng(outPath);
@@ -269,18 +271,9 @@ public partial class Hud : CanvasLayer
         if (inMatch)
             _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
 
-        // Missile ammo: only meaningful on a launcher-equipped hull (not a pod). MissileMount()
-        // returns null for hulls with no rack, which hides the counter entirely. Ammo is the
-        // server-authoritative value decoded straight from the local ship's snapshot record.
+        // Missile launcher presence gates the empty-rack blip below. The live ammo/lock readout now
+        // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack.
         WeaponDef? missileMount = flying && !ship!.IsPod ? _defs.MissileMount((byte)ship.Class) : null;
-        // Unlocked launches are dumbfire (straight out of the tube); a completed lock makes the
-        // round guided — surface which one the next launch will be next to the count.
-        _missileAmmo.Visible = missileMount != null;
-        if (missileMount != null)
-            _missileAmmo.Text =
-                (_net.LocalLockState & 0x80) != 0
-                    ? $"MSL x{_net.LocalMissileAmmo} — LOCKED"
-                    : $"MSL x{_net.LocalMissileAmmo}";
 
         // Empty-rack click: a "no rounds" blip on the pressed edge of the secondary-fire keys when
         // the launcher is dry. Mirrors ShipController's Firing2 gate (F, or RMB while the cursor is

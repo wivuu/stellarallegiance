@@ -65,6 +65,7 @@ public partial class PredictionController : Node3D
     private DefRegistry _defs = null!; // runtime ship/weapon defs (M3); wired at Initialize
     private ShipClass _class; // class id for def/weapon lookups
     private uint _lastFireTick; // mirrors server Ship.LastFireTick (0 = ready)
+    private uint _clientTick; // tick last passed to Step (HUD cooldown readout keys off it)
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();
 
@@ -146,6 +147,14 @@ public partial class PredictionController : Node3D
     // gauge only appears once there's a real tank to draw.
     public float Fuel => _state.Fuel;
     public float MaxFuel => _hasStats ? _stats.MaxFuel : 0f;
+
+    // Primary-gun fire cadence, surfaced for the HUD weapons readout. LastFireTick mirrors the
+    // server's Ship.LastFireTick (0 = never fired / ready); ClientTick is the tick the predictor
+    // last stepped. The gun is READY once ClientTick - LastFireTick >= the mount's FireIntervalTicks
+    // — the SAME gate Step() uses to spawn a predicted bolt (kept in the predictor so the readout
+    // reads the identical tick space the sim fires on).
+    public uint LastFireTick => _lastFireTick;
+    public uint ClientTick => _clientTick;
 
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
@@ -235,6 +244,7 @@ public partial class PredictionController : Node3D
     public IReadOnlyList<PredictedShot> Step(ShipInputState input, uint clientTick)
     {
         _shotsOut.Clear();
+        _clientTick = clientTick;
         _prevState = _state;
         // Re-pull stats from the registry each tick (a cheap cached lookup) so a runtime
         // retune of this class's ShipClassDef flows into prediction with no respawn — and
