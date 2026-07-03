@@ -1057,6 +1057,17 @@ public sealed partial class Simulation
     // rejoins the wave.
     private void DockShip(ShipSim s, uint tick)
     {
+        // Dock refund (D7): a voluntary dock returns the hull's paid cost to the team, so dock→relaunch
+        // is a net-free full rearm/repair. Only real player hulls that actually paid (PaidCost>0)
+        // refund — pods never inherit PaidCost via MakePod and PIGs pay nothing, so death refunds
+        // nothing. Capped at exactly what was paid (zeroed after) → no exploit.
+        if (!s.IsPod && !s.IsPig && s.OwnerClientId >= 0 && s.PaidCost > 0
+            && World.TeamStates.TryGetValue(s.Team, out var ts))
+        {
+            ts.Credits += s.PaidCost;
+            s.PaidCost = 0;
+            TeamStateChangedThisStep = true;
+        }
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
@@ -1324,6 +1335,7 @@ public sealed partial class Simulation
 
         ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
         bool valid = false;
+        ShipSim? threatTarget = null; // the ship being locked (A2 being-locked warning), if any
         if (GameContent.IsBaseLock(input.LockTargetId))
         {
             // Base lock: only a CanDamageBase weapon may lock a base at all (D3); otherwise
@@ -1358,7 +1370,10 @@ public sealed partial class Simulation
             {
                 Vec3 nose = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
                 if (Dot(nose, to * (1f / d)) >= MathF.Cos(w.LockAngleRad))
+                {
                     valid = true;
+                    threatTarget = t; // resolve its warning below, after ship.Locked updates this tick
+                }
             }
         }
 
@@ -1373,6 +1388,13 @@ public sealed partial class Simulation
             ship.LockProgress = 0;
             ship.Locked = false;
         }
+
+        // Being-locked warning (A2): raise the threat state on the TARGET ship so its wire record
+        // carries the amber (locking) / red (locked) flag bits. Uses the freshly-updated ship.Locked
+        // so the red banner fires the same tick the lock completes. A completed lock wins over a
+        // merely-progressing one from another attacker (max, not overwrite). Base locks never warn.
+        if (threatTarget is not null)
+            threatTarget.ThreatLockState = ship.Locked ? (byte)2 : Math.Max(threatTarget.ThreatLockState, (byte)1);
 
         uint pct = w.LockTicks > 0 ? ship.LockProgress * 100u / w.LockTicks : 100u;
         if (pct > 100u)

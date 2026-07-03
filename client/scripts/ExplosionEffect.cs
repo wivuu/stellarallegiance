@@ -47,7 +47,10 @@ public partial class ExplosionEffect : Node3D
         new()
         {
             Name = "Explosion",
-            _classScale = 1.0f, // Track A: Mathf.Max(0.6f, blastRadius / 25f)
+            // Scale to the warhead: the seeker's 25 u blast is the 1.0 reference, so a wider-radius
+            // torpedo booms proportionally bigger. Clamp low so a 0-radius (splash-less) weapon still
+            // shows the small default pop, and cap high so a huge radius doesn't fill the screen.
+            _classScale = Mathf.Clamp(blastRadius / 25f, 0.6f, 3.0f),
             _team = team,
         };
 

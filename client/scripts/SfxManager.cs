@@ -43,6 +43,7 @@ public partial class SfxManager : Node
         MissileLock,
         MissileWarning,
         MissileEmpty,
+        LockWarning,
     }
 
     private static readonly Dictionary<SfxId, string> Files = new()
@@ -63,6 +64,7 @@ public partial class SfxManager : Node
         { SfxId.MissileLock, "missile_lock.ogg" },
         { SfxId.MissileWarning, "missile_warning.ogg" },
         { SfxId.MissileEmpty, "missile_empty.ogg" },
+        { SfxId.LockWarning, "missile_lock_warning.ogg" },
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).

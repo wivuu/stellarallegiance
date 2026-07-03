@@ -824,5 +824,354 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     );
 }
 
+// ==== Chaff / dock-refund (Track A) =============================================================
+//
+// Chaff decoys use MinefieldLayout.Hash01(missileId, chaffId) < strength/(strength+resistance) as a
+// STATELESS pure-hash roll (D5), so a decoy's outcome is fully determined by the two ids. The
+// scenarios below exploit that: they drop a real cloud of puffs, then reposition (mutate) the puffs
+// — ChaffSim is a reference type exposed via sim.Chaff — to place a KNOWN-winning (or known-losing)
+// puff squarely on the missile's path and banish the rest to another sector. That makes the decoy
+// (or non-decoy) deterministic without depending on flight-geometry luck, and asserts the exact
+// substitution/resistance behaviour rather than a coin flip.
+
+// Lock the attacker onto `targetId` for the full LockTicks, then Firing2 once to launch a single
+// guided round; returns its MissileSim (asserts exactly one launched).
+Simulation.MissileSim LockAndFire(Simulation sim, Simulation.ShipSim attacker, ulong targetId, WeaponDef w)
+{
+    for (uint i = 0; i < w.LockTicks; i++)
+    {
+        attacker.HeldInput = new ShipInputState { LockTargetId = targetId };
+        sim.Step();
+    }
+    attacker.HeldInput = new ShipInputState { LockTargetId = targetId, Firing2 = true };
+    sim.Step();
+    attacker.HeldInput = new ShipInputState { LockTargetId = targetId, Firing2 = false };
+    return sim.Missiles.Single();
+}
+
+// Force `ship` to eject `count` chaff puffs in `count` consecutive ticks by zeroing the cadence gate
+// each step (the server's LastChaffTick debounce is what a normal held-input replay trips over — a
+// test may legitimately bypass it to lay a cloud fast). The dropper stays put, so every puff spawns
+// clustered at its aft; the caller repositions the ones it cares about afterwards.
+void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
+{
+    ship.ChaffAmmo = (byte)count;
+    for (int i = 0; i < count; i++)
+    {
+        ship.LastChaffTick = 0; // bypass the FireIntervalTicks debounce for a dense cloud
+        ship.HeldInput = new ShipInputState { DropChaff = true };
+        sim.Step();
+    }
+    ship.HeldInput = new ShipInputState();
+}
+
+// ---- 12. Chaff decoys a seeker (lock breaks, missile pops on the puff, target unharmed) ----------
+{
+    var (sim, attacker, target, seeker) = SetupDuel(seed: 12);
+    var mis = LockAndFire(sim, attacker, target.ShipId, seeker);
+    ulong missileId = mis.MissileId;
+    Check(mis.TargetShipId == target.ShipId, "seeker launched locked onto the target ship", $"seeker target wrong ({mis.TargetShipId})");
+
+    // Lay a cloud from the target (puffs spawn ~4u aft of it at z≈296, far from the missile still
+    // near the origin — no premature decoy), then find a puff whose id WINS the decoy roll.
+    LayChaffCloud(sim, target, 12);
+    Simulation.ChaffSim? winner = null;
+    foreach (var c in sim.Chaff)
+    {
+        float pWin = c.Strength / MathF.Max(1e-3f, c.Strength + seeker.ChaffResistance);
+        if (MinefieldLayout.Hash01(missileId, c.ChaffId) < pWin)
+        {
+            winner = c;
+            break;
+        }
+    }
+    Check(winner is not null, "the chaff cloud contains a puff that wins the seeker decoy roll", "no winning puff found in the cloud (seeker decoy roll)");
+
+    // Plant the winner squarely on the missile's +Z path at z=200 (80u short of the target at 300,
+    // well beyond the 25u blast so its detonation can't splash the target); banish every other puff
+    // to a different sector so the missile can only ever roll against this one.
+    Vec3 interceptPos = new(0f, 0f, 200f);
+    foreach (var c in sim.Chaff)
+    {
+        if (c == winner)
+        {
+            c.Pos = interceptPos;
+            c.Vel = new Vec3(0f, 0f, 0f);
+        }
+        else
+        {
+            c.SectorId = 998; // out of the missile's sector (999) → never a decoy candidate
+        }
+    }
+
+    float targetHealthStart = target.Health;
+    bool decoyed = false;
+    ulong decoyId = 0;
+    bool goneSeen = false;
+    byte goneReason = 255;
+    Vec3 gonePos = default;
+    for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !goneSeen; i++)
+    {
+        sim.Step();
+        var m = FindMissile(sim, missileId);
+        if (m is not null && m.TargetShipId == 0 && m.DecoyChaffId != 0)
+        {
+            decoyed = true;
+            decoyId = m.DecoyChaffId;
+        }
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == missileId)
+            {
+                goneSeen = true;
+                goneReason = g.reason;
+                gonePos = g.pos;
+            }
+    }
+    Check(decoyed && decoyId == winner!.ChaffId, "seeker's ship-lock breaks and it homes on the winning puff (TargetShipId→0, DecoyChaffId set)", $"seeker was not decoyed onto the winning puff (decoyed={decoyed}, decoyId={decoyId}, winner={winner!.ChaffId})");
+    Check(goneSeen && goneReason == 1, $"decoyed seeker detonates (MissileGone reason 1), got {goneReason}", $"decoyed seeker never detonated (goneSeen={goneSeen}, reason={goneReason})");
+    Check(
+        (gonePos - target.State.Pos).Length() > seeker.BlastRadius,
+        $"decoy detonation is clear of the target (>{seeker.BlastRadius}u away)",
+        $"decoy detonated within blast range of the target (dist {(gonePos - target.State.Pos).Length()})"
+    );
+    Check(target.Health == targetHealthStart, "decoyed target takes no damage (no direct hit, no splash)", $"target took damage despite being decoyed away ({targetHealthStart} -> {target.Health})");
+}
+
+// ---- 13. Chaff resistance: a torpedo (resistance 2.5) shrugs off a losing-roll cloud -------------
+{
+    var sim = BootSim(seed: 13);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassBomber); // bomber mounts the torpedo rack (id 5)
+    sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassBomber);
+    sim.Step();
+    var attacker = sim.Ships.First(s => s.OwnerClientId == 1);
+    var target = sim.Ships.First(s => s.OwnerClientId == 2);
+    foreach (var (s, pos) in new[] { (attacker, new Vec3(0f, 0f, 0f)), (target, new Vec3(0f, 0f, 400f)) })
+    {
+        s.SectorId = EmptySector;
+        s.State.Pos = pos;
+        s.State.Vel = new Vec3(0f, 0f, 0f);
+        s.State.Rot = Quat.Identity;
+        s.State.AngVel = new Vec3(0f, 0f, 0f);
+    }
+    var torpedo = sim.Content.Weapons.First(w => w.WeaponId == 5);
+    var seekerDef = sim.Content.Weapons.First(w => w.WeaponId == 3);
+    Check(torpedo.ChaffResistance > seekerDef.ChaffResistance, "torpedo authored with higher chaff-resistance than the seeker", $"torpedo chaff-resistance ({torpedo.ChaffResistance}) not greater than the seeker's ({seekerDef.ChaffResistance})");
+
+    var mis = LockAndFire(sim, attacker, target.ShipId, torpedo);
+    ulong torpId = mis.MissileId;
+    Check(mis.TargetShipId == target.ShipId, "torpedo launched locked onto the target ship", $"torpedo target wrong ({mis.TargetShipId})");
+
+    // Lay a cloud, then keep ONLY the puffs whose id LOSES the torpedo's roll on the missile's path
+    // (banish any winner to another sector). Every puff the torpedo can see is a guaranteed loser, so
+    // its high resistance must carry it through untouched.
+    LayChaffCloud(sim, target, 16);
+    int losersOnPath = 0;
+    foreach (var c in sim.Chaff)
+    {
+        float pWin = c.Strength / MathF.Max(1e-3f, c.Strength + torpedo.ChaffResistance);
+        bool loses = MinefieldLayout.Hash01(torpId, c.ChaffId) >= pWin;
+        if (loses)
+        {
+            c.Pos = new Vec3(0f, 0f, 200f); // on the torpedo's +Z path, within DecoyRadius
+            c.Vel = new Vec3(0f, 0f, 0f);
+            losersOnPath++;
+        }
+        else
+        {
+            c.SectorId = 998; // a winner — keep it out of the torpedo's sector
+        }
+    }
+    Check(losersOnPath > 0, $"cloud has losing-roll puffs on the torpedo's path ({losersOnPath})", "no losing-roll puffs available to prove resistance");
+
+    float targetHealthStart = target.Health;
+    bool everDecoyed = false;
+    bool impactSeen = false;
+    byte impactReason = 255;
+    for (uint i = 0; i < torpedo.ProjectileLifeTicks + 5 && !impactSeen; i++)
+    {
+        sim.Step();
+        var m = FindMissile(sim, torpId);
+        if (m is not null && (m.TargetShipId != target.ShipId || m.DecoyChaffId != 0))
+            everDecoyed = true;
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == torpId)
+            {
+                impactSeen = true;
+                impactReason = g.reason;
+            }
+    }
+    Check(!everDecoyed, "torpedo is NOT decoyed by a losing-roll chaff cloud (keeps its ship lock)", "torpedo was decoyed despite losing every chaff roll");
+    Check(impactSeen && impactReason == 1, $"torpedo flies through the cloud and impacts its target (reason 1), got {impactReason}", $"torpedo never impacted its target (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        target.Health == targetHealthStart - torpedo.Damage * torpedo.DirectHitMult,
+        $"undeterred torpedo deals its full direct hit ({torpedo.Damage * torpedo.DirectHitMult})",
+        $"target health wrong after the torpedo hit ({targetHealthStart} -> {target.Health})"
+    );
+}
+
+// ---- 14. Chaff ammo + cadence: held DropChaff yields exactly ammo puffs at FireIntervalTicks ------
+{
+    var (sim, _, target, _) = SetupDuel(seed: 14);
+    var dispenser = sim.Content.Weapons.First(w => w.WeaponId == 6); // decoy dispenser
+    const byte ammo = 5;
+    target.ChaffAmmo = ammo;
+    target.LastChaffTick = 0;
+
+    var spawnTicks = new List<uint>();
+    uint budget = dispenser.FireIntervalTicks * ammo + 60;
+    for (uint i = 0; i < budget; i++)
+    {
+        target.HeldInput = new ShipInputState { DropChaff = true }; // held every tick (no client edge-detect)
+        sim.Step();
+        if (sim.ChaffSpawnedThisStep.Count > 0)
+            spawnTicks.Add(sim.Tick);
+    }
+
+    Check(spawnTicks.Count == ammo, $"held DropChaff ejects exactly ChaffAmmo ({ammo}) puffs then stops", $"expected {ammo} chaff spawns, got {spawnTicks.Count}");
+    Check(target.ChaffAmmo == 0, "chaff ammo reaches exactly 0", $"chaff ammo left at {target.ChaffAmmo}");
+    bool spacingOk = true;
+    for (int i = 1; i < spawnTicks.Count; i++)
+        if (spawnTicks[i] - spawnTicks[i - 1] != dispenser.FireIntervalTicks)
+            spacingOk = false;
+    Check(
+        spacingOk,
+        $"consecutive puffs are spaced exactly FireIntervalTicks ({dispenser.FireIntervalTicks}) apart",
+        $"chaff spacing wrong: [{string.Join(", ", spawnTicks)}] (want {dispenser.FireIntervalTicks}-tick gaps)"
+    );
+}
+
+// ---- 15. Dock refund: voluntary dock returns the paid cost; death→pod→dock refunds nothing --------
+
+// Move `ship` onto its OWN base's dock trigger (a dock disc when the base has a hull, else the legacy
+// core-sphere) so the next Step docks it — mirrors how the real docking pass resolves a friendly base.
+void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
+{
+    int bi = sim.World.Bases.FindIndex(b => b.Team == ship.Team);
+    var b = sim.World.Bases[bi];
+    ship.SectorId = b.SectorId;
+    ship.State.Pos = sim.World.BaseHull is not null && sim.World.BaseDockDiscs.Length > 0
+        ? b.Pos + sim.World.BaseDockDiscs[0].Pos // land on an entrance-cone disc
+        : b.Pos; // legacy core-sphere dock
+    ship.State.Vel = new Vec3(0f, 0f, 0f);
+    ship.State.Rot = Quat.Identity;
+    ship.State.AngVel = new Vec3(0f, 0f, 0f);
+    ship.HeldInput = new ShipInputState();
+}
+
+{
+    var sim = BootSim(seed: 15);
+    const byte team = 0;
+    int creditsStart = sim.World.TeamStates[team].Credits;
+
+    // (a) Spawn a fighter — the spawn deducts the hull cost — then dock it and confirm the exact refund.
+    sim.EnqueueJoin(1, team: team, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int paid = ship.PaidCost;
+    int creditsAfterSpawn = sim.World.TeamStates[team].Credits;
+    Check(paid > 0 && creditsAfterSpawn == creditsStart - paid, $"spawn deducts the hull cost ({paid}) from team credits", $"spawn cost bookkeeping wrong (paid {paid}, credits {creditsStart} -> {creditsAfterSpawn})");
+
+    DockAtOwnBase(sim, ship);
+    for (int i = 0; i < 5 && sim.Ships.Any(s => s.OwnerClientId == 1); i++)
+        sim.Step();
+    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "fighter docks at its own base", "fighter never docked at its own base");
+    int creditsAfterDock = sim.World.TeamStates[team].Credits;
+    Check(
+        creditsAfterDock == creditsAfterSpawn + paid,
+        $"voluntary dock refunds exactly the paid cost (credits {creditsAfterSpawn} -> {creditsAfterDock})",
+        $"dock refund wrong ({creditsAfterSpawn} -> {creditsAfterDock}, expected +{paid})"
+    );
+
+    // (b) Death → pod → dock must refund NOTHING (the pod never inherits PaidCost).
+    sim.EnqueueJoin(2, team: team, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var ship2 = sim.Ships.First(s => s.OwnerClientId == 2);
+    int creditsBeforeDeath = sim.World.TeamStates[team].Credits;
+    ship2.HeldInput = new ShipInputState();
+    ship2.Health = 0f;
+    sim.Step(); // resolves death → ejects a pod
+    var pod = sim.Ships.First(s => s.IsPod && s.Team == team);
+    Check(sim.World.TeamStates[team].Credits == creditsBeforeDeath, "a ship's death refunds nothing", $"death changed credits ({creditsBeforeDeath} -> {sim.World.TeamStates[team].Credits})");
+
+    DockAtOwnBase(sim, pod);
+    for (int i = 0; i < 5 && sim.Ships.Any(s => s == pod); i++)
+        sim.Step();
+    Check(!sim.Ships.Any(s => s == pod), "the escape pod docks at its own base", "pod never docked");
+    Check(
+        sim.World.TeamStates[team].Credits == creditsBeforeDeath,
+        "death → pod → dock refunds nothing (only a real hull's voluntary dock refunds)",
+        $"pod dock wrongly changed credits ({creditsBeforeDeath} -> {sim.World.TeamStates[team].Credits})"
+    );
+}
+
+// ---- 16. Determinism: replay a lock→fire→chaff-drop script bit-identically on two fresh sims ------
+(
+    List<(uint tick, Vec3 pos, Vec3 vel)> flight,
+    List<(uint tick, ulong id, Vec3 pos)> chaff,
+    List<(uint tick, ulong id, byte reason)> gone,
+    float finalHealth
+) RunChaffScript(ulong seed)
+{
+    var (sim, attacker, target, seeker) = SetupDuel(seed);
+    var mis = LockAndFire(sim, attacker, target.ShipId, seeker);
+    ulong missileId = mis.MissileId;
+    target.ChaffAmmo = 3;
+
+    var flight = new List<(uint, Vec3, Vec3)>();
+    var chaff = new List<(uint, ulong, Vec3)>();
+    var gone = new List<(uint, ulong, byte)>();
+    bool done = false;
+    for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !done; i++)
+    {
+        attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId };
+        target.HeldInput = new ShipInputState { DropChaff = true }; // scripted chaff drop (cadence-gated)
+        sim.Step();
+        var m = FindMissile(sim, missileId);
+        if (m is not null)
+            flight.Add((sim.Tick, m.Pos, m.Vel));
+        foreach (var c in sim.Chaff)
+            chaff.Add((sim.Tick, c.ChaffId, c.Pos));
+        foreach (var g in sim.MissileGoneThisStep)
+        {
+            gone.Add((sim.Tick, g.id, g.reason));
+            if (g.id == missileId)
+                done = true;
+        }
+    }
+    return (flight, chaff, gone, target.Health);
+}
+
+{
+    var r1 = RunChaffScript(seed: 888);
+    var r2 = RunChaffScript(seed: 888);
+    bool same =
+        r1.finalHealth == r2.finalHealth
+        && r1.flight.Count == r2.flight.Count
+        && r1.chaff.Count == r2.chaff.Count
+        && r1.gone.Count == r2.gone.Count;
+    for (int i = 0; same && i < r1.flight.Count; i++)
+    {
+        var (t1, p1, v1) = r1.flight[i];
+        var (t2, p2, v2) = r2.flight[i];
+        if (t1 != t2 || p1.X != p2.X || p1.Y != p2.Y || p1.Z != p2.Z || v1.X != v2.X || v1.Y != v2.Y || v1.Z != v2.Z)
+            same = false;
+    }
+    for (int i = 0; same && i < r1.chaff.Count; i++)
+    {
+        var (t1, id1, p1) = r1.chaff[i];
+        var (t2, id2, p2) = r2.chaff[i];
+        if (t1 != t2 || id1 != id2 || p1.X != p2.X || p1.Y != p2.Y || p1.Z != p2.Z)
+            same = false;
+    }
+    for (int i = 0; same && i < r1.gone.Count; i++)
+        if (r1.gone[i] != r2.gone[i])
+            same = false;
+    Check(
+        same && r1.chaff.Count > 0,
+        $"two fresh sims replay the chaff-drop script bit-identically ({r1.flight.Count} flight, {r1.chaff.Count} chaff samples)",
+        "chaff-drop replay diverged between two fresh Simulation runs (determinism broken)"
+    );
+}
+
 Console.WriteLine(failures == 0 ? "\nALL MISSILE TESTS PASSED" : $"\n{failures} MISSILE TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
