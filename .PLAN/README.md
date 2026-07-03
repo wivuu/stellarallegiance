@@ -221,6 +221,8 @@ Stage-2 economy, no rework.
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
   scores/ranks are Stage 5.
+- ☐ **Control settings and mappings** — allow players to configure keybindings, input devices,
+  and control schemes for the game from the settings -> controls menu.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
