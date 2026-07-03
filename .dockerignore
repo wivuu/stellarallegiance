@@ -20,6 +20,7 @@ client/*
 client/assets/*
 !client/assets/bases
 !client/assets/asteroids
+!client/assets/ships
 docs
 tests
 tools

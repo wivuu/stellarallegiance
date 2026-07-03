@@ -9,9 +9,11 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Restore against just the project files first so the (slow) restore layer caches across
-# source-only changes.
+# source-only changes. SimServer.csproj also ProjectReferences the in-repo Allegiance.Factions
+# content library, so its .csproj must be present for restore to resolve.
 COPY shared/Shared.csproj shared/
 COPY server/SimServer.csproj server/
+COPY factions/src/Allegiance.Factions/Allegiance.Factions.csproj factions/src/Allegiance.Factions/
 RUN dotnet restore server/SimServer.csproj
 
 # The sources PLUS the art GLBs the csproj links as Content (the sim's collision hulls +
@@ -19,8 +21,10 @@ RUN dotnet restore server/SimServer.csproj
 # separate asset copy. client/assets is also where the Godot client's canonical copy lives.
 COPY shared/ shared/
 COPY server/ server/
+COPY factions/ factions/
 COPY client/assets/bases client/assets/bases
 COPY client/assets/asteroids client/assets/asteroids
+COPY client/assets/ships client/assets/ships
 RUN dotnet publish server/SimServer.csproj -c Release -o /app /p:UseAppHost=false
 # Bake the convex-hull cache into the image (/app/sim-cache) so a cold container doesn't
 # recompute hulls on first start. Self-heals at run time if a GLB ever changes.

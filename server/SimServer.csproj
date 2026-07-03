@@ -43,7 +43,7 @@
          content bundle next to the binary, preserving the manifest/catalog/factions layout. The
          server loads content/factions/core.manifest.yaml at boot (content is YAML, never hardcoded);
          the content/CONTENT_PATH override points at a different bundle manifest. -->
-    <Content Include="content\factions\**\*.yaml" Link="content\factions\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Content\factions\**\*.yaml" Link="content\factions\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />
