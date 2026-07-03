@@ -34,17 +34,17 @@ jobs:
             os: ubuntu-latest
             preset: Linux
             platform: linux
-            output_path: build/linux/wivuullegiance.x86_64
+            output_path: build/linux/stellarallegiance.x86_64
           - name: macOS
             os: macos-latest
             preset: macOS
             platform: macos
-            output_path: build/mac/wivuullegiance.app
+            output_path: build/mac/stellarallegiance.app
           - name: Windows
             os: windows-latest
             preset: Windows Desktop
             platform: windows
-            output_path: build/win/wivuullegiance.exe
+            output_path: build/win/stellarallegiance.exe
 
     defaults:
       run:
@@ -80,7 +80,7 @@ jobs:
           cache: true
 
       - name: Restore client dependencies
-        run: dotnet restore client/wivuullegiance.csproj
+        run: dotnet restore client/stellarallegiance.csproj
 
       - name: Generate Godot C# solution
         # Godot headless can SIGSEGV (exit 139) during shutdown on the Windows runner *after* a
@@ -109,15 +109,15 @@ jobs:
       - name: Package Linux
         if: matrix.name == 'Linux'
         run: |
-          chmod +x build/linux/wivuullegiance.x86_64
-          ( cd build/linux && zip -rq "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-linux.zip" . )
+          chmod +x build/linux/stellarallegiance.x86_64
+          ( cd build/linux && zip -rq "$GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-linux.zip" . )
 
       # The Windows runner's git-bash has no `zip`; use PowerShell's Compress-Archive. `build/win/*`
       # puts the .exe + .pck + data_* at the zip root so testers extract one self-contained folder.
       - name: Package Windows
         if: matrix.name == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path build/win/* -DestinationPath "$env:GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-windows.zip" -Force
+        run: Compress-Archive -Path build/win/* -DestinationPath "$env:GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-windows.zip" -Force
 
       # macOS: Godot's signing enables the hardened runtime, which SIGKILLs an un-notarized build.
       # Strip it and re-sign plain ad-hoc, then ditto-zip to preserve the signature + symlinks
@@ -125,17 +125,17 @@ jobs:
       - name: Package macOS
         if: matrix.name == 'macOS'
         run: |
-          APP=build/mac/wivuullegiance.app
+          APP=build/mac/stellarallegiance.app
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict "$APP" && echo "signature valid"
-          ditto -c -k --keepParent "$APP" "$GITHUB_WORKSPACE/wivuullegiance-${{ steps.version.outputs.version }}-macos.zip"
+          ditto -c -k --keepParent "$APP" "$GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-macos.zip"
 
       - name: Upload ${{ matrix.name }} zip
         uses: actions/upload-artifact@v7
         with:
           name: client-${{ matrix.platform }}
-          path: wivuullegiance-${{ steps.version.outputs.version }}-${{ matrix.platform }}.zip
+          path: stellarallegiance-${{ steps.version.outputs.version }}-${{ matrix.platform }}.zip
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------------------------
@@ -169,7 +169,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/wivuullegiance-sim
+          images: ghcr.io/${{ github.repository_owner }}/stellarallegiance-sim
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
@@ -217,7 +217,7 @@ jobs:
             Pick your platform below. Unzip and run.
 
             - **macOS** — ad-hoc signed (not notarized). After unzipping, clear quarantine once:
-              `xattr -dr com.apple.quarantine wivuullegiance.app`, then launch.
+              `xattr -dr com.apple.quarantine stellarallegiance.app`, then launch.
             - **Windows / Linux** — keep the whole unzipped folder together (the executable needs
               its sibling `.pck` and `data_*` directory).
 
@@ -228,7 +228,7 @@ jobs:
             Run the published image (pairs with `docker-compose.server.yml` in the repo):
 
             ```
-            docker pull ghcr.io/${{ github.repository_owner }}/wivuullegiance-sim:${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository_owner }}/stellarallegiance-sim:${{ steps.version.outputs.version }}
             ```
 
             Set `SIM_PUBLIC_NAME` to be listed in the public server browser. See

@@ -8,8 +8,8 @@ Get a match running locally in five steps.
 
 ### 2. Clone and restore
 ```bash
-git clone <repo-url> wivuullegiance
-cd wivuullegiance
+git clone <repo-url> stellarallegiance
+cd stellarallegiance
 dotnet build shared/Shared.csproj      # sanity-check the toolchain
 ```
 

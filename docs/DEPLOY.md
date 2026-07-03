@@ -112,18 +112,18 @@ built-in match-routing layer is future work — the `IMatchmaker`/`IPlayerDirect
 ## systemd (non-container) option
 
 ```bash
-dotnet publish server/SimServer.csproj -c Release -o /opt/wivuullegiance/sim
+dotnet publish server/SimServer.csproj -c Release -o /opt/stellarallegiance/sim
 ```
 
 ```ini
 # /etc/systemd/system/sim-server.service
 [Unit]
-Description=wivuullegiance sim server
+Description=stellarallegiance sim server
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/wivuullegiance/sim
-ExecStart=/usr/bin/dotnet /opt/wivuullegiance/sim/SimServer.dll --port 8090
+WorkingDirectory=/opt/stellarallegiance/sim
+ExecStart=/usr/bin/dotnet /opt/stellarallegiance/sim/SimServer.dll --port 8090
 Environment=SIM_SECRET=change-me
 Restart=always
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy (or UPDATE) the wivuullegiance PUBLIC LOBBY on Railway (server registry + WebRTC signaling).
+# Deploy (or UPDATE) the stellarallegiance PUBLIC LOBBY on Railway (server registry + WebRTC signaling).
 #
 # Prereqs: Railway CLI installed and logged in (`railway login`).
 # Usage:

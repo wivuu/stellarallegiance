@@ -1,4 +1,4 @@
-# Agent Handoff — wivuullegiance
+# Agent Handoff — stellarallegiance
 
 > **⚠ SUPERSEDED (SpacetimeDB removed).** This handoff predates the SpacetimeDB removal:
 > there is no longer a database, module, lobby handoff, or HMAC join-token mint. The server
@@ -157,7 +157,7 @@ the template under `module_bindings/{Tables,Types}/`.
   namespace `StellarAllegiance.Shared`, so it is engine-independent and compiles truly
   identically on both sides. `StatsFor(byte)` (0=Scout, 1=Fighter) keeps it free of any game enum.
 - **`shared/Shared.csproj`** is a net8.0 class library holding that one source. The module
-  (`StdbModule.csproj`), client (`wivuullegiance.csproj`), and the test all pull it in via
+  (`StdbModule.csproj`), client (`stellarallegiance.csproj`), and the test all pull it in via
   `<ProjectReference>` — there are no copies. **Edit `shared/FlightModel.cs`; it is the only copy.**
 - **`tests/FlightModelTest/`** is a standalone net8.0 console test: it integrates a fixed
   200-tick input sequence, asserts two runs are **bit-identical** (determinism), matches a
@@ -489,7 +489,7 @@ client/
   scripts/Hud.cs                 ← Scout/Fighter spawn menu (shipless) + speed/reconcile readout (flying)
   scripts/ShipMath.cs            ← Ship row ↔ FlightModel ↔ Godot marshaling
   module_bindings/               ← GENERATED (tables + reducers), do not edit
-  wivuullegiance.csproj
+  stellarallegiance.csproj
   scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, ShipController, env, light, CameraRig, Hud
 
 tests/

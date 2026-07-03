@@ -83,7 +83,7 @@ server/Content/factions/*.yaml            authored bundle (manifest-driven, keba
 dotnet test factions/tests/Allegiance.Factions.Tests
 dotnet run --project tests/FactionsTest/FactionsTest.csproj -c Release
 dotnet run --project tests/ContentTest/ContentTest.csproj -c Release
-dotnet build server/SimServer.csproj -c Release && dotnet build client/wivuullegiance.csproj
+dotnet build server/SimServer.csproj -c Release && dotnet build client/stellarallegiance.csproj
 ```
 
 Deploy note: a protocol bump means deployed servers (Railway) and clients must redeploy

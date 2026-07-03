@@ -1,7 +1,7 @@
 # Public lobby + WebRTC signaling box. Self-contained (no ProjectReference), but built from the
 # REPO ROOT context so it deploys uniformly with the sim server and with `railway up` (which tars
 # the git root). Build with:
-#     docker build -f public-lobby/Dockerfile -t wivuullegiance-public-lobby .
+#     docker build -f public-lobby/Dockerfile -t stellarallegiance-public-lobby .
 # or via the repo-root docker-compose.yml (context: ., dockerfile: public-lobby/Dockerfile). On
 # Railway, set the service var RAILWAY_DOCKERFILE_PATH=public-lobby/Dockerfile.
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build

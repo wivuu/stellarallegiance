@@ -1,4 +1,4 @@
-# Stellar Allegiance (wivuullegiance)
+# Stellar Allegiance (stellarallegiance)
 
 > [!CAUTION]
 > This is 'Slopllegiance'. it is a functional prototype Allegiance-style game written by Claude under supervision.
@@ -100,7 +100,7 @@ A fresh clone imports automatically on first open; for headless/CI/export builds
 ```bash
 dotnet build shared/Shared.csproj          # deterministic core + content defs
 dotnet build server/SimServer.csproj -c Release
-dotnet build client/wivuullegiance.csproj  # or just open client/ in Godot-mono
+dotnet build client/stellarallegiance.csproj  # or just open client/ in Godot-mono
 dotnet run    --project server -c Release -- --port 8090   # run the server directly
 ```
 
@@ -164,7 +164,7 @@ Released images are published to GHCR — no checkout or build needed:
 ```bash
 docker run --rm -p 8090:8090 \
   -e SIM_PUBLIC_NAME="My Server" \
-  ghcr.io/wivuu/wivuullegiance-sim:latest
+  ghcr.io/wivuu/stellarallegiance-sim:latest
 ```
 
 ## Deployment

@@ -1,4 +1,4 @@
-# Local-dev / single-box deployment of the wivuullegiance backend:
+# Local-dev / single-box deployment of the stellarallegiance backend:
 #   sim-server    the 20 Hz authoritative match + lobby host (clients connect & download content)
 #   public-lobby  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
 #

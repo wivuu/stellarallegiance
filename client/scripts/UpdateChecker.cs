@@ -17,7 +17,7 @@ public static class UpdateChecker
 {
     // Public repo — unauthenticated is fine (~60 req/hr/IP, one call per launch). GitHub requires a
     // User-Agent or it 403s, so the client carries one. (Canonical path: the repo was transferred
-    // from onionhammer/wivuullegiance, which still 301s here — we point at the live name directly.)
+    // from onionhammer/stellarallegiance, which still 301s here — we point at the live name directly.)
     private const string LatestReleaseUrl = "https://api.github.com/repos/wivuu/stellarallegiance/releases/latest";
 
     private static readonly HttpClient Http = CreateClient();
@@ -25,7 +25,7 @@ public static class UpdateChecker
     private static HttpClient CreateClient()
     {
         var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("wivuullegiance-client", "1.0"));
+        http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("stellarallegiance-client", "1.0"));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return http;
     }
