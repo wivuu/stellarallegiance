@@ -207,6 +207,11 @@ public static class FactionsContentProjection
                 MagazineSize = (byte)l.Amount,
                 BlastPower = (float)mn.Power, // per-mine detonation power (direct + splash)
                 BlastRadius = (float)mn.BlastRadius,
+                // Splash full-damage core = the proximity trigger radius: everyone the mine could have
+                // triggered on takes full BlastPower, ships between trigger and blast radius take the
+                // inverse-square falloff ApplyBlast computes from ProjectileRadius (fuseR). Without a
+                // non-zero fuse the (fuse/d)^2 falloff would zero out all mine splash.
+                ProjectileRadius = (float)mn.Radius,
                 MineCloudRadius = (float)mn.CloudRadius,
                 MineCloudCount = (byte)mn.CloudCount,
                 MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
