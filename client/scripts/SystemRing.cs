@@ -1,10 +1,11 @@
 using Godot;
 using StellarAllegiance.Ui;
 
-// HUD system ring: the HULL + FUEL/BOOST gauges from the "Stellar Allegiance" Game-HUD design.
-// Two concentric segmented arc gauges framing the aim reticle (centre of screen space) —
-// HULL on the right span, FUEL (or legacy BOOST) on the left span, top and bottom left open
-// so vertical aim stays clear. The game has no shield, so the design's SHLD arc is omitted.
+// HUD system ring: the HULL + SHIELD + FUEL/BOOST gauges from the "Stellar Allegiance" Game-HUD
+// design. Segmented arc gauges framing the aim reticle (centre of screen space) — on the right
+// span, HULL as segmented blocks (inner) with the regenerating SHIELD as a solid arc wrapping it
+// (outer); FUEL (or legacy BOOST) on the left span. Top and bottom are left open so vertical aim
+// stays clear. The SHLD arc only draws on hulls that actually carry a shield (MaxShield > 0).
 //
 // The left gauge reads FUEL (Fuel/MaxFuel) on hulls with a modeled tank (MaxFuel > 0); on
 // legacy hulls (MaxFuel <= 0, fuel unmodeled) it falls back to the old AbPower ramp so those
@@ -25,6 +26,8 @@ public partial class SystemRing : Control
     private const int Blocks = 10; // segments per gauge
     private const float SpanDeg = 130f; // angular sweep of each gauge
     private const float GapDeg = 2.4f; // dead space between blocks
+    private const float ShieldRadius = Radius + 8f; // SHLD solid arc wraps just outside the HULL blocks
+    private const float ShieldWidth = 5f; // thinner than the hull blocks (design: solid outer band)
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
@@ -75,6 +78,14 @@ public partial class SystemRing : Control
         float hullFrac = local.MaxHealth > 0f ? Mathf.Clamp(local.Health / local.MaxHealth, 0f, 1f) : 0f;
         SegmentedArc(c, 0f, hullFrac, HealthColor(hullFrac), track, litFromEnd: true);
 
+        // SHIELD — a solid cyan arc wrapping just OUTSIDE the hull blocks on the same right span,
+        // filled from the bottom to match. Only on hulls that carry a shield (MaxShield > 0), so a
+        // shieldless class (scout/pod) shows no arc. Cyan = the chrome gauge-arc convention.
+        bool hasShield = local.MaxShield > 0f;
+        float shieldFrac = hasShield ? Mathf.Clamp(local.Shield / local.MaxShield, 0f, 1f) : 0f;
+        if (hasShield)
+            SolidArc(c, ShieldRadius, 0f, shieldFrac, DesignTokens.TeamAccent, track, ShieldWidth);
+
         // FUEL — left span (centre 180°), on hulls with a modeled tank. Legacy hulls
         // (MaxFuel <= 0) keep the old BOOST/AbPower ramp instead.
         bool hasFuel = local.MaxFuel > 0f;
@@ -82,7 +93,10 @@ public partial class SystemRing : Control
         Color leftColor = hasFuel ? FuelColor(leftFrac) : DesignTokens.Warn;
         SegmentedArc(c, 180f, leftFrac, leftColor, track, litFromEnd: false);
 
-        // Mono labels just outside each gauge: tag in the token colour, value in TextHi.
+        // Mono labels just outside each gauge: tag in the token colour, value in TextHi. SHLD sits
+        // above HULL on the right (design order), only when this hull carries a shield.
+        if (hasShield)
+            DrawTagValue(c + new Vector2(Radius + 12f, -14f), "SHLD", $"{local.Shield:0}", DesignTokens.TeamAccent, rightAlign: false);
         DrawTagValue(c + new Vector2(Radius + 12f, 4f), "HULL", $"{local.Health:0}", HealthColor(hullFrac), rightAlign: false);
         string leftTag = hasFuel ? "FUEL" : "BST";
         DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), leftTag, $"{leftFrac * 100f:0}", leftColor, rightAlign: true);
@@ -103,6 +117,22 @@ public partial class SystemRing : Control
             float a2 = Mathf.DegToRad(start + (i + 1) * cell - GapDeg * 0.5f);
             DrawArc(c, Radius, a1, a2, 6, isLit ? lit : track, ArcWidth, true);
         }
+    }
+
+    // One SOLID arc gauge (not segmented) at `radius`, centred at `centerDeg`. Its ends are inset by
+    // half the block gap so the arc caps exactly at the hull blocks' outer edges (the first block
+    // starts at start+GapDeg/2, the last ends at start+SpanDeg-GapDeg/2) instead of overflowing past
+    // them. The dim track spans that capped range; the lit fill grows from the high-angle (bottom)
+    // end so the shield drains the same direction the hull blocks do. Used for the SHLD wrap arc.
+    private void SolidArc(Vector2 c, float radius, float centerDeg, float value, Color lit, Color track, float width)
+    {
+        float half = SpanDeg * 0.5f - GapDeg * 0.5f; // cap to the hull's lit extent, not the full span
+        float lo = centerDeg - half; // top end (aligned to the first hull block's start)
+        float hi = centerDeg + half; // bottom end (aligned to the last hull block's end)
+        DrawArc(c, radius, Mathf.DegToRad(lo), Mathf.DegToRad(hi), 48, track, width, true);
+        float v = Mathf.Clamp(value, 0f, 1f);
+        if (v > 0f)
+            DrawArc(c, radius, Mathf.DegToRad(hi - (hi - lo) * v), Mathf.DegToRad(hi), 48, lit, width, true);
     }
 
     // Draw "TAG value" in JetBrains Mono — tag in `tagColor`, value in TextHi. When

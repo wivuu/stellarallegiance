@@ -808,7 +808,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 18;
+    public const byte ProtocolVersion = 19;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -964,6 +964,9 @@ public partial class GameNetClient : Node
             d.AbFuelDrain = r.ReadSingle();
             d.AbFuelRecharge = r.ReadSingle();
             d.MaxHull = r.ReadSingle();
+            d.ShieldCapacity = r.ReadSingle();
+            d.ShieldRecharge = r.ReadSingle();
+            d.ShieldDelaySec = r.ReadSingle();
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
             d.FactionId = r.ReadUInt32();
@@ -1017,6 +1020,7 @@ public partial class GameNetClient : Node
                     MineArmTicks = r.ReadUInt32(),
                     MineTriggerRadius = r.ReadSingle(),
                     CargoId = r.ReadUInt32(),
+                    ShieldMult = r.ReadSingle(),
                 }
             );
 
@@ -1124,6 +1128,7 @@ public partial class GameNetClient : Node
             ushort ab = r.ReadUInt16();
             ushort fuel = r.ReadUInt16();
             ushort hp = r.ReadUInt16();
+            ushort shield = r.ReadUInt16();
             uint lastInput = r.ReadUInt32();
             uint lastFire = r.ReadUInt32();
             byte missileAmmo = r.ReadByte();
@@ -1163,6 +1168,7 @@ public partial class GameNetClient : Node
             row.AbPower = WireQuant.UnpackHalf(ab);
             row.Fuel = WireQuant.UnpackHalf(fuel);
             row.Health = WireQuant.UnpackHalf(hp);
+            row.Shield = WireQuant.UnpackHalf(shield);
             row.LastInputTick = lastInput;
             row.LastFireTick = lastFire;
             row.MissileAmmo = missileAmmo;

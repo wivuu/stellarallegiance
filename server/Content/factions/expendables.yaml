@@ -111,7 +111,7 @@ mines:
 
 chaffs:
   - id: sensor-decoy
-    name: Sensor Decoy
+    name: Countermeasures
     description: Fakes the ship's signature for pursuers.
     cargo-id: 3
     mass: 3

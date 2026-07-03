@@ -103,6 +103,11 @@ namespace StellarAllegiance.Shared
                     if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
+
+                // A weapon must be able to damage a shield: ShieldMult <= 0 would make it useless
+                // against any shielded ship (the shield absorbs everything and never depletes).
+                if (w.ShieldMult <= 0f)
+                    errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
             }
 
             var classIds = new HashSet<byte>();
@@ -117,6 +122,7 @@ namespace StellarAllegiance.Shared
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
                 ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
                 ValidateFuel(d, errors);
+                ValidateShield(d, errors);
             }
 
             ValidateWinnable(ships, weaponsById, errors);
@@ -204,6 +210,21 @@ namespace StellarAllegiance.Shared
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelDrain");
             if (ship.AbFuelRecharge < 0)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelRecharge");
+        }
+
+        // Regenerating shield: all-zero = no shield (fine). If a hull carries any shield stat, the
+        // trio must be coherent — a positive capacity needs a positive recharge (else it never comes
+        // back after the first hit), and no field may be negative.
+        private static void ValidateShield(ShipClassDef ship, List<string> errors)
+        {
+            if (ship.ShieldCapacity < 0f)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldCapacity {ship.ShieldCapacity}");
+            if (ship.ShieldRecharge < 0f)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldRecharge {ship.ShieldRecharge}");
+            if (ship.ShieldDelaySec < 0f)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldDelaySec {ship.ShieldDelaySec}");
+            if (ship.ShieldCapacity > 0f && ship.ShieldRecharge <= 0f)
+                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has ShieldCapacity but no ShieldRecharge — shield never regenerates");
         }
 
         private static void ValidateWeaponHardpoints(

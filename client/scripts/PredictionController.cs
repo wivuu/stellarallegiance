@@ -137,6 +137,13 @@ public partial class PredictionController : Node3D
     public float Health { get; private set; }
     public float MaxHealth { get; private set; }
 
+    // Regenerating energy shield, synced from the authoritative snapshot each tick. MaxShield is the
+    // authored capacity from this class's def (a pod uses the Pod def, which authors none) — 0 until
+    // the def arrives OR when the hull has no shield, so the HUD only draws the arc when there's one.
+    public float Shield { get; private set; }
+    public float MaxShield =>
+        _defs.TryGetShipDef(IsPod ? GameContent.PodClassId : (byte)_class, out var d) ? d.ShieldCapacity : 0f;
+
     // Afterburner power ramp, 0..1 (synced each snapshot into _state.AbPower; rises while
     // boosting, decays otherwise — it's a ramp, not a depleting reserve). Read by the HUD
     // SystemRing to draw the BOOST gauge.
@@ -212,6 +219,7 @@ public partial class PredictionController : Node3D
         IsPod = row.IsPod;
         Health = row.Health;
         MaxHealth = row.Health;
+        Shield = row.Shield;
         _class = row.Class;
         _defs = defs;
         _lastFireTick = 0;
@@ -362,6 +370,7 @@ public partial class PredictionController : Node3D
         }
 
         Health = row.Health;
+        Shield = row.Shield;
         uint n = row.LastInputTick;
         var auth = ShipMath.StateFromRow(row);
 
@@ -411,6 +420,7 @@ public partial class PredictionController : Node3D
     private void HardSnapTo(Ship row)
     {
         Health = row.Health;
+        Shield = row.Shield;
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
         _lastFireTick = row.LastFireTick;

@@ -2,6 +2,8 @@
 # referenced projectile. weapon-id (referenced by hull hardpoints) and the tick-domain ballistics
 # (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions. Reproduces stock.yaml.
 # mass = payload units the weapon occupies when mounted (counts against the hull's payload-capacity).
+# shield-damage-multiplier (optional, default 1.0) = damage dealt to an energy shield relative to hull:
+# >1 strong vs shields, <1 weak. Heavy AP rounds punch hull but shrug off shields (see bomber-cannon).
 weapons:
   - id: scout-cannon
     name: Scout Cannon
@@ -29,4 +31,5 @@ weapons:
     fire-interval-ticks: 14
     projectile-life-ticks: 16
     projectile-id: bomber-bolt
+    shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, only half-effective vs shields
     required-capabilities: [base]

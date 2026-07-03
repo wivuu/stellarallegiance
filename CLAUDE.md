@@ -25,3 +25,6 @@ ps aux | grep "[a]spire-managed" | awk '{print $2}' | xargs kill -9
 # Then clean up stale locks
 rm -f /private/var/folders/*/*/*/NuGetScratch/lock/*
 ```
+
+## assets
+Assets like models, textures, and audio files can be found in the `pick-assets` folder (not included in the repository, gitignored)

@@ -58,6 +58,11 @@ public sealed partial class Simulation
     private const float PigAimWobbleMaxRad = 0.05f;
     private const float PigAimWobbleRate = 0.11f;
 
+    // Extra spacing between a pig's missile launches, ON TOP of the rack's own fire-interval, so the
+    // AI doesn't empty its magazine the instant it holds a lock. Reads as "less eager" and conserves
+    // the rack. Enforced by gating Firing2 on ticks-since-LastMissileTick in ChaseThink.
+    private const uint PigMissileHoldTicks = 4 * TickHz; // ~4 s
+
     // Evasive side-thrusters ("juking").
     private const float PigJukeRange = 300f;
     private const float PigJukePeriodTicks = 13f;
@@ -876,6 +881,9 @@ public sealed partial class Simulation
         // so the AI must gate itself or it sprays unguided rounds the moment it's in range.
         // Ammo/cooldown gates in TryFireMissile do the rest — no evasion, minimal AI (Stage 3).
         bool hasRack = MissileMountFor(me.Class) is not null;
+        // Space launches out beyond the rack's own cadence: hold fire until PigMissileHoldTicks have
+        // elapsed since the last one (LastMissileTick == 0 => never fired, so the first shot is free).
+        bool missileReady = me.LastMissileTick == 0 || tick - me.LastMissileTick >= PigMissileHoldTicks;
         return new ShipInputState
         {
             Thrust = thrust,
@@ -885,7 +893,7 @@ public sealed partial class Simulation
             Pitch = pitch,
             Roll = 0f,
             Firing = inRange && onTarget,
-            Firing2 = hasRack && inRange && me.Locked,
+            Firing2 = hasRack && inRange && me.Locked && missileReady,
             LockTargetId = hasRack ? tgt.ShipId : 0,
         };
     }

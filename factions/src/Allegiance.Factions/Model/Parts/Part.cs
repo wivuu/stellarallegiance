@@ -15,4 +15,14 @@ public abstract record Part : Buildable
 
     /// <summary>Part upgrade target; references another part id.</summary>
     public string? SuccessorPartId { get; set; }
+
+    // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------
+
+    /// <summary>
+    /// For a runtime WEAPON (a <see cref="Weapon"/> gun or a <see cref="Launcher"/> missile/mine):
+    /// damage this weapon deals to an energy SHIELD relative to hull. 1.0 = equal; &gt;1 strong vs
+    /// shields, &lt;1 weak. Null = default 1.0 (omit-when-default). Projected onto
+    /// <c>WeaponDef.ShieldMult</c>; ignored for non-weapon parts.
+    /// </summary>
+    public double? ShieldDamageMultiplier { get; set; }
 }

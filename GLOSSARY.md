@@ -114,6 +114,20 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
   - `server/Sim/Simulation.cs` — `ShipSim.PaidCost` set in SpawnCombatShip; DockShip refunds (Track A)
 - **Related:** [[Hull]], [[Payload]]
 
+### Shield
+Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,
+`shield-recharge` points/sec, `shield-delay` seconds). Absorbs incoming damage before the hull;
+overflow from a shield-popping hit spills into the hull the same tick; recharges after the quiet
+delay. A per-weapon `shield-damage-multiplier` (default 1.0) is the damage-type interaction.
+- **Frequency:** Common
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `ShieldCapacity/ShieldRecharge/ShieldDelay`; `Model/Parts/Part.cs` — `ShieldDamageMultiplier`
+  - `server/Sim/Simulation.cs` — `ApplyDamage` (single damage seam for all 7 sites), spawn init, end-of-Step recharge sweep, `ShieldsEnabled` test toggle
+  - `server/Net/Protocol.cs` — shield f16 in the ship snapshot (ShipRecordSize 55) + 3 shield floats/1 shieldMult in MsgDefs (proto 19)
+  - `client/scripts/SystemRing.cs` — cyan SHLD solid arc wrapping the HULL gauge; `client/scripts/ShieldFlash.cs` — hemisphere hit flash
+- **Related:** [[Hull]], [[Blast Radius]], [[Direct Hit Multiplier]]
+- **Notes:** Proto v19; a pod uses the Pod def's shield (0). `ShieldsEnabled=false` lets damage-mechanic tests isolate raw damage. `tests/ShieldTest` is the determinism guard.
+
 ### Blast Radius
 Damage falloff zone around explosion epicenter; damps based on distance and intervening obstacles.
 - **Frequency:** Common

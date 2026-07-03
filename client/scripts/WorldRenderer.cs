@@ -57,6 +57,14 @@ public partial class WorldRenderer : Node3D
     // Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
     private readonly Dictionary<ulong, (Node3D Node, Quaternion Base, Vector3 Axis, float Speed)> _asteroidSpins = new();
     private readonly Dictionary<ulong, Node3D> _shipNodes = new();
+
+    // Latest authoritative shield charge per ship, fed from the snapshot rows. CheckBoltImpacts reads
+    // it to pick the shield-vs-hull hit VFX + sound (predicted/cosmetic — a one-frame lag as a shield
+    // pops is fine). Kept beside _shipNodes and torn down with it.
+    private readonly Dictionary<ulong, float> _shipShield = new();
+
+    // Cyan shield-bubble tint (#37E0FF), matching the HUD SHLD arc; alpha sets the flash's base opacity.
+    private static readonly Color ShieldFlashTint = new(0.216f, 0.878f, 1f, 0.3f);
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
@@ -442,11 +450,23 @@ public partial class WorldRenderer : Node3D
         _baseHealthFrac[baseId] = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
     }
 
-    public void NetInsertShip(Ship row, bool local) => InsertShip(row, local);
+    public void NetInsertShip(Ship row, bool local)
+    {
+        _shipShield[row.ShipId] = row.Shield;
+        InsertShip(row, local);
+    }
 
-    public void NetUpdateShip(Ship oldRow, Ship newRow) => UpdateShip(oldRow, newRow);
+    public void NetUpdateShip(Ship oldRow, Ship newRow)
+    {
+        _shipShield[newRow.ShipId] = newRow.Shield;
+        UpdateShip(oldRow, newRow);
+    }
 
-    public void NetDeleteShip(Ship row) => DeleteShip(row);
+    public void NetDeleteShip(Ship row)
+    {
+        _shipShield.Remove(row.ShipId);
+        DeleteShip(row);
+    }
 
     // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
     // GameNetClient decodes MsgMissiles/MsgMissileGone and calls these; it also maintains its own
@@ -552,6 +572,7 @@ public partial class WorldRenderer : Node3D
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
         _shipNodes.Clear();
+        _shipShield.Clear();
         _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
@@ -1225,8 +1246,18 @@ public partial class WorldRenderer : Node3D
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
                 {
-                    SpawnEffect(new HitFlash(), hit, _localSector);
-                    SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
+                    // Shield up on the struck ship → a hemisphere shield-bubble flash + shield sound;
+                    // otherwise the plain hull spark + impact sound. Both cosmetic/predicted.
+                    if (_shipShield.TryGetValue(shipId, out float sh) && sh > 0f)
+                    {
+                        SpawnEffect(new ShieldFlash(hit - c, VisualHitRadius * 1.2f, ShieldFlashTint), c, _localSector);
+                        SfxManager.Instance?.PlayAt(SfxManager.SfxId.ShieldImpact, hit, pitch: 0.95f + GD.Randf() * 0.12f);
+                    }
+                    else
+                    {
+                        SpawnEffect(new HitFlash(), hit, _localSector);
+                        SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
+                    }
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
                     break;

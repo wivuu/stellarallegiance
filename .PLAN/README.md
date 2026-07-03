@@ -212,8 +212,18 @@ Stage-2 economy, no rework.
   default hold authored per hull (`default-cargo`, payload-costed, hangar steppers live via
   `MsgSpawn` cargo). `tests/MineTest` determinism guard. *Deferred: mine-vs-mine chains,
   shootable mines, PIG mine-laying.*
-- ☐ **Shields & damage systems** — regenerating shields over the raw-health model; damage-type
-  interactions.
+- ✅ **Shields & damage systems** — shipped (proto 19): a regenerating energy **shield** authored
+  per hull/faction in YAML (`shield-capacity`/`shield-recharge`/`shield-delay` on `Hull`;
+  Fighter/Bomber carry one, Scout/Pod don't) layered over the raw-health model. One central
+  `Simulation.ApplyDamage` seam routes **all** damage (bolts, missiles, blast, mines, collisions,
+  boundary) through the shield first: it absorbs while it holds (hull untouched) and overflow spills
+  to hull when a hit pops it; recharge resumes after a per-hull quiet delay. The **damage-type
+  interaction** is a per-weapon `shield-damage-multiplier` (default 1.0; the bomber cannon authors
+  0.5 = half vs shields). Current shield rides the snapshot; the client draws a cyan **SHLD** solid
+  arc wrapping the HULL gauge (`SystemRing`, completing the Claude Design "Game HUD" ring), plays a
+  distinct `shield_hit.ogg` + a hemisphere `ShieldFlash` when a bolt strikes a raised shield vs a
+  bare hull. `tests/ShieldTest` guards absorb/spillover/recharge/multiplier; a `Simulation.ShieldsEnabled`
+  toggle lets the missile/mine damage tests isolate raw damage.
 - ☐ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
   don't. (FX done; the recharge *mechanic* is not.)
 - ☐ **Ship salvage & pickups** — destroyed ships drop ammo / guns / missiles / mines (and credits)

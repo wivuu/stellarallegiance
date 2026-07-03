@@ -57,6 +57,7 @@ namespace StellarAllegiance.Net
         public float AbPower;
         public float Fuel;
         public float Health;
+        public float Shield; // current energy-shield charge (0 if this hull has no shield)
         public float Mass;
         public uint LastInputTick;
         public uint LastFireTick;

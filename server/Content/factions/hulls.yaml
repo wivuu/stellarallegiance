@@ -4,6 +4,11 @@
 #   explicit runtime extensions. Numbers reproduce server/Content/stock.yaml exactly.
 #   payload-capacity = the hull's payload budget (mounted weapon mass + cargo hold). Every armed
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
+#   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
+#   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
+#   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.
+#   A hull authoring shield-capacity MUST author a positive shield-recharge (else it never comes back) —
+#   ContentValidator refuses to boot otherwise. Scout/Pod carry no shield; Fighter/Bomber do.
 #   Afterburner fuel (optional, gauges the afterburner): max-fuel is the tank size; ab-fuel-drain is
 #   burned per second while the afterburner is engaged; ab-fuel-recharge trickles back per second
 #   while the boost input is released. A hull authoring ab-accel > 0 MUST also author max-fuel (and vice versa) —
@@ -28,6 +33,9 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 60
+    shield-capacity: 60   # regenerating shield absorbed before hull
+    shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
+    shield-delay: 3       # seconds after the last shield hit before recharge resumes
     price: 100
     payload-capacity: 8 # cannon 2 -> 6 free for cargo
     required-capabilities: [base]
@@ -57,6 +65,9 @@ hulls:
     ab-fuel-drain: 3.0    # per second while the afterburner is engaged
     ab-fuel-recharge: 0.5 # per second while boost is released (~30 s to full); 0 = dock-only (relaunch refills)
     armor-hit-points: 120
+    shield-capacity: 60   # regenerating shield absorbed before hull
+    shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
+    shield-delay: 3       # seconds after the last shield hit before recharge resumes
     price: 200
     payload-capacity: 20 # twin cannons 2x5 + seeker rack 4 = 14 -> 6 free for cargo
     required-capabilities: [base]
@@ -100,6 +111,9 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 240
+    shield-capacity: 100  # the heavy hull carries the largest shield
+    shield-recharge: 6    # points/sec once the quiet delay elapses (~16.7 s to full)
+    shield-delay: 4       # seconds after the last shield hit before recharge resumes
     price: 350
     payload-capacity: 26 # cannon 11 + torpedo rack 4 = 15 -> 11 free; the payload hull carries the most
     required-capabilities: [base]

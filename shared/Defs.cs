@@ -82,6 +82,11 @@ namespace StellarAllegiance.Shared
             AbFuelRecharge;
 
         public float MaxHull; // starting/spawn hull
+        // Regenerating energy shield layered over hull (all 0 = no shield). Depleted before hull;
+        // overflow spills to hull. Recharge (points/sec) resumes ShieldDelaySec after the last hit.
+        public float ShieldCapacity;
+        public float ShieldRecharge;
+        public float ShieldDelaySec;
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public List<HardpointDef> Hardpoints = new();
@@ -149,6 +154,10 @@ namespace StellarAllegiance.Shared
         public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
         public uint CargoId; // dispenser: the cargo item (Chaff/Mine expendable) this launcher consumes
+
+        // Damage vs an energy shield relative to hull (1 = equal, >1 strong, <1 weak). Streamed LAST
+        // in BuildDefs (after CargoId) so the missile/chaff/mine blocks above stay byte-stable.
+        public float ShieldMult = 1f;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored

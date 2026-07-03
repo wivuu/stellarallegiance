@@ -85,6 +85,49 @@ public sealed partial class Simulation
     private float HullFor(byte cls) =>
         ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
 
+    // Shield knobs for a class, read straight from its def (0 capacity = the hull has no shield).
+    // Unknown class falls back to the Scout def, mirroring HullFor. A pod flies the Pod def (which
+    // authors no shield), so the shield rule uses the SAME effective-class resolution as StatsFor.
+    private ShipClassDef ShieldDefFor(byte cls) =>
+        ShipDefs.TryGetValue(cls, out var d) ? d : ShipDefs[FlightModel.ClassScout];
+
+    private ShipClassDef ShieldDefFor(ShipSim s) => ShieldDefFor(s.IsPod ? GameContent.PodClassId : s.Class);
+
+    private float ShieldCapacityFor(ShipSim s) => ShieldDefFor(s).ShieldCapacity;
+
+    private float ShieldRechargeFor(ShipSim s) => ShieldDefFor(s).ShieldRecharge;
+
+    private uint ShieldDelayTicksFor(ShipSim s) => (uint)MathF.Round(ShieldDefFor(s).ShieldDelaySec * TickHz);
+
+    // The single damage seam: every ship-damage site routes through here so the shield rule is
+    // applied ONCE and consistently. The energy shield absorbs first — a hit scaled by the weapon's
+    // shieldMult (1.0 for collisions/boundary that carry no weapon). While the shield holds, the
+    // hull is untouched; when a hit pops it, the raw damage it couldn't absorb spills into the hull
+    // the same tick. ShieldDamageTick stamps this tick so the recharge sweep waits out the delay.
+    // Death is still resolved by the end-of-step Health<=0 pass, not here.
+    private void ApplyDamage(ShipSim s, float dmg, uint tick, float shieldMult = 1f)
+    {
+        if (dmg <= 0f)
+            return;
+        float cap = ShieldsEnabled ? ShieldCapacityFor(s) : 0f;
+        if (cap > 0f && s.Shield > 0f && shieldMult > 0f)
+        {
+            s.ShieldDamageTick = tick;
+            float shieldDmg = dmg * shieldMult; // raw damage as felt by the shield pool
+            if (shieldDmg <= s.Shield)
+            {
+                s.Shield -= shieldDmg;
+                return; // shield held; hull untouched
+            }
+            // Shield pops: it absorbed s.Shield of shield-damage = s.Shield/shieldMult raw; the rest spills.
+            dmg -= s.Shield / shieldMult;
+            s.Shield = 0f;
+            if (dmg <= 0f)
+                return;
+        }
+        s.Health -= dmg;
+    }
+
     // A class's primary GUN — the first Bolt-kind muzzle, or the Scout gun if the hull carries no
     // bolt weapon (missile racks are ignored). Drives the PIG threat heuristic + the gun cadence
     // gate; single-sourced from the same muzzles/defs the sim fires from.
@@ -126,6 +169,11 @@ public sealed partial class Simulation
         public uint SectorId;
         public ShipState State; // shared FlightModel state (pos/vel/rot/angvel/mass/ab)
         public float Health;
+        // Regenerating energy shield layered over Health. Shield absorbs damage first (overflow spills
+        // to hull); ShieldDamageTick stamps the last tick it took damage, gating the recharge delay.
+        // 0 capacity (per the class def) = no shield. Set full at spawn; recharged in the Step sweep.
+        public float Shield;
+        public uint ShieldDamageTick;
         public uint LastInputTick;
         public uint LastFireTick;
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
@@ -225,7 +273,7 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
-    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage);
+    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult);
 
     public readonly World World;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
@@ -309,6 +357,11 @@ public sealed partial class Simulation
     // server default to ON. Toggled live by the /pigs chat command (set on a network
     // thread, read on the sim thread) — volatile for cross-thread visibility.
     public volatile bool PigsEnabled;
+
+    // Regenerating shields are active when true (the default). Turned off, ships spawn with no shield
+    // and every hit lands on the hull — used by the damage-mechanic tests (missile/mine/collision) to
+    // isolate raw damage from shield absorption. The shield mechanic itself is covered by ShieldTest.
+    public bool ShieldsEnabled = true;
 
     // How long the Ended result lingers before the server returns to the lobby for the next match.
     private const uint EndedToLobbyTicks = 6 * TickHz;
@@ -545,7 +598,7 @@ public sealed partial class Simulation
         {
             float over = s.State.Pos.Length() - World.SectorRadius(s.SectorId);
             if (over > 0f)
-                s.Health -= MathF.Min(World.BoundaryBaseDps + over * World.BoundaryRampDps, World.BoundaryMaxDps) * dt;
+                ApplyDamage(s, MathF.Min(World.BoundaryBaseDps + over * World.BoundaryRampDps, World.BoundaryMaxDps) * dt, tick);
 
             ResolveAsteroidCollisions(s);
 
@@ -615,6 +668,21 @@ public sealed partial class Simulation
             }
         }
         ApplyStructural();
+
+        // Shield recharge sweep (end-of-tick so every damage phase this tick has already stamped
+        // ShieldDamageTick — a ship hit this tick won't regen this tick). A shielded ship refills at
+        // its authored rate once the quiet delay since the last shield hit has elapsed.
+        foreach (var s in _order)
+        {
+            if (!ShieldsEnabled || !s.Alive)
+                continue;
+            float cap = ShieldCapacityFor(s);
+            if (cap <= 0f || s.Shield >= cap)
+                continue;
+            if (tick - s.ShieldDamageTick < ShieldDelayTicksFor(s))
+                continue;
+            s.Shield = MathF.Min(cap, s.Shield + ShieldRechargeFor(s) * dt);
+        }
     }
 
     private void DrainQueues(uint tick)
@@ -798,6 +866,8 @@ public sealed partial class Simulation
         s.State.Mass = StatsFor(cls, false).Mass;
         s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
+        s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
+        s.ShieldDamageTick = 0;
         if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
             s.MissileAmmo = mw.MagazineSize;
         // D7: remember what the team paid for this hull (TryReserveSpawn just deducted it) so a
@@ -1029,6 +1099,7 @@ public sealed partial class Simulation
             IsPig = dead.IsPig,
             Alive = true,
             Health = HullFor(GameContent.PodClassId),
+            Shield = ShieldDefFor(GameContent.PodClassId).ShieldCapacity, // 0 unless a pod hull authors a shield
             LastInputTick = tick,
             State = new ShipState
             {
@@ -1322,7 +1393,7 @@ public sealed partial class Simulation
         if (targetShip != 0 || targetBase >= 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage));
+            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult));
         }
     }
 
@@ -1515,7 +1586,7 @@ public sealed partial class Simulation
             if (chaffDetonate)
             {
                 var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
-                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg);
+                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1617,10 +1688,10 @@ public sealed partial class Simulation
             {
                 Vec3 hitPos = mp + vel * bestT;
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
-                    victim.Health -= w.Damage * w.DirectHitMult; // end-of-step death pass resolves 0 health
+                    ApplyDamage(victim, w.Damage * w.DirectHitMult, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
                     ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
-                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid);
+                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1646,7 +1717,7 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
-    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid)
+    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick)
     {
         if (shipGrid is null || w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
@@ -1671,7 +1742,7 @@ public sealed partial class Simulation
                         if (d > w.BlastRadius)
                             continue;
                         float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-                        s.Health -= w.BlastPower * falloff; // end-of-step death pass resolves 0 health
+                        ApplyDamage(s, w.BlastPower * falloff, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                     }
                 }
     }
@@ -1746,7 +1817,7 @@ public sealed partial class Simulation
             {
                 // Apply damage only; the end-of-step death/dock pass detects 0 health and
                 // ejects the pod / frees the slot — one death path, like the module.
-                s.Health -= shot.Damage;
+                ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
             }
         }
         due.Clear();
@@ -1947,7 +2018,7 @@ public sealed partial class Simulation
 
     // Module-identical mass-weighted bounce: restitution impulse + collision damage when closing,
     // and an inverse-mass-split positional correction along n (which points b → a).
-    private static void ResolveShipImpulse(ShipSim a, ShipSim b, Vec3 n, float pen)
+    private void ResolveShipImpulse(ShipSim a, ShipSim b, Vec3 n, float pen)
     {
         float iA = a.State.Mass > 0f ? 1f / a.State.Mass : 1f;
         float iB = b.State.Mass > 0f ? 1f / b.State.Mass : 1f;
@@ -1960,8 +2031,8 @@ public sealed partial class Simulation
             a.State.Vel += n * (jimp * iA);
             b.State.Vel -= n * (jimp * iB);
             float dmg = CollisionDamage(-relVn, (1f / invSum) * World.ShipShipDamageScale);
-            a.Health -= dmg;
-            b.Health -= dmg;
+            ApplyDamage(a, dmg, _tick);
+            ApplyDamage(b, dmg, _tick);
         }
         a.State.Pos += n * (pen * (iA / invSum));
         b.State.Pos -= n * (pen * (iB / invSum));
@@ -2012,7 +2083,7 @@ public sealed partial class Simulation
     // Sphere-vs-convex-hull bounce (the convex analogue of ResolveStaticCollision). The hull is
     // in its own authored frame at (center, rot, uniform scale); SphereVsHull maps the ship sphere
     // into that frame, resolves against the nearest face, and maps the contact back to world.
-    private static void ResolveHullCollision(ShipSim s, ConvexHull hull, Vec3 center, Quat rot, float scale)
+    private void ResolveHullCollision(ShipSim s, ConvexHull hull, Vec3 center, Quat rot, float scale)
     {
         if (Collide.SphereVsHull(s.State.Pos, World.ShipRadius, hull, center, rot, scale, out Vec3 n, out float pen))
             BounceShip(s, n, pen);
@@ -2022,11 +2093,11 @@ public sealed partial class Simulation
     // then the SERVER-ONLY collision damage from the inbound normal speed. Shared by
     // ResolveHullCollision (asteroids, enemy base) and the friendly-base solid-shell branch. The
     // client runs Collide.Bounce too (no damage — health is server-authoritative).
-    private static void BounceShip(ShipSim s, Vec3 worldNormal, float worldPenetration)
+    private void BounceShip(ShipSim s, Vec3 worldNormal, float worldPenetration)
     {
         Collide.Bounce(ref s.State, worldNormal, worldPenetration, World.CollisionRestitution, out float vn);
         if (vn < 0f)
-            s.Health -= CollisionDamage(-vn, World.CollisionDamageScale);
+            ApplyDamage(s, CollisionDamage(-vn, World.CollisionDamageScale), _tick);
     }
 
     // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the
@@ -2055,13 +2126,13 @@ public sealed partial class Simulation
 
     // Sphere-vs-sphere static bounce fallback (a rock without a hull, or a base without a model):
     // shared kinematic (Collide.ResolveStaticSphere) + server-only collision damage.
-    private static void ResolveStaticCollision(ShipSim s, Vec3 center, float radius)
+    private void ResolveStaticCollision(ShipSim s, Vec3 center, float radius)
     {
         if (
             Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
             && vn < 0f
         )
-            s.Health -= CollisionDamage(-vn, World.CollisionDamageScale);
+            ApplyDamage(s, CollisionDamage(-vn, World.CollisionDamageScale), _tick);
     }
 
     // Server-only collision damage from a closing normal speed (m/s, always positive). Below
