@@ -89,21 +89,24 @@ missiles:
     trail-color: "ff9060ff"
 
 mines:
-  # Deployed as a FIELD: one drop scatters cloud-count mines within cloud-radius behind the ship;
-  # each arms after arm-delay, then triggers any enemy within radius (proximity) for a power blast
-  # that splashes out to blast-radius. lifespan bounds the whole field.
+  # Deployed as a FIELD that behaves as ONE damage VOLUME: a drop scatters cloud-count mine MESHES
+  # within cloud-radius behind the ship (cosmetic only — the meshes are never hit-detected). After
+  # arm-delay the whole cloud-radius sphere is lethal: any enemy inside takes power damage-per-second
+  # SCALED BY ITS OWN SPEED (mines are static, so a fast plow-through hurts and a near-stationary ship
+  # takes ~0), every tick, for the field's lifespan. One deploy costs ONE mine-cargo unit regardless of
+  # cloud-count (the meshes are decoration, not per-mine ammo). model-name is the GLB the client
+  # instances per visual mine (assets/mines/<name>.glb).
   - id: proximity-mine
     name: Proximity Mine
     description: Dropped behind the ship; arms after 2s.
     cargo-id: 2
-    mass: 1             # light per-mine payload cost: a full cloud-count hold must fit a bomber
+    mass: 1             # payload cost per deployable field (one drop = one field)
     glyph: "◈"
+    model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
     lifespan: 60         # field lifetime, s
-    radius: 30           # per-mine proximity trigger radius, u
-    power: 25            # per-mine detonation power (direct + splash source)
-    blast-radius: 40     # per-mine splash cutoff, u
-    cloud-radius: 80     # radius the field scatters its mines within, u
-    cloud-count: 8       # mines scattered per deploy (<= 64)
+    power: 20            # damage-PER-SECOND at reference speed, scaled by the victim's speed
+    cloud-radius: 30     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
+    cloud-count: 48      # mine meshes scattered per deploy — cosmetic density (<= 64)
     arm-delay: 2.0       # seconds before the field arms
 
 chaffs:
@@ -113,6 +116,7 @@ chaffs:
     cargo-id: 3
     mass: 3
     glyph: "◇"
-    lifespan: 10         # puff lifetime, s
+    model-name: acs40    # GLB the client instances for the decoy (assets/chaff/acs40.glb)
+    lifespan: 3          # puff lifetime, s
     chaff-strength: 1.0  # decoy strength vs a missile's chaff-resistance
     decoy-radius: 60     # u within which a missile can be lured onto this puff

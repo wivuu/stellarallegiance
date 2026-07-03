@@ -81,10 +81,6 @@ namespace StellarAllegiance.Shared
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64");
                     if (w.MineCloudRadius <= 0f)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}");
-                    if (w.MineTriggerRadius <= 0f)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineTriggerRadius {w.MineTriggerRadius}");
-                    if (w.BlastRadius <= 0f)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
                     if (w.BlastPower <= 0f)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
                     if (w.ProjectileLifeTicks == 0)

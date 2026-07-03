@@ -139,13 +139,9 @@ public static class CoreValidator
                 if (mine.CloudCount < 1 || mine.CloudCount > 64)
                     result.Error($"{ctx} mine '{mine.Id}' needs cloud-count in 1..64 (got {mine.CloudCount}).");
                 if (mine.CloudRadius <= 0)
-                    result.Error($"{ctx} mine '{mine.Id}' needs cloud-radius > 0.");
-                if (mine.Radius <= 0)
-                    result.Error($"{ctx} mine '{mine.Id}' needs radius > 0 (proximity trigger radius).");
-                if (mine.BlastRadius <= 0)
-                    result.Error($"{ctx} mine '{mine.Id}' needs blast-radius > 0.");
+                    result.Error($"{ctx} mine '{mine.Id}' needs cloud-radius > 0 (scatter + lethal sphere radius).");
                 if (mine.Power <= 0)
-                    result.Error($"{ctx} mine '{mine.Id}' needs power > 0 (per-mine blast).");
+                    result.Error($"{ctx} mine '{mine.Id}' needs power > 0 (damage/sec at reference speed).");
                 if (mine.ArmDelay < 0)
                     result.Error($"{ctx} mine '{mine.Id}' has negative arm-delay.");
                 if (mine.ArmDelay >= mine.Lifespan)

@@ -133,7 +133,7 @@ namespace StellarAllegiance.Shared
         public float BlastPower; // splash damage at the detonation point (inverse-square falloff)
         public float BlastRadius; // splash cutoff radius, u; ships beyond it take nothing
         public float DirectHitMult; // multiplier on Damage for the ship that triggers the fuse
-        public string ModelName = ""; // GLB basename under assets/missiles/ (no extension)
+        public string ModelName = ""; // GLB basename, no extension (kind-relative dir: missiles/mines/chaff)
         public float TrailLifetime; // client smoke-trail plume lifetime, s
         public float TrailScale; // client smoke-trail plume size scale
         public uint TrailColor; // client smoke-trail tint, 0xRRGGBBAA

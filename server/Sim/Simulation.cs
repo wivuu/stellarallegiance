@@ -157,6 +157,10 @@ public sealed partial class Simulation
         public uint ChaffWeaponId;
         public uint MineWeaponId;
 
+        // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
+        // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
+        public uint LastMineFxTick;
+
         // Being-locked warning: 0 = no enemy locking me, 1 = a lock is progressing, 2 = a lock
         // completed. Reset to 0 every tick before Pass A, raised by UpdateLock on the TARGET; the
         // wire flags byte carries it to the client (ShipFlagLockingMe/LockedMe).

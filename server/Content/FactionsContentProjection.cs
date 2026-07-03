@@ -200,23 +200,18 @@ public static class FactionsContentProjection
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Mine,
-                // Per-mine blast + field/arming stats reused from the referenced mine.
+                // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
+                // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
                 ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0), // field lifespan
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
                 MagazineSize = (byte)l.Amount,
-                BlastPower = (float)mn.Power, // per-mine detonation power (direct + splash)
-                BlastRadius = (float)mn.BlastRadius,
-                // Splash full-damage core = the proximity trigger radius: everyone the mine could have
-                // triggered on takes full BlastPower, ships between trigger and blast radius take the
-                // inverse-square falloff ApplyBlast computes from ProjectileRadius (fuseR). Without a
-                // non-zero fuse the (fuse/d)^2 falloff would zero out all mine splash.
-                ProjectileRadius = (float)mn.Radius,
-                MineCloudRadius = (float)mn.CloudRadius,
-                MineCloudCount = (byte)mn.CloudCount,
+                BlastPower = (float)mn.Power, // damage-per-second at reference speed (speed-scaled)
+                MineCloudRadius = (float)mn.CloudRadius, // scatter radius AND lethal sphere radius
+                MineCloudCount = (byte)mn.CloudCount, // cosmetic mesh count
                 MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
-                MineTriggerRadius = (float)mn.Radius,
                 CargoId = mn.CargoId ?? 0,
+                ModelName = mn.ModelName ?? "",
             };
 
         if (!string.IsNullOrEmpty(l.ExpendableId) && chaffById.TryGetValue(l.ExpendableId, out var ch))
@@ -232,6 +227,7 @@ public static class FactionsContentProjection
                 ChaffStrength = (float)ch.ChaffStrength,
                 DecoyRadius = (float)ch.DecoyRadius,
                 CargoId = ch.CargoId ?? 0,
+                ModelName = ch.ModelName ?? "",
             };
 
         throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff expendable-id");

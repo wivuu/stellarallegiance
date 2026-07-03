@@ -22,6 +22,7 @@ public record Mine : Expendable
     /// WeaponDef.MineArmTicks after ×20 tick conversion).</summary>
     public double ArmDelay { get; set; }
 
-    /// <summary>Per-mine splash cutoff radius, in u (projected onto WeaponDef.BlastRadius).</summary>
-    public double BlastRadius { get; set; }
+    /// <summary>GLB model basename the client instances (once per visual mine) from
+    /// <c>assets/mines/</c> (no extension); projected onto WeaponDef.ModelName.</summary>
+    public string? ModelName { get; set; }
 }

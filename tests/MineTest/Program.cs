@@ -8,16 +8,22 @@
 // set directly on the ShipSim (the payload budget only fits one mine on the heaviest hull; the sim
 // path under test is the deploy/arm/trigger cycle, not the hangar validator).
 //
+// The field is ONE damage VOLUME (cloud-radius sphere): the scattered meshes are cosmetic, nothing
+// is hit-detected per-mine, and an armed field damages every enemy inside by a per-tick amount SCALED
+// BY THE VICTIM'S SPEED (static mines — a fast plow-through hurts, a parked ship takes ~0). AliveMask
+// never depletes; a rate-limited MsgMineGone(reason 2) ping drives the client hit FX.
+//
 // Scenarios:
-//   1. Deploy: a held DropMine drops exactly ONE field (cadence gate holds), MineAmmo -= n, the
-//      field record is sane (mask popcount == n, positions inside cloud-radius of center).
-//   2. Arming: an enemy parked on a mine before ArmAtTick takes zero damage; the first tick at/after
-//      arming it takes a hit and a MineGone fires.
-//   3. Consumption: an enemy swept through the field detonates mines one per triggered mine, AliveMask
-//      strictly loses bits (never gains), and a friendly swept through the same cloud takes nothing.
-//   4. Splash: a bystander enemy in the (fuse, blast] falloff band of a triggered mine takes exactly
-//      the inverse-square splash; a friendly at the same range and an over-range enemy take nothing.
-//   5. Expiry: an untouched field vanishes at ExpireAtTick with no detonations; the change flag fires.
+//   1. Deploy: a held DropMine drops exactly ONE field (cadence gate holds), MineAmmo -= 1 (one field
+//      per cargo unit), the field record is sane (mask popcount == cloud-count cosmetic meshes, all
+//      inside cloud-radius of center).
+//   2. Arming: a ship moving through an unarmed field takes zero damage and triggers no FX; the first
+//      tick at/after arming it takes speed-scaled damage and a reason-2 hit-FX ping fires.
+//   3. Speed scaling: a fast pass takes more damage than a slow one and a parked ship takes ~0;
+//      AliveMask never depletes; a friendly moving through its own field takes nothing.
+//   4. Volume: every enemy inside the sphere takes damage the same tick; a friendly inside and an
+//      enemy outside cloud-radius take nothing.
+//   5. Expiry: an untouched field vanishes at ExpireAtTick with no FX pings; the change flag fires.
 //   6. Determinism: identical scripts on two fresh sims produce bit-identical MinePos arrays, AliveMask
 //      timelines, and ship-health timelines. Plus: MinefieldLayout.Positions is a pure function.
 
@@ -81,6 +87,18 @@ void ParkAt(Simulation.ShipSim s, Vec3 pos)
     s.State.AngVel = new Vec3(0f, 0f, 0f);
 }
 
+// Place a ship at `pos` carrying `vel` — the field is a speed-scaled damage volume, so only a
+// MOVING ship inside it takes damage (a parked ship, Vel 0, takes none). Re-called each tick to hold
+// the ship inside the cloud while keeping its speed nonzero.
+void PlaceMoving(Simulation.ShipSim s, Vec3 pos, Vec3 vel)
+{
+    s.SectorId = EmptySector;
+    s.State.Pos = pos;
+    s.State.Vel = vel;
+    s.State.Rot = Quat.Identity;
+    s.State.AngVel = new Vec3(0f, 0f, 0f);
+}
+
 // Spawn a bomber (team 0) as the mine layer, park it at the origin facing +Z in the empty sector, and
 // force its mine dispenser ammo/weapon-id directly (bypassing the hangar payload budget). Returns the
 // layer ship + the projected proximity-mine WeaponDef (weapon-id 7).
@@ -121,7 +139,7 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 {
     var (sim, layer, mineW) = SetupLayer(seed: 1, mineAmmo: 8);
     byte ammoBefore = layer.MineAmmo;
-    int expectedN = System.Math.Min(ammoBefore, mineW.MineCloudCount);
+    int expectedMeshes = System.Math.Min((int)mineW.MineCloudCount, 64); // cosmetic mesh count (ammo-independent)
 
     // Hold DropMine for several ticks: the cadence gate (FireIntervalTicks) must still yield ONE field.
     for (int i = 0; i < 5; i++)
@@ -133,14 +151,14 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 
     var field = sim.Minefields[0];
     Check(
-        layer.MineAmmo == ammoBefore - expectedN,
-        $"MineAmmo decremented by n=min(ammo,cloudCount)={expectedN} ({ammoBefore} -> {layer.MineAmmo})",
-        $"MineAmmo wrong ({ammoBefore} -> {layer.MineAmmo}, expected -{expectedN})"
+        layer.MineAmmo == ammoBefore - 1,
+        $"one deploy consumes exactly one mine-cargo unit ({ammoBefore} -> {layer.MineAmmo})",
+        $"MineAmmo wrong ({ammoBefore} -> {layer.MineAmmo}, expected -1)"
     );
     Check(
-        PopCount(field.AliveMask) == expectedN && field.MinePos.Length == expectedN,
-        $"field mask popcount ({PopCount(field.AliveMask)}) and MinePos length ({field.MinePos.Length}) both == n ({expectedN})",
-        $"field size wrong (popcount {PopCount(field.AliveMask)}, positions {field.MinePos.Length}, expected {expectedN})"
+        PopCount(field.AliveMask) == expectedMeshes && field.MinePos.Length == expectedMeshes,
+        $"field carries cloud-count cosmetic meshes (popcount {PopCount(field.AliveMask)}, positions {field.MinePos.Length}) == {expectedMeshes}",
+        $"field size wrong (popcount {PopCount(field.AliveMask)}, positions {field.MinePos.Length}, expected {expectedMeshes})"
     );
 
     bool allInside = field.MinePos.All(p => (p - field.Center).Length() <= mineW.MineCloudRadius + 1e-3f);
@@ -159,160 +177,159 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 
     var field = Deploy(sim, layer);
     ulong fieldId = field.FieldId;
-    Vec3 mp = field.MinePos[0];
-    ParkAt(enemy, mp); // sit right on the mine — well inside the trigger radius
+    Vec3 c = field.Center;
+    Vec3 vel = new Vec3(100f, 0f, 0f); // moving, so speed-scaled damage would apply once armed
 
     float healthBefore = enemy.Health;
-    // Every tick strictly before ArmAtTick: inert. Keep the enemy pinned on the mine each tick.
+    // Every tick strictly before ArmAtTick: inert. Keep the enemy moving through the field center.
     bool anyEarlyDamage = false;
     bool anyEarlyGone = false;
     while (sim.Tick + 1 < field.ArmAtTick)
     {
-        ParkAt(enemy, mp);
+        PlaceMoving(enemy, c, vel);
         sim.Step();
         if (enemy.Health != healthBefore)
             anyEarlyDamage = true;
         if (sim.MineGoneThisStep.Any(g => g.fieldId == fieldId))
             anyEarlyGone = true;
     }
-    Check(!anyEarlyDamage && !anyEarlyGone, "an enemy parked on an unarmed mine takes no damage and triggers nothing", "an unarmed mine damaged / detonated on a parked enemy");
+    Check(!anyEarlyDamage && !anyEarlyGone, "a ship moving through an UNARMED field takes no damage and triggers no FX", "an unarmed field damaged / pinged a ship moving through it");
 
-    // Next step reaches ArmAtTick -> the mine arms and triggers.
-    ParkAt(enemy, mp);
+    // Next step reaches ArmAtTick -> the volume goes live and damages the moving enemy.
+    PlaceMoving(enemy, c, vel);
     sim.Step();
     Check(sim.Tick >= field.ArmAtTick, $"stepped to ArmAtTick ({field.ArmAtTick}) at tick {sim.Tick}", $"tick bookkeeping off (now {sim.Tick}, arm {field.ArmAtTick})");
     Check(
-        enemy.Health == healthBefore - mineW.BlastPower && sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 1),
-        $"the first armed tick hits the enemy for BlastPower ({mineW.BlastPower}) and emits a MineGone",
-        $"armed mine failed to trigger (health {healthBefore} -> {enemy.Health}, gone={sim.MineGoneThisStep.Any(g => g.fieldId == fieldId)})"
+        enemy.Health < healthBefore && sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 2),
+        $"the first armed tick damages a moving enemy inside the field ({healthBefore} -> {enemy.Health}) and emits a reason-2 hit-FX ping",
+        $"armed field failed to hit a moving enemy (health {healthBefore} -> {enemy.Health}, ping={sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 2)})"
     );
 }
 
-// ---- 3. Consumption (enemy sweep depletes the field; friendly is immune) ------------------------
+// ---- 3. Speed scaling (fast > slow > parked); AliveMask never depletes; friendly is immune -------
 {
-    var (sim, layer, mineW) = SetupLayer(seed: 3, mineAmmo: 8);
-    var enemy = JoinShip(sim, 2, team: 1);
-    var field = Deploy(sim, layer);
-    ulong fieldId = field.FieldId;
-
-    // Arm the field (park the enemy far off so nothing triggers during the wait).
-    ParkAt(enemy, new Vec3(5000f, 0f, 0f));
-    while (sim.Tick < field.ArmAtTick)
-        sim.Step();
-
-    // Sweep the enemy straight through each mine in turn — one mine per step, exactly on it.
-    ulong prevMask = field.AliveMask;
-    bool monotonic = true;
-    int goneCount = 0;
-    float enemyStart = enemy.Health;
-    for (int i = 0; i < field.MinePos.Length; i++)
+    // Total damage a team-1 enemy takes over 10 armed ticks while held at the field center moving at
+    // `vel`. Each fresh sim uses the same seed so the field geometry matches — only speed differs.
+    float SweepDamage(Vec3 vel)
     {
-        ParkAt(enemy, field.MinePos[i]);
-        sim.Step();
-        var f = FindField(sim, fieldId);
-        ulong nowMask = f?.AliveMask ?? 0UL;
-        // No bit that was clear may become set.
-        if ((nowMask & ~prevMask) != 0UL)
-            monotonic = false;
-        prevMask = nowMask;
-        goneCount += sim.MineGoneThisStep.Count(g => g.fieldId == fieldId && g.reason == 1);
-        if (f is null)
-            break;
+        var (sim, layer, _) = SetupLayer(seed: 3, mineAmmo: 8);
+        var enemy = JoinShip(sim, 2, team: 1);
+        var field = Deploy(sim, layer);
+        ParkAt(enemy, new Vec3(5000f, 0f, 0f)); // arm with the enemy well clear
+        while (sim.Tick < field.ArmAtTick)
+            sim.Step();
+        float before = enemy.Health;
+        for (int i = 0; i < 10; i++)
+        {
+            PlaceMoving(enemy, field.Center, vel);
+            sim.Step();
+        }
+        return before - enemy.Health;
     }
-    Check(monotonic, "AliveMask only ever loses bits as an enemy plows through (never regains one)", "AliveMask gained a bit — a popped mine came back");
-    Check(goneCount > 0 && enemy.Health < enemyStart, $"the sweep detonated {goneCount} mines and damaged the enemy ({enemyStart} -> {enemy.Health})", $"enemy sweep triggered nothing (gone {goneCount}, health {enemyStart} -> {enemy.Health})");
 
-    // Friendly immunity: a fresh field, a team-0 ship swept through takes nothing and pops no mine.
-    var (sim2, layer2, _) = SetupLayer(seed: 33, mineAmmo: 8);
-    var friendly = JoinShip(sim2, 2, team: 0); // SAME team as the mine layer
-    var field2 = Deploy(sim2, layer2);
-    ulong field2Id = field2.FieldId;
-    ParkAt(friendly, new Vec3(5000f, 0f, 0f));
-    while (sim2.Tick < field2.ArmAtTick)
-        sim2.Step();
-    float friendlyStart = friendly.Health;
-    ulong maskStart = field2.AliveMask;
-    bool friendlyGone = false;
-    for (int i = 0; i < field2.MinePos.Length; i++)
-    {
-        ParkAt(friendly, field2.MinePos[i]);
-        sim2.Step();
-        if (sim2.MineGoneThisStep.Any(g => g.fieldId == field2Id))
-            friendlyGone = true;
-    }
-    var f2 = FindField(sim2, field2Id);
+    float fast = SweepDamage(new Vec3(200f, 0f, 0f));
+    float slow = SweepDamage(new Vec3(40f, 0f, 0f));
+    float still = SweepDamage(new Vec3(0f, 0f, 0f));
     Check(
-        !friendlyGone && friendly.Health == friendlyStart && f2 is not null && f2.AliveMask == maskStart,
-        "a friendly ship plows through a friendly field untouched (no damage, no detonation)",
-        $"friendly field triggered on a friendly (gone={friendlyGone}, health {friendlyStart} -> {friendly.Health})"
+        fast > slow && slow > still && still <= 1e-3f,
+        $"damage scales with the victim's speed (fast {fast:F2} > slow {slow:F2} > parked {still:F2}≈0)",
+        $"speed scaling broken (fast {fast:F2}, slow {slow:F2}, parked {still:F2})"
     );
+
+    // AliveMask never depletes: a fresh field swept by a fast enemy keeps its full mask.
+    {
+        var (sim, layer, _) = SetupLayer(seed: 3, mineAmmo: 8);
+        var enemy = JoinShip(sim, 2, team: 1);
+        var field = Deploy(sim, layer);
+        ulong fieldId = field.FieldId;
+        ulong maskStart = field.AliveMask;
+        ParkAt(enemy, new Vec3(5000f, 0f, 0f));
+        while (sim.Tick < field.ArmAtTick)
+            sim.Step();
+        for (int i = 0; i < 10; i++)
+        {
+            PlaceMoving(enemy, field.Center, new Vec3(200f, 0f, 0f));
+            sim.Step();
+        }
+        var f = FindField(sim, fieldId);
+        Check(
+            f is not null && f.AliveMask == maskStart,
+            $"AliveMask never depletes as a ship plows through (mines are cosmetic, mask stays 0x{maskStart:X})",
+            $"AliveMask changed under a plow-through (was 0x{maskStart:X}, now 0x{(FindField(sim, fieldId)?.AliveMask ?? 0UL):X})"
+        );
+    }
+
+    // Friendly immunity: a team-0 ship moving through its own field takes nothing and pings no FX.
+    {
+        var (sim2, layer2, _) = SetupLayer(seed: 33, mineAmmo: 8);
+        var friendly = JoinShip(sim2, 2, team: 0); // SAME team as the mine layer
+        var field2 = Deploy(sim2, layer2);
+        ulong field2Id = field2.FieldId;
+        ParkAt(friendly, new Vec3(5000f, 0f, 0f));
+        while (sim2.Tick < field2.ArmAtTick)
+            sim2.Step();
+        float friendlyStart = friendly.Health;
+        bool friendlyPinged = false;
+        for (int i = 0; i < 10; i++)
+        {
+            PlaceMoving(friendly, field2.Center, new Vec3(200f, 0f, 0f));
+            sim2.Step();
+            if (sim2.MineGoneThisStep.Any(g => g.fieldId == field2Id))
+                friendlyPinged = true;
+        }
+        Check(
+            !friendlyPinged && friendly.Health == friendlyStart,
+            "a friendly ship moving through its own field is untouched (no damage, no FX ping)",
+            $"friendly field hit a friendly (ping={friendlyPinged}, health {friendlyStart} -> {friendly.Health})"
+        );
+    }
 }
 
-// ---- 4. Splash (inverse-square indirect damage) ------------------------------------------------
+// ---- 4. Volume (everyone inside is hit; friendly-in and enemy-out are spared) -------------------
 {
-    var (sim, layer, mineW) = SetupLayer(seed: 4, mineAmmo: 1); // single mine → isolated blast
-    var victim = JoinShip(sim, 2, team: 1);
-    var bystander = JoinShip(sim, 3, team: 1);
+    var (sim, layer, mineW) = SetupLayer(seed: 4, mineAmmo: 8);
+    var e1 = JoinShip(sim, 2, team: 1);
+    var e2 = JoinShip(sim, 3, team: 1);
     var friendly = JoinShip(sim, 4, team: 0);
     var farEnemy = JoinShip(sim, 5, team: 1);
 
     var field = Deploy(sim, layer);
-    ulong fieldId = field.FieldId;
-    Vec3 mp = field.MinePos[0];
+    Vec3 c = field.Center;
+    float r = mineW.MineCloudRadius;
+    Vec3 vel = new Vec3(120f, 0f, 0f);
 
-    // Trigger victim 10u off the mine (nearest → direct hit). Bystanders 35u off (in the (fuse 30,
-    // blast 40] falloff band). Far enemy 200u off (clear of the blast). Offsets on distinct axes.
-    ParkAt(victim, mp + new Vec3(10f, 0f, 0f));
-    ParkAt(bystander, mp + new Vec3(0f, 35f, 0f));
-    ParkAt(friendly, mp + new Vec3(0f, -35f, 0f));
-    ParkAt(farEnemy, mp + new Vec3(0f, 0f, 200f));
+    // Two enemies + a friendly at distinct points WELL INSIDE the sphere; a far enemy WELL OUTSIDE it.
+    Vec3 e1Pos = c;
+    Vec3 e2Pos = c + new Vec3(0f, r * 0.5f, 0f);
+    Vec3 friPos = c + new Vec3(0f, -r * 0.5f, 0f);
+    Vec3 farPos = c + new Vec3(0f, 0f, r + 300f);
 
-    // Stop one tick short of arming (parking the ships each tick), so the detonation happens on the
-    // single controlled step below — after the baseline healths are captured.
+    void PlaceAll()
+    {
+        PlaceMoving(e1, e1Pos, vel);
+        PlaceMoving(e2, e2Pos, vel);
+        PlaceMoving(friendly, friPos, vel);
+        PlaceMoving(farEnemy, farPos, vel);
+    }
+
+    // Arm the field, holding the ships in place each tick (no damage while inert).
     while (sim.Tick + 1 < field.ArmAtTick)
     {
-        ParkAt(victim, mp + new Vec3(10f, 0f, 0f));
-        ParkAt(bystander, mp + new Vec3(0f, 35f, 0f));
-        ParkAt(friendly, mp + new Vec3(0f, -35f, 0f));
-        ParkAt(farEnemy, mp + new Vec3(0f, 0f, 200f));
+        PlaceAll();
         sim.Step();
     }
 
-    float victimBefore = victim.Health;
-    float bystanderBefore = bystander.Health;
-    float friendlyBefore = friendly.Health;
-    float farBefore = farEnemy.Health;
-    ParkAt(victim, mp + new Vec3(10f, 0f, 0f));
-    ParkAt(bystander, mp + new Vec3(0f, 35f, 0f));
-    ParkAt(friendly, mp + new Vec3(0f, -35f, 0f));
-    ParkAt(farEnemy, mp + new Vec3(0f, 0f, 200f));
-    sim.Step();
-
-    var gone = sim.MineGoneThisStep.FirstOrDefault(g => g.fieldId == fieldId && g.reason == 1);
-    Check(gone.fieldId == fieldId, "single mine detonated on the trigger victim", "single mine failed to detonate");
-    Vec3 hitPos = gone.pos;
+    float e1b = e1.Health, e2b = e2.Health, frb = friendly.Health, fab = farEnemy.Health;
+    PlaceAll();
+    sim.Step(); // first armed tick — the volume goes live
 
     Check(
-        victim.Health == victimBefore - mineW.BlastPower,
-        $"direct victim took exactly BlastPower ({mineW.BlastPower}) and no splash on top",
-        $"direct victim health wrong ({victimBefore} -> {victim.Health}, expected -{mineW.BlastPower})"
+        e1.Health < e1b && e2.Health < e2b,
+        $"every enemy inside the volume takes damage the same tick (e1 {e1b}->{e1.Health}, e2 {e2b}->{e2.Health})",
+        $"an enemy inside the volume was not hit (e1 {e1b}->{e1.Health}, e2 {e2b}->{e2.Health})"
     );
-
-    // Bystander: replicate ApplyBlast's f32 falloff bit-for-bit against the REPORTED detonation point.
-    float d = (bystander.State.Pos - hitPos).Length();
-    Check(
-        d > mineW.ProjectileRadius && d <= mineW.BlastRadius,
-        $"bystander sits in the falloff band (fuse {mineW.ProjectileRadius} < d {d} <= blast {mineW.BlastRadius})",
-        $"splash geometry broken: bystander distance {d} not in ({mineW.ProjectileRadius}, {mineW.BlastRadius}]"
-    );
-    float expectedSplash = mineW.BlastPower * ((mineW.ProjectileRadius / d) * (mineW.ProjectileRadius / d));
-    Check(
-        bystander.Health == bystanderBefore - expectedSplash,
-        $"bystander took exactly the inverse-square splash ({expectedSplash} at d {d})",
-        $"bystander splash wrong ({bystanderBefore} -> {bystander.Health}, expected -{expectedSplash})"
-    );
-    Check(friendly.Health == friendlyBefore, "friendly in blast range took nothing", $"friendly took splash ({friendlyBefore} -> {friendly.Health})");
-    Check(farEnemy.Health == farBefore, "enemy outside blast-radius took nothing", $"out-of-range enemy took splash ({farBefore} -> {farEnemy.Health})");
+    Check(friendly.Health == frb, "a friendly inside the volume takes nothing", $"friendly inside took damage ({frb} -> {friendly.Health})");
+    Check(farEnemy.Health == fab, $"an enemy outside cloud-radius ({r}) takes nothing", $"out-of-range enemy took damage ({fab} -> {farEnemy.Health})");
 }
 
 // ---- 5. Expiry ---------------------------------------------------------------------------------
@@ -338,7 +355,7 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         }
     }
     Check(removed && sim.Tick >= expireAt, $"field removed at/after ExpireAtTick ({expireAt}) (removed at tick {sim.Tick})", $"field never expired (removed={removed}, now {sim.Tick}, expire {expireAt})");
-    Check(!anyGone, "an untouched field expires with zero detonations (no per-mine MineGone)", "an untouched field emitted a detonation before expiring");
+    Check(!anyGone, "an untouched field expires with zero FX pings (nobody inside)", "an untouched field emitted a hit-FX ping before expiring");
     Check(changedOnRemoval, "MinefieldsChangedThisStep fires on the expiry/removal tick", "the removal tick did not raise MinefieldsChangedThisStep");
 }
 
@@ -361,7 +378,9 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     var healthTL = new List<(float, float)>();
     for (int i = 0; i < minePos.Length; i++)
     {
-        ParkAt(enemy, minePos[i]);
+        // Move the enemy through the field center so speed-scaled damage actually accrues — the
+        // AliveMask stays full (cosmetic) while the health timeline exercises the damage path.
+        PlaceMoving(enemy, field.Center, new Vec3(150f, 0f, 0f));
         sim.Step();
         maskTL.Add(FindField(sim, fieldId)?.AliveMask ?? 0UL);
         healthTL.Add((layer.Health, enemy.Health));

@@ -96,7 +96,7 @@ var chaffW = stock.Weapons.First(w => w.WeaponId == 6);
 Check(
     chaffW.Kind == WeaponKind.Chaff
         && chaffW.ChaffStrength == 1f && chaffW.DecoyRadius == 60f
-        && chaffW.ProjectileLifeTicks == 200 && chaffW.CargoId == 3,
+        && chaffW.ProjectileLifeTicks == 60 && chaffW.CargoId == 3 && chaffW.ModelName == "acs40",
     "loader projected the decoy-dispenser (chaff-kind WeaponDef)",
     $"chaff weapon wrong (kind {chaffW.Kind}, strength {chaffW.ChaffStrength}, decoy {chaffW.DecoyRadius}, life {chaffW.ProjectileLifeTicks}, cargo {chaffW.CargoId})"
 );
@@ -104,9 +104,9 @@ Check(
 var mineW = stock.Weapons.First(w => w.WeaponId == 7);
 Check(
     mineW.Kind == WeaponKind.Mine
-        && mineW.MineCloudCount == 8 && mineW.MineArmTicks == 40 && mineW.MineTriggerRadius == 30f
-        && mineW.MineCloudRadius == 80f && mineW.BlastRadius == 40f && mineW.BlastPower == 25f
-        && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2,
+        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 40
+        && mineW.MineCloudRadius == 15f && mineW.BlastPower == 20f
+        && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "acs41",
     "loader projected the mine-dispenser (mine-kind WeaponDef)",
     $"mine weapon wrong (kind {mineW.Kind}, cloudCount {mineW.MineCloudCount}, arm {mineW.MineArmTicks}, trigger {mineW.MineTriggerRadius}, cloudR {mineW.MineCloudRadius}, cargo {mineW.CargoId})"
 );
