@@ -1,0 +1,34 @@
+# Launchers — the missile racks a hull mounts via a { kind: weapon, weapon-id: N } hardpoint. A
+# launcher carrying a weapon-id projects to a WeaponKind.Missile WeaponDef whose ballistics come from
+# the referenced missile expendable (expendables.yaml); the launcher itself supplies the magazine
+# (amount → MagazineSize), the launch cadence (fire-interval-ticks, tick domain to avoid rounding
+# drift) and the mounted mass (counts against the hull's payload-capacity, like a gun's mass).
+# weapon-id shares the namespace with weapons.yaml guns (0/1/2 = scout/fighter/bomber cannons).
+launchers:
+  - id: missile-rack
+    name: Missile Rack
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: seeker-missile
+    weapon-id: 3
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+  - id: dart-rack
+    name: Dart Rack
+    slot: magazine
+    mass: 3
+    amount: 8
+    expendable-id: dart-missile
+    weapon-id: 4
+    fire-interval-ticks: 20
+    required-capabilities: [base]
+  - id: torpedo-rack
+    name: Torpedo Rack
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: anti-base-torpedo
+    weapon-id: 5
+    fire-interval-ticks: 60
+    required-capabilities: [base]

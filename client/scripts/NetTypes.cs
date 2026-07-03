@@ -60,8 +60,28 @@ namespace StellarAllegiance.Net
         public float Mass;
         public uint LastInputTick;
         public uint LastFireTick;
+        public byte MissileAmmo; // rounds left in the missile rack (0 if this hull has none)
+        public byte LockState; // bit7 = locked, bits0-6 = lock progress 0..100
         public bool IsPig; // AI combat drone
         public bool IsPod; // escape pod
+    }
+
+    // One in-flight guided missile, decoded from MsgMissiles (server/Net/Protocol.cs WriteMissile).
+    // Server-simulated + AOI-streamed; the client dead-reckons between updates and ages it out on
+    // the matching MsgMissileGone.
+    public sealed class Missile
+    {
+        public ulong MissileId;
+        public uint WeaponId; // which WeaponDef (missile-kind) launched it — model/trail come from here
+        public byte Team;
+        public uint SectorId;
+        public float PosX,
+            PosY,
+            PosZ;
+        public float VelX,
+            VelY,
+            VelZ;
+        public ulong TargetShipId; // the ship it is homing on (0 = coasting); HUD incoming-warning key
     }
 
     // A team base (from Welcome + streamed health frames).

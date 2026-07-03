@@ -61,6 +61,17 @@ public partial class GameNetClient : Node
     private readonly Dictionary<ulong, Ship> _rows = new();
     private readonly HashSet<ulong> _seenThisSnapshot = new();
 
+    // Last-decoded in-flight missile per id (from MsgMissiles). Maintained by ApplyMissiles /
+    // ApplyMissileGone and read by the HUD (incoming-missile warning) and render layer. Cleared
+    // wherever _rows resets (reconnect / world rebuild / voluntary leave).
+    private readonly Dictionary<ulong, Missile> _missileRows = new();
+
+    // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
+    // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
+    public IReadOnlyDictionary<ulong, Missile> MissileRows => _missileRows;
+    public byte LocalMissileAmmo { get; private set; }
+    public byte LocalLockState { get; private set; } // bit7 = locked, bits0-6 = lock progress 0..100
+
     // Optional connect credentials. Secret = shared-secret password (env SIM_SECRET, empty =
     // open server); name labels the lobby roster (env PILOT_NAME).
     private string _secret = "";
@@ -130,6 +141,7 @@ public partial class GameNetClient : Node
         Active = true;
         LocalShipId = 0;
         _rows.Clear();
+        _missileRows.Clear();
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         GD.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
@@ -168,6 +180,7 @@ public partial class GameNetClient : Node
         _reconnectToken = "";
         _worldLoaded = false;
         _rows.Clear();
+        _missileRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -201,6 +214,7 @@ public partial class GameNetClient : Node
         _reconnectToken = ""; // voluntary leave gives the ship up — don't try to reclaim it
         _worldLoaded = false;
         _rows.Clear();
+        _missileRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -216,6 +230,7 @@ public partial class GameNetClient : Node
         _worldLoaded = false;
         LocalShipId = 0;
         _rows.Clear();
+        _missileRows.Clear();
         _world.Reset();
     }
 
@@ -277,7 +292,7 @@ public partial class GameNetClient : Node
 
     public void SendInput(uint tick, in ShipInputState input)
     {
-        Span<byte> f = stackalloc byte[30];
+        Span<byte> f = stackalloc byte[38];
         f[0] = 2; // Input
         BitConverter.TryWriteBytes(f[1..], tick);
         BitConverter.TryWriteBytes(f[5..], input.Thrust);
@@ -286,7 +301,8 @@ public partial class GameNetClient : Node
         BitConverter.TryWriteBytes(f[17..], input.Yaw);
         BitConverter.TryWriteBytes(f[21..], input.Pitch);
         BitConverter.TryWriteBytes(f[25..], input.Roll);
-        f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0));
+        f[29] = (byte)((input.Firing ? 1 : 0) | (input.Boost ? 2 : 0) | (input.Firing2 ? 4 : 0));
+        BitConverter.TryWriteBytes(f[30..], input.LockTargetId); // u64 Tab-target for server-authoritative missile lock
         _tx.Writer.TryWrite(f.ToArray());
     }
 
@@ -553,6 +569,12 @@ public partial class GameNetClient : Node
             case 10:
                 ApplyTeamState(r);
                 break;
+            case 11:
+                ApplyMissiles(r);
+                break;
+            case 12:
+                ApplyMissileGone(r);
+                break;
         }
     }
 
@@ -567,6 +589,60 @@ public partial class GameNetClient : Node
         byte count = r.ReadByte();
         for (int i = 0; i < count; i++)
             _world.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
+    }
+
+    // In-flight guided missiles (mirrors Protocol.WriteMissile). Each record upserts the local
+    // _missileRows cache and hands the decoded row to the renderer. AOI-filtered server-side, so a
+    // missile simply stops updating (and is aged out by its MsgMissileGone) when it leaves view.
+    private void ApplyMissiles(BinaryReader r)
+    {
+        r.ReadUInt32(); // tick (missiles carry their own state; no per-record interp clock needed yet)
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            uint weaponId = r.ReadUInt32();
+            byte team = r.ReadByte();
+            ushort sector = r.ReadUInt16();
+            short px = r.ReadInt16(),
+                py = r.ReadInt16(),
+                pz = r.ReadInt16();
+            ushort vx = r.ReadUInt16(),
+                vy = r.ReadUInt16(),
+                vz = r.ReadUInt16();
+            ulong targetId = r.ReadUInt64();
+
+            var row = new Missile
+            {
+                MissileId = id,
+                WeaponId = weaponId,
+                Team = team,
+                SectorId = sector,
+                PosX = WireQuant.UnpackPos(px),
+                PosY = WireQuant.UnpackPos(py),
+                PosZ = WireQuant.UnpackPos(pz),
+                VelX = WireQuant.UnpackHalf(vx),
+                VelY = WireQuant.UnpackHalf(vy),
+                VelZ = WireQuant.UnpackHalf(vz),
+                TargetShipId = targetId,
+            };
+            _missileRows[id] = row;
+            _world.NetUpsertMissile(row);
+        }
+    }
+
+    // A missile detonated (reason 1) or expired/coasted out (reason 0): drop it from the cache and
+    // let the renderer play the FX at the reported position.
+    private void ApplyMissileGone(BinaryReader r)
+    {
+        ulong id = r.ReadUInt64();
+        byte reason = r.ReadByte();
+        ushort sector = r.ReadUInt16();
+        short px = r.ReadInt16(),
+            py = r.ReadInt16(),
+            pz = r.ReadInt16();
+        _missileRows.Remove(id);
+        _world.NetMissileGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
     // Per-team economy (credits/score), mirrors Protocol.BuildTeamState. Low-rate — the renderer
@@ -589,7 +665,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 14;
+    public const byte ProtocolVersion = 17;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -628,7 +704,10 @@ public partial class GameNetClient : Node
         // as ghosts. During the dead window itself no Welcome arrives, so the frozen world stays
         // up behind the reconnecting overlay. The first connect has nothing to reset.
         if (_worldLoaded)
+        {
             _world.Reset();
+            _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
+        }
         _worldLoaded = true;
 
         ushort sectors = r.ReadUInt16();
@@ -763,6 +842,23 @@ public partial class GameNetClient : Node
                     ProjectileRadius = r.ReadSingle(),
                     SpreadRad = r.ReadSingle(),
                     Mass = r.ReadSingle(),
+                    CanDamageBase = r.ReadBoolean(),
+                    // Missile-kind block (mirror of Protocol.BuildDefs, exact field order).
+                    Kind = (WeaponKind)r.ReadByte(),
+                    MagazineSize = r.ReadByte(),
+                    LockTicks = r.ReadUInt32(),
+                    LockAngleRad = r.ReadSingle(),
+                    LockRange = r.ReadSingle(),
+                    MissileAccel = r.ReadSingle(),
+                    MissileTurnRateRad = r.ReadSingle(),
+                    MissileMaxSpeed = r.ReadSingle(),
+                    BlastPower = r.ReadSingle(),
+                    BlastRadius = r.ReadSingle(),
+                    DirectHitMult = r.ReadSingle(),
+                    ModelName = ReadStr(r),
+                    TrailLifetime = r.ReadSingle(),
+                    TrailScale = r.ReadSingle(),
+                    TrailColor = r.ReadUInt32(),
                 }
             );
 
@@ -872,6 +968,8 @@ public partial class GameNetClient : Node
             ushort hp = r.ReadUInt16();
             uint lastInput = r.ReadUInt32();
             uint lastFire = r.ReadUInt32();
+            byte missileAmmo = r.ReadByte();
+            byte lockState = r.ReadByte();
 
             _rows.TryGetValue(id, out var prev);
             var row = new Ship
@@ -902,6 +1000,14 @@ public partial class GameNetClient : Node
             row.Health = WireQuant.UnpackHalf(hp);
             row.LastInputTick = lastInput;
             row.LastFireTick = lastFire;
+            row.MissileAmmo = missileAmmo;
+            row.LockState = lockState;
+            // Surface the LOCAL ship's authoritative missile ammo + lock state for the HUD.
+            if (id == LocalShipId)
+            {
+                LocalMissileAmmo = missileAmmo;
+                LocalLockState = lockState;
+            }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
             // seeds from), so a YAML-overridden mass matches server authority. No compile-time
             // fallback — by the time ship snapshots arrive the MsgDefs frame has been applied.

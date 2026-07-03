@@ -62,11 +62,14 @@ public enum RuntimeHardpointKind : byte
 
 /// <summary>
 /// How a runtime weapon behaves when fired. Mirrors the game's <c>WeaponKind</c> (shared/Defs.cs)
-/// value-for-value; APPEND-ONLY. Today every weapon is an analytic <see cref="Bolt"/>.
+/// value-for-value; APPEND-ONLY. <see cref="Bolt"/> is an analytic ray-cast gun;
+/// <see cref="Missile"/> is a guided-missile launcher (its stats come from the referenced missile
+/// expendable, projected via a <see cref="Launcher"/> that carries a weapon id).
 /// </summary>
 public enum RuntimeWeaponKind : byte
 {
     Bolt,
+    Missile,
 }
 
 /// <summary>

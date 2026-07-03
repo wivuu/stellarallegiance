@@ -2,7 +2,20 @@
 # mass (payload units per unit carried, against the hull's payload-capacity) and glyph are explicit
 # runtime extensions; the rest is core Allegiance.Factions expendable data. Cargo is hangar/UI-side
 # today (Stage 2 wires the sim behaviors — launch/arm/decoy); streamed to clients as CargoItemDef.
+#
+# Missiles that a launcher fires (launchers.yaml, weapon-id racks) also carry a guidance/lock stat
+# block projected onto the missile-kind WeaponDef: acceleration/turn-rate (deg/s)/initial-speed/
+# max-speed drive flight; lock-time (s)/lock-angle (rad cone half-angle)/max-lock (u range) drive the
+# server lock timer; power/width are damage + proximity-fuse radius; lifespan (s) is flight time.
+# Warhead: a direct (fuse-triggering) hit deals power * direct-hit-multiplier; every OTHER enemy ship
+# within blast-radius (u) of the detonation takes blast-power splash — full inside the fuse radius
+# (width), inverse-square falloff beyond it, nothing past blast-radius. The
+# smoke trail is YAML-tweakable: model-name (assets/missiles/<name>.glb), trail-lifetime/trail-scale
+# (client EngineGlow plume) and trail-color (RRGGBB[AA] hex). CoreValidator refuses to boot a launcher
+# whose missile leaves any of these unauthored. can-damage-base (omit-when-default false) flags a
+# warhead as able to damage bases (a base is a lockable target only for such a weapon).
 missiles:
+  # Seeker (weapon-id 3 rack): slow, hard-hitting, patient tracker.
   - id: seeker-missile
     name: Seeker Missile
     description: Lock-on ordnance. Fired from the hold.
@@ -10,6 +23,69 @@ missiles:
     mass: 4
     glyph: "➤"
     lifespan: 8
+    initial-speed: 90
+    acceleration: 40
+    max-speed: 220
+    turn-rate: 80       # deg/s guidance limit
+    lock-time: 2.0      # seconds in-cone to lock
+    lock-angle: 0.5     # lock cone half-angle, radians
+    max-lock: 1200      # lock range, u
+    power: 45
+    width: 1            # proximity-fuse margin
+    direct-hit-multiplier: 1.5
+    blast-power: 30     # splash at the detonation point
+    blast-radius: 25    # splash cutoff, u
+    model-name: mis09
+    trail-lifetime: 0.7
+    trail-scale: 0.45
+    trail-color: "ffc890ff"  # warm booster plume
+
+  # Dart (weapon-id 4 rack): fast, weak, barely tracks — a harasser.
+  - id: dart-missile
+    name: Dart Missile
+    description: Fast fire-and-forget dart. Barely tracks.
+    mass: 3
+    lifespan: 5
+    initial-speed: 180
+    acceleration: 80
+    max-speed: 320
+    turn-rate: 30       # deg/s — sluggish guidance
+    lock-time: 1.0
+    lock-angle: 0.4
+    max-lock: 1000
+    power: 18
+    width: 2
+    direct-hit-multiplier: 1.25
+    blast-power: 10     # thin splash — a harasser, not a bomber
+    blast-radius: 12
+    model-name: mis01
+    trail-lifetime: 0.4
+    trail-scale: 0.3
+    trail-color: "aaccffcc"  # cool, thin plume
+
+  # Anti-base torpedo (weapon-id 5 rack): heavy siege ordnance, barely steers, hits stations hard.
+  - id: anti-base-torpedo
+    name: Anti-Base Torpedo
+    description: Heavy siege torpedo. Locks onto enemy stations.
+    mass: 6
+    lifespan: 12
+    initial-speed: 60
+    acceleration: 25
+    max-speed: 140
+    turn-rate: 25        # deg/s — barely steers; meant for a static target
+    lock-time: 3.0
+    lock-angle: 0.35
+    max-lock: 1500
+    power: 200
+    width: 1             # minimal fuse margin — vs the base it's ignored anyway (exact hull contact)
+    direct-hit-multiplier: 1.0
+    blast-power: 40      # splashes defenders near the impact, never the base
+    blast-radius: 30
+    can-damage-base: true
+    model-name: mis09    # reuse existing GLB until a torpedo model lands
+    trail-lifetime: 1.0
+    trail-scale: 0.6
+    trail-color: "ff9060ff"
 
 mines:
   - id: proximity-mine

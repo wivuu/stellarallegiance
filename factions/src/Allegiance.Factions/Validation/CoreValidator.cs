@@ -42,20 +42,71 @@ public static class CoreValidator
         }
 
         // Runtime hulls: the authored default loadout (hardpoint weapons) must fit the payload budget.
-        var runtimeWeapons = new Dictionary<uint, Weapon>();
+        // A weapon-id hardpoint may be a gun (Weapon) OR a missile launcher (Launcher with a weapon
+        // id) — both share the weapon-id namespace and both cost their Part.Mass against the budget.
+        var runtimeWeaponMass = new Dictionary<uint, double>();
         foreach (var weapon in core.Weapons)
             if (weapon.WeaponId is uint wid)
-                runtimeWeapons.TryAdd(wid, weapon); // dup wire ids are the shared ContentValidator's error, not a throw here
+                runtimeWeaponMass.TryAdd(wid, weapon.Mass); // dup wire ids are the shared ContentValidator's error, not a throw here
+        foreach (var launcher in core.Launchers)
+            if (launcher.WeaponId is uint lid)
+                runtimeWeaponMass.TryAdd(lid, launcher.Mass);
         foreach (var hull in core.Hulls)
         {
             if (hull.ClassId is null)
                 continue;
             double defaultPayload = 0;
             foreach (var hp in hull.Hardpoints)
-                if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeapons.TryGetValue(hp.WeaponId, out var weapon))
-                    defaultPayload += weapon.Mass;
+                if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeaponMass.TryGetValue(hp.WeaponId, out var mass))
+                    defaultPayload += mass;
             if (defaultPayload > hull.PayloadCapacity)
                 result.Error($"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}.");
+        }
+
+        // Runtime launchers: a launcher carrying a weapon id projects to a missile-kind WeaponDef, so
+        // its referenced expendable MUST be a Missile (not a mine/chaff/probe) with sane guidance
+        // stats, and the launcher itself must carry a real magazine + launch cadence.
+        var missilesById = new Dictionary<string, Missile>(StringComparer.Ordinal);
+        foreach (var missile in core.Missiles)
+            missilesById[missile.Id] = missile;
+        foreach (var launcher in core.Launchers)
+        {
+            if (launcher.WeaponId is null)
+                continue;
+            var ctx = $"launcher '{launcher.Id}' (weapon-id {launcher.WeaponId})";
+            if (launcher.Amount <= 0)
+                result.Error($"{ctx} has non-positive amount {launcher.Amount} — an empty magazine.");
+            if (launcher.FireIntervalTicks == 0)
+                result.Error($"{ctx} has fire-interval-ticks 0 — no launch cadence.");
+            if (string.IsNullOrEmpty(launcher.ExpendableId) || !missilesById.TryGetValue(launcher.ExpendableId, out var missile))
+            {
+                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile.");
+                continue;
+            }
+            if (missile.InitialSpeed <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs initial-speed > 0.");
+            if (missile.Lifespan <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs lifespan > 0.");
+            if (missile.Power <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs power > 0.");
+            if (missile.LockTime <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs lock-time > 0.");
+            if (missile.LockAngle <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs lock-angle > 0.");
+            if (missile.MaxLock <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs max-lock > 0.");
+            if (missile.TurnRate < 0)
+                result.Error($"{ctx} missile '{missile.Id}' has negative turn-rate.");
+            if (missile.Width <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius).");
+            if (missile.BlastPower <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs blast-power > 0.");
+            if (missile.BlastRadius <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs blast-radius > 0.");
+            if (missile.DirectHitMultiplier <= 0)
+                result.Error($"{ctx} missile '{missile.Id}' needs direct-hit-multiplier > 0.");
+            if (!string.IsNullOrEmpty(missile.TrailColor) && !IsHexColor(missile.TrailColor))
+                result.Error($"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string.");
         }
 
         // Runtime hulls: afterburner and fuel are authored as a pair, and the drain/recharge
@@ -171,6 +222,10 @@ public static class CoreValidator
         }
         return true;
     }
+
+    /// <summary>A 6-digit (RRGGBB) or 8-digit (RRGGBBAA) hex color string, no leading '#'.</summary>
+    private static bool IsHexColor(string s) =>
+        (s.Length == 6 || s.Length == 8) && s.All(Uri.IsHexDigit);
 
     private static string Describe(Buildable buildable)
     {

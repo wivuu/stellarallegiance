@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 14;
+    public const byte Version = 17;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -32,7 +32,11 @@ public static class Protocol
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 49;
+    public const int ShipRecordSize = 51;
+
+    // Fixed serialized size of one in-flight guided-missile record (see WriteMissile). The hub
+    // strides a second per-tick scratch by this, mirroring the ship-record scratch.
+    public const int MissileRecordSize = 35;
 
     // client -> server
     // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
@@ -61,9 +65,12 @@ public static class Protocol
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope, u8 fromTeam, str name, str text
     public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
+    public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
+    public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
+    public const byte FlagFiring2 = 4; // secondary fire (missile launch)
 
     // ShipRecord flags byte (server->client): how the client should render/classify the ship.
     public const byte ShipFlagPig = 1; // AI combat drone — HUD highlight, never predicted
@@ -81,6 +88,7 @@ public static class Protocol
     //   3x i16 pos(sector-local) | u32 rot(smallest-three)
     //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health
     //   u32 lastInputTick | u32 lastFireTick
+    //   u8 missileAmmo | u8 lockState (bit7 = locked, bits0-6 = lock progress 0..100)
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
     {
         byte flags = 0;
@@ -136,7 +144,60 @@ public static class Protocol
         o += 4;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastFireTick);
         o += 4;
-        // o == ShipRecordSize (49)
+        dst[o++] = s.MissileAmmo;
+        dst[o++] = s.LockState; // bit7 = locked, bits0-6 = lock progress 0..100 (computed sim-side)
+        // o == ShipRecordSize (51)
+    }
+
+    // Serialize one in-flight missile record (exactly MissileRecordSize bytes) into dst. Layout:
+    //   u64 id | u32 weaponId | u8 team | u16 sector | 3x i16 pos(sector-local, WireQuant)
+    //   3x f16 vel | u64 targetShipId
+    public static void WriteMissile(Span<byte> dst, Simulation.MissileSim m)
+    {
+        int o = 0;
+        BitConverter.TryWriteBytes(dst.Slice(o), m.MissileId);
+        o += 8;
+        BitConverter.TryWriteBytes(dst.Slice(o), m.WeaponId);
+        o += 4;
+        dst[o++] = m.Team;
+        BitConverter.TryWriteBytes(dst.Slice(o), (ushort)m.SectorId);
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(m.Pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(m.Pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(m.Pos.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(m.Vel.X));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(m.Vel.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(m.Vel.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), m.TargetShipId);
+        o += 8;
+        // o == MissileRecordSize (35)
+    }
+
+    // Missile detonation / expiry FX frame (same bytes to every client that can see it). Reason
+    // 0 = expired/coasted out, 1 = impact. 18 bytes: type + id + reason + sector + 3x i16 pos.
+    public static byte[] BuildMissileGone(ulong id, byte reason, uint sector, Vec3 pos)
+    {
+        var buf = new byte[18];
+        buf[0] = MsgMissileGone;
+        int o = 1;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+        o += 8;
+        buf[o++] = reason;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)sector);
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Z));
+        o += 2;
+        return buf;
     }
 
     public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick, byte[] reconnectToken)
@@ -353,6 +414,23 @@ public static class Protocol
             w.Write(wp.ProjectileRadius);
             w.Write(wp.SpreadRad);
             w.Write(wp.Mass);
+            w.Write(wp.CanDamageBase);
+            // Missile-kind block (zero/empty for Bolt weapons). Reader mirrors this order exactly.
+            w.Write((byte)wp.Kind);
+            w.Write(wp.MagazineSize);
+            w.Write(wp.LockTicks);
+            w.Write(wp.LockAngleRad);
+            w.Write(wp.LockRange);
+            w.Write(wp.MissileAccel);
+            w.Write(wp.MissileTurnRateRad);
+            w.Write(wp.MissileMaxSpeed);
+            w.Write(wp.BlastPower);
+            w.Write(wp.BlastRadius);
+            w.Write(wp.DirectHitMult);
+            WriteString(w, wp.ModelName);
+            w.Write(wp.TrailLifetime);
+            w.Write(wp.TrailScale);
+            w.Write(wp.TrailColor);
         }
 
         var cargoItems = content.CargoItems;

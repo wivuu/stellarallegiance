@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,15 +27,22 @@ public static class FactionsContentProjection
     public static ContentSet Project(Factions.Core core)
     {
         var projectileById = core.Projectiles.ToDictionary(p => p.Id);
+        var missileById = core.Missiles.ToDictionary(m => m.Id);
 
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
             .Select(ProjectShip)
             .ToList();
 
+        // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
+        // with a weapon id), each in Core list order — deterministic (the shared ContentValidator
+        // catches a duplicate weapon id shared between the two).
         var weapons = core.Weapons
             .Where(w => w.WeaponId is not null)
             .Select(w => ProjectWeapon(w, projectileById))
+            .Concat(core.Launchers
+                .Where(l => l.WeaponId is not null)
+                .Select(l => ProjectLauncher(l, missileById)))
             .ToList();
 
         var bases = core.Stations
@@ -122,7 +130,59 @@ public static class FactionsContentProjection
             FireIntervalTicks = w.FireIntervalTicks,
             ProjectileLifeTicks = w.ProjectileLifeTicks,
             Kind = (WeaponKind)(byte)w.Kind,
+            CanDamageBase = w.CanDamageBase,
         };
+    }
+
+    // A launcher carrying a weapon id projects to a missile-kind WeaponDef: the ballistics come from
+    // its referenced Missile expendable, the magazine/cadence/mass from the launcher. Seconds→ticks
+    // rounds identically every load (same double math) so projection stays deterministic. CoreValidator
+    // already proved the expendable resolves to a Missile with sane stats.
+    private static WeaponDef ProjectLauncher(Factions.Launcher l, IReadOnlyDictionary<string, Factions.Missile> missileById)
+    {
+        if (string.IsNullOrEmpty(l.ExpendableId) || !missileById.TryGetValue(l.ExpendableId, out var m))
+            throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile expendable-id");
+
+        return new WeaponDef
+        {
+            WeaponId = l.WeaponId!.Value,
+            Name = l.Name,
+            Kind = WeaponKind.Missile,
+            // Ballistics reused from the referenced missile.
+            Damage = (float)m.Power,
+            ProjectileSpeed = (float)m.InitialSpeed,
+            ProjectileLifeTicks = (uint)Math.Round(m.Lifespan * 20.0),
+            ProjectileRadius = (float)m.Width, // proximity-fuse swept-sphere margin
+            SpreadRad = 0f,
+            Mass = (float)l.Mass,
+            FireIntervalTicks = l.FireIntervalTicks,
+            CanDamageBase = m.CanDamageBase,
+            // Missile-kind extension fields.
+            MagazineSize = (byte)l.Amount,
+            LockTicks = (uint)Math.Round(m.LockTime * 20.0),
+            LockAngleRad = (float)m.LockAngle,
+            LockRange = (float)m.MaxLock,
+            MissileAccel = (float)m.Acceleration,
+            MissileTurnRateRad = (float)(m.TurnRate * Math.PI / 180.0),
+            MissileMaxSpeed = (float)m.MaxSpeed,
+            BlastPower = (float)m.BlastPower,
+            BlastRadius = (float)m.BlastRadius,
+            DirectHitMult = (float)m.DirectHitMultiplier,
+            ModelName = m.ModelName ?? "",
+            TrailLifetime = (float)m.TrailLifetime,
+            TrailScale = (float)m.TrailScale,
+            TrailColor = ParseTrailColor(m.TrailColor),
+        };
+    }
+
+    // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).
+    // CoreValidator already proved the string is 6/8-digit hex when present.
+    private static uint ParseTrailColor(string? hex)
+    {
+        if (string.IsNullOrEmpty(hex))
+            return 0;
+        uint v = Convert.ToUInt32(hex, 16);
+        return hex.Length == 6 ? (v << 8) | 0xFFu : v;
     }
 
     private static CargoItemDef ProjectCargoItem(Factions.Expendable e) =>

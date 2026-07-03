@@ -39,6 +39,29 @@ namespace StellarAllegiance.Shared
                     errors.Add($"duplicate WeaponId {w.WeaponId} (\"{w.Name}\")");
                 else
                     weaponsById[w.WeaponId] = w;
+
+                // Missile-kind defs need a live guidance/lock stat block (belt-and-suspenders over
+                // the library CoreValidator — a projected missile with a dead lock/range/speed/
+                // magazine would spawn an unusable launcher).
+                if (w.Kind == WeaponKind.Missile)
+                {
+                    if (w.LockTicks == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has LockTicks 0 — never locks");
+                    if (w.LockRange <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive LockRange {w.LockRange}");
+                    if (w.ProjectileSpeed <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}");
+                    if (w.MagazineSize == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
+                    if (w.ProjectileLifeTicks == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                    if (w.BlastPower <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
+                    if (w.BlastRadius <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
+                    if (w.DirectHitMult <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}");
+                }
             }
 
             var classIds = new HashSet<byte>();
@@ -54,6 +77,8 @@ namespace StellarAllegiance.Shared
                 ValidatePayload(d, weaponsById, errors);
                 ValidateFuel(d, errors);
             }
+
+            ValidateWinnable(ships, weaponsById, errors);
 
             // The map seeds a team base + the win condition reads its hull from content, so a bundle
             // must define at least one base.
@@ -88,6 +113,26 @@ namespace StellarAllegiance.Shared
                     used += w.Mass;
             if (used > ship.PayloadCapacity)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
+        }
+
+        // A base can only take damage from a weapon flagged CanDamageBase, so if no ship's
+        // default loadout mounts one, no team can ever reduce the enemy base's health — a match
+        // that can never end.
+        private static void ValidateWinnable(
+            IReadOnlyList<ShipClassDef> ships,
+            Dictionary<uint, WeaponDef> weaponsById,
+            List<string> errors
+        )
+        {
+            foreach (var ship in ships)
+            {
+                if (ship.Hardpoints is null)
+                    continue;
+                foreach (var h in ship.Hardpoints)
+                    if (h.Kind == HardpointKind.Weapon && weaponsById.TryGetValue(h.WeaponId, out var w) && w.CanDamageBase)
+                        return;
+            }
+            errors.Add("no ship's default loadout mounts a can-damage-base weapon — bases can never be destroyed, matches can never end");
         }
 
         // Afterburner and fuel are authored as a pair, and the drain/recharge rates must

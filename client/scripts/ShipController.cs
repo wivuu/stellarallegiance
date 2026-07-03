@@ -105,7 +105,9 @@ public partial class ShipController : Node
         && a.Pitch == b.Pitch
         && a.Roll == b.Roll
         && a.Firing == b.Firing
-        && a.Boost == b.Boost;
+        && a.Boost == b.Boost
+        && a.Firing2 == b.Firing2
+        && a.LockTargetId == b.LockTargetId;
 
     private bool _autoFly;
     private bool _autoJoined; // autofly QuickJoins (team + ready) once on connect
@@ -226,11 +228,13 @@ public partial class ShipController : Node
         bool hasShip = _world.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
 
-        // Headless autofly: the server gates spawning behind the lobby ready-up, so ready up once
-        // on connect to drive the match to Active before requesting a ship (teams are balanced
-        // server-side). Run the server with --autostart for fully unattended benchmarks.
+        // Headless autofly: the server gates spawning behind BOTH a team pick ("Pick a team before
+        // launching") and the lobby ready-up, so QuickJoin once on connect — take a side (BLUE) then
+        // ready up to drive the match to Active before requesting a ship. Run the server with
+        // --autostart for a perpetual match (this readies straight through it).
         if (_autoFly && connected && !_autoJoined)
         {
+            _net?.SetTeam(0);
             _net?.SetReady(true);
             _autoJoined = true;
         }
@@ -317,10 +321,13 @@ public partial class ShipController : Node
         _input.Boost = boost;
         pc.SetAfterburner(boost ? 1f : 0f);
 
-        // An escape pod is unarmed: drop firing so the player can't shoot and the client
-        // doesn't predict muzzle ghosts the server (which also ignores pod fire) won't make.
+        // An escape pod is unarmed: drop BOTH fire channels so the player can't shoot and the
+        // client doesn't predict muzzle ghosts the server (which also ignores pod fire) won't make.
         if (pc.IsPod)
+        {
             _input.Firing = false;
+            _input.Firing2 = false;
+        }
 
         UpdateAdaptiveLead();
         if (Native)
@@ -519,6 +526,11 @@ public partial class ShipController : Node
             Pitch = Mathf.Clamp(Axis(Key.Up, Key.Down) + _stickPitch, -1f, 1f),
             Roll = Axis(Key.E, Key.Q), // roll right / left
             Firing = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
+            // Secondary (missile) fire: F, or RMB while mouse-look owns the cursor — the same
+            // capture gate the LMB primary uses so a right-click on a menu never launches. The
+            // lock target is whatever TargetMarkers has Tab-focused (0 = none; server needs a lock).
+            Firing2 = Input.IsPhysicalKeyPressed(Key.F) || (look && Input.IsMouseButtonPressed(MouseButton.Right)),
+            LockTargetId = TargetMarkers.FocusedId,
         };
     }
 

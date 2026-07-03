@@ -39,6 +39,10 @@ public partial class SfxManager : Node
         MenuOpen,
         MenuClose,
         Collision,
+        MissileLaunch,
+        MissileLock,
+        MissileWarning,
+        MissileEmpty,
     }
 
     private static readonly Dictionary<SfxId, string> Files = new()
@@ -55,6 +59,10 @@ public partial class SfxManager : Node
         { SfxId.MenuOpen, "menu_open.ogg" },
         { SfxId.MenuClose, "menu_close.ogg" },
         { SfxId.Collision, "collision_thud.ogg" },
+        { SfxId.MissileLaunch, "missile_launch.ogg" },
+        { SfxId.MissileLock, "missile_lock.ogg" },
+        { SfxId.MissileWarning, "missile_warning.ogg" },
+        { SfxId.MissileEmpty, "missile_empty.ogg" },
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).

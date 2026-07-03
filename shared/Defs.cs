@@ -89,10 +89,10 @@ namespace StellarAllegiance.Shared
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
-    // Today every weapon is a Bolt (analytic ray-cast); missile/mine kinds land in a later phase.
     public enum WeaponKind : byte
     {
-        Bolt, // instant analytic ray-cast bolt (the only kind today)
+        Bolt, // instant analytic ray-cast bolt
+        Missile, // guided homing missile (projected from a Launcher + its missile expendable)
     }
 
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
@@ -107,11 +107,30 @@ namespace StellarAllegiance.Shared
         public float ProjectileRadius; // projectile hit sphere
         public float SpreadRad; // cone half-angle (rad); 0 = pinpoint
         public float Mass; // payload units this weapon occupies when mounted (Part.Mass)
+        public bool CanDamageBase; // this weapon's shots/warheads apply damage to bases
 
-        // Behavior dispatch, consumed SERVER-SIDE only (Simulation.TryFire). Defaults to Bolt and is
-        // deliberately NOT sent over the wire yet (Protocol.MsgDefs) — the client renders bolts
-        // regardless, so a kind only needs wiring when it must render differently (Stage 2/missiles).
+        // Behavior dispatch, consumed SERVER-SIDE (Simulation.TryFire) and — now that missiles render
+        // differently — sent over the wire (Protocol.MsgDefs) so the client can tell a missile launcher
+        // from a bolt gun. Defaults to Bolt.
         public WeaponKind Kind;
+
+        // --- Missile-kind fields (all zero/empty for Bolt weapons) ---
+        // Authored on the missile expendable + its launcher and projected here
+        // (FactionsContentProjection.ProjectLauncher); the missile sim + client render read them.
+        public byte MagazineSize; // rounds the launcher spawns with (Launcher.Amount)
+        public uint LockTicks; // sim ticks the target must stay in-cone to lock (round(LockTime*20))
+        public float LockAngleRad; // half-angle of the lock cone, radians
+        public float LockRange; // max lock range, u (missile MaxLock)
+        public float MissileAccel; // booster acceleration, u/s^2
+        public float MissileTurnRateRad; // guidance turn-rate limit, rad/s (authored deg/s -> rad/s)
+        public float MissileMaxSpeed; // speed cap once boosted, u/s; 0 = uncapped
+        public float BlastPower; // splash damage at the detonation point (inverse-square falloff)
+        public float BlastRadius; // splash cutoff radius, u; ships beyond it take nothing
+        public float DirectHitMult; // multiplier on Damage for the ship that triggers the fuse
+        public string ModelName = ""; // GLB basename under assets/missiles/ (no extension)
+        public float TrailLifetime; // client smoke-trail plume lifetime, s
+        public float TrailScale; // client smoke-trail plume size scale
+        public uint TrailColor; // client smoke-trail tint, 0xRRGGBBAA
     }
 
     // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).
@@ -162,5 +181,15 @@ namespace StellarAllegiance.Shared
         public const uint ScoutWeaponId = 0;
         public const uint FighterWeaponId = 1;
         public const uint BomberWeaponId = 2;
+
+        // Ship/missile ids are monotonic from 1 (Simulation._nextShipId); base ids come from
+        // World.Bases / the Welcome frame and are small (1/2). The top bit is otherwise unused by
+        // either id space, so it marks a lock/target id as a BASE rather than a ship/missile — lets
+        // LockTargetId / MissileSim.TargetShipId carry a base reference through the existing u64 wire
+        // fields with no new message fields.
+        public const ulong BaseLockFlag = 1UL << 63;
+        public static bool IsBaseLock(ulong id) => (id & BaseLockFlag) != 0;
+        public static ulong BaseLockId(ulong baseId) => BaseLockFlag | baseId;
+        public static ulong BaseIdOf(ulong lockId) => lockId & ~BaseLockFlag;
     }
 }

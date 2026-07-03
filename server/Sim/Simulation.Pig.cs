@@ -114,6 +114,7 @@ public sealed partial class Simulation
             Py,
             Pz;
         public float Radius;
+        public ulong TargetBaseLockId; // GameContent.BaseLockId(base.Id) for PigKindAttackPoint, else 0
     }
 
     // Everything one decision needs, gathered ONCE per drone per brain tick (single sector/radar
@@ -351,6 +352,8 @@ public sealed partial class Simulation
         s.State.Pos += new Vec3(0f, fan, 0f);
         s.State.Mass = StatsFor(slot.Class, false).Mass;
         s.Health = HullFor(slot.Class);
+        if (MissileMountFor(slot.Class) is (_, WeaponDef mw)) // missile-armed pigs spawn with a full rack
+            s.MissileAmmo = mw.MagazineSize;
 
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -662,6 +665,7 @@ public sealed partial class Simulation
                 Py = eb.Pos.Y,
                 Pz = eb.Pos.Z,
                 Radius = World.BaseRadius,
+                TargetBaseLockId = GameContent.BaseLockId(eb.Id),
             };
         }
 
@@ -803,7 +807,7 @@ public sealed partial class Simulation
             case PigKindSteerPoint:
                 return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 1f);
             case PigKindAttackPoint:
-                return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius);
+                return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius, d.TargetBaseLockId);
             case PigKindPatrol:
                 return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 0.7f);
             default:
@@ -867,6 +871,11 @@ public sealed partial class Simulation
 
         bool inRange = dist <= PigFireRange;
         bool onTarget = haveLead && local.Z > 0f && aimErr < PigAimSinDeg;
+        // Missile-armed pigs: hold the chase target for the server-authoritative lock and fire
+        // (Firing2) only once LOCKED — launches no longer require a lock (players may dumbfire),
+        // so the AI must gate itself or it sprays unguided rounds the moment it's in range.
+        // Ammo/cooldown gates in TryFireMissile do the rest — no evasion, minimal AI (Stage 3).
+        bool hasRack = MissileMountFor(me.Class) is not null;
         return new ShipInputState
         {
             Thrust = thrust,
@@ -876,6 +885,8 @@ public sealed partial class Simulation
             Pitch = pitch,
             Roll = 0f,
             Firing = inRange && onTarget,
+            Firing2 = hasRack && inRange && me.Locked,
+            LockTargetId = hasRack ? tgt.ShipId : 0,
         };
     }
 
@@ -1059,7 +1070,7 @@ public sealed partial class Simulation
         };
     }
 
-    private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius)
+    private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius, ulong baseLockId)
     {
         Vec3 to = point - myPos;
         float dist = to.Length();
@@ -1088,15 +1099,26 @@ public sealed partial class Simulation
         else
             thrust = 0.2f;
 
-        float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
-        bool onTarget = local.Z > 0f && aimErr < PigAimSinDeg;
-        bool inRange = (dist - radius) <= PigFireRange;
+        // Guns no longer damage bases — holding primary fire on a base is a shoots-but-nothing-
+        // happens look, so Firing is always false here. A hull whose missile mount CAN damage a
+        // base (the siege torpedo) locks + launches at it instead (Firing2), same lock-range gate
+        // UpdateLock uses server-side.
+        bool firing2 = false;
+        ulong lockTargetId = 0;
+        if (MissileMountFor(me.Class) is (_, WeaponDef mw) && mw.CanDamageBase)
+        {
+            lockTargetId = baseLockId;
+            firing2 = me.Locked && (dist - radius) <= mw.LockRange;
+        }
+
         return new ShipInputState
         {
             Thrust = thrust,
             Yaw = yaw,
             Pitch = pitch,
-            Firing = inRange && onTarget,
+            Firing = false,
+            Firing2 = firing2,
+            LockTargetId = lockTargetId,
         };
     }
 

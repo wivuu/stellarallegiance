@@ -65,6 +65,7 @@ public partial class PredictionController : Node3D
     private DefRegistry _defs = null!; // runtime ship/weapon defs (M3); wired at Initialize
     private ShipClass _class; // class id for def/weapon lookups
     private uint _lastFireTick; // mirrors server Ship.LastFireTick (0 = ready)
+    private uint _clientTick; // tick last passed to Step (HUD cooldown readout keys off it)
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();
 
@@ -121,6 +122,9 @@ public partial class PredictionController : Node3D
     // Escape pod (Ship.IsPod): slow, unarmed lifeboat. Drives pod-aware flight stats and
     // lets ShipController suppress firing (a pod can't shoot).
     public bool IsPod { get; private set; }
+
+    // Hull class (for the HUD's missile-mount / ammo lookup). Set from the authoritative row.
+    public ShipClass Class => _class;
     public float Speed => _state.Vel.Length();
 
     // Predicted velocity (u/s, Godot space). Read by TargetMarkers so the lead
@@ -143,6 +147,14 @@ public partial class PredictionController : Node3D
     // gauge only appears once there's a real tank to draw.
     public float Fuel => _state.Fuel;
     public float MaxFuel => _hasStats ? _stats.MaxFuel : 0f;
+
+    // Primary-gun fire cadence, surfaced for the HUD weapons readout. LastFireTick mirrors the
+    // server's Ship.LastFireTick (0 = never fired / ready); ClientTick is the tick the predictor
+    // last stepped. The gun is READY once ClientTick - LastFireTick >= the mount's FireIntervalTicks
+    // — the SAME gate Step() uses to spawn a predicted bolt (kept in the predictor so the readout
+    // reads the identical tick space the sim fires on).
+    public uint LastFireTick => _lastFireTick;
+    public uint ClientTick => _clientTick;
 
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
@@ -232,6 +244,7 @@ public partial class PredictionController : Node3D
     public IReadOnlyList<PredictedShot> Step(ShipInputState input, uint clientTick)
     {
         _shotsOut.Clear();
+        _clientTick = clientTick;
         _prevState = _state;
         // Re-pull stats from the registry each tick (a cheap cached lookup) so a runtime
         // retune of this class's ShipClassDef flows into prediction with no respawn — and
@@ -266,7 +279,17 @@ public partial class PredictionController : Node3D
         // server won't fire either, so we predict nothing. The shared FireInterval is the same on
         // every barrel of a class, so the first mount gates the whole volley.
         var mounts = input.Firing ? _defs.WeaponMounts((byte)_class) : EmptyMounts;
-        if (mounts.Count > 0 && clientTick - _lastFireTick >= mounts[0].weapon.FireIntervalTicks)
+        // Gun cadence keys off the first BOLT mount — racks launch via Firing2 on their own
+        // server-side cadence and must not gate (or join) the predicted volley. Mirror of
+        // Simulation.TryFire / PrimaryWeapon.
+        WeaponDef? gun = null;
+        foreach (var (_, w) in mounts)
+            if (w.Kind == WeaponKind.Bolt)
+            {
+                gun = w;
+                break;
+            }
+        if (gun != null && clientTick - _lastFireTick >= gun.FireIntervalTicks)
         {
             _lastFireTick = clientTick;
             // Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
@@ -281,6 +304,11 @@ public partial class PredictionController : Node3D
             for (byte barrel = 0; barrel < mounts.Count; barrel++)
             {
                 var (hp, weapon) = mounts[barrel];
+                // Skip missile racks: primary fire is bolts only. The barrel index is STILL
+                // consumed so the spread seed stays aligned with the server's TryFire loop
+                // (same skip in WorldRenderer.SpawnBoltFor for remote ships).
+                if (weapon.Kind != WeaponKind.Bolt)
+                    continue;
                 Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
                 Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
                 Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);

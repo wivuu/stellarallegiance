@@ -1,5 +1,6 @@
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Shared;
 using StellarAllegiance.Ui;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
@@ -19,6 +20,11 @@ public partial class Hud : CanvasLayer
     private Label _sectorShips = null!;
     private Label _credits = null!;
     private Label _warning = null!;
+
+    // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
+    // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
+    private bool _firing2Held;
+    private double _emptyClickCd;
 
     // The design-system gallery overlay (F9), instantiated on demand.
     private Control? _showcase;
@@ -63,7 +69,7 @@ public partial class Hud : CanvasLayer
         // Enemy target markers (added first so the HUD text/menu draw on top of it).
         var markers = new TargetMarkers { Name = "TargetMarkers" };
         AddChild(markers);
-        markers.Init(_world, GetNode<Camera3D>("../Camera3D"));
+        markers.Init(_world, GetNode<Camera3D>("../Camera3D"), _net, _defs);
 
         // Prograde velocity marker (direction of travel, not aim). Drawn under the text/menu.
         var velo = new VelocityIndicator { Name = "VelocityIndicator" };
@@ -80,6 +86,12 @@ public partial class Hud : CanvasLayer
         var minimap = new Minimap { Name = "Minimap" };
         AddChild(minimap);
         minimap.Init(_cm, _world);
+
+        // Weapons readout, bottom-right (symmetric to the minimap): the local ship's armament —
+        // primary gun cadence + launcher ammo/lock. Added here so the top-left text draws over it.
+        var weapons = new WeaponsPanel { Name = "WeaponsPanel" };
+        AddChild(weapons);
+        weapons.Init(_world, _net, _defs);
 
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
         // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
@@ -139,12 +151,17 @@ public partial class Hud : CanvasLayer
     private void CaptureLiveUiIfRequested()
     {
         string? outPath = null;
+        double delay = 2.0; // default settle; --ui-shot-delay=<sec> waits longer (e.g. for an autofly spawn)
         foreach (string a in OS.GetCmdlineUserArgs())
+        {
             if (a.StartsWith("--ui-shot="))
                 outPath = a.Substring("--ui-shot=".Length);
+            else if (a.StartsWith("--ui-shot-delay="))
+                double.TryParse(a.Substring("--ui-shot-delay=".Length), System.Globalization.CultureInfo.InvariantCulture, out delay);
+        }
         if (outPath == null)
             return;
-        var t = GetTree().CreateTimer(2.0);
+        var t = GetTree().CreateTimer(delay);
         t.Timeout += () =>
         {
             GetViewport().GetTexture().GetImage().SavePng(outPath);
@@ -253,6 +270,29 @@ public partial class Hud : CanvasLayer
         _credits.Visible = inMatch;
         if (inMatch)
             _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
+
+        // Missile launcher presence gates the empty-rack blip below. The live ammo/lock readout now
+        // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack.
+        WeaponDef? missileMount = flying && !ship!.IsPod ? _defs.MissileMount((byte)ship.Class) : null;
+
+        // Empty-rack click: a "no rounds" blip on the pressed edge of the secondary-fire keys when
+        // the launcher is dry. Mirrors ShipController's Firing2 gate (F, or RMB while the cursor is
+        // captured) and stays silent while chat/menus own the keyboard so typing F never blips.
+        if (_emptyClickCd > 0)
+            _emptyClickCd -= delta;
+        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
+        bool firing2 =
+            inputFree
+            && (
+                Input.IsPhysicalKeyPressed(Key.F)
+                || (Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsMouseButtonPressed(MouseButton.Right))
+            );
+        if (firing2 && !_firing2Held && missileMount != null && _net.LocalMissileAmmo == 0 && _emptyClickCd <= 0)
+        {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+            _emptyClickCd = 0.5;
+        }
+        _firing2Held = firing2;
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.
