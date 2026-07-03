@@ -100,6 +100,10 @@ public static class FactionsContentProjection
             SideMult = (float)h.StrafeThrustMultiplier,
             BackMult = (float)h.ReverseThrustMultiplier,
             MaxHull = (float)h.ArmorHitPoints,
+            // Regenerating shield (all 0 = no shield); delay authored in seconds, sim rounds to ticks.
+            ShieldCapacity = (float)h.ShieldCapacity,
+            ShieldRecharge = (float)h.ShieldRecharge,
+            ShieldDelaySec = (float)h.ShieldDelay,
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
             PayloadCapacity = (float)h.PayloadCapacity,
@@ -143,6 +147,7 @@ public static class FactionsContentProjection
             ProjectileLifeTicks = w.ProjectileLifeTicks,
             Kind = (WeaponKind)(byte)w.Kind,
             CanDamageBase = w.CanDamageBase,
+            ShieldMult = (float)(w.ShieldDamageMultiplier ?? 1.0),
         };
     }
 
@@ -188,6 +193,7 @@ public static class FactionsContentProjection
                 BlastRadius = (float)m.BlastRadius,
                 DirectHitMult = (float)m.DirectHitMultiplier,
                 ChaffResistance = (float)m.ChaffResistance, // authored-but-previously-dropped; now projected
+                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
                 ModelName = m.ModelName ?? "",
                 TrailLifetime = (float)m.TrailLifetime,
                 TrailScale = (float)m.TrailScale,
@@ -211,6 +217,7 @@ public static class FactionsContentProjection
                 MineCloudCount = (byte)mn.CloudCount, // cosmetic mesh count
                 MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
                 CargoId = mn.CargoId ?? 0,
+                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
                 ModelName = mn.ModelName ?? "",
             };
 

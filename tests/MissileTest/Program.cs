@@ -63,6 +63,7 @@ Simulation BootSim(ulong seed)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.ShieldsEnabled = false; // isolate raw missile/blast damage from shield absorption (ShieldTest covers shields)
     sim.StartMatch(); // Lobby -> Active: resolves team unlocks + seeds economy, so spawns are allowed
     return sim;
 }

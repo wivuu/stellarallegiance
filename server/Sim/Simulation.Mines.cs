@@ -175,7 +175,7 @@ public sealed partial class Simulation
                         float dmg = w.BlastPower * mult * FlightModel.Dt;
                         if (dmg <= 0f)
                             continue;
-                        s.Health -= dmg;
+                        ApplyDamage(s, dmg, tick, w.ShieldMult);
 
                         // Rate-limited hit-FX ping: a small explosion + pop at the nearest cosmetic
                         // mine (a mine "near you" going off). Doesn't deplete anything.

@@ -86,6 +86,17 @@ public record Hull : Buildable
     public double AbFuelDrain { get; set; }
     public double AbFuelRecharge { get; set; }
 
+    /// <summary>
+    /// Regenerating energy shield layered over the raw hull. <see cref="ShieldCapacity"/> is the
+    /// total shield pool (0 = this hull has NO shield). Incoming damage depletes the shield before
+    /// the hull and overflows into the hull when the shield pops. <see cref="ShieldRecharge"/> is
+    /// the regen rate in points/second, resuming <see cref="ShieldDelay"/> seconds after the last
+    /// shield damage. All omit-when-default; projected onto the ShipClassDef shield fields.
+    /// </summary>
+    public double ShieldCapacity { get; set; }
+    public double ShieldRecharge { get; set; }
+    public double ShieldDelay { get; set; }
+
     /// <summary>Local-space mount points (weapon muzzles, engine nozzles, lights) the client renders from.</summary>
     public List<Hardpoint> Hardpoints { get; set; } = new();
 

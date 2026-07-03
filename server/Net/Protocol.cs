@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 18;
+    public const byte Version = 19;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -32,7 +32,7 @@ public static class Protocol
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 53;
+    public const int ShipRecordSize = 55;
 
     // Fixed serialized size of one in-flight guided-missile record (see WriteMissile). The hub
     // strides a second per-tick scratch by this, mirroring the ship-record scratch.
@@ -97,7 +97,7 @@ public static class Protocol
     // Serialize one quantized ship record (exactly ShipRecordSize bytes) into dst. Layout:
     //   u64 id | u8 team | u8 class | u8 flags | u16 sector
     //   3x i16 pos(sector-local) | u32 rot(smallest-three)
-    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health
+    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health | f16 shield
     //   u32 lastInputTick | u32 lastFireTick
     //   u8 missileAmmo | u8 lockState (bit7 = locked, bits0-6 = lock progress 0..100)
     //   u8 chaffAmmo | u8 mineAmmo
@@ -158,6 +158,8 @@ public static class Protocol
         o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.Health));
         o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.Shield));
+        o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastInputTick);
         o += 4;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastFireTick);
@@ -166,7 +168,7 @@ public static class Protocol
         dst[o++] = s.LockState; // bit7 = locked, bits0-6 = lock progress 0..100 (computed sim-side)
         dst[o++] = s.ChaffAmmo;
         dst[o++] = s.MineAmmo;
-        // o == ShipRecordSize (53)
+        // o == ShipRecordSize (55)
     }
 
     // Serialize one in-flight missile record (exactly MissileRecordSize bytes) into dst. Layout:
@@ -498,6 +500,9 @@ public static class Protocol
             w.Write(s.AbFuelDrain);
             w.Write(s.AbFuelRecharge);
             w.Write(s.MaxHull);
+            w.Write(s.ShieldCapacity);
+            w.Write(s.ShieldRecharge);
+            w.Write(s.ShieldDelaySec);
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);
             w.Write(s.FactionId);
@@ -550,6 +555,7 @@ public static class Protocol
             w.Write(wp.MineArmTicks);
             w.Write(wp.MineTriggerRadius);
             w.Write(wp.CargoId);
+            w.Write(wp.ShieldMult); // damage-vs-shield multiplier (streamed last; reader mirrors)
         }
 
         var cargoItems = content.CargoItems;
