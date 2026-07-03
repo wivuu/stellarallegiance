@@ -64,7 +64,7 @@ public partial class WorldRenderer : Node3D
     private readonly Dictionary<ulong, float> _shipShield = new();
 
     // Cyan shield-bubble tint (#37E0FF), matching the HUD SHLD arc; alpha sets the flash's base opacity.
-    private static readonly Color ShieldFlashTint = new(0.216f, 0.878f, 1f, 0.6f);
+    private static readonly Color ShieldFlashTint = new(0.216f, 0.878f, 1f, 0.3f);
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
