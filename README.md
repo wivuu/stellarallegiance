@@ -162,7 +162,7 @@ docker compose up --build   # sim-server (ws://localhost:8090/game) + public-lob
 Released images are published to GHCR — no checkout or build needed:
 
 ```bash
-docker run -p 8090:8090 \
+docker run --rm -p 8090:8090 \
   -e SIM_PUBLIC_NAME="My Server" \
   ghcr.io/wivuu/wivuullegiance-sim:latest
 ```
@@ -187,6 +187,3 @@ The 3D ship and station models are converted from
 [Allegiance](https://github.com/FreeAllegiance/Allegiance), originally developed by Microsoft
 and open-sourced by the FreeAllegiance project under the MIT license (copyright Microsoft
 Corporation). See [NOTICE](NOTICE) for the full license text.
-
-This repo also keeps a [graphify](https://github.com/safishamsi/graphify) knowledge graph in
-`graphify-out/` — see the graphify note in `CLAUDE.md`.

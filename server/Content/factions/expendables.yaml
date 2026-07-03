@@ -1,0 +1,30 @@
+# Expendables — the consumables the hangar's CARGO HOLD stocks. cargo-id (the stable wire id),
+# mass (payload units per unit carried, against the hull's payload-capacity) and glyph are explicit
+# runtime extensions; the rest is core Allegiance.Factions expendable data. Cargo is hangar/UI-side
+# today (Stage 2 wires the sim behaviors — launch/arm/decoy); streamed to clients as CargoItemDef.
+missiles:
+  - id: seeker-missile
+    name: Seeker Missile
+    description: Lock-on ordnance. Fired from the hold.
+    cargo-id: 1
+    mass: 4
+    glyph: "➤"
+    lifespan: 8
+
+mines:
+  - id: proximity-mine
+    name: Proximity Mine
+    description: Dropped behind the ship; arms after 2s.
+    cargo-id: 2
+    mass: 6
+    glyph: "◈"
+    lifespan: 60
+
+chaffs:
+  - id: sensor-decoy
+    name: Sensor Decoy
+    description: Fakes the ship's signature for pursuers.
+    cargo-id: 3
+    mass: 3
+    glyph: "◇"
+    lifespan: 10

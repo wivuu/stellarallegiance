@@ -27,6 +27,7 @@ public partial class DefRegistry : Node
     private readonly Dictionary<byte, ShipClassDef> _ships = new();
     private readonly Dictionary<uint, WeaponDef> _weapons = new();
     private readonly Dictionary<byte, BaseDef> _bases = new();
+    private readonly Dictionary<uint, CargoItemDef> _cargo = new();
 
     // Derived ShipStats memo keyed by ClassId (ShipStats.Create runs an Exp() — too costly to
     // repeat per-ship per-tick). Pure function of the def, so it never breaks determinism;
@@ -39,12 +40,14 @@ public partial class DefRegistry : Node
         IReadOnlyList<ShipClassDef> ships,
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
+        IReadOnlyList<CargoItemDef> cargoItems,
         WorldConfig _
     )
     {
         _ships.Clear();
         _weapons.Clear();
         _bases.Clear();
+        _cargo.Clear();
         _statsCache.Clear();
         _mountsCache.Clear();
         foreach (var s in ships)
@@ -53,6 +56,8 @@ public partial class DefRegistry : Node
             _weapons[w.WeaponId] = w;
         foreach (var b in bases)
             _bases[b.BaseTypeId] = b;
+        foreach (var c in cargoItems)
+            _cargo[c.CargoId] = c;
     }
 
     // ---- Ship flight stats ------------------------------------------------
@@ -71,21 +76,7 @@ public partial class DefRegistry : Node
             stats = default;
             return false;
         }
-        stats = ShipStats.Create(
-            d.MaxSpeed,
-            d.Accel,
-            d.Mass,
-            d.RateYawDeg,
-            d.RatePitchDeg,
-            d.RateRollDeg,
-            d.DriftYawDeg,
-            d.DriftPitchDeg,
-            d.SideMult,
-            d.BackMult,
-            d.AbAccel,
-            d.AbOnRate,
-            d.AbOffRate
-        );
+        stats = ShipStats.FromDef(d);
         _statsCache[defId] = stats;
         return true;
     }
@@ -116,7 +107,40 @@ public partial class DefRegistry : Node
 
     public bool TryGetShipDef(byte classId, out ShipClassDef def) => _ships.TryGetValue(classId, out def!);
 
+    // Every buildable ship class (every ship def except the reserved pod), ascending by ClassId so the
+    // buy menu has a stable order regardless of dictionary iteration. Empty until the defs arrive.
+    public List<ShipClassDef> BuildableShips()
+    {
+        var list = new List<ShipClassDef>();
+        foreach (var s in _ships.Values)
+            if (s.ClassId != PodClassId)
+                list.Add(s);
+        list.Sort((a, b) => a.ClassId.CompareTo(b.ClassId));
+        return list;
+    }
+
     public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;
+
+    // Every streamed weapon def, ascending by WeaponId so lists built from it have a stable
+    // order regardless of dictionary iteration — the hangar's arsenal list. Empty until the
+    // defs arrive.
+    public List<WeaponDef> AllWeapons()
+    {
+        var list = new List<WeaponDef>(_weapons.Values);
+        list.Sort((a, b) => a.WeaponId.CompareTo(b.WeaponId));
+        return list;
+    }
+
+    public CargoItemDef? GetCargoItem(uint cargoId) => _cargo.TryGetValue(cargoId, out var c) ? c : null;
+
+    // Every streamed cargo item def, ascending by CargoId — the hangar's cargo hold list.
+    // Empty until the defs arrive (the caller renders nothing rather than baked stubs).
+    public List<CargoItemDef> AllCargoItems()
+    {
+        var list = new List<CargoItemDef>(_cargo.Values);
+        list.Sort((a, b) => a.CargoId.CompareTo(b.CargoId));
+        return list;
+    }
 
     // A base type's def (radius/health/hardpoints), for the base-mesh loader. Null until it arrives.
     public BaseDef? GetBaseDef(byte baseTypeId) => _bases.TryGetValue(baseTypeId, out var b) ? b : null;

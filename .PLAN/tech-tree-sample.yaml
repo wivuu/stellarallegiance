@@ -1,0 +1,1127 @@
+catalog:
+  version: 2026.06.21
+  techs:
+  - id: advanced-reactors
+    name: Advanced Reactors
+  - id: heavy-hulls
+    name: Heavy Hull Plating
+  - id: gun-tier-2
+    name: Class-2 Cannons
+  - id: cloak-tech
+    name: Cloaking Systems
+  - id: mining-boost
+    name: Improved Mining
+  hulls:
+  - speed: 30
+    max-turn-rates: &o0 {}
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 20
+    abilities:
+    - is-lifepod
+    - no-ripcord
+    id: lifepod
+    name: Lifepod
+    required-capabilities:
+    - base
+  - speed: 90
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    scanner-range: 4000
+    armor-hit-points: 60
+    max-weapons: 1
+    allowed-parts:
+      weapon:
+      - light-cannon
+      shield:
+      - light-shield
+    abilities:
+    - is-fighter
+    id: scout
+    name: Scout
+    price: 100
+    required-capabilities:
+    - base
+  - speed: 75
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 120
+    max-weapons: 2
+    preferred-parts:
+    - light-cannon
+    - light-shield
+    allowed-parts:
+      weapon:
+      - light-cannon
+      - heavy-cannon
+      shield:
+      - light-shield
+      afterburner:
+      - standard-burner
+    abilities:
+    - is-fighter
+    id: fighter
+    name: Fighter
+    price: 200
+    required-capabilities:
+    - base
+  - speed: 60
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 260
+    max-weapons: 3
+    allowed-parts:
+      weapon:
+      - heavy-cannon
+      shield:
+      - heavy-shield
+    abilities:
+    - is-fighter
+    - threat-to-station
+    id: heavy-fighter
+    name: Heavy Fighter
+    price: 400
+    required-techs:
+    - heavy-hulls
+  - speed: 80
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 140
+    max-weapons: 2
+    allowed-parts:
+      weapon:
+      - light-cannon
+      - heavy-cannon
+      cloak:
+      - field-cloak
+    abilities:
+    - is-fighter
+    id: stealth-fighter
+    name: Stealth Fighter
+    price: 500
+    required-techs:
+    - cloak-tech
+  - speed: 50
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 200
+    abilities:
+    - is-builder
+    id: constructor
+    name: Constructor
+    price: 300
+    required-capabilities:
+    - shipyard-allowed
+  - speed: 55
+    max-turn-rates: *o0
+    turn-torques: *o0
+    strafe-thrust-multiplier: 1
+    reverse-thrust-multiplier: 1
+    armor-hit-points: 150
+    abilities:
+    - is-miner
+    id: miner
+    name: Miner
+    price: 150
+    required-capabilities:
+    - base
+  weapons:
+  - reload-time: 0.25
+    energy-per-shot: 5
+    projectile-id: bolt
+    slot: weapon
+    id: light-cannon
+    name: Light Cannon
+    price: 50
+    required-capabilities:
+    - base
+  - reload-time: 0.5
+    energy-per-shot: 12
+    projectile-id: heavy-bolt
+    slot: weapon
+    id: heavy-cannon
+    name: Heavy Cannon
+    price: 120
+    required-techs:
+    - gun-tier-2
+  shields:
+  - regen-rate: 2
+    max-strength: 80
+    slot: shield
+    id: light-shield
+    name: Light Shield
+    price: 60
+    required-capabilities:
+    - base
+  - regen-rate: 3
+    max-strength: 200
+    slot: shield
+    id: heavy-shield
+    name: Heavy Shield
+    price: 140
+    required-techs:
+    - heavy-hulls
+  cloaks:
+  - energy-consumption: 4
+    max-cloaking: 0.9
+    on-rate: 0.5
+    off-rate: 1
+    slot: cloak
+    id: field-cloak
+    name: Field Cloak
+    price: 180
+    required-techs:
+    - cloak-tech
+  afterburners:
+  - fuel-consumption: 3
+    max-thrust: 2
+    on-rate: 2
+    off-rate: 2
+    slot: afterburner
+    id: standard-burner
+    name: Standard Afterburner
+    price: 40
+    required-capabilities:
+    - base
+  launchers:
+  - amount: 4
+    launch-count: 1
+    expendable-id: seeker-missile
+    slot: dispenser
+    id: missile-rack
+    name: Missile Rack
+    price: 90
+    required-capabilities:
+    - tactical-allowed
+  stations:
+  - max-armor: 4000
+    max-shield: 2000
+    class: garrison
+    abilities:
+    - start
+    - restart
+    - repair
+    - capture
+    - land
+    buildable-on:
+    - buildable
+    id: garrison
+    name: Garrison
+    required-capabilities:
+    - base
+  - max-armor: 3000
+    class: shipyard
+    abilities:
+    - capture
+    - land
+    - repair
+    buildable-on:
+    - buildable
+    construction-drone-id: constructor-drone
+    id: shipyard
+    name: Shipyard
+    price: 600
+    required-capabilities:
+    - expansion-allowed
+    granted-capabilities:
+    - shipyard-allowed
+  - income: 50
+    class: mining
+    abilities:
+    - unload
+    - capture
+    buildable-on:
+    - mine-he3
+    - mine-gold
+    id: refinery
+    name: Refinery
+    price: 400
+    required-capabilities:
+    - expansion-allowed
+  - class: research
+    abilities:
+    - capture
+    - land
+    buildable-on:
+    - special-tactical
+    id: tech-lab
+    name: Technology Lab
+    price: 500
+    required-capabilities:
+    - expansion-allowed
+    granted-capabilities:
+    - tactical-allowed
+  - max-armor: 6000
+    max-shield: 3000
+    abilities:
+    - capture
+    - land
+    - repair
+    buildable-on:
+    - special-supremacy
+    id: supremacy-center
+    name: Supremacy Center
+    price: 1500
+    required-capabilities:
+    - shipyard-allowed
+    granted-capabilities:
+    - supremacy-allowed
+    required-techs:
+    - heavy-hulls
+  developments:
+  - attributes:
+      max-energy: 1.2
+      energy-lifespan: 1.1
+    id: dev-advanced-reactors
+    name: Advanced Reactors
+    price: 300
+    build-time-seconds: 60
+    required-capabilities:
+    - shipyard-allowed
+    granted-techs:
+    - advanced-reactors
+  - attributes:
+      max-armor-ship: 1.15
+    id: dev-heavy-hulls
+    name: Heavy Hull Plating
+    price: 350
+    build-time-seconds: 75
+    required-techs:
+    - advanced-reactors
+    granted-techs:
+    - heavy-hulls
+  - attributes:
+      gun-damage: 1.1
+    id: dev-gun-tier-2
+    name: Class-2 Cannons
+    price: 250
+    required-capabilities:
+    - shipyard-allowed
+    granted-techs:
+    - gun-tier-2
+  - id: dev-cloaking
+    name: Cloaking Systems
+    price: 450
+    required-capabilities:
+    - tactical-allowed
+    granted-techs:
+    - cloak-tech
+  - attributes:
+      mining-yield: 1.25
+    tech-only: true
+    id: dev-mining
+    name: Improved Mining
+    price: 200
+    required-capabilities:
+    - expansion-allowed
+    granted-techs:
+    - mining-boost
+  drones:
+  - pilot: builder
+    hull-id: constructor
+    id: constructor-drone
+    name: Constructor Drone
+    required-capabilities:
+    - shipyard-allowed
+  - hull-id: miner
+    id: mining-drone
+    name: Mining Drone
+    required-capabilities:
+    - expansion-allowed
+  missiles:
+  - acceleration: 40
+    turn-rate: 2.5
+    initial-speed: 60
+    power: 120
+    blast-radius: 30
+    damage-type: explosive
+    id: seeker-missile
+    name: Seeker Missile
+    lifespan: 8
+    abilities:
+    - shoot-ships
+  probes:
+  - scanner-range: 6000
+    id: sensor-probe
+    name: Sensor Probe
+    lifespan: 120
+  projectiles:
+  - id: bolt
+    name: Plasma Bolt
+    power: 20
+    speed: 200
+    lifespan: 1.5
+    damage-type: energy
+  - id: heavy-bolt
+    name: Heavy Plasma Bolt
+    power: 45
+    speed: 180
+    lifespan: 1.8
+    damage-type: energy
+  factions:
+  - id: iron-coalition
+    name: Iron Coalition
+    hud-name: iron-hud
+    income-money: 10
+    bonus-money: 5000
+    base-capabilities:
+    - base
+    - expansion-allowed
+    base-attributes:
+      max-armor-ship: 1.1
+      max-speed: 0.95
+    lifepod-hull-id: lifepod
+    initial-station-id: garrison
+  - id: bios
+    name: Bios Genetics
+    hud-name: bios-hud
+    income-money: 12
+    bonus-money: 5000
+    base-capabilities:
+    - base
+    - tactical-allowed
+    base-attributes:
+      max-speed: 1.1
+      scan-range: 1.2
+    lifepod-hull-id: lifepod
+    initial-station-id: garrison
+  - id: gigacorp
+    name: GigaCorp
+    hud-name: gigacorp-hud
+    income-money: 14
+    bonus-money: 5000
+    base-capabilities:
+    - base
+    - expansion-allowed
+    base-attributes:
+      development-cost: 0.85
+      development-time: 0.9
+      max-energy: 1.1
+    lifepod-hull-id: lifepod
+    initial-station-id: garrison
+analysis:
+  bios:
+    starting:
+      credits: 5000
+      income: 12
+      base-capabilities:
+      - base
+      - tactical-allowed
+      initial-station-id: garrison
+      lifepod-hull-id: lifepod
+    reachable-techs:
+    - cloak-tech
+    reachable-capabilities:
+    - base
+    - tactical-allowed
+    available-at-start:
+    - dev-cloaking
+    - fighter
+    - garrison
+    - lifepod
+    - light-cannon
+    - light-shield
+    - miner
+    - missile-rack
+    - scout
+    - standard-burner
+    techs:
+      cloak-tech:
+        granted-by:
+        - dev-cloaking
+        unlocks:
+        - field-cloak
+        - stealth-fighter
+    buildables:
+      constructor:
+        kind: hull
+        price: 300
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      constructor-drone:
+        kind: drone
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      dev-advanced-reactors:
+        kind: development
+        price: 300
+        build-time-seconds: 60
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - advanced-reactors
+        unlocked-by:
+        - shipyard
+      dev-cloaking:
+        kind: development
+        price: 450
+        needs-capabilities:
+        - tactical-allowed
+        grants-techs:
+        - cloak-tech
+        available-at-start: true
+      dev-gun-tier-2:
+        kind: development
+        price: 250
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - gun-tier-2
+        unlocked-by:
+        - shipyard
+      dev-heavy-hulls:
+        kind: development
+        price: 350
+        build-time-seconds: 75
+        needs-techs:
+        - advanced-reactors
+        grants-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-advanced-reactors
+      dev-mining:
+        kind: development
+        price: 200
+        needs-capabilities:
+        - expansion-allowed
+        grants-techs:
+        - mining-boost
+      field-cloak:
+        kind: cloak
+        price: 180
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      fighter:
+        kind: hull
+        price: 200
+        needs-capabilities:
+        - base
+        available-at-start: true
+      garrison:
+        kind: station
+        needs-capabilities:
+        - base
+        available-at-start: true
+      heavy-cannon:
+        kind: weapon
+        price: 120
+        needs-techs:
+        - gun-tier-2
+        unlocked-by:
+        - dev-gun-tier-2
+      heavy-fighter:
+        kind: hull
+        price: 400
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      heavy-shield:
+        kind: shield
+        price: 140
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      lifepod:
+        kind: hull
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-cannon:
+        kind: weapon
+        price: 50
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-shield:
+        kind: shield
+        price: 60
+        needs-capabilities:
+        - base
+        available-at-start: true
+      miner:
+        kind: hull
+        price: 150
+        needs-capabilities:
+        - base
+        available-at-start: true
+      mining-drone:
+        kind: drone
+        needs-capabilities:
+        - expansion-allowed
+      missile-rack:
+        kind: launcher
+        price: 90
+        needs-capabilities:
+        - tactical-allowed
+        available-at-start: true
+      refinery:
+        kind: station
+        price: 400
+        needs-capabilities:
+        - expansion-allowed
+      scout:
+        kind: hull
+        price: 100
+        needs-capabilities:
+        - base
+        available-at-start: true
+      shipyard:
+        kind: station
+        price: 600
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - shipyard-allowed
+      standard-burner:
+        kind: afterburner
+        price: 40
+        needs-capabilities:
+        - base
+        available-at-start: true
+      stealth-fighter:
+        kind: hull
+        price: 500
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      supremacy-center:
+        kind: station
+        price: 1500
+        needs-techs:
+        - heavy-hulls
+        needs-capabilities:
+        - shipyard-allowed
+        grants-capabilities:
+        - supremacy-allowed
+        unlocked-by:
+        - dev-heavy-hulls
+        - shipyard
+      tech-lab:
+        kind: station
+        price: 500
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - tactical-allowed
+  gigacorp:
+    starting:
+      credits: 5000
+      income: 14
+      base-capabilities:
+      - base
+      - expansion-allowed
+      initial-station-id: garrison
+      lifepod-hull-id: lifepod
+    reachable-techs:
+    - advanced-reactors
+    - cloak-tech
+    - gun-tier-2
+    - heavy-hulls
+    - mining-boost
+    reachable-capabilities:
+    - base
+    - shipyard-allowed
+    - expansion-allowed
+    - tactical-allowed
+    - supremacy-allowed
+    available-at-start:
+    - dev-mining
+    - fighter
+    - garrison
+    - lifepod
+    - light-cannon
+    - light-shield
+    - miner
+    - mining-drone
+    - refinery
+    - scout
+    - shipyard
+    - standard-burner
+    - tech-lab
+    techs:
+      advanced-reactors:
+        granted-by:
+        - dev-advanced-reactors
+        unlocks:
+        - dev-heavy-hulls
+      cloak-tech:
+        granted-by:
+        - dev-cloaking
+        unlocks:
+        - field-cloak
+        - stealth-fighter
+      gun-tier-2:
+        granted-by:
+        - dev-gun-tier-2
+        unlocks:
+        - heavy-cannon
+      heavy-hulls:
+        granted-by:
+        - dev-heavy-hulls
+        unlocks:
+        - heavy-fighter
+        - heavy-shield
+        - supremacy-center
+        requires-first:
+        - advanced-reactors
+      mining-boost:
+        granted-by:
+        - dev-mining
+    buildables:
+      constructor:
+        kind: hull
+        price: 300
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      constructor-drone:
+        kind: drone
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      dev-advanced-reactors:
+        kind: development
+        price: 300
+        build-time-seconds: 60
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - advanced-reactors
+        unlocked-by:
+        - shipyard
+      dev-cloaking:
+        kind: development
+        price: 450
+        needs-capabilities:
+        - tactical-allowed
+        grants-techs:
+        - cloak-tech
+        unlocked-by:
+        - tech-lab
+      dev-gun-tier-2:
+        kind: development
+        price: 250
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - gun-tier-2
+        unlocked-by:
+        - shipyard
+      dev-heavy-hulls:
+        kind: development
+        price: 350
+        build-time-seconds: 75
+        needs-techs:
+        - advanced-reactors
+        grants-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-advanced-reactors
+      dev-mining:
+        kind: development
+        price: 200
+        needs-capabilities:
+        - expansion-allowed
+        grants-techs:
+        - mining-boost
+        available-at-start: true
+      field-cloak:
+        kind: cloak
+        price: 180
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      fighter:
+        kind: hull
+        price: 200
+        needs-capabilities:
+        - base
+        available-at-start: true
+      garrison:
+        kind: station
+        needs-capabilities:
+        - base
+        available-at-start: true
+      heavy-cannon:
+        kind: weapon
+        price: 120
+        needs-techs:
+        - gun-tier-2
+        unlocked-by:
+        - dev-gun-tier-2
+      heavy-fighter:
+        kind: hull
+        price: 400
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      heavy-shield:
+        kind: shield
+        price: 140
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      lifepod:
+        kind: hull
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-cannon:
+        kind: weapon
+        price: 50
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-shield:
+        kind: shield
+        price: 60
+        needs-capabilities:
+        - base
+        available-at-start: true
+      miner:
+        kind: hull
+        price: 150
+        needs-capabilities:
+        - base
+        available-at-start: true
+      mining-drone:
+        kind: drone
+        needs-capabilities:
+        - expansion-allowed
+        available-at-start: true
+      missile-rack:
+        kind: launcher
+        price: 90
+        needs-capabilities:
+        - tactical-allowed
+        unlocked-by:
+        - tech-lab
+      refinery:
+        kind: station
+        price: 400
+        needs-capabilities:
+        - expansion-allowed
+        available-at-start: true
+      scout:
+        kind: hull
+        price: 100
+        needs-capabilities:
+        - base
+        available-at-start: true
+      shipyard:
+        kind: station
+        price: 600
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - shipyard-allowed
+        available-at-start: true
+      standard-burner:
+        kind: afterburner
+        price: 40
+        needs-capabilities:
+        - base
+        available-at-start: true
+      stealth-fighter:
+        kind: hull
+        price: 500
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      supremacy-center:
+        kind: station
+        price: 1500
+        needs-techs:
+        - heavy-hulls
+        needs-capabilities:
+        - shipyard-allowed
+        grants-capabilities:
+        - supremacy-allowed
+        unlocked-by:
+        - dev-heavy-hulls
+        - shipyard
+      tech-lab:
+        kind: station
+        price: 500
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - tactical-allowed
+        available-at-start: true
+  iron-coalition:
+    starting:
+      credits: 5000
+      income: 10
+      base-capabilities:
+      - base
+      - expansion-allowed
+      initial-station-id: garrison
+      lifepod-hull-id: lifepod
+    reachable-techs:
+    - advanced-reactors
+    - cloak-tech
+    - gun-tier-2
+    - heavy-hulls
+    - mining-boost
+    reachable-capabilities:
+    - base
+    - shipyard-allowed
+    - expansion-allowed
+    - tactical-allowed
+    - supremacy-allowed
+    available-at-start:
+    - dev-mining
+    - fighter
+    - garrison
+    - lifepod
+    - light-cannon
+    - light-shield
+    - miner
+    - mining-drone
+    - refinery
+    - scout
+    - shipyard
+    - standard-burner
+    - tech-lab
+    techs:
+      advanced-reactors:
+        granted-by:
+        - dev-advanced-reactors
+        unlocks:
+        - dev-heavy-hulls
+      cloak-tech:
+        granted-by:
+        - dev-cloaking
+        unlocks:
+        - field-cloak
+        - stealth-fighter
+      gun-tier-2:
+        granted-by:
+        - dev-gun-tier-2
+        unlocks:
+        - heavy-cannon
+      heavy-hulls:
+        granted-by:
+        - dev-heavy-hulls
+        unlocks:
+        - heavy-fighter
+        - heavy-shield
+        - supremacy-center
+        requires-first:
+        - advanced-reactors
+      mining-boost:
+        granted-by:
+        - dev-mining
+    buildables:
+      constructor:
+        kind: hull
+        price: 300
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      constructor-drone:
+        kind: drone
+        needs-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - shipyard
+      dev-advanced-reactors:
+        kind: development
+        price: 300
+        build-time-seconds: 60
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - advanced-reactors
+        unlocked-by:
+        - shipyard
+      dev-cloaking:
+        kind: development
+        price: 450
+        needs-capabilities:
+        - tactical-allowed
+        grants-techs:
+        - cloak-tech
+        unlocked-by:
+        - tech-lab
+      dev-gun-tier-2:
+        kind: development
+        price: 250
+        needs-capabilities:
+        - shipyard-allowed
+        grants-techs:
+        - gun-tier-2
+        unlocked-by:
+        - shipyard
+      dev-heavy-hulls:
+        kind: development
+        price: 350
+        build-time-seconds: 75
+        needs-techs:
+        - advanced-reactors
+        grants-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-advanced-reactors
+      dev-mining:
+        kind: development
+        price: 200
+        needs-capabilities:
+        - expansion-allowed
+        grants-techs:
+        - mining-boost
+        available-at-start: true
+      field-cloak:
+        kind: cloak
+        price: 180
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      fighter:
+        kind: hull
+        price: 200
+        needs-capabilities:
+        - base
+        available-at-start: true
+      garrison:
+        kind: station
+        needs-capabilities:
+        - base
+        available-at-start: true
+      heavy-cannon:
+        kind: weapon
+        price: 120
+        needs-techs:
+        - gun-tier-2
+        unlocked-by:
+        - dev-gun-tier-2
+      heavy-fighter:
+        kind: hull
+        price: 400
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      heavy-shield:
+        kind: shield
+        price: 140
+        needs-techs:
+        - heavy-hulls
+        unlocked-by:
+        - dev-heavy-hulls
+      lifepod:
+        kind: hull
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-cannon:
+        kind: weapon
+        price: 50
+        needs-capabilities:
+        - base
+        available-at-start: true
+      light-shield:
+        kind: shield
+        price: 60
+        needs-capabilities:
+        - base
+        available-at-start: true
+      miner:
+        kind: hull
+        price: 150
+        needs-capabilities:
+        - base
+        available-at-start: true
+      mining-drone:
+        kind: drone
+        needs-capabilities:
+        - expansion-allowed
+        available-at-start: true
+      missile-rack:
+        kind: launcher
+        price: 90
+        needs-capabilities:
+        - tactical-allowed
+        unlocked-by:
+        - tech-lab
+      refinery:
+        kind: station
+        price: 400
+        needs-capabilities:
+        - expansion-allowed
+        available-at-start: true
+      scout:
+        kind: hull
+        price: 100
+        needs-capabilities:
+        - base
+        available-at-start: true
+      shipyard:
+        kind: station
+        price: 600
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - shipyard-allowed
+        available-at-start: true
+      standard-burner:
+        kind: afterburner
+        price: 40
+        needs-capabilities:
+        - base
+        available-at-start: true
+      stealth-fighter:
+        kind: hull
+        price: 500
+        needs-techs:
+        - cloak-tech
+        unlocked-by:
+        - dev-cloaking
+      supremacy-center:
+        kind: station
+        price: 1500
+        needs-techs:
+        - heavy-hulls
+        needs-capabilities:
+        - shipyard-allowed
+        grants-capabilities:
+        - supremacy-allowed
+        unlocked-by:
+        - dev-heavy-hulls
+        - shipyard
+      tech-lab:
+        kind: station
+        price: 500
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - tactical-allowed
+        available-at-start: true

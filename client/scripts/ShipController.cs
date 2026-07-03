@@ -1,6 +1,7 @@
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Ui;
 
 // Reads local input, runs the fixed-rate (20 Hz) input/prediction loop, and
 // calls the ApplyInput reducer. Also handles the (temporary) spawn key for T4.
@@ -61,6 +62,10 @@ public partial class ShipController : Node
     private ShipClass? _spawnRequest; // class chosen via HUD menu / 1-2 keys; cleared once flying
     private bool _spawnPending;
     private double _spawnRetry;
+
+    // Why the last buy was suppressed by the client pre-check (locked / can't afford), or null when
+    // the buy went through / none is pending. Read by Hud to surface a one-line hint near the menu.
+    public string? SpawnHint { get; private set; }
     private bool _perturbHeld; // edge-detect the P debug key
 
     // Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
@@ -71,13 +76,17 @@ public partial class ShipController : Node
     // accumulated (in _Input) into a persistent deflection (_stickYaw/_stickPitch) that
     // eases back toward center each frame when the mouse stops. Push to turn, release to
     // straighten. This is purely an input-sampling change; the flight dynamics are untouched.
-    // The cursor is captured while flying (Esc releases, click recaptures); arrow keys still
-    // work as a fallback and sum with the stick. STDB_MOUSE_SENS tunes feel (px->deflection),
-    // STDB_MOUSE_INVERT=1 flips pitch. (Sens + return rate below want a quick in-flight tune.)
+    // The cursor is captured while flying (first Esc releases, click recaptures; a second Esc
+    // with the cursor already free opens the escape menu); arrow keys still work as a fallback
+    // and sum with the stick. Feel comes from the settings (UserPrefs sensitivity multiplier +
+    // invert-Y, live via RefreshMousePrefs); the STDB_MOUSE_SENS / STDB_MOUSE_INVERT env vars
+    // pin it for a run (testing override that wins over the saved prefs).
     private const float DefaultMouseSens = 0.01f; // px -> stick deflection per frame
     private const float MouseReturnPerSec = 8f; // how fast the virtual stick eases back to center
     private float _mouseSens = DefaultMouseSens;
     private bool _mouseInvert;
+    private bool _sensFromEnv,
+        _invertFromEnv; // STDB_MOUSE_* env override present — pin the value, ignore prefs
     private Vector2 _mouseDelta; // captured-cursor motion accumulated since last sample
     private float _stickYaw,
         _stickPitch; // persistent self-centering virtual-stick deflection (-1..1)
@@ -130,8 +139,18 @@ public partial class ShipController : Node
         }
 
         if (float.TryParse(OS.GetEnvironment("STDB_MOUSE_SENS"), out var sens) && sens > 0f)
+        {
             _mouseSens = sens;
-        _mouseInvert = OS.GetEnvironment("STDB_MOUSE_INVERT") is "1" or "true";
+            _sensFromEnv = true; // testing override — wins over the saved pref
+        }
+        string invertEnv = OS.GetEnvironment("STDB_MOUSE_INVERT");
+        if (!string.IsNullOrEmpty(invertEnv))
+        {
+            _mouseInvert = invertEnv is "1" or "true";
+            _invertFromEnv = true;
+        }
+        RefreshMousePrefs();
+        UserPrefs.Changed += RefreshMousePrefs; // settings dialog writes through UserPrefs
 
         // Latency for the adaptive lead / HUD readout is sampled in native mode via the
         // Ping/Pong probe (the in-STDB ApplyInput reducer-ack path was removed with the sim).
@@ -165,6 +184,21 @@ public partial class ShipController : Node
         }
     }
 
+    public override void _ExitTree()
+    {
+        UserPrefs.Changed -= RefreshMousePrefs; // static event — would leak this node otherwise
+    }
+
+    // Mouse feel follows the saved settings unless an STDB_MOUSE_* env var pinned it for this
+    // run. Re-run on every UserPrefs.Changed so slider/toggle changes apply mid-flight.
+    private void RefreshMousePrefs()
+    {
+        if (!_sensFromEnv)
+            _mouseSens = DefaultMouseSens * UserPrefs.MouseSensMultiplier;
+        if (!_invertFromEnv)
+            _mouseInvert = UserPrefs.MouseInvertY;
+    }
+
     // Called by the HUD spawn menu. Picks the class to spawn; the actual reducer
     // call happens in _Process once the connection is live (with retry).
     public void RequestSpawn(ShipClass cls)
@@ -175,11 +209,12 @@ public partial class ShipController : Node
 
     public override void _Process(double delta)
     {
-        // Neutral input while the chat box is open or the sector overview map is up, so
-        // typing/panning never steers or fires — the ship coasts on held/neutral input.
+        // Neutral input while the chat box is open, the sector overview map is up, or the
+        // hangar screen is open, so typing/panning/clicking never steers or fires — the
+        // ship coasts on held/neutral input.
         _input = _autoFly
             ? AutoInput()
-            : (Chat.Capturing || SectorOverview.Active ? new ShipInputState() : ReadInput(delta));
+            : (Chat.Capturing || SectorOverview.Active || ShipLoadout.Active ? new ShipInputState() : ReadInput(delta));
 
         // Spawn handling. The class comes from the HUD spawn menu (RequestSpawn) or
         // the 1/2 keyboard shortcuts (handy alongside the menu). We only call the
@@ -202,7 +237,7 @@ public partial class ShipController : Node
 
         HandleMouseCapture(hasShip);
 
-        if (!hasShip && !Chat.Capturing)
+        if (!hasShip && !Chat.Capturing && !ShipLoadout.Active)
         {
             if (Input.IsPhysicalKeyPressed(Key.Key1))
                 _spawnRequest = ShipClass.Scout;
@@ -222,14 +257,31 @@ public partial class ShipController : Node
         {
             _spawnPending = false;
             _spawnRequest = null;
+            SpawnHint = null;
         }
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {
-            // Spawn on the authoritative sim server (honored only while the match is Active;
-            // the request simply retries until then).
-            _net?.RequestSpawn((byte)cls);
-            _spawnPending = true;
-            _spawnRetry = 1.0;
+            // Stage-2 buy pre-check: don't spam a request the latest snapshot says will fail (locked
+            // hull / can't afford). The server stays authoritative; this only suppresses the doomed
+            // send and surfaces a reason. The request stays queued so it auto-fires once affordable
+            // (e.g. when the paycheck lands). Team pre-spawn comes from the Welcome assignment.
+            byte team = _world.LocalTeam ?? _net?.MyTeam ?? 0;
+            var gate = _world.CheckSpawnGate(team, (byte)cls);
+            if (gate == WorldRenderer.SpawnGate.Allow)
+            {
+                // Spawn on the authoritative sim server (honored only while the match is Active;
+                // the request simply retries until then).
+                _net?.RequestSpawn((byte)cls);
+                _spawnPending = true;
+                _spawnRetry = 1.0;
+                SpawnHint = null;
+            }
+            else
+            {
+                SpawnHint = gate == WorldRenderer.SpawnGate.Locked
+                    ? $"{cls} is locked"
+                    : $"Not enough credits for {cls}";
+            }
         }
 
         // Prediction. The prediction tick lives in SERVER-tick space and is kept a
@@ -261,7 +313,7 @@ public partial class ShipController : Node
         // ShipInput so the server integrates the same boost the client predicted (no
         // reconcile storm), and still drives the engine glow. Autofly pins it on so
         // headless runs exercise the boost + exhaust path.
-        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && Input.IsPhysicalKeyPressed(Key.Shift));
+        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsPhysicalKeyPressed(Key.Shift));
         _input.Boost = boost;
         pc.SetAfterburner(boost ? 1f : 0f);
 
@@ -362,20 +414,38 @@ public partial class ShipController : Node
     // cursor's hide/show in lockstep with the mode: on macOS a Captured set from _Process
     // leaves a ghost cursor pinned at screen center until the next motion event.
     //
-    // Esc always RELEASES the cursor (one-way, so the OS cursor is reachable mid-flight); a
-    // left click in the viewport recaptures it. Skipped under --autofly (headless has no real
-    // cursor) and while Chat/SectorOverview own the cursor (they restore it on close).
+    // Esc is two-step: the first press RELEASES the cursor (so the OS cursor is reachable
+    // mid-flight); with the cursor already free a second press opens the escape menu. A left
+    // click in the viewport recaptures. Skipped under --autofly (headless has no real cursor),
+    // while Chat/SectorOverview own the cursor (they restore it on close), and while the
+    // escape menu / settings dialog are up (so clicking their buttons never recaptures).
     public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
             _mouseDelta += mm.Relative;
 
-        if (_autoFly || !_hasShip || Chat.Capturing || SectorOverview.Active)
+        if (
+            _autoFly
+            || !_hasShip
+            || Chat.Capturing
+            || SectorOverview.Active
+            || ShipLoadout.Active
+            || EscapeMenu.Active
+            || SettingsDialog.Active
+        )
             return;
 
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
         {
-            Input.MouseMode = Input.MouseModeEnum.Visible;
+            if (Input.MouseMode == Input.MouseModeEnum.Captured)
+            {
+                Input.MouseMode = Input.MouseModeEnum.Visible;
+            }
+            else
+            {
+                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                GetViewport().SetInputAsHandled();
+            }
         }
         else if (
             @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }
@@ -391,7 +461,14 @@ public partial class ShipController : Node
     // capture/release lives in _Input; this only handles the no-ship menu case each frame.
     private void HandleMouseCapture(bool flying)
     {
-        if (_autoFly || Chat.Capturing || SectorOverview.Active)
+        if (
+            _autoFly
+            || Chat.Capturing
+            || SectorOverview.Active
+            || ShipLoadout.Active
+            || EscapeMenu.Active
+            || SettingsDialog.Active
+        )
             return;
         if (!flying && Input.MouseMode == Input.MouseModeEnum.Captured)
             Input.MouseMode = Input.MouseModeEnum.Visible; // free cursor for the menu

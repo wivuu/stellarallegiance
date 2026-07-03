@@ -1,30 +1,58 @@
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Ui;
 
 // Heads-up display. The Lobby overlay (a child created here) owns the pre/post-match
-// UI; the Hud's own spawn menu only appears once you're teamed in an active match and
-// not currently flying, and while flying it shows a speed + reconcile readout.
-// The 1/2 keyboard shortcuts in ShipController do the same thing as the spawn buttons.
+// UI; ship selection is the ShipLoadout hangar overlay, auto-opened whenever you're in
+// an active match without a ship AFTER you've deployed once (first spawn, then respawn
+// after docking or death — deploy intent is sticky for the match) and closed once the
+// ship exists. While flying the Hud shows a speed + reconcile readout; F4 reopens the
+// hangar read-only (LAUNCH gated to "IN FLIGHT").
 public partial class Hud : CanvasLayer
 {
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
     private ShipController _ship = null!;
+    private GameNetClient _net = null!;
+    private DefRegistry _defs = null!;
     private Label _label = null!;
     private Label _sectorShips = null!;
-    private Control _menu = null!;
+    private Label _credits = null!;
     private Label _warning = null!;
 
-    // Previous-frame visibility, so UI sounds fire once on the transition (the spawn
-    // menu opening/closing, the sector warning first appearing) rather than every frame.
-    private bool _menuWasVisible;
+    // The design-system gallery overlay (F9), instantiated on demand.
+    private Control? _showcase;
+
+    // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
+    private ShipLoadout? _hangar;
+
+    // Deploy intent, raised by the Lobby's LAUNCH. The mandatory ship-select hangar only opens
+    // once the pilot asks to deploy — until then the Lobby overlay owns the not-flying screen
+    // (even mid-match), so a joiner can pick a team and read the roster first. Sticky through the
+    // whole active match (NOT consumed on spawn): once you've committed to the fight, losing your
+    // ship — by docking or dying — returns you to the hangar to re-launch, not the team picker.
+    // Cleared only when the match ends (back to the post-match lobby).
+    private bool _deployRequested;
+
+    // Previous-frame visibility, so UI sounds fire once on the transition (the sector
+    // warning first appearing) rather than every frame.
     private bool _warnWasVisible;
 
     public override void _Ready()
     {
+        // Boot straight into the design-system gallery for headless screenshot CI:
+        //   godot --path client -- --ui-showcase
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--ui-showcase") >= 0)
+        {
+            CallDeferred(nameof(LoadShowcaseScene));
+            return;
+        }
+
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         _ship = GetNode<ShipController>("../ShipController");
+        _net = GetNode<GameNetClient>("../GameNetClient");
+        _defs = GetNode<DefRegistry>("../DefRegistry");
 
         // Sun lens flare (added first so it sits UNDER every HUD element while still drawing over
         // the 3D viewport — it's a light effect on the sky, not a readout).
@@ -42,39 +70,42 @@ public partial class Hud : CanvasLayer
         AddChild(velo);
         velo.Init(_world, GetNode<Camera3D>("../Camera3D"));
 
+        // HULL + BOOST system ring: concentric arc gauges framing the aim reticle. Added here
+        // so the top-left text/menu still draw over it. Reads the local ship's hull + boost ramp.
+        var systemRing = new SystemRing { Name = "SystemRing" };
+        AddChild(systemRing);
+        systemRing.Init(_world, GetNode<Camera3D>("../Camera3D"));
+
         // Always-on sector minimap, bottom-left.
         var minimap = new Minimap { Name = "Minimap" };
         AddChild(minimap);
         minimap.Init(_cm, _world);
 
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
-        // match is live (the lobby overlay owns the screen otherwise).
-        _sectorShips = new Label { Position = new Vector2(16, 12), Visible = false };
-        _sectorShips.AddThemeFontSizeOverride("font_size", 18);
+        // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
+        _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
+        _sectorShips.Position = new Vector2(16, 12);
+        _sectorShips.Visible = false;
         AddChild(_sectorShips);
 
-        _label = new Label { Position = new Vector2(16, 38) };
-        _label.AddThemeFontSizeOverride("font_size", 18);
+        _label = UiKit.MakeLabel("", UiKit.TextStyle.Data);
+        _label.Position = new Vector2(16, 38);
         AddChild(_label);
 
-        // Spawn menu: one button per class, shown only when the player has no ship.
-        _menu = new VBoxContainer { Position = new Vector2(16, 64) };
-        AddChild(_menu);
-        _menu.AddChild(SpawnButton("Spawn Scout  [1]  — fast & agile", ShipClass.Scout));
-        _menu.AddChild(SpawnButton("Spawn Fighter  [2]  — slower & heavier", ShipClass.Fighter));
-        _menu.AddChild(SpawnButton("Spawn Bomber  [3]  — heavy & ponderous", ShipClass.Bomber));
+        // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
+        // match is live. The Secondary token replaces the old inline gold.
+        _credits = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Secondary);
+        _credits.Position = new Vector2(16, 64);
+        _credits.Visible = false;
+        AddChild(_credits);
 
         // Out-of-bounds warning (sector boundary): centered in the upper third, hidden
         // until the local ship strays past its sector radius and starts taking damage.
-        _warning = new Label
-        {
-            Visible = false,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            AnchorRight = 1f,
-            OffsetTop = 90f,
-        };
-        _warning.AddThemeFontSizeOverride("font_size", 30);
-        _warning.AddThemeColorOverride("font_color", new Color(1f, 0.35f, 0.3f));
+        _warning = UiKit.MakeLabel("", UiKit.TextStyle.Display, DesignTokens.Danger);
+        _warning.Visible = false;
+        _warning.HorizontalAlignment = HorizontalAlignment.Center;
+        _warning.AnchorRight = 1f;
+        _warning.OffsetTop = 90f;
         AddChild(_warning);
 
         // Lobby / pre-match / post-match overlay. Owns the team picker, ready-up, and
@@ -89,40 +120,139 @@ public partial class Hud : CanvasLayer
         AddChild(chat);
         chat.Init(_cm, _world);
 
-        // Connection-status overlay (added last so it draws on top of everything,
-        // including the lobby). Shows "Server offline" / "Connecting…" until we're live.
-        var conn = new ConnectionOverlay { Name = "ConnectionOverlay" };
-        AddChild(conn);
-        conn.Init(_cm);
+        // Connecting modal on its own high CanvasLayer so it draws above the server
+        // browser (ServerInputLayer, layer 100) — the browser stays visible underneath
+        // while a join is in flight, and mid-game reconnects overlay the world.
+        var connLayer = new CanvasLayer { Name = "ConnectLayer", Layer = 150 };
+        AddChild(connLayer);
+        var conn = new ConnectLinkModal { Name = "ConnectLinkModal" };
+        connLayer.AddChild(conn);
+        conn.Init(_cm, _ship);
+
+        CaptureLiveUiIfRequested();
     }
 
-    private Button SpawnButton(string text, ShipClass cls)
+    private void LoadShowcaseScene() => GetTree().ChangeSceneToFile("res://scenes/UiShowcase.tscn");
+
+    // `--ui-shot=<path>` (without --ui-showcase) screenshots the live game UI after a short
+    // settle and quits — used to verify the migrated screens render with the design system.
+    private void CaptureLiveUiIfRequested()
     {
-        var b = new Button { Text = text, CustomMinimumSize = new Vector2(280, 36) };
-        b.Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
-        b.Pressed += () => _ship.RequestSpawn(cls);
-        return b;
+        string? outPath = null;
+        foreach (string a in OS.GetCmdlineUserArgs())
+            if (a.StartsWith("--ui-shot="))
+                outPath = a.Substring("--ui-shot=".Length);
+        if (outPath == null)
+            return;
+        var t = GetTree().CreateTimer(2.0);
+        t.Timeout += () =>
+        {
+            GetViewport().GetTexture().GetImage().SavePng(outPath);
+            GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
+            GetTree().Quit();
+        };
     }
+
+    // F9 toggles the design-system gallery as a live overlay, for eyeballing the shared
+    // components against the real screens. The showcase self-themes, so it can hang
+    // straight off this CanvasLayer.
+    public override void _ShortcutInput(InputEvent @event)
+    {
+        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F9 })
+        {
+            if (_showcase != null && GodotObject.IsInstanceValid(_showcase))
+            {
+                _showcase.QueueFree();
+                _showcase = null;
+            }
+            else
+            {
+                _showcase = new UiShowcase();
+                AddChild(_showcase);
+            }
+            GetViewport().SetInputAsHandled();
+        }
+
+        // F4 toggles the hangar / loadout screen (same lifecycle as the showcase). Guarded
+        // on _defs: in --ui-showcase boot the game nodes were never resolved.
+        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F4 } && _defs != null)
+        {
+            ToggleHangar();
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    private void ToggleHangar()
+    {
+        if (_hangar != null && GodotObject.IsInstanceValid(_hangar))
+        {
+            if (_hangar.OpenedForSpawn)
+                return; // the active ship-select can't be F4-dismissed — launch to leave
+            _hangar.QueueFree();
+            _hangar = null;
+        }
+        else
+        {
+            OpenHangar(forSpawn: false);
+        }
+    }
+
+    private void OpenHangar(bool forSpawn)
+    {
+        _hangar = new ShipLoadout { OpenedForSpawn = forSpawn };
+        _hangar.Init(_defs, _ship, _world, _net);
+        AddChild(_hangar);
+    }
+
+    // The Lobby's LAUNCH expresses intent to deploy. While a match is Active this promotes the
+    // pilot from the lobby overlay into the mandatory ship-select hangar; set pre-match (on ready)
+    // it carries that intent through match-start so readying flows straight into the hangar.
+    public void RequestDeploy(bool on = true) => _deployRequested = on;
 
     public override void _Process(double delta)
     {
         var ship = _world.LocalShip;
         bool flying = ship != null;
 
-        // The Lobby overlay owns everything outside a live match. The spawn menu appears once a
-        // match is Active and you're not currently flying — keying off "not flying" means it also
-        // reopens when a pod is destroyed/docked and you're awaiting your next ship.
+        // The Lobby overlay owns the not-flying screen — pre-match, post-match, AND mid-match
+        // until the pilot presses LAUNCH — so a joiner can see the teams and pick a side before
+        // deploying. The spawn hangar opens only once deploy is requested (Hud.RequestDeploy).
         bool inMatch = _world.Phase == MatchPhase.Active;
-        bool teamedInMatch = inMatch;
-        _menu.Visible = teamedInMatch && !flying;
-        if (_menu.Visible != _menuWasVisible)
+        // Deploy intent is sticky for the whole match — cleared only when it ends (back to the
+        // post-match lobby). It persists across the lobby→active flip (a pre-match ready flows
+        // straight into the ship-select at start) AND across losing a ship, so docking or dying
+        // reopens the hangar instead of dumping the pilot on the team picker.
+        if (_world.Phase == MatchPhase.Ended)
+            _deployRequested = false;
+        // The hangar IS the ship-select screen. While in an active match with no ship and deploy
+        // requested (first spawn, respawn after dock/death): open it if it isn't up, and promote a
+        // hangar the player had open manually — either way it becomes the mandatory select
+        // (LAUNCH to leave). The death-cam guard holds the hangar back for the blast beat (dock has
+        // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
+        // — the spawn hangar closes itself and the lobby overlay takes over.
+        bool hangarUp = _hangar != null && GodotObject.IsInstanceValid(_hangar);
+        if (inMatch && !flying && _deployRequested && !_world.DeathCamActive)
         {
-            SfxManager.Instance?.PlayUi(_menu.Visible ? SfxManager.SfxId.MenuOpen : SfxManager.SfxId.MenuClose);
-            _menuWasVisible = _menu.Visible;
+            if (hangarUp)
+                _hangar!.OpenedForSpawn = true;
+            else if (_defs.BuildableShips().Count > 0)
+                OpenHangar(forSpawn: true);
         }
+        else if (hangarUp && _hangar!.OpenedForSpawn)
+        {
+            _hangar.QueueFree();
+            _hangar = null;
+        }
+
         _sectorShips.Visible = inMatch;
         if (inMatch)
             _sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
+
+        // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
+        // source as the buy menu so the balance shown matches what gates the buttons.
+        _credits.Visible = inMatch;
+        if (inMatch)
+            _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.
@@ -148,16 +278,16 @@ public partial class Hud : CanvasLayer
         if (_warning.Visible && !_warnWasVisible)
             SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiNotify);
         _warnWasVisible = _warning.Visible;
-        // Top-left readout: the controls hint while choosing a ship (teamed, pre-spawn),
-        // the live flight stats while flying, and nothing while the lobby overlay is up.
+        // Top-left readout: the live flight stats while flying; nothing otherwise (the
+        // hangar owns the pre-spawn screen, the lobby overlay everything outside a match).
         _label.Text = flying
             ? ship!.IsPod
-                // Ejected: flying the escape pod. Show the resolve hint + pod hull instead of
-                // the combat flight stats (the pod is unarmed and just trying to get home).
-                ? $"⚠  EJECTED — reach a friendly base or get rescued   Pod HP: {ship.Health, 3:0} / {ship.MaxHealth, 3:0}   Speed: {ship.Speed, 4:0.0} u/s"
-                : $"HP: {ship.Health, 4:0} / {ship.MaxHealth, 3:0}   Speed: {ship.Speed, 5:0.0} u/s   Ping: {_ship.PingMs, 3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
-            : teamedInMatch
-                ? "Choose your ship:\nW/S throttle · Shift afterburner · A/D strafe · E/C up·down · mouse aim (Esc frees cursor) · Q/Z roll · click/Space fire · Tab focus target"
-                : "";
+                // Ejected: flying the escape pod. Just the resolve hint — hull/speed now read
+                // off the HULL gauge and the velocity marker (the pod is unarmed, just fleeing).
+                ? "⚠  EJECTED — reach a friendly base or get rescued"
+                // HP + Speed are shown graphically (HULL gauge / velocity marker), so the text
+                // line keeps only the network telemetry: ping and reconcile stats.
+                : $"Ping: {_ship.PingMs, 3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
+            : "";
     }
 }

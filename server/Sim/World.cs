@@ -1,5 +1,10 @@
 using SimServer.Assets;
+using SimServer.Content;
 using StellarAllegiance.Shared;
+// Alias just the two library set types (TechSet/CapabilitySet) rather than `using` the whole model
+// namespace, which would collide with Shared.WorldConfig (the ctor's `cfg` type).
+using TechSet = Allegiance.Factions.Model.TechSet;
+using CapabilitySet = Allegiance.Factions.Model.CapabilitySet;
 
 namespace SimServer.Sim;
 
@@ -17,7 +22,7 @@ public sealed class World
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = CollisionConfig.BaseRadius;
     public const float DockDiscRadius = CollisionConfig.DockDiscRadius; // docking cone base-disc radius
-    public const float BaseMaxHealth = 2000f;
+    public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
     public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
@@ -40,8 +45,9 @@ public sealed class World
     public const int AsteroidCount = 4; // base count, scaled by cube law below
     public const int VergeAsteroidCount = 4;
     public const float VergeBeltRadius = 380f;
-    public const float SectorScale = 2.25f; // module WorldConfig defaults
-    public const float AsteroidDensity = 1.0f;
+    // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
+    // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
+    // the generated map, not just what's streamed. No compile-in defaults live here.
     public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
 
     public readonly record struct Sector(uint Id, float Radius);
@@ -70,6 +76,28 @@ public sealed class World
     public readonly List<Rock> Asteroids = new();
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
+
+    // Stage-2 strategy spine: per-team economy/owned state, keyed by team byte (parallel to the
+    // per-team bases). Credits accrue in the sim step (Simulation.AccrueTeamCredits); OwnedTechs/
+    // OwnedCapabilities are mutable per-team clones of the faction seed, fed to the unlock-gating
+    // resolver in Phase 5. The sim mutates these; World only owns + (re)seeds them (SeedEconomy).
+    public sealed class TeamState
+    {
+        public int Credits;
+        public int Score; // placeholder (no scoring logic yet — wired to the client in Phase 4)
+        public TechSet OwnedTechs = new();
+        public CapabilitySet OwnedCapabilities = new();
+
+        // Hull ClassIds this team may currently build, resolved from OwnedTechs/OwnedCapabilities via
+        // BuildableResolver (Simulation.ResolveTeamUnlocks, refreshed at match start). The spawn gate
+        // checks membership here; the wire snapshot (Protocol.BuildTeamState) streams it so the client
+        // can predict locks and gray out the buy menu.
+        public HashSet<byte> UnlockedClasses = new();
+    }
+
+    // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot
+    // at construction and re-seeded on each match start (SeedEconomy).
+    public readonly Dictionary<byte, TeamState> TeamStates = new();
 
     // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
     // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
@@ -124,14 +152,18 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start)
     {
         Seed = seed;
-        float coreR = CoreRadius * SectorScale;
-        float vergeR = VergeRadius * SectorScale;
-        float scale3 = SectorScale * SectorScale * SectorScale;
-        int coreCount = (int)MathF.Round(AsteroidDensity * AsteroidCount * scale3);
-        int vergeCount = (int)MathF.Round(AsteroidDensity * VergeAsteroidCount * scale3);
+        BaseMaxHealth = baseMaxHealth;
+        // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
+        float sectorScale = cfg.SectorScale;
+        float density = cfg.AsteroidDensity;
+        float coreR = CoreRadius * sectorScale;
+        float vergeR = VergeRadius * sectorScale;
+        float scale3 = sectorScale * sectorScale * sectorScale;
+        int coreCount = (int)MathF.Round(density * AsteroidCount * scale3);
+        int vergeCount = (int)MathF.Round(density * VergeAsteroidCount * scale3);
 
         Sectors.Add(new Sector(HomeSector, coreR));
         Sectors.Add(new Sector(VergeSector, vergeR));
@@ -146,10 +178,15 @@ public sealed class World
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
 
+        // One economy state per team (Stage-1 = both teams seed from the single stock faction).
+        foreach (var b in Bases)
+            TeamStates[b.Team] = new TeamState();
+        SeedEconomy(start);
+
         var rng = new DetRng(seed);
         ulong rockId = 1;
-        SeedAsteroidField(ref rng, HomeSector, coreCount, SectorScale, ref rockId);
-        SeedAsteroidBelt(ref rng, VergeSector, vergeCount, SectorScale, ref rockId);
+        SeedAsteroidField(ref rng, HomeSector, coreCount, sectorScale, ref rockId);
+        SeedAsteroidBelt(ref rng, VergeSector, vergeCount, sectorScale, ref rockId);
 
         // One linked aleph pair, placed toward the outer reaches of each sector.
         var corePos = RandomOuterPos(ref rng, coreR);
@@ -171,6 +208,21 @@ public sealed class World
         (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies();
+    }
+
+    // (Re)seed every team's economy from the faction snapshot: reset Credits to the starting grant,
+    // Score to 0, and re-clone the faction's base tech/capability sets into fresh per-team owned sets
+    // (so a prior match's unlocks don't carry over and the owned sets stay isolated per team). Called
+    // at construction and on each match start (Simulation.StartMatch).
+    public void SeedEconomy(FactionStart start)
+    {
+        foreach (var team in TeamStates.Values)
+        {
+            team.Credits = start.StartingCredits;
+            team.Score = 0;
+            team.OwnedTechs = start.BaseTechs.Clone();
+            team.OwnedCapabilities = start.BaseCapabilities.Clone();
+        }
     }
 
     // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the

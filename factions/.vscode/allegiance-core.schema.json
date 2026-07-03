@@ -1,0 +1,1587 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Allegiance faction core",
+  "$ref": "#/$defs/Core",
+  "$defs": {
+    "Afterburner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "fuel-consumption": {
+          "type": "number"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "max-thrust": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "off-rate": {
+          "type": "number"
+        },
+        "on-rate": {
+          "type": "number"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        }
+      }
+    },
+    "AmmoPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "type": "integer"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pack-type": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        }
+      }
+    },
+    "AsteroidAbility": {
+      "type": "string",
+      "enum": [
+        "mine-he3",
+        "mine-lots-he3",
+        "mine-ice",
+        "mine-gold",
+        "buildable",
+        "special-expansion",
+        "special-tactical",
+        "special-supremacy"
+      ]
+    },
+    "Capability": {
+      "type": "string",
+      "enum": [
+        "base",
+        "shipyard-allowed",
+        "expansion-allowed",
+        "tactical-allowed",
+        "supremacy-allowed"
+      ]
+    },
+    "Chaff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpendableAbility"
+          }
+        },
+        "chaff-strength": {
+          "type": "number"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "hit-points": {
+          "type": "number"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lifespan": {
+          "type": "number"
+        },
+        "load-time": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "number"
+        }
+      }
+    },
+    "Cloak": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "energy-consumption": {
+          "type": "number"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "max-cloaking": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "off-rate": {
+          "type": "number"
+        },
+        "on-rate": {
+          "type": "number"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        }
+      }
+    },
+    "Core": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "afterburners": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Afterburner"
+          }
+        },
+        "ammo-packs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AmmoPack"
+          }
+        },
+        "chaffs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Chaff"
+          }
+        },
+        "cloaks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Cloak"
+          }
+        },
+        "developments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Development"
+          }
+        },
+        "drones": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Drone"
+          }
+        },
+        "factions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Faction"
+          }
+        },
+        "hulls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hull"
+          }
+        },
+        "launchers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Launcher"
+          }
+        },
+        "mines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mine"
+          }
+        },
+        "missiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Missile"
+          }
+        },
+        "probes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Probe"
+          }
+        },
+        "projectiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Projectile"
+          }
+        },
+        "shields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Shield"
+          }
+        },
+        "stations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Station"
+          }
+        },
+        "techs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Tech"
+          }
+        },
+        "version": {
+          "type": "string"
+        },
+        "weapons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Weapon"
+          }
+        },
+        "world": {
+          "$ref": "#/$defs/WorldConfig"
+        }
+      }
+    },
+    "Development": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/GameAttribute"
+          }
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tech-only": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Drone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bravery": {
+          "type": "number"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "deployed-expendable-id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "hull-id": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "move-skill": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pilot": {
+          "$ref": "#/$defs/PilotKind"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "shoot-skill": {
+          "type": "number"
+        }
+      }
+    },
+    "EquipmentSlot": {
+      "type": "string",
+      "enum": [
+        "chaff-launcher",
+        "weapon",
+        "magazine",
+        "dispenser",
+        "shield",
+        "cloak",
+        "pack",
+        "afterburner"
+      ]
+    },
+    "ExpendableAbility": {
+      "type": "string",
+      "enum": [
+        "capture",
+        "warp-bomb-dual",
+        "warp-bomb-single",
+        "quick-ready",
+        "ripcord",
+        "shoot-stations",
+        "shoot-ships",
+        "shoot-missiles",
+        "shoot-only-target",
+        "rescue",
+        "rescue-any"
+      ]
+    },
+    "Faction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base-attributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/GameAttribute"
+          }
+        },
+        "base-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "base-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bonus-money": {
+          "type": "number"
+        },
+        "hud-name": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "income-money": {
+          "type": "number"
+        },
+        "initial-station-id": {
+          "type": "string"
+        },
+        "lifepod-hull-id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "no-dev-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "GameAttribute": {
+      "type": "string",
+      "enum": [
+        "max-speed",
+        "thrust",
+        "turn-rate",
+        "turn-torque",
+        "max-armor-station",
+        "armor-regeneration-station",
+        "max-shield-station",
+        "shield-regeneration-station",
+        "max-armor-ship",
+        "max-shield-ship",
+        "shield-regeneration-ship",
+        "scan-range",
+        "signature",
+        "max-energy",
+        "ammo-speed",
+        "energy-lifespan",
+        "missile-turn-rate",
+        "mining-rate",
+        "mining-yield",
+        "mining-capacity",
+        "ripcord-time",
+        "gun-damage",
+        "missile-damage",
+        "development-cost",
+        "development-time"
+      ]
+    },
+    "Hardpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir-x": {
+          "type": "number"
+        },
+        "dir-y": {
+          "type": "number"
+        },
+        "dir-z": {
+          "type": "number"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeHardpointKind"
+        },
+        "off-x": {
+          "type": "number"
+        },
+        "off-y": {
+          "type": "number"
+        },
+        "off-z": {
+          "type": "number"
+        },
+        "weapon-id": {
+          "type": "integer"
+        }
+      }
+    },
+    "Hull": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ab-accel": {
+          "type": "number"
+        },
+        "ab-off-rate": {
+          "type": "number"
+        },
+        "ab-on-rate": {
+          "type": "number"
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HullAbility"
+          }
+        },
+        "allowed-parts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/EquipmentSlot"
+          }
+        },
+        "armor-hit-points": {
+          "type": "number"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "chaff-launcher-capacity": {
+          "type": "integer"
+        },
+        "class-id": {
+          "type": "integer"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dispenser-capacity": {
+          "type": "integer"
+        },
+        "drift-pitch-deg": {
+          "type": "number"
+        },
+        "drift-yaw-deg": {
+          "type": "number"
+        },
+        "ecm": {
+          "type": "number"
+        },
+        "energy-recharge-rate": {
+          "type": "number"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "hardpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hardpoint"
+          }
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "length": {
+          "type": "number"
+        },
+        "magazine-capacity": {
+          "type": "integer"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "max-ammo": {
+          "type": "integer"
+        },
+        "max-energy": {
+          "type": "number"
+        },
+        "max-fixed-weapons": {
+          "type": "integer"
+        },
+        "max-fuel": {
+          "type": "number"
+        },
+        "max-turn-rates": {
+          "$ref": "#/$defs/TurnRates"
+        },
+        "max-weapons": {
+          "type": "integer"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "preferred-parts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reverse-thrust-multiplier": {
+          "type": "number"
+        },
+        "ripcord-cost": {
+          "type": "number"
+        },
+        "ripcord-speed": {
+          "type": "number"
+        },
+        "scanner-range": {
+          "type": "number"
+        },
+        "signature": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "strafe-thrust-multiplier": {
+          "type": "number"
+        },
+        "successor-hull-id": {
+          "type": "string"
+        },
+        "thrust": {
+          "type": "number"
+        },
+        "turn-torques": {
+          "$ref": "#/$defs/TurnRates"
+        }
+      }
+    },
+    "HullAbility": {
+      "type": "string",
+      "enum": [
+        "can-board",
+        "can-rescue",
+        "is-lifepod",
+        "can-capture",
+        "can-land-on-carrier",
+        "no-ripcord",
+        "is-ripcord-target",
+        "is-fighter",
+        "remote-lead-indicator",
+        "threat-to-station",
+        "is-carrier",
+        "lead-indicator",
+        "is-light-ripcord-target",
+        "can-light-ripcord",
+        "is-miner",
+        "is-builder"
+      ]
+    },
+    "Launcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "type": "integer"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "expendable-id": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "launch-count": {
+          "type": "integer"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        }
+      }
+    },
+    "Mine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpendableAbility"
+          }
+        },
+        "damage-type": {
+          "type": "string"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "endurance": {
+          "type": "number"
+        },
+        "hit-points": {
+          "type": "number"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lifespan": {
+          "type": "number"
+        },
+        "load-time": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "power": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number"
+        },
+        "signature": {
+          "type": "number"
+        }
+      }
+    },
+    "Missile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpendableAbility"
+          }
+        },
+        "acceleration": {
+          "type": "number"
+        },
+        "blast-power": {
+          "type": "number"
+        },
+        "blast-radius": {
+          "type": "number"
+        },
+        "chaff-resistance": {
+          "type": "number"
+        },
+        "damage-type": {
+          "type": "string"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "directional": {
+          "type": "boolean"
+        },
+        "dispersion": {
+          "type": "number"
+        },
+        "hit-points": {
+          "type": "number"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "initial-speed": {
+          "type": "number"
+        },
+        "lifespan": {
+          "type": "number"
+        },
+        "load-time": {
+          "type": "number"
+        },
+        "lock-angle": {
+          "type": "number"
+        },
+        "lock-time": {
+          "type": "number"
+        },
+        "max-lock": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "power": {
+          "type": "number"
+        },
+        "ready-time": {
+          "type": "number"
+        },
+        "signature": {
+          "type": "number"
+        },
+        "turn-rate": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      }
+    },
+    "PilotKind": {
+      "type": "string",
+      "enum": [
+        "miner",
+        "wingman",
+        "layer",
+        "builder"
+      ]
+    },
+    "Probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpendableAbility"
+          }
+        },
+        "accuracy": {
+          "type": "number"
+        },
+        "ammo": {
+          "type": "integer"
+        },
+        "burst-time": {
+          "type": "number"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "dispersion": {
+          "type": "number"
+        },
+        "hit-points": {
+          "type": "number"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lifespan": {
+          "type": "number"
+        },
+        "load-time": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectile-id": {
+          "type": "string"
+        },
+        "ripcord-time": {
+          "type": "number"
+        },
+        "scanner-range": {
+          "type": "number"
+        },
+        "signature": {
+          "type": "number"
+        }
+      }
+    },
+    "Projectile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "damage-type": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lifespan": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "power": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      }
+    },
+    "RuntimeHardpointKind": {
+      "type": "string",
+      "enum": [
+        "weapon",
+        "main-engine",
+        "booster",
+        "thruster",
+        "turret",
+        "light",
+        "docking-entrance",
+        "docking-exit"
+      ]
+    },
+    "RuntimeWeaponKind": {
+      "type": "string",
+      "enum": [
+        "bolt"
+      ]
+    },
+    "Shield": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "defense-type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "max-strength": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "regen-rate": {
+          "type": "number"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        }
+      }
+    },
+    "Station": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StationAbility"
+          }
+        },
+        "armor-regen": {
+          "type": "number"
+        },
+        "base-type-id": {
+          "type": "integer"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "buildable-on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AsteroidAbility"
+          }
+        },
+        "class": {
+          "$ref": "#/$defs/StationClass"
+        },
+        "construction-drone-id": {
+          "type": "string"
+        },
+        "defense-type-armor": {
+          "type": "string"
+        },
+        "defense-type-shield": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "hardpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hardpoint"
+          }
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "income": {
+          "type": "integer"
+        },
+        "local-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "max-armor": {
+          "type": "number"
+        },
+        "max-shield": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "radius": {
+          "type": "number"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scanner-range": {
+          "type": "number"
+        },
+        "shield-regen": {
+          "type": "number"
+        },
+        "signature": {
+          "type": "number"
+        },
+        "successor-station-id": {
+          "type": "string"
+        }
+      }
+    },
+    "StationAbility": {
+      "type": "string",
+      "enum": [
+        "unload",
+        "start",
+        "restart",
+        "ripcord",
+        "capture",
+        "land",
+        "repair",
+        "remote-lead-indicator",
+        "reload",
+        "flag",
+        "pedestal",
+        "teleport-unload",
+        "capital-ship-land",
+        "rescue",
+        "rescue-any"
+      ]
+    },
+    "StationClass": {
+      "type": "string",
+      "enum": [
+        "starbase",
+        "garrison",
+        "shipyard",
+        "ripcord",
+        "mining",
+        "research",
+        "ordnance",
+        "electronics"
+      ]
+    },
+    "Tech": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "TurnRates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch": {
+          "type": "number"
+        },
+        "roll": {
+          "type": "number"
+        },
+        "yaw": {
+          "type": "number"
+        }
+      }
+    },
+    "Weapon": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ammo-per-shot": {
+          "type": "integer"
+        },
+        "build-time-seconds": {
+          "type": "integer"
+        },
+        "burst-time": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dispersion": {
+          "type": "number"
+        },
+        "energy-per-shot": {
+          "type": "number"
+        },
+        "fire-interval-ticks": {
+          "type": "integer"
+        },
+        "granted-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "granted-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "icon-name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeWeaponKind"
+        },
+        "mass": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer"
+        },
+        "projectile-id": {
+          "type": "string"
+        },
+        "projectile-life-ticks": {
+          "type": "integer"
+        },
+        "reload-time": {
+          "type": "number"
+        },
+        "required-capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "required-techs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "number"
+        },
+        "slot": {
+          "$ref": "#/$defs/EquipmentSlot"
+        },
+        "successor-part-id": {
+          "type": "string"
+        },
+        "weapon-id": {
+          "type": "integer"
+        }
+      }
+    },
+    "WorldConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asteroid-density": {
+          "type": "number"
+        },
+        "debug-freeze-brain": {
+          "type": "boolean"
+        },
+        "debug-no-fire": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "sector-scale": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

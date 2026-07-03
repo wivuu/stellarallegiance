@@ -1,0 +1,91 @@
+# Stellar Allegiance — UI Design System
+
+One source of truth for the client's **bracket / retro-futurism** look, imported from the
+Claude Design "Stellar Allegiance — System" component library. **All in-game UI should be built
+from these tokens and components** — never re-hardcode colors, fonts, or sizes inline.
+
+- **Code:** `client/scripts/ui/` (namespace `StellarAllegiance.Ui`)
+- **Live gallery:** `client/scenes/UiShowcase.tscn` — press **F9** in-game, or boot with
+  `--ui-showcase`. This is the visual contract; if you add or change a component, render it here.
+- **Source spec:** Claude Design project `28bf0d21-5959-4554-8bfc-a1f92113ea28`
+  ("Stellar Allegiance UI design"). Read it with the `claude_design` MCP (`DesignSync`,
+  `get_file` on `Stellar Allegiance - System.dc.html`) before extending the system.
+
+## Foundations
+
+### Palette (`DesignTokens`)
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| `Void` | `#05070F` | background / base |
+| `Panel` | `#0B1320` | opaque surface |
+| `PanelHi` | `#16243A` | raised surface |
+| `PanelFill` | `rgba(8,14,24,.60)` | translucent panel body |
+| `Well` | `#05070F` (opaque) | recessed data well |
+| `BorderHi` / `BorderLo` | `rgba(120,190,255,.25/.16)` | hairline borders |
+| `TeamAccent` | `#37E0FF` | **structural chrome only** — brackets, primary buttons, gauges, diamonds |
+| `Secondary` | `#FF9D4D` | highlight / credits |
+| `TextHi` / `Text2` / `TextDim` | `#CFE6F5` / `#7FA6C8` / `#5A7390` | primary / secondary / dim text |
+| `Ok` / `Warn` / `Danger` / `Data` | `#4DFFA6` / `#FFB347` / `#FF5A6A` / `#9FD6FF` | status + mono telemetry |
+| `Faction0` / `Faction1` | blue `(.30,.55,1)` / red `(1,.40,.34)` | **team identity** |
+
+**Rule: `TeamAccent` (cyan) is chrome, not team color.** Team identity is always
+`Faction0`/`Faction1`. Never recolor blips, rosters, or trails to cyan. `TeamAccent` may be
+subtly faction-tinted via `DesignTokens.SetTeamAccentTint(team)`, but stays distinct.
+
+### Type scale & fonts (`UiFonts`, `UiKit.TextStyle`)
+
+- **Saira** — UI / headings / labels. **JetBrains Mono** — telemetry, numbers, coordinates.
+- Both are **variable TTFs** in `client/assets/fonts/`; weights are realized as `FontVariation`
+  (no per-weight files). The caps "Label" style bakes in `LabelLetterSpacing`.
+- Styles: `Display` 34/bold · `Title` 22/bold · `Label` 13 caps+spacing · `Body` 15 · `Data` 14 mono.
+- Build labels with `UiKit.MakeLabel(text, TextStyle, color?)` — don't set font overrides by hand.
+
+## Components
+
+Hybrid pattern: **static factories** (`UiKit`) for stock controls + styling; **Control
+subclasses** for anything needing custom `_Draw` or per-frame state.
+
+- **Buttons** — `ChamferButton` (variants `Primary`/`Secondary`/`Ghost`/`Danger`/`Icon`, plus
+  `Disabled`; optional `AccentOverride` for faction-colored buttons). Bakes in the UI click SFX
+  and hover glow. Use `UiKit.MakeButton(text, onPressed, variant)`.
+- **Controls** (`UiKit`) — `MakeSliderRow`, `MakeToggle`, `MakeCheckbox`, `MakeSegmented`,
+  `MakeStepper`, `MakeSelect`.
+- **Surfaces** — `BracketPanel` (corner brackets, high-priority frames), `HairlinePanel`
+  (1px border + optional clipped tab header), `InsetWell`, `DiamondDivider`.
+- **Data & feedback** — `RadialGauge`, `SegmentedBar`, `StatusPill` (optional pulse), `AlertBox`,
+  `StatReadout`, `DataTable`, `ToastHost`.
+- **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
+  `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
+- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
+- **Backgrounds** — `NebulaBackground` (animated warm/blue gas-cloud fill from the `Nebula.dc.html`
+  spec; a single `canvas_item` shader — drifting screen-blended clouds, Void vignette, star-dot
+  grid, scanlines; `Intensity` 0..1). Use it behind full-screen menu overlays whose backdrop is
+  **not** the live 3D space scene (e.g. the server browser); overlays shown over the running game
+  keep letting the real space show through instead.
+- **Draw helpers** — `UiDraw.Chamfer`/`ChamferPoints`/`TabPoints`/`CornerBrackets`/`Hairline`/`Diamond`.
+
+## Wiring & gotchas
+
+- **Theme is applied per top-level overlay**, not globally: call `UiTheme.Apply(control)` on each
+  full-screen overlay's root (Lobby, ConnectLinkModal, ServerLobbyOverlay, Chat). A Theme can't
+  live on a `CanvasLayer`, and wrapping the Hud in one extra Control would break the
+  `GetNode("../../GameNetClient")` relative lookups in Lobby/Chat — don't do that.
+- **`ChamferButton` draws on top of the stock Button**, so it blanks both the stock styleboxes
+  and the stock label (transparent font colors) and paints its own chamfer + label.
+- **Chamfers are geometry** (an explicit polygon), not a StyleBoxFlat corner radius — keep
+  `CornerRadius = 0`. Hairline styleboxes set `AntiAliasing = false` so 1px edges stay crisp.
+- **Custom-draw nodes read fonts from `UiFonts`** (not the cascaded Theme) so they render
+  standalone and survive a cold import cache.
+- **Per-frame redraw discipline:** call `QueueRedraw()` only on change in gauges/bars/button-glow.
+- **Fonts need import:** `.import` sidecars are gitignored (same convention as the GLBs); run
+  `godot --headless --import` after pulling new fonts. `UiFonts` falls back to the engine font if
+  the import cache is cold.
+
+## Adding / changing a component
+
+1. Read the source spec via the `claude_design` MCP first (don't guess at the visual language).
+2. Add tokens to `DesignTokens`, not inline literals.
+3. New types go in `StellarAllegiance.Ui`, no `[GlobalClass]`/`class_name`.
+4. Add it to `UiShowcase.cs` and verify with `godot --path client res://scenes/UiShowcase.tscn
+   -- --ui-shot=/tmp/ui.png` (one-frame capture), comparing against the spec.

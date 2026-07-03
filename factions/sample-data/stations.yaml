@@ -1,0 +1,50 @@
+stations:
+  - id: garrison
+    name: Garrison
+    class: garrison
+    max-armor: 4000
+    max-shield: 2000
+    abilities: [start, restart, repair, capture, land]
+    buildable-on: [buildable]
+    required-capabilities: [base]
+
+  - id: shipyard
+    name: Shipyard
+    price: 600
+    class: shipyard
+    max-armor: 3000
+    abilities: [capture, land, repair]
+    buildable-on: [buildable]
+    granted-capabilities: [shipyard-allowed]
+    required-capabilities: [expansion-allowed]
+    construction-drone-id: constructor-drone
+
+  - id: refinery
+    name: Refinery
+    price: 400
+    class: mining
+    income: 50
+    abilities: [unload, capture]
+    buildable-on: [mine-he3, mine-gold]
+    required-capabilities: [expansion-allowed]
+
+  - id: tech-lab
+    name: Technology Lab
+    price: 500
+    class: research
+    abilities: [capture, land]
+    buildable-on: [special-tactical]
+    granted-capabilities: [tactical-allowed]
+    required-capabilities: [expansion-allowed]
+
+  - id: supremacy-center
+    name: Supremacy Center
+    price: 1500
+    class: starbase
+    max-armor: 6000
+    max-shield: 3000
+    abilities: [capture, land, repair]
+    buildable-on: [special-supremacy]
+    granted-capabilities: [supremacy-allowed]
+    required-capabilities: [shipyard-allowed]
+    required-techs: [heavy-hulls]

@@ -22,16 +22,25 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 8;
+    public const byte Version = 14;
+
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
+    // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
+    // wire anywhere a team byte does (Welcome, lobby roster, chat fromTeam) and never indexes a
+    // real team array — only teams 0/1 have bases, economy, or ships.
+    public const byte NoTeam = 0xFF;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 47;
+    public const int ShipRecordSize = 49;
 
     // client -> server
-    // Hello v7: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…  The secret is an optional
-    // shared-secret password (empty when the server runs open); the server constant-time
-    // compares it. No class/team here — those are lobby actions; spawning is MsgSpawn.
+    // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
+    // The secret is an optional shared-secret password (empty when the server runs open); the
+    // server constant-time compares it. The trailing token (absent/0-length on a fresh join) is
+    // a reconnect token the server minted in a prior Welcome — a returning client re-presents it
+    // to reclaim a ship the server is still holding (see ClientHub/Simulation held-orphans). No
+    // class/team here — those are lobby actions; spawning is MsgSpawn.
     public const byte MsgHello = 1;
     public const byte MsgInput = 2; // u32 tick, f32 thrust/strafeX/strafeY/yaw/pitch/roll, u8 flags
     public const byte MsgPing = 3; // u32 nonce (echoed back as MsgPong for RTT/adaptive-lead)
@@ -39,17 +48,19 @@ public static class Protocol
     public const byte MsgSetTeam = 5; // u8 team — pick a side in the lobby
     public const byte MsgSetReady = 6; // u8 ready (0/1) — toggle ready in the lobby
     public const byte MsgChat = 7; // u8 scope (0 all, 1 team), u16 len, utf8 text
+    public const byte MsgBye = 8; // (no body) voluntary leave — free my ship NOW, don't hold it for reconnect
 
     // server -> client
-    public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, statics (sectors/bases/asteroids/alephs)
+    public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
     public const byte MsgYouAre = 2; // u64 shipId
     public const byte MsgSnapshot = 3; // u32 tick, u8 phase, u8 winner, u16 count, count x ShipRecord
     public const byte MsgShipGone = 4; // u64 shipId (death or disconnect — free the node)
     public const byte MsgBases = 5; // u8 count, count x (u64 baseId, f32 health) — streamed base health
     public const byte MsgPong = 6; // u32 nonce (echo of the client's MsgPing)
-    public const byte MsgDefs = 7; // full content defs (ship classes/weapons/bases/world cfg) — sent once after Welcome
+    public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope, u8 fromTeam, str name, str text
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -68,7 +79,7 @@ public static class Protocol
     // Serialize one quantized ship record (exactly ShipRecordSize bytes) into dst. Layout:
     //   u64 id | u8 team | u8 class | u8 flags | u16 sector
     //   3x i16 pos(sector-local) | u32 rot(smallest-three)
-    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 health
+    //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health
     //   u32 lastInputTick | u32 lastFireTick
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
     {
@@ -117,16 +128,18 @@ public static class Protocol
 
         BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.State.AbPower));
         o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.State.Fuel));
+        o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(s.Health));
         o += 2;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastInputTick);
         o += 4;
         BitConverter.TryWriteBytes(dst.Slice(o), s.LastFireTick);
         o += 4;
-        // o == ShipRecordSize (47)
+        // o == ShipRecordSize (49)
     }
 
-    public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick)
+    public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick, byte[] reconnectToken)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
@@ -136,6 +149,12 @@ public static class Protocol
         w.Write(team);
         w.Write(tick);
         w.Write(FlightModel.Dt);
+
+        // Reconnect token: the client stores it and re-presents it in its next Hello to reclaim a
+        // held ship after an unexpected drop. Written before the world block so the client reads
+        // it on the same handshake path regardless of world size.
+        w.Write((byte)reconnectToken.Length);
+        w.Write(reconnectToken);
 
         w.Write((ushort)world.Sectors.Count);
         foreach (var s in world.Sectors)
@@ -209,6 +228,37 @@ public static class Protocol
         return buf;
     }
 
+    // Broadcast per-team economy (credits + score + the per-team unlocked-hull snapshot), same bytes
+    // to every client. Low-rate: built on coarse ticks / on change, NOT in the per-tick snapshot hot
+    // path (see ClientHub.AfterStep). Variable-length — each team appends a count-prefixed list of the
+    // ClassIds it may currently build (Stage-2 unlock gating), which the client reads to predict locks.
+    public static byte[] BuildTeamState(World world)
+    {
+        var teams = world.TeamStates;
+        int size = 2;
+        foreach (var kv in teams)
+            size += 9 + 1 + kv.Value.UnlockedClasses.Count; // team + credits + score + nUnlocked + classIds
+        var buf = new byte[size];
+        buf[0] = MsgTeamState;
+        buf[1] = (byte)teams.Count;
+        int o = 2;
+        foreach (var kv in teams)
+        {
+            buf[o] = kv.Key;
+            o += 1;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Credits);
+            o += 4;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Score);
+            o += 4;
+            var unlocked = kv.Value.UnlockedClasses;
+            buf[o] = (byte)unlocked.Count;
+            o += 1;
+            foreach (byte cls in unlocked)
+                buf[o++] = cls;
+        }
+        return buf;
+    }
+
     public static byte[] BuildShipGone(ulong shipId)
     {
         var buf = new byte[9];
@@ -255,13 +305,13 @@ public static class Protocol
     // The full content defs the client renders + predicts from (formerly STDB public tables).
     // Sent once, right after Welcome. Full-float (not hot): the client guards until it arrives
     // and keeps no compile-time fallback, so this is the sole source of tuning on the client.
-    public static byte[] BuildDefs()
+    public static byte[] BuildDefs(SimServer.Content.ContentSet content)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
         w.Write(MsgDefs);
 
-        var ships = GameContent.ShipClasses();
+        var ships = content.Ships;
         w.Write((byte)ships.Count);
         foreach (var s in ships)
         {
@@ -280,12 +330,17 @@ public static class Protocol
             w.Write(s.AbAccel);
             w.Write(s.AbOnRate);
             w.Write(s.AbOffRate);
+            w.Write(s.MaxFuel);
+            w.Write(s.AbFuelDrain);
+            w.Write(s.AbFuelRecharge);
             w.Write(s.MaxHull);
+            w.Write(s.Cost);
+            w.Write(s.PayloadCapacity);
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
         }
 
-        var weapons = GameContent.Weapons();
+        var weapons = content.Weapons;
         w.Write((byte)weapons.Count);
         foreach (var wp in weapons)
         {
@@ -297,9 +352,21 @@ public static class Protocol
             w.Write(wp.ProjectileLifeTicks);
             w.Write(wp.ProjectileRadius);
             w.Write(wp.SpreadRad);
+            w.Write(wp.Mass);
         }
 
-        var bases = GameContent.Bases();
+        var cargoItems = content.CargoItems;
+        w.Write((byte)cargoItems.Count);
+        foreach (var c in cargoItems)
+        {
+            w.Write(c.CargoId);
+            WriteString(w, c.Name);
+            WriteString(w, c.Glyph);
+            w.Write(c.Mass);
+            WriteString(w, c.Description);
+        }
+
+        var bases = content.Bases;
         w.Write((byte)bases.Count);
         foreach (var b in bases)
         {
@@ -310,7 +377,7 @@ public static class Protocol
             WriteHardpoints(w, b.Hardpoints);
         }
 
-        var cfg = GameContent.WorldDefaults();
+        var cfg = content.World;
         w.Write(cfg.Id);
         w.Write(cfg.SectorScale);
         w.Write(cfg.AsteroidDensity);

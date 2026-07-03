@@ -13,6 +13,11 @@ config_version=5
 config/name="wivuullegiance"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6", "C#")
+boot_splash/bg_color=Color(0.019608, 0.027451, 0.058824, 1)
+boot_splash/image="res://assets/ui/logo.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
+boot_splash/minimum_display_time=3000
 
 [display]
 
@@ -22,6 +27,15 @@ window/size/viewport_height=1440
 [dotnet]
 
 project/assembly_name="wivuullegiance"
+
+[editor]
+
+; Movie Maker (--write-movie) tuning. mjpeg_quality trims MJPEG encode time + file size
+; vs the 0.75 default (encoding dominates record time at the 2560x1440 default viewport).
+; Recording fps is driven by scripts/run-client.sh (--fixed-fps, default 30 via MOVIE_FPS),
+; but set a matching default here so editor-launched recordings are cheap too.
+movie_writer/mjpeg_quality=0.6
+movie_writer/fps=30
 
 [audio]
 

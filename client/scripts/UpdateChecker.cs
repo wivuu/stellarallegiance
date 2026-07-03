@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
-// The BCL HttpClient (Godot ships its own); same choice as ServerInputOverlay's lobby fetch.
+// The BCL HttpClient (Godot ships its own); same choice as ServerLobbyOverlay's lobby fetch.
 using HttpClient = System.Net.Http.HttpClient;
 
 // Startup "a newer build exists" check. GitHub is the source of truth for releases (the release

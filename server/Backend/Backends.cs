@@ -92,9 +92,13 @@ public sealed class ReadyUpMatchmaker : IMatchmaker
             return false;
         if (_autoStart)
             return true;
+        // NOAT pilots (no side picked) are spectators — they don't gate the match. Start once at
+        // least one teamed pilot exists and every teamed pilot is ready.
         bool anyReady = false;
         foreach (var e in lobby)
         {
+            if (e.Team != 0 && e.Team != 1)
+                continue;
             if (!e.Ready)
                 return false;
             anyReady = true;

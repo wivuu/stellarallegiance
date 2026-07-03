@@ -211,6 +211,10 @@ namespace StellarAllegiance.Shared
         // authority and the client's prediction ramp the afterburner identically
         // (it climbs at AbOnRate while Boost is held, falls at AbOffRate otherwise).
         public float AbPower;
+
+        // Afterburner fuel. Drained/gated in Integrate only when st.MaxFuel > 0; a hull
+        // with MaxFuel <= 0 leaves this unused (legacy unlimited boost).
+        public float Fuel;
     }
 
     public struct ShipInputState
@@ -251,6 +255,9 @@ namespace StellarAllegiance.Shared
         public float AbAccel; // extra forward accel at full afterburner
         public float AbOnRate,
             AbOffRate; // afterburner power ramp per second
+        public float MaxFuel; // afterburner fuel capacity; <= 0 = unmodeled (unlimited boost)
+        public float FuelDrain,
+            FuelRecharge; // fuel per second while afterburning / not
 
         // --- Derived once by Create() (NOT authored, NOT stored in a row) ---
         public float Thrust; // Mass·Accel — engine force capacity (clip magnitude)
@@ -278,7 +285,10 @@ namespace StellarAllegiance.Shared
             float backMult,
             float abAccel,
             float abOnRate,
-            float abOffRate
+            float abOffRate,
+            float maxFuel = 0f,
+            float fuelDrain = 0f,
+            float fuelRecharge = 0f
         )
         {
             return new ShipStats
@@ -296,6 +306,9 @@ namespace StellarAllegiance.Shared
                 AbAccel = abAccel,
                 AbOnRate = abOnRate,
                 AbOffRate = abOffRate,
+                MaxFuel = maxFuel,
+                FuelDrain = fuelDrain,
+                FuelRecharge = fuelRecharge,
 
                 Thrust = mass * accel,
                 AbThrust = mass * abAccel,
@@ -314,6 +327,29 @@ namespace StellarAllegiance.Shared
                 TorqueRollRad = mass * (rateRollDeg * rateRollDeg / (2f * driftPitchDeg)) * Deg2Rad,
             };
         }
+
+        // Build the ShipStats from a ShipClassDef's authored f32s — the SINGLE path both server
+        // authority and client prediction take, so the YAML-authored def drives identical flight on
+        // both sides (the def, sourced from the content bundle, is the one source of truth).
+        public static ShipStats FromDef(ShipClassDef d) =>
+            Create(
+                d.MaxSpeed,
+                d.Accel,
+                d.Mass,
+                d.RateYawDeg,
+                d.RatePitchDeg,
+                d.RateRollDeg,
+                d.DriftYawDeg,
+                d.DriftPitchDeg,
+                d.SideMult,
+                d.BackMult,
+                d.AbAccel,
+                d.AbOnRate,
+                d.AbOffRate,
+                d.MaxFuel,
+                d.AbFuelDrain,
+                d.AbFuelRecharge
+            );
     }
 
     public static class FlightModel
@@ -328,117 +364,11 @@ namespace StellarAllegiance.Shared
         public const byte ClassFighter = 1;
         public const byte ClassBomber = 2;
 
-        // Per-class seed stats from the extracted Allegiance hulls (.PLAN/CONFIG.md,
-        // .PLAN/ship_movement/06_extracted_hull_stats.md). Authored knobs only — the
-        // derived thrust/torques/drag are computed once by ShipStats.Create. These are
-        // the compile-in defaults; M1 seeds an identical row into ShipClassDef so an
-        // operator can retune at runtime. Note the faithful quirk: the Fighter
-        // out-TURNS the Scout (60 vs 50 °/s); the Scout's edge is speed and snap.
-        //                                 maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
-        public static readonly ShipStats Scout = ShipStats.Create(
-            160f,
-            30f,
-            40f,
-            50f,
-            50f,
-            50f,
-            5f,
-            5f,
-            0.5f,
-            0.25f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 0 → no afterburner: the Scout's edge is raw speed/snap, not boost.
-
-        public static readonly ShipStats Fighter = ShipStats.Create(
-            100f,
-            25f,
-            36f,
-            60f,
-            60f,
-            60f,
-            5f,
-            5f,
-            0.5f,
-            0.5f,
-            10f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 10 → abThrust/thrust = 0.4 → boosted equilibrium ≈ 1.4× MaxSpeed.
-
-        // Bomber: the heavy hull, straight from the extracted Allegiance numbers
-        // ("Bomber" row, 06_extracted_hull_stats.md). 20°/s rates at 8° drift give
-        // only rate²/(2·drift) = 25°/s² of angular accel — ~0.8-1.6 s to wind a turn
-        // up or stop it. This is the hull where the rotational inertia really shows.
-        public static readonly ShipStats Bomber = ShipStats.Create(
-            60f,
-            15f,
-            50f,
-            20f,
-            20f,
-            20f,
-            8f,
-            8f,
-            0.5f,
-            0.5f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        // abAccel 0 → no afterburner: the heavy hull lumbers at its base speed.
-
-        // Escape pod (server Ship.IsPod): a slow, unarmed lifeboat ejected on ship death.
-        // Full strafe/reverse (1.0) and no afterburner (AbAccel 0) — it crawls home and
-        // gets shoved around in collisions (light mass). Selected via StatsFor(class,
-        // isPod) so server authority and client prediction integrate pods identically.
-        public static readonly ShipStats Pod = ShipStats.Create(
-            60f,
-            15f,
-            10f,
-            40f,
-            40f,
-            40f,
-            8f,
-            8f,
-            1.0f,
-            1.0f,
-            0f,
-            2.0f,
-            1.0f
-        );
-
-        public static ShipStats StatsFor(byte shipClass) =>
-            shipClass == ClassFighter ? Fighter
-            : shipClass == ClassBomber ? Bomber
-            : Scout;
-
-        // Pod-aware stats selection: a pod ignores its class and flies the slow,
-        // boost-less Pod profile. Callers pass ship.IsPod so server authority and
-        // client prediction agree on which stats a pod integrates with.
-        public static ShipStats StatsFor(byte shipClass, bool isPod) => isPod ? Pod : StatsFor(shipClass);
-
-        // ---- Weapon spread -------------------------------------------------
-        //
-        // Per-weapon shot scatter as a cone HALF-ANGLE in radians. Tweak these to
-        // taste: 0 is pinpoint, larger is sloppier. Tied to ship class for now (one
-        // weapon per class); the standard Scout cannon is the "default" weapon and is
-        // near-pinpoint, while the Fighter's heavier gun scatters more. Lives here in
-        // the shared model so the authoritative server and the predicting client read
-        // the SAME value (no mirrored-constant drift).
-        public const float ScoutSpread = 0.006f; // ~0.34° — minimal (default weapon)
-        public const float FighterSpread = 0.035f; // ~2.0°
-        public const float BomberSpread = 0.012f; // ~0.7° — slow heavy slugs, fairly true
-
-        public static float WeaponSpreadRad(byte shipClass) =>
-            shipClass == ClassFighter ? FighterSpread
-            : shipClass == ClassBomber ? BomberSpread
-            : ScoutSpread;
+        // NOTE: the per-class flight numbers (mass/speed/turn rates/afterburner) and per-weapon
+        // spread are CONTENT, not code — they are authored in the YAML content bundle and reach the
+        // sim/client as ShipClassDef/WeaponDef (resolved via ShipStats.FromDef + WeaponDef.SpreadRad).
+        // This file owns only the deterministic INTEGRATOR and the cross-runtime scatter function.
+        // (The determinism golden's reference stats live as fixtures in tests/FlightModelTest.)
 
         // Deterministically scatter a unit fire direction within a cone of the given
         // half-angle. Keyed by (shipId, fireTick) so the wasm server and the mono
@@ -563,7 +493,10 @@ namespace StellarAllegiance.Shared
             Vec3 drag = s.Vel * (st.OneMinusDrag / ttv);
 
             // --- Step 3: afterburner power ramp + fold into drag. ---
-            bool afterburning = i.Boost && st.AbThrust > 0f;
+            // Fuel gates entry (read pre-tick, so a tick that empties the tank still fires the
+            // afterburner that tick); a hull with MaxFuel <= 0 is unmodeled and never gates.
+            bool fuelModeled = st.MaxFuel > 0f;
+            bool afterburning = i.Boost && st.AbThrust > 0f && (!fuelModeled || s.Fuel > 0f);
             float thrustRatio = 0f;
             float abPower = s.AbPower;
             if (st.AbThrust > 0f)
@@ -583,6 +516,28 @@ namespace StellarAllegiance.Shared
                 }
                 if (abPower != 0f)
                     drag = drag + backward * (abPower * st.AbThrust);
+            }
+
+            // Flat drain while engaged (not scaled by AbPower); recharge only while the boost
+            // input is RELEASED, hard clamped to [0, MaxFuel]. No hysteresis — afterburning
+            // re-gates the instant fuel > 0. Recharging on every non-burning tick would let a
+            // held trigger on an empty tank alternate burn/recharge each tick (the 0-clamp
+            // discards most of the drain), saturating AbPower into effectively free boost.
+            float fuel = s.Fuel;
+            if (fuelModeled)
+            {
+                if (afterburning)
+                {
+                    fuel -= dt * st.FuelDrain;
+                    if (fuel < 0f)
+                        fuel = 0f;
+                }
+                else if (!i.Boost)
+                {
+                    fuel += dt * st.FuelRecharge;
+                    if (fuel > st.MaxFuel)
+                        fuel = st.MaxFuel;
+                }
             }
 
             // --- Step 4: engine thrust direction (manual-strafe / throttle). ---
@@ -633,6 +588,7 @@ namespace StellarAllegiance.Shared
                 AngVel = angVel,
                 Mass = s.Mass,
                 AbPower = abPower,
+                Fuel = fuel,
             };
         }
 

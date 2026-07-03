@@ -64,12 +64,13 @@ public sealed partial class Simulation
     private const float PigJukeAmpMin = 0.45f;
     private const float PigJukeAmpMax = 1.0f;
 
-    // Lead solving uses the drone's primary weapon (all server weapons share these).
-    // Stored as fields (not properties) so the array lookup is paid once, not per call.
-    private static readonly float PigShotSpeed = WeaponDefs[GameContent.ScoutWeaponId].ProjectileSpeed; // 200 u/s
-    private static readonly uint PigShotLifeTicks = WeaponDefs[GameContent.ScoutWeaponId].ProjectileLifeTicks; // 16
-    private static readonly float PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
-    private static readonly float PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
+    // Lead solving uses the drone's primary weapon (all server weapons share these). Instance
+    // readonly (assigned in the Simulation ctor from the loaded WeaponDefs) since the content is now
+    // resolved at boot, not at static-init; the array lookup is still paid once, not per call.
+    private readonly float PigShotSpeed; // scout gun muzzle speed, e.g. 200 u/s
+    private readonly uint PigShotLifeTicks; // scout bolt lifespan in ticks, e.g. 16
+    private readonly float PigShotSpeedSq;
+    private readonly float PigMaxLead;
 
     // Precomputed once; used in both PigChaseInput and PigAttackPoint.
     private static readonly float PigAimSinDeg = MathF.Sin(PigAimDeg * (MathF.PI / 180f));
@@ -348,7 +349,7 @@ public sealed partial class Simulation
         // -2..2 vertical fan keyed by slot.
         float fan = ((slot.PigId % 5) - 2f) * (World.ShipRadius * 2.5f);
         s.State.Pos += new Vec3(0f, fan, 0f);
-        s.State.Mass = FlightModel.StatsFor(slot.Class, false).Mass;
+        s.State.Mass = StatsFor(slot.Class, false).Mass;
         s.Health = HullFor(slot.Class);
 
         _ships[s.ShipId] = s;

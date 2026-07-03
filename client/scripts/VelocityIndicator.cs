@@ -1,10 +1,17 @@
 using Godot;
+using StellarAllegiance.Ui;
 
 // A prograde velocity marker: a small circle on the HUD sitting where the local ship's
 // velocity vector points — i.e. the direction it is actually TRAVELING, independent of where
 // the nose is AIMING (the cyan aim reticle in TargetMarkers shows aim). The ship has true
 // 6DOF flight, so strafing/drifting makes travel diverge from aim; this gives the player a
 // cue for "where am I actually going."
+//
+// Styled after the design's "self MOVEMENT indicator": a dim cyan ring + centre dot, a mono
+// speed readout to its right, and a couple of faint velocity-trail dots streaming toward the
+// marker. It shares the cyan accent with the aim reticle by design — the two are told apart
+// by the marker being dimmer, spoke-less, and speed-tagged (and they only coincide when
+// flying dead ahead).
 //
 // Only shown while moving forward: when traveling backwards the prograde point falls behind
 // the camera (and the forward-hemisphere gate hides it explicitly), and below a small speed
@@ -16,10 +23,13 @@ public partial class VelocityIndicator : Control
 {
     private const float MinSpeed = 2f; // hide below this (u/s) to avoid jitter at rest
     private const float MarkerRange = 500f; // project this far along velocity (vanishing point of heading)
-    private const float Radius = 9f; // marker ring radius (px)
+    private const float Radius = 13f; // marker ring radius (px) — design's ~26px diameter
     private const float SmoothRate = 12f; // exponential smoothing rate (higher = snappier)
 
-    private static readonly Color VeloColor = new(1f, 1f, 1f, 0.6f); // faded white
+    // Cyan structural accent, matching the design's movement indicator. The ring is dim, the
+    // centre dot brighter, and the trail dots fainter still — see the _Draw comment.
+    private static readonly Color RingColor = new(DesignTokens.TeamAccent, 0.45f);
+    private static readonly Color DotColor = new(DesignTokens.TeamAccent, 0.75f);
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
@@ -30,6 +40,9 @@ public partial class VelocityIndicator : Control
 
     private Vector2 _smoothed; // smoothed screen position the marker is drawn at
     private bool _visible; // whether the marker should draw this frame
+    private float _speed; // current speed (u/s), shown in the mono readout
+    private Vector2 _trailDir; // unit screen vector ship->marker; the trail streams back along it
+    private bool _hasTrail; // whether the ship centre projected in front (so a trail can draw)
 
     // Wired up by the Hud (which already resolves these siblings).
     public void Init(WorldRenderer world, Camera3D camera)
@@ -38,6 +51,7 @@ public partial class VelocityIndicator : Control
         _camera = camera;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
+        UiFonts.EnsureLoaded(); // mono speed readout is drawn directly, not via a Theme
     }
 
     public override void _Process(double delta)
@@ -53,16 +67,19 @@ public partial class VelocityIndicator : Control
         QueueRedraw();
     }
 
-    // The screen point of the prograde marker, or false if it shouldn't be shown.
+    // The screen point of the prograde marker, or false if it shouldn't be shown. Also caches
+    // the speed readout and the screen-space trail direction (ship centre -> marker).
     private bool TryGetTarget(out Vector2 screen)
     {
         screen = default;
+        _hasTrail = false;
         var local = _world.LocalShip;
         if (local == null)
             return false;
 
         Vector3 vel = local.Velocity;
-        if (vel.Length() < MinSpeed)
+        _speed = vel.Length();
+        if (_speed < MinSpeed)
             return false;
 
         Vector3 dir = vel.Normalized();
@@ -78,6 +95,20 @@ public partial class VelocityIndicator : Control
             return false;
 
         screen = cam.UnprojectPosition(pt);
+
+        // Trail direction: project the ship centre and point from it toward the marker, so the
+        // trail dots stream back along the actual on-screen travel path. Skipped (no trail)
+        // when the ship centre is behind the camera.
+        if (!cam.IsPositionBehind(local.GlobalPosition))
+        {
+            Vector2 shipScreen = cam.UnprojectPosition(local.GlobalPosition);
+            Vector2 d = screen - shipScreen;
+            if (d.LengthSquared() > 1e-4f)
+            {
+                _trailDir = d.Normalized();
+                _hasTrail = true;
+            }
+        }
         return true;
     }
 
@@ -85,7 +116,27 @@ public partial class VelocityIndicator : Control
     {
         if (!_visible)
             return;
-        DrawArc(_smoothed, Radius, 0f, Mathf.Tau, 24, VeloColor, 1.5f, true);
-        DrawCircle(_smoothed, 1.5f, VeloColor);
+
+        // Velocity-trail dots streaming back toward the ship (faintest furthest out), so the
+        // marker reads as "where I'm heading" with a sense of motion. Drawn under the marker.
+        if (_hasTrail)
+        {
+            DrawCircle(_smoothed - _trailDir * 7f, 1f, new Color(DesignTokens.TeamAccent, 0.34f));
+            DrawCircle(_smoothed - _trailDir * 14f, 1f, new Color(DesignTokens.TeamAccent, 0.22f));
+        }
+
+        DrawArc(_smoothed, Radius, 0f, Mathf.Tau, 24, RingColor, 1.5f, true);
+        DrawCircle(_smoothed, 1.5f, DotColor);
+
+        // Mono speed readout to the marker's right (design: "▲ 218 m/s"); game units are `u`.
+        DrawString(
+            UiFonts.Mono,
+            _smoothed + new Vector2(Radius + 5f, -Radius + 7f),
+            $"▲ {_speed:0} u/s",
+            HorizontalAlignment.Left,
+            -1,
+            9,
+            DesignTokens.Text2
+        );
     }
 }

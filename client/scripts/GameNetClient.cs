@@ -66,6 +66,16 @@ public partial class GameNetClient : Node
     private string _secret = "";
     private string _name = "";
 
+    // Reconnect token (hex) the server minted in our last Welcome. Re-presented in the next
+    // Hello so a reconnect after an unexpected drop can reclaim the ship the server held for us.
+    // Persists across BeginConnect (so an auto-reconnect carries it); cleared only on a voluntary
+    // Disconnect, where we explicitly give the ship up.
+    private string _reconnectToken = "";
+
+    // True once a Welcome has populated the rendered world. A later Welcome arriving while this is
+    // set is a reconnect, so ApplyWelcome rebuilds the world from server authority (see there).
+    private bool _worldLoaded;
+
     public override void _Ready()
     {
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -84,12 +94,17 @@ public partial class GameNetClient : Node
     // next connect's Hello frame; the overlay always commits before calling ConnectTo.
     public void SetPilotName(string name) => _name = UserPrefs.Clamp(name);
 
+    // Set the shared-secret password typed in the direct-connect modal (via ConnectionManager).
+    // Same slot the SIM_SECRET env seeds; empty = open server. Carried by the next Hello.
+    public void SetJoinSecret(string secret) => _secret = secret ?? "";
+
     // Direct join: open (or re-open) a WebSocket to the given ws:// URL (LAN / dev / typed
     // address). Called by ConnectionManager once it has resolved an address.
     public void Connect(string uri)
     {
         var ct = BeginConnect($"ws {uri}");
-        _ = Task.Run(() => RunWebSocket(uri, ct));
+        int seq = _connectSeq;
+        _ = Task.Run(() => RunWebSocket(uri, seq, ct));
     }
 
     // Public-lobby join: reach a (possibly NAT'd) server via a WebRTC DataChannel, with the SDP
@@ -98,13 +113,20 @@ public partial class GameNetClient : Node
     public void ConnectWebRtc(string shareBase, string sessionId)
     {
         var ct = BeginConnect($"webrtc {sessionId} via {shareBase}");
-        _ = Task.Run(() => RunWebRtc(shareBase, sessionId, ct));
+        int seq = _connectSeq;
+        _ = Task.Run(() => RunWebRtc(shareBase, sessionId, seq, ct));
     }
+
+    // Monotonic connect-attempt id. Background tasks stamp their progress/error callbacks with
+    // the seq they were started under; deliveries from a superseded (cancelled) attempt are
+    // dropped so they can't touch the CURRENT attempt's stage log.
+    private int _connectSeq;
 
     // Reset per-connection state and arm a fresh cancellation token (cancelling any prior link).
     private CancellationToken BeginConnect(string what)
     {
         _socketCts?.Cancel();
+        _connectSeq++;
         Active = true;
         LocalShipId = 0;
         _rows.Clear();
@@ -113,18 +135,87 @@ public partial class GameNetClient : Node
         return _socketCts.Token;
     }
 
+    // ---- Connect-progress plumbing (background task -> main thread) --------
+
+    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) => CallDeferred(nameof(DeliverStage), seq, (int)stage);
+
+    private void DeliverStage(int seq, int stage)
+    {
+        if (seq == _connectSeq)
+            _cm.NotifyStage((ConnectionManager.ConnectStage)stage);
+    }
+
+    // A connect attempt died before its channel ever opened — surface the reason to the
+    // failed-link modal (post-open drops keep going through OnSocketClosed instead).
+    private void DeliverConnectError(int seq, string reason)
+    {
+        if (seq == _connectSeq)
+            _cm.NotifyFailed(reason);
+    }
+
+    // Cancel the in-flight connect with no Bye and no reconnect intent — the connecting modal's
+    // Cancel/Back. Unlike Disconnect there is nothing established to say goodbye to, and a Bye
+    // queued into _tx would linger (the channel is shared across connections) and poison the
+    // NEXT connect's first frame.
+    public void Abort()
+    {
+        _socketCts?.Cancel();
+        _connectSeq++; // stragglers from the dead task are dropped by the seq guard
+        while (_tx.Reader.TryRead(out _)) { } // drop frames queued for the dead link
+        Active = false;
+        LocalShipId = 0;
+        LocalClientId = 0;
+        _reconnectToken = "";
+        _worldLoaded = false;
+        _rows.Clear();
+        LobbyPlayers = Array.Empty<LobbyPlayer>();
+        LobbyChanged?.Invoke();
+        _world.Reset();
+    }
+
     // Voluntarily leave the current server: cancel the live socket/peer connection and drop all
     // per-connection state so the UI falls back to the address screen. The background I/O task
     // observes the cancelled token and tears its WebSocket / RTCPeerConnection down on its own.
     public void Disconnect()
     {
-        _socketCts?.Cancel();
+        // Tell the server this is a clean leave (MsgBye) so it frees our ship NOW instead of
+        // holding it for the 5s reconnect grace. The server can't otherwise tell a voluntary
+        // leave from a drop — both just close the socket. Queue the Bye, then cancel the socket
+        // a beat later so the send loop drains it first; cancelling immediately would race the
+        // flush and the server would wrongly park a 5s orphan for every "Leave".
+        _tx.Writer.TryWrite(new byte[] { 8 }); // MsgBye
+        var cts = _socketCts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(200);
+            }
+            catch { }
+            cts?.Cancel();
+        });
+
         Active = false;
         LocalShipId = 0;
         LocalClientId = 0;
+        _reconnectToken = ""; // voluntary leave gives the ship up — don't try to reclaim it
+        _worldLoaded = false;
         _rows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
+        _world.Reset();
+    }
+
+    // Abandon the ship the server may still be holding for us (clear the reconnect token) and drop
+    // the stale rendered world, WITHOUT tearing the connection down. Used by "Leave & Return to
+    // Lobby" during a reconnect: the auto-reconnect keeps running and we rejoin fresh into the
+    // team lobby (no ship reclaim) instead of dropping back into the ship.
+    public void GiveUpShip()
+    {
+        _reconnectToken = "";
+        _worldLoaded = false;
+        LocalShipId = 0;
+        _rows.Clear();
         _world.Reset();
     }
 
@@ -136,12 +227,14 @@ public partial class GameNetClient : Node
 
     // ---- Send API (used by the UI + ShipController) ----------------------
 
-    // Hello v7: secret + name. Sent automatically once the socket opens.
+    // Hello v9: secret + name + reconnect token. Sent automatically once the socket opens. The
+    // token (empty on a first connect) lets the server hand back a ship it's still holding for us.
     private void SendHello()
     {
         var sec = System.Text.Encoding.UTF8.GetBytes(_secret);
         var nm = System.Text.Encoding.UTF8.GetBytes(_name);
-        var f = new byte[2 + sec.Length + 1 + nm.Length];
+        var tok = System.Text.Encoding.UTF8.GetBytes(_reconnectToken);
+        var f = new byte[2 + sec.Length + 1 + nm.Length + 1 + tok.Length];
         int o = 0;
         f[o++] = 1; // Hello
         f[o++] = (byte)sec.Length;
@@ -149,6 +242,9 @@ public partial class GameNetClient : Node
         o += sec.Length;
         f[o++] = (byte)nm.Length;
         nm.CopyTo(f, o);
+        o += nm.Length;
+        f[o++] = (byte)tok.Length;
+        tok.CopyTo(f, o);
         _tx.Writer.TryWrite(f);
     }
 
@@ -204,13 +300,15 @@ public partial class GameNetClient : Node
 
     // ---- Socket I/O (background) ------------------------------------------
 
-    private async Task RunWebSocket(string uri, CancellationToken ct)
+    private async Task RunWebSocket(string uri, int seq, CancellationToken ct)
     {
+        bool opened = false;
         try
         {
             _ws = new ClientWebSocket();
             await _ws.ConnectAsync(new Uri(uri), ct);
-            CallDeferred(nameof(OnSocketOpen));
+            opened = true;
+            CallDeferred(nameof(OnSocketOpen), seq);
 
             var send = Task.Run(
                 async () =>
@@ -242,23 +340,30 @@ public partial class GameNetClient : Node
         catch (Exception e)
         {
             GD.PrintErr($"[GameNet] socket error: {e.Message}");
-            CallDeferred(nameof(OnSocketClosed));
+            // Never-opened socket = the connect itself failed (carry the reason); a post-open
+            // drop keeps flowing through NotifyDisconnected so auto-reconnect can kick in.
+            if (opened)
+                CallDeferred(nameof(OnSocketClosed));
+            else
+                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
     }
 
     // WebRTC offerer: build a peer connection + DataChannel, exchange SDP through the public lobby
     // (non-trickle ICE so one offer/answer round trip suffices), then pump _tx -> DataChannel.
     // Inbound frames arrive via onmessage into _rx and are applied in _Process like the WS path.
-    private async Task RunWebRtc(string shareBase, string sessionId, CancellationToken ct)
+    private async Task RunWebRtc(string shareBase, string sessionId, int seq, CancellationToken ct)
     {
         shareBase = shareBase.TrimEnd('/');
         RTCPeerConnection? pc = null;
+        bool opened = false;
         try
         {
             // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
             var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
             if (entry is null)
                 throw new Exception("server not found in lobby");
+            EmitStage(seq, ConnectionManager.ConnectStage.Negotiate); // entry located
 
             var iceServers = ToIceServers(entry.IceServers);
             pc = new RTCPeerConnection(new RTCConfiguration { iceServers = iceServers });
@@ -272,7 +377,7 @@ public partial class GameNetClient : Node
 
             dc.onopen += () =>
             {
-                CallDeferred(nameof(OnSocketOpen));
+                CallDeferred(nameof(OnSocketOpen), seq);
                 dcOpen.TrySetResult();
             };
             dc.onmessage += (_, _, data) => _rx.Enqueue(data);
@@ -330,10 +435,12 @@ public partial class GameNetClient : Node
             var set = pc.setRemoteDescription(new RTCSessionDescriptionInit { type = RTCSdpType.answer, sdp = answerSdp });
             if (set != SetDescriptionResultEnum.OK)
                 throw new Exception($"bad answer ({set})");
+            EmitStage(seq, ConnectionManager.ConnectStage.Channel); // negotiated — channel opening
 
             // Wait for the DataChannel to open, then drain outbound frames into it. The foreach
             // ends when this connection's token is cancelled (reconnect / shutdown).
             await dcOpen.Task.WaitAsync(ct);
+            opened = true;
             await foreach (var frame in _tx.Reader.ReadAllAsync(ct))
                 if (dc.readyState == RTCDataChannelState.open)
                     dc.send(frame);
@@ -342,7 +449,10 @@ public partial class GameNetClient : Node
         catch (Exception e)
         {
             GD.PrintErr($"[GameNet] webrtc error: {e.Message}");
-            CallDeferred(nameof(OnSocketClosed));
+            if (opened)
+                CallDeferred(nameof(OnSocketClosed));
+            else
+                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
         finally
         {
@@ -383,7 +493,13 @@ public partial class GameNetClient : Node
 
     private sealed record AnswerDto(string SdpAnswer);
 
-    private void OnSocketOpen() => SendHello();
+    private void OnSocketOpen(int seq)
+    {
+        if (seq != _connectSeq)
+            return; // a superseded attempt's channel opened late — ignore it
+        _cm.NotifyStage(ConnectionManager.ConnectStage.Auth);
+        SendHello();
+    }
 
     private void OnSocketClosed() => _cm.NotifyDisconnected();
 
@@ -405,6 +521,12 @@ public partial class GameNetClient : Node
                 break;
             case 2:
                 LocalShipId = r.ReadUInt64();
+                // Make this YouAre authoritative about which node is local: forget any prior row
+                // and drop a stale remote node for the same id (possible on a reconnect reclaim
+                // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
+                // as the predicted local ship rather than leaving it an un-predicted remote.
+                _rows.Remove(LocalShipId);
+                _world.NetPromoteLocal(LocalShipId);
                 GD.Print($"[GameNet] assigned ship {LocalShipId}");
                 break;
             case 3:
@@ -428,6 +550,9 @@ public partial class GameNetClient : Node
             case 9:
                 ApplyChat(r);
                 break;
+            case 10:
+                ApplyTeamState(r);
+                break;
         }
     }
 
@@ -444,9 +569,32 @@ public partial class GameNetClient : Node
             _world.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
     }
 
+    // Per-team economy (credits/score), mirrors Protocol.BuildTeamState. Low-rate — the renderer
+    // holds the latest snapshot for the HUD and the chat slash-commands to read.
+    private void ApplyTeamState(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+        {
+            byte team = r.ReadByte();
+            int credits = r.ReadInt32();
+            int score = r.ReadInt32();
+            byte nUnlocked = r.ReadByte();
+            var unlocked = new byte[nUnlocked];
+            for (int j = 0; j < nUnlocked; j++)
+                unlocked[j] = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked);
+        }
+    }
+
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
-    // Public so the server browser can filter the lobby list to our protocol (ServerInputOverlay).
-    public const byte ProtocolVersion = 8;
+    // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
+    public const byte ProtocolVersion = 14;
+
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
+    // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
+    // must pick BLUE/RED before deploying.
+    public const byte NoTeam = 0xFF;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -461,10 +609,27 @@ public partial class GameNetClient : Node
             _cm.NotifyFailed($"server protocol v{version} ≠ client v{ProtocolVersion}");
             return;
         }
+        _cm.NotifyStage(ConnectionManager.ConnectStage.Sync); // authenticated — applying the world
         LocalClientId = r.ReadInt32();
         MyTeam = r.ReadByte();
         r.ReadUInt32(); // tick
         r.ReadSingle(); // dt
+
+        // Reconnect token: store it (each Welcome rotates it) so the next Hello can reclaim our
+        // ship if this connection drops.
+        byte tokenLen = r.ReadByte();
+        _reconnectToken = Convert.ToHexString(r.ReadBytes(tokenLen));
+
+        // Reconnect: a Welcome arriving while a world is already rendered means we just
+        // re-established the link. Tear the stale world down and rebuild from this authoritative
+        // Welcome (+ the snapshots that follow), so the local ship is re-seeded at the server's
+        // position instead of continuing from where the client predicted during the dead window —
+        // and any ships that died/left while we were away (whose ShipGone we missed) don't linger
+        // as ghosts. During the dead window itself no Welcome arrives, so the frozen world stays
+        // up behind the reconnecting overlay. The first connect has nothing to reset.
+        if (_worldLoaded)
+            _world.Reset();
+        _worldLoaded = true;
 
         ushort sectors = r.ReadUInt16();
         for (int i = 0; i < sectors; i++)
@@ -572,7 +737,12 @@ public partial class GameNetClient : Node
             d.AbAccel = r.ReadSingle();
             d.AbOnRate = r.ReadSingle();
             d.AbOffRate = r.ReadSingle();
+            d.MaxFuel = r.ReadSingle();
+            d.AbFuelDrain = r.ReadSingle();
+            d.AbFuelRecharge = r.ReadSingle();
             d.MaxHull = r.ReadSingle();
+            d.Cost = r.ReadInt32();
+            d.PayloadCapacity = r.ReadSingle();
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             ships.Add(d);
@@ -592,6 +762,21 @@ public partial class GameNetClient : Node
                     ProjectileLifeTicks = r.ReadUInt32(),
                     ProjectileRadius = r.ReadSingle(),
                     SpreadRad = r.ReadSingle(),
+                    Mass = r.ReadSingle(),
+                }
+            );
+
+        var cargoItems = new List<CargoItemDef>();
+        byte cargoCount = r.ReadByte();
+        for (int i = 0; i < cargoCount; i++)
+            cargoItems.Add(
+                new CargoItemDef
+                {
+                    CargoId = r.ReadUInt32(),
+                    Name = ReadStr(r),
+                    Glyph = ReadStr(r),
+                    Mass = r.ReadSingle(),
+                    Description = ReadStr(r),
                 }
             );
 
@@ -619,8 +804,8 @@ public partial class GameNetClient : Node
             DebugNoFire = r.ReadBoolean(),
         };
 
-        _defs.Load(ships, weapons, bases, cfg);
-        GD.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {bases.Count} bases");
+        _defs.Load(ships, weapons, bases, cargoItems, cfg);
+        GD.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
         DefsReceived?.Invoke();
     }
 
@@ -683,6 +868,7 @@ public partial class GameNetClient : Node
                 ay = r.ReadUInt16(),
                 az = r.ReadUInt16();
             ushort ab = r.ReadUInt16();
+            ushort fuel = r.ReadUInt16();
             ushort hp = r.ReadUInt16();
             uint lastInput = r.ReadUInt32();
             uint lastFire = r.ReadUInt32();
@@ -712,11 +898,14 @@ public partial class GameNetClient : Node
             row.AngVelY = WireQuant.UnpackHalf(ay);
             row.AngVelZ = WireQuant.UnpackHalf(az);
             row.AbPower = WireQuant.UnpackHalf(ab);
+            row.Fuel = WireQuant.UnpackHalf(fuel);
             row.Health = WireQuant.UnpackHalf(hp);
             row.LastInputTick = lastInput;
             row.LastFireTick = lastFire;
-            // Mass isn't on the wire: re-derive from the same shared class stats the server seeds.
-            row.Mass = FlightModel.StatsFor((byte)row.Class, row.IsPod).Mass;
+            // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
+            // seeds from), so a YAML-overridden mass matches server authority. No compile-time
+            // fallback — by the time ship snapshots arrive the MsgDefs frame has been applied.
+            row.Mass = _defs.TryGetStats((byte)row.Class, row.IsPod, out var massStats) ? massStats.Mass : 0f;
 
             _seenThisSnapshot.Add(id);
             if (prev is null)

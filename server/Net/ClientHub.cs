@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Threading.Channels;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
@@ -86,6 +87,16 @@ public sealed class ClientHub
         public IClientTransport Transport = null!;
         public Channel<OutFrame> Outbound = null!;
         public ulong ShipId;
+
+        // Reconnect token, minted at Hello and handed to the client in its Welcome. A returning
+        // client re-presents it to reclaim a ship the sim is still holding (held-orphans). Stored
+        // as hex for the token<->orphan dictionary key.
+        public string Token = "";
+
+        // Set when the client sends MsgBye: a voluntary leave frees its ship immediately instead
+        // of parking it for the reconnect grace window. A bare socket close (no Bye) is an
+        // unexpected drop and DOES park the ship.
+        public bool Leaving;
 
         // AOI anchor, cached each tick by AfterStep's sequential pre-pass (own ship pos/sector,
         // or the home-sector origin before a ship exists) so the parallel snapshot build reads
@@ -178,6 +189,9 @@ public sealed class ClientHub
             Simulation.PhaseEnded => "ended",
             _ => "lobby",
         };
+
+    // Per-player roster (name/team/ready/ship) advertised to the public lobby's server browser.
+    public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id));
 
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
@@ -294,7 +308,17 @@ public sealed class ClientHub
         finally
         {
             _clients.TryRemove(client.Id, out _);
-            _sim.EnqueueLeave(client.Id);
+            // Voluntary leave (MsgBye) or a client with no live ship frees immediately. An
+            // unexpected drop of a flying client parks the ship for the grace window so the
+            // player can reconnect and reclaim it; the orphan is keyed by this connection's token.
+            bool cleanLeave = client.Leaving || _sim.ShipIdOf(client.Id) == 0;
+            if (cleanLeave)
+                _sim.EnqueueLeave(client.Id);
+            else
+                _sim.EnqueueDetach(client.Id, client.Token);
+            Console.WriteLine(
+                $"[Hub] client {client.Id} disconnected (bye={client.Leaving}, {(cleanLeave ? "clean leave" : "holding ship for reconnect grace")})"
+            );
             _lobby.Remove(client.Id);
             _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
@@ -324,12 +348,14 @@ public sealed class ClientHub
             {
                 case Protocol.MsgHello:
                 {
-                    // v7 layout: u8 secretLen, secret…, u8 nameLen, name…  The secret is an
-                    // optional shared-secret password the server constant-time compares (open
-                    // when the server runs without one); name labels the lobby roster. No
-                    // class/team here — those are lobby actions, spawning is MsgSpawn.
+                    // v9 layout: u8 secretLen, secret…, u8 nameLen, name…, u8 tokenLen, token…
+                    // The secret is an optional shared-secret password the server constant-time
+                    // compares (open when the server runs without one); name labels the lobby
+                    // roster; the trailing token (absent on a fresh join) is a reconnect token
+                    // from a prior Welcome. No class/team here — those are lobby actions.
                     string secret = "",
-                        name = "";
+                        name = "",
+                        reconnectToken = "";
                     if (count > 1)
                     {
                         int secLen = buffer[1];
@@ -340,7 +366,17 @@ public sealed class ClientHub
                             int nameLen = buffer[o];
                             o += 1;
                             if (count >= o + nameLen)
+                            {
                                 name = System.Text.Encoding.UTF8.GetString(buffer, o, nameLen);
+                                o += nameLen;
+                                if (count >= o + 1)
+                                {
+                                    int tokLen = buffer[o];
+                                    o += 1;
+                                    if (tokLen > 0 && count >= o + tokLen)
+                                        reconnectToken = System.Text.Encoding.UTF8.GetString(buffer, o, tokLen);
+                                }
+                            }
                         }
                     }
 
@@ -351,6 +387,10 @@ public sealed class ClientHub
                         return;
                     }
 
+                    // Mint this connection's reconnect token before sending Welcome. Each Welcome
+                    // rotates the token; the sim keys held orphans by it.
+                    client.Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+
                     _players.OnConnect(client.Id, name);
                     _lobby.Add(client.Id, _players.NameOf(client.Id));
                     _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
@@ -359,10 +399,24 @@ public sealed class ClientHub
                     // The client downloads everything from the server: world statics, the
                     // content defs, then the lobby roster.
                     client.Outbound.Writer.TryWrite(
-                        OutFrame.Whole(Protocol.BuildWelcome(client.Id, client.Team, _sim.World, _sim.Tick))
+                        OutFrame.Whole(
+                            Protocol.BuildWelcome(
+                                client.Id,
+                                client.Team,
+                                _sim.World,
+                                _sim.Tick,
+                                Convert.FromHexString(client.Token)
+                            )
+                        )
                     );
-                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs()));
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
                     BroadcastLobby();
+
+                    // Reconnect: hand back a ship the sim is still holding for the presented token.
+                    // Enqueued AFTER _clients registration so the resulting ShipIdOf flip in
+                    // AfterStep has a registered client to re-issue MsgYouAre to.
+                    if (reconnectToken.Length > 0)
+                        _sim.EnqueueReclaim(client.Id, reconnectToken);
                     break;
                 }
                 case Protocol.MsgSpawn when count >= 2:
@@ -375,6 +429,12 @@ public sealed class ClientHub
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
+                        // Can't deploy without a side — a NOAT pilot must pick BLUE/RED first.
+                        if (team != 0 && team != 1)
+                        {
+                            SystemTo(client, "Pick a team before launching.");
+                            break;
+                        }
                         client.Team = team;
                         _sim.EnqueueJoin(client.Id, team, cls);
                     }
@@ -383,6 +443,9 @@ public sealed class ClientHub
                 case Protocol.MsgSetTeam when count >= 2:
                 {
                     _lobby.SetTeam(client.Id, buffer[1]);
+                    // Keep the connection's team in sync with the lobby so chat scope (and any
+                    // later spawn) reflect the pick immediately, not just at deploy time.
+                    client.Team = _lobby.TeamOf(client.Id);
                     BroadcastLobby();
                     break;
                 }
@@ -390,6 +453,14 @@ public sealed class ClientHub
                 {
                     _lobby.SetReady(client.Id, buffer[1] != 0);
                     BroadcastLobby();
+                    break;
+                }
+                case Protocol.MsgBye:
+                {
+                    // Voluntary leave: mark intent so the finally block frees the ship now instead
+                    // of parking it for the reconnect grace window. The client closes the socket
+                    // right after, which lands us in finally.
+                    client.Leaving = true;
                     break;
                 }
                 case Protocol.MsgChat when count >= 4:
@@ -529,6 +600,10 @@ public sealed class ClientHub
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
         byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
 
+        // Per-team economy (credits/score): same low-rate cadence as bases — on change or coarse
+        // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
+        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
+
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
         // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
@@ -572,6 +647,9 @@ public sealed class ClientHub
 
             if (basesFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(basesFrame));
+
+            if (teamStateFrame is not null)
+                client.Outbound.Writer.TryWrite(OutFrame.Whole(teamStateFrame));
 
             _dispatchList.Add(client);
         }

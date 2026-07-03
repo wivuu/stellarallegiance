@@ -1,4 +1,5 @@
 using SimServer.Assets;
+using SimServer.Content;
 using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
@@ -16,6 +17,10 @@ public sealed partial class Simulation
     public const uint TickHz = 20;
     private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
+    // Stage-2 economy: every team gets a flat credit paycheck this often (1200 ticks = 1 min at 20 Hz).
+    // The amount per paycheck is the faction's authored income (Content.Start.IncomePerPaycheck).
+    public const uint PaycheckTicks = TickHz * 60;
+
     // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
     private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
@@ -24,14 +29,18 @@ public sealed partial class Simulation
     private const float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
     private const float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
 
-    // The sim consumes the AUTHORED defs straight from GameContent — ONE source of truth with the
-    // defs it ships to the client (no private duplicate that can silently drift out of sync).
-    // WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the weapon it fires); ShipDefs by
-    // ClassId. (BuildMuzzles already sources its muzzle geometry from GameContent the same way.)
-    private static readonly Dictionary<uint, WeaponDef> WeaponDefs =
-        GameContent.Weapons().ToDictionary(w => w.WeaponId);
-    private static readonly Dictionary<byte, ShipClassDef> ShipDefs =
-        GameContent.ShipClasses().ToDictionary(d => d.ClassId);
+    // The resolved content this match runs on (GameContent defaults, optionally YAML-overlaid at
+    // boot). ONE source of truth with the defs streamed to the client (Protocol.BuildDefs(Content)),
+    // so server authority and client prediction can never drift. Exposed for the hub's def frame.
+    public ContentSet Content { get; }
+
+    // Instance lookups built from Content in the ctor (were static-from-GameContent before the
+    // Stage-1 content pipeline). WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the
+    // weapon it fires); ShipDefs by ClassId; _stats is the per-class flight profile derived from the
+    // loaded def, so a YAML-overridden ship flies the authored numbers on BOTH sides.
+    private readonly Dictionary<uint, WeaponDef> WeaponDefs;
+    private readonly Dictionary<byte, ShipClassDef> ShipDefs;
+    private readonly Dictionary<byte, ShipStats> _stats;
 
     // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
     // fires along. Single-sourced from the authored ShipClassDef hardpoints so the server's
@@ -42,11 +51,10 @@ public sealed partial class Simulation
     // (the Fighter's twin cannons) fires one bolt from EACH muzzle every fire tick; the array
     // for a class is in hardpoint declaration order, which fixes each muzzle's barrel index so
     // the per-barrel spread seed (FlightModel.SpreadDirection) matches the client.
-    private static readonly Muzzle[][] ClassMuzzles = BuildMuzzles();
+    private readonly Muzzle[][] ClassMuzzles;
 
-    private static Muzzle[][] BuildMuzzles()
+    private static Muzzle[][] BuildMuzzles(IReadOnlyList<ShipClassDef> defs)
     {
-        var defs = GameContent.ShipClasses();
         int max = 0;
         foreach (var d in defs)
             if (d.ClassId != GameContent.PodClassId && d.ClassId > max)
@@ -69,15 +77,25 @@ public sealed partial class Simulation
 
     // Spawn hull for a class, read straight from its def (was a duplicate switch). An unknown class
     // falls back to the Scout hull, matching the old default.
-    private static float HullFor(byte cls) =>
+    private float HullFor(byte cls) =>
         ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
 
     // A class's primary (first) weapon — or the Scout gun if the hull carries no weapon hardpoint.
     // Drives the PIG threat heuristic; single-sourced from the same muzzles/defs the sim fires from.
-    private static WeaponDef PrimaryWeapon(byte cls)
+    private WeaponDef PrimaryWeapon(byte cls)
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
         return WeaponDefs[m.Length > 0 ? m[0].WeaponId : GameContent.ScoutWeaponId];
+    }
+
+    // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
+    // client takes (ShipStats.FromDef) — so server authority and client prediction integrate
+    // bit-identically. A pod ignores its class and flies the Pod profile; an unknown class falls
+    // back to the Scout def. Precomputed in the ctor from the content set.
+    private ShipStats StatsFor(byte cls, bool isPod)
+    {
+        byte defId = isPod ? GameContent.PodClassId : cls;
+        return _stats.TryGetValue(defId, out var s) ? s : _stats[FlightModel.ClassScout];
     }
 
     public sealed class ShipSim
@@ -127,7 +145,21 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
     private readonly Queue<(int clientId, byte team, byte cls)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
+    // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
+    // back to the returning connection), both keyed by the connection's reconnect token.
+    private readonly Queue<(int clientId, string token)> _detachQueue = new();
+    private readonly Queue<(int clientId, string token)> _reclaimQueue = new();
     private readonly object _qLock = new();
+
+    // How long a disconnected player's ship is held in the sim before it's reaped — the window a
+    // reconnecting client has to reclaim it (5s @ 20Hz). The ship stays simulated and vulnerable.
+    private const uint GraceTicks = 5 * TickHz;
+
+    // Ships held alive after an unexpected drop, keyed by the connection's reconnect token (hex).
+    // Value is the still-bound OLD client id (the ship is still in _byClient[oldClientId]) plus
+    // the tick at which the hold expires. Keyed by old client id rather than ShipSim so a
+    // death->escape-pod swap during the grace window is followed transparently. Sim-thread only.
+    private readonly Dictionary<string, (int oldClientId, uint expiryTick)> _heldOrphans = new();
 
     // The ship a client currently controls — a combat ship, OR (after death) the escape pod
     // it's flying. Absent while the client is dead and waiting on a respawn. ShipId changes
@@ -193,6 +225,10 @@ public sealed partial class Simulation
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
 
+    // Set whenever per-team economy changed this step (paycheck accrued, economy (re)seeded), so
+    // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
+    public bool TeamStateChangedThisStep { get; private set; }
+
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
@@ -211,9 +247,26 @@ public sealed partial class Simulation
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
-    public Simulation(World world)
+    public Simulation(World world, ContentSet content)
     {
         World = world;
+        Content = content;
+
+        // Resolve the per-match def lookups ONCE from the loaded content (defaults, or YAML-overlaid).
+        WeaponDefs = content.Weapons.ToDictionary(w => w.WeaponId);
+        ShipDefs = content.Ships.ToDictionary(d => d.ClassId);
+        ClassMuzzles = BuildMuzzles(content.Ships);
+        _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
+        foreach (var d in content.Ships)
+            _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
+
+        // PIG lead-prediction constants off the scout gun (all server weapons share these today).
+        var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
+        PigShotSpeed = pigShot.ProjectileSpeed;
+        PigShotLifeTicks = pigShot.ProjectileLifeTicks;
+        PigShotSpeedSq = PigShotSpeed * PigShotSpeed;
+        PigMaxLead = PigShotLifeTicks * FlightModel.Dt;
+
         PigsEnabled = (System.Environment.GetEnvironmentVariable("SIM_PIGS") ?? "") is "1" or "true";
         _shotRing = new List<PendingShot>[ShotRingSize];
         for (int i = 0; i < ShotRingSize; i++)
@@ -232,6 +285,22 @@ public sealed partial class Simulation
     {
         lock (_qLock)
             _leaveQueue.Enqueue(clientId);
+    }
+
+    // Unexpected drop of a flying client: park its ship for the grace window instead of removing
+    // it, so the player can reconnect and reclaim it. Token is the connection's reconnect token.
+    public void EnqueueDetach(int clientId, string token)
+    {
+        lock (_qLock)
+            _detachQueue.Enqueue((clientId, token));
+    }
+
+    // A reconnecting client re-presented a token: hand it back the ship still held under that
+    // token, rebinding it to this new connection's id.
+    public void EnqueueReclaim(int newClientId, string token)
+    {
+        lock (_qLock)
+            _reclaimQueue.Enqueue((newClientId, token));
     }
 
     public void EnqueueInput(int clientId, uint tick, ShipInputState input)
@@ -255,8 +324,10 @@ public sealed partial class Simulation
         DeathsThisStep.Clear();
         JustEnded = false;
         BasesChangedThisStep = false;
+        TeamStateChangedThisStep = false;
 
         DrainQueues(tick);
+        ExpireHeldOrphans(tick);
 
         // Lobby host: poll the matchmaker while waiting in the lobby, and return to the lobby
         // a few seconds after a match ends so the next one can be readied up.
@@ -272,7 +343,10 @@ public sealed partial class Simulation
 
         ProcessRespawns(tick);
         if (Phase == PhaseActive)
+        {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+            AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+        }
         ResolveDueShots(tick);
         RebuildShipGrid();
 
@@ -282,7 +356,7 @@ public sealed partial class Simulation
         foreach (var s in _order)
         {
             var input = InputFor(s, tick);
-            var stats = FlightModel.StatsFor(s.Class, s.IsPod);
+            var stats = StatsFor(s.Class, s.IsPod);
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
             // Pods are unarmed — only an armed combat ship fires.
@@ -403,6 +477,37 @@ public sealed partial class Simulation
                 _clientInfo.Remove(cid);
                 _clientRespawn.Remove(cid);
             }
+            // Detach: keep the dropped client's ship in _byClient/_ships/_order (still simulated
+            // and vulnerable) but zero its input so it coasts — no thrust, no fire — and record
+            // the held orphan with its expiry. _clientInfo/_clientRespawn are deliberately kept so
+            // a death->pod->respawn during the window still resolves and stays reclaimable.
+            while (_detachQueue.Count > 0)
+            {
+                var (cid, token) = _detachQueue.Dequeue();
+                if (_byClient.TryGetValue(cid, out var ship))
+                {
+                    ship.HeldInput = default;
+                    Array.Clear(ship.InputRingTick, 0, ship.InputRingTick.Length);
+                    _heldOrphans[token] = (cid, tick + GraceTicks);
+                }
+            }
+            // Reclaim: a returning client re-presented a held token — rebind that ship (or its
+            // current pod) from the old client id to the new connection. ShipIdOf(newCid) then
+            // returns it and AfterStep re-issues MsgYouAre next tick, so the client resumes.
+            while (_reclaimQueue.Count > 0)
+            {
+                var (newCid, token) = _reclaimQueue.Dequeue();
+                if (_heldOrphans.Remove(token, out var orphan)
+                    && _byClient.Remove(orphan.oldClientId, out var ship))
+                {
+                    ship.OwnerClientId = newCid;
+                    _byClient[newCid] = ship;
+                    if (_clientInfo.Remove(orphan.oldClientId, out var info))
+                        _clientInfo[newCid] = info;
+                    if (_clientRespawn.Remove(orphan.oldClientId, out var rt))
+                        _clientRespawn[newCid] = rt;
+                }
+            }
             while (_inputQueue.Count > 0)
             {
                 var (cid, stamp, input) = _inputQueue.Dequeue();
@@ -432,6 +537,21 @@ public sealed partial class Simulation
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
+    // Stage-2 strategy spine: pay every team a flat credit paycheck on the paycheck cadence. Called
+    // only while the match is active (gated by the caller). The amount is the faction's authored
+    // income; a team with 0 income simply never gains credits. Server-only — no wire change yet.
+    private void AccrueTeamCredits(uint tick)
+    {
+        if (tick % PaycheckTicks != 0)
+            return;
+        int income = Content.Start.IncomePerPaycheck;
+        if (income == 0)
+            return;
+        foreach (var team in World.TeamStates.Values)
+            team.Credits += income;
+        TeamStateChangedThisStep = true;
+    }
+
     public void StartMatch()
     {
         if (Phase == PhaseActive)
@@ -443,7 +563,26 @@ public sealed partial class Simulation
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        // Fresh economy each match: reset every team to its starting credits + base unlocks.
+        World.SeedEconomy(Content.Start);
+        ResolveTeamUnlocks();
+        TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
+    }
+
+    // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,
+    // riding the library's forward-closure so it stays correct when Stage-4 grants techs mid-match).
+    // Runs at match start — Stage-2 teams don't gain techs mid-match and spawns only happen while
+    // Active. The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
+    private void ResolveTeamUnlocks()
+    {
+        foreach (var ts in World.TeamStates.Values)
+            ts.UnlockedClasses = Allegiance.Factions.Resolution.BuildableResolver
+                .GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities)
+                .OfType<Allegiance.Factions.Model.Hull>()
+                .Where(h => h.ClassId is not null)
+                .Select(h => h.ClassId!.Value)
+                .ToHashSet();
     }
 
     // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
@@ -460,6 +599,9 @@ public sealed partial class Simulation
         _order.Clear();
         _byClient.Clear();
         _clientRespawn.Clear();
+        // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
+        // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
+        _heldOrphans.Clear();
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
         BasesChangedThisStep = true;
         Phase = PhaseLobby;
@@ -485,7 +627,8 @@ public sealed partial class Simulation
             Alive = true,
         };
         PlaceAtBase(s, World.ShipRadius, tick);
-        s.State.Mass = FlightModel.StatsFor(cls, false).Mass;
+        s.State.Mass = StatsFor(cls, false).Mass;
+        s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -566,8 +709,33 @@ public sealed partial class Simulation
                 continue; // disconnected
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
+            // Stage-2 economy gate: a locked or unaffordable buy is dropped (no ship, no charge,
+            // no reschedule). The client's spawn-pending retry times out and its pre-check stops it
+            // re-spamming a request it can predict will fail.
+            if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
+                continue;
             SpawnCombatShip(cid, info.team, info.cls, tick);
         }
+    }
+
+    public enum SpawnDecision { Allowed, Locked, TooPoor }
+
+    // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
+    // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
+    // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
+    // Authority is bootstrap-simple (any-player-spends / auto) — no commander.
+    public SpawnDecision TryReserveSpawn(byte team, byte cls)
+    {
+        if (!World.TeamStates.TryGetValue(team, out var ts))
+            return SpawnDecision.Locked;
+        if (!ts.UnlockedClasses.Contains(cls))
+            return SpawnDecision.Locked;
+        int cost = ShipDefs.TryGetValue(cls, out var d) ? d.Cost : 0;
+        if (ts.Credits < cost)
+            return SpawnDecision.TooPoor;
+        ts.Credits -= cost;
+        TeamStateChangedThisStep = true;
+        return SpawnDecision.Allowed;
     }
 
     // The input that drives a ship this tick: PIGs are server-brained, players (incl. their
@@ -635,8 +803,9 @@ public sealed partial class Simulation
                 Vel = dead.State.Vel + dir * PodEjectSpeed,
                 Rot = dead.State.Rot,
                 AngVel = spin * PodEjectSpin,
-                Mass = FlightModel.StatsFor(dead.Class, true).Mass,
+                Mass = StatsFor(dead.Class, true).Mass,
                 AbPower = 0f,
+                Fuel = StatsFor(dead.Class, true).MaxFuel, // 0 today; content-driven if pods ever get boost
             },
         };
         return pod;
@@ -683,6 +852,30 @@ public sealed partial class Simulation
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         DeathsThisStep.Add(s.ShipId);
+    }
+
+    // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
+    // ship is removed exactly as a leave would (ShipGone emitted) and its slot cleared. Runs on
+    // the sim thread right after DrainQueues; collect-then-remove to avoid mutating mid-enumerate.
+    private void ExpireHeldOrphans(uint tick)
+    {
+        if (_heldOrphans.Count == 0)
+            return;
+        List<string>? due = null;
+        foreach (var kv in _heldOrphans)
+            if (tick >= kv.Value.expiryTick)
+                (due ??= new()).Add(kv.Key);
+        if (due == null)
+            return;
+        foreach (var token in due)
+        {
+            var orphan = _heldOrphans[token];
+            _heldOrphans.Remove(token);
+            if (_byClient.Remove(orphan.oldClientId, out var ship))
+                RemoveShipNow(ship);
+            _clientInfo.Remove(orphan.oldClientId);
+            _clientRespawn.Remove(orphan.oldClientId);
+        }
     }
 
     // Apply the structural changes collected during a pass: remove dead/docked ships (each a

@@ -20,6 +20,8 @@ namespace SimServer.Net;
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
 //                         (default https://wivuu-public-lobby-production.up.railway.app)
 //   SIM_PUBLIC_NAME       3-50 char public name; gates registration
+//   SIM_HOSTED_BY         optional host/operator label shown as "hosted by …" in the browser
+//                         (max 24 chars; unset = no attribution)
 //   SIM_MAX_PLAYERS       capacity advertised in the lobby browser (default 32)
 //   SIM_PUBLIC_PORT       public-facing port to advertise/probe (default = the listen port; set
 //                         when a port-forward maps a different external port)
@@ -43,6 +45,8 @@ public sealed class LobbyRegistrar
     private readonly int _port; // public-facing port the lobby probes/advertises
     private readonly string? _publicEndpoint;
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
+    private readonly string? _hostedBy; // optional operator label ("hosted by …")
+    private readonly LobbyStatus.MapLayoutDto _map; // built once — the world never mutates
 
     private string? _sessionId;
     private string? _secret; // per-session capability minted by the lobby at registration
@@ -51,7 +55,16 @@ public sealed class LobbyRegistrar
     private int _directRetries; // re-register attempts spent waiting for our endpoint to go live
     private Channel<PendingOfferDto>? _offerChannel; // written by WS receive, read by WebRtcListener
 
-    private LobbyRegistrar(ClientHub hub, string shareBase, string name, int port, string? publicEndpoint, int maxPlayers)
+    private LobbyRegistrar(
+        ClientHub hub,
+        string shareBase,
+        string name,
+        int port,
+        string? publicEndpoint,
+        int maxPlayers,
+        string? hostedBy,
+        LobbyStatus.MapLayoutDto map
+    )
     {
         _hub = hub;
         _shareBase = shareBase;
@@ -59,11 +72,13 @@ public sealed class LobbyRegistrar
         _port = port;
         _publicEndpoint = publicEndpoint;
         _maxPlayers = maxPlayers;
+        _hostedBy = hostedBy;
+        _map = map;
     }
 
     // Builds a registrar from the environment, or returns null when no public name is set
     // (the server stays private). Logs the decision either way.
-    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort)
+    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort, Sim.World world)
     {
         var name = (Environment.GetEnvironmentVariable("SIM_PUBLIC_NAME") ?? "").Trim();
         if (name.Length == 0)
@@ -96,8 +111,24 @@ public sealed class LobbyRegistrar
 
         var maxPlayers = int.TryParse(Environment.GetEnvironmentVariable("SIM_MAX_PLAYERS"), out var mp) && mp > 0 ? mp : 32;
 
-        Console.WriteLine($"[Lobby] publishing \"{name}\" to {shareBase} (port {port}, max {maxPlayers} players)");
-        return new LobbyRegistrar(hub, shareBase, name, port, endpoint.Length == 0 ? null : endpoint, maxPlayers);
+        var hostedBy = (Environment.GetEnvironmentVariable("SIM_HOSTED_BY") ?? "").Trim();
+        if (hostedBy.Length > 24)
+            hostedBy = hostedBy[..24];
+
+        Console.WriteLine(
+            $"[Lobby] publishing \"{name}\" to {shareBase} (port {port}, max {maxPlayers} players"
+                + (hostedBy.Length > 0 ? $", hosted by {hostedBy})" : ")")
+        );
+        return new LobbyRegistrar(
+            hub,
+            shareBase,
+            name,
+            port,
+            endpoint.Length == 0 ? null : endpoint,
+            maxPlayers,
+            hostedBy.Length == 0 ? null : hostedBy,
+            LobbyStatus.BuildMap(world)
+        );
     }
 
     public void Start(CancellationToken ct) => _ = Task.Run(() => RunAsync(ct), ct);
@@ -173,6 +204,9 @@ public sealed class LobbyRegistrar
                     maxPlayers = _maxPlayers,
                     state = _hub.GameState,
                     protocolVersion = (int)Protocol.Version,
+                    hostedBy = _hostedBy,
+                    map = _map,
+                    roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
                 },
                 ct
             );
@@ -282,6 +316,7 @@ public sealed class LobbyRegistrar
 
         int lastPlayers = -1;
         string? lastState = null;
+        string? lastRosterSig = null; // null so the first update always carries the roster
         int ticks = 0;
 
         try
@@ -290,8 +325,10 @@ public sealed class LobbyRegistrar
             {
                 int players = _hub.PlayerCount;
                 string state = _hub.GameState;
+                var roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot());
+                string rosterSig = LobbyStatus.RosterSignature(roster);
 
-                if (players != lastPlayers || state != lastState)
+                if (players != lastPlayers || state != lastState || rosterSig != lastRosterSig)
                 {
                     var payload = JsonSerializer.SerializeToUtf8Bytes(
                         new
@@ -300,11 +337,13 @@ public sealed class LobbyRegistrar
                             players,
                             maxPlayers = _maxPlayers,
                             state,
+                            roster,
                         }
                     );
                     await ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
                     lastPlayers = players;
                     lastState = state;
+                    lastRosterSig = rosterSig;
                     ticks = 0;
                 }
                 else if (++ticks >= PingAfterTicks)
