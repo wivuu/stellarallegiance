@@ -101,6 +101,17 @@ public partial class DefRegistry : Node
         return mounts;
     }
 
+    // The class's first missile-kind weapon mount's WeaponDef, or null if the hull carries no
+    // launcher. The HUD keys the missile ammo counter off this (shown only when non-null), and it
+    // mirrors the server's ClassMissileMounts pick (first Missile-kind mount in hardpoint order).
+    public WeaponDef? MissileMount(byte classId)
+    {
+        foreach (var (_, weapon) in WeaponMounts(classId))
+            if (weapon.Kind == WeaponKind.Missile)
+                return weapon;
+        return null;
+    }
+
     // A class's full hardpoint list (engines/turrets/lights/docking + weapons), for the ship-mesh
     // loader. Null until the def arrives.
     public List<HardpointDef>? GetHardpoints(byte classId) => _ships.TryGetValue(classId, out var d) ? d.Hardpoints : null;

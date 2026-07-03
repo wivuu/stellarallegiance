@@ -56,9 +56,12 @@ public partial class EngineGlow : Node3D
     //     so the cloud fans into a bell near the exhaust and re-merges toward the tail.
     //   • SIZE (the billow): each mote is born small (SmokeTip), GROWS to SmokeGrow× at
     //     SmokeGrowAt, then SHRINKS back to a wisp; ×SmokeSizeVar random per-mote base.
-    private const int SmokeAmount = 180; // mote count — density/fill of the trail
-    private const float SmokeLifetime = 1.5f; // mote lifespan (sec); also how long smoke lingers after boost
-    private const float SmokeSize = 2.5f; // base mote DIAMETER, in NozzleRadius units  ← overall bigness
+    // Density/lifetime/bigness are per-instance so a missile can request a smaller, shorter-lived
+    // booster plume (MissileView tunes them from the WeaponDef) while ship engines keep the
+    // defaults below unchanged — set before AddChild, read in _Ready/ApplyVisual.
+    public int SmokeAmount = 180; // mote count — density/fill of the trail
+    public float SmokeLifetime = 1.5f; // mote lifespan (sec); also how long smoke lingers after boost
+    public float SmokeSize = 2.5f; // base mote DIAMETER, in NozzleRadius units  ← overall bigness
     private const float SmokeSizeVar = 0.6f; // ± random per-mote size variation (0 = all identical, 0.6 = 40%–160%)
     private const float SmokeSpeed = 4f; // backward drift speed; with Lifetime sets plume LENGTH
     private const float SmokeSpeedVar = 0.5f; // ± random drift spread

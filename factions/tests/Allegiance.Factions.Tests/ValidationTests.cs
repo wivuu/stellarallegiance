@@ -213,6 +213,115 @@ public class ValidationTests
         Assert.True(result.IsValid, string.Join("\n", result.Errors));
     }
 
+    // A launcher carrying a weapon-id projects to a missile-kind WeaponDef, so its expendable MUST be
+    // a Missile — pointing it at a mine/chaff/probe is a boot-refusing authoring error.
+    [Fact]
+    public void LauncherPointingAtNonMissileExpendable_IsReported()
+    {
+        var core = new Core
+        {
+            Mines = { new Mine { Id = "mine1", Name = "Mine", Lifespan = 60 } },
+            Launchers =
+            {
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "mine1" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile") && e.Contains("rack"));
+    }
+
+    // A launcher with an empty magazine (amount 0) is dead data — refuse boot.
+    [Fact]
+    public void LauncherWithZeroAmount_IsReported()
+    {
+        var core = new Core
+        {
+            Missiles = { ValidMissile() },
+            Launchers =
+            {
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 0, FireIntervalTicks = 30, ExpendableId = "seeker" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("amount") && e.Contains("rack"));
+    }
+
+    // Payload budget spans BOTH guns (Weapon) and missile racks (Launcher with a weapon-id): the
+    // hull below carries a mass-5 gun + a mass-4 rack (9) against an 8-unit budget → overflow.
+    [Fact]
+    public void OverburdenedLoadoutIncludingLauncherMass_IsReported()
+    {
+        var core = new Core
+        {
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "fighter",
+                    Name = "Fighter",
+                    ClassId = 1,
+                    PayloadCapacity = 8,
+                    Hardpoints =
+                    {
+                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 0, WeaponId = 1 },
+                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 1, WeaponId = 3 },
+                    },
+                },
+            },
+            Weapons = { new Weapon { Id = "cannon", Name = "Cannon", WeaponId = 1, Mass = 5 } },
+            Missiles = { ValidMissile() },
+            Launchers =
+            {
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Mass = 4, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("payload-capacity") && e.Contains("fighter"));
+    }
+
+    // A fully-authored missile launcher passes clean (guards against a false-positive rule).
+    [Fact]
+    public void CorrectlyAuthoredMissileLauncher_IsValid()
+    {
+        var core = new Core
+        {
+            Missiles = { ValidMissile() },
+            Launchers =
+            {
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Mass = 4, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("rack"));
+    }
+
+    // A missile with all the guidance/lock stats the launcher projection needs (positive).
+    private static Missile ValidMissile(string id = "seeker") =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            InitialSpeed = 90,
+            Lifespan = 8,
+            Power = 45,
+            LockTime = 2,
+            LockAngle = 0.5,
+            MaxLock = 1200,
+            TurnRate = 90,
+            Width = 3,
+        };
+
     private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>
         new()
         {

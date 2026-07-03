@@ -351,6 +351,8 @@ public sealed partial class Simulation
         s.State.Pos += new Vec3(0f, fan, 0f);
         s.State.Mass = StatsFor(slot.Class, false).Mass;
         s.Health = HullFor(slot.Class);
+        if (MissileMountFor(slot.Class) is (_, WeaponDef mw)) // missile-armed pigs spawn with a full rack
+            s.MissileAmmo = mw.MagazineSize;
 
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -867,6 +869,11 @@ public sealed partial class Simulation
 
         bool inRange = dist <= PigFireRange;
         bool onTarget = haveLead && local.Z > 0f && aimErr < PigAimSinDeg;
+        // Missile-armed pigs: hold the chase target for the server-authoritative lock and fire
+        // (Firing2) only once LOCKED — launches no longer require a lock (players may dumbfire),
+        // so the AI must gate itself or it sprays unguided rounds the moment it's in range.
+        // Ammo/cooldown gates in TryFireMissile do the rest — no evasion, minimal AI (Stage 3).
+        bool hasRack = MissileMountFor(me.Class) is not null;
         return new ShipInputState
         {
             Thrust = thrust,
@@ -876,6 +883,8 @@ public sealed partial class Simulation
             Pitch = pitch,
             Roll = 0f,
             Firing = inRange && onTarget,
+            Firing2 = hasRack && inRange && me.Locked,
+            LockTargetId = hasRack ? tgt.ShipId : 0,
         };
     }
 

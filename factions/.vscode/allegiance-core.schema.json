@@ -186,10 +186,19 @@
             "$ref": "#/$defs/ExpendableAbility"
           }
         },
+        "cargo-id": {
+          "type": "integer"
+        },
         "chaff-strength": {
           "type": "number"
         },
         "defense-type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "glyph": {
           "type": "string"
         },
         "hit-points": {
@@ -205,6 +214,9 @@
           "type": "number"
         },
         "load-time": {
+          "type": "number"
+        },
+        "mass": {
           "type": "number"
         },
         "name": {
@@ -701,6 +713,12 @@
         "ab-accel": {
           "type": "number"
         },
+        "ab-fuel-drain": {
+          "type": "number"
+        },
+        "ab-fuel-recharge": {
+          "type": "number"
+        },
         "ab-off-rate": {
           "type": "number"
         },
@@ -818,6 +836,9 @@
         "name": {
           "type": "string"
         },
+        "payload-capacity": {
+          "type": "number"
+        },
         "preferred-parts": {
           "type": "array",
           "items": {
@@ -908,6 +929,9 @@
         "expendable-id": {
           "type": "string"
         },
+        "fire-interval-ticks": {
+          "type": "integer"
+        },
         "granted-capabilities": {
           "type": "array",
           "items": {
@@ -964,6 +988,9 @@
         },
         "successor-part-id": {
           "type": "string"
+        },
+        "weapon-id": {
+          "type": "integer"
         }
       }
     },
@@ -977,14 +1004,23 @@
             "$ref": "#/$defs/ExpendableAbility"
           }
         },
+        "cargo-id": {
+          "type": "integer"
+        },
         "damage-type": {
           "type": "string"
         },
         "defense-type": {
           "type": "string"
         },
+        "description": {
+          "type": "string"
+        },
         "endurance": {
           "type": "number"
+        },
+        "glyph": {
+          "type": "string"
         },
         "hit-points": {
           "type": "number"
@@ -999,6 +1035,9 @@
           "type": "number"
         },
         "load-time": {
+          "type": "number"
+        },
+        "mass": {
           "type": "number"
         },
         "name": {
@@ -1034,6 +1073,9 @@
         "blast-radius": {
           "type": "number"
         },
+        "cargo-id": {
+          "type": "integer"
+        },
         "chaff-resistance": {
           "type": "number"
         },
@@ -1043,11 +1085,17 @@
         "defense-type": {
           "type": "string"
         },
+        "description": {
+          "type": "string"
+        },
         "directional": {
           "type": "boolean"
         },
         "dispersion": {
           "type": "number"
+        },
+        "glyph": {
+          "type": "string"
         },
         "hit-points": {
           "type": "number"
@@ -1073,8 +1121,17 @@
         "lock-time": {
           "type": "number"
         },
+        "mass": {
+          "type": "number"
+        },
         "max-lock": {
           "type": "number"
+        },
+        "max-speed": {
+          "type": "number"
+        },
+        "model-name": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -1086,6 +1143,15 @@
           "type": "number"
         },
         "signature": {
+          "type": "number"
+        },
+        "trail-color": {
+          "type": "string"
+        },
+        "trail-lifetime": {
+          "type": "number"
+        },
+        "trail-scale": {
           "type": "number"
         },
         "turn-rate": {
@@ -1124,11 +1190,20 @@
         "burst-time": {
           "type": "number"
         },
+        "cargo-id": {
+          "type": "integer"
+        },
         "defense-type": {
+          "type": "string"
+        },
+        "description": {
           "type": "string"
         },
         "dispersion": {
           "type": "number"
+        },
+        "glyph": {
+          "type": "string"
         },
         "hit-points": {
           "type": "number"
@@ -1143,6 +1218,9 @@
           "type": "number"
         },
         "load-time": {
+          "type": "number"
+        },
+        "mass": {
           "type": "number"
         },
         "name": {
@@ -1205,7 +1283,8 @@
     "RuntimeWeaponKind": {
       "type": "string",
       "enum": [
-        "bolt"
+        "bolt",
+        "missile"
       ]
     },
     "Shield": {

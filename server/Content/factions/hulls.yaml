@@ -55,11 +55,14 @@ hulls:
     ab-fuel-recharge: 0.5 # per second while boost is released (~30 s to full); 0 = dock-only (relaunch refills)
     armor-hit-points: 120
     price: 200
-    payload-capacity: 16 # twin cannons 2x5 -> 6 free for cargo
+    payload-capacity: 20 # twin cannons 2x5 + seeker rack 4 = 14 -> 6 free for cargo
     required-capabilities: [base]
+    # Missile rack sits AFTER the two gun hardpoints (weapon-index 2) so the barrel spread-seed
+    # indices of the guns (0/1) stay aligned on both server and client.
     hardpoints:
       - { kind: weapon, index: 0, off-x: -0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
       - { kind: weapon, index: 1, off-x: 0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
+      - { kind: weapon, index: 2, off-y: -0.6, off-z: 2, dir-z: 1, weapon-id: 3 }
       - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
       - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
 
@@ -92,10 +95,12 @@ hulls:
     ab-off-rate: 1.0
     armor-hit-points: 240
     price: 350
-    payload-capacity: 20 # cannon 11 -> 9 free; the payload hull carries the most
+    payload-capacity: 26 # cannon 11 + seeker rack 4 = 15 -> 11 free; the payload hull carries the most
     required-capabilities: [base]
+    # Seeker rack sits AFTER the gun (weapon-index 1) to keep the gun's spread-seed index (0) aligned.
     hardpoints:
-      - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 2 }
+      - { kind: weapon, index: 0, off-z: 3, dir-z: 1, weapon-id: 2 }
+      - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 3 }
       - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
       - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
 

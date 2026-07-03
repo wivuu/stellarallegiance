@@ -121,6 +121,9 @@ public partial class PredictionController : Node3D
     // Escape pod (Ship.IsPod): slow, unarmed lifeboat. Drives pod-aware flight stats and
     // lets ShipController suppress firing (a pod can't shoot).
     public bool IsPod { get; private set; }
+
+    // Hull class (for the HUD's missile-mount / ammo lookup). Set from the authoritative row.
+    public ShipClass Class => _class;
     public float Speed => _state.Vel.Length();
 
     // Predicted velocity (u/s, Godot space). Read by TargetMarkers so the lead
@@ -266,7 +269,17 @@ public partial class PredictionController : Node3D
         // server won't fire either, so we predict nothing. The shared FireInterval is the same on
         // every barrel of a class, so the first mount gates the whole volley.
         var mounts = input.Firing ? _defs.WeaponMounts((byte)_class) : EmptyMounts;
-        if (mounts.Count > 0 && clientTick - _lastFireTick >= mounts[0].weapon.FireIntervalTicks)
+        // Gun cadence keys off the first BOLT mount — racks launch via Firing2 on their own
+        // server-side cadence and must not gate (or join) the predicted volley. Mirror of
+        // Simulation.TryFire / PrimaryWeapon.
+        WeaponDef? gun = null;
+        foreach (var (_, w) in mounts)
+            if (w.Kind == WeaponKind.Bolt)
+            {
+                gun = w;
+                break;
+            }
+        if (gun != null && clientTick - _lastFireTick >= gun.FireIntervalTicks)
         {
             _lastFireTick = clientTick;
             // Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
@@ -281,6 +294,11 @@ public partial class PredictionController : Node3D
             for (byte barrel = 0; barrel < mounts.Count; barrel++)
             {
                 var (hp, weapon) = mounts[barrel];
+                // Skip missile racks: primary fire is bolts only. The barrel index is STILL
+                // consumed so the spread seed stays aligned with the server's TryFire loop
+                // (same skip in WorldRenderer.SpawnBoltFor for remote ships).
+                if (weapon.Kind != WeaponKind.Bolt)
+                    continue;
                 Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
                 Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
                 Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);

@@ -116,6 +116,11 @@ public sealed class ClientHub
     private byte[] _recordScratch = new byte[64 * Protocol.ShipRecordSize];
     private int[] _recordOffset = new int[64];
 
+    // Per-tick missile record scratch (sim thread only), index-aligned to _sim.Missiles: every
+    // in-flight missile's 35-byte record is serialized once here, then each client's MsgMissiles
+    // frame memcpys the slices its AOI picks (mirrors _recordScratch for ships).
+    private byte[] _missileScratch = new byte[16 * Protocol.MissileRecordSize];
+
     // AOI broad-phase, rebuilt by AfterStep on plain/mid ticks (coarse ticks full-scan, so they
     // skip it): sector -> cell -> ship-list indices. A viewer gathers same-sector candidates
     // from its cell neighborhood (full rate) or its whole sector (mid) instead of scanning all
@@ -483,7 +488,7 @@ public sealed class ClientHub
                     }
                     break;
                 }
-                case Protocol.MsgInput when count >= 1 + 4 + 24 + 1:
+                case Protocol.MsgInput when count >= 38:
                 {
                     uint tick = BitConverter.ToUInt32(buffer, 1);
                     byte flags = buffer[29];
@@ -497,6 +502,8 @@ public sealed class ClientHub
                         Roll = BitConverter.ToSingle(buffer, 25),
                         Firing = (flags & Protocol.FlagFiring) != 0,
                         Boost = (flags & Protocol.FlagBoost) != 0,
+                        Firing2 = (flags & Protocol.FlagFiring2) != 0,
+                        LockTargetId = BitConverter.ToUInt64(buffer, 30),
                     };
                     _sim.EnqueueInput(client.Id, tick, input);
                     break;
@@ -596,6 +603,24 @@ public sealed class ClientHub
                 goneFrames[i] = Protocol.BuildShipGone(_sim.DeathsThisStep[i]);
         }
 
+        // Missile detonation / expiry FX — broadcast to every client (cheap, rare), next to the
+        // ship-death drain. Missile in-flight records are AOI-filtered per client below instead.
+        byte[][]? missileGoneFrames = null;
+        if (_sim.MissileGoneThisStep.Count > 0)
+        {
+            missileGoneFrames = new byte[_sim.MissileGoneThisStep.Count][];
+            for (int i = 0; i < _sim.MissileGoneThisStep.Count; i++)
+            {
+                var g = _sim.MissileGoneThisStep[i];
+                missileGoneFrames[i] = Protocol.BuildMissileGone(g.id, g.reason, g.sector, g.pos);
+            }
+        }
+
+        // Serialize every live missile's record once (index-aligned to _sim.Missiles); each client
+        // memcpys the ones its AOI picks. Skipped entirely when no missiles are in flight.
+        var missiles = _sim.Missiles;
+        SerializeMissiles(missiles);
+
         // Stream base health when it changed (a hit landed / match ended) or on coarse
         // ticks as a keepalive for clients that joined between changes. Built once, shared.
         byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
@@ -650,6 +675,20 @@ public sealed class ClientHub
 
             if (teamStateFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(teamStateFrame));
+
+            if (missileGoneFrames is not null)
+                foreach (var f in missileGoneFrames)
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+
+            // In-flight missiles this client can see: same-sector within full-rate radius of its
+            // anchor, OR homing on its own ship (incoming warning at any range). Built from the
+            // shared record scratch. Cheap sequential build (rare, low count) off the parallel path.
+            if (missiles.Count > 0)
+            {
+                byte[]? missileFrame = BuildMissilesFor(client, missiles, tick);
+                if (missileFrame is not null)
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(missileFrame));
+            }
 
             _dispatchList.Add(client);
         }
@@ -765,6 +804,56 @@ public sealed class ClientHub
             slot++;
         }
         _aliveCount = slot; // alive records occupy _recordScratch[0 .. slot*ShipRecordSize)
+    }
+
+    // Serialize each live missile's record once into _missileScratch (index-aligned to the missile
+    // list). Grows the scratch as needed. No-op when there are no missiles.
+    private void SerializeMissiles(IReadOnlyList<Simulation.MissileSim> missiles)
+    {
+        int n = missiles.Count;
+        if (n == 0)
+            return;
+        int need = n * Protocol.MissileRecordSize;
+        if (_missileScratch.Length < need)
+            _missileScratch = new byte[Math.Max(need, _missileScratch.Length * 2)];
+        for (int i = 0; i < n; i++)
+            Protocol.WriteMissile(_missileScratch.AsSpan(i * Protocol.MissileRecordSize, Protocol.MissileRecordSize), missiles[i]);
+    }
+
+    // Build one client's MsgMissiles frame from the shared scratch, or null if none are in view.
+    // Header: MsgMissiles(1) + tick(4) + count(1), then count x MissileRecordSize record slices.
+    private byte[]? BuildMissilesFor(Client client, IReadOnlyList<Simulation.MissileSim> missiles, uint tick)
+    {
+        Vec3 myPos = client.AnchorPos;
+        uint mySector = client.AnchorSector;
+        ulong myShip = client.ShipId;
+
+        // First pass: which missile indices this client can see.
+        Span<int> picks = missiles.Count <= 128 ? stackalloc int[missiles.Count] : new int[missiles.Count];
+        int count = 0;
+        for (int i = 0; i < missiles.Count; i++)
+        {
+            var m = missiles[i];
+            bool inView =
+                (m.SectorId == mySector && (m.Pos - myPos).LengthSquared() <= FullRateRadiusSq)
+                || (myShip != 0 && m.TargetShipId == myShip);
+            if (inView)
+                picks[count++] = i;
+        }
+        if (count == 0)
+            return null;
+
+        byte[] buf = new byte[1 + 4 + 1 + count * Protocol.MissileRecordSize];
+        buf[0] = Protocol.MsgMissiles;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), tick);
+        buf[5] = (byte)count;
+        int dst = 6;
+        for (int i = 0; i < count; i++)
+        {
+            Buffer.BlockCopy(_missileScratch, picks[i] * Protocol.MissileRecordSize, buf, dst, Protocol.MissileRecordSize);
+            dst += Protocol.MissileRecordSize;
+        }
+        return buf;
     }
 
     // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).

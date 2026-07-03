@@ -77,6 +77,14 @@ public partial class TargetMarkers : Control
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
+    private GameNetClient _net = null!; // own missile ammo / lock state + the live missile set
+
+    // Missile HUD state, updated in _Process and read by _Draw. The lock tone fires on the rising
+    // edge into a full lock; the incoming warning tracks the nearest missile homing on the local
+    // ship (world position, null = none) and re-arms its sound on a cooldown while any is inbound.
+    private bool _wasLocked;
+    private Vector3? _inbound; // nearest inbound-missile world position, or null
+    private double _warnCd; // seconds until the incoming-missile warning tone may re-fire
 
     // The camera the indicators project through: the F3 overview camera while the sector
     // map is open (so every bracket / glyph / arrow reprojects onto the map), otherwise the
@@ -85,6 +93,12 @@ public partial class TargetMarkers : Control
 
     private ulong? _focused; // ShipId of the focused enemy, or null
     private bool _tabHeld; // edge-detect Tab so a held key cycles once
+
+    // The current Tab-focused enemy ShipId (0 = none), mirrored to a static each frame so
+    // ShipController can pack it as the missile-lock target in the input frame without an
+    // ownership chain to this overlay — the same cross-overlay idiom as Chat.Capturing /
+    // SectorOverview.Active. Cleared to 0 whenever focus drops (no ship / no target).
+    public static ulong FocusedId { get; private set; }
 
     // Reusable scratch arrays for DrawColoredPolygon — Godot copies on call so sequential
     // reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
@@ -98,10 +112,11 @@ public partial class TargetMarkers : Control
     private readonly List<(float AimDist2, ulong Id)> _visible = new();
 
     // Wired up by the Hud (which already resolves these siblings).
-    public void Init(WorldRenderer world, Camera3D camera)
+    public void Init(WorldRenderer world, Camera3D camera, GameNetClient net)
     {
         _world = world;
         _camera = camera;
+        _net = net;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // mono font for the focused-target tag, read directly (no Theme)
@@ -113,6 +128,8 @@ public partial class TargetMarkers : Control
         // camera (see Cam) so the same indicators track each entity over the map.
         Visible = true;
         HandleFocusCycle();
+        FocusedId = _focused ?? 0; // publish for ShipController's missile-lock input
+        UpdateMissileHud(delta);
         QueueRedraw();
     }
 
@@ -242,6 +259,61 @@ public partial class TargetMarkers : Control
         return best;
     }
 
+    // Drive the missile HUD's audio + threat tracking each frame (the visuals are drawn in _Draw
+    // from the state cached here). Two channels: the lock tone on the rising edge into a full
+    // lock (LocalLockState bit7), and the incoming-missile warning when any live missile is homing
+    // on the local ship — the nearest one's world position feeds the off-screen threat arrow.
+    private void UpdateMissileHud(double delta)
+    {
+        var local = _world.LocalShip;
+
+        // Lock tone: fire once when the server confirms a full lock (bit7). Resets naturally when
+        // the lock drops (progress zeroed server-side), re-arming the tone for the next lock.
+        bool locked = local != null && (_net.LocalLockState & 0x80) != 0;
+        if (locked && !_wasLocked)
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileLock);
+        _wasLocked = locked;
+
+        // Incoming warning: the nearest live missile whose target is our ship. Missile rows carry
+        // last-snapshot positions (good enough for a threat-direction arrow); AOI streams any
+        // missile aimed at us at every range, so this catches a seeker the moment it launches.
+        _inbound = null;
+        if (local != null)
+        {
+            ulong myId = local.ShipId;
+            Vector3 me = local.GlobalPosition;
+            float bestSq = float.MaxValue;
+            foreach (var m in _net.MissileRows.Values)
+                if (m.TargetShipId == myId)
+                {
+                    Vector3 p = new(m.PosX, m.PosY, m.PosZ);
+                    float d2 = (p - me).LengthSquared();
+                    if (d2 < bestSq)
+                    {
+                        bestSq = d2;
+                        _inbound = p;
+                    }
+                }
+        }
+
+        // Warning tone: re-fires on a cooldown while any missile stays inbound; cleared to fire
+        // immediately when a fresh threat appears after a lull.
+        if (_warnCd > 0)
+            _warnCd -= delta;
+        if (_inbound.HasValue)
+        {
+            if (_warnCd <= 0)
+            {
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileWarning);
+                _warnCd = 3.0;
+            }
+        }
+        else
+        {
+            _warnCd = 0;
+        }
+    }
+
     public override void _Draw()
     {
         // Use the viewport rect (what UnprojectPosition is relative to) rather than this
@@ -279,9 +351,13 @@ public partial class TargetMarkers : Control
         }
 
         // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
-        // target chrome (the game has no callsigns or missile-lock states to show).
+        // target chrome — plus the missile lock-progress arc on its bracket, filling as the
+        // server-authoritative lock timer runs and snapping to a steady ring once locked.
         if (focusedShip != null)
+        {
             DrawFocusTag(view, focusedShip, local);
+            DrawLockArc(focusedShip);
+        }
 
         // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
         // view axis — and the chase camera is offset above/behind the ship, so screen
@@ -322,6 +398,74 @@ public partial class TargetMarkers : Control
         Vector3 reticlePoint = muzzle + fwd * aimRange;
         if (!Cam.IsPositionBehind(reticlePoint))
             DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+
+        // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
+        // missile homing on us (drawn last so it sits over everything). State cached in _Process.
+        DrawIncomingWarning(view);
+    }
+
+    // The missile lock-progress arc wrapping the focused target's bracket, driven by the local
+    // ship's own LockState (bits 0-6 = progress 0..100, bit7 = locked). A partial cyan arc grows
+    // clockwise from the top while the lock timer runs; once locked it snaps to a full steady red
+    // ring with a LOCK tag. Skipped when there's no lock activity or the target is behind us.
+    private void DrawLockArc(RemoteShip ship)
+    {
+        int raw = _net.LocalLockState;
+        bool locked = (raw & 0x80) != 0;
+        int progress = raw & 0x7F;
+        if (!locked && progress == 0)
+            return;
+
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(ship.GlobalPosition))
+            return;
+        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
+        float r = FocusHalf + 7f;
+        if (locked)
+        {
+            DrawArc(sp, r, 0f, Mathf.Tau, 32, DesignTokens.Danger, 2.5f, true);
+            const string tag = "LOCK";
+            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
+            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 3f), tag, HorizontalAlignment.Left, -1, 9, DesignTokens.Danger);
+        }
+        else
+        {
+            float start = -Mathf.Pi * 0.5f; // 12 o'clock
+            float sweep = Mathf.Clamp(progress / 100f, 0f, 1f) * Mathf.Tau;
+            DrawArc(sp, r, start, start + sweep, 32, AimColor, 2f, true);
+        }
+    }
+
+    // Flashing "incoming missile" banner + an edge-clamped arrow pointing toward the nearest
+    // missile homing on the local ship. No-op when nothing is inbound (_inbound set in _Process).
+    private void DrawIncomingWarning(Vector2 view)
+    {
+        if (_inbound is not Vector3 threat)
+            return;
+
+        // Pulse the alpha so the warning flashes (a ~4 Hz throb) without a per-frame timer node.
+        float pulse = 0.55f + 0.45f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 8f);
+        Color c = new(DesignTokens.Danger, pulse);
+        Font font = UiFonts.Mono;
+        const string txt = "⚠  INCOMING MISSILE";
+        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 15).X;
+        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.32f), txt, HorizontalAlignment.Left, -1, 15, c);
+
+        // Edge arrow toward the threat, reusing the off-screen clamp path (points the way to turn
+        // even when the missile is on screen — a threat indicator, not just an off-screen marker).
+        Vector2 center = view * 0.5f;
+        Camera3D cam = Cam;
+        bool behind = cam.IsPositionBehind(threat);
+        Vector2 sp = cam.UnprojectPosition(threat);
+        if (behind)
+            sp = center * 2f - sp;
+        Vector2 dir = sp - center;
+        if (dir.LengthSquared() < 1e-4f)
+            dir = Vector2.Down;
+        dir = dir.Normalized();
+        Vector2 half = view * 0.5f - new Vector2(EdgeMargin, EdgeMargin);
+        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
+        DrawArrow(center + dir * scale, dir, c);
     }
 
     // Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class.

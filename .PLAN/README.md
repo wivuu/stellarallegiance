@@ -189,8 +189,13 @@ Stage-2 economy, no rework.
 - ✅ **Escape pods** — ships eject a pod on death; the pod must die or be rescued by a teammate
   before the player respawns.
 - ✅ **Booster / smoke-trail FX** — booster smoke trail reacting to thrust.
-- ☐ **Missiles** — a `WeaponKind` behavior module (launchers, lock-on, chaff/flare), defined in
-  YAML with cost + unlock. *Where the Stage-0 seam pays off and the wire protocol bump lands.*
+- ◐ **Missiles** — guided missiles shipped (2026-07-02, proto 15): `WeaponKind.Missile` launchers
+  authored as factions `Launcher`+`Missile` YAML (turn rate/accel/speed/lock/damage/trail all
+  data), hung on fighter/bomber hardpoints; server-authoritative lock + `MissileSim` pursuit
+  streamed via `MsgMissiles`/`MsgMissileGone`; finite racks; lock/ammo/incoming-warning HUD with
+  original Allegiance models+SFX; PIGs fire them; `tests/MissileTest` determinism guard.
+  Remaining from this item: **chaff/flare** (seam: `ResolveSeekerTarget`; `ChaffResistance`
+  authored), blast-radius splash, pre-launch "being locked" warning, rearm at base.
 - ☐ **Mines & fields** — deployable mines/minefields as a `WeaponKind` behavior module.
 - ☐ **Shields & damage systems** — regenerating shields over the raw-health model; damage-type
   interactions.

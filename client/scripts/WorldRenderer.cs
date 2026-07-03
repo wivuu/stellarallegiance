@@ -83,6 +83,11 @@ public partial class WorldRenderer : Node3D
     // on TTL expiry (_Process) or on visually striking a ship (CheckBoltImpacts).
     private readonly List<ProjectileView> _bolts = new();
 
+    // Live in-flight guided missiles, keyed by MissileId (server-simulated, AOI-streamed). Each
+    // MissileView dead-reckons between snapshots and is aged out on its MsgMissileGone. Parented
+    // under _projectiles, so RefreshSectorVisibility and Reset() sweep them like bolts.
+    private readonly Dictionary<ulong, MissileView> _missiles = new();
+
     // Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
     // circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
     // TTL where the SERVER's analytic solve would have stopped it on a rock.
@@ -411,6 +416,51 @@ public partial class WorldRenderer : Node3D
 
     public void NetDeleteShip(Ship row) => DeleteShip(row);
 
+    // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
+    // GameNetClient decodes MsgMissiles/MsgMissileGone and calls these; it also maintains its own
+    // MissileRows cache (the HUD reads that + LocalMissileAmmo/LocalLockState). These are no-ops
+    // today so the client compiles; the render agent replaces them with MissileView spawn/update
+    // (GLB by row.WeaponId's WeaponDef.ModelName, dead-reckoned by row.Vel) and NetMissileGone FX
+    // (reason 1 = impact explosion, 0 = expired fizzle). See plan step 8.
+    public void NetUpsertMissile(Missile row)
+    {
+        Vector3 pos = new(row.PosX, row.PosY, row.PosZ);
+        Vector3 vel = new(row.VelX, row.VelY, row.VelZ);
+        if (_missiles.TryGetValue(row.MissileId, out var view))
+        {
+            // Subsequent record: hand the fresh authoritative pos/vel to the view (it eases) and
+            // re-tag its sector, since a missile can cross a warp boundary mid-flight.
+            view.OnAuthoritative(pos, vel);
+            SetNodeSector(view, row.SectorId);
+            return;
+        }
+
+        // First sight: build the visual from the launching WeaponDef (model + trail) and drop it
+        // into the projectiles group so it inherits the sector-visibility gating and Reset sweep.
+        var mv = new MissileView { Name = $"Missile_{row.MissileId}" };
+        _projectiles.AddChild(mv);
+        mv.Initialize(pos, vel, row.Team, _defs.GetWeapon(row.WeaponId));
+        SetNodeSector(mv, row.SectorId);
+        _missiles[row.MissileId] = mv;
+        SfxManager.Instance?.PlayAt(SfxManager.SfxId.MissileLaunch, pos);
+    }
+
+    public void NetMissileGone(ulong id, byte reason, uint sector, Vec3 pos)
+    {
+        if (!_missiles.Remove(id, out var view))
+            return;
+        // reason 1 = impact: a small blast + boom at the detonation point (tinted to the missile's
+        // team). reason 0 = expired/coasted out: just vanish. The view's own team drives the tint.
+        if (reason == 1)
+        {
+            Vector3 p = new(pos.X, pos.Y, pos.Z);
+            var boom = ExplosionEffect.Create(ShipClass.Scout, view.Team);
+            SpawnEffect(boom, p, sector);
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, p, pitch: 1.25f);
+        }
+        view.QueueFree();
+    }
+
     // ShipId -> pilot name, rebuilt from each MsgLobbyState roster. The roster is the only source of
     // names (snapshots carry no identity); it's sent on every roster change including spawn/death, so
     // this stays current. PIG/pod ships with no roster row simply aren't in the map -> no nameplate.
@@ -456,6 +506,7 @@ public partial class WorldRenderer : Node3D
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
         _shipNodes.Clear();
+        _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _collidingShips.Clear();
         _alephNodes.Clear();
         _asteroidClip.Clear();
@@ -932,6 +983,11 @@ public partial class WorldRenderer : Node3D
         for (byte barrel = 0; barrel < mounts.Count; barrel++)
         {
             var (hp, weapon) = mounts[barrel];
+            // Skip missile racks: they don't fire bolts. The barrel index is STILL consumed so the
+            // per-barrel spread seed stays aligned with the server's TryFire loop regardless of where
+            // racks sit in the hardpoint array (server mirror: Simulation.TryFire).
+            if (weapon.Kind != WeaponKind.Bolt)
+                continue;
             Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
             Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
             Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));

@@ -65,9 +65,35 @@ Check(
 // Payload: hull capacity + weapon mass are authored (hulls/weapons.yaml), cargo items project
 // from expendables carrying a cargo-id (expendables.yaml).
 Check(
-    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 20f && scoutW.Mass == 2f,
+    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 26f && scoutW.Mass == 2f,
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
+);
+// Guided missiles: guns (3) + missile launchers (2 racks) project into one weapon set. A launcher
+// with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
+Check(
+    stock.Weapons.Count == 5,
+    "loader projected guns + missile launchers (3 guns + 2 racks)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 5)"
+);
+var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
+Check(
+    seekerW.Kind == WeaponKind.Missile
+        && seekerW.Damage == 45f && seekerW.ProjectileSpeed == 90f && seekerW.ProjectileLifeTicks == 160
+        && seekerW.ProjectileRadius == 3f && seekerW.Mass == 4f && seekerW.FireIntervalTicks == 30
+        && seekerW.MagazineSize == 6 && seekerW.LockTicks == 40 && seekerW.LockAngleRad == 0.5f
+        && seekerW.LockRange == 1200f && seekerW.MissileAccel == 40f && seekerW.MissileMaxSpeed == 220f
+        && seekerW.ModelName == "mis09" && seekerW.TrailColor == 0xffc890ffu
+        && System.MathF.Abs(seekerW.MissileTurnRateRad - (90f * System.MathF.PI / 180f)) < 0.0001f,
+    "loader projected seeker missile launcher (missile-kind WeaponDef)",
+    $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, lock {seekerW.LockTicks}/{seekerW.LockRange}, color {seekerW.TrailColor:x})"
+);
+// A bolt gun leaves every missile field zero/empty (guards the projection's Bolt path).
+Check(
+    scoutW.Kind == WeaponKind.Bolt && scoutW.MagazineSize == 0 && scoutW.LockTicks == 0
+        && scoutW.LockRange == 0f && scoutW.MissileMaxSpeed == 0f && scoutW.ModelName == "" && scoutW.TrailColor == 0u,
+    "loader left bolt weapon's missile fields zero/empty",
+    $"scout bolt has stray missile fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, lock {scoutW.LockTicks})"
 );
 Check(
     stock.CargoItems.Count == 3

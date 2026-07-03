@@ -53,6 +53,11 @@ public sealed partial class Simulation
     // the per-barrel spread seed (FlightModel.SpreadDirection) matches the client.
     private readonly Muzzle[][] ClassMuzzles;
 
+    // Per-class MISSILE-kind mounts (a subset of ClassMuzzles), indexed by ClassId, in hardpoint
+    // order. Built from the loaded defs; the first entry is the rack a hull launches from + inits
+    // its ammo. A hull with no missile hardpoint has an empty array.
+    private readonly Muzzle[][] ClassMissileMounts;
+
     private static Muzzle[][] BuildMuzzles(IReadOnlyList<ShipClassDef> defs)
     {
         int max = 0;
@@ -80,12 +85,26 @@ public sealed partial class Simulation
     private float HullFor(byte cls) =>
         ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
 
-    // A class's primary (first) weapon — or the Scout gun if the hull carries no weapon hardpoint.
-    // Drives the PIG threat heuristic; single-sourced from the same muzzles/defs the sim fires from.
+    // A class's primary GUN — the first Bolt-kind muzzle, or the Scout gun if the hull carries no
+    // bolt weapon (missile racks are ignored). Drives the PIG threat heuristic + the gun cadence
+    // gate; single-sourced from the same muzzles/defs the sim fires from.
     private WeaponDef PrimaryWeapon(byte cls)
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
-        return WeaponDefs[m.Length > 0 ? m[0].WeaponId : GameContent.ScoutWeaponId];
+        foreach (var mz in m)
+            if (WeaponDefs.TryGetValue(mz.WeaponId, out var wd) && wd.Kind == WeaponKind.Bolt)
+                return wd;
+        return WeaponDefs[GameContent.ScoutWeaponId];
+    }
+
+    // The first missile mount for a class + its projected WeaponDef, or null if the hull has none.
+    // Used to init a spawn's ammo and by TryFireMissile/UpdateLock (the missile launch/lock path).
+    private (Muzzle mount, WeaponDef w)? MissileMountFor(byte cls)
+    {
+        var mounts = cls < ClassMissileMounts.Length ? ClassMissileMounts[cls] : System.Array.Empty<Muzzle>();
+        if (mounts.Length == 0)
+            return null;
+        return (mounts[0], WeaponDefs[mounts[0].WeaponId]);
     }
 
     // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
@@ -119,6 +138,14 @@ public sealed partial class Simulation
         public bool IsPig;
         public bool IsPod;
 
+        // ---- Guided-missile launcher state (0 / false on hulls with no missile mount) ----
+        public byte MissileAmmo; // rounds left in the rack (init = mount MagazineSize at spawn)
+        public uint LastMissileTick; // last tick a missile launched (fire-cadence gate)
+        public ulong LockTargetId; // the ship this ship is trying to lock (from input)
+        public uint LockProgress; // consecutive ticks the target held a valid lock (vs LockTicks)
+        public bool Locked; // LockProgress reached LockTicks — a missile may launch
+        public byte LockState; // wire byte: bit7 = Locked, bits0-6 = progress 0..100 (computed in UpdateLock)
+
         // Tick-stamped input ring (module ShipInput buffer equivalent): an input stamped
         // for tick T is applied exactly AT tick T, so the server replays the same input
         // sequence the client predicted with — the contract client prediction relies on.
@@ -127,6 +154,31 @@ public sealed partial class Simulation
     }
 
     public const int InputRingSize = 64;
+
+    // An in-flight guided missile. A separate entity from ShipSim (own list, no flight-model
+    // integration): turn-rate-limited pure pursuit in StepMissiles, direct-Power damage on impact.
+    // Ids come from the shared _nextShipId counter (unique across ships + missiles).
+    public sealed class MissileSim
+    {
+        public ulong MissileId;
+        public ulong OwnerShipId; // launching ship (never a valid sweep target)
+        public byte Team; // owner team (friendlies are not swept)
+        public uint WeaponId; // missile-kind WeaponDef (ballistics + model/trail)
+        public uint SectorId;
+        public Vec3 Pos;
+        public Vec3 Vel;
+        public ulong TargetShipId; // the ship the seeker homes on (0 / invalid → coast)
+        public uint ExpireAtTick; // launch tick + ProjectileLifeTicks
+    }
+
+    // Live missiles (appended by TryFireMissile in Pass A, stepped in StepMissiles). Exposed to the
+    // hub for AOI-filtered MsgMissiles fan-out.
+    private readonly List<MissileSim> _missiles = new();
+    public IReadOnlyList<MissileSim> Missiles => _missiles;
+
+    // Missiles that detonated / expired this step, drained by the hub into MsgMissileGone frames.
+    // Reason 0 = expired/coasted out, 1 = impact. Cleared at the top of Step (like DeathsThisStep).
+    public readonly List<(ulong id, byte reason, uint sector, Vec3 pos)> MissileGoneThisStep = new();
 
     private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage);
 
@@ -256,6 +308,16 @@ public sealed partial class Simulation
         WeaponDefs = content.Weapons.ToDictionary(w => w.WeaponId);
         ShipDefs = content.Ships.ToDictionary(d => d.ClassId);
         ClassMuzzles = BuildMuzzles(content.Ships);
+        // Missile-kind subset of the muzzles, filtered once against the resolved WeaponDefs.
+        ClassMissileMounts = new Muzzle[ClassMuzzles.Length][];
+        for (int c = 0; c < ClassMuzzles.Length; c++)
+        {
+            var mis = new List<Muzzle>();
+            foreach (var m in ClassMuzzles[c])
+                if (WeaponDefs.TryGetValue(m.WeaponId, out var wd) && wd.Kind == WeaponKind.Missile)
+                    mis.Add(m);
+            ClassMissileMounts[c] = mis.ToArray();
+        }
         _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
@@ -322,6 +384,7 @@ public sealed partial class Simulation
         uint tick = ++_tick;
         float dt = FlightModel.Dt;
         DeathsThisStep.Clear();
+        MissileGoneThisStep.Clear();
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
@@ -359,11 +422,21 @@ public sealed partial class Simulation
             var stats = StatsFor(s.Class, s.IsPod);
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
-            // Pods are unarmed — only an armed combat ship fires.
-            if (!s.IsPod && input.Firing)
-                TryFire(s, tick);
+            // Pods are unarmed — only an armed combat ship fires / locks.
+            if (!s.IsPod)
+            {
+                UpdateLock(s, input, tick); // missile lock timer (no-op on hulls with no rack)
+                if (input.Firing)
+                    TryFire(s, tick);
+                if (input.Firing2)
+                    TryFireMissile(s, tick);
+            }
             TryWarp(s);
         }
+
+        // Guided missiles: steer + sweep + damage, between Pass A (which may have launched some this
+        // tick) and Pass C. A missile launched this tick coasts its first partial segment next tick.
+        StepMissiles(tick, dt);
 
         // Pass C: enemy ship-vs-ship collisions (mass-weighted impulse, module-identical),
         // O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -591,6 +664,10 @@ public sealed partial class Simulation
     public void ReturnToLobby()
     {
         DespawnAllPigs();
+        // Tear down any in-flight missiles too (emit gone so live clients don't keep ghosts).
+        foreach (var mis in _missiles)
+            MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
+        _missiles.Clear();
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
@@ -630,6 +707,8 @@ public sealed partial class Simulation
         s.State.Mass = StatsFor(cls, false).Mass;
         s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
+        if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
+            s.MissileAmmo = mw.MagazineSize;
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
@@ -920,23 +999,37 @@ public sealed partial class Simulation
         if (muzzles.Length == 0)
             return; // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
 
-        // ponytail: one cadence per ship, gated off the primary muzzle's weapon; per-weapon cadence
-        // (a separate LastFireTick per mount) arrives with mixed loadouts (Stage 2).
-        var primary = WeaponDefs[muzzles[0].WeaponId];
+        // Primary fire is the GUNS: one cadence per ship, gated off the first Bolt muzzle's weapon
+        // (missile racks have their own cadence in TryFireMissile). A hull with no gun (only racks)
+        // has nothing to fire here. Per-weapon cadence arrives with mixed loadouts (Stage 2).
+        WeaponDef? primary = null;
+        foreach (var mz in muzzles)
+            if (WeaponDefs[mz.WeaponId].Kind == WeaponKind.Bolt)
+            {
+                primary = WeaponDefs[mz.WeaponId];
+                break;
+            }
+        if (primary is null)
+            return; // no gun on this hull — primary fire is a no-op (missiles fire via Firing2)
         if (tick - ship.LastFireTick < primary.FireIntervalTicks && ship.LastFireTick != 0)
             return;
         ship.LastFireTick = tick;
 
         // One shot per muzzle, in hardpoint order (the Fighter's twin cannons fire together). Each
-        // muzzle fires its own weapon, dispatched by kind — today every weapon is a Bolt.
+        // muzzle fires its own weapon, dispatched by kind. IMPORTANT: the loop still visits missile
+        // mounts and KEEPS the hardpoint-array index as `barrel` (the per-barrel spread seed) — it
+        // just skips firing a bolt for them. The client's SpawnBoltFor mirrors this exactly so the
+        // gun barrel seeds stay aligned on both sides regardless of where racks sit in the array.
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
             var w = WeaponDefs[muzzles[barrel].WeaponId];
-            switch (w.Kind) // ponytail: one-branch seam; missile/mine kinds add a case + a behavior method (Stage 2)
+            switch (w.Kind)
             {
                 case WeaponKind.Bolt:
                     FireBolt(ship, tick, w, muzzles[barrel], barrel);
                     break;
+                case WeaponKind.Missile:
+                    break; // racks are fired by Firing2 (TryFireMissile), not primary fire
             }
         }
     }
@@ -1066,6 +1159,245 @@ public sealed partial class Simulation
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
             _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage));
         }
+    }
+
+    // ---- Guided missiles (server-authoritative lock + launch + turn-rate pursuit) ----
+
+    // Advance this ship's missile lock timer from its input's LockTargetId. A hull with no rack
+    // never locks (early out). A valid target (alive enemy ship — NOT a pod — in the same sector,
+    // within LockRange, inside the LockAngle nose cone) advances progress; anything else resets it.
+    // Progress reaching LockTicks latches Locked. Also bakes the wire LockState byte.
+    private void UpdateLock(ShipSim ship, in ShipInputState input, uint tick)
+    {
+        if (MissileMountFor(ship.Class) is not (_, WeaponDef w))
+            return; // no launcher on this hull — never locks
+
+        ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
+        bool valid = false;
+        if (
+            input.LockTargetId != 0
+            && _ships.TryGetValue(input.LockTargetId, out var t)
+            && t.Alive
+            && t.Team != ship.Team
+            && !t.IsPod // locking a helpless pod is bad feel — pods are never lockable
+            && t.SectorId == ship.SectorId
+        )
+        {
+            Vec3 to = t.State.Pos - ship.State.Pos;
+            float d = to.Length();
+            if (d > 1e-4f && d <= w.LockRange)
+            {
+                Vec3 nose = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
+                if (Dot(nose, to * (1f / d)) >= MathF.Cos(w.LockAngleRad))
+                    valid = true;
+            }
+        }
+
+        if (valid)
+        {
+            ship.LockProgress++;
+            if (ship.LockProgress >= w.LockTicks)
+                ship.Locked = true;
+        }
+        else
+        {
+            ship.LockProgress = 0;
+            ship.Locked = false;
+        }
+
+        uint pct = w.LockTicks > 0 ? ship.LockProgress * 100u / w.LockTicks : 100u;
+        if (pct > 100u)
+            pct = 100u;
+        ship.LockState = (byte)((ship.Locked ? 0x80 : 0) | (int)pct);
+    }
+
+    // Secondary fire (Firing2): launch one missile from the rack when armed and off cooldown.
+    // A lock is NOT required — unlocked launches are dumbfire (no target, ballistic straight
+    // out of the tube); a completed lock makes the round guided. Spawns at the mount
+    // hardpoint's world pose (like FireBolt), inheriting ship velocity plus the missile's
+    // initial boost along the mount forward. Appended directly to _missiles (safe — Pass A
+    // iterates _order, not _missiles).
+    private void TryFireMissile(ShipSim ship, uint tick)
+    {
+        if (MissileMountFor(ship.Class) is not (Muzzle mount, WeaponDef w))
+            return;
+        if (ship.MissileAmmo == 0)
+            return;
+        if (ship.LastMissileTick != 0 && tick - ship.LastMissileTick < w.FireIntervalTicks)
+            return;
+
+        ship.MissileAmmo--;
+        ship.LastMissileTick = tick;
+
+        Vec3 fwd = ship.State.Rot.Rotate(mount.Dir);
+        Vec3 mp = ship.State.Pos + ship.State.Rot.Rotate(mount.Off);
+        _missiles.Add(
+            new MissileSim
+            {
+                MissileId = _nextShipId++,
+                OwnerShipId = ship.ShipId,
+                Team = ship.Team,
+                WeaponId = w.WeaponId,
+                SectorId = ship.SectorId,
+                Pos = mp,
+                Vel = ship.State.Vel + fwd * w.ProjectileSpeed, // ProjectileSpeed = InitialSpeed
+                // Guided only when the lock completed; LockTargetId alone is just the client's
+                // REQUEST (mirrored every tick by UpdateLock) and must not steer a dumbfire.
+                TargetShipId = ship.Locked ? ship.LockTargetId : 0,
+                ExpireAtTick = tick + w.ProjectileLifeTicks,
+            }
+        );
+    }
+
+    // Resolve a missile's seeker target — the isolated chaff/flare substitution seam. Returns the
+    // homed ship, or null (missile coasts ballistic) when the target is dead / friendly / a pod /
+    // in another sector / gone.
+    private ShipSim? ResolveSeekerTarget(MissileSim mis)
+    {
+        if (mis.TargetShipId == 0 || !_ships.TryGetValue(mis.TargetShipId, out var t))
+            return null;
+        if (!t.Alive || t.Team == mis.Team || t.IsPod || t.SectorId != mis.SectorId)
+            return null;
+        return t;
+    }
+
+    // Step every in-flight missile: steer (turn-rate-limited pure pursuit) + accelerate, sweep this
+    // tick's segment for the first enemy ship (skip owner, friendlies, pods) or rock, apply direct
+    // Power damage on a ship hit, and detonate/expire. Deterministic f32 math, no RNG. Between
+    // Pass A and Pass C. Removals collected then applied post-loop.
+    private void StepMissiles(uint tick, float dt)
+    {
+        if (_missiles.Count == 0)
+            return;
+
+        List<MissileSim>? remove = null;
+        foreach (var mis in _missiles)
+        {
+            var w = WeaponDefs[mis.WeaponId];
+
+            // (1) target (chaff seam) → (2) steer + accelerate.
+            ShipSim? target = ResolveSeekerTarget(mis);
+            float speed = mis.Vel.Length();
+            Vec3 dir = speed > 1e-4f ? mis.Vel * (1f / speed) : new Vec3(0f, 0f, 1f);
+            if (target is ShipSim tg)
+            {
+                Vec3 to = tg.State.Pos - mis.Pos;
+                float d = to.Length();
+                if (d > 1e-4f)
+                    dir = TurnToward(dir, to * (1f / d), w.MissileTurnRateRad * dt);
+            }
+            float newSpeed = speed + w.MissileAccel * dt;
+            if (w.MissileMaxSpeed > 0f && newSpeed > w.MissileMaxSpeed)
+                newSpeed = w.MissileMaxSpeed;
+            Vec3 vel = dir * newSpeed;
+            mis.Vel = vel;
+
+            // (3) sweep the tick segment (mp + vel·t, t∈[0,dt]) against ships + rocks.
+            Vec3 mp = mis.Pos;
+            float bestT = dt;
+            ulong hitShip = 0;
+            bool detonate = false;
+            var shipGrid = _shipGrid.TryGetValue(mis.SectorId, out var sg) ? sg : null;
+            var rockGrid = World.RockGrid(mis.SectorId);
+            foreach (var cell in CellsAlongRay(mp, vel, bestT))
+            {
+                if (shipGrid is not null && shipGrid.TryGetValue(cell, out var shipsInCell))
+                {
+                    foreach (var s in shipsInCell)
+                    {
+                        // Skip the owner, friendlies, dead ships, and pods (strays must not gib
+                        // podded pilots; seekers only ever target ships anyway).
+                        if (s.Team == mis.Team || !s.Alive || s.ShipId == mis.OwnerShipId || s.IsPod)
+                            continue;
+                        var body = World.ShipHull(s.Class, s.IsPod);
+                        if (body is World.ShipBody sb)
+                        {
+                            float br = sb.BoundingRadius + w.ProjectileRadius;
+                            if (!FirstEntryTime(mp, vel, s.State.Pos, s.State.Vel, br, bestT, out _))
+                                continue;
+                            Vec3 vrel = vel - s.State.Vel;
+                            if (
+                                HullRayEntry(sb.Hull, s.State.Pos, s.State.Rot, 1f, mp, vrel, w.ProjectileRadius, bestT, out float th)
+                                && th < bestT
+                            )
+                            {
+                                bestT = th;
+                                hitShip = s.ShipId;
+                                detonate = true;
+                            }
+                        }
+                        else
+                        {
+                            float r = World.ShipRadius + w.ProjectileRadius;
+                            if (FirstEntryTime(mp, vel, s.State.Pos, s.State.Vel, r, bestT, out float t) && t < bestT)
+                            {
+                                bestT = t;
+                                hitShip = s.ShipId;
+                                detonate = true;
+                            }
+                        }
+                    }
+                }
+                if (rockGrid.TryGetValue(cell, out var rocks))
+                {
+                    foreach (var a in rocks)
+                    {
+                        if (!FirstEntryTime(mp, vel, a.Pos, default, a.Radius + w.ProjectileRadius, bestT, out _))
+                            continue;
+                        float r = a.Radius * World.AsteroidCollisionScale + w.ProjectileRadius;
+                        bool hit = World.RockBodies.TryGetValue(a.Id, out var rbody)
+                            ? HullRayEntry(rbody.Hull, a.Pos, rbody.Rot, rbody.Scale, mp, vel, w.ProjectileRadius, bestT, out float t)
+                            : FirstEntryTime(mp, vel, a.Pos, default, r, bestT, out t);
+                        if (hit && t < bestT)
+                        {
+                            bestT = t;
+                            hitShip = 0; // a rock kills the missile (no damage dealt)
+                            detonate = true;
+                        }
+                    }
+                }
+            }
+
+            if (detonate)
+            {
+                Vec3 hitPos = mp + vel * bestT;
+                if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
+                    victim.Health -= w.Damage; // end-of-step death pass resolves 0 health
+                MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
+                (remove ??= new()).Add(mis);
+                continue;
+            }
+
+            // (6) integrate, then expiry / world-boundary.
+            mis.Pos = mp + vel * dt;
+            if (tick >= mis.ExpireAtTick || mis.Pos.Length() > World.SectorRadius(mis.SectorId))
+            {
+                MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos)); // expired
+                (remove ??= new()).Add(mis);
+            }
+        }
+
+        if (remove is not null)
+            foreach (var mis in remove)
+                _missiles.Remove(mis);
+    }
+
+    // Rotate unit `dir` toward unit `desired` by at most `maxRad`. Linear blend + renormalize (a
+    // small-angle slerp approximation, exact enough per tick); deterministic f32 (server-only).
+    private static Vec3 TurnToward(Vec3 dir, Vec3 desired, float maxRad)
+    {
+        float dot = Dot(dir, desired);
+        if (dot > 1f)
+            dot = 1f;
+        else if (dot < -1f)
+            dot = -1f;
+        float ang = MathF.Acos(dot);
+        if (ang <= maxRad || ang < 1e-5f)
+            return desired;
+        float f = maxRad / ang;
+        Vec3 blended = dir * (1f - f) + desired * f;
+        float n = blended.Length();
+        return n > 1e-6f ? blended * (1f / n) : desired;
     }
 
     private void ResolveDueShots(uint tick)

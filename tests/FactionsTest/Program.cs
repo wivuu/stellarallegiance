@@ -86,7 +86,7 @@ Check(scoutBolt.Power == 4 && scoutBolt.Speed == 200 && scoutBolt.Width == 1, "s
 // Payload authoring: hull capacity, weapon mass, and cargo-id expendables (the hangar's hold).
 var fighter = stock.Hulls.Single(h => h.Id == "fighter");
 Check(
-    scout.PayloadCapacity == 8 && fighter.PayloadCapacity == 16 && scoutCannon.Mass == 2,
+    scout.PayloadCapacity == 8 && fighter.PayloadCapacity == 20 && scoutCannon.Mass == 2,
     "stock hulls/weapons carry payload-capacity + mass",
     $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, cannon mass {scoutCannon.Mass})"
 );
@@ -101,6 +101,27 @@ Check(
     seeker.CargoId == 1 && seeker.Mass == 4 && !string.IsNullOrEmpty(seeker.Glyph) && !string.IsNullOrEmpty(seeker.Description),
     "stock seeker missile carries cargo-id + mass + glyph",
     $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass})"
+);
+// Guided-missile guidance/lock block + smoke-trail runtime extension fields (projected onto the
+// missile-kind WeaponDef).
+Check(
+    seeker.InitialSpeed == 90 && seeker.Acceleration == 40 && seeker.MaxSpeed == 220 && seeker.TurnRate == 90
+        && seeker.LockTime == 2.0 && seeker.LockAngle == 0.5 && seeker.MaxLock == 1200 && seeker.Power == 45
+        && seeker.Width == 3 && seeker.Lifespan == 8,
+    "stock seeker carries guidance/lock stats",
+    $"stock seeker guidance wrong (speed {seeker.InitialSpeed}/{seeker.MaxSpeed}, accel {seeker.Acceleration}, turn {seeker.TurnRate}, lock {seeker.LockTime}/{seeker.LockAngle}/{seeker.MaxLock}, power {seeker.Power})"
+);
+Check(
+    seeker.ModelName == "mis09" && seeker.TrailLifetime == 0.7 && seeker.TrailScale == 0.45 && seeker.TrailColor == "ffc890ff",
+    "stock seeker carries smoke-trail fields (model-name/trail-*)",
+    $"stock seeker trail wrong (model {seeker.ModelName}, life {seeker.TrailLifetime}, scale {seeker.TrailScale}, color {seeker.TrailColor})"
+);
+var missileRack = stock.Launchers.Single(l => l.Id == "missile-rack");
+Check(
+    missileRack.WeaponId == 3 && missileRack.Amount == 6 && missileRack.FireIntervalTicks == 30
+        && missileRack.ExpendableId == "seeker-missile" && missileRack.Mass == 4,
+    "stock missile-rack carries weapon-id + amount + fire-interval-ticks",
+    $"stock missile-rack wrong (weapon-id {missileRack.WeaponId}, amount {missileRack.Amount}, fire {missileRack.FireIntervalTicks}, expendable {missileRack.ExpendableId})"
 );
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");

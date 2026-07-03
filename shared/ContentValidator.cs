@@ -39,6 +39,23 @@ namespace StellarAllegiance.Shared
                     errors.Add($"duplicate WeaponId {w.WeaponId} (\"{w.Name}\")");
                 else
                     weaponsById[w.WeaponId] = w;
+
+                // Missile-kind defs need a live guidance/lock stat block (belt-and-suspenders over
+                // the library CoreValidator — a projected missile with a dead lock/range/speed/
+                // magazine would spawn an unusable launcher).
+                if (w.Kind == WeaponKind.Missile)
+                {
+                    if (w.LockTicks == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has LockTicks 0 — never locks");
+                    if (w.LockRange <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive LockRange {w.LockRange}");
+                    if (w.ProjectileSpeed <= 0f)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}");
+                    if (w.MagazineSize == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
+                    if (w.ProjectileLifeTicks == 0)
+                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                }
             }
 
             var classIds = new HashSet<byte>();

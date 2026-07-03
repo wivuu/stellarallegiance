@@ -232,6 +232,13 @@ namespace StellarAllegiance.Shared
             Roll;
         public bool Firing;
         public bool Boost; // afterburner held: ramps AbPower, raising equilibrium speed
+
+        // Secondary fire (missile launch) + the client's current lock target (Tab-target). Both
+        // ride the input ring / HeldInput replay untouched by Integrate — the missile lock/fire
+        // path (Simulation) is server-authoritative and reads them directly, so flight stays
+        // deterministic (they default false/0, keeping existing FlightModel goldens unchanged).
+        public bool Firing2;
+        public ulong LockTargetId;
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)
