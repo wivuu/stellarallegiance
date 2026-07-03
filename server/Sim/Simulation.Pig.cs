@@ -114,6 +114,7 @@ public sealed partial class Simulation
             Py,
             Pz;
         public float Radius;
+        public ulong TargetBaseLockId; // GameContent.BaseLockId(base.Id) for PigKindAttackPoint, else 0
     }
 
     // Everything one decision needs, gathered ONCE per drone per brain tick (single sector/radar
@@ -664,6 +665,7 @@ public sealed partial class Simulation
                 Py = eb.Pos.Y,
                 Pz = eb.Pos.Z,
                 Radius = World.BaseRadius,
+                TargetBaseLockId = GameContent.BaseLockId(eb.Id),
             };
         }
 
@@ -805,7 +807,7 @@ public sealed partial class Simulation
             case PigKindSteerPoint:
                 return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 1f);
             case PigKindAttackPoint:
-                return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius);
+                return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius, d.TargetBaseLockId);
             case PigKindPatrol:
                 return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 0.7f);
             default:
@@ -1068,7 +1070,7 @@ public sealed partial class Simulation
         };
     }
 
-    private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius)
+    private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius, ulong baseLockId)
     {
         Vec3 to = point - myPos;
         float dist = to.Length();
@@ -1097,15 +1099,26 @@ public sealed partial class Simulation
         else
             thrust = 0.2f;
 
-        float aimErr = MathF.Sqrt(local.X * local.X + local.Y * local.Y);
-        bool onTarget = local.Z > 0f && aimErr < PigAimSinDeg;
-        bool inRange = (dist - radius) <= PigFireRange;
+        // Guns no longer damage bases — holding primary fire on a base is a shoots-but-nothing-
+        // happens look, so Firing is always false here. A hull whose missile mount CAN damage a
+        // base (the siege torpedo) locks + launches at it instead (Firing2), same lock-range gate
+        // UpdateLock uses server-side.
+        bool firing2 = false;
+        ulong lockTargetId = 0;
+        if (MissileMountFor(me.Class) is (_, WeaponDef mw) && mw.CanDamageBase)
+        {
+            lockTargetId = baseLockId;
+            firing2 = me.Locked && (dist - radius) <= mw.LockRange;
+        }
+
         return new ShipInputState
         {
             Thrust = thrust,
             Yaw = yaw,
             Pitch = pitch,
-            Firing = inRange && onTarget,
+            Firing = false,
+            Firing2 = firing2,
+            LockTargetId = lockTargetId,
         };
     }
 

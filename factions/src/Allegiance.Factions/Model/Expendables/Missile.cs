@@ -44,4 +44,7 @@ public record Missile : Expendable
 
     /// <summary>Smoke-trail tint as a 6- or 8-digit hex string (RRGGBB[AA]); parsed to u32 at projection.</summary>
     public string? TrailColor { get; set; }
+
+    /// <summary>True if this missile's warhead applies damage to bases (station siege ordnance).</summary>
+    public bool CanDamageBase { get; set; }
 }

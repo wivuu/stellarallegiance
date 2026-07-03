@@ -12,7 +12,8 @@
 # (width), inverse-square falloff beyond it, nothing past blast-radius. The
 # smoke trail is YAML-tweakable: model-name (assets/missiles/<name>.glb), trail-lifetime/trail-scale
 # (client EngineGlow plume) and trail-color (RRGGBB[AA] hex). CoreValidator refuses to boot a launcher
-# whose missile leaves any of these unauthored.
+# whose missile leaves any of these unauthored. can-damage-base (omit-when-default false) flags a
+# warhead as able to damage bases (a base is a lockable target only for such a weapon).
 missiles:
   # Seeker (weapon-id 3 rack): slow, hard-hitting, patient tracker.
   - id: seeker-missile
@@ -61,6 +62,30 @@ missiles:
     trail-lifetime: 0.4
     trail-scale: 0.3
     trail-color: "aaccffcc"  # cool, thin plume
+
+  # Anti-base torpedo (weapon-id 5 rack): heavy siege ordnance, barely steers, hits stations hard.
+  - id: anti-base-torpedo
+    name: Anti-Base Torpedo
+    description: Heavy siege torpedo. Locks onto enemy stations.
+    mass: 6
+    lifespan: 12
+    initial-speed: 60
+    acceleration: 25
+    max-speed: 140
+    turn-rate: 25        # deg/s — barely steers; meant for a static target
+    lock-time: 3.0
+    lock-angle: 0.35
+    max-lock: 1500
+    power: 200
+    width: 1             # minimal fuse margin — vs the base it's ignored anyway (exact hull contact)
+    direct-hit-multiplier: 1.0
+    blast-power: 40      # splashes defenders near the impact, never the base
+    blast-radius: 30
+    can-damage-base: true
+    model-name: mis09    # reuse existing GLB until a torpedo model lands
+    trail-lifetime: 1.0
+    trail-scale: 0.6
+    trail-color: "ff9060ff"
 
 mines:
   - id: proximity-mine

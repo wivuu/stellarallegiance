@@ -1050,7 +1050,7 @@ public sealed partial class Simulation
         ulong targetShip = 0;
         int targetBase = -1;
 
-        if (ship.Class == FlightModel.ClassBomber)
+        if (w.CanDamageBase)
         {
             for (int i = 0; i < World.Bases.Count; i++)
             {
@@ -1174,7 +1174,26 @@ public sealed partial class Simulation
 
         ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
         bool valid = false;
-        if (
+        if (GameContent.IsBaseLock(input.LockTargetId))
+        {
+            // Base lock: only a CanDamageBase weapon may lock a base at all (D3); otherwise
+            // reuse the exact same range/cone test as a ship target, aimed at the base's pos.
+            if (
+                w.CanDamageBase
+                && TryGetLockableBase(input.LockTargetId, ship.Team, ship.SectorId, out int bi)
+            )
+            {
+                Vec3 to = World.Bases[bi].Pos - ship.State.Pos;
+                float d = to.Length();
+                if (d > 1e-4f && d <= w.LockRange)
+                {
+                    Vec3 nose = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
+                    if (Dot(nose, to * (1f / d)) >= MathF.Cos(w.LockAngleRad))
+                        valid = true;
+                }
+            }
+        }
+        else if (
             input.LockTargetId != 0
             && _ships.TryGetValue(input.LockTargetId, out var t)
             && t.Alive
@@ -1276,13 +1295,24 @@ public sealed partial class Simulation
         {
             var w = WeaponDefs[mis.WeaponId];
 
-            // (1) target (chaff seam) → (2) steer + accelerate.
-            ShipSim? target = ResolveSeekerTarget(mis);
+            // (1) aim point (chaff seam for ships; base-lock resolves to the base's pos, else the
+            // missile coasts unguided — D4) → (2) steer + accelerate. ResolveSeekerTarget stays the
+            // untouched chaff substitution seam.
+            Vec3? aimPos = null;
+            if (GameContent.IsBaseLock(mis.TargetShipId))
+            {
+                if (TryGetLockableBase(mis.TargetShipId, mis.Team, mis.SectorId, out int aimBase))
+                    aimPos = World.Bases[aimBase].Pos;
+            }
+            else if (ResolveSeekerTarget(mis) is ShipSim tg)
+            {
+                aimPos = tg.State.Pos;
+            }
             float speed = mis.Vel.Length();
             Vec3 dir = speed > 1e-4f ? mis.Vel * (1f / speed) : new Vec3(0f, 0f, 1f);
-            if (target is ShipSim tg)
+            if (aimPos is Vec3 ap)
             {
-                Vec3 to = tg.State.Pos - mis.Pos;
+                Vec3 to = ap - mis.Pos;
                 float d = to.Length();
                 if (d > 1e-4f)
                     dir = TurnToward(dir, to * (1f / d), w.MissileTurnRateRad * dt);
@@ -1293,11 +1323,34 @@ public sealed partial class Simulation
             Vec3 vel = dir * newSpeed;
             mis.Vel = vel;
 
-            // (3) sweep the tick segment (mp + vel·t, t∈[0,dt]) against ships + rocks.
+            // (3) sweep the tick segment (mp + vel·t, t∈[0,dt]) against enemy bases + ships + rocks.
+            // Bases go first (mirrors FireBolt's base-then-grid order): EVERY missile sweeps bases
+            // regardless of lock, using the RAW hull/sphere test (no w.ProjectileRadius fuse-margin
+            // inflation — D5) so a torpedo always registers an exact hull-surface contact, never a
+            // near-miss short of the base. The ship/rock grid walk below then competes against the
+            // (possibly already-reduced) bestT exactly as it did before bases existed; whichever is
+            // closer wins and clears the other's hit slot.
             Vec3 mp = mis.Pos;
             float bestT = dt;
             ulong hitShip = 0;
+            int hitBase = -1;
             bool detonate = false;
+            for (int bi = 0; bi < World.Bases.Count; bi++)
+            {
+                var b = World.Bases[bi];
+                if (b.SectorId != mis.SectorId || b.Team == mis.Team)
+                    continue; // friendly bases are non-colliding, matching bolts
+                bool bhit = World.BaseHull is ConvexHull bh
+                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, vel, 0f, bestT, out float bt)
+                    : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadius, bestT, out bt);
+                if (bhit && bt < bestT)
+                {
+                    bestT = bt;
+                    hitBase = bi;
+                    hitShip = 0;
+                    detonate = true;
+                }
+            }
             var shipGrid = _shipGrid.TryGetValue(mis.SectorId, out var sg) ? sg : null;
             var rockGrid = World.RockGrid(mis.SectorId);
             foreach (var cell in CellsAlongRay(mp, vel, bestT))
@@ -1324,6 +1377,7 @@ public sealed partial class Simulation
                             {
                                 bestT = th;
                                 hitShip = s.ShipId;
+                                hitBase = -1;
                                 detonate = true;
                             }
                         }
@@ -1334,6 +1388,7 @@ public sealed partial class Simulation
                             {
                                 bestT = t;
                                 hitShip = s.ShipId;
+                                hitBase = -1;
                                 detonate = true;
                             }
                         }
@@ -1353,6 +1408,7 @@ public sealed partial class Simulation
                         {
                             bestT = t;
                             hitShip = 0; // a rock kills the missile (no damage dealt)
+                            hitBase = -1;
                             detonate = true;
                         }
                     }
@@ -1364,6 +1420,8 @@ public sealed partial class Simulation
                 Vec3 hitPos = mp + vel * bestT;
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
                     victim.Health -= w.Damage * w.DirectHitMult; // end-of-step death pass resolves 0 health
+                else if (hitBase >= 0 && w.CanDamageBase)
+                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
                 ApplyBlast(mis, w, hitPos, hitShip, shipGrid);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
@@ -1438,6 +1496,45 @@ public sealed partial class Simulation
         return n > 1e-6f ? blended * (1f / n) : desired;
     }
 
+    // Apply damage to a base (health floor at 0), flag it as changed/dirty, and — the first time
+    // it drops to 0 — latch the match end (winner = the OTHER team, i.e. the side that destroyed
+    // it) and schedule the return-to-lobby. Shared by the bolt path (ResolveDueShots) and missile
+    // detonation (StepMissiles) so both apply base damage identically.
+    private void ApplyBaseDamage(int baseIndex, float damage, uint tick)
+    {
+        float hp = MathF.Max(0f, World.BaseHealth[baseIndex] - damage);
+        World.BaseHealth[baseIndex] = hp;
+        BasesChangedThisStep = true;
+        _matchDirty = true;
+        if (hp <= 0f && Phase != PhaseEnded)
+        {
+            byte loser = World.Bases[baseIndex].Team;
+            Winner = (byte)(loser == 0 ? 1 : 0);
+            Phase = PhaseEnded;
+            JustEnded = true;
+            _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+        }
+    }
+
+    // Find the enemy base this lock id refers to: `lockId` must decode (GameContent.BaseIdOf) to a
+    // base on the OTHER team, in the ship's sector, still standing (BaseHealth > 0). Used by both
+    // UpdateLock (ship-issued base locks) and StepMissiles (in-flight missile aim-point/collision).
+    private bool TryGetLockableBase(ulong lockId, byte team, uint sectorId, out int baseIndex)
+    {
+        ulong id = GameContent.BaseIdOf(lockId);
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            var b = World.Bases[i];
+            if (b.Id == id && b.Team != team && b.SectorId == sectorId && World.BaseHealth[i] > 0f)
+            {
+                baseIndex = i;
+                return true;
+            }
+        }
+        baseIndex = -1;
+        return false;
+    }
+
     private void ResolveDueShots(uint tick)
     {
         var due = _shotRing[tick % ShotRingSize];
@@ -1445,20 +1542,7 @@ public sealed partial class Simulation
         {
             if (shot.BaseIndex >= 0)
             {
-                float hp = MathF.Max(0f, World.BaseHealth[shot.BaseIndex] - shot.Damage);
-                World.BaseHealth[shot.BaseIndex] = hp;
-                BasesChangedThisStep = true;
-                _matchDirty = true;
-                // A base at 0 health ends the match — the winner is the OTHER team (the
-                // side that destroyed it). Latches: the first base to fall decides it.
-                if (hp <= 0f && Phase != PhaseEnded)
-                {
-                    byte loser = World.Bases[shot.BaseIndex].Team;
-                    Winner = (byte)(loser == 0 ? 1 : 0);
-                    Phase = PhaseEnded;
-                    JustEnded = true;
-                    _returnToLobbyAtTick = tick + EndedToLobbyTicks;
-                }
+                ApplyBaseDamage(shot.BaseIndex, shot.Damage, tick);
             }
             else if (_ships.TryGetValue(shot.TargetShipId, out var s) && s.Alive)
             {

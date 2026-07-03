@@ -331,6 +331,28 @@ public class ValidationTests
         Assert.Contains(result.Errors, e => e.Contains("direct-hit-multiplier"));
     }
 
+    // can-damage-base (station-siege ordnance flag) round-trips through the serializer and defaults
+    // false when unauthored — mirrors SerializationTests' round-trip pattern (Serialize -> Deserialize)
+    // for this one runtime-extension field.
+    [Fact]
+    public void CanDamageBase_RoundTripsAndDefaultsFalse()
+    {
+        var core = new Core
+        {
+            Missiles =
+            {
+                new Missile { Id = "torpedo", Name = "Torpedo", CanDamageBase = true },
+                new Missile { Id = "seeker", Name = "Seeker" }, // unauthored -> defaults false
+            },
+        };
+
+        var yaml = CoreSerializer.Serialize(core);
+        var reloaded = CoreSerializer.Deserialize(yaml);
+
+        Assert.True(reloaded.Missiles.Single(m => m.Id == "torpedo").CanDamageBase);
+        Assert.False(reloaded.Missiles.Single(m => m.Id == "seeker").CanDamageBase);
+    }
+
     // A missile with all the guidance/lock/warhead stats the launcher projection needs (positive).
     private static Missile ValidMissile(string id = "seeker") =>
         new()

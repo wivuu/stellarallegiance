@@ -70,7 +70,7 @@ public partial class Hud : CanvasLayer
         // Enemy target markers (added first so the HUD text/menu draw on top of it).
         var markers = new TargetMarkers { Name = "TargetMarkers" };
         AddChild(markers);
-        markers.Init(_world, GetNode<Camera3D>("../Camera3D"), _net);
+        markers.Init(_world, GetNode<Camera3D>("../Camera3D"), _net, _defs);
 
         // Prograde velocity marker (direction of travel, not aim). Drawn under the text/menu.
         var velo = new VelocityIndicator { Name = "VelocityIndicator" };

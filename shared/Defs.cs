@@ -107,6 +107,7 @@ namespace StellarAllegiance.Shared
         public float ProjectileRadius; // projectile hit sphere
         public float SpreadRad; // cone half-angle (rad); 0 = pinpoint
         public float Mass; // payload units this weapon occupies when mounted (Part.Mass)
+        public bool CanDamageBase; // this weapon's shots/warheads apply damage to bases
 
         // Behavior dispatch, consumed SERVER-SIDE (Simulation.TryFire) and — now that missiles render
         // differently — sent over the wire (Protocol.MsgDefs) so the client can tell a missile launcher
@@ -180,5 +181,15 @@ namespace StellarAllegiance.Shared
         public const uint ScoutWeaponId = 0;
         public const uint FighterWeaponId = 1;
         public const uint BomberWeaponId = 2;
+
+        // Ship/missile ids are monotonic from 1 (Simulation._nextShipId); base ids come from
+        // World.Bases / the Welcome frame and are small (1/2). The top bit is otherwise unused by
+        // either id space, so it marks a lock/target id as a BASE rather than a ship/missile — lets
+        // LockTargetId / MissileSim.TargetShipId carry a base reference through the existing u64 wire
+        // fields with no new message fields.
+        public const ulong BaseLockFlag = 1UL << 63;
+        public static bool IsBaseLock(ulong id) => (id & BaseLockFlag) != 0;
+        public static ulong BaseLockId(ulong baseId) => BaseLockFlag | baseId;
+        public static ulong BaseIdOf(ulong lockId) => lockId & ~BaseLockFlag;
     }
 }

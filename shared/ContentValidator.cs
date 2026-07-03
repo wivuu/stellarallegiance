@@ -78,6 +78,8 @@ namespace StellarAllegiance.Shared
                 ValidateFuel(d, errors);
             }
 
+            ValidateWinnable(ships, weaponsById, errors);
+
             // The map seeds a team base + the win condition reads its hull from content, so a bundle
             // must define at least one base.
             if (bases.Count == 0)
@@ -111,6 +113,26 @@ namespace StellarAllegiance.Shared
                     used += w.Mass;
             if (used > ship.PayloadCapacity)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
+        }
+
+        // A base can only take damage from a weapon flagged CanDamageBase, so if no ship's
+        // default loadout mounts one, no team can ever reduce the enemy base's health — a match
+        // that can never end.
+        private static void ValidateWinnable(
+            IReadOnlyList<ShipClassDef> ships,
+            Dictionary<uint, WeaponDef> weaponsById,
+            List<string> errors
+        )
+        {
+            foreach (var ship in ships)
+            {
+                if (ship.Hardpoints is null)
+                    continue;
+                foreach (var h in ship.Hardpoints)
+                    if (h.Kind == HardpointKind.Weapon && weaponsById.TryGetValue(h.WeaponId, out var w) && w.CanDamageBase)
+                        return;
+            }
+            errors.Add("no ship's default loadout mounts a can-damage-base weapon — bases can never be destroyed, matches can never end");
         }
 
         // Afterburner and fuel are authored as a pair, and the drain/recharge rates must

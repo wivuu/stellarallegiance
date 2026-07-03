@@ -95,12 +95,12 @@ hulls:
     ab-off-rate: 1.0
     armor-hit-points: 240
     price: 350
-    payload-capacity: 26 # cannon 11 + seeker rack 4 = 15 -> 11 free; the payload hull carries the most
+    payload-capacity: 26 # cannon 11 + torpedo rack 4 = 15 -> 11 free; the payload hull carries the most
     required-capabilities: [base]
-    # Seeker rack sits AFTER the gun (weapon-index 1) to keep the gun's spread-seed index (0) aligned.
+    # Torpedo rack sits AFTER the gun (weapon-index 1) to keep the gun's spread-seed index (0) aligned.
     hardpoints:
       - { kind: weapon, index: 0, off-z: 3, dir-z: 1, weapon-id: 2 }
-      - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 3 }
+      - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 5 }
       - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
       - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
 

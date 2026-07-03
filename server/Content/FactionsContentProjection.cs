@@ -130,6 +130,7 @@ public static class FactionsContentProjection
             FireIntervalTicks = w.FireIntervalTicks,
             ProjectileLifeTicks = w.ProjectileLifeTicks,
             Kind = (WeaponKind)(byte)w.Kind,
+            CanDamageBase = w.CanDamageBase,
         };
     }
 
@@ -155,6 +156,7 @@ public static class FactionsContentProjection
             SpreadRad = 0f,
             Mass = (float)l.Mass,
             FireIntervalTicks = l.FireIntervalTicks,
+            CanDamageBase = m.CanDamageBase,
             // Missile-kind extension fields.
             MagazineSize = (byte)l.Amount,
             LockTicks = (uint)Math.Round(m.LockTime * 20.0),

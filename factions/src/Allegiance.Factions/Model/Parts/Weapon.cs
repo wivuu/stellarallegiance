@@ -30,4 +30,7 @@ public record Weapon : Part
     /// <summary>Tick-domain ballistics, authored directly to avoid seconds→tick rounding drift.</summary>
     public uint FireIntervalTicks { get; set; }
     public uint ProjectileLifeTicks { get; set; }
+
+    /// <summary>True if this weapon's shots/warheads apply damage to bases (station siege ordnance).</summary>
+    public bool CanDamageBase { get; set; }
 }

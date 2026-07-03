@@ -23,3 +23,12 @@ launchers:
     weapon-id: 4
     fire-interval-ticks: 20
     required-capabilities: [base]
+  - id: torpedo-rack
+    name: Torpedo Rack
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: anti-base-torpedo
+    weapon-id: 5
+    fire-interval-ticks: 60
+    required-capabilities: [base]

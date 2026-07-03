@@ -69,25 +69,39 @@ Check(
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
-// Guided missiles: guns (3) + missile launchers (2 racks) project into one weapon set. A launcher
+// Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 5,
-    "loader projected guns + missile launchers (3 guns + 2 racks)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 5)"
+    stock.Weapons.Count == 6,
+    "loader projected guns + missile launchers (3 guns + 3 racks)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 6)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
     seekerW.Kind == WeaponKind.Missile
         && seekerW.Damage == 45f && seekerW.ProjectileSpeed == 90f && seekerW.ProjectileLifeTicks == 160
-        && seekerW.ProjectileRadius == 3f && seekerW.Mass == 4f && seekerW.FireIntervalTicks == 30
+        && seekerW.ProjectileRadius == 1f && seekerW.Mass == 4f && seekerW.FireIntervalTicks == 30
         && seekerW.MagazineSize == 6 && seekerW.LockTicks == 40 && seekerW.LockAngleRad == 0.5f
         && seekerW.LockRange == 1200f && seekerW.MissileAccel == 40f && seekerW.MissileMaxSpeed == 220f
         && seekerW.BlastPower == 30f && seekerW.BlastRadius == 25f && seekerW.DirectHitMult == 1.5f
         && seekerW.ModelName == "mis09" && seekerW.TrailColor == 0xffc890ffu
+        && !seekerW.CanDamageBase
         && System.MathF.Abs(seekerW.MissileTurnRateRad - (80f * System.MathF.PI / 180f)) < 0.0001f,
     "loader projected seeker missile launcher (missile-kind WeaponDef)",
     $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, lock {seekerW.LockTicks}/{seekerW.LockRange}, color {seekerW.TrailColor:x})"
+);
+// Anti-base torpedo (weapon-id 5): the only weapon flagged CanDamageBase — a base is a lockable
+// target only for a weapon carrying this flag (D3), and only this warhead applies damage to one.
+var torpedoW = stock.Weapons.First(w => w.WeaponId == 5);
+Check(
+    torpedoW.Kind == WeaponKind.Missile && torpedoW.CanDamageBase,
+    "loader projected the anti-base-torpedo weapon (missile-kind, can-damage-base)",
+    $"torpedo weapon wrong (kind {torpedoW.Kind}, can-damage-base {torpedoW.CanDamageBase})"
+);
+Check(
+    stock.Weapons.Where(w => w.WeaponId <= 4).All(w => !w.CanDamageBase),
+    "weapon-ids 0-4 (guns + non-siege racks) do not carry can-damage-base",
+    $"a non-siege weapon-id (0-4) unexpectedly carries can-damage-base: {string.Join(", ", stock.Weapons.Where(w => w.WeaponId <= 4 && w.CanDamageBase).Select(w => w.WeaponId))}"
 );
 // A bolt gun leaves every missile field zero/empty (guards the projection's Bolt path).
 Check(
@@ -220,11 +234,50 @@ Check(
     "validator flags negative AbFuelRecharge",
     "validator missed negative AbFuelRecharge"
 );
-var goodFuelErrors = FuelErrors(FuelShip(26, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f));
+// The winnability rule (3e below) requires SOME ship's default loadout to mount a can-damage-base
+// weapon, but this fixture's ship carries no weapons at all — mount a minimal siege weapon so this
+// otherwise-unrelated fuel-authoring check isn't tripped by the new rule.
+var goodFuelShip = FuelShip(26, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f);
+goodFuelShip.Hardpoints.Add(new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 50 });
+var siegeWeapon = new WeaponDef { WeaponId = 50, Name = "Siege", CanDamageBase = true };
+var goodFuelErrors = ContentValidator.Validate(new[] { goodFuelShip }, new[] { siegeWeapon }, new[] { okBase });
 Check(
     goodFuelErrors.Count == 0,
     "validator accepts a correctly-authored fueled hull",
     $"validator wrongly flagged a correctly-authored fueled hull: {string.Join("; ", goodFuelErrors)}"
+);
+
+// 3e. Winnability: a bundle where NO ship's default loadout mounts a can-damage-base weapon can
+// never end (no team could ever destroy the enemy base) — the validator must refuse to boot it.
+var noSiegeWeapon = new WeaponDef { WeaponId = 51, Name = "Popgun", Mass = 1f };
+var noSiegeShip = new ShipClassDef
+{
+    ClassId = 9,
+    Name = "Unarmed",
+    MaxHull = 50f,
+    PayloadCapacity = 10f,
+    Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 51 } },
+};
+var noSiegeErrors = ContentValidator.Validate(new[] { noSiegeShip }, new[] { noSiegeWeapon }, new[] { okBase });
+Check(
+    noSiegeErrors.Any(e => e.Contains("can-damage-base")),
+    "validator flags a bundle with no can-damage-base default loadout (unwinnable)",
+    "validator missed an unwinnable bundle (no ship mounts a can-damage-base weapon)"
+);
+// ...and accepts a bundle where the SAME ship mounts a can-damage-base weapon.
+var siegeShip = new ShipClassDef
+{
+    ClassId = 10,
+    Name = "Armed",
+    MaxHull = 50f,
+    PayloadCapacity = 10f,
+    Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 50 } },
+};
+var winnableErrors = ContentValidator.Validate(new[] { siegeShip }, new[] { siegeWeapon }, new[] { okBase });
+Check(
+    !winnableErrors.Any(e => e.Contains("can-damage-base")),
+    "validator accepts a bundle where a default loadout mounts a can-damage-base weapon",
+    $"validator wrongly flagged a winnable bundle: {string.Join("; ", winnableErrors)}"
 );
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");

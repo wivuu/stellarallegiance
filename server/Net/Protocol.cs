@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 16;
+    public const byte Version = 17;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -414,6 +414,7 @@ public static class Protocol
             w.Write(wp.ProjectileRadius);
             w.Write(wp.SpreadRad);
             w.Write(wp.Mass);
+            w.Write(wp.CanDamageBase);
             // Missile-kind block (zero/empty for Bolt weapons). Reader mirrors this order exactly.
             w.Write((byte)wp.Kind);
             w.Write(wp.MagazineSize);

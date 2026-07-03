@@ -491,5 +491,338 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     );
 }
 
+// ==== Base siege (anti-base torpedo + can-damage-base) ==========================================
+//
+// Bases only exist in their REAL sectors (World.Bases[0] team 0 in HomeSector, World.Bases[1] team
+// 1 in VergeSector) — unlike the ship-vs-ship duel scenarios above, these can't be relocated to the
+// sentinel EmptySector. VergeSector carries a procedural asteroid belt (World.SeedAsteroidBelt), but
+// a short (~200u) dead-straight nose-on approach with the fixed content seed stays clear of it; every
+// scenario below asserts gone-reason (and, for siege hits, the exact base-health delta) so a stray
+// rock intercept fails loudly instead of silently passing.
+
+// Park a ship nose-on toward `basePos`, `standoff` units back along its own +Z (world +Z, since Rot
+// is set to Identity here) — mirrors SetupDuel's "target straight down the nose" convention, so an
+// unguided (dumbfire) round launched dead straight already flies directly at the base.
+void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 200f)
+{
+    ship.SectorId = World.VergeSector;
+    ship.State.Pos = basePos - new Vec3(0f, 0f, standoff);
+    ship.State.Vel = new Vec3(0f, 0f, 0f);
+    ship.State.Rot = Quat.Identity;
+    ship.State.AngVel = new Vec3(0f, 0f, 0f);
+}
+
+// Join a bomber (class 2 — the only hull mounting the anti-base-torpedo rack, weapon-id 5) and
+// place it nose-on ~200u from the enemy (other-team) base. Returns the ship, the projected torpedo
+// WeaponDef, and the enemy base's index into World.Bases/World.BaseHealth.
+(Simulation sim, Simulation.ShipSim bomber, WeaponDef torpedo, int baseIdx) SetupBaseSiege(ulong seed, int clientId = 1, byte team = 0)
+{
+    var sim = BootSim(seed);
+    sim.EnqueueJoin(clientId, team: team, cls: FlightModel.ClassBomber);
+    sim.Step();
+    var bomber = sim.Ships.First(s => s.OwnerClientId == clientId);
+
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != team);
+    PositionNoseOnBase(bomber, sim.World.Bases[baseIdx].Pos);
+
+    var torpedo = sim.Content.Weapons.First(w => w.WeaponId == 5);
+    return (sim, bomber, torpedo, baseIdx);
+}
+
+// ---- 7. Torpedo siege: base-lock -> volley -> exact base damage -> match ends ------------------
+{
+    var (sim, bomber, torpedo, baseIdx) = SetupBaseSiege(seed: 101);
+    ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
+
+    Check(
+        bomber.MissileAmmo == torpedo.MagazineSize && !bomber.Locked && bomber.LockProgress == 0,
+        $"bomber spawns with a full torpedo rack ({torpedo.MagazineSize}) and no base lock",
+        $"bomber spawn state wrong (ammo {bomber.MissileAmmo}, locked {bomber.Locked}, progress {bomber.LockProgress})"
+    );
+
+    // Hold the base-lock target for LockTicks-1 ticks: still building, not yet locked.
+    for (uint i = 1; i < torpedo.LockTicks; i++)
+    {
+        bomber.HeldInput = new ShipInputState { LockTargetId = lockId };
+        sim.Step();
+    }
+    Check(
+        !bomber.Locked && bomber.LockProgress == torpedo.LockTicks - 1,
+        $"base lock still building after {torpedo.LockTicks - 1} ticks (progress {bomber.LockProgress})",
+        $"base lock state wrong before completion (locked={bomber.Locked}, progress={bomber.LockProgress})"
+    );
+
+    // One more valid tick reaches LockTicks -> Locked flips.
+    bomber.HeldInput = new ShipInputState { LockTargetId = lockId };
+    sim.Step();
+    Check(
+        bomber.Locked && bomber.LockProgress == torpedo.LockTicks,
+        $"base locked after {torpedo.LockTicks} ticks (~{torpedo.LockTicks / (double)Simulation.TickHz:0.0}s)",
+        $"failed to lock the base after {torpedo.LockTicks} ticks (locked={bomber.Locked}, progress={bomber.LockProgress})"
+    );
+
+    // Volley the full rack (respecting FireIntervalTicks cadence): every impact must drop BaseHealth
+    // by EXACTLY Damage * DirectHitMultiplier (a direct-hit-only warhead — blast never touches a base).
+    float directDamage = torpedo.Damage * torpedo.DirectHitMult;
+    float healthBefore = sim.World.BaseHealth[baseIdx];
+    var healthDeltas = new List<float>();
+    byte launches = 0;
+    byte lastAmmo = bomber.MissileAmmo;
+    uint rackTicks = torpedo.FireIntervalTicks * (uint)torpedo.MagazineSize + 40;
+    for (uint i = 0; i < rackTicks; i++)
+    {
+        float before = sim.World.BaseHealth[baseIdx];
+        bomber.HeldInput = new ShipInputState { LockTargetId = lockId, Firing2 = true };
+        sim.Step();
+        if (bomber.MissileAmmo < lastAmmo)
+        {
+            launches += (byte)(lastAmmo - bomber.MissileAmmo);
+            lastAmmo = bomber.MissileAmmo;
+        }
+        float after = sim.World.BaseHealth[baseIdx];
+        if (after != before)
+            healthDeltas.Add(before - after);
+    }
+    Check(launches == torpedo.MagazineSize, $"bomber fired its full torpedo rack ({torpedo.MagazineSize})", $"bomber fired {launches} torpedoes, expected {torpedo.MagazineSize}");
+    Check(bomber.MissileAmmo == 0, "torpedo rack ran dry", $"rack left with {bomber.MissileAmmo} torpedoes");
+    Check(
+        healthDeltas.Count > 0 && healthDeltas.All(d => d == directDamage),
+        $"every base impact dealt exactly Damage * DirectHitMultiplier ({directDamage})",
+        $"base health deltas wrong: [{string.Join(", ", healthDeltas)}], expected all {directDamage} (a stray non-{directDamage} delta usually means a rock/ship intercepted a torpedo)"
+    );
+    float healthAfterRack = sim.World.BaseHealth[baseIdx];
+    Check(
+        healthAfterRack == healthBefore - healthDeltas.Count * directDamage,
+        $"base health dropped by exactly {healthDeltas.Count} direct hits ({healthBefore} -> {healthAfterRack})",
+        $"base health bookkeeping wrong ({healthBefore} -> {healthAfterRack}, {healthDeltas.Count} impacts logged)"
+    );
+
+    // One rack (6 x 200 = 1200) doesn't fully deplete a base carrying more HP (garrison MaxArmor
+    // 2000) — rejoin a second bomber, nose-aligned the same way, and dumbfire (no lock needed: a
+    // straight, nose-on shot already flies dead-on at the base) until it falls, so the match-end
+    // assertion below is reachable rather than merely hoped-for.
+    if (sim.Phase != Simulation.PhaseEnded)
+    {
+        Check(healthAfterRack > 0f, "base survives one bomber's rack (needs a second wave)", $"base health {healthAfterRack} <= 0 but the match didn't end");
+
+        sim.EnqueueJoin(2, team: 0, cls: FlightModel.ClassBomber);
+        sim.Step();
+        var bomber2 = sim.Ships.First(s => s.OwnerClientId == 2);
+        PositionNoseOnBase(bomber2, sim.World.Bases[baseIdx].Pos);
+
+        uint secondRackTicks = torpedo.FireIntervalTicks * (uint)torpedo.MagazineSize + 40;
+        for (uint i = 0; i < secondRackTicks && sim.Phase != Simulation.PhaseEnded; i++)
+        {
+            bomber2.HeldInput = new ShipInputState { Firing2 = true }; // dumbfire — already nose-on
+            sim.Step();
+        }
+    }
+
+    Check(
+        sim.Phase == Simulation.PhaseEnded && sim.Winner == 0,
+        $"destroying the enemy base ends the match (team 0 wins) (phase={sim.Phase}, winner={sim.Winner})",
+        $"match didn't end correctly after the base fell (phase={sim.Phase}, winner={sim.Winner}, base health {sim.World.BaseHealth[baseIdx]})"
+    );
+}
+
+// ---- 8. Non-siege: a fighter's seeker rack can never lock a base --------------------------------
+{
+    var sim = BootSim(seed: 102);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
+    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+
+    var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
+    ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
+
+    bool everLocked = false;
+    for (uint i = 0; i < seeker.LockTicks * 2; i++)
+    {
+        fighter.HeldInput = new ShipInputState { LockTargetId = lockId };
+        sim.Step();
+        if (fighter.Locked)
+            everLocked = true;
+    }
+    Check(
+        !everLocked && !fighter.Locked && fighter.LockProgress == 0,
+        "a fighter's seeker (non-siege weapon) never locks a base lock id",
+        $"fighter unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={fighter.Locked}, progress={fighter.LockProgress})"
+    );
+}
+
+// ---- 9. Non-siege: a dumbfired seeker detonates on the base hull but deals no base damage --------
+{
+    var sim = BootSim(seed: 103);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
+    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+
+    var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
+    float baseHealthBefore = sim.World.BaseHealth[baseIdx];
+
+    fighter.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
+    sim.Step();
+    Check(sim.Missiles.Count == 1, "dumbfire seeker launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
+    ulong dumbId = sim.Missiles[0].MissileId;
+    Check(sim.Missiles[0].TargetShipId == 0, "dumbfire seeker carries no target (unguided)", $"dumbfire seeker has target {sim.Missiles[0].TargetShipId}");
+    fighter.HeldInput = new ShipInputState { Firing2 = false };
+
+    bool impactSeen = false;
+    byte impactReason = 255;
+    for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !impactSeen; i++)
+    {
+        sim.Step();
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == dumbId)
+            {
+                impactSeen = true;
+                impactReason = g.reason;
+            }
+    }
+    Check(impactSeen && impactReason == 1, $"dumbfire seeker detonates on the base hull (gone-reason 1), got {impactReason}", $"dumbfire seeker never impacted (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        sim.World.BaseHealth[baseIdx] == baseHealthBefore,
+        "the seeker's base impact leaves BaseHealth unchanged (non-siege weapon)",
+        $"BaseHealth changed from a non-siege missile impact ({baseHealthBefore} -> {sim.World.BaseHealth[baseIdx]})"
+    );
+}
+
+// ---- 10. Non-siege: bomber cannon fire point-blank on the base leaves it untouched ---------------
+{
+    var sim = BootSim(seed: 104);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassBomber);
+    sim.Step();
+    var bomber = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != bomber.Team);
+    PositionNoseOnBase(bomber, sim.World.Bases[baseIdx].Pos, standoff: 60f); // point-blank
+
+    var cannon = sim.Content.Weapons.First(w => w.WeaponId == 2);
+    float baseHealthBefore = sim.World.BaseHealth[baseIdx];
+    for (uint i = 0; i < cannon.FireIntervalTicks * 3 + 20; i++)
+    {
+        bomber.HeldInput = new ShipInputState { Firing = true };
+        sim.Step();
+    }
+    Check(
+        sim.World.BaseHealth[baseIdx] == baseHealthBefore,
+        "bomber cannon fire point-blank on the base leaves BaseHealth unchanged (guns no longer damage bases)",
+        $"BaseHealth changed from bomber cannon fire ({baseHealthBefore} -> {sim.World.BaseHealth[baseIdx]})"
+    );
+}
+
+// ---- 11. Determinism: replay the base-siege script on two fresh Simulations ----------------------
+// A self-contained replica of scenario 7's script (lock -> volley -> second-bomber finish), tracking
+// every in-flight missile's position/velocity per tick + every gone event, so a replay diverging
+// anywhere (steering, collision order, base-health bookkeeping) is caught.
+(
+    List<(uint tick, ulong id, Vec3 pos, Vec3 vel)> flight,
+    List<(uint tick, ulong id, byte reason)> gone,
+    float finalHealth,
+    byte finalPhase,
+    byte finalWinner
+) RunSiegeScript(ulong seed)
+{
+    var (sim, bomber, torpedo, baseIdx) = SetupBaseSiege(seed);
+    ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
+
+    var flight = new List<(uint, ulong, Vec3, Vec3)>();
+    var gone = new List<(uint, ulong, byte)>();
+    void Record()
+    {
+        foreach (var m in sim.Missiles)
+            flight.Add((sim.Tick, m.MissileId, m.Pos, m.Vel));
+        foreach (var g in sim.MissileGoneThisStep)
+            gone.Add((sim.Tick, g.id, g.reason));
+    }
+
+    for (uint i = 0; i < torpedo.LockTicks; i++)
+    {
+        bomber.HeldInput = new ShipInputState { LockTargetId = lockId };
+        sim.Step();
+        Record();
+    }
+
+    var active = bomber;
+    int nextClientId = 2;
+    bool waitingForSecond = false;
+    uint budget = torpedo.FireIntervalTicks * (uint)torpedo.MagazineSize * 2 + 400;
+    for (uint i = 0; i < budget && sim.Phase != Simulation.PhaseEnded; i++)
+    {
+        if (active.MissileAmmo > 0)
+        {
+            active.HeldInput = new ShipInputState { LockTargetId = lockId, Firing2 = true };
+        }
+        else if (!waitingForSecond)
+        {
+            active.HeldInput = new ShipInputState();
+            sim.EnqueueJoin(nextClientId, team: 0, cls: FlightModel.ClassBomber);
+            waitingForSecond = true;
+        }
+        else
+        {
+            var next = sim.Ships.FirstOrDefault(s => s.OwnerClientId == nextClientId);
+            if (next is not null)
+            {
+                PositionNoseOnBase(next, sim.World.Bases[baseIdx].Pos);
+                active = next;
+                waitingForSecond = false;
+                active.HeldInput = new ShipInputState { Firing2 = true }; // already nose-on: dumbfire finishes it
+            }
+        }
+        sim.Step();
+        Record();
+    }
+
+    return (flight, gone, sim.World.BaseHealth[baseIdx], sim.Phase, sim.Winner);
+}
+
+{
+    var run1 = RunSiegeScript(seed: 777);
+    var run2 = RunSiegeScript(seed: 777);
+
+    bool same =
+        run1.finalPhase == Simulation.PhaseEnded
+        && run1.finalPhase == run2.finalPhase
+        && run1.finalWinner == run2.finalWinner
+        && run1.finalHealth == run2.finalHealth
+        && run1.flight.Count == run2.flight.Count
+        && run1.gone.Count == run2.gone.Count;
+    if (same)
+    {
+        for (int i = 0; i < run1.flight.Count; i++)
+        {
+            var (t1, id1, p1, v1) = run1.flight[i];
+            var (t2, id2, p2, v2) = run2.flight[i];
+            if (t1 != t2 || id1 != id2 || p1.X != p2.X || p1.Y != p2.Y || p1.Z != p2.Z || v1.X != v2.X || v1.Y != v2.Y || v1.Z != v2.Z)
+            {
+                same = false;
+                break;
+            }
+        }
+    }
+    if (same)
+    {
+        for (int i = 0; i < run1.gone.Count; i++)
+        {
+            var (t1, id1, r1) = run1.gone[i];
+            var (t2, id2, r2) = run2.gone[i];
+            if (t1 != t2 || id1 != id2 || r1 != r2)
+            {
+                same = false;
+                break;
+            }
+        }
+    }
+    Check(
+        same,
+        $"two fresh Simulations replay the base-siege script bit-identically ({run1.flight.Count} flight samples, {run1.gone.Count} gone events, final base health {run1.finalHealth}, winner {run1.finalWinner})",
+        "base-siege script diverged between two fresh Simulation runs (determinism broken)"
+    );
+}
+
 Console.WriteLine(failures == 0 ? "\nALL MISSILE TESTS PASSED" : $"\n{failures} MISSILE TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

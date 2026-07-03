@@ -107,7 +107,7 @@ Check(
 Check(
     seeker.InitialSpeed == 90 && seeker.Acceleration == 40 && seeker.MaxSpeed == 220 && seeker.TurnRate == 80
         && seeker.LockTime == 2.0 && seeker.LockAngle == 0.5 && seeker.MaxLock == 1200 && seeker.Power == 45
-        && seeker.Width == 3 && seeker.Lifespan == 8
+        && seeker.Width == 1 && seeker.Lifespan == 8
         && seeker.BlastPower == 30 && seeker.BlastRadius == 25 && seeker.DirectHitMultiplier == 1.5,
     "stock seeker carries guidance/lock stats",
     $"stock seeker guidance wrong (speed {seeker.InitialSpeed}/{seeker.MaxSpeed}, accel {seeker.Acceleration}, turn {seeker.TurnRate}, lock {seeker.LockTime}/{seeker.LockAngle}/{seeker.MaxLock}, power {seeker.Power})"
@@ -123,6 +123,31 @@ Check(
         && missileRack.ExpendableId == "seeker-missile" && missileRack.Mass == 4,
     "stock missile-rack carries weapon-id + amount + fire-interval-ticks",
     $"stock missile-rack wrong (weapon-id {missileRack.WeaponId}, amount {missileRack.Amount}, fire {missileRack.FireIntervalTicks}, expendable {missileRack.ExpendableId})"
+);
+
+// Anti-base torpedo (weapon-id 5 rack): siege ordnance, no cargo-id (never hangar-stocked, only
+// launcher-fired), can-damage-base true — the flag that lets it (and only it) hurt a station.
+var torpedo = stock.Missiles.Single(m => m.Id == "anti-base-torpedo");
+Check(
+    torpedo.CanDamageBase && torpedo.Power == 200 && torpedo.CargoId == null,
+    "stock anti-base-torpedo carries can-damage-base + power, and no cargo-id",
+    $"anti-base-torpedo wrong (can-damage-base {torpedo.CanDamageBase}, power {torpedo.Power}, cargo-id {torpedo.CargoId})"
+);
+var torpedoRack = stock.Launchers.Single(l => l.Id == "torpedo-rack");
+Check(
+    torpedoRack.WeaponId == 5 && torpedoRack.Amount == 6 && torpedoRack.FireIntervalTicks == 60
+        && torpedoRack.ExpendableId == "anti-base-torpedo",
+    "stock torpedo-rack carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",
+    $"stock torpedo-rack wrong (weapon-id {torpedoRack.WeaponId}, amount {torpedoRack.Amount}, fire {torpedoRack.FireIntervalTicks}, expendable {torpedoRack.ExpendableId})"
+);
+// The bomber's missile hardpoint (index 1) was repointed from the seeker rack (weapon-id 3) to the
+// torpedo rack (weapon-id 5) — the fighter keeps its seeker rack untouched.
+var bomberHull = stock.Hulls.Single(h => h.Id == "bomber");
+Check(
+    bomberHull.Hardpoints.Count > 1
+        && bomberHull.Hardpoints[1].Kind == RuntimeHardpointKind.Weapon && bomberHull.Hardpoints[1].WeaponId == 5,
+    "stock bomber hardpoint index 1 mounts the torpedo rack (weapon-id 5)",
+    $"stock bomber hardpoint wrong ({(bomberHull.Hardpoints.Count > 1 ? bomberHull.Hardpoints[1].WeaponId.ToString() : "missing")})"
 );
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");

@@ -1073,6 +1073,10 @@
         "blast-radius": {
           "type": "number"
         },
+        "can-damage-base": {
+          "type": "boolean",
+          "description": "True if this missile's warhead applies damage to bases (station siege ordnance)."
+        },
         "cargo-id": {
           "type": "integer"
         },
@@ -1560,6 +1564,10 @@
         },
         "burst-time": {
           "type": "number"
+        },
+        "can-damage-base": {
+          "type": "boolean",
+          "description": "True if this weapon's shots/warheads apply damage to bases (station siege ordnance)."
         },
         "description": {
           "type": "string"

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Shared;
 using StellarAllegiance.Ui;
 
 // On-screen + off-screen HUD indicators for every relevant entity — friendly AND enemy
@@ -78,6 +79,7 @@ public partial class TargetMarkers : Control
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
     private GameNetClient _net = null!; // own missile ammo / lock state + the live missile set
+    private DefRegistry _defs = null!; // resolves the local hull's missile mount (siege capability)
 
     // Missile HUD state, updated in _Process and read by _Draw. The lock tone fires on the rising
     // edge into a full lock; the incoming warning tracks the nearest missile homing on the local
@@ -112,11 +114,12 @@ public partial class TargetMarkers : Control
     private readonly List<(float AimDist2, ulong Id)> _visible = new();
 
     // Wired up by the Hud (which already resolves these siblings).
-    public void Init(WorldRenderer world, Camera3D camera, GameNetClient net)
+    public void Init(WorldRenderer world, Camera3D camera, GameNetClient net, DefRegistry defs)
     {
         _world = world;
         _camera = camera;
         _net = net;
+        _defs = defs;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // mono font for the focused-target tag, read directly (no Theme)
@@ -178,11 +181,18 @@ public partial class TargetMarkers : Control
         }
 
         // EnemyShips() returns a shared scratch list — read it once and don't re-call it
-        // below (a second call would clear it mid-use).
+        // below (a second call would clear it mid-use). Same for LockableEnemyBases() below.
         var enemies = _world.EnemyShips();
 
-        // Order the in-front enemies by how close they project to the aim reticle, so the
-        // cycle reads as "what I'm pointing at first, then outward."
+        // The enemy base only enters the cycle when the local hull mounts a CanDamageBase
+        // missile weapon (D3) — a seeker rack can't use a base lock, so a fighter/scout/pod
+        // never sees it in Tab. Read once (siege == false skips the call entirely).
+        bool siege = HasSiegeCapability(local);
+        IEnumerable<(ulong Id, Vector3 Pos)>? bases = siege ? _world.LockableEnemyBases() : null;
+
+        // Order the in-front enemies (ships, then the lockable base(s)) by how close they
+        // project to the aim reticle, so the cycle reads as "what I'm pointing at first, then
+        // outward."
         Vector2 aimPt = AimReticleScreenPoint(local);
         Camera3D cam = Cam;
         _visible.Clear();
@@ -192,12 +202,27 @@ public partial class TargetMarkers : Control
                 float d2 = (cam.UnprojectPosition(e.GlobalPosition) - aimPt).LengthSquared();
                 _visible.Add((d2, e.ShipId));
             }
+        if (bases != null)
+            foreach (var (id, pos) in bases)
+                if (!cam.IsPositionBehind(pos))
+                {
+                    float d2 = (cam.UnprojectPosition(pos) - aimPt).LengthSquared();
+                    _visible.Add((d2, GameContent.BaseLockId(id)));
+                }
         _visible.Sort(static (a, b) => a.AimDist2.CompareTo(b.AimDist2));
 
-        // If the focused ship is no longer among the live enemies (it died or left),
-        // auto-target the nearest remaining enemy instead of dropping focus.
-        if (_focused is ulong f && !ContainsId(enemies, f))
-            _focused = NearestEnemy(enemies);
+        // If the focus is no longer valid — a focused SHIP died/left, or a focused BASE is no
+        // longer enemy/alive/in-sector/lockable (siege capability lost, e.g. a respawn into a
+        // different hull) — auto-target the nearest remaining enemy ship instead of dropping
+        // focus outright.
+        if (_focused is ulong f)
+        {
+            bool stillValid = GameContent.IsBaseLock(f)
+                ? bases != null && ContainsBaseId(bases, GameContent.BaseIdOf(f))
+                : ContainsId(enemies, f);
+            if (!stillValid)
+                _focused = NearestEnemy(enemies);
+        }
 
         if (!pressed)
             return;
@@ -236,6 +261,21 @@ public partial class TargetMarkers : Control
                 return true;
         return false;
     }
+
+    private static bool ContainsBaseId(IEnumerable<(ulong Id, Vector3 Pos)> bases, ulong baseId)
+    {
+        foreach (var (id, _) in bases)
+            if (id == baseId)
+                return true;
+        return false;
+    }
+
+    // Whether the local ship's hull mounts a CanDamageBase missile weapon (D3) — the gate on
+    // offering the enemy base as a Tab-cycle lock target. Pods carry no weapons. Mirrors
+    // Hud.cs's local-missile-def resolution (WeaponDef? via DefRegistry.MissileMount), which
+    // picks the class's first Missile-kind hardpoint the same way the server does.
+    private bool HasSiegeCapability(PredictionController local) =>
+        !local.IsPod && _defs.MissileMount((byte)local.Class) is { CanDamageBase: true };
 
     // The enemy closest to the local ship, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
@@ -321,12 +361,38 @@ public partial class TargetMarkers : Control
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
         Vector2 view = GetViewportRect().Size;
 
+        // The focused enemy base's world position (D3's siege lock), or null if focus isn't a
+        // base right now. Resolved once via LockableEnemyBases() — VisibleBases() doesn't carry
+        // Id — both to skip it in the dim pass below (it gets the bright focused treatment
+        // instead, later in this method) and to draw the lock arc against the same position.
+        Vector3? focusedBasePos = null;
+        if (_focused is ulong bf && GameContent.IsBaseLock(bf))
+        {
+            ulong baseId = GameContent.BaseIdOf(bf);
+            foreach (var (id, pos) in _world.LockableEnemyBases())
+                if (id == baseId)
+                {
+                    focusedBasePos = pos;
+                    break;
+                }
+        }
+
         // Bases first (drawn under the ships). Bases + their damage bars are drawn even when
         // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
+        // The focused base is skipped here — it's drawn bright/bracketed below instead.
         foreach (var (pos, team) in _world.VisibleBases())
-            DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
+            if (focusedBasePos is not Vector3 fbp || pos != fbp)
+                DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
         foreach (var (pos, frac) in _world.VisibleBaseHealth())
             DrawBaseHealthBar(view, pos, frac);
+
+        // The focused base itself: same bright bracket treatment as a focused ship. No lead
+        // indicator — a base is a static target, so there's nothing to deflect for.
+        if (focusedBasePos is Vector3 fp)
+        {
+            DrawEntity(view, fp, Kind.Base, FocusColor, focused: true, friendly: false);
+            DrawLockArc(fp);
+        }
 
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
         // edge arrow off-screen) so the way to the nearest aleph always reads.
@@ -408,7 +474,11 @@ public partial class TargetMarkers : Control
     // ship's own LockState (bits 0-6 = progress 0..100, bit7 = locked). A partial cyan arc grows
     // clockwise from the top while the lock timer runs; once locked it snaps to a full steady red
     // ring with a LOCK tag. Skipped when there's no lock activity or the target is behind us.
-    private void DrawLockArc(RemoteShip ship)
+    private void DrawLockArc(RemoteShip ship) => DrawLockArc(ship.GlobalPosition);
+
+    // Position-based overload so a locked BASE (a static target with no RemoteShip) can share
+    // the same lock-progress arc as a locked ship.
+    private void DrawLockArc(Vector3 worldPos)
     {
         int raw = _net.LocalLockState;
         bool locked = (raw & 0x80) != 0;
@@ -417,9 +487,9 @@ public partial class TargetMarkers : Control
             return;
 
         Camera3D cam = Cam;
-        if (cam.IsPositionBehind(ship.GlobalPosition))
+        if (cam.IsPositionBehind(worldPos))
             return;
-        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
+        Vector2 sp = cam.UnprojectPosition(worldPos);
         float r = FocusHalf + 7f;
         if (locked)
         {

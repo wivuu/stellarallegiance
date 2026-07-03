@@ -201,7 +201,7 @@ Unlock progression system: techs gate hull/weapon/payload availability; advancin
 
 ## Networking & Protocol
 
-### Protocol v17
+### Protocol
 Binary wire format with quantized/compressed snapshots, separate missile stride, WebRTC/WebSocket dual transport.
 - **Frequency:** Very common
 - **Key Files:**
@@ -218,7 +218,7 @@ Quantized world state: player positions, rotations, velocities, health, weapons 
   - `server/Net/Protocol.cs` — MsgSnapshot structure and serialization
   - `client/scripts/GameNetClient.cs` — snapshot application and reconciliation
   - `server/Sim/Simulation.cs` — snapshot generation per SimTick
-- **Related:** [[Protocol v17]], [[WireQuant]], [[AOI]]
+- **Related:** [[Protocol]], [[WireQuant]], [[AOI]]
 - **Notes:** Sent once per SimTick to clients within AOI; quantized positions use f16
 
 ### MsgMissiles
@@ -228,7 +228,7 @@ Separate protocol message for active missiles; never packed into ship snapshots.
   - `server/Net/Protocol.cs` — MsgMissiles structure
   - `client/scripts/GameNetClient.cs` — missile state application
   - `server/Sim/Simulation.cs` — missile lifecycle updates
-- **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol v17]]
+- **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol]]
 - **Notes:** Proto v15: separate stride prevents missile data bloat; missiles sent per-missile once per tick
 
 ### WireQuant (Wire Quantization)
@@ -237,7 +237,7 @@ Half-precision (f16) floating-point compression for network transmission of velo
 - **Key Files:**
   - `shared/WireQuant.cs` — f16 encoding/decoding
   - `server/Net/Protocol.cs` — applied to position/velocity in MsgSnapshot
-- **Related:** [[MsgSnapshot]], [[Protocol v17]]
+- **Related:** [[MsgSnapshot]], [[Protocol]]
 - **Notes:** Trades ~1.5% accuracy for 50% bandwidth savings; safe for physics/visuals
 
 ### WebRTC

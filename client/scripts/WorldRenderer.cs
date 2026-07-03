@@ -35,9 +35,10 @@ public partial class WorldRenderer : Node3D
 
     private readonly Dictionary<ulong, Node3D> _baseNodes = new();
 
-    // Parallel list of (base node, team) for the HUD off-screen indicators — VisibleBases()
-    // walks it and filters by Node.Visible (sector visibility), so it allocates nothing.
-    private readonly List<(Node3D Node, byte Team)> _baseList = new();
+    // Parallel list of (base node, team, id) for the HUD off-screen indicators — VisibleBases()
+    // walks it and filters by Node.Visible (sector visibility), so it allocates nothing. Id is
+    // also read by LockableEnemyBases() to offer a base as a Tab-cycle lock target.
+    private readonly List<(Node3D Node, byte Team, ulong Id)> _baseList = new();
 
     // Per-base health fraction (0..1), keyed by BaseId. Drives the screen-space damage bar
     // TargetMarkers draws over each base; full-health (>= ~1) bases are skipped so the bar
@@ -300,10 +301,27 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleBases()
     {
         _baseScratch.Clear();
-        foreach (var (node, team) in _baseList)
+        foreach (var (node, team, _) in _baseList)
             if (node.Visible)
                 _baseScratch.Add((node.GlobalPosition, team));
         return _baseScratch;
+    }
+
+    // Scratch reused by LockableEnemyBases() so the per-frame Tab-cycle pass allocates nothing.
+    private readonly List<(ulong Id, Vector3 Pos)> _lockableBaseScratch = new();
+
+    // Enemy bases (vs the local team) in the currently-visible sector that are still alive
+    // (health fraction > 0 — a missing _baseHealthFrac entry means full health), for the
+    // Tab-cycle to offer as a lock target. Returns a shared scratch list — read it immediately.
+    // Empty until the local team is known.
+    public IEnumerable<(ulong Id, Vector3 Pos)> LockableEnemyBases()
+    {
+        _lockableBaseScratch.Clear();
+        if (_localTeam is byte lt)
+            foreach (var (node, team, id) in _baseList)
+                if (node.Visible && team != lt && (!_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f))
+                    _lockableBaseScratch.Add((id, node.GlobalPosition));
+        return _lockableBaseScratch;
     }
 
     // Damaged bases in the currently-visible sector, as (world position, 0..1 health fraction),
@@ -656,7 +674,7 @@ public partial class WorldRenderer : Node3D
         node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
-        _baseList.Add((node, row.Team));
+        _baseList.Add((node, row.Team, row.BaseId));
         NetUpdateBaseHealth(row.BaseId, row.Health);
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
         _collisionWorld.AddBase(row);
