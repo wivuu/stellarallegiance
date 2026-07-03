@@ -1,3 +1,12 @@
+## Quick Reference
+
+**[GLOSSARY.md](GLOSSARY.md)** — reference for common terminology across the codebase. Organized by domain (simulation, weapons, networking, UI, server, etc.) with key file locations for each concept. **Update the glossary when:**
+  - Introducing new gameplay systems or mechanics
+  - Adding new server/client architecture patterns
+  - Coining new domain-specific terms that recur across files
+  
+**[DESIGN.md](DESIGN.md)** — UI component library and design-system spec (palette, type scale, theme wiring, components).
+
 ## UI / design tasks
 
 For any UI, styling, or design-system work in the Godot client, read [DESIGN.md](DESIGN.md)
