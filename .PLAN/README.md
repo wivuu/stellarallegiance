@@ -23,6 +23,10 @@ Archives:
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - **[S]** Pods explode when 'rescued'. Pig's pods fail to dock properly (bounce off base and explode)
+- F3 improvements
+  - Hide HUD elements in F3 mode (reticule, hull, shields, weapons, etc)
+  - Allow user to 'F3' while docker in base (hangar, etc)
+- Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area, increase the distance weighting from alephs from the center of the sector
 ---
 
 ## Content philosophy (the through-line)
