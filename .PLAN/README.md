@@ -224,13 +224,6 @@ Stage-2 economy, no rework.
   toggle lets the missile/mine damage tests isolate raw damage.
 - ✅ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
   don't. (FX done; the recharge *mechanic* is not.)
-- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
-  to fly over and collect; ties into the Stage-2 economy.
-  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
-  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
-  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
-  - If the ship does not have capacity, the item can bounce off harmlessly.
-  - If the item is in-motion, it should collision detect with asteroids and bases
 - ◐ **[S]** **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
@@ -240,6 +233,13 @@ Stage-2 economy, no rework.
 - ☐ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
+- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
+  to fly over and collect; ties into the Stage-2 economy.
+  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
+  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
+  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
+  - If the ship does not have capacity, the item can bounce off harmlessly.
+  - If the item is in-motion, it should collision detect with asteroids and bases
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
@@ -304,6 +304,8 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   client-update release checks that ban out-of-date servers/clients.
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
+- ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
+  lobby.
 - ☐ **[M]** **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
   system, and player ranks. (In-match scoreboards are Stage 3.)
 - ☐ **[XL]** **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. Lobby
@@ -314,8 +316,6 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   by game servers (JWT?).
 - ☐ **[M]** **Game-server authentication** — game servers prove identity to the lobby; on start, show a
   link in the terminal to authenticate the session. Same userbase as clients.
-- ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
-  lobby.
 - ☐ **[M]** **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
   store as YAML in a known location (same per-server-override mechanism as Stage 1). Each file is a
   map; env vars pick the map (random, specific, pick-from-files). *(Could be pulled forward to feed
