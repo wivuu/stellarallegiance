@@ -223,9 +223,9 @@ Stage-2 economy, no rework.
   distinct `shield_hit.ogg` + a hemisphere `ShieldFlash` when a bolt strikes a raised shield vs a
   bare hull. `tests/ShieldTest` guards absorb/spillover/recharge/multiplier; a `Simulation.ShieldsEnabled`
   toggle lets the missile/mine damage tests isolate raw damage.
-- ☐ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
+- ✅ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
   don't. (FX done; the recharge *mechanic* is not.)
-- ☐ **Ship salvage & pickups** — destroyed ships drop ammo / guns / missiles / mines (and credits)
+- ☐ **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
 - ☐ **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
   (Independent — slot anytime.)
