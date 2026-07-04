@@ -136,8 +136,10 @@ public partial class TargetMarkers : Control
     public override void _Process(double delta)
     {
         // Stay visible in the F3 sector map too — the markers reproject through the overview
-        // camera (see Cam) so the same indicators track each entity over the map.
-        Visible = true;
+        // camera (see Cam) so the same indicators track each entity over the map. Hidden while
+        // the telescopic scope is up: brackets/reticle/lead project through the MAIN camera and
+        // would sit wrong over the magnified image.
+        Visible = !ZoomView.Active;
         HandleFocusCycle();
         FocusedId = _focused ?? 0; // publish for ShipController's missile-lock input
         UpdateMissileHud(delta);

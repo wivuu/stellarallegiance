@@ -454,6 +454,17 @@ Per-overlay Godot UI theme application; not global.
 - **Related:** [[DesignTokens]], [[UI Components]]
 - **Notes:** Call `UiTheme.Apply(control)` on each full-screen overlay root; cannot live on CanvasLayer
 
+### Zoom Mode (Telescopic Scope)
+Circular picture-in-picture magnifier centred on screen: a second Camera3D renders the live world (shared World3D, narrow FOV) into a SubViewport, drawn clipped to a disc in place of the SystemRing gauges. `+`/`KpAdd` opens at 5x and steps 5→10→20 (capped); `−`/`KpSubtract` steps down and closes below 5x; Esc dismisses. Mouse-look sensitivity is divided by the magnification for fine aim.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/ZoomView.cs` — the scope (SubViewport + narrow-FOV camera, circular draw, input, `Active`/`Magnification` statics)
+  - `client/scripts/Hud.cs` — instantiates it after WeaponsPanel
+  - `client/scripts/SystemRing.cs` / `VelocityIndicator.cs` / `TargetMarkers.cs` — hidden while `ZoomView.Active`
+  - `client/scripts/ShipController.cs` — Esc bail-out + mouse gain ÷ `ZoomView.Magnification`
+- **Related:** [[UI Components]], [[DesignTokens]]
+- **Notes:** Scope FOV = 2·atan(tan(75°/2)/M); shares the main World3D (split-screen idiom), never OwnWorld3D (that's the hangar preview)
+
 ---
 
 ## Server Architecture

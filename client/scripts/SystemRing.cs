@@ -48,7 +48,7 @@ public partial class SystemRing : Control
 
     public override void _Process(double delta)
     {
-        Visible = _world.LocalShip != null;
+        Visible = _world.LocalShip != null && !ZoomView.Active; // the scope circle replaces these gauges
         if (Visible)
             QueueRedraw();
     }

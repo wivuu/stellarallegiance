@@ -454,6 +454,8 @@ public partial class ShipController : Node
 
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
         {
+            if (ZoomView.Active)
+                return; // the scope owns Esc while open (its own handler closes it) — don't release/menu
             if (Input.MouseMode == Input.MouseModeEnum.Captured)
             {
                 Input.MouseMode = Input.MouseModeEnum.Visible;
@@ -513,8 +515,11 @@ public partial class ShipController : Node
         _mouseDelta = Vector2.Zero;
         if (look)
         {
-            _stickYaw = Mathf.Clamp(_stickYaw - m.X * _mouseSens, -1f, 1f);
-            _stickPitch = Mathf.Clamp(_stickPitch + (_mouseInvert ? -m.Y : m.Y) * _mouseSens, -1f, 1f);
+            // Fine aiming while scoped: the telescopic zoom divides the effective mouse gain by
+            // the magnification (1 when closed), so a 20x scope turns 20x slower per pixel.
+            Vector2 md = m / ZoomView.Magnification;
+            _stickYaw = Mathf.Clamp(_stickYaw - md.X * _mouseSens, -1f, 1f);
+            _stickPitch = Mathf.Clamp(_stickPitch + (_mouseInvert ? -md.Y : md.Y) * _mouseSens, -1f, 1f);
             float ret = Mathf.Exp(-MouseReturnPerSec * (float)delta);
             _stickYaw *= ret;
             _stickPitch *= ret;

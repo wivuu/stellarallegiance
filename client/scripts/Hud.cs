@@ -95,6 +95,12 @@ public partial class Hud : CanvasLayer
         AddChild(weapons);
         weapons.Init(_world, _net, _defs);
 
+        // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
+        // while open. Added after the combat overlays so it draws above them, under the text/menu.
+        var zoom = new ZoomView { Name = "ZoomView" };
+        AddChild(zoom);
+        zoom.Init(_world);
+
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
         // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
         _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
