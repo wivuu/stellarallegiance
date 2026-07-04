@@ -23,7 +23,8 @@ Archives:
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - Default to fullscreen mode for production builds
-- Zoom mode
+- Zoom mode - Opens a rectangle with a telescopic zoom view that magnifies between 5x - 10x - 20x, esc dismisses.
+- First person view — allow the camera to switch to a first-person perspective from the ship; make it the default, with a key to toggle first and third; zooming closer than closest automatically switches to first-person
 ---
 
 ## Content philosophy (the through-line)
