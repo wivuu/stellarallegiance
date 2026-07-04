@@ -35,7 +35,7 @@ AllegianceModel/
   AllegianceModel.sln
   global.json                                   # pins SDK to .NET 8 (8.0.403, rollForward latestFeature)
   src/Allegiance.Factions/                      # <-- the library you depend on
-    Allegiance.Factions.csproj                  #     net8.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 16.2.1
+    Allegiance.Factions.csproj                  #     net10.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 16.2.1
   src/Allegiance.Factions.Cli/                  # validate/roundtrip/schema CLI (optional tooling, do not ship)
   tests/Allegiance.Factions.Tests/              # xUnit tests (reference for usage patterns)
   sample-data/                                  # a runnable 3-faction bundle (manifest + catalog + factions/)
@@ -59,12 +59,12 @@ From the StellarAllegiance game project's `.csproj`:
 </ItemGroup>
 ```
 
-(Adjust the relative path to wherever the two repos sit. Both target `net8.0`; if the game targets a
-later TFM that's fine, net8.0 libs load into later runtimes.)
+(Adjust the relative path to wherever the two repos sit. Both target `net10.0`; if the game targets a
+later TFM that's fine, net10.0 libs load into later runtimes.)
 
 **SDK pin caveat:** this repo's `global.json` pins the SDK to 8.0.x. If StellarAllegiance pins a
 different SDK via its own `global.json`, the nearest `global.json` to the build root wins. Make sure
-the chosen SDK can still build `net8.0` (any SDK ≥ 8.0 can). Don't copy this repo's `global.json`
+the chosen SDK can still build `net10.0` (any SDK ≥ 8.0 can). Don't copy this repo's `global.json`
 into StellarAllegiance unless you actually want to pin to 8.0.403.
 
 ### Option B — Package it as NuGet

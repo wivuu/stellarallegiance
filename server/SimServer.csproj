@@ -6,7 +6,7 @@
        References the same shared deterministic FlightModel the module and Godot client
        compile, so prediction math stays bit-identical across all three. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>

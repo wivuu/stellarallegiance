@@ -4,7 +4,7 @@
        <ProjectReference>. Each consumer's own runtime compiles this same source,
        so the wasm-server and mono-client math stays bit-identical. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Folder is shared/ but the namespace is StellarAllegiance.Shared (used by

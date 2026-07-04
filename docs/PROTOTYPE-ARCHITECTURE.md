@@ -62,7 +62,7 @@ stellar-allegiance/
 │   └── Lib.cs                   # Tables + reducers
 ├── shared/
 │   ├── FlightModel.cs           # Deterministic flight math (the only copy)
-│   └── Shared.csproj            # net8.0 lib referenced by module/, client/, tests/
+│   └── Shared.csproj            # net10.0 lib referenced by module/, client/, tests/
 ├── client/                      # Godot 4.6 C# project
 │   ├── project.godot
 │   ├── module_bindings/         # Generated — never hand-edit

@@ -156,10 +156,10 @@ the template under `module_bindings/{Tables,Types}/`.
   It uses self-contained `Vec3`/`Quat` structs (no Godot / System.Numerics types) in
   namespace `StellarAllegiance.Shared`, so it is engine-independent and compiles truly
   identically on both sides. `StatsFor(byte)` (0=Scout, 1=Fighter) keeps it free of any game enum.
-- **`shared/Shared.csproj`** is a net8.0 class library holding that one source. The module
+- **`shared/Shared.csproj`** is a net10.0 class library holding that one source. The module
   (`StdbModule.csproj`), client (`stellarallegiance.csproj`), and the test all pull it in via
   `<ProjectReference>` — there are no copies. **Edit `shared/FlightModel.cs`; it is the only copy.**
-- **`tests/FlightModelTest/`** is a standalone net8.0 console test: it integrates a fixed
+- **`tests/FlightModelTest/`** is a standalone net10.0 console test: it integrates a fixed
   200-tick input sequence, asserts two runs are **bit-identical** (determinism), matches a
   recorded golden state within **1e-5**, and that terminal speed respects `MaxSpeed`.
   Run with `cd tests/FlightModelTest && dotnet run -c Release` → `ALL TESTS PASSED`.
@@ -388,7 +388,7 @@ correctly on all clients is the remaining sign-off.
 the prebuilt binary with the native CLI** (`spacetime publish --server maincloud -b <wasm>`).
 `scripts/publish-maincloud.sh` does exactly this (build-in-Docker → publish-prebuilt); `--reset`
 adds `--delete-data=always` for a clean lobby. The wasm is at
-`module/spacetimedb/bin/Release/net8.0/wasi-wasm/AppBundle/StdbModule.opt.wasm`.
+`module/spacetimedb/bin/Release/net10.0/wasi-wasm/AppBundle/StdbModule.opt.wasm`.
 
 **Client is now server-configurable** (`client/scripts/ConnectionManager.cs`): defaults to the
 local dev server; override with the **`--maincloud`** launch flag or the `STDB_URI` / `STDB_DB`
@@ -469,13 +469,13 @@ scripts/
   populate-db.sh          ← publish the module (runs Init -> seeds Match/Bases/Asteroids); --reset wipes
 shared/
   FlightModel.cs          ← deterministic flight model; the ONLY copy, edit here
-  Shared.csproj           ← net8.0 class library; referenced by module/, client/, tests/
+  Shared.csproj           ← net10.0 class library; referenced by module/, client/, tests/
 module/
   spacetime.json          ← points to spacetimedb/ subdirectory
   spacetimedb/
     Lib.cs                ← schema (Ship has AngVel) + reducers; SimTick integrates ships
     StdbModule.csproj     ← references ../../shared/Shared.csproj
-    global.json           ← pins net8.0, do not touch
+    global.json           ← pins net10.0, do not touch
   CLAUDE.md               ← 2.x API reference, read this
 
 client/
@@ -493,7 +493,7 @@ client/
   scenes/Main.tscn               ← Node3D root: ConnectionManager, WorldRenderer, ShipController, env, light, CameraRig, Hud
 
 tests/
-  FlightModelTest/        ← standalone net8.0 console test for FlightModel (dotnet run -c Release)
+  FlightModelTest/        ← standalone net10.0 console test for FlightModel (dotnet run -c Release)
 
 .PLAN/                    ← design docs; read for intent, not for copy-paste syntax
 ACCEPTANCE01.md           ← T0 manual test checklist (already passing)

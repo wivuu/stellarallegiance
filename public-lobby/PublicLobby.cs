@@ -45,7 +45,7 @@ var app = builder.Build();
 // Behind a TLS-terminating proxy the registrant's real IP arrives in X-Forwarded-For; honour it so
 // the reachability probe targets the right address (cleared trust list = accept from the proxy).
 var fwd = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor };
-fwd.KnownNetworks.Clear();
+fwd.KnownIPNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
