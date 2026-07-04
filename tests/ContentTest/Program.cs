@@ -49,10 +49,11 @@ Check(
     $"hull cost wrong (scout {scout.Cost}, bomber {bomber.Cost})"
 );
 Check(
-    scout.Hardpoints.Count == 2
+    scout.Hardpoints.Count == 3
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon
         && scout.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId
-        && scout.Hardpoints[1].Kind == HardpointKind.MainEngine,
+        && scout.Hardpoints[1].Kind == HardpointKind.MainEngine
+        && scout.Hardpoints[2].Kind == HardpointKind.Cockpit,
     "loader parsed scout hardpoints (kinds + weapon-id)",
     "scout hardpoints wrong"
 );

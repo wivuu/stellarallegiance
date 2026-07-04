@@ -63,9 +63,10 @@ Check(
     $"stock scout fields wrong (class {scout.ClassId}, mass {scout.Mass}, speed {scout.Speed}, drift {scout.DriftYawDeg})"
 );
 Check(
-    scout.Hardpoints.Count == 2
+    scout.Hardpoints.Count == 3
         && scout.Hardpoints[0].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[0].WeaponId == 0
-        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.MainEngine,
+        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.MainEngine
+        && scout.Hardpoints[2].Kind == RuntimeHardpointKind.Cockpit,
     "stock scout carries hardpoints (kinds + weapon-id)",
     "stock scout hardpoints wrong"
 );

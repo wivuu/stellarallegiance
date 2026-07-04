@@ -168,6 +168,29 @@ public partial class PredictionController : Node3D
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
 
+    // The own hull's visual nodes, cached once the model is built (both exist by Initialize time —
+    // WorldRenderer builds ShipModel + TeamTrail before calling Initialize). Toggled off in first
+    // person so the camera, parked at the cockpit, doesn't stare through the inside of the hull.
+    private Node3D? _shipModel;
+    private Node3D? _teamTrail;
+
+    // Hide the own hull's visuals when the local camera is actually inside the cockpit. Idempotent
+    // per frame, so a respawn's brand-new nodes are handled automatically. FirstPersonActive only
+    // flips once the view transition completes, so the hull stays drawn while the camera dollies
+    // in/out and hides only at the very end (§ CameraRig). The F3 sector overview un-hides it (you
+    // watch your own ship from outside there).
+    private bool ApplyViewMode()
+    {
+        bool fp = CameraRig.FirstPersonActive && !SectorOverview.Active;
+        if (_shipModel is not null)
+            _shipModel.Visible = !fp;
+        if (_teamTrail is not null)
+            _teamTrail.Visible = !fp;
+        if (_engine is not null)
+            _engine.Suppressed = fp;
+        return fp;
+    }
+
     // When true, the local player's own nameplate is shown in normal chase flight too (like remote
     // ships). When false it reverts to the original behavior — visible ONLY in the F3 sector overview,
     // so your own name doesn't float in front of you while flying. A simple static toggle for now;
@@ -242,6 +265,12 @@ public partial class PredictionController : Node3D
         _rotErrVel = Vector3.Zero;
         _renderedPos = ShipMath.ToGodot(_state.Pos);
         _renderedRot = ShipMath.ToGodot(_state.Rot).Normalized();
+        // Cache the hull visuals for the first-person hide seam (built before Initialize runs) and
+        // apply the current view mode once, so a ship spawning straight into first person shows no
+        // one-frame hull flash.
+        _shipModel = GetNodeOrNull<Node3D>("ShipModel");
+        _teamTrail = GetNodeOrNull<Node3D>("TeamTrail");
+        ApplyViewMode();
         ApplyVisual(1f);
     }
 
@@ -475,11 +504,16 @@ public partial class PredictionController : Node3D
         ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
         _engine?.SetThrottle(_throttle, _afterburner);
 
+        // Hide the own hull / trail / glow while inside the cockpit (idempotent each frame).
+        bool fp = ApplyViewMode();
+
         // Show the local nameplate when enabled (normal flight) or while the F3 overview is open,
-        // keeping its on-screen size constant across the flight / F3 camera FOVs.
+        // keeping its on-screen size constant across the flight / F3 camera FOVs. In first person the
+        // own nameplate would float in front of the eye, so suppress it there (the overview un-hides
+        // it via fp being false while F3 is open).
         if (_nameplate is not null)
         {
-            _nameplate.Visible = (ShowOwnNameplate || SectorOverview.Active) && _pilotName.Length > 0;
+            _nameplate.Visible = !fp && (ShowOwnNameplate || SectorOverview.Active) && _pilotName.Length > 0;
             Nameplate.UpdateFovScale(_nameplate, SectorOverview.ActiveCamera);
         }
     }

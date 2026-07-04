@@ -465,6 +465,19 @@ Circular picture-in-picture magnifier centred on screen: a second Camera3D rende
 - **Related:** [[UI Components]], [[DesignTokens]]
 - **Notes:** Scope FOV = 2·atan(tan(75°/2)/M); shares the main World3D (split-screen idiom), never OwnWorld3D (that's the hangar preview)
 
+### First-Person View (Cockpit Camera)
+The chase camera's two-mode state machine: THIRD PERSON (the behind-the-ship chase shot) and FIRST PERSON (the pilot's eye, parked at the hull's `Cockpit` hardpoint). Both framings share the ship's basis, so switching is a purely positional, smoothstep-eased dolly (~0.3 s) between the chase offset and the cockpit offset — never a hard cut. First person is the DEFAULT, persisted per player (`UserPrefs.FirstPersonView`, default true). `V` toggles modes without touching the zoom; winding the wheel IN past the closest chase shot dives into the cockpit, winding OUT of the cockpit pulls back to the tightest chase framing. The own hull / team-trail / engine-glow / own-nameplate hide only once the transition completes (`CameraRig.FirstPersonActive`), so the ship stays visible throughout the dolly.
+- **Frequency:** Common
+- **Key Files:**
+  - `client/scripts/CameraRig.cs` — the view-mode state machine, `V` toggle, wheel transitions, cockpit-offset lookup, `FirstPersonActive`/`ViewIsFirstPerson` statics, `--view-demo` self-drive
+  - `client/scripts/PredictionController.cs` — hides the own ShipModel/TeamTrail/glow/nameplate while `FirstPersonActive && !SectorOverview.Active`
+  - `client/scripts/EngineGlow.cs` — `Suppressed` flag folded into the per-frame `Visible` recompute
+  - `client/scripts/ViewModeIndicator.cs` — transient "VIEW FPV/3RD" chip flashed on a toggle
+  - `client/scripts/UserPrefs.cs` — `FirstPersonView` persisted pref
+  - `server/Content/factions/hulls.yaml` — the `kind: cockpit` hardpoint (eye point) on each hull
+- **Related:** [[Zoom Mode (Telescopic Scope)]], [[Hardpoint]], [[UserPrefs]]
+- **Notes:** `Cockpit` = `HardpointKind` byte 8 (append-only, client-only — no wire/sim change); marker `HP_Cockpit_0` resolved to ship-local space, fallback `(0, 0.5, 1)`; F3 sector overview un-hides the own ship
+
 ---
 
 ## Server Architecture

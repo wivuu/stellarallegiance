@@ -47,6 +47,9 @@ hulls:
     hardpoints:
       - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 0 }
       - { kind: main-engine, off-z: -2.25, dir-z: -1 }
+      # Cockpit eye point for the first-person camera (client-only; slightly above the centreline,
+      # forward of centre). Kept LAST so the positional weapon/engine indices above stay stable.
+      - { kind: cockpit, off-y: 0.35, off-z: 0.9, dir-z: 1 }
     # Default hold: cannon 2 + sensor-decoy (3) = 5 <= 8; 3 free for hangar extras (e.g. mines).
     default-cargo:
       - { item: proximity-mine, count: 3 }
@@ -90,6 +93,9 @@ hulls:
       - { kind: weapon, index: 2, off-y: -0.6, off-z: 2, dir-z: 1, weapon-id: 3 }
       - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
       - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
+      # Cockpit eye point for the first-person camera (client-only). LAST so the weapon/booster
+      # positional indices above stay stable.
+      - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     # Default hold: twin cannons 2x5 + seeker rack 4 = 14, + 2x sensor-decoy (3) = 20 == capacity.
     default-cargo:
       - { item: sensor-decoy, count: 2 }
@@ -139,6 +145,9 @@ hulls:
       - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 5 }
       - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
       - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
+      # Cockpit eye point for the first-person camera (client-only). LAST so the weapon index-1
+      # torpedo rack (asserted positionally in FactionsTest) stays put.
+      - { kind: cockpit, off-y: 0.7, off-z: 1.8, dir-z: 1 }
     # Default hold: cannon 11 + torpedo rack 4 = 15, + 8x proximity-mine (8) + sensor-decoy (3) = 26 <= 26.
     # 8 mines = one full cloud-count deploy; mine mass 1 keeps the whole field affordable.
     default-cargo:
@@ -167,3 +176,6 @@ hulls:
     required-capabilities: [base]
     hardpoints:
       - { kind: main-engine, off-z: -2.25, dir-z: -1 }
+      # Cockpit eye point for the first-person camera (client-only). The pod is a tiny lifeboat, so
+      # the eye sits close to the origin.
+      - { kind: cockpit, off-y: 0.2, off-z: 0.3, dir-z: 1 }

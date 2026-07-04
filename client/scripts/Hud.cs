@@ -101,6 +101,11 @@ public partial class Hud : CanvasLayer
         AddChild(zoom);
         zoom.Init(_world);
 
+        // Transient first/third-person view-mode readout, flashed on a V toggle or wheel transition.
+        var viewMode = new ViewModeIndicator { Name = "ViewModeIndicator" };
+        AddChild(viewMode);
+        viewMode.Init();
+
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
         // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
         _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);

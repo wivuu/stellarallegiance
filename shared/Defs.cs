@@ -35,6 +35,7 @@ namespace StellarAllegiance.Shared
         Light, // a blinking nav light
         DockingEntrance, // where a ship docks in (marker only)
         DockingExit, // where a ship spawns back out (marker only)
+        Cockpit, // eye point for the first-person camera (client-only; the sim never reads it)
     }
 
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
