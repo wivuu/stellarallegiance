@@ -581,7 +581,7 @@ public partial class GameNetClient : Node
                 ApplySnapshot(r);
                 break;
             case 4:
-                ApplyShipGone(r.ReadUInt64());
+                ApplyShipGone(r.ReadUInt64(), r.ReadByte());
                 break;
             case 5:
                 ApplyBases(r);
@@ -806,7 +806,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 22;
+    public const byte ProtocolVersion = 23;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -1202,9 +1202,10 @@ public partial class GameNetClient : Node
         }
     }
 
-    private void ApplyShipGone(ulong shipId)
+    // reason: 0 = destroyed (fiery blast), 1 = clean despawn (voluntary dock / pod rescue).
+    private void ApplyShipGone(ulong shipId, byte reason)
     {
         if (_rows.Remove(shipId, out var row))
-            _world.NetDeleteShip(row);
+            _world.NetDeleteShip(row, reason);
     }
 }

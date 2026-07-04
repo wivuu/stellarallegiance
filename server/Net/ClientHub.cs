@@ -622,7 +622,10 @@ public sealed class ClientHub
         {
             goneFrames = new byte[_sim.DeathsThisStep.Count][];
             for (int i = 0; i < _sim.DeathsThisStep.Count; i++)
-                goneFrames[i] = Protocol.BuildShipGone(_sim.DeathsThisStep[i]);
+            {
+                var (id, reason) = _sim.DeathsThisStep[i];
+                goneFrames[i] = Protocol.BuildShipGone(id, reason);
+            }
         }
 
         // Missile detonation / expiry FX — broadcast to every client (cheap, rare), next to the

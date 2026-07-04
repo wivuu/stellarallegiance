@@ -18,13 +18,9 @@ public partial class WorldRenderer : Node3D
     // behind the base geometry.
     private const float BaseMaxHealth = 2000f;
 
-    // A pod removed while a friendly non-pod ship is in (roughly) hull contact was RESCUED
-    // — picked up by a teammate/drone — not destroyed, so it should simply vanish without a
-    // blast (the server's rescue pass deletes the row exactly like a kill does, so the row
-    // alone can't tell them apart; we mirror its rule client-side). The threshold is looser
-    // than the server's tight RescueRadius (6 units) to absorb the gap between the rescuer's
-    // rendered position (predicted for the local ship, interpolated for remotes) and the pod's.
-    private const float RescuePickupDist = 12f;
+    // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is
+    // a voluntary dock or a pod rescue — it despawns silently instead of playing the death blast.
+    private const byte GoneClean = 1;
 
     private Node3D _bases = null!;
     private Node3D _asteroids = null!;
@@ -462,10 +458,10 @@ public partial class WorldRenderer : Node3D
         UpdateShip(oldRow, newRow);
     }
 
-    public void NetDeleteShip(Ship row)
+    public void NetDeleteShip(Ship row, byte reason)
     {
         _shipShield.Remove(row.ShipId);
-        DeleteShip(row);
+        DeleteShip(row, reason);
     }
 
     // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
@@ -940,19 +936,22 @@ public partial class WorldRenderer : Node3D
         }
     }
 
-    private void DeleteShip(Ship row)
+    // reason: 0 = destroyed (blast + death-cam), 1 = clean despawn (voluntary dock / pod rescue).
+    private void DeleteShip(Ship row, byte reason)
     {
         if (!_shipNodes.Remove(row.ShipId, out var node))
             return;
 
         bool local = LocalShip == node;
 
-        // A rescued pod is removed cleanly (a friendly flew onto it), not destroyed — it just
-        // vanishes, no blast. The row delete is identical to a kill's, so detect the rescue the
-        // way the server does: a friendly non-pod ship in hull contact (see FriendlyRescuerNear).
-        bool rescued = row.IsPod && FriendlyRescuerNear(node, row.SectorId, row.Team);
+        // A clean removal (a friendly flew onto the pod to rescue it, or a ship docked at home) is
+        // not a death — it just vanishes, no blast. The server tells us this authoritatively via the
+        // ShipGone reason, so we no longer have to infer it from interpolated render positions (which
+        // mismatched the server's rescue radius and let rescued pods play the full death explosion).
+        bool clean = reason == GoneClean;
+        bool rescued = row.IsPod && clean;
 
-        if (!rescued)
+        if (!clean)
         {
             // A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
             // place it at the predicted node position the player was actually watching (not the
@@ -995,34 +994,6 @@ public partial class WorldRenderer : Node3D
             }
         }
         node.QueueFree();
-    }
-
-    // Client-side mirror of the server's rescue rule (Lib.cs rescue pass): is a friendly,
-    // non-pod ship in roughly hull contact with this pod? If so the pod was picked up, not
-    // killed, so its removal should be silent. Compares RENDERED positions (rescuer node vs
-    // pod node) so the interpolation lag they share largely cancels, with a generous radius
-    // (RescuePickupDist) for the residual predicted/interp gap. Restricted to the pod's own
-    // sector — sectors share a coordinate origin, so a same-team ship in another sector can
-    // overlap in raw coords. The pod node is already removed from _shipNodes by the caller.
-    private bool FriendlyRescuerNear(Node3D podNode, uint sector, byte team)
-    {
-        Vector3 podPos = podNode.GlobalPosition;
-        foreach (var node in _shipNodes.Values)
-        {
-            (byte t, bool isPod) = node switch
-            {
-                RemoteShip rs => (rs.Team, rs.IsPod),
-                PredictionController pc => (pc.Team, pc.IsPod),
-                _ => ((byte)255, true),
-            };
-            if (isPod || t != team)
-                continue;
-            if (node.HasMeta("sector") && (int)node.GetMeta("sector") != (int)sector)
-                continue;
-            if (podPos.DistanceSquaredTo(node.GlobalPosition) <= RescuePickupDist * RescuePickupDist)
-                return true;
-        }
-        return false;
     }
 
     // ---- Bolts (client-synthesized projectile visuals) -------------------

@@ -226,20 +226,36 @@ Stage-2 economy, no rework.
   don't. (FX done; the recharge *mechanic* is not.)
 - ☐ **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
-- ☐ **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
-  (Independent — slot anytime.)
+  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
+  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
+  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
+  - If the ship does not have capacity, the item can bounce off harmlessly.
+  - If the item is in-motion, it should collision detect with asteroids and bases
 - ◐ **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
   scores/ranks are Stage 5.
 - ☐ **Control settings and mappings** — allow players to configure keybindings, input devices,
   and control schemes for the game from the settings -> controls menu.
+- ☐ **Alephs block shots**  - from weapons and missiles
+  - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
+    players to navigate around or otherwise account for their presence in combat scenarios.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
 The economic + RTS loop. Largely sequential; each item builds on Stage 2's money + gating and the
 Stage-1 YAML pipeline.
 
+- ☐ **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
+  (Independent — slot anytime.)
+  - Each team has a shared vision of the things on the map
+  - The shared vision is updated as teammates scout the map, revealing or hiding objects based on their line-of-sight and proximity.
+  - Only bases, asteroids, and alephs are assumed to be persistent in the enemy's view once discovered/scouted. The entire team will share scouting information.
+  - If a base is destroyed, it will remain on the the map in memory of team until re-scouted and discovered to be gone.
+  - Ships disappear from the enemy's shared view once they are no longer in-sight of a teammate
+  - A ship has a yaml configured 'cone' that defines its vision for scouting purposes, as well as a smaller 'sphere' that defines proximity-based vision. Scouts, for example have a much longer/wider cone than fighters, and a larger sphere for nearby detection.
+  - Asteroids can occlude vision, blocking line-of-sight for scouting purposes.
+  - Expendable 'probe's can be deployed by scouts (or other ships if configured in YAML), probe types have different radiii for sight. Use acs64.glb as the model for the probe, but configurable in yaml
 - ☐ **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
 - ☐ **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
@@ -288,16 +304,16 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   client-update release checks that ban out-of-date servers/clients.
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
+- ☐ **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
+  system, and player ranks. (In-match scoreboards are Stage 3.)
 - ☐ **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. Lobby
   owns the persistent storage; deployed as part of the lobby project. Use **Orleans** so the lobby
-  is horizontally scalable and manages state.
+  is horizontally scalable and manages state. (BIG)
 - ☐ **Client authentication** — clients prove identity to the lobby (per-session secrets/tokens).
   Choose a provider that supports **passkeys**; lobby issues a session secret per client, validated
   by game servers (JWT?).
 - ☐ **Game-server authentication** — game servers prove identity to the lobby; on start, show a
   link in the terminal to authenticate the session. Same userbase as clients.
-- ☐ **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
-  system, and player ranks. (In-match scoreboards are Stage 3.)
 - ☐ **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
 - ☐ **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
