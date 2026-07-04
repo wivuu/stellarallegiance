@@ -66,7 +66,7 @@ public partial class Hud : CanvasLayer
         // the 3D viewport — it's a light effect on the sky, not a readout).
         var flare = new LensFlare { Name = "LensFlare" };
         AddChild(flare);
-        flare.Init(GetNode<Camera3D>("../Camera3D"));
+        flare.Init(GetNode<Camera3D>("../Camera3D"), _world);
 
         // Enemy target markers (added first so the HUD text/menu draw on top of it).
         var markers = new TargetMarkers { Name = "TargetMarkers" };
@@ -157,9 +157,9 @@ public partial class Hud : CanvasLayer
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--ui-shot="))
-                outPath = a.Substring("--ui-shot=".Length);
+                outPath = a["--ui-shot=".Length..];
             else if (a.StartsWith("--ui-shot-delay="))
-                double.TryParse(a.Substring("--ui-shot-delay=".Length), System.Globalization.CultureInfo.InvariantCulture, out delay);
+                double.TryParse(a["--ui-shot-delay=".Length..], System.Globalization.CultureInfo.InvariantCulture, out delay);
         }
         if (outPath == null)
             return;
@@ -179,7 +179,7 @@ public partial class Hud : CanvasLayer
     {
         if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F9 })
         {
-            if (_showcase != null && GodotObject.IsInstanceValid(_showcase))
+            if (_showcase != null && IsInstanceValid(_showcase))
             {
                 _showcase.QueueFree();
                 _showcase = null;
@@ -249,7 +249,7 @@ public partial class Hud : CanvasLayer
         // (LAUNCH to leave). The death-cam guard holds the hangar back for the blast beat (dock has
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
-        bool hangarUp = _hangar != null && GodotObject.IsInstanceValid(_hangar);
+        bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
         if (inMatch && !flying && _deployRequested && !_world.DeathCamActive)
         {
             if (hangarUp)

@@ -1139,6 +1139,48 @@ public partial class WorldRenderer : Node3D
         return ttl;
     }
 
+    // How much of the cosmetic Sun's line-of-sight is clear (1 = fully visible, 0 = fully
+    // blocked) from a camera at camPos looking along the unit sunDir. The sky Sun quad is a
+    // real depth-tested billboard, so it already hides behind rocks/bases; this exists purely
+    // so the LensFlare — a screen-space overlay with no depth of its own — can fade out when
+    // the disc it anchors to is occluded, instead of bleeding light through solid geometry.
+    // Analytic ray-vs-sphere over the same static caches the bolt clip uses, in the viewed
+    // sector only (that's what's actually drawn around the camera). A soft feather ring around
+    // each occluder keeps the flare from popping on/off at a hard silhouette edge.
+    public float SunVisibility(Vector3 camPos, Vector3 sunDir)
+    {
+        float occ = 0f; // strongest single occluder wins
+        uint sector = ViewSector;
+        foreach (var a in _asteroidClip)
+        {
+            if (a.Sector == sector)
+                occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, a.Pos, a.Radius));
+        }
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        foreach (var b in _baseClip)
+        {
+            if (b.Sector == sector)
+                occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, b.Pos, baseR));
+        }
+        return 1f - occ;
+    }
+
+    // Occlusion (0..1) of a ray from origin along unit dir by a sphere: 1 when the ray passes
+    // through the sphere, easing to 0 across a feather ring of half a radius outside it, and 0
+    // for any sphere behind the camera. The sun sits far beyond any sector geometry, so a
+    // sphere in front along the ray always lies between camera and disc — no far-limit needed.
+    private static float RayOcclusion(Vector3 origin, Vector3 dir, Vector3 center, float radius)
+    {
+        Vector3 l = center - origin;
+        float t = l.Dot(dir); // distance to the point on the ray closest to the sphere centre
+        if (t <= 0f)
+            return 0f; // occluder is behind the camera
+        float perp = Mathf.Sqrt(Mathf.Max(0f, l.LengthSquared() - t * t));
+        float feather = radius * 0.5f;
+        // perp <= radius: fully inside -> 1; perp >= radius+feather: clear -> 0.
+        return 1f - Mathf.SmoothStep(radius, radius + feather, perp);
+    }
+
     // Smallest positive entry time of the line pos+vel·t into a static sphere, if it is
     // within the current ttl — the client-side mirror of the module's FirstEntryTime
     // specialized to a static target.

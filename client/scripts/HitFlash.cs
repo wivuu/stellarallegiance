@@ -61,8 +61,8 @@ public partial class HitFlash : Node3D
     {
         var gradient = new Gradient
         {
-            Offsets = new[] { 0f, 0.5f, 1f },
-            Colors = new[] { new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f) },
+            Offsets = [0f, 0.5f, 1f],
+            Colors = [new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f)],
         };
         return new GradientTexture2D
         {

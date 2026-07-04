@@ -39,6 +39,11 @@ public partial class LensFlare : Control
 
     private Camera3D _camera = null!;
 
+    // Static world, for the sun line-of-sight test. A lens flare is light from the source hitting
+    // the lens, so when a rock or base blocks the disc the whole flare should vanish — otherwise the
+    // additive overlay bleeds sun-glow over solid geometry. Null until Init wires it.
+    private WorldRenderer _world = null!;
+
     // Project through the F3 overview camera while the sector map is open, else the flight chase
     // camera — matching TargetMarkers / VelocityIndicator. Resolved per-access to follow the toggle.
     private Camera3D Cam => SectorOverview.ActiveCamera ?? _camera;
@@ -46,10 +51,11 @@ public partial class LensFlare : Control
     private Vector2 _sunScreen; // cached projected sun position
     private float _intensity; // cached master intensity for this frame (0 = nothing to draw)
 
-    // Wired up by the Hud (which resolves the chase camera sibling).
-    public void Init(Camera3D camera)
+    // Wired up by the Hud (which resolves the chase camera sibling and WorldRenderer).
+    public void Init(Camera3D camera, WorldRenderer world)
     {
         _camera = camera;
+        _world = world;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         // Additive blend so every draw call ADDS light over the scene (mirrors the Sun quad) and
@@ -100,7 +106,11 @@ public partial class LensFlare : Control
         float halfDiag = center.Length();
         float falloff = 1f - Mathf.SmoothStep(0f, halfDiag, dist);
 
-        _intensity = MasterIntensity * falloff;
+        // Fade the whole flare as the disc slips behind a rock or base — a blocked source casts no
+        // flare, so the additive overlay stops bleeding sun-glow through solid geometry.
+        float visibility = _world.SunVisibility(cam.GlobalPosition, skyDir);
+
+        _intensity = MasterIntensity * falloff * visibility;
         QueueRedraw();
     }
 

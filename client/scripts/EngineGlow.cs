@@ -25,7 +25,7 @@ public partial class EngineGlow : Node3D
 
     // Local positions of each engine nozzle (rear face of the hull). One for a
     // Scout's single thruster, two for a Fighter's heavier twin engines.
-    public Vector3[] Nozzles = { Vector3.Zero };
+    public Vector3[] Nozzles = [Vector3.Zero];
 
     // Flame plume size at full throttle (before the afterburner stretch).
     public float NozzleRadius = 0.9f;
@@ -62,7 +62,7 @@ public partial class EngineGlow : Node3D
     public int SmokeAmount = 180; // mote count — density/fill of the trail
     public float SmokeLifetime = 1.5f; // mote lifespan (sec); also how long smoke lingers after boost
     public float SmokeSize = 2.5f; // base mote DIAMETER, in NozzleRadius units  ← overall bigness
-    private const float SmokeSizeVar = 0.6f; // ± random per-mote size variation (0 = all identical, 0.6 = 40%–160%)
+    private const float SmokeSizeVar = 0.6f; // ± random per-mote size variation (0 = all identical, 0.6 = 40%-160%)
     private const float SmokeSpeed = 4f; // backward drift speed; with Lifetime sets plume LENGTH
     private const float SmokeSpeedVar = 0.5f; // ± random drift spread
     private const float SmokeBell = 2f; // lateral fan-out radius, in NozzleRadius units  ← how wide the bell

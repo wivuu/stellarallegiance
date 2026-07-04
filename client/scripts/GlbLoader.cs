@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Godot;
 
 // =====================================================================
@@ -17,7 +18,7 @@ public static class GlbLoader
 {
     // res:// paths we've already failed to load, so a missing asset warns once and then
     // falls back silently (the procedural placeholder) instead of spamming per spawn.
-    private static readonly System.Collections.Generic.HashSet<string> _missing = [];
+    private static readonly HashSet<string> _missing = [];
 
     // Instantiate the GLB at `resPath` as a Node3D, or null if it's absent/failed (the caller
     // then builds the procedural placeholder). Each call yields a fresh instance, so per-team
@@ -67,9 +68,9 @@ public static class GlbLoader
     // transform relative to `hull` (hull's own transform excluded — same subtree semantics as
     // HasNode). Lets the loaders place beacons/markers at GLB-authored hardpoints instead of
     // def-seeded offsets. Walks the tree accumulating each node's transform, mirroring MeshAabb.
-    public static System.Collections.Generic.List<(string Name, Transform3D Local)> FindHardpoints(Node hull, string prefix)
+    public static List<(string Name, Transform3D Local)> FindHardpoints(Node hull, string prefix)
     {
-        var found = new System.Collections.Generic.List<(string, Transform3D)>();
+        var found = new List<(string, Transform3D)>();
 
         void Recurse(Node node, Transform3D xform)
         {
