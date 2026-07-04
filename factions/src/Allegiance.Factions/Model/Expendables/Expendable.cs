@@ -39,4 +39,11 @@ public abstract record Expendable
 
     /// <summary>Single-character UI glyph the hangar cargo list renders.</summary>
     public string? Glyph { get; set; }
+
+    /// <summary>
+    /// Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one
+    /// <see cref="Mass"/>) and every press distributes one charge. Total charges = packs ×
+    /// charges-per-pack. Null → 1 (a pack is a single charge — legacy one-for-one behavior).
+    /// </summary>
+    public uint? ChargesPerPack { get; set; }
 }

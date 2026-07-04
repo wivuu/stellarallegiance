@@ -194,7 +194,8 @@ namespace StellarAllegiance.Shared
         public uint CargoId;
         public string Name = "";
         public string Glyph = ""; // single-character UI glyph
-        public float Mass; // payload units per unit carried
+        public float Mass; // payload units per PACK carried (one hangar count = one pack)
+        public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
     }
 

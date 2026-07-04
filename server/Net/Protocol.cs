@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 21;
+    public const byte Version = 22;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -573,6 +573,7 @@ public static class Protocol
             WriteString(w, c.Name);
             WriteString(w, c.Glyph);
             w.Write(c.Mass);
+            w.Write(c.ChargesPerPack);
             WriteString(w, c.Description);
         }
 

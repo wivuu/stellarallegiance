@@ -410,7 +410,12 @@ public partial class ShipLoadout : Control
             nameCol.AddThemeConstantOverride("separation", 0);
             var name = UiKit.MakeLabel(item.Name.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
             name.AddThemeFontSizeOverride("font_size", 12);
-            var sub = UiKit.MakeLabel($"{item.Mass:0} PAYLOAD EA · {item.Description}", UiKit.TextStyle.Data, DesignTokens.TextDim);
+            // Dispensers load in PACKS of ChargesPerPack charges (one per press); show the multiplier
+            // so the count reads as packs. Legacy single-charge items (ChargesPerPack 1) stay "EA".
+            string cargoSub = item.ChargesPerPack > 1
+                ? $"{item.Mass:0} PAYLOAD/PACK · {item.ChargesPerPack}× CHARGES · {item.Description}"
+                : $"{item.Mass:0} PAYLOAD EA · {item.Description}";
+            var sub = UiKit.MakeLabel(cargoSub, UiKit.TextStyle.Data, DesignTokens.TextDim);
             sub.AddThemeFontSizeOverride("font_size", 9);
             sub.ClipText = true;
             sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
@@ -446,6 +451,10 @@ public partial class ShipLoadout : Control
             return;
         int cur = _state.GetCargoCount(classId, itemId);
         int want = Math.Clamp(cur + delta, 0, 12);
+        // The per-kind charge total (packs × ChargesPerPack) rides a wire byte — never let the pack
+        // count push past 255 charges (the hard 12-pack cap already covers sane pack sizes).
+        if (_defs.GetCargoItem(itemId) is CargoItemDef packItem && packItem.ChargesPerPack > 1)
+            want = Math.Min(want, 255 / packItem.ChargesPerPack);
         // A bump is additionally clamped to the hull's REMAINING payload budget — you can't stock
         // past what the hull can carry (the server would just fall back to the hull default anyway).
         if (want > cur && _defs.GetCargoItem(itemId) is CargoItemDef item && item.Mass > 0f)

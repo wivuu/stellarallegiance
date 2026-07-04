@@ -266,6 +266,7 @@ public static class FactionsContentProjection
             Name = e.Name,
             Glyph = e.Glyph ?? "",
             Mass = (float)e.Mass,
+            ChargesPerPack = (byte)System.Math.Max(1, e.ChargesPerPack ?? 1),
             Description = e.Description ?? "",
         };
 

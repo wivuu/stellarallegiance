@@ -320,6 +320,7 @@ public sealed partial class Simulation
     // by id, for the spawn-time payload validation. Built once from Content in the ctor.
     private readonly Dictionary<uint, WeaponDef> _dispenserByCargo = new();
     private readonly Dictionary<uint, float> _cargoMass = new();
+    private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -433,7 +434,10 @@ public sealed partial class Simulation
             if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine) && w.CargoId != 0)
                 _dispenserByCargo[w.CargoId] = w;
         foreach (var c in content.CargoItems)
+        {
             _cargoMass[c.CargoId] = c.Mass;
+            _chargesPerPack[c.CargoId] = System.Math.Max((byte)1, c.ChargesPerPack);
+        }
 
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
         var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
@@ -893,14 +897,18 @@ public sealed partial class Simulation
         {
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
                 continue;
+            // `count` is the loaded PACK count; each pack holds ChargesPerPack charges and one charge
+            // is spent per gated press. Total charges = packs × pack-size, clamped to the wire byte.
+            byte packSize = _chargesPerPack.TryGetValue(cargoId, out var pk) ? pk : (byte)1;
+            byte charges = (byte)System.Math.Min(255, count * packSize);
             if (w.Kind == WeaponKind.Chaff)
             {
-                s.ChaffAmmo = count;
+                s.ChaffAmmo = charges;
                 s.ChaffWeaponId = w.WeaponId;
             }
             else if (w.Kind == WeaponKind.Mine)
             {
-                s.MineAmmo = count;
+                s.MineAmmo = charges;
                 s.MineWeaponId = w.WeaponId;
             }
         }
