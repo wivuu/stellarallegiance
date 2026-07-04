@@ -1,9 +1,13 @@
 # World — a Core-level fragment carrying the map-seeding knobs (a runtime extension on Core).
 # sector-scale multiplies authored per-sector radii; asteroid-density scales asteroid counts.
-# Reproduces stock.yaml's world block.
+# fog-of-war toggles per-team vision filtering server-wide (off = behavior/bytes identical to no
+# fog); fog-eyeball-multiplier scales a ship's vision-sphere radius for the outer "mesh renders but
+# isn't radar-detected" tier (server-side only — never streamed). Reproduces stock.yaml's world block.
 world:
   id: 0
   sector-scale: 2.25
   asteroid-density: 1.0
   debug-freeze-brain: false
   debug-no-fire: false
+  fog-of-war: true
+  fog-eyeball-multiplier: 1.5

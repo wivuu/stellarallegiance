@@ -30,6 +30,7 @@ public static class FactionsContentProjection
         var missileById = core.Missiles.ToDictionary(m => m.Id);
         var mineById = core.Mines.ToDictionary(m => m.Id);
         var chaffById = core.Chaffs.ToDictionary(c => c.Id);
+        var probeById = core.Probes.ToDictionary(p => p.Id);
         // expendable id -> stable cargo id, for a hull's default-cargo (authored by expendable id).
         var cargoIdByExpendable = core.AllExpendables()
             .Where(e => e.CargoId is not null)
@@ -48,7 +49,7 @@ public static class FactionsContentProjection
             .Select(w => ProjectWeapon(w, projectileById))
             .Concat(core.Launchers
                 .Where(l => l.WeaponId is not null)
-                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById)))
+                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById)))
             .ToList();
 
         var bases = core.Stations
@@ -110,6 +111,13 @@ public static class FactionsContentProjection
             ShieldCapacity = (float)h.ShieldCapacity,
             ShieldRecharge = (float)h.ShieldRecharge,
             ShieldDelaySec = (float)h.ShieldDelay,
+            // Fog-of-war vision (behavior-inert until a later WP): cone/sphere derive losslessly;
+            // RadarSignature resolves an authored 0/omitted to 1.0 so the wire never carries a
+            // signature of 0 (which would make the hull undetectable at any range).
+            VisionConeLength = (float)h.VisionConeLength,
+            VisionConeAngleDeg = (float)h.VisionConeAngleDeg,
+            VisionSphereRadius = (float)h.VisionSphereRadius,
+            RadarSignature = h.RadarSignature <= 0 ? 1f : (float)h.RadarSignature,
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
             PayloadCapacity = (float)h.PayloadCapacity,
@@ -166,13 +174,15 @@ public static class FactionsContentProjection
     // already proved the expendable resolves to a Missile with sane stats.
     // A launcher carrying a weapon id projects to a runtime WeaponDef whose KIND is dispatched off
     // the referenced expendable: a Missile → guided-missile launcher, a Mine → proximity-mine
-    // dispenser, a Chaff → sensor-decoy dispenser. CoreValidator already proved the expendable
-    // resolves (and rejects a Probe / unknown), so an unresolved id here is a projection invariant.
+    // dispenser, a Chaff → sensor-decoy dispenser, a Probe → deployable vision-sphere dispenser.
+    // CoreValidator already proved the expendable resolves, so an unresolved id here is a
+    // projection invariant.
     private static WeaponDef ProjectLauncher(
         Factions.Launcher l,
         IReadOnlyDictionary<string, Factions.Missile> missileById,
         IReadOnlyDictionary<string, Factions.Mine> mineById,
-        IReadOnlyDictionary<string, Factions.Chaff> chaffById
+        IReadOnlyDictionary<string, Factions.Chaff> chaffById,
+        IReadOnlyDictionary<string, Factions.Probe> probeById
     )
     {
         if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
@@ -246,7 +256,24 @@ public static class FactionsContentProjection
                 ModelName = ch.ModelName ?? "",
             };
 
-        throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff expendable-id");
+        if (!string.IsNullOrEmpty(l.ExpendableId) && probeById.TryGetValue(l.ExpendableId, out var pr))
+            return new WeaponDef
+            {
+                WeaponId = l.WeaponId!.Value,
+                Name = l.Name,
+                Kind = WeaponKind.Probe,
+                ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0), // deployed-probe lifespan
+                Mass = (float)l.Mass,
+                FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
+                MagazineSize = (byte)l.Amount,
+                ProbeSightRadius = (float)pr.SightRadius,
+                ProbeLifespanSec = (float)pr.Lifespan,
+                CargoId = pr.CargoId ?? 0,
+                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
+                ModelName = pr.ModelName ?? "",
+            };
+
+        throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff/probe expendable-id");
     }
 
     // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).
@@ -277,6 +304,10 @@ public static class FactionsContentProjection
             Name = s.Name,
             Radius = (float)s.Radius,
             MaxHealth = (float)s.MaxArmor,
+            // Fog-of-war vision (behavior-inert until a later WP): RadarSignature resolves an
+            // authored 0/omitted to 1.0, mirroring the hull rule.
+            VisionSphereRadius = (float)s.VisionSphereRadius,
+            RadarSignature = s.RadarSignature <= 0 ? 1f : (float)s.RadarSignature,
             Hardpoints = s.Hardpoints.Select(ProjectHardpoint).ToList(),
         };
 
@@ -297,7 +328,7 @@ public static class FactionsContentProjection
 
     private static WorldConfig ProjectWorld(Factions.WorldConfig? w) =>
         w is null
-            ? new WorldConfig()
+            ? new WorldConfig { FogOfWar = true, FogEyeballMultiplier = 1.5f }
             : new WorldConfig
             {
                 Id = w.Id,
@@ -305,5 +336,9 @@ public static class FactionsContentProjection
                 AsteroidDensity = (float)w.AsteroidDensity,
                 DebugFreezeBrain = w.DebugFreezeBrain,
                 DebugNoFire = w.DebugNoFire,
+                // Fog-of-war: default ON. EyeballMultiplier is server-side only (never streamed —
+                // Protocol.BuildDefs deliberately skips it).
+                FogOfWar = w.FogOfWar ?? true,
+                FogEyeballMultiplier = w.FogEyeballMultiplier <= 0 ? 1.5f : (float)w.FogEyeballMultiplier,
             };
 }

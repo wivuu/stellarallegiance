@@ -64,6 +64,8 @@ Simulation BootSim(ulong seed)
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.ShieldsEnabled = false; // isolate raw missile/blast damage from shield absorption (ShieldTest covers shields)
+    sim.FogEnabled = false; // isolate lock mechanics from the fog radar-visibility gate (FogTest covers fog); vision is a 2 Hz async pass this suite never waits on
+
     sim.StartMatch(); // Lobby -> Active: resolves team unlocks + seeds economy, so spawns are allowed
     return sim;
 }

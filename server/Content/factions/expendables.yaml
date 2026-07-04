@@ -126,3 +126,20 @@ chaffs:
     lifespan: 3          # puff lifetime, s
     chaff-strength: 1.0  # decoy strength vs a missile's chaff-resistance
     decoy-radius: 60     # u within which a missile can be lured onto this puff
+
+probes:
+  # A deployed, passive, invulnerable sensor buoy: grants its owning team a vision sphere
+  # (sight-radius) around its drop point until it expires (lifespan, reusing the shared Expendable
+  # field every expendable carries). model-name is the GLB the client instances per deployed probe
+  # (assets/probes/<name>.glb). mass is authored low (not the "realistic" heavier value) so a single
+  # pack fits inside the scout's existing payload-capacity alongside its other cargo.
+  - id: recon-probe
+    name: Recon Probe
+    description: Deployable sensor buoy. Passive and invulnerable; expires after 10 minutes.
+    cargo-id: 4
+    mass: 2              # payload cost per PACK (one hangar count = one pack)
+    charges-per-pack: 2 # probes deployable from one loaded pack (one probe per press)
+    glyph: "◉"
+    model-name: acs64    # GLB the client instances per deployed probe (assets/probes/acs64.glb)
+    lifespan: 600        # seconds before the deployed probe expires
+    sight-radius: 1200   # u radius of the team vision sphere the probe grants while alive

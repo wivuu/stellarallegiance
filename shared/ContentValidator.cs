@@ -103,6 +103,17 @@ namespace StellarAllegiance.Shared
                     if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
+                else if (w.Kind == WeaponKind.Probe)
+                {
+                    // Probe dispenser: sight-radius/lifespan must be live, and it must link to a
+                    // stockable cargo item (the probe expendable it consumes).
+                    if (w.ProbeSightRadius <= 0f)
+                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}");
+                    if (w.ProbeLifespanSec <= 0f)
+                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}");
+                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+                }
 
                 // A weapon must be able to damage a shield: ShieldMult <= 0 would make it useless
                 // against any shielded ship (the shield absorbs everything and never depletes).
@@ -123,6 +134,7 @@ namespace StellarAllegiance.Shared
                 ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
                 ValidateFuel(d, errors);
                 ValidateShield(d, errors);
+                ValidateVision(d, errors);
             }
 
             ValidateWinnable(ships, weaponsById, errors);
@@ -139,6 +151,7 @@ namespace StellarAllegiance.Shared
                     errors.Add($"duplicate BaseTypeId {b.BaseTypeId} (\"{b.Name}\")");
 
                 ValidateWeaponHardpoints(b.Name, b.Hardpoints, weaponIds, errors);
+                ValidateBaseVision(b, errors);
             }
 
             return errors;
@@ -225,6 +238,36 @@ namespace StellarAllegiance.Shared
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldDelaySec {ship.ShieldDelaySec}");
             if (ship.ShieldCapacity > 0f && ship.ShieldRecharge <= 0f)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has ShieldCapacity but no ShieldRecharge — shield never regenerates");
+        }
+
+        // Fog-of-war vision (all inert until a later WP wires up filtering, but bad authoring here
+        // would still silently break that WP): ranges/sphere can't be negative, the cone half-angle
+        // must be a sane 0..90 degrees, a cone with reach must actually have a nonzero angle (else it
+        // sees nothing), and RadarSignature must be positive — projection resolves an authored 0 to
+        // 1.0 BEFORE this validator runs, so a non-positive resolved signature is an authoring bug.
+        private static void ValidateVision(ShipClassDef ship, List<string> errors)
+        {
+            string ctx = $"class \"{ship.Name}\" ({ship.ClassId})";
+            if (ship.VisionConeLength < 0f)
+                errors.Add($"{ctx} has negative VisionConeLength {ship.VisionConeLength}");
+            if (ship.VisionSphereRadius < 0f)
+                errors.Add($"{ctx} has negative VisionSphereRadius {ship.VisionSphereRadius}");
+            if (ship.VisionConeAngleDeg < 0f || ship.VisionConeAngleDeg > 90f)
+                errors.Add($"{ctx} has VisionConeAngleDeg {ship.VisionConeAngleDeg} outside 0..90");
+            if (ship.VisionConeLength > 0f && ship.VisionConeAngleDeg <= 0f)
+                errors.Add($"{ctx} has VisionConeLength > 0 but VisionConeAngleDeg <= 0 — cone sees nothing");
+            if (ship.RadarSignature <= 0f)
+                errors.Add($"{ctx} has non-positive RadarSignature {ship.RadarSignature}");
+        }
+
+        // Same sphere/signature checks as ships, minus the directional cone (bases are omnidirectional-only).
+        private static void ValidateBaseVision(BaseDef b, List<string> errors)
+        {
+            string ctx = $"base \"{b.Name}\" ({b.BaseTypeId})";
+            if (b.VisionSphereRadius < 0f)
+                errors.Add($"{ctx} has negative VisionSphereRadius {b.VisionSphereRadius}");
+            if (b.RadarSignature <= 0f)
+                errors.Add($"{ctx} has non-positive RadarSignature {b.RadarSignature}");
         }
 
         private static void ValidateWeaponHardpoints(

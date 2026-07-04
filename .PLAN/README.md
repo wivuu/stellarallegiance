@@ -22,11 +22,21 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- **[S]** Pods explode when 'rescued'. Pig's pods fail to dock properly (bounce off base and explode)
 - F3 improvements
   - Hide HUD elements in F3 mode (reticule, hull, shields, weapons, etc)
   - Allow user to 'F3' while docker in base (hangar, etc)
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area, increase the distance weighting from alephs from the center of the sector
+- Mine changes
+  - Mines are maybe a bit **too** powerful.
+  - Mines should animate as they are deployed (rapidly expand spherically)
+- Store protocol version in shared lib constant so it doesnt have to be updated in two places
+- Radar rivisions
+  - Make a contact sound effect (from pick_assets) when a radar contact appears
+  - Shooting should increase radar signature
+  - Sector control/contention should not be apparent (red sector vs blue sector etc) until a base is discovered in that sector
+  - probes too small, need to be destructable
+- Esc menu should work from hangar/base as well (currenetly only works in-ship)
+- Zoom quickly can animate; smooth zoom between 5-10-20
 ---
 
 ## Content philosophy (the through-line)
@@ -250,16 +260,27 @@ Stage-2 economy, no rework.
 The economic + RTS loop. Largely sequential; each item builds on Stage 2's money + gating and the
 Stage-1 YAML pipeline.
 
-- ☐ **[XL]** **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
-  (Independent — slot anytime.)
-  - Each team has a shared vision of the things on the map
-  - The shared vision is updated as teammates scout the map, revealing or hiding objects based on their line-of-sight and proximity.
-  - Only bases, asteroids, and alephs are assumed to be persistent in the enemy's view once discovered/scouted. The entire team will share scouting information.
-  - If a base is destroyed, it will remain on the the map in memory of team until re-scouted and discovered to be gone.
-  - Ships disappear from the enemy's shared view once they are no longer in-sight of a teammate
-  - A ship has a yaml configured 'cone' that defines its vision for scouting purposes, as well as a smaller 'sphere' that defines proximity-based vision. Scouts, for example have a much longer/wider cone than fighters, and a larger sphere for nearby detection.
-  - Asteroids can occlude vision, blocking line-of-sight for scouting purposes.
-  - Expendable 'probe's can be deployed by scouts (or other ships if configured in YAML), probe types have different radiii for sight. Use acs64.glb as the model for the probe, but configurable in yaml
+- ✅ **Fog of war** — shipped (proto 23): server-authoritative **per-team shared vision**. Statics
+  (asteroids, bases, alephs) stay hidden until a teammate scouts them, then persist as team memory —
+  a base destroyed while unseen keeps its last-known health (`LastKnownBaseHealth`) until re-scouted.
+  Enemy ships are streamed only while in a teammate's sight; once radar-seen and then lost they
+  persist as last-known **ghost** contacts (HUD/F3 glyph only, never a 3D mesh) until re-scouted empty
+  or re-spotted. Vision is per-hull YAML (long-range **cone** + omni proximity **sphere**, scouts get
+  much bigger values; asteroids occlude the cone via the bolt raycast); **bases** contribute an
+  unoccluded vision sphere (garrison watches from tick 0); every target carries a **radar signature**
+  multiplier scaling all detection ranges (small scouts seen closer, bombers/bases farther). An outer
+  **eyeball tier** (`fog-eyeball-multiplier`, ~1.5× sphere) streams an enemy's mesh in-world while its
+  radar/HUD/targeting stay silent — a keen-eyed player can spot a stealth fleet before radar. Deployable
+  **recon probes** (`WeaponKind.Probe` launcher + expendable, model `acs64`) add team vision spheres.
+  Vision is computed on a **dedicated 2 Hz worker thread** (snapshot-in / apply-at-boundary pipeline,
+  `Simulation.Vision.cs`) so the sim tick is untouched; wire frames `MsgReveal`/`MsgContacts` (ghosts +
+  radar-id list) / `MsgProbes`/`MsgProbeGone` + `MsgShipGone reason=2` (quiet fade), all per-team,
+  reusing Welcome's static encoders so they can't drift. PIGs and missile-lock respect team vision (no
+  more wallhack). World-YAML `fog-of-war` (default on) toggles it; **off = bytes/behavior identical to
+  pre-fog** (single shared coarse buffer, no worker, full Welcome). `tests/FogTest` covers cone/sphere/
+  occlusion/signature/eyeball/ghost-lifecycle/base-vision/probe/determinism. *Deferred: shootable
+  probes (combat fields dormant), PIG auto-probe usage, `MsgMissiles` team-filtering (accepted
+  incoming-warning leak), vision-cone HUD rendering, eyeball-tier occlusion (unoccluded in v1).*
 - ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;

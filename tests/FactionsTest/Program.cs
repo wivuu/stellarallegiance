@@ -147,15 +147,15 @@ Check(
 // Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
 var mine = stock.Mines.Single(m => m.Id == "proximity-mine");
 Check(
-    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 20
-        && mine.CloudRadius == 15 && mine.CloudCount == 64
-        && mine.ArmDelay == 2.0 && mine.Lifespan == 60 && mine.ModelName == "acs41",
+    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 200
+        && mine.CloudRadius == 80 && mine.CloudCount == 64
+        && mine.ArmDelay == 0.5 && mine.Lifespan == 60 && mine.ModelName == "acs41",
     "stock proximity-mine carries field/blast/arming stats",
     $"proximity-mine wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay})"
 );
 var decoy = stock.Chaffs.Single(c => c.Id == "sensor-decoy");
 Check(
-    decoy.CargoId == 3 && decoy.Mass == 3 && decoy.ChaffStrength == 1.0 && decoy.DecoyRadius == 60 && decoy.Lifespan == 3 && decoy.ModelName == "acs40",
+    decoy.CargoId == 3 && decoy.Mass == 1 && decoy.ChaffStrength == 1.0 && decoy.DecoyRadius == 60 && decoy.Lifespan == 3 && decoy.ModelName == "acs40",
     "stock sensor-decoy carries chaff-strength + decoy-radius",
     $"sensor-decoy wrong (cargo {decoy.CargoId}, strength {decoy.ChaffStrength}, decoy {decoy.DecoyRadius})"
 );

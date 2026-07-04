@@ -41,6 +41,12 @@ hulls:
     shield-capacity: 60   # regenerating shield absorbed before hull
     shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
     shield-delay: 3       # seconds after the last shield hit before recharge resumes
+    # Fog-of-war vision: long-range directional cone (occluded by asteroids) + omnidirectional
+    # proximity sphere (unoccluded). Scouts trade armor for the best eyes in the fleet.
+    vision-cone-length: 2400
+    vision-cone-angle-deg: 30
+    vision-sphere-radius: 900
+    radar-signature: 0.5   # small + quiet — must be approached closer before being seen
     price: 100
     payload-capacity: 8 # cannon 2 -> 6 free for cargo
     required-capabilities: [base]
@@ -50,10 +56,13 @@ hulls:
       # Cockpit eye point for the first-person camera (client-only; slightly above the centreline,
       # forward of centre). Kept LAST so the positional weapon/engine indices above stay stable.
       - { kind: cockpit, off-y: 0.35, off-z: 0.9, dir-z: 1 }
-    # Default hold: cannon 2 + sensor-decoy (3) = 5 <= 8; 3 free for hangar extras (e.g. mines).
+    # Default hold: cannon 2 + proximity-mine (3) + sensor-decoy (1) + recon-probe (2) = 8 == capacity.
+    # Probe mass is authored low (2, not a "realistic" 20) so a single pack fits exactly alongside
+    # the scout's existing loadout rather than raising payload-capacity for every hull.
     default-cargo:
       - { item: proximity-mine, count: 3 }
       - { item: sensor-decoy, count: 1 }
+      - { item: recon-probe, count: 1 }
 
   # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
   - id: fighter
@@ -82,6 +91,10 @@ hulls:
     shield-capacity: 60   # regenerating shield absorbed before hull
     shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
     shield-delay: 3       # seconds after the last shield hit before recharge resumes
+    vision-cone-length: 1200
+    vision-cone-angle-deg: 20
+    vision-sphere-radius: 450
+    radar-signature: 1.0   # baseline detectability
     price: 200
     payload-capacity: 20 # twin cannons 2x5 + seeker rack 4 = 14 -> 6 free for cargo
     required-capabilities: [base]
@@ -136,6 +149,10 @@ hulls:
     shield-capacity: 100  # the heavy hull carries the largest shield
     shield-recharge: 6    # points/sec once the quiet delay elapses (~16.7 s to full)
     shield-delay: 4       # seconds after the last shield hit before recharge resumes
+    vision-cone-length: 1000
+    vision-cone-angle-deg: 18
+    vision-sphere-radius: 400
+    radar-signature: 1.75  # big and loud — seen from much further away than a scout
     price: 350
     payload-capacity: 26 # cannon 11 + torpedo rack 4 = 15 -> 11 free; the payload hull carries the most
     required-capabilities: [base]
@@ -172,6 +189,8 @@ hulls:
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     armor-hit-points: 20
+    vision-sphere-radius: 250 # no cone — a lifepod has no forward sensor, just a short proximity bubble
+    radar-signature: 0.35     # tiny lifeboat — hard to spot fleeing a wreck
     abilities: [is-lifepod, no-ripcord]
     required-capabilities: [base]
     hardpoints:

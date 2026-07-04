@@ -205,6 +205,12 @@ public sealed partial class Simulation
         public uint ChaffWeaponId;
         public uint MineWeaponId;
 
+        // ---- Recon-probe dispenser state (0 on hulls carrying no probe cargo) — same D6/D9 seam
+        // as the chaff/mine ammo above (Simulation.Probes.cs). ----
+        public byte ProbeAmmo;
+        public uint LastProbeTick;
+        public uint ProbeWeaponId;
+
         // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
         // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
         public uint LastMineFxTick;
@@ -438,10 +444,10 @@ public sealed partial class Simulation
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
 
-        // Dispenser (chaff/mine) WeaponDefs indexed by the cargo item they consume, + cargo masses
-        // for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
+        // Dispenser (chaff/mine/probe) WeaponDefs indexed by the cargo item they consume, + cargo
+        // masses for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
         foreach (var w in content.Weapons)
-            if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine) && w.CargoId != 0)
+            if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine || w.Kind == WeaponKind.Probe) && w.CargoId != 0)
                 _dispenserByCargo[w.CargoId] = w;
         foreach (var c in content.CargoItems)
         {
@@ -460,6 +466,8 @@ public sealed partial class Simulation
         _shotRing = new List<PendingShot>[ShotRingSize];
         for (int i = 0; i < ShotRingSize; i++)
             _shotRing[i] = new List<PendingShot>();
+
+        InitVision(); // fog-of-war switch + per-team vision state (Simulation.Vision.cs)
     }
 
     // ---- Thread-safe intake (called from socket tasks) -------------------
@@ -517,11 +525,19 @@ public sealed partial class Simulation
     {
         uint tick = ++_tick;
         float dt = FlightModel.Dt;
+        // Accumulate the prior step's completed deaths for the fog witnessed-death rule BEFORE the
+        // drain list is cleared (consumed + reset at the next vision apply, Simulation.Vision.cs).
+        if (FogEnabled)
+            foreach (var d in DeathsThisStep)
+                _visionDeaths.Add(d.id);
         DeathsThisStep.Clear();
+        LostContactsThisStep.Clear();
         MissileGoneThisStep.Clear();
         ChaffSpawnedThisStep.Clear();
         MineGoneThisStep.Clear();
         MinefieldsChangedThisStep = false;
+        ProbeGoneThisStep.Clear();
+        ProbesChangedThisStep = false;
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
@@ -546,6 +562,10 @@ public sealed partial class Simulation
         {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+            // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
+            // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
+            if (FogEnabled && tick % VisionEvery == 0)
+                VisionStep(tick);
         }
         ResolveDueShots(tick);
         RebuildShipGrid();
@@ -576,6 +596,8 @@ public sealed partial class Simulation
                     TryDropChaff(s, tick); // dispenser cadence-gated (Simulation.Chaff.cs)
                 if (input.DropMine)
                     TryDeployMine(s, tick); // dispenser cadence-gated (Simulation.Mines.cs)
+                if (input.DropProbe)
+                    TryDeployProbe(s, tick); // dispenser cadence-gated (Simulation.Probes.cs)
             }
             TryWarp(s);
         }
@@ -590,6 +612,9 @@ public sealed partial class Simulation
 
         // Mines: expire/deplete fields + proximity-trigger armed mines against the ship grid.
         StepMines(tick); // Simulation.Mines.cs
+
+        // Recon probes: expire past their lifespan (passive — no per-tick effect otherwise).
+        StepProbes(tick); // Simulation.Probes.cs
 
         // Pass C: enemy ship-vs-ship collisions (mass-weighted impulse, module-identical),
         // O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -807,6 +832,7 @@ public sealed partial class Simulation
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
         ResolveTeamUnlocks();
+        ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
     }
@@ -841,6 +867,14 @@ public sealed partial class Simulation
         _chaff.Clear();
         _minefields.Clear();
         MinefieldsChangedThisStep = true;
+        // Tear down probes too (match reseed clears them). MsgProbes has NO reconcile-by-omission (a
+        // probe is only ever removed by an explicit MsgProbeGone — client ApplyProbes never drops on
+        // absence), so emit a ProbeGone (reason 1 = cleanup/despawn, rendered as a silent removal — no
+        // FX) for every live probe BEFORE clearing, or the client would keep phantom probes (F7).
+        foreach (var p in _probes)
+            ProbeGoneThisStep.Add((p.ProbeId, 1, p.Team, p.SectorId, p.Pos));
+        _probes.Clear();
+        ProbesChangedThisStep = true;
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
@@ -859,6 +893,7 @@ public sealed partial class Simulation
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        ResetVision(); // drain any in-flight vision compute + clear fog state (Simulation.Vision.cs)
         OnReturnToLobby?.Invoke();
     }
 
@@ -920,6 +955,11 @@ public sealed partial class Simulation
             {
                 s.MineAmmo = charges;
                 s.MineWeaponId = w.WeaponId;
+            }
+            else if (w.Kind == WeaponKind.Probe)
+            {
+                s.ProbeAmmo = charges;
+                s.ProbeWeaponId = w.WeaponId;
             }
         }
     }
@@ -1457,6 +1497,9 @@ public sealed partial class Simulation
             && t.Team != ship.Team
             && !t.IsPod // locking a helpless pod is bad feel — pods are never lockable
             && t.SectorId == ship.SectorId
+            // Fog of war: only a RADAR-detected foe is lockable (eyeball-tier / ghosts are not). An
+            // in-flight missile keeps tracking a target that later fogs out — this gates ACQUISITION.
+            && TeamRadarSees(ship.Team, t.ShipId)
         )
         {
             Vec3 to = t.State.Pos - ship.State.Pos;
@@ -2202,6 +2245,9 @@ public sealed partial class Simulation
             // pointed the way it's travelling instead of keeping its pre-warp heading.
             s.State.Rot = LookRotationZ(e);
             s.State.AngVel = default;
+            // Fog: immediately scout the rocks around the arrival point (same tick) so gate-exit
+            // surroundings reveal now instead of at the next 2 Hz vision boundary (Simulation.Vision.cs, F8).
+            WarpDiscoverRocks(s);
             return;
         }
     }

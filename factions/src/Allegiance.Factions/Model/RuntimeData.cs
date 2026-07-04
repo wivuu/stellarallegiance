@@ -95,4 +95,16 @@ public record WorldConfig
 
     /// <summary>Force every ship's firing input false (benchmarking).</summary>
     public bool DebugNoFire { get; set; }
+
+    /// <summary>
+    /// Per-server fog-of-war toggle. Null/omitted -&gt; on at projection (default true); when off,
+    /// behavior/bytes are identical to no-fog. Rides the wire (WorldConfig.FogOfWar).
+    /// </summary>
+    public bool? FogOfWar { get; set; }
+
+    /// <summary>
+    /// Outer "eyeball" tier multiplier on a ship's vision-sphere radius (mesh streams but isn't
+    /// radar-detected). 0/omitted -&gt; 1.5 at projection. Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double FogEyeballMultiplier { get; set; }
 }

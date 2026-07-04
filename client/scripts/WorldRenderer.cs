@@ -22,6 +22,11 @@ public partial class WorldRenderer : Node3D
     // a voluntary dock or a pod rescue — it despawns silently instead of playing the death blast.
     private const byte GoneClean = 1;
 
+    // Fog lost-contact (reason 2): an enemy left our team's streamed set (out of radar AND eyeball
+    // range). Remove the mesh with no blast/death-cam — it's information loss, not a kill. WP4 adds a
+    // gentle fade + a "CONTACT LOST" toast; for now it's an immediate clean removal like GoneClean.
+    private const byte GoneLostContact = 2;
+
     private Node3D _bases = null!;
     private Node3D _asteroids = null!;
     private Node3D _ships = null!;
@@ -83,6 +88,81 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(uint Sector, uint Dest)> MapAlephLinks => _alephLinks;
     public IReadOnlyList<(uint Sector, byte Team)> MapBaseTeams => _baseTeams;
 
+    // ---- Fog of war (WP3 stores; WP4 renders) --------------------------
+    // A last-known enemy contact (from MsgContacts). HUD/radar glyph only — never a 3D node. Pos is
+    // sector-local, frozen at the tick the ship was last streamed; Yaw/Pitch are the frozen heading.
+    public struct GhostContact
+    {
+        public ulong ShipId;
+        public byte Team;
+        public byte Cls;
+        public uint Sector;
+        public Vector3 Pos;
+        public float Yaw;
+        public float Pitch;
+    }
+
+    // Last-known enemy ghosts, keyed by ship id, and the set of enemy ids this team currently has
+    // RADAR contact on (a streamed enemy NOT in this set is eyeball-tier — mesh only, no HUD marker).
+    // Both are reconciled wholesale by NetSetContacts each MsgContacts frame. Read by WP4's HUD.
+    private readonly Dictionary<ulong, GhostContact> _ghosts = new();
+    private readonly HashSet<ulong> _radarVisible = new();
+    public IReadOnlyDictionary<ulong, GhostContact> GhostContacts() => _ghosts;
+    public IReadOnlyCollection<ulong> RadarVisibleIds => _radarVisible;
+
+    // Scratch reused by GhostContacts(sector) so the per-frame HUD pass allocates nothing.
+    private readonly List<GhostContact> _ghostScratch = new();
+
+    // A live rendered row within this many units of a ghost's frozen position suppresses that
+    // ghost, so a re-spotted (or still-eyeball-streaming) ship at the same spot doesn't draw the
+    // mesh AND a stale marker on top of itself. Ships are ~5-15u; this is a small "same place" gate.
+    private const float GhostLiveSuppressDist = 45f;
+
+    // Whether fog-of-war presentation is live (server-authoritative, streamed on the WorldConfig).
+    // When false, the client renders exactly as before fog existed: EnemyShips() never filters and
+    // no ghosts arrive, so eyeball-suppression and ghost glyphs short-circuit.
+    public bool FogActive => _defs.FogOfWar;
+
+    // The enemy ghosts remembered in `sector`, already filtered by the live-row / radar suppression
+    // rule so the HUD can draw them straight. A ghost is dropped when: (a) its id is currently
+    // RADAR-visible (the server clears these, but guard regardless — a radar contact owns the live
+    // marker), or (b) a live rendered row for that id sits within GhostLiveSuppressDist of the ghost
+    // (avoids doubling the marker on a re-spotted / eyeball-streaming ship). A live row elsewhere
+    // does NOT suppress the ghost — you can see a mesh here and a stale contact there.
+    public IReadOnlyList<GhostContact> GhostContacts(uint sector)
+    {
+        _ghostScratch.Clear();
+        foreach (var g in _ghosts.Values)
+        {
+            if (g.Sector != sector)
+                continue;
+            if (_radarVisible.Contains(g.ShipId))
+                continue;
+            if (_shipNodes.TryGetValue(g.ShipId, out var node)
+                && node.GlobalPosition.DistanceSquaredTo(g.Pos) < GhostLiveSuppressDist * GhostLiveSuppressDist)
+                continue;
+            _ghostScratch.Add(g);
+        }
+        return _ghostScratch;
+    }
+
+    // Fog lost-contact toast window: DeleteShip(reason=2) opens a brief window during which the HUD
+    // flashes a "CONTACT LOST" note. Time-based so no per-frame bookkeeping is needed.
+    private const double ContactLostToastSec = 2.0;
+    private double _contactLostUntil = -1.0;
+    public bool ContactLostActive => Time.GetTicksMsec() / 1000.0 < _contactLostUntil;
+
+    // Replace the ghost set + radar-id set wholesale (MsgContacts reconcile semantics).
+    public void NetSetContacts(IReadOnlyList<GhostContact> ghosts, IReadOnlyList<ulong> radarIds)
+    {
+        _ghosts.Clear();
+        foreach (var g in ghosts)
+            _ghosts[g.ShipId] = g;
+        _radarVisible.Clear();
+        foreach (var id in radarIds)
+            _radarVisible.Add(id);
+    }
+
     public string SectorName(uint id) => _sectors.TryGetValue(id, out var s) ? s.Name : "";
 
     // Every live bolt, all client-synthesized (no Projectile rows exist): the local ship's
@@ -94,6 +174,11 @@ public partial class WorldRenderer : Node3D
     // MissileView dead-reckons between snapshots and is aged out on its MsgMissileGone. Parented
     // under _projectiles, so RefreshSectorVisibility and Reset() sweep them like bolts.
     private readonly Dictionary<ulong, MissileView> _missiles = new();
+
+    // Live deployed recon probes, keyed by ProbeId (server-simulated, owner-team-only stream). A
+    // ProbeView never moves once spawned; it's aged out on its MsgProbeGone. Parented under
+    // _projectiles, so RefreshSectorVisibility and Reset() sweep them like bolts/missiles.
+    private readonly Dictionary<ulong, ProbeView> _probes = new();
 
     // Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
     // circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
@@ -170,7 +255,7 @@ public partial class WorldRenderer : Node3D
     private readonly List<RemoteShip> _friendlyScratch = new();
 
     // Scratch reused by VisibleBases() for the same reason.
-    private readonly List<(Vector3 Pos, byte Team)> _baseScratch = new();
+    private readonly List<(Vector3 Pos, byte Team, bool Dead)> _baseScratch = new();
 
     // Client-side hit-spark tuning. A bolt sparks when its swept path this frame passes within
     // VisualHitRadius of a ship's rendered centre. The firing ship is excluded by bolt OwnerShipId
@@ -269,17 +354,26 @@ public partial class WorldRenderer : Node3D
         return SpawnGate.Allow;
     }
 
-    // Live enemy ship nodes (team != local team). Returns a shared scratch list — read
-    // it immediately, don't retain it. Empty until the local team is known.
+    // Live enemy ship nodes (team != local team) that have HUD presence. Returns a shared scratch
+    // list — read it immediately, don't retain it. Empty until the local team is known.
+    //
+    // Fog eyeball tier: when fog is on, an enemy whose id is NOT in the radar-visible set is being
+    // streamed for its MESH only (a keen eye spots it), but it gets no HUD/targeting presence — so
+    // it's excluded here. Every consumer of EnemyShips() is presentation (TargetMarkers brackets +
+    // Tab-cycle, SectorOverview altitude stems), so suppressing at this one seam covers them all;
+    // the 3D mesh keeps rendering because it lives in _shipNodes, which this never touches. Fog off
+    // (or before any contacts frame) → FogActive false → no filtering, identical to pre-fog.
     public IReadOnlyList<RemoteShip> EnemyShips()
     {
         _enemyScratch.Clear();
         if (_localTeam is byte lt)
         {
+            bool fog = FogActive;
             foreach (var node in _shipNodes.Values)
                 // Exclude enemy pods: they're harmless and shouldn't draw a marker or be
                 // Tab-targetable (let a downed opponent float home unmolested).
-                if (node is RemoteShip rs && rs.Team != lt && !rs.IsPod && rs.Visible)
+                if (node is RemoteShip rs && rs.Team != lt && !rs.IsPod && rs.Visible
+                    && (!fog || _radarVisible.Contains(rs.ShipId)))
                     _enemyScratch.Add(rs);
         }
         return _enemyScratch;
@@ -301,16 +395,43 @@ public partial class WorldRenderer : Node3D
         return _friendlyScratch;
     }
 
-    // Bases in the currently-visible (local) sector, as (world position, team). Returns a
+    // Bases in the currently-visible (local) sector, as (world position, team, dead). Returns a
     // shared scratch list — read it immediately. Mirrors the ship accessors' sector filter
     // via Node.Visible, so off-screen base indicators only reflect the sector you're flying.
-    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleBases()
+    // Dead = last-known health ≤ 0: a fog stale-memory base (destroyed but still remembered on the
+    // team map) the HUD draws as a dim hollow glyph instead of a live station marker.
+    public IReadOnlyList<(Vector3 Pos, byte Team, bool Dead)> VisibleBases()
     {
         _baseScratch.Clear();
-        foreach (var (node, team, _) in _baseList)
+        foreach (var (node, team, id) in _baseList)
             if (node.Visible)
-                _baseScratch.Add((node.GlobalPosition, team));
+                _baseScratch.Add((node.GlobalPosition, team, BaseIsDead(id)));
         return _baseScratch;
+    }
+
+    // A base's last-known health is at/below zero (destroyed). A missing entry means full health.
+    // Fog-gated (F9): the destroyed-base stale-memory presentation is a fog-only mechanic — with fog
+    // off a base is never "stale-dead" (the match ends when a base dies), so fog-off renders exactly
+    // as pre-fog (no wreck glyph, no dim). Feeds VisibleBases(Dead) and SectorTeamStale.
+    private bool BaseIsDead(ulong id) => FogActive && _baseHealthFrac.TryGetValue(id, out float frac) && frac <= 0.001f;
+
+    // True if `team`'s base(s) in `sector` are ALL destroyed (stale memory) — the Minimap dims the
+    // sector tint to read as remembered-but-lost. False if the team holds any live base there, or
+    // has no base there at all (nothing to dim).
+    public bool SectorTeamStale(uint sector, byte team)
+    {
+        if (!FogActive)
+            return false; // stale memory is a fog-only mechanic — fog off renders as pre-fog (F9)
+        bool any = false;
+        foreach (var (node, t, id) in _baseList)
+        {
+            if (t != team || !node.HasMeta("sector") || (int)node.GetMeta("sector") != (int)sector)
+                continue;
+            any = true;
+            if (!BaseIsDead(id))
+                return false; // a live base here → the presence is not stale
+        }
+        return any;
     }
 
     // Scratch reused by LockableEnemyBases() so the per-frame Tab-cycle pass allocates nothing.
@@ -336,8 +457,11 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(Vector3 Pos, float Frac)> VisibleBaseHealth()
     {
         _baseHealthScratch.Clear();
+        // Skip full-health bases (no bar until hit). Under fog ALSO skip stale-dead ones (frac ≤ 0): a
+        // destroyed remembered base shows the dim hollow glyph instead of an empty red damage bar. With
+        // fog OFF that skip is disabled so the bar behaves exactly as pre-fog (F9).
         foreach (var (id, frac) in _baseHealthFrac)
-            if (frac < 0.999f && _baseNodes.TryGetValue(id, out var node) && node.Visible)
+            if ((!FogActive || frac > 0.001f) && frac < 0.999f && _baseNodes.TryGetValue(id, out var node) && node.Visible)
                 _baseHealthScratch.Add((node.GlobalPosition, frac));
         return _baseHealthScratch;
     }
@@ -443,7 +567,32 @@ public partial class WorldRenderer : Node3D
     // this records the 0..1 fraction TargetMarkers reads for the screen-space damage bar.
     public void NetUpdateBaseHealth(ulong baseId, float health)
     {
-        _baseHealthFrac[baseId] = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
+        float frac = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
+        // Detect the alive→destroyed transition so the 3D silhouette is dimmed exactly once. A base's
+        // last-known health only ever falls (a re-scout of a killed base shows it destroyed), so this
+        // never needs to un-dim.
+        bool wasAlive = !_baseHealthFrac.TryGetValue(baseId, out float prev) || prev > 0.001f;
+        _baseHealthFrac[baseId] = frac;
+        // Fog stale memory only (F9): dim a destroyed-but-remembered station's silhouette. Gated on
+        // FogActive so fog-off never dims a base's mesh (pre-fog rendering).
+        if (FogActive && wasAlive && frac <= 0.001f && _baseNodes.TryGetValue(baseId, out var node))
+            DimNode(node, StaleBaseTransparency);
+    }
+
+    // Ghostly dim for a stale-dead base's mesh — a subtle per-instance transparency (independent of
+    // the GLB's baked PBR materials) so it reads as "remembered structure", not a live station. v1
+    // markers-only would also be acceptable, but this cheap transparency ramp needs no shader work.
+    private const float StaleBaseTransparency = 0.55f;
+
+    // Set GeometryInstance3D.Transparency on every mesh under `node`. Transparency is a per-instance
+    // fade (0 opaque … 1 invisible) that applies across all of a GLB's materials without touching
+    // them — the same reason QuietFade uses it for the lost-contact ship fade.
+    private static void DimNode(Node node, float transparency)
+    {
+        if (node is GeometryInstance3D gi)
+            gi.Transparency = transparency;
+        foreach (var child in node.GetChildren())
+            DimNode(child, transparency);
     }
 
     public void NetInsertShip(Ship row, bool local)
@@ -510,6 +659,27 @@ public partial class WorldRenderer : Node3D
         view.QueueFree();
     }
 
+    // ---- Recon probes (owner-team-only stream; see MsgProbes/MsgProbeGone) ----
+    // GameNetClient decodes MsgProbes/MsgProbeGone and calls these. A probe never moves once
+    // deployed, so first sight builds the visual and later sights are no-ops (no dead-reckoning).
+    public void NetUpsertProbe(Probe row)
+    {
+        if (_probes.ContainsKey(row.ProbeId))
+            return; // stationary — nothing to update on a resend
+        Vector3 pos = new(row.PosX, row.PosY, row.PosZ);
+        var pv = new ProbeView { Name = $"Probe_{row.ProbeId}" };
+        _projectiles.AddChild(pv);
+        pv.Initialize(pos, row.Team, _defs.GetWeapon(row.WeaponId));
+        SetNodeSector(pv, row.SectorId);
+        _probes[row.ProbeId] = pv;
+    }
+
+    public void NetProbeGone(ulong id, byte reason, uint sector, Vec3 pos)
+    {
+        if (_probes.Remove(id, out var view))
+            view.QueueFree();
+    }
+
     // ---- Chaff + minefields (render stubs — Track A/B fill ChaffFx / MinefieldViews) ----
     // GameNetClient decodes MsgChaff / MsgMinefields / MsgMineGone and calls these; they forward to
     // the ChaffFx / MinefieldViews child nodes (compilable no-op skeletons in Track 0).
@@ -570,10 +740,13 @@ public partial class WorldRenderer : Node3D
         _shipNodes.Clear();
         _shipShield.Clear();
         _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
+        _probes.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
         _collidingShips.Clear();
         _alephNodes.Clear();
+        _ghosts.Clear();
+        _radarVisible.Clear();
         _asteroidClip.Clear();
         _baseClip.Clear();
         _collisionWorld.Clear();
@@ -592,6 +765,7 @@ public partial class WorldRenderer : Node3D
         Winner = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
+        _contactLostUntil = -1.0;
         _starscape?.SetSector(HomeSector);
     }
 
@@ -948,8 +1122,23 @@ public partial class WorldRenderer : Node3D
         // not a death — it just vanishes, no blast. The server tells us this authoritatively via the
         // ShipGone reason, so we no longer have to infer it from interpolated render positions (which
         // mismatched the server's rescue radius and let rescued pods play the full death explosion).
-        bool clean = reason == GoneClean;
-        bool rescued = row.IsPod && clean;
+        // Reason 2 (fog lost-contact) removes quietly like a clean despawn — no blast, no death-cam.
+        bool clean = reason == GoneClean || reason == GoneLostContact;
+        bool rescued = row.IsPod && reason == GoneClean;
+
+        // Fog lost-contact: the enemy left our team's streamed set (out of radar AND eyeball range).
+        // It's information loss, not a kill — no blast, no sound, no death-cam. Coast the mesh out
+        // with a short quiet alpha fade, flash a brief "CONTACT LOST" note, and let the dim ghost
+        // glyph (MsgContacts) take over at its last-known position. Reason 2 only ever targets an
+        // ENEMY ship (you always see your own), so LocalShip is untouched here.
+        if (reason == GoneLostContact)
+        {
+            if (local)
+                LocalShip = null; // defensive: reason 2 shouldn't hit the local ship
+            _contactLostUntil = Time.GetTicksMsec() / 1000.0 + ContactLostToastSec;
+            QuietFade(node);
+            return;
+        }
 
         if (!clean)
         {
@@ -994,6 +1183,40 @@ public partial class WorldRenderer : Node3D
             }
         }
         node.QueueFree();
+    }
+
+    // Duration of the fog lost-contact mesh fade — brief, so the ship visibly slips out of sight
+    // rather than blinking away, but short enough that a re-spot pops it straight back.
+    private const float ContactFadeSec = 0.5f;
+
+    // Quietly fade a removed ship's mesh to invisible over ContactFadeSec, then free it. Used for a
+    // fog lost-contact removal (no blast/sound). The node is already out of _shipNodes, so it no
+    // longer targets/collides/sparks; its own _Process keeps dead-reckoning, so it coasts out as it
+    // fades. GeometryInstance3D.Transparency is a per-instance fade that spans all the GLB's baked
+    // materials without touching them (same trick as DimNode for stale bases).
+    private void QuietFade(Node3D node)
+    {
+        var tween = node.CreateTween();
+        int faded = 0;
+        FadeMeshes(node, tween, ref faded);
+        if (faded == 0)
+        {
+            node.QueueFree(); // nothing to fade (shouldn't happen) — just drop it
+            return;
+        }
+        tween.Chain().TweenCallback(Callable.From(node.QueueFree));
+    }
+
+    // Add a parallel Transparency 0→1 tween for every GeometryInstance3D under `node`.
+    private static void FadeMeshes(Node node, Tween tween, ref int count)
+    {
+        if (node is GeometryInstance3D gi)
+        {
+            tween.Parallel().TweenProperty(gi, "transparency", 1f, ContactFadeSec);
+            count++;
+        }
+        foreach (var child in node.GetChildren())
+            FadeMeshes(child, tween, ref count);
     }
 
     // ---- Bolts (client-synthesized projectile visuals) -------------------

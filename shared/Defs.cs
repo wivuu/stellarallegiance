@@ -99,6 +99,17 @@ namespace StellarAllegiance.Shared
         public float ShieldCapacity;
         public float ShieldRecharge;
         public float ShieldDelaySec;
+
+        // Fog-of-war vision (all inert until a later WP wires up filtering): a long-range
+        // directional cone (VisionConeLength/VisionConeAngleDeg, occluded by asteroids) plus an
+        // omnidirectional proximity sphere (VisionSphereRadius, unoccluded). RadarSignature scales
+        // every viewer's detection range against THIS ship (0 authored -> 1.0 resolved at
+        // projection, never streamed as 0).
+        public float VisionConeLength;
+        public float VisionConeAngleDeg;
+        public float VisionSphereRadius;
+        public float RadarSignature;
+
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public List<HardpointDef> Hardpoints = new();
@@ -116,6 +127,7 @@ namespace StellarAllegiance.Shared
         Missile, // guided homing missile (projected from a Launcher + its missile expendable)
         Mine, // proximity mine dispenser (projected from a Launcher + its mine expendable)
         Chaff, // sensor-decoy dispenser (projected from a Launcher + its chaff expendable)
+        Probe, // deployable vision-sphere dispenser (projected from a Launcher + its probe expendable); APPEND-ONLY, never reorder
     }
 
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
@@ -165,10 +177,15 @@ namespace StellarAllegiance.Shared
         public byte MineCloudCount; // mine: mines scattered per deploy (<= 64, seed-based aliveMask)
         public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
-        public uint CargoId; // dispenser: the cargo item (Chaff/Mine expendable) this launcher consumes
+        public uint CargoId; // dispenser: the cargo item (Chaff/Mine/Probe expendable) this launcher consumes
+
+        // --- Probe dispenser fields (all zero for other weapon kinds); streamed after the
+        // Chaff/Mine block above so it stays byte-stable.
+        public float ProbeSightRadius; // probe: u radius of the team vision sphere the deployed probe grants
+        public float ProbeLifespanSec; // probe: seconds before the deployed probe expires
 
         // Damage vs an energy shield relative to hull (1 = equal, >1 strong, <1 weak). Streamed
-        // after CargoId so the missile/chaff/mine blocks above stay byte-stable.
+        // after the probe block so the blocks above stay byte-stable.
         public float ShieldMult = 1f;
 
         // Client bolt-mesh dimensions (visual only), authored on the projectile (projectiles.yaml)
@@ -206,6 +223,13 @@ namespace StellarAllegiance.Shared
         public string Name = "";
         public float Radius;
         public float MaxHealth;
+
+        // Fog-of-war vision: an omnidirectional, unoccluded sphere this base contributes to its
+        // owning team; RadarSignature scales every viewer's detection range against this base
+        // (0 authored -> 1.0 resolved at projection, never streamed as 0).
+        public float VisionSphereRadius;
+        public float RadarSignature;
+
         public List<HardpointDef> Hardpoints = new();
     }
 
@@ -218,6 +242,16 @@ namespace StellarAllegiance.Shared
         public float AsteroidDensity; // asteroids per unit of normalized sector volume
         public bool DebugFreezeBrain; // skip the per-drone AI decision loop (benchmarking)
         public bool DebugNoFire; // force every ship's Firing input false (benchmarking)
+
+        // Per-server fog-of-war toggle (default true at projection); when off, behavior/bytes are
+        // identical to no-fog. Rides the wire.
+        public bool FogOfWar;
+
+        // Outer "eyeball" tier multiplier on a ship's vision-sphere radius (mesh streams but isn't
+        // radar-detected); default 1.5 at projection. Server-side only — deliberately NOT written
+        // to the wire (Protocol.BuildDefs skips it; the client learns eyeball state from the
+        // per-team radar-id list instead, added by a later WP).
+        public float FogEyeballMultiplier;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

@@ -96,6 +96,9 @@ public static class CoreValidator
         var chaffsById = new Dictionary<string, Chaff>(StringComparer.Ordinal);
         foreach (var chaff in core.Chaffs)
             chaffsById[chaff.Id] = chaff;
+        var probesById = new Dictionary<string, Probe>(StringComparer.Ordinal);
+        foreach (var probe in core.Probes)
+            probesById[probe.Id] = probe;
         foreach (var launcher in core.Launchers)
         {
             if (launcher.WeaponId is null)
@@ -156,9 +159,18 @@ public static class CoreValidator
                 if (chaff.DecoyRadius <= 0)
                     result.Error($"{ctx} chaff '{chaff.Id}' needs decoy-radius > 0.");
             }
+            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && probesById.TryGetValue(launcher.ExpendableId, out var probe))
+            {
+                if (probe.SightRadius <= 0)
+                    result.Error($"{ctx} probe '{probe.Id}' needs sight-radius > 0.");
+                if (probe.Lifespan <= 0)
+                    result.Error($"{ctx} probe '{probe.Id}' needs lifespan > 0.");
+                if (string.IsNullOrEmpty(probe.ModelName))
+                    result.Error($"{ctx} probe '{probe.Id}' needs model-name set.");
+            }
             else
             {
-                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile, mine, or chaff.");
+                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile, mine, chaff, or probe.");
             }
         }
 

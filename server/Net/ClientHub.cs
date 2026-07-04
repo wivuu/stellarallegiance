@@ -107,6 +107,14 @@ public sealed class ClientHub
         // Per-client pick scratch, pre-sized past the typical coarse-tick fan-out so it doesn't
         // grow-and-realloc each tick. Reused every snapshot; never escapes the owning client.
         public List<(float Dist2, int Index)> Scratch = new(256);
+
+        // Fog reveal cursors (F3): how far into this client's team reveal LOGS it has been streamed.
+        // Seeded to the log lengths at Welcome-build time (atomically under DiscoverLock, so the Welcome
+        // snapshot and the cursor can't gap/dup), then advanced as bounded MsgReveal slices are sent.
+        // A team change / match reseed re-sends Welcome, which re-seeds these to the new team's logs.
+        public int RevealBaseCur,
+            RevealRockCur,
+            RevealAlephCur;
     }
 
     // Per-tick record scratch (sim thread only): every alive ship's quantized record is
@@ -154,6 +162,22 @@ public sealed class ClientHub
     private int _aliveCount;
     private readonly List<Client> _dispatchList = new(256);
     private readonly CancellationTokenSource _shutdownCts = new();
+
+    // Rock id -> Asteroids-list index, built once (asteroids are immutable after world-gen) so a fog
+    // reveal slice resolves its rock ids in O(1) instead of scanning the whole asteroid list per frame.
+    private IReadOnlyDictionary<ulong, int>? _rockIndexById;
+
+    private IReadOnlyDictionary<ulong, int> RockIndexById()
+    {
+        if (_rockIndexById == null)
+        {
+            var map = new Dictionary<ulong, int>(_sim.World.Asteroids.Count);
+            for (int i = 0; i < _sim.World.Asteroids.Count; i++)
+                map[_sim.World.Asteroids[i].Id] = i;
+            _rockIndexById = map;
+        }
+        return _rockIndexById;
+    }
 
     private readonly Simulation _sim;
 
@@ -284,6 +308,39 @@ public sealed class ClientHub
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
 
+    // Build + send this client's Welcome for its CURRENT team, seeding its fog reveal cursors to the
+    // team's reveal-log lengths ATOMICALLY with the Welcome's discovered-set snapshot (both under
+    // DiscoverLock) so no reveal is dropped or duplicated across the join/rebuild window (F1/F3). Fog
+    // off, or fog on with no team vision (NoTeam): empty/full per BuildWelcome, cursors reset to 0.
+    // Safe on or off the sim thread (a join's receive task calls it; so do the team-change / match-
+    // transition / reclaim hooks on the sim thread) — it only reads world statics + the lock-guarded
+    // vision. The client fully rebuilds its world on any Welcome after the first (ApplyWelcome.Reset),
+    // so re-sending mid-session re-syncs it to the current team's remembered map.
+    private void SendWelcome(Client client)
+    {
+        bool fog = _sim.FogEnabled;
+        var vision = fog ? _sim.VisionFor(client.Team) : null;
+        byte[] frame;
+        if (fog && vision is not null)
+        {
+            lock (vision.DiscoverLock)
+            {
+                client.RevealBaseCur = vision.RevealLogBases.Count;
+                client.RevealRockCur = vision.RevealLogRocks.Count;
+                client.RevealAlephCur = vision.RevealLogAlephs.Count;
+                frame = Protocol.BuildWelcome(
+                    client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
+            }
+        }
+        else
+        {
+            client.RevealBaseCur = client.RevealRockCur = client.RevealAlephCur = 0;
+            frame = Protocol.BuildWelcome(
+                client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
+        }
+        client.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+    }
+
     public async Task HandleConnection(IClientTransport transport, CancellationToken ct)
     {
         var client = new Client
@@ -401,19 +458,12 @@ public sealed class ClientHub
                     _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
                     client.Team = _lobby.TeamOf(client.Id);
 
-                    // The client downloads everything from the server: world statics, the
-                    // content defs, then the lobby roster.
-                    client.Outbound.Writer.TryWrite(
-                        OutFrame.Whole(
-                            Protocol.BuildWelcome(
-                                client.Id,
-                                client.Team,
-                                _sim.World,
-                                _sim.Tick,
-                                Convert.FromHexString(client.Token)
-                            )
-                        )
-                    );
+                    // The client downloads everything from the server: world statics, the content defs,
+                    // then the lobby roster. Fog on: only the joining team's discovered statics, with
+                    // this client's reveal cursors seeded atomically (SendWelcome). A NoTeam joiner sees
+                    // NOTHING under fog until it picks a side (then the MsgSetTeam hook re-Welcomes it).
+                    // Fog off: byte-identical full-world Welcome as before.
+                    SendWelcome(client);
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
                     BroadcastLobby();
 
@@ -470,7 +520,15 @@ public sealed class ClientHub
                     _lobby.SetTeam(client.Id, buffer[1]);
                     // Keep the connection's team in sync with the lobby so chat scope (and any
                     // later spawn) reflect the pick immediately, not just at deploy time.
+                    byte prevTeam = client.Team;
                     client.Team = _lobby.TeamOf(client.Id);
+                    // Fog on: the discovered map is per-team, so a team change must re-sync this client
+                    // to the new team's remembered world — re-send a fresh Welcome (the client rebuilds
+                    // its world on it) with the new team's vision + re-seeded reveal cursors (F1). This
+                    // is also what finally streams a real world to a NoTeam joiner (whose join Welcome
+                    // was empty under fog). Fog off: the world is team-agnostic, no re-Welcome needed.
+                    if (_sim.FogEnabled && client.Team != prevTeam)
+                        SendWelcome(client);
                     BroadcastLobby();
                     break;
                 }
@@ -525,6 +583,7 @@ public sealed class ClientHub
                         Firing2 = (flags & Protocol.FlagFiring2) != 0,
                         DropChaff = (flags & Protocol.FlagDropChaff) != 0,
                         DropMine = (flags & Protocol.FlagDropMine) != 0,
+                        DropProbe = (flags & Protocol.FlagDropProbe) != 0,
                         LockTargetId = BitConverter.ToUInt64(buffer, 30),
                     };
                     _sim.EnqueueInput(client.Id, tick, input);
@@ -602,6 +661,15 @@ public sealed class ClientHub
         {
             _lastPhase = _sim.Phase;
             BroadcastLobby();
+            // Fog: a match reseed (StartMatch -> Active, ReturnToLobby -> Lobby both run ResetVision,
+            // which clears every team's discovered set + reveal log back to its own bases) leaves each
+            // client's rendered world stale. Pre-fog nothing re-syncs the world across a recycle (the
+            // statics are identical), but under fog the remembered map changed, so re-send every client
+            // a fresh Welcome for its team — the client rebuilds its world and its reveal cursors reset
+            // to the fresh logs (F1). Not on the ->Ended transition (no reseed there).
+            if (_sim.FogEnabled && (_sim.Phase == Simulation.PhaseActive || _sim.Phase == Simulation.PhaseLobby))
+                foreach (var c in _clients.Values)
+                    SendWelcome(c);
         }
 
         SerializeRecords(ships);
@@ -665,17 +733,91 @@ public sealed class ClientHub
             }
         }
 
+        // Recon probes (WP5): owner-team-only, always (not gated on FogEnabled — a separate mechanic
+        // from vision filtering). Gone events carry their team so the send loop can filter per client.
+        List<(byte team, byte[] frame)>? probeGoneFrames = null;
+        if (_sim.ProbeGoneThisStep.Count > 0)
+        {
+            probeGoneFrames = new(_sim.ProbeGoneThisStep.Count);
+            foreach (var g in _sim.ProbeGoneThisStep)
+                probeGoneFrames.Add((g.team, Protocol.BuildProbeGone(g.id, g.reason, g.sector, g.pos)));
+        }
+        // MsgProbes: minefield-style cadence (on change + coarse keepalive), one buffer per team.
+        bool sendProbes = _sim.ProbesChangedThisStep || coarse;
+        Dictionary<byte, byte[]>? probeFramesByTeam = sendProbes ? new() : null;
+
         // Minefields stream per anchor sector, on change OR the coarse keepalive — a lethal static
         // hazard must not AOI-pop, and the empty frame on removal must reach the client too.
         bool sendMinefields = _sim.MinefieldsChangedThisStep || coarse;
 
-        // Stream base health when it changed (a hit landed / match ended) or on coarse
-        // ticks as a keepalive for clients that joined between changes. Built once, shared.
-        byte[]? basesFrame = (_sim.BasesChangedThisStep || coarse) ? Protocol.BuildBases(_sim.World) : null;
+        // Stream base health when it changed (a hit landed / match ended) or on coarse ticks as a
+        // keepalive for clients that joined between changes. Fog off: built once, shared to all. Fog
+        // on: per-team (BuildBasesFor, discovered bases + last-known health), built lazily in the loop
+        // on the SAME change/keepalive cadence — a base's FIRST appearance instead rides MsgReveal, so
+        // MsgBases only refreshes the remembered health of already-known bases.
+        bool fog = _sim.FogEnabled;
+        bool sendBases = _sim.BasesChangedThisStep || coarse;
+        byte[]? basesFrame = (!fog && sendBases) ? Protocol.BuildBases(_sim.World) : null;
+
+        // Fog-on per-team frame caches — one build per team (not per client), keyed by team byte.
+        // (MsgReveal is NOT cached per team — it's a per-CLIENT cursor slice; see the reveal send below.)
+        Dictionary<byte, byte[]>? baseFramesByTeam = fog ? new() : null;
+        Dictionary<byte, byte[]>? contactFramesByTeam = fog ? new() : null;
+
+        // Lost contacts (fog): a ship that left a team's streamed union this vision apply → a reason-2
+        // quiet-fade ShipGone to THAT team's clients only (real deaths stay in goneFrames, broadcast).
+        // Grouped by team here so the per-client loop just replays its team's list.
+        Dictionary<byte, List<byte[]>>? lostByTeam = null;
+        if (fog && _sim.LostContactsThisStep.Count > 0)
+        {
+            lostByTeam = new();
+            foreach (var (lt, sid) in _sim.LostContactsThisStep)
+            {
+                if (!lostByTeam.TryGetValue(lt, out var lst))
+                    lostByTeam[lt] = lst = new();
+                lst.Add(Protocol.BuildShipGone(sid, 2));
+            }
+        }
 
         // Per-team economy (credits/score): same low-rate cadence as bases — on change or coarse
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
         byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
+
+        // Fog point-visibility precompute (F10): the enemy-visibility of a minefield or a chaff pop
+        // depends only on (target, team), NOT on the individual client — so compute it ONCE per team
+        // here instead of per client (and, for minefields, twice per field inside BuildMinefieldsFor's
+        // count+write passes). Only the two real teams have vision; a NoTeam client sees no enemy hazard
+        // (its team never keys these maps). Keyed by team → visible enemy field ids / chaff-spawn indices.
+        Dictionary<byte, HashSet<ulong>>? mineVisByTeam = null;
+        if (fog && sendMinefields)
+        {
+            var fields = _sim.Minefields;
+            mineVisByTeam = new();
+            for (byte t = 0; t <= 1; t++)
+            {
+                HashSet<ulong>? vis = null;
+                for (int i = 0; i < fields.Count; i++)
+                    if (fields[i].Team != t && _sim.IsPointVisibleToTeam(t, fields[i].SectorId, fields[i].Center))
+                        (vis ??= new()).Add(fields[i].FieldId);
+                if (vis != null)
+                    mineVisByTeam[t] = vis;
+            }
+        }
+        Dictionary<byte, HashSet<int>>? chaffVisByTeam = null;
+        if (fog && _sim.ChaffSpawnedThisStep.Count > 0)
+        {
+            var cs = _sim.ChaffSpawnedThisStep;
+            chaffVisByTeam = new();
+            for (byte t = 0; t <= 1; t++)
+            {
+                HashSet<int>? vis = null;
+                for (int i = 0; i < cs.Count; i++)
+                    if (cs[i].Team != t && _sim.IsPointVisibleToTeam(t, cs[i].SectorId, cs[i].Pos))
+                        (vis ??= new()).Add(i);
+                if (vis != null)
+                    chaffVisByTeam[t] = vis;
+            }
+        }
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
@@ -707,6 +849,24 @@ public sealed class ClientHub
             {
                 client.AnchorPos = ships[si].State.Pos;
                 client.AnchorSector = ships[si].SectorId;
+
+                // Reconnect reclaim rebinds a held ship to this fresh connection on the sim thread, but
+                // the hub-side team (and the lobby record) were reset to NoTeam at this connection's
+                // Hello. Restore them from the reclaimed ship's authoritative team so its OWN records
+                // stream (Hidden()/coarse both team-gate on client.Team) and its fog vision is correct
+                // (F2). Sync the lobby exactly as MsgSetTeam does, then — since the reclaim resolved
+                // AFTER the join Welcome (which under fog carried NoTeam's empty world) — re-send a fog
+                // Welcome for the restored team (F1's team-change hook). A normal spawn already matches,
+                // so only a reclaim trips this.
+                byte shipTeam = ships[si].Team;
+                if (shipTeam != client.Team && (shipTeam == 0 || shipTeam == 1))
+                {
+                    client.Team = shipTeam;
+                    _lobby.SetTeam(client.Id, shipTeam);
+                    rosterDirty = true;
+                    if (fog)
+                        SendWelcome(client);
+                }
             }
             else
             {
@@ -724,26 +884,110 @@ public sealed class ClientHub
             if (teamStateFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(teamStateFrame));
 
+            // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
+            // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).
+            if (fog)
+            {
+                var vision = _sim.VisionFor(client.Team); // null for a NoTeam spectator
+
+                // MsgBases (per-team, discovered + remembered health) on the change/keepalive cadence.
+                if (sendBases)
+                {
+                    if (!baseFramesByTeam!.TryGetValue(client.Team, out var bf))
+                        baseFramesByTeam[client.Team] = bf = Protocol.BuildBasesFor(_sim.World, vision);
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(bf));
+                }
+
+                // MsgReveal (per-team, PER-CLIENT cursor): stream the bounded slice of the reveal log
+                // this client is still behind on (F3). Lossless-by-cursor: the log is never drained, so
+                // a dropped frame is simply resent next tick, and a late joiner streams the whole match's
+                // discoveries in bounded slices. The cursor advances ONLY on a successful enqueue.
+                if (vision is not null)
+                {
+                    var rf = Protocol.BuildRevealSlice(
+                        _sim.World, vision, RockIndexById(),
+                        client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur,
+                        out int nb, out int nr, out int na);
+                    if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
+                    {
+                        client.RevealBaseCur = nb;
+                        client.RevealRockCur = nr;
+                        client.RevealAlephCur = na;
+                    }
+                }
+
+                // MsgContacts (per-team) on ContactsDirty (ghost change) OR the coarse keepalive (the
+                // radar id-list changes without a ghost change, so it needs the periodic refresh).
+                if (vision is not null && (vision.ContactsDirty || coarse))
+                {
+                    if (!contactFramesByTeam!.TryGetValue(client.Team, out var cf))
+                    {
+                        cf = Protocol.BuildContacts(vision);
+                        vision.ContactsDirty = false;
+                        contactFramesByTeam[client.Team] = cf;
+                    }
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(cf));
+                }
+
+                // Lost-contact quiet fades to this team only.
+                if (lostByTeam is not null && lostByTeam.TryGetValue(client.Team, out var lostFrames))
+                    foreach (var f in lostFrames)
+                        client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+            }
+
             if (missileGoneFrames is not null)
                 foreach (var f in missileGoneFrames)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
 
+            // Chaff spawns: broadcast when fog off. When fog on, an ENEMY team receives a pop only if
+            // its pop point is visible to that team at the spawn instant (own-team chaff always shown).
             if (chaffFrames is not null)
-                foreach (var f in chaffFrames)
-                    client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+                for (int ci = 0; ci < chaffFrames.Length; ci++)
+                {
+                    if (fog)
+                    {
+                        var c = _sim.ChaffSpawnedThisStep[ci];
+                        // Enemy pops only when visible to this team at the spawn instant — using the
+                        // per-(team, chaff-index) precompute above (F10), not a per-client recompute.
+                        if (c.Team != client.Team
+                            && !(chaffVisByTeam is not null
+                                && chaffVisByTeam.TryGetValue(client.Team, out var cv)
+                                && cv.Contains(ci)))
+                            continue;
+                    }
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(chaffFrames[ci]));
+                }
 
             if (mineGoneFrames is not null)
                 foreach (var f in mineGoneFrames)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
 
+            // Recon probes: owner-team-only, always (v1 — no enemy ever receives 18/19).
+            if (probeGoneFrames is not null)
+                foreach (var (team, f) in probeGoneFrames)
+                    if (team == client.Team)
+                        client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+
+            if (sendProbes)
+            {
+                if (!probeFramesByTeam!.TryGetValue(client.Team, out var pf))
+                    probeFramesByTeam[client.Team] = pf = BuildProbesFor(client.Team);
+                client.Outbound.Writer.TryWrite(OutFrame.Whole(pf));
+            }
+
             // Minefield frame for this client's anchor sector (change + coarse keepalive). Always
-            // sent when flagged — an empty frame is how a removal propagates.
+            // sent when flagged — an empty frame is how a removal propagates. Fog on: own-team fields
+            // always, enemy fields only while their anchor point is visible to this team.
             if (sendMinefields)
-                client.Outbound.Writer.TryWrite(OutFrame.Whole(BuildMinefieldsFor(client.AnchorSector)));
+                client.Outbound.Writer.TryWrite(
+                    OutFrame.Whole(BuildMinefieldsFor(
+                        client.AnchorSector, client.Team, mineVisByTeam is null ? null : mineVisByTeam.GetValueOrDefault(client.Team))));
 
             // In-flight missiles this client can see: same-sector within full-rate radius of its
             // anchor, OR homing on its own ship (incoming warning at any range). Built from the
             // shared record scratch. Cheap sequential build (rare, low count) off the parallel path.
+            // NOT fog-filtered by design (accepted leak): a target needs its incoming-missile warning
+            // even from an unseen attacker (RWR counterplay). See the plan's Fog-interactions note.
             if (missiles.Count > 0)
             {
                 byte[]? missileFrame = BuildMissilesFor(client, missiles, tick);
@@ -767,11 +1011,30 @@ public sealed class ClientHub
         // through to the per-client path only when the cap forces nearest-N pruning (a furball).
         if (coarse && _aliveCount <= MaxRecords && n > 0)
         {
-            var shared = OutFrame.Whole(BuildSharedCoarseSnapshot());
+            if (!_sim.FogEnabled)
+            {
+                var shared = OutFrame.Whole(BuildSharedCoarseSnapshot());
+                for (int i = 0; i < n; i++)
+                    _dispatchList[i].Outbound.Writer.TryWrite(shared);
+                _recordsSent += (long)_aliveCount * n; // sim thread only here, no interlock needed
+                _snapshotCount += n;
+                return;
+            }
+
+            // Fog on: the single shared buffer would leak every ship to everyone (risk #1). Build one
+            // team-filtered coarse buffer per team present this tick (lazily), and hand each client the
+            // buffer for its team. Clients on the same team share one buffer (non-pooled, so the send
+            // loop won't return it). Built on the sim thread — TeamVision reads are quiescent here.
+            var byTeam = new Dictionary<byte, (byte[] buf, int recs)>();
             for (int i = 0; i < n; i++)
-                _dispatchList[i].Outbound.Writer.TryWrite(shared);
-            _recordsSent += (long)_aliveCount * n; // sim thread only here, no interlock needed
-            _snapshotCount += n;
+            {
+                var c = _dispatchList[i];
+                if (!byTeam.TryGetValue(c.Team, out var entry))
+                    byTeam[c.Team] = entry = BuildCoarseSnapshotForTeam(c.Team, ships);
+                c.Outbound.Writer.TryWrite(OutFrame.Whole(entry.buf));
+                _recordsSent += entry.recs;
+                _snapshotCount += 1;
+            }
             return;
         }
 
@@ -919,23 +1182,60 @@ public sealed class ClientHub
 
     // Build the MsgMinefields frame for one anchor sector: [13][u8 count] + count x 41-B records.
     // Always returns a frame (an empty one when the sector has no fields) so a removal propagates.
-    private byte[] BuildMinefieldsFor(uint sector)
+    // Fog on: own-team fields always stream; an enemy field streams only while its anchor (center)
+    // point is visible to `team` — hidden minefields are the feature (collisions stay server-side).
+    // `enemyVisible` (fog on) is the precomputed set of enemy field ids visible to `team` this tick
+    // (F10) — reused for both the count and write passes instead of recomputing point-visibility.
+    private byte[] BuildMinefieldsFor(uint sector, byte team, HashSet<ulong>? enemyVisible)
     {
         var fields = _sim.Minefields;
+        bool fog = _sim.FogEnabled;
+        bool Visible(Simulation.MineFieldSim f) =>
+            !fog || f.Team == team || (enemyVisible is not null && enemyVisible.Contains(f.FieldId));
+
         int cnt = 0;
         for (int i = 0; i < fields.Count; i++)
-            if (fields[i].SectorId == sector)
+            if (fields[i].SectorId == sector && Visible(fields[i]))
                 cnt++;
         byte[] buf = new byte[2 + cnt * Protocol.MinefieldRecordSize];
         buf[0] = Protocol.MsgMinefields;
         buf[1] = (byte)Math.Min(cnt, 255);
         int dst = 2;
         for (int i = 0; i < fields.Count; i++)
-            if (fields[i].SectorId == sector)
+            if (fields[i].SectorId == sector && Visible(fields[i]))
             {
                 Protocol.WriteMinefield(buf.AsSpan(dst, Protocol.MinefieldRecordSize), fields[i]);
                 dst += Protocol.MinefieldRecordSize;
             }
+        return buf;
+    }
+
+    // Build the per-team MsgProbes frame: [18][u8 count] + count x 29-B records — every live probe
+    // this team owns, regardless of sector (a probe is a strategic team asset, not anchor-sector
+    // scoped like a minefield). v1: owner-team-only and unconditional — enemy teams never receive
+    // 18/19, fog on or off.
+    private byte[] BuildProbesFor(byte team)
+    {
+        var probes = _sim.Probes;
+        int cnt = 0;
+        for (int i = 0; i < probes.Count; i++)
+            if (probes[i].Team == team)
+                cnt++;
+        cnt = Math.Min(cnt, 255);
+        byte[] buf = new byte[2 + cnt * Protocol.ProbeRecordSize];
+        buf[0] = Protocol.MsgProbes;
+        buf[1] = (byte)cnt;
+        int dst = 2;
+        int written = 0;
+        uint tick = _sim.Tick;
+        for (int i = 0; i < probes.Count && written < cnt; i++)
+        {
+            if (probes[i].Team != team)
+                continue;
+            Protocol.WriteProbe(buf.AsSpan(dst, Protocol.ProbeRecordSize), probes[i], tick);
+            dst += Protocol.ProbeRecordSize;
+            written++;
+        }
         return buf;
     }
 
@@ -960,6 +1260,39 @@ public sealed class ClientHub
         return buf;
     }
 
+    // Fog-on variant of the shared coarse snapshot: one buffer for a whole team, carrying every own
+    // ship plus only the enemy ships that team currently streams (radar ∪ eyeball). Copies from the
+    // already-serialized _recordScratch by ship-list index. Sim-thread only (quiescent TeamVision).
+    private (byte[] buf, int recs) BuildCoarseSnapshotForTeam(byte team, IReadOnlyList<Simulation.ShipSim> ships)
+    {
+        var vision = _sim.VisionFor(team);
+        bool Streamed(Simulation.ShipSim s) =>
+            s.Team == team
+            || (vision != null && (vision.VisibleEnemyShips.Contains(s.ShipId) || vision.EyeballShips.Contains(s.ShipId)));
+
+        int count = 0;
+        for (int i = 0; i < ships.Count; i++)
+            if (ships[i].Alive && Streamed(ships[i]))
+                count++;
+
+        int len = SnapshotHeader + count * Protocol.ShipRecordSize;
+        byte[] buf = new byte[len];
+        buf[0] = Protocol.MsgSnapshot;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), _dispatchTick);
+        buf[5] = _dispatchPhase;
+        buf[6] = _dispatchWinner;
+        BitConverter.TryWriteBytes(buf.AsSpan(7), (ushort)count);
+        int dst = SnapshotHeader;
+        for (int i = 0; i < ships.Count; i++)
+        {
+            if (!ships[i].Alive || !Streamed(ships[i]))
+                continue;
+            Buffer.BlockCopy(_recordScratch, _recordOffset[i], buf, dst, Protocol.ShipRecordSize);
+            dst += Protocol.ShipRecordSize;
+        }
+        return (buf, count);
+    }
+
     private OutFrame BuildSnapshotFor(Client client, IReadOnlyList<Simulation.ShipSim> ships, bool midTick, bool coarseTick)
     {
         // AOI anchor was cached by AfterStep's pre-pass (own ship, or home-sector origin).
@@ -967,6 +1300,18 @@ public sealed class ClientHub
         uint mySector = client.AnchorSector;
         float r1sq = FullRateRadiusSq;
         float r2sq = MidRateRadiusSq;
+
+        // Fog of war: an enemy record is streamed only when this client's team has it in its radar OR
+        // eyeball set (own-team always passes). The TeamVision sets are swapped whole at the vision
+        // apply boundary on the sim thread; the fan-out runs after Step() with the sim thread parked,
+        // so reading them here is a quiescent read (no lock). Fetched once per snapshot build.
+        bool fog = _sim.FogEnabled;
+        byte myTeam = client.Team;
+        Simulation.TeamVision? vision = fog ? _sim.VisionFor(myTeam) : null;
+        bool Hidden(Simulation.ShipSim s) =>
+            fog
+            && s.Team != myTeam
+            && (vision == null || (!vision.VisibleEnemyShips.Contains(s.ShipId) && !vision.EyeballShips.Contains(s.ShipId)));
 
         var picks = client.Scratch;
         picks.Clear();
@@ -978,6 +1323,8 @@ public sealed class ClientHub
             {
                 var s = ships[i];
                 if (!s.Alive)
+                    continue;
+                if (Hidden(s))
                     continue;
                 if (s.SectorId == mySector)
                     picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
@@ -993,6 +1340,8 @@ public sealed class ClientHub
                 foreach (var cell in grid.Values)
                 foreach (int i in cell)
                 {
+                    if (Hidden(ships[i]))
+                        continue;
                     float d2 = (ships[i].State.Pos - myPos).LengthSquared();
                     if (d2 <= r2sq)
                         picks.Add((d2, i));
@@ -1014,6 +1363,8 @@ public sealed class ClientHub
                     if (grid.TryGetValue((gx, gy, gz), out var cell))
                         foreach (int i in cell)
                         {
+                            if (Hidden(ships[i]))
+                                continue;
                             float d2 = (ships[i].State.Pos - myPos).LengthSquared();
                             if (d2 <= r1sq)
                                 picks.Add((d2, i));

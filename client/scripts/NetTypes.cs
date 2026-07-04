@@ -65,6 +65,7 @@ namespace StellarAllegiance.Net
         public byte LockState; // bit7 = locked, bits0-6 = lock progress 0..100
         public byte ChaffAmmo; // chaff puffs left in the dispenser
         public byte MineAmmo; // mine fields left in the dispenser
+        public byte ProbeAmmo; // recon probes left in the dispenser
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
         public bool IsPig; // AI combat drone
         public bool IsPod; // escape pod
@@ -104,6 +105,21 @@ namespace StellarAllegiance.Net
             VelY,
             VelZ;
         public ulong TargetShipId; // the ship it is homing on (0 = coasting); HUD incoming-warning key
+    }
+
+    // One deployed recon probe, decoded from MsgProbes (server/Net/Protocol.cs WriteProbe). Streamed
+    // to the owning team only; the server never moves a probe once dropped (no vel field — ProbeView
+    // is stationary). Removed on the matching MsgProbeGone (reason 0 = expired).
+    public sealed class Probe
+    {
+        public ulong ProbeId;
+        public byte Team;
+        public uint WeaponId; // probe-kind WeaponDef — model/sight-radius come from here
+        public uint SectorId;
+        public float PosX,
+            PosY,
+            PosZ;
+        public ushort TicksLeft; // remaining lifespan at the time this frame was sent
     }
 
     // A team base (from Welcome + streamed health frames).

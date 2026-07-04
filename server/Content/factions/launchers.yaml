@@ -55,3 +55,12 @@ launchers:
     weapon-id: 7
     fire-interval-ticks: 100
     required-capabilities: [base]
+  - id: probe-dispenser
+    name: Probe Dispenser
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: recon-probe
+    weapon-id: 8
+    fire-interval-ticks: 100
+    required-capabilities: [base]

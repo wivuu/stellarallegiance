@@ -109,6 +109,7 @@ public partial class ShipController : Node
         && a.Firing2 == b.Firing2
         && a.DropChaff == b.DropChaff
         && a.DropMine == b.DropMine
+        && a.DropProbe == b.DropProbe
         && a.LockTargetId == b.LockTargetId;
 
     private bool _autoFly;
@@ -278,10 +279,12 @@ public partial class ShipController : Node
                 // Spawn on the authoritative sim server (honored only while the match is Active;
                 // the request simply retries until then), carrying the hangar's chosen consumable
                 // hold for this class (server validates + falls back to the hull default if invalid).
-                // Autofly ships a fixed test hold (3 mines + 1 decoy fit the scout's free payload)
-                // so headless runs exercise the MsgSpawn cargo path the hangar uses.
+                // Autofly ships a fixed test hold (3 mines + 1 decoy + 1 recon-probe pack — mass
+                // 3+1+2 = 6, exactly the scout's free payload alongside its cannon) so headless runs
+                // exercise the full MsgSpawn cargo path AND actually carry probes for the pinned
+                // DropProbe in AutoInput to deploy (cargo-ids: 2 mine, 3 decoy, 4 recon-probe).
                 var hold = _autoFly
-                    ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1) }
+                    ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1), (4u, (byte)1) }
                     : LoadoutState.Shared.CargoFor((byte)cls);
                 _net?.RequestSpawn((byte)cls, hold);
                 _spawnPending = true;
@@ -349,6 +352,7 @@ public partial class ShipController : Node
             _input.Firing2 = false;
             _input.DropChaff = false;
             _input.DropMine = false;
+            _input.DropProbe = false;
         }
 
         UpdateAdaptiveLead();
@@ -557,11 +561,12 @@ public partial class ShipController : Node
             // capture gate the LMB primary uses so a right-click on a menu never launches. The
             // lock target is whatever TargetMarkers has Tab-focused (0 = none; server needs a lock).
             Firing2 = Input.IsPhysicalKeyPressed(Key.F) || (look && Input.IsMouseButtonPressed(MouseButton.Right)),
-            // Dispensers: C ejects chaff, B lays a mine field. Held-input replay re-fires the flag,
-            // so the SERVER's cadence gate is the debounce — we do NOT client-edge-detect (that would
-            // desync from the authoritative cadence).
+            // Dispensers: C ejects chaff, B lays a mine field, G deploys a recon probe. Held-input
+            // replay re-fires the flag, so the SERVER's cadence gate is the debounce — we do NOT
+            // client-edge-detect (that would desync from the authoritative cadence).
             DropChaff = Input.IsPhysicalKeyPressed(Key.C),
             DropMine = Input.IsPhysicalKeyPressed(Key.B),
+            DropProbe = Input.IsPhysicalKeyPressed(Key.G),
             LockTargetId = TargetMarkers.FocusedId,
         };
     }
@@ -586,11 +591,12 @@ public partial class ShipController : Node
             Pitch = 0.2f * Mathf.Sin(t * 0.37f),
             Firing = true, // exercise projectile spawn/cull
             // Pin the dispensers on like boost/Firing: the server cadence gate turns the held
-            // flags into periodic drops, so headless runs exercise the full chaff/mine wire
-            // (input flag -> sim -> MsgChaff/MsgMinefields -> client FX) with whatever the
+            // flags into periodic drops, so headless runs exercise the full chaff/mine/probe wire
+            // (input flag -> sim -> MsgChaff/MsgMinefields/MsgProbes -> client FX) with whatever the
             // spawned hold carried.
             DropChaff = true,
             DropMine = true,
+            DropProbe = true,
         };
     }
 }
