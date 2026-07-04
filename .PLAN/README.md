@@ -19,10 +19,10 @@ Archives:
 ---
 
 ## QUICKNOTES:
-- Code cleanup and refactor
+- **[M]** Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
-- Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- Pods explode when 'rescued'. Pig's pods fail to dock properly (bounce off base and explode)
+- **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
+- **[S]** Pods explode when 'rescued'. Pig's pods fail to dock properly (bounce off base and explode)
 ---
 
 ## Content philosophy (the through-line)
@@ -103,7 +103,7 @@ everything downstream is authored as data + a behavior module rather than rebuil
   rendering (Stage 3), so no protocol bump.
 - ✅ **Guard test** — `FlightModelTest` asserts every weapon-hardpoint `WeaponId` has a def and
   every non-pod class has a positive hull.
-- ☐ *Deferred:* lift sim-only tuning constants (`LaunchSpeed`, `DockRadiusFrac`, pod-eject params)
+- ☐ **[S]** *Deferred:* lift sim-only tuning constants (`LaunchSpeed`, `DockRadiusFrac`, pod-eject params)
   into the tuning config *when they need runtime tuning* (folds into Stage 1's YAML).
 
 ### Stage 1 — Content pipeline (YAML authoring + per-server override) — ✅ DONE (2026-06-28)
@@ -224,20 +224,20 @@ Stage-2 economy, no rework.
   toggle lets the missile/mine damage tests isolate raw damage.
 - ✅ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
   don't. (FX done; the recharge *mechanic* is not.)
-- ☐ **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
+- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
   - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
   - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
   - If the ship does not have capacity, the item can bounce off harmlessly.
   - If the item is in-motion, it should collision detect with asteroids and bases
-- ◐ **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
+- ◐ **[S]** **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
   scores/ranks are Stage 5.
-- ☐ **Control settings and mappings** — allow players to configure keybindings, input devices,
+- ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,
   and control schemes for the game from the settings -> controls menu.
-- ☐ **Alephs block shots**  - from weapons and missiles
+- ☐ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
 
@@ -246,7 +246,7 @@ Stage-2 economy, no rework.
 The economic + RTS loop. Largely sequential; each item builds on Stage 2's money + gating and the
 Stage-1 YAML pipeline.
 
-- ☐ **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
+- ☐ **[XL]** **Fog of war** — asteroids and enemy bases stay hidden until scouted by a teammate.
   (Independent — slot anytime.)
   - Each team has a shared vision of the things on the map
   - The shared vision is updated as teammates scout the map, revealing or hiding objects based on their line-of-sight and proximity.
@@ -256,18 +256,18 @@ Stage-1 YAML pipeline.
   - A ship has a yaml configured 'cone' that defines its vision for scouting purposes, as well as a smaller 'sphere' that defines proximity-based vision. Scouts, for example have a much longer/wider cone than fighters, and a larger sphere for nearby detection.
   - Asteroids can occlude vision, blocking line-of-sight for scouting purposes.
   - Expendable 'probe's can be deployed by scouts (or other ships if configured in YAML), probe types have different radiii for sight. Use acs64.glb as the model for the probe, but configurable in yaml
-- ☐ **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
+- ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
-- ☐ **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
+- ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **Commander / RTS map view** — the "rich UI": a 2D strategic overlay across all sectors;
+- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a 2D strategic overlay across all sectors;
   commander issues waypoints and investment orders. Reuse minimap/sector data.
-- ☐ **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
+- ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
-- ☐ **Base building + constructors** — deployable structures for resource processing; ships land,
+- ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
-- ☐ **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
+- ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
   (`MsgDefs`); this extends the same model to binary assets (transfer + cache + load-from-temp +
@@ -289,7 +289,7 @@ Stage-1 YAML pipeline.
     hash and streams normally. So the server stays authoritative over content (binary-asset analog
     of the no-baked-tuning rule: defs are authority data with no fallback; assets are content-
     addressed blobs validated against server-named hashes, safe to pre-ship).
-- ☐ **Factions** — distinct factions with unique ship classes, tech trees, and visual styles for
+- ☐ **[L]** **Factions** — distinct factions with unique ship classes, tech trees, and visual styles for
   asymmetric play (a faction dimension on YAML defs). *Faction rules ride Stage 1; faction assets
   ride asset streaming above.*
 
@@ -304,19 +304,19 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   client-update release checks that ban out-of-date servers/clients.
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
-- ☐ **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
+- ☐ **[M]** **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
   system, and player ranks. (In-match scoreboards are Stage 3.)
-- ☐ **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. Lobby
+- ☐ **[XL]** **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. Lobby
   owns the persistent storage; deployed as part of the lobby project. Use **Orleans** so the lobby
   is horizontally scalable and manages state. (BIG)
-- ☐ **Client authentication** — clients prove identity to the lobby (per-session secrets/tokens).
+- ☐ **[L]** **Client authentication** — clients prove identity to the lobby (per-session secrets/tokens).
   Choose a provider that supports **passkeys**; lobby issues a session secret per client, validated
   by game servers (JWT?).
-- ☐ **Game-server authentication** — game servers prove identity to the lobby; on start, show a
+- ☐ **[M]** **Game-server authentication** — game servers prove identity to the lobby; on start, show a
   link in the terminal to authenticate the session. Same userbase as clients.
-- ☐ **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
+- ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
-- ☐ **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
+- ☐ **[M]** **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
   store as YAML in a known location (same per-server-override mechanism as Stage 1). Each file is a
   map; env vars pick the map (random, specific, pick-from-files). *(Could be pulled forward to feed
   Stage-4 resource-asteroid maps.)*
@@ -327,16 +327,16 @@ Not stage-bound — done when convenient or when a stage needs them.
 
 - ✅ **CI / automated testing** — tag-triggered Release workflow (client zips + GHCR server image);
   `FlightModelTest` (determinism/golden + content guard) and `CryptoTest` in `tests/`.
-- ☐ **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
+- ☐ **[S]** **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
   explore baking and in-engine parallax/height maps.
-- ◐ **Spatial audio polish** — `SfxManager` exists; ✅ collision thuds (asteroids AND bases,
+- ◐ **[S]** **Spatial audio polish** — `SfxManager` exists; ✅ collision thuds (asteroids AND bases,
   client-side interception in `WorldRenderer.CheckCollisions` against the shared convex hulls, with
   the own-base dock-disc carve-out) and ✅ a volume settings UI (per-bus sliders in the Lobby
   overlay, persisted via `UserPrefs`) shipped. Remaining: finer mix tuning / more event coverage.
 
 ## Deep backlog
 
-- ☐ **Replay system** — tick log or time-travel query playback.
-- ☐ **.NET 10 upgrade** — upgrade from .NET 8 to 10 for perf.
-- ☐ **Fireteam support** — sub-teams of 2-6 players that can privately chat. Commanders can
+- ☐ **[L]** **Replay system** — tick log or time-travel query playback.
+- ☐ **[M]** **.NET 10 upgrade** — upgrade from .NET 8 to 10 for perf.
+- ☐ **[M]** **Fireteam support** — sub-teams of 2-6 players that can privately chat. Commanders can
   assign players to fireteams and issue orders to specific fireteams.
