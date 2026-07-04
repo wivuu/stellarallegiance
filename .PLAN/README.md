@@ -22,8 +22,7 @@ Archives:
 - Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- Default to fullscreen mode for production builds
-- First person view — allow the camera to switch to a first-person perspective from the ship; make it the default, with a key to toggle first and third; zooming closer than closest automatically switches to first-person — done; V toggles, FP default (persisted), wheel-in past closest zoom enters FP, animated dolly hides the own hull only once fully in the cockpit (CameraRig + Cockpit hardpoint)
+- When killed, dont go to game lobby; once you have joined the game you should respawn in the hangar
 ---
 
 ## Content philosophy (the through-line)
