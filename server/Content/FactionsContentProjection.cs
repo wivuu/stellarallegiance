@@ -90,6 +90,10 @@ public static class FactionsContentProjection
         {
             ClassId = h.ClassId!.Value,
             Name = h.Name,
+            // Hangar presentation flavor (blurb reuses the Buildable.Description base field).
+            Glyph = h.Glyph ?? "",
+            Role = h.Role ?? "",
+            Description = h.Description ?? "",
             // Derived (lossless) from Core hull fields.
             Mass = (float)h.Mass,
             MaxSpeed = (float)h.Speed,

@@ -61,6 +61,11 @@ namespace StellarAllegiance.Shared
     {
         public byte ClassId;
         public string Name = "";
+        // Presentation flavor authored per-hull (streamed, not baked): the hangar's icon glyph,
+        // role tag, and blurb. Empty = the client falls back to a generic cosmetic default.
+        public string Glyph = "";
+        public string Role = "";
+        public string Description = "";
 
         // --- authoring schema (mirrors FlightModel.ShipStats authored block) ---
         public float Mass;

@@ -20,6 +20,9 @@ hulls:
   # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
   - id: scout
     name: Scout
+    glyph: "▲"
+    role: RECON
+    description: "Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill."
     class-id: 0
     mass: 40
     speed: 160
@@ -50,6 +53,9 @@ hulls:
   # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
   - id: fighter
     name: Fighter
+    glyph: "◆"
+    role: INTERCEPT
+    description: "The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad."
     class-id: 1
     mass: 36
     speed: 100
@@ -99,6 +105,9 @@ hulls:
   # Bomber (class-id 2): the heavy hull — twin main engines; one slow, hard cannon.
   - id: bomber
     name: Bomber
+    glyph: "⬢"
+    role: ASSAULT
+    description: "Slow and loud, but its payload cracks bases open. Bring an escort."
     class-id: 2
     mass: 50
     speed: 60
