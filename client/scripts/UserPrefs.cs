@@ -14,6 +14,8 @@ public static class UserPrefs
     private const string InputSection = "input";
     private const string MouseSensKey = "mouse_sens_mult";
     private const string InvertYKey = "invert_y";
+    private const string ViewSection = "view";
+    private const string FirstPersonKey = "first_person";
 
     // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
     // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
@@ -22,6 +24,7 @@ public static class UserPrefs
     // Defaults the settings dialog's RESTORE DEFAULTS lands on.
     public const float DefaultMouseSensMultiplier = 1f;
     public const bool DefaultMouseInvertY = false;
+    public const bool DefaultFirstPersonView = true;
 
     // Raised at the end of every setter so live consumers (ShipController mouse feel, the server
     // browser's name field) can re-read. Setters only run on the main thread, so subscribers may
@@ -164,6 +167,21 @@ public static class UserPrefs
     public static void SetMouseInvertY(bool v)
     {
         Cfg.SetValue(InputSection, InvertYKey, v);
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+        Changed?.Invoke();
+    }
+
+    // Whether the chase camera spawns in first person (cockpit view). Default true — the pilot's-eye
+    // view is the intended default; the last mode the player toggled to persists across sessions.
+    public static bool FirstPersonView => (bool)Cfg.GetValue(ViewSection, FirstPersonKey, DefaultFirstPersonView);
+
+    // Persist the first-person view preference. Writes through immediately like SetPilotName so the
+    // last-used mode survives even a force-quit.
+    public static void SetFirstPersonView(bool v)
+    {
+        Cfg.SetValue(ViewSection, FirstPersonKey, v);
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
             GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");

@@ -161,12 +161,12 @@ public partial class WeaponsPanel : Control
         // ---- Dispenser rows (chaff [C] / mine [B]), keyed to their hotkeys ----
         if (chaffDisp != null)
         {
-            DrawDispenserRow("C", chaffDisp.Name, _net.LocalChaffAmmo, left, right, y, mono);
+            DrawDispenserRow("C", chaffDisp, _net.LocalChaffAmmo, left, right, y, mono);
             y += SecRowH;
         }
         if (mineDisp != null)
         {
-            DrawDispenserRow("B", mineDisp.Name, _net.LocalMineAmmo, left, right, y, mono);
+            DrawDispenserRow("B", mineDisp, _net.LocalMineAmmo, left, right, y, mono);
             y += SecRowH;
         }
     }
@@ -190,21 +190,33 @@ public partial class WeaponsPanel : Control
         return null;
     }
 
-    // One dispenser row: "[key]  NAME  <pips>  READY/EMPTY". Ammo is the local ship's authoritative
-    // dispenser count (LocalChaffAmmo / LocalMineAmmo). Mirrors the missile row's pip cluster.
-    private void DrawDispenserRow(string keyHint, string name, int ammo, float left, float right, float y, Font mono)
+    // One dispenser row: "[key]  NAME  <pack-pips>  NN  READY/EMPTY". `ammo` is the local ship's
+    // authoritative TOTAL charge count (LocalChaffAmmo / LocalMineAmmo); dispensers are loaded in
+    // packs of `ChargesPerPack`, so the pips show PACKS still holding a charge (bounded, readable)
+    // and the NN number carries the exact remaining charges.
+    private void DrawDispenserRow(string keyHint, WeaponDef disp, int ammo, float left, float right, float y, Font mono)
     {
         float mid = y + SecRowH * 0.5f;
         DrawString(mono, new Vector2(left, mid + 4f), $"[{keyHint}]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
 
+        int packSize = _defs.GetCargoItem(disp.CargoId)?.ChargesPerPack ?? 1;
+        if (packSize < 1)
+            packSize = 1;
+        int packs = (ammo + packSize - 1) / packSize; // ceil — packs still holding at least one charge
+
         (string txt, Color col) = ammo == 0 ? ("EMPTY", DesignTokens.TextDim) : ("READY", DesignTokens.Ok);
         DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, col);
 
-        float pipsRight = right - MonoWidth(mono, txt, 10) - 10f;
-        float clusterLeft = DrawPips(pipsRight, mid, ammo, System.Math.Max(ammo, 1));
+        // Exact remaining charges, just left of the state tag.
+        float countRight = right - MonoWidth(mono, txt, 10) - 10f;
+        string countTxt = ammo.ToString();
+        DrawStringRight(mono, new Vector2(countRight, mid + 4f), countTxt, 10, ammo == 0 ? DesignTokens.TextDim : DesignTokens.Data);
+
+        float pipsRight = countRight - MonoWidth(mono, countTxt, 10) - 10f;
+        float clusterLeft = DrawPips(pipsRight, mid, packs, System.Math.Max(packs, 1));
 
         float nameX = left + 26f;
-        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), name.ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
+        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), disp.Name.ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
     }
 
     // One secondary weapon row: "[n]  NAME  <pips|bar>  STATE".

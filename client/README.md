@@ -11,8 +11,8 @@ constants.
 
 ```
 project.godot            Godot project (entry scene = scenes/Main.tscn)
-wivuullegiance.csproj    C# project compiled by Godot's Mono build; references ../shared
-wivuullegiance.sln       solution (client + shared)
+stellarallegiance.csproj    C# project compiled by Godot's Mono build; references ../shared
+stellarallegiance.sln       solution (client + shared)
 export_presets.cfg       macOS / Windows / Linux export presets (see scripts/export-clients.sh)
 default_bus_layout.tres  audio bus layout for the spatial-audio mixer
 scenes/Main.tscn         the single root scene; everything is spawned/driven from here

@@ -25,7 +25,7 @@ public partial class EngineGlow : Node3D
 
     // Local positions of each engine nozzle (rear face of the hull). One for a
     // Scout's single thruster, two for a Fighter's heavier twin engines.
-    public Vector3[] Nozzles = { Vector3.Zero };
+    public Vector3[] Nozzles = [Vector3.Zero];
 
     // Flame plume size at full throttle (before the afterburner stretch).
     public float NozzleRadius = 0.9f;
@@ -37,6 +37,12 @@ public partial class EngineGlow : Node3D
     // Hot exhaust colour, tinted toward the ship's team hue so friend/foe still
     // reads at a glance. The afterburner blends this toward BoostColor.
     public Color CoreColor = new(0.6f, 0.8f, 1f);
+
+    // Force the whole glow dark regardless of throttle. Set by PredictionController when the local
+    // ship is in first person (the camera sits inside the hull, so its own exhaust glare must not
+    // wash out the view). Folded into the per-frame Visible recompute below so a plain Visible=false
+    // can't be stomped the next frame.
+    public bool Suppressed;
 
     // --- Tuning ---------------------------------------------------------
 
@@ -62,7 +68,7 @@ public partial class EngineGlow : Node3D
     public int SmokeAmount = 180; // mote count — density/fill of the trail
     public float SmokeLifetime = 1.5f; // mote lifespan (sec); also how long smoke lingers after boost
     public float SmokeSize = 2.5f; // base mote DIAMETER, in NozzleRadius units  ← overall bigness
-    private const float SmokeSizeVar = 0.6f; // ± random per-mote size variation (0 = all identical, 0.6 = 40%–160%)
+    private const float SmokeSizeVar = 0.6f; // ± random per-mote size variation (0 = all identical, 0.6 = 40%-160%)
     private const float SmokeSpeed = 4f; // backward drift speed; with Lifetime sets plume LENGTH
     private const float SmokeSpeedVar = 0.5f; // ± random drift spread
     private const float SmokeBell = 2f; // lateral fan-out radius, in NozzleRadius units  ← how wide the bell
@@ -442,7 +448,7 @@ public partial class EngineGlow : Node3D
         bool burning = boost > 0.02f;
         if (burning)
             _smokeFade = SmokeLifetime;
-        Visible = glow > 0.001f || _smokeFade > 0f;
+        Visible = !Suppressed && (glow > 0.001f || _smokeFade > 0f);
         if (!Visible)
         {
             _light.LightEnergy = 0f;

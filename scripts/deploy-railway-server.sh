@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy (or UPDATE) a wivuullegiance GAME SERVER on Railway, published to the default public lobby.
+# Deploy (or UPDATE) a stellarallegiance GAME SERVER on Railway, published to the default public lobby.
 #
 # Prereqs: Railway CLI installed and logged in (`railway login`).
 # Usage:

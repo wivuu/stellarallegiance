@@ -39,8 +39,11 @@ public partial class Hud : CanvasLayer
     // (even mid-match), so a joiner can pick a team and read the roster first. Sticky through the
     // whole active match (NOT consumed on spawn): once you've committed to the fight, losing your
     // ship — by docking or dying — returns you to the hangar to re-launch, not the team picker.
-    // Cleared only when the match ends (back to the post-match lobby).
-    private bool _deployRequested;
+    // Cleared only when the match ends (back to the post-match lobby). Static so the Lobby overlay
+    // can read it (Lobby.cs) and yield the not-flying screen to the hangar once you've deployed —
+    // matching the other static UI-state flags (ShipLoadout.Active, Chat.Capturing, ...). Hud is a
+    // persistent Main.tscn node, so this has the same session lifetime the instance field had.
+    public static bool DeployRequested { get; private set; }
 
     // Previous-frame visibility, so UI sounds fire once on the transition (the sector
     // warning first appearing) rather than every frame.
@@ -66,7 +69,7 @@ public partial class Hud : CanvasLayer
         // the 3D viewport — it's a light effect on the sky, not a readout).
         var flare = new LensFlare { Name = "LensFlare" };
         AddChild(flare);
-        flare.Init(GetNode<Camera3D>("../Camera3D"));
+        flare.Init(GetNode<Camera3D>("../Camera3D"), _world);
 
         // Enemy target markers (added first so the HUD text/menu draw on top of it).
         var markers = new TargetMarkers { Name = "TargetMarkers" };
@@ -94,6 +97,17 @@ public partial class Hud : CanvasLayer
         var weapons = new WeaponsPanel { Name = "WeaponsPanel" };
         AddChild(weapons);
         weapons.Init(_world, _net, _defs);
+
+        // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
+        // while open. Added after the combat overlays so it draws above them, under the text/menu.
+        var zoom = new ZoomView { Name = "ZoomView" };
+        AddChild(zoom);
+        zoom.Init(_world);
+
+        // Transient first/third-person view-mode readout, flashed on a V toggle or wheel transition.
+        var viewMode = new ViewModeIndicator { Name = "ViewModeIndicator" };
+        AddChild(viewMode);
+        viewMode.Init();
 
         // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
         // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
@@ -157,9 +171,9 @@ public partial class Hud : CanvasLayer
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--ui-shot="))
-                outPath = a.Substring("--ui-shot=".Length);
+                outPath = a["--ui-shot=".Length..];
             else if (a.StartsWith("--ui-shot-delay="))
-                double.TryParse(a.Substring("--ui-shot-delay=".Length), System.Globalization.CultureInfo.InvariantCulture, out delay);
+                double.TryParse(a["--ui-shot-delay=".Length..], System.Globalization.CultureInfo.InvariantCulture, out delay);
         }
         if (outPath == null)
             return;
@@ -179,7 +193,7 @@ public partial class Hud : CanvasLayer
     {
         if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F9 })
         {
-            if (_showcase != null && GodotObject.IsInstanceValid(_showcase))
+            if (_showcase != null && IsInstanceValid(_showcase))
             {
                 _showcase.QueueFree();
                 _showcase = null;
@@ -226,7 +240,7 @@ public partial class Hud : CanvasLayer
     // The Lobby's LAUNCH expresses intent to deploy. While a match is Active this promotes the
     // pilot from the lobby overlay into the mandatory ship-select hangar; set pre-match (on ready)
     // it carries that intent through match-start so readying flows straight into the hangar.
-    public void RequestDeploy(bool on = true) => _deployRequested = on;
+    public void RequestDeploy(bool on = true) => DeployRequested = on;
 
     public override void _Process(double delta)
     {
@@ -242,15 +256,15 @@ public partial class Hud : CanvasLayer
         // straight into the ship-select at start) AND across losing a ship, so docking or dying
         // reopens the hangar instead of dumping the pilot on the team picker.
         if (_world.Phase == MatchPhase.Ended)
-            _deployRequested = false;
+            DeployRequested = false;
         // The hangar IS the ship-select screen. While in an active match with no ship and deploy
         // requested (first spawn, respawn after dock/death): open it if it isn't up, and promote a
         // hangar the player had open manually — either way it becomes the mandatory select
         // (LAUNCH to leave). The death-cam guard holds the hangar back for the blast beat (dock has
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
-        bool hangarUp = _hangar != null && GodotObject.IsInstanceValid(_hangar);
-        if (inMatch && !flying && _deployRequested && !_world.DeathCamActive)
+        bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
+        if (inMatch && !flying && DeployRequested && !_world.DeathCamActive)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;

@@ -30,7 +30,7 @@ mismatch rather than misreading frames.
 ```bash
 dotnet build shared/Shared.csproj
 dotnet build server/SimServer.csproj -c Release
-dotnet build client/wivuullegiance.csproj
+dotnet build client/stellarallegiance.csproj
 scripts/run-server.sh        # server (rebuilds + runs)
 scripts/run-client.sh        # client (rebuilds + launches Godot)
 ```

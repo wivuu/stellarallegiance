@@ -318,6 +318,18 @@ public partial class ShipController : Node
             // Fresh ship: force the first step to send (server starts from default input).
             _lastSentInput = default;
             _lastSentTick = 0;
+            // Launch locks the cursor to flight immediately — steering is captured relative mouse
+            // motion (see _Input / ReadInput), so the pilot flies straight out of the hangar without
+            // a click to capture first. ShipLoadout is deliberately NOT in the guard: the mandatory
+            // spawn hangar is the launch source and is still in the tree this frame (it closes once
+            // the ship exists, Hud._Process), and its _ExitTree doesn't touch MouseMode, so this
+            // capture sticks. Skipped in headless autofly (no cursor) and while a real modal owns the
+            // cursor, so we never yank it out from under a menu/map/chat.
+            if (!_autoFly && !EscapeMenu.Active && !SettingsDialog.Active && !SectorOverview.Active && !Chat.Capturing)
+            {
+                Input.MouseMode = Input.MouseModeEnum.Captured;
+                _mouseDelta = Vector2.Zero;
+            }
         }
 
         // Afterburner (Shift): a real flight input now — extra forward thrust and a
@@ -375,7 +387,7 @@ public partial class ShipController : Node
                 _lastSentTick = _predTick;
             }
             foreach (var shot in pc.Step(_input, _predTick))
-                _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec);
+                _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
         }
 
         // T5 divergence injection (debug). Press P to force a misprediction and
@@ -454,6 +466,8 @@ public partial class ShipController : Node
 
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
         {
+            if (ZoomView.Active)
+                return; // the scope owns Esc while open (its own handler closes it) — don't release/menu
             if (Input.MouseMode == Input.MouseModeEnum.Captured)
             {
                 Input.MouseMode = Input.MouseModeEnum.Visible;
@@ -513,8 +527,11 @@ public partial class ShipController : Node
         _mouseDelta = Vector2.Zero;
         if (look)
         {
-            _stickYaw = Mathf.Clamp(_stickYaw - m.X * _mouseSens, -1f, 1f);
-            _stickPitch = Mathf.Clamp(_stickPitch + (_mouseInvert ? -m.Y : m.Y) * _mouseSens, -1f, 1f);
+            // Fine aiming while scoped: the telescopic zoom divides the effective mouse gain by
+            // the magnification (1 when closed), so a 20x scope turns 20x slower per pixel.
+            Vector2 md = m / ZoomView.Magnification;
+            _stickYaw = Mathf.Clamp(_stickYaw - md.X * _mouseSens, -1f, 1f);
+            _stickPitch = Mathf.Clamp(_stickPitch + (_mouseInvert ? -md.Y : md.Y) * _mouseSens, -1f, 1f);
             float ret = Mathf.Exp(-MouseReturnPerSec * (float)delta);
             _stickYaw *= ret;
             _stickPitch *= ret;

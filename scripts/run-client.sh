@@ -57,7 +57,7 @@ source "${REPO_ROOT}/scripts/godot-bin.sh"
 godot_resolve || exit 1
 
 echo "[run-client] building client C# (Debug)"
-dotnet build "${REPO_ROOT}/client/wivuullegiance.csproj" -c Debug
+dotnet build "${REPO_ROOT}/client/stellarallegiance.csproj" -c Debug
 
 cd "${REPO_ROOT}"
 if [[ -n "${MOVIE_PATH}" ]]; then

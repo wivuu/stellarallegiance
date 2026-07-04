@@ -1,27 +1,61 @@
 using Godot;
+using StellarAllegiance.Ui;
 
-// Chase camera. Follows the local ship from behind (ships fly along local +Z,
-// so "behind" is local -Z) and looks ahead. When there is no local ship, it
-// parks at a wide overview of the sector.
+// Chase / cockpit camera. A Camera3D rigidly attached to the local ship each frame (ships fly
+// along local +Z, so the third-person "behind" shot sits at local −Z and looks ahead). The camera
+// runs a two-mode state machine:
+//   • THIRD PERSON — the chase shot, dollied in/out along the framing with the scroll wheel.
+//   • FIRST PERSON — the pilot's eye, parked at the hull's cockpit hardpoint.
+// The two framings share EXACTLY the same basis (the ship's orientation, faced forward), so
+// switching modes is a purely positional dolly between the chase offset and the cockpit offset —
+// a brief eased blend, never a hard cut, so the pilot keeps their bearings. First person is the
+// default (persisted per player), toggled with V, and reachable by zooming past the closest chase
+// shot. When there is no local ship the camera parks at a wide overview of the sector.
 public partial class CameraRig : Camera3D
 {
     private static readonly Vector3 ChaseOffset = new Vector3(0f, 2.5f, -10f); // ship-local
     private static readonly Vector3 OverviewPos = new Vector3(600f, 750f, 1600f);
 
-    // A Camera3D looks down its local -Z, but the ship flies along +Z, so rotate
-    // the ship's basis 180° about its OWN up to aim the camera along the ship's
-    // forward. Inheriting the ship's full orientation (its up included) is the
-    // whole point: there is no world "up" in space, so referencing one (as LookAt
-    // does) makes the view flip when you pitch toward vertical.
+    // Fallback cockpit eye offset (ship-local) for a hull whose model carries no HP_Cockpit_0
+    // marker — so first person never breaks on custom server content. Slightly above and ahead of
+    // the origin, matching the authored scout eye point.
+    private static readonly Vector3 CockpitFallback = new Vector3(0f, 0.5f, 1f);
+
+    // A Camera3D looks down its local -Z, but the ship flies along +Z, so rotate the ship's basis
+    // 180° about its OWN up to aim the camera along the ship's forward. Inheriting the ship's full
+    // orientation (its up included) is the whole point: there is no world "up" in space, so
+    // referencing one (as LookAt does) makes the view flip when you pitch toward vertical.
     private static readonly Basis FaceForward = new Basis(Vector3.Up, Mathf.Pi);
 
-    // Scroll-wheel zoom: multiply ChaseOffset to dolly the camera straight back
-    // along its current framing. 1.0 is the tightest shot (the baseline offset
-    // above); the wheel only ever widens out from there.
+    // Scroll-wheel zoom: multiply ChaseOffset to dolly the camera straight back along its current
+    // framing. 1.0 is the tightest shot (the baseline offset above); the wheel only ever widens out
+    // from there. Zooming IN past the tightest shot dives into first person instead (see HandleWheel).
     private const float MinZoom = 1f; // closest (default ChaseOffset)
     private const float MaxZoom = 24f; // widest pull-back
     private const float ZoomStep = 1.15f; // per wheel notch (matches SectorOverview feel)
     private float _zoom = MinZoom;
+
+    // View-mode state. `_fpDesired` is the mode the player picked (persisted); `_blend` is the
+    // animated position between chase (0) and cockpit (1). The two are decoupled so a mode change
+    // mid-transition simply re-aims the blend toward the new target from wherever it currently sits.
+    private const float TransitionSec = 0.3f; // edge-to-edge dolly time
+    private bool _fpDesired;
+    private float _blend; // 0 = third person, 1 = first person (linear param; eased when applied)
+
+    // True only once the dolly INTO first person has (nearly) finished — so the own hull stays
+    // rendered while the camera moves in/out and hides only when actually in the cockpit. The
+    // cross-system idiom (mirrors ZoomView.Active / SectorOverview.Active); false with no local ship.
+    public static bool FirstPersonActive { get; private set; }
+
+    // Surfaced for the transient HUD view-mode chip: which mode the player last selected and when
+    // (ms), so the readout can flash briefly on a change and fade out.
+    public static bool ViewIsFirstPerson { get; private set; }
+    public static ulong ViewChangedMsec { get; private set; }
+
+    // Cockpit eye offset, resolved from the hull's HP_Cockpit_0 marker and cached per ship node
+    // instance (a respawn/pod-eject makes a new node, invalidating the cache naturally).
+    private Node? _ship;
+    private Vector3 _cockpitOffset = CockpitFallback;
 
     private WorldRenderer _world = null!;
 
@@ -29,21 +63,78 @@ public partial class CameraRig : Camera3D
     {
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         Far = 6000f;
+
+        // Default = first person, restoring the last mode the player toggled to.
+        _fpDesired = UserPrefs.FirstPersonView;
+        ViewIsFirstPerson = _fpDesired;
+        _blend = _fpDesired ? 1f : 0f;
+
+        foreach (string a in OS.GetCmdlineUserArgs())
+            if (a.StartsWith("--view-demo="))
+                _demoDir = a["--view-demo=".Length..];
     }
 
     public override void _Input(InputEvent @event)
     {
-        if (@event is not InputEventMouseButton mb || !mb.Pressed)
+        // Same inputFree idiom the rest of the client gates keys on (ZoomView), plus a live local
+        // ship: no view-mode changes while a full-screen overlay owns the screen (F3 overview reads
+        // the wheel itself; chat/menus capture keys).
+        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
+        if (!inputFree || _world.LocalShip == null)
             return;
-        switch (mb.ButtonIndex)
+
+        switch (@event)
         {
-            case MouseButton.WheelDown:
-                _zoom = Mathf.Max(MinZoom, _zoom / ZoomStep);
-                break; // narrower
-            case MouseButton.WheelUp:
-                _zoom = Mathf.Min(MaxZoom, _zoom * ZoomStep);
-                break; // wider
+            case InputEventKey { Pressed: true, Echo: false, Keycode: Key.V }:
+                // V flips modes WITHOUT touching _zoom, so toggling round-trips to the prior framing.
+                SetDesiredMode(!_fpDesired);
+                GetViewport().SetInputAsHandled();
+                break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
+                HandleWheel(down: true);
+                break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
+                HandleWheel(down: false);
+                break;
         }
+    }
+
+    // WheelDown narrows the shot; WheelUp widens it. The two ends of the zoom range hand off to the
+    // view mode: winding IN past the closest chase shot dives into the cockpit, winding OUT of the
+    // cockpit pulls back to the tightest chase framing.
+    private void HandleWheel(bool down)
+    {
+        if (down) // narrower
+        {
+            if (_fpDesired)
+                return; // already in the cockpit — WheelDown has nowhere closer to go
+            if (_zoom <= MinZoom + 1e-4f)
+                SetDesiredMode(true); // at the closest chase shot, one more notch dives to first person
+            else
+                _zoom = Mathf.Max(MinZoom, _zoom / ZoomStep);
+        }
+        else // wider
+        {
+            if (_fpDesired)
+            {
+                SetDesiredMode(false);
+                _zoom = MinZoom; // pull back out of the cockpit to the tightest chase framing
+            }
+            else
+                _zoom = Mathf.Min(MaxZoom, _zoom * ZoomStep);
+        }
+    }
+
+    // Change (and persist) the view mode. The blend animates toward it from its current value, so a
+    // change mid-transition just reverses the dolly. A no-op if the mode is unchanged.
+    private void SetDesiredMode(bool fp)
+    {
+        if (_fpDesired == fp)
+            return;
+        _fpDesired = fp;
+        UserPrefs.SetFirstPersonView(fp);
+        ViewIsFirstPerson = fp;
+        ViewChangedMsec = Time.GetTicksMsec();
     }
 
     public override void _Process(double delta)
@@ -51,9 +142,10 @@ public partial class CameraRig : Camera3D
         var ship = _world.LocalShip;
         if (ship == null)
         {
-            // Just died: hold the last chase framing on the death point for a beat so the
-            // player sees their own blast up close (see WorldRenderer death-cam) before the
-            // view pulls back to the wide overview.
+            FirstPersonActive = false; // no ship ⇒ never "in the cockpit" (hull-hide seam reads this)
+            // Just died: hold the last chase framing on the death point for a beat so the player
+            // sees their own blast up close (see WorldRenderer death-cam) before the view pulls back
+            // to the wide overview. The death cam always frames the wreck from OUTSIDE (third person).
             if (_world.DeathCamActive)
             {
                 Transform3D d = _world.DeathCamShipTransform;
@@ -65,13 +157,100 @@ public partial class CameraRig : Camera3D
             return;
         }
 
-        // Rigidly attach to the ship's (smoothly interpolated) transform so the
-        // camera moves AND rotates at EXACTLY the ship's rate — no smoothing lag,
-        // no world-up reference. CameraRig processes after the ship's node in tree
-        // order, so this reads the transform the ship rendered this frame. Sharing
-        // the ship's orientation means rolling/pitching to any attitude (including
-        // straight up) keeps the controls and view consistent — true 6DOF.
+        // A fresh ship node (spawn / respawn / pod-eject): re-resolve its cockpit eye point and snap
+        // straight to the preferred mode with no dolly — you spawn already framed, you don't watch a
+        // transition play out on birth.
+        if (!ReferenceEquals(ship, _ship))
+        {
+            _ship = ship;
+            _cockpitOffset = ResolveCockpit(ship);
+            _blend = _fpDesired ? 1f : 0f;
+        }
+
+        // Advance the blend toward the desired mode over ~TransitionSec, edge to edge.
+        float target = _fpDesired ? 1f : 0f;
+        if (_blend != target)
+        {
+            float step = (float)delta / TransitionSec;
+            _blend = _blend < target ? Mathf.Min(target, _blend + step) : Mathf.Max(target, _blend - step);
+        }
+        // Hide the own hull only once we're (essentially) all the way into the cockpit, so it stays
+        // rendered throughout the dolly both directions.
+        FirstPersonActive = _blend >= 0.98f;
+
+        // Rigidly attach to the ship's (smoothly interpolated) transform so the camera moves AND
+        // rotates at EXACTLY the ship's rate — no smoothing lag, no world-up reference. Both framings
+        // share the basis, so the transition is a pure ship-local positional lerp (smoothstep-eased)
+        // between the chase offset and the cockpit offset; the ship's attitude stays locked the whole
+        // time. CameraRig processes after the ship's node in tree order, so this reads the transform
+        // the ship rendered this frame.
+        float e = _blend * _blend * (3f - 2f * _blend); // smoothstep ease
+        Vector3 offset = (ChaseOffset * _zoom).Lerp(_cockpitOffset, e);
         Transform3D t = ship.GlobalTransform;
-        GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis * (ChaseOffset * _zoom));
+        GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis * offset);
+
+        if (_demoDir != null)
+            RunDemo(delta);
+    }
+
+    // Marker-first cockpit lookup: convert the hull's HP_Cockpit_0 node into ship-local space (so it
+    // honors both the def-seeded marker AND any future GLB-authored override, and survives hull
+    // scaling). Falls back to CockpitFallback when the model carries no cockpit node.
+    private static Vector3 ResolveCockpit(Node3D ship)
+    {
+        var shipModel = ship.GetNodeOrNull<Node3D>("ShipModel");
+        if (shipModel?.FindChild("HP_Cockpit_0", recursive: true, owned: false) is Node3D cockpit)
+            return ship.GlobalTransform.AffineInverse() * cockpit.GlobalTransform.Origin;
+        return CockpitFallback;
+    }
+
+    // ---- --view-demo=<dir>: scripted self-drive for screenshot verification --------
+    // Synthesizes real V-key + wheel events through Input.ParseInputEvent (the normal input
+    // pipeline — the same _Input handler a player reaches), snapshotting after each step INCLUDING a
+    // couple of mid-transition frames that prove the animated dolly keeps the hull on screen while
+    // moving. Pair with --autofly (needs a live local ship); quits when done.
+
+    private string? _demoDir;
+    private int _demoStep;
+    private double _demoWait = 2.0; // let the autofly spawn + first snapshots settle
+
+    private void RunDemo(double delta)
+    {
+        _demoWait -= delta;
+        if (_demoWait > 0)
+            return;
+        _demoWait = 0.8;
+        switch (_demoStep++)
+        {
+            case 0: Snap("01-fp-default"); break; // spawns in first person (default)
+            case 1: Tap(Key.V); break; // FP -> 3P
+            case 2: Snap("02-third"); break;
+            case 3: Tap(Key.V); _demoWait = 0.15; break; // 3P -> FP; short wait to catch the dolly
+            case 4: Snap("03-fp-mid-transition"); break; // hull still visible mid-blend
+            case 5: Snap("04-fp"); break; // settled first person
+            case 6: Wheel(MouseButton.WheelUp); break; // FP -> 3P (zoom snaps to MinZoom)
+            case 7: Snap("05-wheel-out-third"); break;
+            case 8: Wheel(MouseButton.WheelDown); _demoWait = 0.15; break; // at MinZoom -> auto FP
+            case 9: Snap("06-wheel-in-fp-mid"); break; // mid dolly again
+            case 10: Snap("07-wheel-in-fp"); GetTree().Quit(); break;
+        }
+    }
+
+    private static void Tap(Key k)
+    {
+        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true });
+        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false });
+    }
+
+    private static void Wheel(MouseButton b)
+    {
+        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = b, Pressed = true });
+        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = b, Pressed = false });
+    }
+
+    private void Snap(string name)
+    {
+        GetViewport().GetTexture().GetImage().SavePng($"{_demoDir}/{name}.png");
+        GD.Print($"VIEW_DEMO_SHOT:{name}");
     }
 }

@@ -58,6 +58,7 @@ public enum RuntimeHardpointKind : byte
     Light,
     DockingEntrance,
     DockingExit,
+    Cockpit,
 }
 
 /// <summary>

@@ -46,15 +46,6 @@ public partial class ShipLoadout : Control
     // hold persists across open/close and rides MsgSpawn to the server.
     private readonly LoadoutState _state = LoadoutState.Shared;
 
-    // Per-class presentation strings (roles/blurbs are client flavor, not authored
-    // content yet; keyed by ClassId with a generic fallback for future hulls).
-    private static readonly Dictionary<byte, (string Icon, string Role, string Desc)> Flavor = new()
-    {
-        [0] = ("▲", "RECON", "Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill."),
-        [1] = ("◆", "INTERCEPT", "The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad."),
-        [2] = ("⬢", "ASSAULT", "Slow and loud, but its payload cracks bases open. Bring an escort."),
-    };
-
     private const int PayloadSegments = 20;
 
     // -- built controls ------------------------------------------------------
@@ -419,7 +410,12 @@ public partial class ShipLoadout : Control
             nameCol.AddThemeConstantOverride("separation", 0);
             var name = UiKit.MakeLabel(item.Name.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
             name.AddThemeFontSizeOverride("font_size", 12);
-            var sub = UiKit.MakeLabel($"{item.Mass:0} PAYLOAD EA · {item.Description}", UiKit.TextStyle.Data, DesignTokens.TextDim);
+            // Dispensers load in PACKS of ChargesPerPack charges (one per press); show the multiplier
+            // so the count reads as packs. Legacy single-charge items (ChargesPerPack 1) stay "EA".
+            string cargoSub = item.ChargesPerPack > 1
+                ? $"{item.Mass:0} PAYLOAD/PACK · {item.ChargesPerPack}× CHARGES · {item.Description}"
+                : $"{item.Mass:0} PAYLOAD EA · {item.Description}";
+            var sub = UiKit.MakeLabel(cargoSub, UiKit.TextStyle.Data, DesignTokens.TextDim);
             sub.AddThemeFontSizeOverride("font_size", 9);
             sub.ClipText = true;
             sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
@@ -455,6 +451,10 @@ public partial class ShipLoadout : Control
             return;
         int cur = _state.GetCargoCount(classId, itemId);
         int want = Math.Clamp(cur + delta, 0, 12);
+        // The per-kind charge total (packs × ChargesPerPack) rides a wire byte — never let the pack
+        // count push past 255 charges (the hard 12-pack cap already covers sane pack sizes).
+        if (_defs.GetCargoItem(itemId) is CargoItemDef packItem && packItem.ChargesPerPack > 1)
+            want = Math.Min(want, 255 / packItem.ChargesPerPack);
         // A bump is additionally clamped to the hull's REMAINING payload budget — you can't stock
         // past what the hull can carry (the server would just fall back to the hull default anyway).
         if (want > cur && _defs.GetCargoItem(itemId) is CargoItemDef item && item.Mass > 0f)
@@ -821,8 +821,14 @@ public partial class ShipLoadout : Control
         return $"DMG {w.Damage:0} · {rof:0.#}/s · {w.ProjectileSpeed:0} u/s";
     }
 
-    private static (string Icon, string Role, string Desc) FlavorOf(byte classId) =>
-        Flavor.TryGetValue(classId, out var f) ? f : ("◇", "HULL", "Uncatalogued hull.");
+    // Presentation flavor is authored per-hull and streamed (ShipClassDef.Glyph/Role/Description);
+    // the empty-string fallbacks are purely cosmetic for a hull that authored none.
+    private (string Icon, string Role, string Desc) FlavorOf(byte classId) =>
+        _defs.TryGetShipDef(classId, out ShipClassDef d)
+            ? (d.Glyph.Length > 0 ? d.Glyph : "◇",
+               d.Role.Length > 0 ? d.Role : "HULL",
+               d.Description.Length > 0 ? d.Description : "Uncatalogued hull.")
+            : ("◇", "HULL", "Uncatalogued hull.");
 
     // ---- --hangar-demo=<dir>: scripted self-drive for screenshot verification --------
     // Synthesizes real mouse events through Input.ParseInputEvent (the normal viewport

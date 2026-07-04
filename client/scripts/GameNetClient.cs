@@ -58,17 +58,17 @@ public partial class GameNetClient : Node
 
     // Last-applied row per ship so updates hand the renderer (oldRow, newRow) — the shape its
     // LastFireTick bolt-synthesis and warp detection key off.
-    private readonly Dictionary<ulong, Ship> _rows = new();
-    private readonly HashSet<ulong> _seenThisSnapshot = new();
+    private readonly Dictionary<ulong, Ship> _rows = [];
+    private readonly HashSet<ulong> _seenThisSnapshot = [];
 
     // Last-decoded in-flight missile per id (from MsgMissiles). Maintained by ApplyMissiles /
     // ApplyMissileGone and read by the HUD (incoming-missile warning) and render layer. Cleared
     // wherever _rows resets (reconnect / world rebuild / voluntary leave).
-    private readonly Dictionary<ulong, Missile> _missileRows = new();
+    private readonly Dictionary<ulong, Missile> _missileRows = [];
 
     // Last-decoded minefield per fieldId (from MsgMinefields). Maintained by ApplyMinefields /
     // ApplyMineGone. Cleared wherever _missileRows resets (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Minefield> _minefieldRows = new();
+    private readonly Dictionary<ulong, Minefield> _minefieldRows = [];
 
     // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
     // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
@@ -193,7 +193,7 @@ public partial class GameNetClient : Node
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
-        LobbyPlayers = Array.Empty<LobbyPlayer>();
+        LobbyPlayers = [];
         LobbyChanged?.Invoke();
         _world.Reset();
     }
@@ -299,12 +299,12 @@ public partial class GameNetClient : Node
 
     public void SetTeam(byte team)
     {
-        _tx.Writer.TryWrite(new byte[] { 5, team }); // MsgSetTeam
+        _tx.Writer.TryWrite([5, team]); // MsgSetTeam
     }
 
     public void SetReady(bool ready)
     {
-        _tx.Writer.TryWrite(new byte[] { 6, (byte)(ready ? 1 : 0) }); // MsgSetReady
+        _tx.Writer.TryWrite([6, (byte)(ready ? 1 : 0)]); // MsgSetReady
     }
 
     public void SendChat(string text, bool teamOnly)
@@ -410,9 +410,7 @@ public partial class GameNetClient : Node
         try
         {
             // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
-            var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct);
-            if (entry is null)
-                throw new Exception("server not found in lobby");
+            var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct) ?? throw new Exception("server not found in lobby");
             EmitStage(seq, ConnectionManager.ConnectStage.Negotiate); // entry located
 
             var iceServers = ToIceServers(entry.IceServers);
@@ -583,7 +581,7 @@ public partial class GameNetClient : Node
                 ApplySnapshot(r);
                 break;
             case 4:
-                ApplyShipGone(r.ReadUInt64());
+                ApplyShipGone(r.ReadUInt64(), r.ReadByte());
                 break;
             case 5:
                 ApplyBases(r);
@@ -808,7 +806,7 @@ public partial class GameNetClient : Node
 
     // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 19;
+    public const byte ProtocolVersion = 22;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
     // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
@@ -947,6 +945,11 @@ public partial class GameNetClient : Node
         for (int i = 0; i < shipCount; i++)
         {
             var d = new ShipClassDef { ClassId = r.ReadByte(), Name = ReadStr(r) };
+            d.Glyph = ReadStr(r);
+            d.Role = ReadStr(r);
+            d.Description = ReadStr(r);
+            d.ModelName = ReadStr(r);
+            d.ModelLength = r.ReadSingle();
             d.Mass = r.ReadSingle();
             d.MaxSpeed = r.ReadSingle();
             d.Accel = r.ReadSingle();
@@ -1021,6 +1024,8 @@ public partial class GameNetClient : Node
                     MineTriggerRadius = r.ReadSingle(),
                     CargoId = r.ReadUInt32(),
                     ShieldMult = r.ReadSingle(),
+                    BoltRadius = r.ReadSingle(),
+                    BoltLength = r.ReadSingle(),
                 }
             );
 
@@ -1034,6 +1039,7 @@ public partial class GameNetClient : Node
                     Name = ReadStr(r),
                     Glyph = ReadStr(r),
                     Mass = r.ReadSingle(),
+                    ChargesPerPack = r.ReadByte(),
                     Description = ReadStr(r),
                 }
             );
@@ -1196,9 +1202,10 @@ public partial class GameNetClient : Node
         }
     }
 
-    private void ApplyShipGone(ulong shipId)
+    // reason: 0 = destroyed (fiery blast), 1 = clean despawn (voluntary dock / pod rescue).
+    private void ApplyShipGone(ulong shipId, byte reason)
     {
         if (_rows.Remove(shipId, out var row))
-            _world.NetDeleteShip(row);
+            _world.NetDeleteShip(row, reason);
     }
 }

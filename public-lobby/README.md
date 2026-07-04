@@ -121,8 +121,8 @@ after 60 s. Run a single instance — there is no shared state across replicas.
 dotnet run --project public-lobby -c Release        # listens on :8091
 
 # or build the image directly (built from the repo root, like the sim server):
-docker build -f public-lobby/Dockerfile -t wivuullegiance-public-lobby .
-docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 wivuullegiance-public-lobby
+docker build -f public-lobby/Dockerfile -t stellarallegiance-public-lobby .
+docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 stellarallegiance-public-lobby
 ```
 
 ---

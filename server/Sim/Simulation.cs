@@ -218,6 +218,11 @@ public sealed partial class Simulation
         // from the class Cost that TryReserveSpawn charged; 0 for PIGs/pods (they pay nothing).
         public int PaidCost;
 
+        // Why this ship left the world, carried on its ShipGone so the client renders the right FX
+        // instead of guessing (GoneDestroyed = fiery blast, GoneClean = silent despawn for a
+        // voluntary dock / pod rescue). Default 0 = destroyed; DockShip flips it to clean.
+        public byte GoneReason;
+
         // Tick-stamped input ring (module ShipInput buffer equivalent): an input stamped
         // for tick T is applied exactly AT tick T, so the server replays the same input
         // sequence the client predicted with — the contract client prediction relies on.
@@ -320,6 +325,7 @@ public sealed partial class Simulation
     // by id, for the spawn-time payload validation. Built once from Content in the ctor.
     private readonly Dictionary<uint, WeaponDef> _dispenserByCargo = new();
     private readonly Dictionary<uint, float> _cargoMass = new();
+    private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -339,8 +345,13 @@ public sealed partial class Simulation
     // Per-tick ship spatial grid for shot broad-phase (module ShipGridForSector).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<ShipSim>>> _shipGrid = new();
 
-    // Deaths this step, drained by the hub to emit ShipGone events.
-    public readonly List<ulong> DeathsThisStep = new();
+    // Removals this step, drained by the hub to emit ShipGone events. Each carries a reason so the
+    // client renders a blast (GoneDestroyed) or a silent despawn (GoneClean = dock / pod rescue).
+    public readonly List<(ulong id, byte reason)> DeathsThisStep = new();
+
+    // ShipGone reason codes (mirrored on the client in GameNetClient). Default 0 = a real death.
+    public const byte GoneDestroyed = 0;
+    public const byte GoneClean = 1;
 
     // Match lifecycle. The server is now the lobby host: it starts in Lobby, the matchmaker
     // (ShouldStartMatch hook, polled each step) flips it to Active, a destroyed base flips it
@@ -433,7 +444,10 @@ public sealed partial class Simulation
             if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine) && w.CargoId != 0)
                 _dispenserByCargo[w.CargoId] = w;
         foreach (var c in content.CargoItems)
+        {
             _cargoMass[c.CargoId] = c.Mass;
+            _chargesPerPack[c.CargoId] = System.Math.Max((byte)1, c.ChargesPerPack);
+        }
 
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
         var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
@@ -830,7 +844,7 @@ public sealed partial class Simulation
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
-            DeathsThisStep.Add(s.ShipId);
+            DeathsThisStep.Add((s.ShipId, GoneDestroyed));
         }
         _order.Clear();
         _byClient.Clear();
@@ -893,14 +907,18 @@ public sealed partial class Simulation
         {
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
                 continue;
+            // `count` is the loaded PACK count; each pack holds ChargesPerPack charges and one charge
+            // is spent per gated press. Total charges = packs × pack-size, clamped to the wire byte.
+            byte packSize = _chargesPerPack.TryGetValue(cargoId, out var pk) ? pk : (byte)1;
+            byte charges = (byte)System.Math.Min(255, count * packSize);
             if (w.Kind == WeaponKind.Chaff)
             {
-                s.ChaffAmmo = count;
+                s.ChaffAmmo = charges;
                 s.ChaffWeaponId = w.WeaponId;
             }
             else if (w.Kind == WeaponKind.Mine)
             {
-                s.MineAmmo = count;
+                s.MineAmmo = charges;
                 s.MineWeaponId = w.WeaponId;
             }
         }
@@ -1143,6 +1161,8 @@ public sealed partial class Simulation
             s.PaidCost = 0;
             TeamStateChangedThisStep = true;
         }
+        // Clean exit (flew home / rescued) — the client despawns it silently, no death blast.
+        s.GoneReason = GoneClean;
         _toRemove.Add(s);
         if (s.IsPig && s.IsPod)
             FreePigPodSlot(s, tick + 1u, tick);
@@ -1166,7 +1186,7 @@ public sealed partial class Simulation
     {
         _ships.Remove(s.ShipId);
         _order.Remove(s);
-        DeathsThisStep.Add(s.ShipId);
+        DeathsThisStep.Add((s.ShipId, GoneDestroyed));
     }
 
     // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
@@ -1203,7 +1223,7 @@ public sealed partial class Simulation
             {
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
-                DeathsThisStep.Add(s.ShipId);
+                DeathsThisStep.Add((s.ShipId, s.GoneReason));
             }
             _toRemove.Clear();
         }

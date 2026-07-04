@@ -1,7 +1,11 @@
 # Expendables — the consumables the hangar's CARGO HOLD stocks. cargo-id (the stable wire id),
-# mass (payload units per unit carried, against the hull's payload-capacity) and glyph are explicit
-# runtime extensions; the rest is core Allegiance.Factions expendable data. Cargo is hangar/UI-side
-# today (Stage 2 wires the sim behaviors — launch/arm/decoy); streamed to clients as CargoItemDef.
+# mass (payload units per PACK carried, against the hull's payload-capacity), charges-per-pack
+# and glyph are explicit runtime extensions; the rest is core Allegiance.Factions expendable data.
+# Dispenser expendables (mines/chaff) are LOADED IN PACKS: the hangar count is a number of packs,
+# each pack costs one `mass` and holds `charges-per-pack` charges, and one charge is distributed per
+# press (total charges = packs × charges-per-pack). Omit charges-per-pack ⇒ 1 (one-for-one legacy).
+# NOTE: hulls.yaml default-cargo counts are therefore PACK counts. Streamed to clients as
+# CargoItemDef; the missile racks below carry their own magazine (launchers.yaml amount) instead.
 #
 # Missiles that a launcher fires (launchers.yaml, weapon-id racks) also carry a guidance/lock stat
 # block projected onto the missile-kind WeaponDef: acceleration/turn-rate (deg/s)/initial-speed/
@@ -100,21 +104,23 @@ mines:
     name: Proximity Mine
     description: Dropped behind the ship; arms after 2s.
     cargo-id: 2
-    mass: 1             # payload cost per deployable field (one drop = one field)
+    mass: 1             # payload cost per PACK (one hangar count = one pack)
+    charges-per-pack: 1 # fields deployable from one loaded pack (one field per press)
     glyph: "◈"
     model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
     lifespan: 60         # field lifetime, s
-    power: 20            # damage-PER-SECOND at reference speed, scaled by the victim's speed
-    cloud-radius: 30     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
-    cloud-count: 48      # mine meshes scattered per deploy — cosmetic density (<= 64)
-    arm-delay: 2.0       # seconds before the field arms
+    power: 200           # damage-PER-SECOND at reference speed, scaled by the victim's speed
+    cloud-radius: 80     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
+    cloud-count: 64      # mine meshes scattered per deploy — cosmetic density (<= 64)
+    arm-delay: 0.5       # seconds before the field arms
 
 chaffs:
   - id: sensor-decoy
     name: Countermeasures
     description: Fakes the ship's signature for pursuers.
     cargo-id: 3
-    mass: 3
+    mass: 1              # payload cost per PACK (one hangar count = one pack)
+    charges-per-pack: 8 # puffs dispensable from one loaded pack (one puff per press)
     glyph: "◇"
     model-name: acs40    # GLB the client instances for the decoy (assets/chaff/acs40.glb)
     lifespan: 3          # puff lifetime, s

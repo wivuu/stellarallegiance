@@ -65,6 +65,7 @@ it is **append-only** — never reorder or remove members, only add to the end.
 | 5 | `Light` | blinking nav light | blinking team-tinted beacon (`BaseBeacon`) |
 | 6 | `DockingEntrance` | where a ship docks in | marker only (docking logic later) |
 | 7 | `DockingExit` | where a ship spawns back out | marker only (spawn-exit logic later) |
+| 8 | `Cockpit` | eye point for the first-person camera | first-person view (`CameraRig` parks the eye here; **client-only** — the sim never reads it) |
 
 `Index` disambiguates multiples of one kind on the same hull (e.g. a Fighter's two
 `Booster`s are `Booster_0` and `Booster_1`). `WeaponId` is meaningful only for `Weapon`
@@ -87,6 +88,9 @@ hardpoints (0 otherwise) and references a `WeaponDef.WeaponId`.
   procedural sphere placeholder.
 - **Turret / DockingEntrance / DockingExit** — carried as data and shown as positioned
   `HP_` markers now; their gameplay logic is out of scope for the current phase.
+- **Cockpit** — `CameraRig` resolves the local ship's `HP_Cockpit_0` marker to a ship-local eye
+  offset for the first-person camera (falling back to `(0, 0.5, 1)` when a hull carries none).
+  Client-only: no server plumbing, no wire change (`Kind` is a generic `u8`).
 
 ---
 
@@ -168,7 +172,7 @@ HP_<Kind>_<Index>
 ```
 
 where `<Kind>` is the `HardpointKind` name (`Weapon`, `MainEngine`, `Booster`, `Thruster`,
-`Turret`, `Light`, `DockingEntrance`, `DockingExit`) and `<Index>` is the byte index. This
+`Turret`, `Light`, `DockingEntrance`, `DockingExit`, `Cockpit`) and `<Index>` is the byte index. This
 is the same string the loaders synthesize today:
 `Name = $"HP_{hp.Kind}_{hp.Index}"` (`ShipModelLoader.cs:161`, `BaseModelLoader.cs:78`).
 

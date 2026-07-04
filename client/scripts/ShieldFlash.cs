@@ -10,8 +10,8 @@ using Godot;
 public partial class ShieldFlash : Node3D
 {
     private const double LifeSec = 0.15;
-    private const float Energy = 2.5f;    // additive bloom at the lit hotspot / front
-    private const float PeakAlpha = 0.3f; // opacity at the brightest point (rest of the sphere is clear)
+    private const float Energy = 6.5f;    // additive bloom at the lit hotspot / front
+    private const float PeakAlpha = 0.05f; // opacity at the brightest point (rest of the sphere is clear)
 
     // Impact-centred radial shader. `impact_dir` is the unit direction (sphere-local) from the ship
     // centre to the hit; each fragment's angular distance `ang` from it drives two lit features:

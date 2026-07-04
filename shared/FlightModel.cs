@@ -4,7 +4,7 @@
 //  This file lives in the shared/Shared.csproj library and is REFERENCED (via
 //  <ProjectReference>), not copied, by:
 //    module/spacetimedb/StdbModule.csproj   (server authority)
-//    client/wivuullegiance.csproj           (client prediction)
+//    client/stellarallegiance.csproj           (client prediction)
 //    tests/FlightModelTest/                  (determinism + golden test)
 //  Each consumer's own runtime compiles this one source, so the wasm-server and
 //  mono-client math stays bit-identical. There is one copy — edit it here.

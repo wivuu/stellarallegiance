@@ -22,7 +22,7 @@ public static class Protocol
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 19;
+    public const byte Version = 22;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
@@ -62,7 +62,7 @@ public static class Protocol
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
     public const byte MsgYouAre = 2; // u64 shipId
     public const byte MsgSnapshot = 3; // u32 tick, u8 phase, u8 winner, u16 count, count x ShipRecord
-    public const byte MsgShipGone = 4; // u64 shipId (death or disconnect — free the node)
+    public const byte MsgShipGone = 4; // u64 shipId + u8 reason (0 destroyed/blast, 1 clean despawn)
     public const byte MsgBases = 5; // u8 count, count x (u64 baseId, f32 health) — streamed base health
     public const byte MsgPong = 6; // u32 nonce (echo of the client's MsgPing)
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
@@ -425,11 +425,12 @@ public static class Protocol
         return buf;
     }
 
-    public static byte[] BuildShipGone(ulong shipId)
+    public static byte[] BuildShipGone(ulong shipId, byte reason)
     {
-        var buf = new byte[9];
+        var buf = new byte[10];
         buf[0] = MsgShipGone;
         BitConverter.TryWriteBytes(buf.AsSpan(1), shipId);
+        buf[9] = reason; // Simulation.GoneDestroyed (blast) / GoneClean (silent despawn: dock/rescue)
         return buf;
     }
 
@@ -483,6 +484,11 @@ public static class Protocol
         {
             w.Write(s.ClassId);
             WriteString(w, s.Name);
+            WriteString(w, s.Glyph);
+            WriteString(w, s.Role);
+            WriteString(w, s.Description);
+            WriteString(w, s.ModelName);
+            w.Write(s.ModelLength);
             w.Write(s.Mass);
             w.Write(s.MaxSpeed);
             w.Write(s.Accel);
@@ -555,7 +561,9 @@ public static class Protocol
             w.Write(wp.MineArmTicks);
             w.Write(wp.MineTriggerRadius);
             w.Write(wp.CargoId);
-            w.Write(wp.ShieldMult); // damage-vs-shield multiplier (streamed last; reader mirrors)
+            w.Write(wp.ShieldMult); // damage-vs-shield multiplier (reader mirrors)
+            w.Write(wp.BoltRadius); // client bolt-mesh dims (streamed last; reader mirrors)
+            w.Write(wp.BoltLength);
         }
 
         var cargoItems = content.CargoItems;
@@ -566,6 +574,7 @@ public static class Protocol
             WriteString(w, c.Name);
             WriteString(w, c.Glyph);
             w.Write(c.Mass);
+            w.Write(c.ChargesPerPack);
             WriteString(w, c.Description);
         }
 

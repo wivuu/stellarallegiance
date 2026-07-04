@@ -25,21 +25,21 @@ jobs:
           - name: Linux
             os: ubuntu-latest
             preset: Linux
-            artifact_name: wivuullegiance-linux
+            artifact_name: stellarallegiance-linux
             artifact_path: build/linux
-            output_path: build/linux/wivuullegiance.x86_64
+            output_path: build/linux/stellarallegiance.x86_64
           - name: macOS
             os: macos-latest
             preset: macOS
-            artifact_name: wivuullegiance-macos
+            artifact_name: stellarallegiance-macos
             artifact_path: build/mac
-            output_path: build/mac/wivuullegiance.zip
+            output_path: build/mac/stellarallegiance.zip
           - name: Windows
             os: windows-latest
             preset: Windows Desktop
-            artifact_name: wivuullegiance-windows
+            artifact_name: stellarallegiance-windows
             artifact_path: build/win
-            output_path: build/win/wivuullegiance.exe
+            output_path: build/win/stellarallegiance.exe
 
     defaults:
       run:
@@ -63,7 +63,7 @@ jobs:
           cache: true
 
       - name: Restore client dependencies
-        run: dotnet restore client/wivuullegiance.csproj
+        run: dotnet restore client/stellarallegiance.csproj
 
       - name: Generate Godot C# solution
         run: godot --headless --path client --build-solutions --quit

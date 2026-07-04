@@ -3,7 +3,7 @@
 # IMPORTANT: the build context MUST be the repo root, because SimServer.csproj has a
 # <ProjectReference> on ../shared/Shared.csproj (the deterministic FlightModel + content defs
 # shared with the Godot client). Build with:
-#     docker build -f server/Dockerfile -t wivuullegiance-sim .
+#     docker build -f server/Dockerfile -t stellarallegiance-sim .
 # or via the repo-root docker-compose.yml (which sets context: .).
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src

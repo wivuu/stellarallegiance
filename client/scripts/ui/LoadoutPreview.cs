@@ -128,12 +128,10 @@ public partial class LoadoutPreview : SubViewportContainer
         _model = ShipModelLoader.Build(defs, (ShipClass)classId, isPod: false, mat);
         _viewport.AddChild(_model);
 
-        float len = (ShipClass)classId switch
-        {
-            ShipClass.Fighter => 5.5f,
-            ShipClass.Bomber => 7.2f,
-            _ => 4.5f, // mirrors ShipModelLoader.TargetLength (private there)
-        };
+        // Frame the orbit camera off the hull's authored silhouette length (the same
+        // ShipClassDef.ModelLength the model loader normalizes the GLB to); 4.5 guards a hull
+        // that authored none.
+        float len = defs.TryGetShipDef(classId, out ShipClassDef def) && def.ModelLength > 0f ? def.ModelLength : 4.5f;
         _dist = len * 1.9f;
         _minDist = len * 0.9f;
         _maxDist = len * 5f;

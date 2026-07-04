@@ -35,6 +35,7 @@ namespace StellarAllegiance.Shared
         Light, // a blinking nav light
         DockingEntrance, // where a ship docks in (marker only)
         DockingExit, // where a ship spawns back out (marker only)
+        Cockpit, // eye point for the first-person camera (client-only; the sim never reads it)
     }
 
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
@@ -61,6 +62,17 @@ namespace StellarAllegiance.Shared
     {
         public byte ClassId;
         public string Name = "";
+        // Presentation flavor authored per-hull (streamed, not baked): the hangar's icon glyph,
+        // role tag, and blurb. Empty = the client falls back to a generic cosmetic default.
+        public string Glyph = "";
+        public string Role = "";
+        public string Description = "";
+        // GLB the client loads for this hull (res://assets/ships/<ModelName>.glb). Empty = the
+        // procedural placeholder silhouette. Authored, so a new hull ships its own mesh patchless.
+        public string ModelName = "";
+        // Longest local axis (world units) the loaded hull is uniform-scaled to — the silhouette
+        // length the client normalizes the GLB to and sizes the engine glow / loadout camera off.
+        public float ModelLength;
 
         // --- authoring schema (mirrors FlightModel.ShipStats authored block) ---
         public float Mass;
@@ -155,9 +167,15 @@ namespace StellarAllegiance.Shared
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
         public uint CargoId; // dispenser: the cargo item (Chaff/Mine expendable) this launcher consumes
 
-        // Damage vs an energy shield relative to hull (1 = equal, >1 strong, <1 weak). Streamed LAST
-        // in BuildDefs (after CargoId) so the missile/chaff/mine blocks above stay byte-stable.
+        // Damage vs an energy shield relative to hull (1 = equal, >1 strong, <1 weak). Streamed
+        // after CargoId so the missile/chaff/mine blocks above stay byte-stable.
         public float ShieldMult = 1f;
+
+        // Client bolt-mesh dimensions (visual only), authored on the projectile (projectiles.yaml)
+        // and folded in via ProjectWeapon. 0 = the client's built-in default bolt size. Streamed
+        // LAST in BuildDefs (after ShieldMult) so the blocks above stay byte-stable.
+        public float BoltRadius;
+        public float BoltLength;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -176,7 +194,8 @@ namespace StellarAllegiance.Shared
         public uint CargoId;
         public string Name = "";
         public string Glyph = ""; // single-character UI glyph
-        public float Mass; // payload units per unit carried
+        public float Mass; // payload units per PACK carried (one hangar count = one pack)
+        public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
     }
 

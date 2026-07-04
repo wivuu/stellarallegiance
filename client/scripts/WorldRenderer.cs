@@ -18,13 +18,9 @@ public partial class WorldRenderer : Node3D
     // behind the base geometry.
     private const float BaseMaxHealth = 2000f;
 
-    // A pod removed while a friendly non-pod ship is in (roughly) hull contact was RESCUED
-    // — picked up by a teammate/drone — not destroyed, so it should simply vanish without a
-    // blast (the server's rescue pass deletes the row exactly like a kill does, so the row
-    // alone can't tell them apart; we mirror its rule client-side). The threshold is looser
-    // than the server's tight RescueRadius (6 units) to absorb the gap between the rescuer's
-    // rendered position (predicted for the local ship, interpolated for remotes) and the pod's.
-    private const float RescuePickupDist = 12f;
+    // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is
+    // a voluntary dock or a pod rescue — it despawns silently instead of playing the death blast.
+    private const byte GoneClean = 1;
 
     private Node3D _bases = null!;
     private Node3D _asteroids = null!;
@@ -462,10 +458,10 @@ public partial class WorldRenderer : Node3D
         UpdateShip(oldRow, newRow);
     }
 
-    public void NetDeleteShip(Ship row)
+    public void NetDeleteShip(Ship row, byte reason)
     {
         _shipShield.Remove(row.ShipId);
-        DeleteShip(row);
+        DeleteShip(row, reason);
     }
 
     // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
@@ -940,19 +936,22 @@ public partial class WorldRenderer : Node3D
         }
     }
 
-    private void DeleteShip(Ship row)
+    // reason: 0 = destroyed (blast + death-cam), 1 = clean despawn (voluntary dock / pod rescue).
+    private void DeleteShip(Ship row, byte reason)
     {
         if (!_shipNodes.Remove(row.ShipId, out var node))
             return;
 
         bool local = LocalShip == node;
 
-        // A rescued pod is removed cleanly (a friendly flew onto it), not destroyed — it just
-        // vanishes, no blast. The row delete is identical to a kill's, so detect the rescue the
-        // way the server does: a friendly non-pod ship in hull contact (see FriendlyRescuerNear).
-        bool rescued = row.IsPod && FriendlyRescuerNear(node, row.SectorId, row.Team);
+        // A clean removal (a friendly flew onto the pod to rescue it, or a ship docked at home) is
+        // not a death — it just vanishes, no blast. The server tells us this authoritatively via the
+        // ShipGone reason, so we no longer have to infer it from interpolated render positions (which
+        // mismatched the server's rescue radius and let rescued pods play the full death explosion).
+        bool clean = reason == GoneClean;
+        bool rescued = row.IsPod && clean;
 
-        if (!rescued)
+        if (!clean)
         {
             // A fiery blast at the death point (Fighters bigger than Scouts). For the local ship
             // place it at the predicted node position the player was actually watching (not the
@@ -995,34 +994,6 @@ public partial class WorldRenderer : Node3D
             }
         }
         node.QueueFree();
-    }
-
-    // Client-side mirror of the server's rescue rule (Lib.cs rescue pass): is a friendly,
-    // non-pod ship in roughly hull contact with this pod? If so the pod was picked up, not
-    // killed, so its removal should be silent. Compares RENDERED positions (rescuer node vs
-    // pod node) so the interpolation lag they share largely cancels, with a generous radius
-    // (RescuePickupDist) for the residual predicted/interp gap. Restricted to the pod's own
-    // sector — sectors share a coordinate origin, so a same-team ship in another sector can
-    // overlap in raw coords. The pod node is already removed from _shipNodes by the caller.
-    private bool FriendlyRescuerNear(Node3D podNode, uint sector, byte team)
-    {
-        Vector3 podPos = podNode.GlobalPosition;
-        foreach (var node in _shipNodes.Values)
-        {
-            (byte t, bool isPod) = node switch
-            {
-                RemoteShip rs => (rs.Team, rs.IsPod),
-                PredictionController pc => (pc.Team, pc.IsPod),
-                _ => ((byte)255, true),
-            };
-            if (isPod || t != team)
-                continue;
-            if (node.HasMeta("sector") && (int)node.GetMeta("sector") != (int)sector)
-                continue;
-            if (podPos.DistanceSquaredTo(node.GlobalPosition) <= RescuePickupDist * RescuePickupDist)
-                return true;
-        }
-        return false;
     }
 
     // ---- Bolts (client-synthesized projectile visuals) -------------------
@@ -1069,15 +1040,17 @@ public partial class WorldRenderer : Node3D
                 row.SectorId,
                 weapon.ProjectileLifeTicks * FlightModel.Dt,
                 row.ShipId,
-                ShotMaskLeadSec()
+                ShotMaskLeadSec(),
+                weapon.BoltRadius,
+                weapon.BoltLength
             );
         }
     }
 
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
     // rendering as a remote bolt, no masking lead (prediction is already now-correct).
-    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec) =>
-        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
+    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength) =>
+        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength);
 
     private void AddBolt(
         Vector3 pos,
@@ -1086,12 +1059,14 @@ public partial class WorldRenderer : Node3D
         uint sector,
         float lifeSec,
         ulong ownerShipId,
-        float leadSec
+        float leadSec,
+        float boltRadius,
+        float boltLength
     )
     {
         var pv = new ProjectileView { Name = "Bolt" };
         _projectiles.AddChild(pv);
-        pv.AddChild(NewProjectileMesh());
+        pv.AddChild(NewProjectileMesh(boltRadius, boltLength));
         pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
         SetNodeSector(pv, sector);
         _bolts.Add(pv);
@@ -1135,6 +1110,48 @@ public partial class WorldRenderer : Node3D
         return ttl;
     }
 
+    // How much of the cosmetic Sun's line-of-sight is clear (1 = fully visible, 0 = fully
+    // blocked) from a camera at camPos looking along the unit sunDir. The sky Sun quad is a
+    // real depth-tested billboard, so it already hides behind rocks/bases; this exists purely
+    // so the LensFlare — a screen-space overlay with no depth of its own — can fade out when
+    // the disc it anchors to is occluded, instead of bleeding light through solid geometry.
+    // Analytic ray-vs-sphere over the same static caches the bolt clip uses, in the viewed
+    // sector only (that's what's actually drawn around the camera). A soft feather ring around
+    // each occluder keeps the flare from popping on/off at a hard silhouette edge.
+    public float SunVisibility(Vector3 camPos, Vector3 sunDir)
+    {
+        float occ = 0f; // strongest single occluder wins
+        uint sector = ViewSector;
+        foreach (var a in _asteroidClip)
+        {
+            if (a.Sector == sector)
+                occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, a.Pos, a.Radius));
+        }
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        foreach (var b in _baseClip)
+        {
+            if (b.Sector == sector)
+                occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, b.Pos, baseR));
+        }
+        return 1f - occ;
+    }
+
+    // Occlusion (0..1) of a ray from origin along unit dir by a sphere: 1 when the ray passes
+    // through the sphere, easing to 0 across a feather ring of half a radius outside it, and 0
+    // for any sphere behind the camera. The sun sits far beyond any sector geometry, so a
+    // sphere in front along the ray always lies between camera and disc — no far-limit needed.
+    private static float RayOcclusion(Vector3 origin, Vector3 dir, Vector3 center, float radius)
+    {
+        Vector3 l = center - origin;
+        float t = l.Dot(dir); // distance to the point on the ray closest to the sphere centre
+        if (t <= 0f)
+            return 0f; // occluder is behind the camera
+        float perp = Mathf.Sqrt(Mathf.Max(0f, l.LengthSquared() - t * t));
+        float feather = radius * 0.5f;
+        // perp <= radius: fully inside -> 1; perp >= radius+feather: clear -> 0.
+        return 1f - Mathf.SmoothStep(radius, radius + feather, perp);
+    }
+
     // Smallest positive entry time of the line pos+vel·t into a static sphere, if it is
     // within the current ttl — the client-side mirror of the module's FirstEntryTime
     // specialized to a static target.
@@ -1159,16 +1176,21 @@ public partial class WorldRenderer : Node3D
             ttl = t;
     }
 
-    private MeshInstance3D NewProjectileMesh() =>
-        new MeshInstance3D
+    // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back
+    // to the built-in default so an unauthored weapon still renders a bolt.
+    private MeshInstance3D NewProjectileMesh(float radius, float height)
+    {
+        float r = radius > 0f ? radius : 0.22f;
+        float h = height > 0f ? height : 2.2f;
+        return new MeshInstance3D
         {
             // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z
             // so it runs along ProjectileView's forward, which is aimed down the bolt's velocity.
             Mesh = new CylinderMesh
             {
-                TopRadius = 0.22f,
-                BottomRadius = 0.22f,
-                Height = 2.2f,
+                TopRadius = r,
+                BottomRadius = r,
+                Height = h,
                 RadialSegments = 8,
                 Rings = 1,
             },
@@ -1177,6 +1199,7 @@ public partial class WorldRenderer : Node3D
             // Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
 
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)

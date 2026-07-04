@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/client/">
-    <Project Path="client/wivuullegiance.csproj" />
+    <Project Path="client/stellarallegiance.csproj" />
   </Folder>
   <Folder Name="/factions/" />
   <Folder Name="/factions/src/">

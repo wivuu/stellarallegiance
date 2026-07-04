@@ -90,6 +90,12 @@ public static class FactionsContentProjection
         {
             ClassId = h.ClassId!.Value,
             Name = h.Name,
+            // Hangar presentation flavor (blurb reuses the Buildable.Description base field).
+            Glyph = h.Glyph ?? "",
+            Role = h.Role ?? "",
+            Description = h.Description ?? "",
+            ModelName = h.ModelName ?? "",
+            ModelLength = (float)h.ModelLength,
             // Derived (lossless) from Core hull fields.
             Mass = (float)h.Mass,
             MaxSpeed = (float)h.Speed,
@@ -148,6 +154,9 @@ public static class FactionsContentProjection
             Kind = (WeaponKind)(byte)w.Kind,
             CanDamageBase = w.CanDamageBase,
             ShieldMult = (float)(w.ShieldDamageMultiplier ?? 1.0),
+            // Client bolt-mesh dims come from the referenced projectile (0 = client default).
+            BoltRadius = (float)proj.BoltRadius,
+            BoltLength = (float)proj.BoltLength,
         };
     }
 
@@ -257,6 +266,7 @@ public static class FactionsContentProjection
             Name = e.Name,
             Glyph = e.Glyph ?? "",
             Mass = (float)e.Mass,
+            ChargesPerPack = (byte)System.Math.Max(1, e.ChargesPerPack ?? 1),
             Description = e.Description ?? "",
         };
 

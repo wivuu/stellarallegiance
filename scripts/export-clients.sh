@@ -12,7 +12,7 @@
 # and framework symlinks (plain `zip` corrupts them).
 #
 # Testers still need to clear quarantine once on the downloaded zip:
-#   xattr -dr com.apple.quarantine wivuullegiance.app
+#   xattr -dr com.apple.quarantine stellarallegiance.app
 #
 # Usage: scripts/export-clients.sh   (run from anywhere; needs godot-mono on PATH)
 set -euo pipefail
@@ -44,7 +44,7 @@ dotnet build-server shutdown >/dev/null 2>&1 || true
 # macOS-only). On Windows/Linux we skip it and still produce the Windows + Linux builds.
 if [ "$(uname -s)" = "Darwin" ]; then
   echo "[export] macOS .app ..."
-  APP="${OUT}/mac/wivuullegiance.app"
+  APP="${OUT}/mac/stellarallegiance.app"
   rm -rf "${APP}"
   "${GODOT}" --headless --path "${CLIENT}" --export-release "macOS" "${APP}"
 
@@ -54,29 +54,29 @@ if [ "$(uname -s)" = "Darwin" ]; then
   codesign --verify --deep --strict "${APP}" && echo "[export]   signature valid"
 
   echo "[export] zipping macOS app with ditto ..."
-  rm -f "${OUT}/mac/wivuullegiance-macos.zip"
-  ditto -c -k --keepParent "${APP}" "${OUT}/mac/wivuullegiance-macos.zip"
+  rm -f "${OUT}/mac/stellarallegiance-macos.zip"
+  ditto -c -k --keepParent "${APP}" "${OUT}/mac/stellarallegiance-macos.zip"
 else
   echo "[export] skipping macOS build (only exportable from macOS — needs codesign/ditto)"
 fi
 
 echo "[export] Windows .exe ..."
-"${GODOT}" --headless --path "${CLIENT}" --export-release "Windows Desktop" "${OUT}/win/wivuullegiance.exe"
+"${GODOT}" --headless --path "${CLIENT}" --export-release "Windows Desktop" "${OUT}/win/stellarallegiance.exe"
 
 echo "[export] zipping Windows folder (testers need the whole folder) ..."
-rm -f "${OUT}/wivuullegiance-windows.zip"
-( cd "${OUT}/win" && zip -rq "${OUT}/wivuullegiance-windows.zip" . )
+rm -f "${OUT}/stellarallegiance-windows.zip"
+( cd "${OUT}/win" && zip -rq "${OUT}/stellarallegiance-windows.zip" . )
 
 echo "[export] Linux .x86_64 ..."
-"${GODOT}" --headless --path "${CLIENT}" --export-release "Linux" "${OUT}/linux/wivuullegiance.x86_64"
-chmod +x "${OUT}/linux/wivuullegiance.x86_64"
+"${GODOT}" --headless --path "${CLIENT}" --export-release "Linux" "${OUT}/linux/stellarallegiance.x86_64"
+chmod +x "${OUT}/linux/stellarallegiance.x86_64"
 
 echo "[export] zipping Linux folder (testers need the whole folder) ..."
-rm -f "${OUT}/wivuullegiance-linux.zip"
-( cd "${OUT}/linux" && zip -rq "${OUT}/wivuullegiance-linux.zip" . )
+rm -f "${OUT}/stellarallegiance-linux.zip"
+( cd "${OUT}/linux" && zip -rq "${OUT}/stellarallegiance-linux.zip" . )
 
 echo ""
 echo "[export] done:"
-echo "  macOS:   ${OUT}/mac/wivuullegiance-macos.zip"
-echo "  Windows: ${OUT}/wivuullegiance-windows.zip"
-echo "  Linux:   ${OUT}/wivuullegiance-linux.zip"
+echo "  macOS:   ${OUT}/mac/stellarallegiance-macos.zip"
+echo "  Windows: ${OUT}/stellarallegiance-windows.zip"
+echo "  Linux:   ${OUT}/stellarallegiance-linux.zip"
