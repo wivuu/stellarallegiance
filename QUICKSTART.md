@@ -4,7 +4,7 @@ Get a match running locally in five steps.
 
 ### 1. Install prerequisites
 - **.NET 8 SDK** — verify with `dotnet --version` (≥ 8).
-- **Godot 4.6.3, Mono/.NET build** — the `godot-mono` binary on your PATH.
+- **Godot 4.7, Mono/.NET build** — the `godot-mono` binary on your PATH.
 
 ### 2. Clone and restore
 ```bash
@@ -62,7 +62,7 @@ dotnet run --project tools/simbot/SimBot.csproj -c Release -- --bots 100 --secon
 ### Trouble?
 - **"Server offline" on the client** — confirm the server terminal shows the `20 Hz` line and
   the address/port match. Retry returns you to the address screen.
-- **`godot-mono: command not found`** — install the Mono/.NET build of Godot 4.6.3 and put it on
+- **`godot-mono: command not found`** — install the Mono/.NET build of Godot 4.7 and put it on
   your PATH (or run the client from the Godot editor by opening `client/`).
 - **Protocol mismatch warning** — the client and server were built from different revisions;
   rebuild both (`run-server.sh` and `run-client.sh` rebuild on launch).

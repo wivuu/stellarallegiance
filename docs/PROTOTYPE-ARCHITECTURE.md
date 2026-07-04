@@ -91,7 +91,7 @@ stellar-allegiance/
 | SpacetimeDB CLI | 2.3.0 | `spacetime --version` |
 | .NET SDK | 8.0 | Module + Godot client |
 | .NET WASI workload | experimental | Module → WASM compilation |
-| Godot | 4.6.3 (.NET build) | C#-capable build required |
+| Godot | 4.7 (.NET build) | C#-capable build required |
 
 ---
 

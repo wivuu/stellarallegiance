@@ -18,7 +18,7 @@ done). The repo has:
 - A SpacetimeDB C# module with the **full game schema** (7 tables + 2 enums + scheduled SimTick) published to a local server, seeded with 1 Match, 2 Bases, 30 Asteroids. `Ship` has `AngVelX/Y/Z`; `ShipInput` is now a **server-private per-tick input buffer** (keyed by `InputId`, indexed by `ShipId`).
 - The 20 Hz `SimTick` **integrates every ship** via the shared `FlightModel` (ships only — projectiles/hits are T8), applying the input stamped for the current tick, and stamps `Ship.LastInputTick = Match.Tick`
 - Player-action reducers: `SpawnShip`, `Respawn`, `ApplyInput`, `SetName`
-- A Godot 4.6.3 C# client that connects, subscribes, renders the static world, **spawns and flies either ship class (HUD spawn menu) with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a HUD with a Scout/Fighter spawn menu
+- A Godot 4.7 C# client that connects, subscribes, renders the static world, **spawns and flies either ship class (HUD spawn menu) with tick-aligned prediction + rollback reconciliation (zero divergence)**, renders **other players' ships with 100 ms snapshot interpolation**, a rigid chase camera, and a HUD with a Scout/Fighter spawn menu
 - A **shared, deterministic, fixed-`dt` flight model** with **deterministic `sin/cos`** (`shared/FlightModel.cs`, in `shared/Shared.csproj`) referenced by `module/` and `client/`, with a passing determinism+golden test
 - `dotnet build` (client) and the module wasm publish both succeed (one harmless generated-code warning on the client)
 
@@ -40,7 +40,7 @@ decided result, watching for desync / feel. Launch each machine's client with **
 |-------|--------|
 | SpacetimeDB server | Docker on **host port 3001** (port 3000 is taken) |
 | Database name | `stellar-allegiance` |
-| Godot | `~/.local/bin/godot` → Godot 4.6.3 mono |
+| Godot | `~/.local/bin/godot` → Godot 4.7 mono |
 | .NET SDK | 10.0 (host) |
 
 > **Identity persistence (important — read before publishing).** Each `docker run` of

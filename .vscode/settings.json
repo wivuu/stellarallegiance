@@ -11,7 +11,7 @@
     // so your local path isn't committed. When empty, the scripts auto-detect Godot from PATH
     // and standard install locations, so most setups need no value here.
     //   macOS:   "/Applications/Godot_mono.app/Contents/MacOS/Godot"
-    //   Windows: "C:/Program Files/Godot_mono/Godot_v4.6.3-stable_mono_win64.exe"
+    //   Windows: "C:/Program Files/Godot_mono/Godot_v4.7.stable_mono_win64.exe"
     //   on PATH: "godot-mono"
     "godot.executablePath": ""
 
