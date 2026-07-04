@@ -318,6 +318,18 @@ public partial class ShipController : Node
             // Fresh ship: force the first step to send (server starts from default input).
             _lastSentInput = default;
             _lastSentTick = 0;
+            // Launch locks the cursor to flight immediately — steering is captured relative mouse
+            // motion (see _Input / ReadInput), so the pilot flies straight out of the hangar without
+            // a click to capture first. ShipLoadout is deliberately NOT in the guard: the mandatory
+            // spawn hangar is the launch source and is still in the tree this frame (it closes once
+            // the ship exists, Hud._Process), and its _ExitTree doesn't touch MouseMode, so this
+            // capture sticks. Skipped in headless autofly (no cursor) and while a real modal owns the
+            // cursor, so we never yank it out from under a menu/map/chat.
+            if (!_autoFly && !EscapeMenu.Active && !SettingsDialog.Active && !SectorOverview.Active && !Chat.Capturing)
+            {
+                Input.MouseMode = Input.MouseModeEnum.Captured;
+                _mouseDelta = Vector2.Zero;
+            }
         }
 
         // Afterburner (Shift): a real flight input now — extra forward thrust and a

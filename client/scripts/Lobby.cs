@@ -451,7 +451,15 @@ public partial class Lobby : Control
         // The Lobby owns the screen whenever we're connected and not flying — pre-match,
         // post-match, and "joined but not yet deployed" mid-match. While flying, the flight HUD
         // and the ConnectLinkModal own it.
-        bool show = _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null;
+        //
+        // But once the pilot has committed to the fight (deploy intent raised on first LAUNCH), the
+        // hangar — not the team picker — owns the not-flying screen for the rest of the active match.
+        // Without this the lobby would flash up during the death-cam beat / respawn gap on every
+        // death (LocalShip is null but the hangar is held back for the blast beat). So: dying returns
+        // you to the hangar, never back to the team picker mid-match. It reverts to the lobby when the
+        // match ends (Hud clears DeployRequested on MatchPhase.Ended → post-match end screen).
+        bool committed = _world.Phase == MatchPhase.Active && Hud.DeployRequested;
+        bool show = _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null && !committed;
         if (!show)
         {
             _wasVisible = Visible;

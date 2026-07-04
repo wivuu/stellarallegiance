@@ -22,7 +22,8 @@ Archives:
 - Code cleanup and refactor
 - Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
 - Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- When killed, dont go to game lobby; once you have joined the game you should respawn in the hangar
+- When killed, dont go to game lobby; once you have joined the game you should respawn in the hangar — done; the Lobby overlay now yields the not-flying screen to the hangar once you've deployed (`Hud.DeployRequested`), so it no longer flashes the team picker during the death-cam/respawn gap
+- On launch, the cursor should be locked to the ship's movement — done; the fresh-ship transition in `ShipController` captures the cursor on spawn (no click-to-capture), skipped in autofly / while a modal owns the cursor
 ---
 
 ## Content philosophy (the through-line)

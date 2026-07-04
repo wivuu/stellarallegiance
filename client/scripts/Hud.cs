@@ -39,8 +39,11 @@ public partial class Hud : CanvasLayer
     // (even mid-match), so a joiner can pick a team and read the roster first. Sticky through the
     // whole active match (NOT consumed on spawn): once you've committed to the fight, losing your
     // ship — by docking or dying — returns you to the hangar to re-launch, not the team picker.
-    // Cleared only when the match ends (back to the post-match lobby).
-    private bool _deployRequested;
+    // Cleared only when the match ends (back to the post-match lobby). Static so the Lobby overlay
+    // can read it (Lobby.cs) and yield the not-flying screen to the hangar once you've deployed —
+    // matching the other static UI-state flags (ShipLoadout.Active, Chat.Capturing, ...). Hud is a
+    // persistent Main.tscn node, so this has the same session lifetime the instance field had.
+    public static bool DeployRequested { get; private set; }
 
     // Previous-frame visibility, so UI sounds fire once on the transition (the sector
     // warning first appearing) rather than every frame.
@@ -237,7 +240,7 @@ public partial class Hud : CanvasLayer
     // The Lobby's LAUNCH expresses intent to deploy. While a match is Active this promotes the
     // pilot from the lobby overlay into the mandatory ship-select hangar; set pre-match (on ready)
     // it carries that intent through match-start so readying flows straight into the hangar.
-    public void RequestDeploy(bool on = true) => _deployRequested = on;
+    public void RequestDeploy(bool on = true) => DeployRequested = on;
 
     public override void _Process(double delta)
     {
@@ -253,7 +256,7 @@ public partial class Hud : CanvasLayer
         // straight into the ship-select at start) AND across losing a ship, so docking or dying
         // reopens the hangar instead of dumping the pilot on the team picker.
         if (_world.Phase == MatchPhase.Ended)
-            _deployRequested = false;
+            DeployRequested = false;
         // The hangar IS the ship-select screen. While in an active match with no ship and deploy
         // requested (first spawn, respawn after dock/death): open it if it isn't up, and promote a
         // hangar the player had open manually — either way it becomes the mandatory select
@@ -261,7 +264,7 @@ public partial class Hud : CanvasLayer
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
         bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
-        if (inMatch && !flying && _deployRequested && !_world.DeathCamActive)
+        if (inMatch && !flying && DeployRequested && !_world.DeathCamActive)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;
