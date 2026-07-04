@@ -148,6 +148,12 @@ public partial class TargetMarkers : Control
 
     private static Color TeamColor(byte team) => team == 0 ? Team0Color : Team1Color;
 
+    // The focused/locked target's chrome (bracket, glyph, TARGET tag, lock ring) is drawn in a
+    // brightened SHADE of the target's team color, so it reads as the SAME faction as the ship it
+    // wraps while still popping hotter than the plain team marker. Replaces the old fixed amber /
+    // red so a target indicator never carries a color unrelated to whose side it's on.
+    private static Color FocusTint(byte team) => TeamColor(team).Lerp(Colors.White, 0.35f);
+
     // The screen point of the aim reticle (the real firing line): the muzzle projected
     // forward along the ship's nose. The chase camera is offset above/behind the ship, so
     // this is NOT screen center — Tab-targeting ranks enemies by closeness to THIS point so
@@ -410,18 +416,22 @@ public partial class TargetMarkers : Control
         // Bases first (drawn under the ships). Bases + their damage bars are drawn even when
         // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
         // The focused base is skipped here — it's drawn bright/bracketed below instead.
+        byte focusedBaseTeam = 1; // resolved from VisibleBases below when a base is focused
         foreach (var (pos, team) in _world.VisibleBases())
-            if (focusedBasePos is not Vector3 fbp || pos != fbp)
+            if (focusedBasePos is Vector3 fbp && pos == fbp)
+                focusedBaseTeam = team; // skip the dim pass; drawn bright/bracketed below
+            else
                 DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
         foreach (var (pos, frac) in _world.VisibleBaseHealth())
             DrawBaseHealthBar(view, pos, frac);
 
-        // The focused base itself: same bright bracket treatment as a focused ship. No lead
-        // indicator — a base is a static target, so there's nothing to deflect for.
+        // The focused base itself: same bright bracket treatment as a focused ship, in a shade of
+        // its team color. No lead indicator — a base is a static target, so there's nothing to
+        // deflect for.
         if (focusedBasePos is Vector3 fp)
         {
-            DrawEntity(view, fp, Kind.Base, FocusColor, focused: true, friendly: false);
-            DrawLockArc(fp);
+            DrawEntity(view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
+            DrawLockArc(fp, focusedBaseTeam);
         }
 
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
@@ -442,7 +452,7 @@ public partial class TargetMarkers : Control
             bool focused = _focused is ulong f && f == e.ShipId;
             if (focused)
                 focusedShip = e;
-            Color color = focused ? FocusColor : TeamColor(e.Team);
+            Color color = focused ? FocusTint(e.Team) : TeamColor(e.Team);
             DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
         }
 
@@ -527,12 +537,13 @@ public partial class TargetMarkers : Control
     // The missile lock-progress arc wrapping the focused target's bracket, driven by the local
     // ship's own LockState (bits 0-6 = progress 0..100, bit7 = locked). A partial cyan arc grows
     // clockwise from the top while the lock timer runs; once locked it snaps to a full steady red
-    // ring with a LOCK tag. Skipped when there's no lock activity or the target is behind us.
-    private void DrawLockArc(RemoteShip ship) => DrawLockArc(ship.GlobalPosition);
+    // ring with a LOCK tag in a shade of the target's team color. Skipped when there's no lock
+    // activity or the target is behind us.
+    private void DrawLockArc(RemoteShip ship) => DrawLockArc(ship.GlobalPosition, ship.Team);
 
     // Position-based overload so a locked BASE (a static target with no RemoteShip) can share
     // the same lock-progress arc as a locked ship.
-    private void DrawLockArc(Vector3 worldPos)
+    private void DrawLockArc(Vector3 worldPos, byte team)
     {
         int raw = _net.LocalLockState;
         bool locked = (raw & 0x80) != 0;
@@ -547,10 +558,11 @@ public partial class TargetMarkers : Control
         float r = FocusHalf + 7f;
         if (locked)
         {
-            DrawArc(sp, r, 0f, Mathf.Tau, 32, DesignTokens.Danger, 2.5f, true);
+            Color lockColor = FocusTint(team);
+            DrawArc(sp, r, 0f, Mathf.Tau, 32, lockColor, 2.5f, true);
             const string tag = "LOCK";
             float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
-            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 3f), tag, HorizontalAlignment.Left, -1, 9, DesignTokens.Danger);
+            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 3f), tag, HorizontalAlignment.Left, -1, 9, lockColor);
         }
         else
         {
@@ -786,7 +798,7 @@ public partial class TargetMarkers : Control
         string info = $"{(ship.GlobalPosition - local.GlobalPosition).Length():0} u";
         float tagW = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 11).X;
         float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, FocusColor);
+        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, FocusTint(ship.Team));
         DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
     }
 
