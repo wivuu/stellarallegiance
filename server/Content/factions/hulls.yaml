@@ -23,6 +23,7 @@ hulls:
     glyph: "▲"
     role: RECON
     description: "Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill."
+    model-name: scout   # res://assets/ships/<model-name>.glb (else procedural placeholder)
     class-id: 0
     mass: 40
     speed: 160
@@ -56,6 +57,7 @@ hulls:
     glyph: "◆"
     role: INTERCEPT
     description: "The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad."
+    model-name: fighter
     class-id: 1
     mass: 36
     speed: 100
@@ -108,6 +110,7 @@ hulls:
     glyph: "⬢"
     role: ASSAULT
     description: "Slow and loud, but its payload cracks bases open. Bring an escort."
+    model-name: bomber
     class-id: 2
     mass: 50
     speed: 60
@@ -142,6 +145,7 @@ hulls:
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod
     name: Pod
+    model-name: pod
     class-id: 255
     mass: 10
     speed: 60

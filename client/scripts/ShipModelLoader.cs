@@ -21,8 +21,9 @@ using StellarAllegiance.Shared;
 //  the glow's cosmetic scale (radius/length/range/trail width) stay keyed off the
 //  ship class — they're stand-in art, not authored content, until real meshes land.
 //
-//  GLB CONVENTION (now wired, see docs/GLB-AND-HARDPOINT-FORMAT.md §4): when a ship
-//  `res://assets/ships/<class>.glb` exists it is loaded in place of BuildPlaceholderMesh,
+//  GLB CONVENTION (now wired, see docs/GLB-AND-HARDPOINT-FORMAT.md §4): when a hull authors
+//  `model-name` (streamed on ShipClassDef) and `res://assets/ships/<ModelName>.glb` exists it is
+//  loaded in place of BuildPlaceholderMesh,
 //  uniform-scaled (via GlbLoader) to the class's placeholder length so the fixed def
 //  hardpoints still land on the hull, keeping its own baked PBR materials (friend/foe is
 //  read from the HUD, not a hull tint). Any HP_<Kind>_<Index> node the glb author placed
@@ -48,7 +49,7 @@ public static class ShipModelLoader
     {
         var root = new Node3D { Name = "ShipModel" };
 
-        Node3D hull = LoadHull(cls, isPod) ?? BuildPlaceholderMesh(cls, isPod, mat);
+        Node3D hull = LoadHull(defs, cls, isPod) ?? BuildPlaceholderMesh(cls, isPod, mat);
         root.AddChild(hull);
 
         // A GLB that carries its own HP_ node overrides the def-seeded marker (its author placed
@@ -62,21 +63,15 @@ public static class ShipModelLoader
         return root;
     }
 
-    // Load `res://assets/ships/<class>.glb` (pod uses pod.glb) and ready it as a hull: scaled to
-    // the class's placeholder length, keeping the GLB's own baked PBR materials (friend/foe reads
-    // from the HUD, not a hull tint). Null when no asset exists, so Build falls back to the
-    // procedural placeholder.
-    private static Node3D? LoadHull(ShipClass cls, bool isPod)
+    // Load the hull's authored mesh `res://assets/ships/<ModelName>.glb` (streamed on the def) and
+    // ready it: scaled to the class's placeholder length, keeping the GLB's own baked PBR materials
+    // (friend/foe reads from the HUD, not a hull tint). Null when the def authored no model-name or
+    // the asset is absent, so Build falls back to the procedural placeholder.
+    private static Node3D? LoadHull(DefRegistry defs, ShipClass cls, bool isPod)
     {
-        string name = isPod
-            ? "pod"
-            : cls switch
-            {
-                ShipClass.Fighter => "fighter",
-                ShipClass.Bomber => "bomber",
-                _ => "scout",
-            };
-        Node3D? hull = GlbLoader.Load($"res://assets/ships/{name}.glb");
+        if (!defs.TryGetShipDef(DefId(cls, isPod), out ShipClassDef def) || def.ModelName.Length == 0)
+            return null;
+        Node3D? hull = GlbLoader.Load($"res://assets/ships/{def.ModelName}.glb");
         if (hull == null)
             return null;
         GlbLoader.NormalizeLongestAxis(hull, TargetLength(cls, isPod));

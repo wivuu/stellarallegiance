@@ -17,7 +17,7 @@
 #  on the model (see factions/src/.../Model/RuntimeData.cs); everything else derives from Core.
 # =====================================================================
 
-version: "2026.07.03-hull-flavor"
+version: "2026.07.03-hull-model-name"
 
 catalog:
   - hulls.yaml

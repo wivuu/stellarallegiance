@@ -94,6 +94,7 @@ public static class FactionsContentProjection
             Glyph = h.Glyph ?? "",
             Role = h.Role ?? "",
             Description = h.Description ?? "",
+            ModelName = h.ModelName ?? "",
             // Derived (lossless) from Core hull fields.
             Mass = (float)h.Mass,
             MaxSpeed = (float)h.Speed,

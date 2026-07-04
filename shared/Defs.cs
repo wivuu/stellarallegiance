@@ -66,6 +66,9 @@ namespace StellarAllegiance.Shared
         public string Glyph = "";
         public string Role = "";
         public string Description = "";
+        // GLB the client loads for this hull (res://assets/ships/<ModelName>.glb). Empty = the
+        // procedural placeholder silhouette. Authored, so a new hull ships its own mesh patchless.
+        public string ModelName = "";
 
         // --- authoring schema (mirrors FlightModel.ShipStats authored block) ---
         public float Mass;
