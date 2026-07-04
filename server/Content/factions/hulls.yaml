@@ -24,6 +24,7 @@ hulls:
     role: RECON
     description: "Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill."
     model-name: scout   # res://assets/ships/<model-name>.glb (else procedural placeholder)
+    model-length: 4.5   # world-unit silhouette length the client normalizes the GLB to
     class-id: 0
     mass: 40
     speed: 160
@@ -58,6 +59,7 @@ hulls:
     role: INTERCEPT
     description: "The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad."
     model-name: fighter
+    model-length: 5.5
     class-id: 1
     mass: 36
     speed: 100
@@ -111,6 +113,7 @@ hulls:
     role: ASSAULT
     description: "Slow and loud, but its payload cracks bases open. Bring an escort."
     model-name: bomber
+    model-length: 7.2
     class-id: 2
     mass: 50
     speed: 60
@@ -146,6 +149,7 @@ hulls:
   - id: pod
     name: Pod
     model-name: pod
+    model-length: 2.8
     class-id: 255
     mass: 10
     speed: 60

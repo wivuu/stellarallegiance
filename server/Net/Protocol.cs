@@ -487,6 +487,7 @@ public static class Protocol
             WriteString(w, s.Role);
             WriteString(w, s.Description);
             WriteString(w, s.ModelName);
+            w.Write(s.ModelLength);
             w.Write(s.Mass);
             w.Write(s.MaxSpeed);
             w.Write(s.Accel);
@@ -559,7 +560,9 @@ public static class Protocol
             w.Write(wp.MineArmTicks);
             w.Write(wp.MineTriggerRadius);
             w.Write(wp.CargoId);
-            w.Write(wp.ShieldMult); // damage-vs-shield multiplier (streamed last; reader mirrors)
+            w.Write(wp.ShieldMult); // damage-vs-shield multiplier (reader mirrors)
+            w.Write(wp.BoltRadius); // client bolt-mesh dims (streamed last; reader mirrors)
+            w.Write(wp.BoltLength);
         }
 
         var cargoItems = content.CargoItems;

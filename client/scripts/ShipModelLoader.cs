@@ -74,22 +74,22 @@ public static class ShipModelLoader
         Node3D? hull = GlbLoader.Load($"res://assets/ships/{def.ModelName}.glb");
         if (hull == null)
             return null;
-        GlbLoader.NormalizeLongestAxis(hull, TargetLength(cls, isPod));
+        GlbLoader.NormalizeLongestAxis(hull, TargetLength(defs, cls, isPod));
         return hull;
     }
 
-    // Longest local axis (world units) a loaded hull is uniform-scaled to, per class — the
-    // placeholder silhouette's length, so the fixed def muzzle (+Z≈3) and engine nozzles
-    // (−Z≈2.25–3.4) keep landing on the hull's nose/tail whatever scale the art was authored at.
-    private static float TargetLength(ShipClass cls, bool isPod) =>
-        isPod
-            ? 2.8f
-            : cls switch
-            {
-                ShipClass.Fighter => 5.5f,
-                ShipClass.Bomber => 7.2f,
-                _ => 4.5f,
-            };
+    // Cosmetic guard for a hull that authored no model-length (or whose def hasn't arrived): keeps
+    // the GLB normalize / glow sizing from collapsing to zero. Not a gameplay fallback.
+    private const float DefaultModelLength = 4.5f;
+
+    // Longest local axis (world units) a loaded hull is uniform-scaled to — authored per hull on the
+    // def (ShipClassDef.ModelLength), so the fixed def muzzle (+Z≈3) and engine nozzles (−Z≈2.25–3.4)
+    // keep landing on the hull's nose/tail whatever scale the art was authored at. Also sizes the
+    // engine glow and the loadout preview camera (LoadoutPreview reads the same field).
+    private static float TargetLength(DefRegistry defs, ShipClass cls, bool isPod) =>
+        defs.TryGetShipDef(DefId(cls, isPod), out ShipClassDef def) && def.ModelLength > 0f
+            ? def.ModelLength
+            : DefaultModelLength;
 
     // Attach the dynamic engine glow + team trail, reading the nozzle/anchor positions
     // from the class's engine hardpoints. The glow node is handed back to the ship node
@@ -119,7 +119,7 @@ public static class ShipModelLoader
             // Size the flame off the hull's silhouette length so a Scout's exhaust isn't as big
             // as a Bomber's, and keep it deliberately small relative to the hull (the old
             // per-class constants over-sized the glow — the Scout worst of all).
-            float len = TargetLength(cls, isPod);
+            float len = TargetLength(defs, cls, isPod);
             float radius = len * 0.10f; // flame mouth radius
             float plume = len * 0.55f; // plume length (before the afterburner stretch)
             float range = len * 2.6f; // engine-wash light reach

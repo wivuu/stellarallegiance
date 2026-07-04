@@ -74,6 +74,13 @@ public record Hull : Buildable
     public string? Role { get; set; }
 
     /// <summary>
+    /// Longest local axis (world units) the client uniform-scales the loaded hull GLB to (its
+    /// silhouette length). Also sizes the engine glow and the loadout preview camera. Projected
+    /// onto <c>ShipClassDef.ModelLength</c>.
+    /// </summary>
+    public double ModelLength { get; set; }
+
+    /// <summary>
     /// Total payload budget the hull can carry: the summed <see cref="Part.Mass"/> of mounted
     /// weapons plus the cargo hold (expendable <see cref="Expendable.Mass"/> × count). 0 = no hold
     /// (e.g. the pod). Runtime hulls with weapon hardpoints must author enough capacity for their

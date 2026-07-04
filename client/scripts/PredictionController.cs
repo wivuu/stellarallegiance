@@ -43,6 +43,8 @@ public partial class PredictionController : Node3D
         public Vector3 Vel;
         public Vector3 Dir;
         public float LifeSec;
+        public float BoltRadius; // client bolt-mesh dims from the firing weapon (0 = client default)
+        public float BoltLength;
     }
 
     private struct Entry
@@ -330,6 +332,8 @@ public partial class PredictionController : Node3D
                         Vel = ShipMath.ToGodot(mv),
                         Dir = ShipMath.ToGodot(shotDir), // fired direction, for tracer orientation (not skewed by strafe)
                         LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
+                        BoltRadius = weapon.BoltRadius,
+                        BoltLength = weapon.BoltLength,
                     }
                 );
             }

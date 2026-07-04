@@ -1069,15 +1069,17 @@ public partial class WorldRenderer : Node3D
                 row.SectorId,
                 weapon.ProjectileLifeTicks * FlightModel.Dt,
                 row.ShipId,
-                ShotMaskLeadSec()
+                ShotMaskLeadSec(),
+                weapon.BoltRadius,
+                weapon.BoltLength
             );
         }
     }
 
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
     // rendering as a remote bolt, no masking lead (prediction is already now-correct).
-    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec) =>
-        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f);
+    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength) =>
+        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength);
 
     private void AddBolt(
         Vector3 pos,
@@ -1086,12 +1088,14 @@ public partial class WorldRenderer : Node3D
         uint sector,
         float lifeSec,
         ulong ownerShipId,
-        float leadSec
+        float leadSec,
+        float boltRadius,
+        float boltLength
     )
     {
         var pv = new ProjectileView { Name = "Bolt" };
         _projectiles.AddChild(pv);
-        pv.AddChild(NewProjectileMesh());
+        pv.AddChild(NewProjectileMesh(boltRadius, boltLength));
         pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
         SetNodeSector(pv, sector);
         _bolts.Add(pv);
@@ -1159,16 +1163,21 @@ public partial class WorldRenderer : Node3D
             ttl = t;
     }
 
-    private MeshInstance3D NewProjectileMesh() =>
-        new MeshInstance3D
+    // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back
+    // to the built-in default so an unauthored weapon still renders a bolt.
+    private MeshInstance3D NewProjectileMesh(float radius, float height)
+    {
+        float r = radius > 0f ? radius : 0.22f;
+        float h = height > 0f ? height : 2.2f;
+        return new MeshInstance3D
         {
             // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z
             // so it runs along ProjectileView's forward, which is aimed down the bolt's velocity.
             Mesh = new CylinderMesh
             {
-                TopRadius = 0.22f,
-                BottomRadius = 0.22f,
-                Height = 2.2f,
+                TopRadius = r,
+                BottomRadius = r,
+                Height = h,
                 RadialSegments = 8,
                 Rings = 1,
             },
@@ -1177,6 +1186,7 @@ public partial class WorldRenderer : Node3D
             // Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
 
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)

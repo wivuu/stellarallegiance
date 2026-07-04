@@ -15,4 +15,10 @@ public record Projectile
     public double Width { get; set; }
 
     public string? DamageType { get; set; }
+
+    // --- StellarAllegiance runtime extension (omit-when-default) ---
+    /// <summary>Client bolt-mesh visual dimensions (world units); folded into WeaponDef and streamed.
+    /// 0 = the client's built-in default bolt size.</summary>
+    public double BoltRadius { get; set; }
+    public double BoltLength { get; set; }
 }

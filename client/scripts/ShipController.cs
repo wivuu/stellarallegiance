@@ -375,7 +375,7 @@ public partial class ShipController : Node
                 _lastSentTick = _predTick;
             }
             foreach (var shot in pc.Step(_input, _predTick))
-                _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec);
+                _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
         }
 
         // T5 divergence injection (debug). Press P to force a misprediction and

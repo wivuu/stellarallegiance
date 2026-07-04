@@ -951,6 +951,7 @@ public partial class GameNetClient : Node
             d.Role = ReadStr(r);
             d.Description = ReadStr(r);
             d.ModelName = ReadStr(r);
+            d.ModelLength = r.ReadSingle();
             d.Mass = r.ReadSingle();
             d.MaxSpeed = r.ReadSingle();
             d.Accel = r.ReadSingle();
@@ -1025,6 +1026,8 @@ public partial class GameNetClient : Node
                     MineTriggerRadius = r.ReadSingle(),
                     CargoId = r.ReadUInt32(),
                     ShieldMult = r.ReadSingle(),
+                    BoltRadius = r.ReadSingle(),
+                    BoltLength = r.ReadSingle(),
                 }
             );
 
