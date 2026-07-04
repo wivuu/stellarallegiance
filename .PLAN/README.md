@@ -267,6 +267,10 @@ Stage-1 YAML pipeline.
   Stage-2 flat paycheck into the real Allegiance economy.
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
+- ☐ **[M]** **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
+  store as YAML in a known location (same per-server-override mechanism as Stage 1). Each file is a
+  map; env vars pick the map (random, specific, pick-from-files). *(Could be pulled forward to feed
+  Stage-4 resource-asteroid maps.)*
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
@@ -316,10 +320,6 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   by game servers (JWT?).
 - ☐ **[M]** **Game-server authentication** — game servers prove identity to the lobby; on start, show a
   link in the terminal to authenticate the session. Same userbase as clients.
-- ☐ **[M]** **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
-  store as YAML in a known location (same per-server-override mechanism as Stage 1). Each file is a
-  map; env vars pick the map (random, specific, pick-from-files). *(Could be pulled forward to feed
-  Stage-4 resource-asteroid maps.)*
 
 ### Cross-cutting / opportunistic
 
