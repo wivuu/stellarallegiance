@@ -477,6 +477,7 @@ public partial class TargetMarkers : Control
         {
             DrawFocusTag(view, focusedShip, local);
             DrawLockArc(focusedShip);
+            DrawTargetHealthArc(focusedShip);
         }
 
         // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
@@ -591,6 +592,63 @@ public partial class TargetMarkers : Control
             DrawArc(sp, r, start, start + sweep, 32, AimColor, 2f, true);
         }
     }
+
+    // The focused target's condition indicator: a bottom-left quarter arc wrapping the bracket that
+    // drains and shifts green→amber→red as its hull falls, with a thin cyan shield band just outside
+    // (shielded hulls only) — the design's target HP arc. Uses the same tiered colours as the local
+    // SystemRing gauge so the target and own-ship readouts agree. Only drawn when the target is on
+    // screen and has taken damage, so a pristine target stays uncluttered.
+    private void DrawTargetHealthArc(RemoteShip ship)
+    {
+        if (ship.MaxHealth <= 0f)
+            return; // class def not streamed yet — no baked fallback, hold off until it lands
+
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(ship.GlobalPosition))
+            return;
+        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
+        if (!new Rect2(Vector2.Zero, GetViewportRect().Size).HasPoint(sp))
+            return;
+
+        float hullFrac = Mathf.Clamp(ship.Health / ship.MaxHealth, 0f, 1f);
+        bool hasShield = ship.MaxShield > 0f;
+        float shieldFrac = hasShield ? Mathf.Clamp(ship.Shield / ship.MaxShield, 0f, 1f) : 0f;
+        // Nothing to say about a pristine target — keep the marker clean until it's actually hurt.
+        if (hullFrac >= 1f && (!hasShield || shieldFrac >= 1f))
+            return;
+
+        // Bottom-left quarter: 6 o'clock (Godot 90°) → 9 o'clock (180°), the fill growing from the
+        // 6 o'clock end so the arc drains toward 9 o'clock like the design's HP arc and the bottom-lit
+        // SystemRing gauges. (Design degrees are 0=top clockwise; Godot's DrawArc is 0=+X clockwise,
+        // so a design degree maps to Godot angle = deg − 90.)
+        const float lo = Mathf.Pi * 0.5f; // 6 o'clock
+        const float hi = Mathf.Pi; // 9 o'clock
+        Color track = DesignTokens.BorderLo;
+
+        // HULL arc — just outside the bracket, inside the lock ring (FocusHalf + 7f) so the
+        // bottom-left quarter reads distinctly against the full lock ring.
+        float hullR = FocusHalf + 6f;
+        DrawArc(sp, hullR, lo, hi, 24, track, 3f, true);
+        DrawArc(sp, hullR, lo, lo + (hi - lo) * hullFrac, 24, HullColor(hullFrac), 3f, true);
+
+        // SHIELD band — a thinner cyan (chrome) arc one band outside the hull, on shielded hulls,
+        // filled from the same 6 o'clock end. Mirrors SystemRing's solid outer SHLD band.
+        if (hasShield)
+        {
+            float shieldR = FocusHalf + 11f;
+            DrawArc(sp, shieldR, lo, hi, 24, track, 2f, true);
+            if (shieldFrac > 0f)
+                DrawArc(sp, shieldR, lo, lo + (hi - lo) * shieldFrac, 24, DesignTokens.TeamAccent, 2f, true);
+        }
+    }
+
+    // Tiered green→amber→red ramp matching the design's HP arc (#4dffa6 / #ffb347 / #ff5a6a) and
+    // the local SystemRing gauge. Distinct from HealthColor's continuous lerp, which the base-health
+    // bar deliberately keeps.
+    private static Color HullColor(float frac) =>
+        frac > 0.5f ? DesignTokens.Ok
+        : frac > 0.25f ? DesignTokens.Warn
+        : DesignTokens.Danger;
 
     // Flashing "incoming missile" banner + an edge-clamped arrow pointing toward the nearest
     // missile homing on the local ship. No-op when nothing is inbound (_inbound set in _Process).
@@ -854,22 +912,19 @@ public partial class TargetMarkers : Control
         }
     }
 
-    // A four-corner bracket reticle centered on p.
+    // A rounded four-corner bracket reticle centered on p: four short arcs at the diagonal corners
+    // (with gaps at the cardinal directions, where the ticks/lead/tag sit). Drawn on a circle of
+    // radius h so the reticle is curved and concentric with the target's health arc — the rounded
+    // corners echo the gauge arcs instead of clashing with a square four-corner bracket.
     private void DrawBracket(Vector2 p, float h, Color color, float width)
     {
-        float t = h * 0.45f; // corner tick length
-        // top-left
-        DrawLine(p + new Vector2(-h, -h), p + new Vector2(-h + t, -h), color, width, true);
-        DrawLine(p + new Vector2(-h, -h), p + new Vector2(-h, -h + t), color, width, true);
-        // top-right
-        DrawLine(p + new Vector2(h, -h), p + new Vector2(h - t, -h), color, width, true);
-        DrawLine(p + new Vector2(h, -h), p + new Vector2(h, -h + t), color, width, true);
-        // bottom-left
-        DrawLine(p + new Vector2(-h, h), p + new Vector2(-h + t, h), color, width, true);
-        DrawLine(p + new Vector2(-h, h), p + new Vector2(-h, h - t), color, width, true);
-        // bottom-right
-        DrawLine(p + new Vector2(h, h), p + new Vector2(h - t, h), color, width, true);
-        DrawLine(p + new Vector2(h, h), p + new Vector2(h, h - t), color, width, true);
+        const float span = 26f * (Mathf.Pi / 180f); // half-angle each corner arc extends around its diagonal
+        // Godot angles: 0° = +X (right), 90° = down. The corners sit on the four diagonals.
+        for (int i = 0; i < 4; i++)
+        {
+            float mid = Mathf.Pi * 0.25f + i * Mathf.Pi * 0.5f; // 45°, 135°, 225°, 315°
+            DrawArc(p, h, mid - span, mid + span, 10, color, width, true);
+        }
     }
 
     // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only

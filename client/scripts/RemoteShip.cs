@@ -93,6 +93,21 @@ public partial class RemoteShip : Node3D
     public Vector3 Velocity { get; private set; }
     private Vector3 _velTarget;
 
+    // Authoritative hull + shield, straight off the Ship row each snapshot, so the HUD can draw a
+    // health indicator around a Tab-focused target (TargetMarkers.DrawTargetHealthArc). Latest-value
+    // assignment — a HUD arc needs no interpolation, and Push already drops out-of-order frames.
+    // Max values come LIVE from the class def (not from spawn health): a target can already be
+    // damaged when it enters our AOI, so its cur/max must derive from the def, not the first row.
+    // 0 until the def streams in (client-no-baked-tuning-fallback) — the arc simply holds off until
+    // then. MaxShield is 0 for a hull that carries no shield, so no shield band is drawn.
+    public float Health { get; private set; }
+    public float Shield { get; private set; }
+    public float MaxHealth =>
+        _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
+    public float MaxShield =>
+        _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.ShieldCapacity : 0f;
+    private DefRegistry _defs = null!;
+
     // Dynamic engine glow. A remote ship has no input to read, so its throttle is
     // approximated from forward speed as a fraction of the class max — fast forward
     // flight lights the engines, drifting/turning lets them idle.
@@ -149,6 +164,7 @@ public partial class RemoteShip : Node3D
         Class = row.Class;
         IsPig = row.IsPig;
         IsPod = row.IsPod;
+        _defs = defs; // kept so MaxHealth/MaxShield can resolve the class def live (it may stream in later)
         // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
         // leaves the harmless 1f default until the row lands — no baked tuning on the
         // client. Pod-aware so a pod's proxy reads against its slow cap.
@@ -209,6 +225,10 @@ public partial class RemoteShip : Node3D
         };
         var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
         _velTarget = IsFinite(vel) ? vel : Vector3.Zero;
+
+        // Latest authoritative hull/shield for the focused-target HP arc (no interpolation needed).
+        Health = row.Health;
+        Shield = row.Shield;
 
         // Track the smoothed gap between successive samples (now in jitter-free server time, so
         // this is the ship's true update cadence) to size the render delay below. Reject
