@@ -28,12 +28,9 @@ Archives:
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
   - Mines should also kill ejection pods
-  - Where is the setting for how ship speed affects mine damage
 - Esc menu should work from hangar/base as well (currenetly only works in-ship)
   - 'Esc' key while menu should open can give focus back to the game if in-game
 - Zoom quickly can animate; smooth zoom between 5-10-20
-- Radar tuning:
-  - Probes should be collideable, considered to be 'bases' but with low HP and not require base damage to be destroyed
 - Dont include the 'injected divergence' button in release builds
 ---
 

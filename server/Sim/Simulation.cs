@@ -640,6 +640,7 @@ public sealed partial class Simulation
                 ApplyDamage(s, MathF.Min(World.BoundaryBaseDps + over * World.BoundaryRampDps, World.BoundaryMaxDps) * dt, tick);
 
             ResolveAsteroidCollisions(s);
+            ResolveDeployableCollisions(s, tick); // solid deployables (recon probes today)
 
             // Bases in this ship's sector: an ENEMY base is solid (bounce); your OWN base is
             // your dock — fly into its core and the ship/pod resolves (player ship/pod ->
@@ -2185,6 +2186,56 @@ public sealed partial class Simulation
             ResolveHullCollision(s, hull, center, Quat.Identity, 1f);
         else
             ResolveStaticCollision(s, center, World.BaseRadius);
+    }
+
+    // Resolve a ship against every DEPLOYABLE solid body in its sector. A deployable is a small,
+    // stationary, low-HP object a ship can bounce off AND wreck by ramming — unlike a base (which uses
+    // the base-health system, and is only DESTROYED via that system), a deployable dies from the same
+    // collision/weapon damage anything else does. Recon probes are the only deployable today; a future
+    // drop-turret / sensor buoy / decoy drone slots in here the SAME way: iterate its live list,
+    // resolve each element through the ResolveDeployableSphere kernel, and feed the returned impact
+    // damage into that deployable's own HP sink. Keep the generic bounce in the kernel; keep only the
+    // per-type "which list / which radius / which damage sink" here. O(ships × deployables); few of each.
+    private void ResolveDeployableCollisions(ShipSim s, uint tick)
+    {
+        // Recon probes (Simulation.Probes.cs): solid sphere = the combat hit radius, so "what you
+        // shoot is what you bump"; a hard ram spends the impact on the probe's low HP → gone reason 2.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != s.SectorId)
+                continue;
+            if (!WeaponDefs.TryGetValue(p.WeaponId, out var w) || w.ProbeHitRadius <= 0f)
+                continue;
+            float dmg = ResolveDeployableSphere(s, p.Pos, w.ProbeHitRadius, tick);
+            if (dmg > 0f && p.Health > 0f) // Health 0 = authored-invulnerable: solid but undamageable
+            {
+                DamageProbe(p, dmg, tick);
+                if (p.Health <= 0f)
+                    i--; // DamageProbe removed p from _probes; don't skip the next entry
+            }
+        }
+    }
+
+    // Bounce a ship off ONE solid deployable sphere (the shared kernel behind ResolveDeployableCollisions).
+    // Pushes the ship out of penetration (solid) and, on a closing contact, applies collision damage to
+    // the SHIP (exactly like a base) and RETURNS that same damage so the caller can also spend it on the
+    // deployable's own HP. Returns 0 on no contact or a below-min-speed kiss. Symmetric across teams —
+    // you bounce off (and can wreck) your own deployables too.
+    private float ResolveDeployableSphere(ShipSim s, Vec3 center, float radius, uint tick)
+    {
+        if (radius <= 0f)
+            return 0f;
+        if (
+            Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
+            && vn < 0f
+        )
+        {
+            float dmg = CollisionDamage(-vn, World.CollisionDamageScale);
+            ApplyDamage(s, dmg, tick);
+            return dmg;
+        }
+        return 0f;
     }
 
     // Sphere-vs-convex-hull bounce (the convex analogue of ResolveStaticCollision). The hull is

@@ -154,6 +154,11 @@ public static class Collide
 
         public static StaticBody BaseSphere(Vec3 center, float radius, int team) =>
             new(null, center, Quat.Identity, 1f, radius, team, null);
+
+        // A deployed recon probe: a plain solid sphere, team-agnostic (no ownership carve-out — you
+        // bounce off your own probes too), matching the server's ResolveProbeCollisions footprint.
+        public static StaticBody ProbeSphere(Vec3 center, float radius) =>
+            new(null, center, Quat.Identity, 1f, radius, -1, null);
     }
 
     // Resolve a ship (a shipRadius sphere) against a sector's static bodies, mutating its state the

@@ -973,6 +973,67 @@ Vec3 AtAngle(float dist, float angleDeg)
     try { conn.Wait(2000); } catch { /* teardown */ }
 }
 
+// ================================================================================================
+// 20. Probe collision — a deployed probe is a SOLID, low-HP body: deploying it must not kick the
+//     deploying ship; a ship rammed into it is pushed out (no penetration) and takes collision
+//     damage (like a base); and enough ramming destroys the probe (reason-2 gone) with no
+//     base-damage system. Shields off so the ship's collision damage is observable on the hull.
+// ================================================================================================
+{
+    var sim = BootSim(20);
+    sim.ShieldsEnabled = false;
+    var probeW = sim.Content.Weapons.First(w => w.WeaponId == 8);
+    float hitR = probeW.ProbeHitRadius;
+    float minD = hitR + CollisionConfig.ShipRadius; // ship-center distance at the probe's surface
+
+    var layer = Join(sim, 1, 0, FlightModel.ClassFighter);
+    layer.ProbeAmmo = 1;
+    layer.ProbeWeaponId = probeW.WeaponId;
+
+    // Deploy one probe (real fire path), facing +Z so it ejects behind toward −Z.
+    Park(layer, EmptySector, new Vec3(0, 0, 0));
+    layer.HeldInput = new ShipInputState { DropProbe = true };
+    sim.Step();
+    layer.HeldInput = new ShipInputState();
+    Check(sim.Probes.Count == 1, "probe deployed (pre-condition)", $"found {sim.Probes.Count}");
+    var probe = sim.Probes[0];
+    Check(probe.Health > 0f, "the deployed probe is destructible (HP > 0, not invulnerable)", $"probe HP {probe.Health}");
+
+    // Self-deploy must clear the deploying ship: let physics run (no Park) — no shove, no damage.
+    float shipHp0 = layer.Health;
+    Vec3 shipPos0 = layer.State.Pos;
+    for (int i = 0; i < 3; i++) sim.Step();
+    Check(layer.Health >= shipHp0 - 0.001f, "deploying a probe does not damage the deploying ship", $"ship lost {shipHp0 - layer.Health} HP on self-deploy");
+    Check((layer.State.Pos - shipPos0).Length() < 1f, "deploying a probe does not shove the deploying ship", $"ship moved {(layer.State.Pos - shipPos0).Length():0.0}u on self-deploy");
+
+    // Ram the probe head-on (+X side, moving −X) until the low-HP probe dies. Each contact must push
+    // the ship out to the probe surface (no penetration) and dent both ship and probe.
+    bool noPenetration = false, shipHurt = false, probeHurt = false, destroyed = false;
+    for (int attempt = 0; attempt < 20 && !destroyed; attempt++)
+    {
+        layer.SectorId = probe.SectorId;
+        layer.State.Pos = probe.Pos + new Vec3(minD * 0.85f, 0, 0); // start penetrating on +X
+        layer.State.Vel = new Vec3(-40f, 0, 0); // slam inward (closing speed 40 >> min 4)
+        float shipBefore = layer.Health;
+        float probeBefore = probe.Health;
+        sim.Step();
+
+        if ((layer.State.Pos - probe.Pos).Length() >= minD - 0.5f) noPenetration = true;
+        if (layer.Health < shipBefore - 0.001f) shipHurt = true;
+        bool alive = sim.Probes.Any(p => p.ProbeId == probe.ProbeId);
+        if (probe.Health < probeBefore - 0.001f) probeHurt = true;
+        if (!alive)
+        {
+            destroyed = sim.ProbeGoneThisStep.Any(g => g.id == probe.ProbeId && g.reason == 2);
+            break;
+        }
+    }
+    Check(noPenetration, "a rammed ship is pushed out to the probe surface (solid — no penetration)", "the ship penetrated the probe without a bounce");
+    Check(shipHurt, "ramming a probe damages the ship (collision damage, like a base)", "the ramming ship took no collision damage");
+    Check(probeHurt, "ramming a probe damages the probe", "the rammed probe took no damage from the ram");
+    Check(destroyed, "enough ramming destroys the low-HP probe (gone reason 2, no base-damage system)", "the probe never died from ramming");
+}
+
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
 

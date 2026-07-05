@@ -762,6 +762,9 @@ public partial class WorldRenderer : Node3D
         pv.Initialize(pos, row.Team, _defs.GetWeapon(row.WeaponId));
         SetNodeSector(pv, row.SectorId);
         _probes[row.ProbeId] = pv;
+        // Solid body for the local ship's collision prediction (bounce matches the server's
+        // ResolveProbeCollisions); HitRadius is the same combat radius the server collides against.
+        _collisionWorld.AddProbe(row.SectorId, row.ProbeId, new Vec3(pos.X, pos.Y, pos.Z), pv.HitRadius);
     }
 
     // reason 0 expired, 1 match cleanup, 255 silent local reconcile (fogged-out enemy probe) → the
@@ -770,6 +773,7 @@ public partial class WorldRenderer : Node3D
     // otherwise a client that never saw it (blind teammate of the shooter) pops a phantom explosion.
     public void NetProbeGone(ulong id, byte reason, uint sector, Vec3 pos)
     {
+        _collisionWorld.RemoveProbe(sector, id); // stop predicting a bounce off a gone probe
         bool had = _probes.Remove(id, out var view);
         if (reason == 2 && had)
         {

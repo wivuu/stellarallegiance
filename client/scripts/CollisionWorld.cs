@@ -28,6 +28,13 @@ public sealed class CollisionWorld
     private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
     private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
 
+    // Deployed probes are DYNAMIC solid bodies (added/removed mid-match, unlike Welcome-time
+    // asteroids/bases), so they live in their own sector→probeId map and merge into BodiesIn's output.
+    // The local ship then predicts bouncing off a probe exactly as the server does (ResolveProbeCollisions);
+    // only probes this client can see are here, so a fully-fogged enemy probe is a small predict-miss
+    // the server reconciles — acceptable for an object you can't see anyway.
+    private readonly Dictionary<uint, Dictionary<ulong, Collide.StaticBody>> _probes = new();
+
     // Bodies in a sector with their rotation advanced to sim time t (seconds = tick * FlightModel.Dt).
     public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector, float t)
     {
@@ -47,13 +54,34 @@ public sealed class CollisionWorld
                         e.Base.Scale
                     )
             );
+        if (_probes.TryGetValue(sector, out var probes))
+            foreach (var b in probes.Values)
+                outBuf.Add(b);
         return outBuf;
+    }
+
+    // A deployed probe is on-screen at a fixed position; add it as a solid sphere of its combat hit
+    // radius (matching the server). Idempotent per id (a probe resend won't duplicate it).
+    public void AddProbe(uint sector, ulong probeId, Vec3 pos, float radius)
+    {
+        if (radius <= 0f)
+            return;
+        if (!_probes.TryGetValue(sector, out var m))
+            _probes[sector] = m = new Dictionary<ulong, Collide.StaticBody>();
+        m[probeId] = Collide.StaticBody.ProbeSphere(pos, radius);
+    }
+
+    public void RemoveProbe(uint sector, ulong probeId)
+    {
+        if (_probes.TryGetValue(sector, out var m))
+            m.Remove(probeId);
     }
 
     public void Clear()
     {
         _src.Clear();
         _live.Clear();
+        _probes.Clear();
     }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)

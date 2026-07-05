@@ -146,6 +146,6 @@ probes:
     model-size: 4.0      # u visual normalization length (was a hardcoded 1.2 client-side)
     lifespan: 1200        # seconds before the deployed probe expires
     sight-radius: 4800   # u radius of the team vision sphere the probe grants while alive
-    hit-points: 5        # ~2 fighter twin-gun volleys or 2 bomber bolts; 0 = invulnerable
+    hit-points: 25        # ~2 fighter twin-gun volleys or 2 bomber bolts; 0 = invulnerable
     hit-radius: 12       # u server hit sphere for bolts/blasts (generous vs the visual, feels fair)
     signature: 1.0       # radar signature enemies detect the deployed probe at

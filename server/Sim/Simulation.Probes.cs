@@ -3,16 +3,19 @@ using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
 
-// Deployable recon probes (WP5 of the Fog plan). A probe is a passive, invulnerable, STATIONARY
-// vision-sphere contributor: TryDeployProbe drops one just ahead of the deploying ship exactly
-// like TryDropChaff/TryDeployMine (ammo + cadence gate mirrors those dispensers, riding the SAME
+// Deployable recon probes (WP5 of the Fog plan). A probe is a passive, STATIONARY vision-sphere
+// contributor: TryDeployProbe drops one just behind the deploying ship exactly like
+// TryDropChaff/TryDeployMine (ammo + cadence gate mirrors those dispensers, riding the SAME
 // cargo/ammo accounting — SeedDispenserAmmo/_dispenserByCargo), and StepProbes expires it after
 // its authored lifespan (ProbeLifespanSec, already resolved into WeaponDef.ProjectileLifeTicks at
 // content projection, same field missiles/mines/chaff use for their own lifespans).
 //
-// Probes carry no physics/collision. They are a DESTRUCTIBLE combat target now (ProbeHitPoints/
-// ProbeHitRadius): a bolt or missile blast from an enemy team removes one (DamageProbe → gone
-// reason 2). Their vision contribution is an unoccluded team vision sphere of ProbeSightRadius,
+// A probe is a small SOLID collision body — it's the first "deployable" handled by the generic
+// Simulation.ResolveDeployableCollisions: a ship bounces off it like a miniature base and takes
+// collision damage, and — because it has LOW HP — the impact damages the probe too (DamageProbe),
+// so a solid ram (or weapon fire) is enough to kill it; it never needs the base-health system. They are a DESTRUCTIBLE combat target (ProbeHitPoints/ProbeHitRadius): a bolt or missile
+// blast from an enemy team removes one (DamageProbe → gone reason 2). Their vision contribution is
+// an unoccluded team vision sphere of ProbeSightRadius,
 // folded into Simulation.Vision.cs's existing ViewerSnap list (see CaptureVisionInput) — no new
 // code path in the vision worker. They stream to the OWNING team unconditionally, PLUS any enemy
 // team that can currently radar-detect them (Simulation.Vision.cs VisibleEnemyProbes → ClientHub
@@ -64,10 +67,13 @@ public sealed partial class Simulation
         ship.LastProbeTick = tick;
 
         // Behind the ship's engine (local −Z), clear of the hull — deployed out the back like a
-        // dropped buoy. No physics, so it never separates further; it simply sits where it was
-        // dropped for the rest of its lifespan (mirrors how mines/chaff eject behind the ship).
+        // dropped buoy. It's a solid collision body now (ResolveProbeCollisions), so it ejects far
+        // enough back that the deploying ship starts OUTSIDE the probe's collision sphere
+        // (ShipRadius + ProbeHitRadius + margin); otherwise dropping one would kick/damage your own
+        // ship. It never moves afterward — it sits where dropped for the rest of its lifespan.
         Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
-        Vec3 pos = ship.State.Pos - fwd * (World.ShipRadius + 4f);
+        float hitR = w.ProbeHitRadius > 0f ? w.ProbeHitRadius : 4f;
+        Vec3 pos = ship.State.Pos - fwd * (World.ShipRadius + hitR + 2f);
 
         _probes.Add(
             new ProbeSim
