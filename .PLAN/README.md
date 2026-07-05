@@ -21,17 +21,9 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Password-protection for game servers: and allow clients to enter password on-join
-- F3 improvements
-  - Hide HUD elements in F3 mode (reticule, hull, shields, weapons, etc)
-  - Allow user to 'F3' while docker in base (hangar, etc)
-- Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area, increase the distance weighting from alephs from the center of the sector
+- Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area. Asteroids should fill out be added outwards towards the edges
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
-  - Mines should also kill ejection pods
-- Esc menu should work from hangar/base as well (currenetly only works in-ship)
-  - 'Esc' key while menu should open can give focus back to the game if in-game
-- Zoom quickly can animate; smooth zoom between 5-10-20
-- Dont include the 'injected divergence' button in release builds
 ---
 
 ## Content philosophy (the through-line)
