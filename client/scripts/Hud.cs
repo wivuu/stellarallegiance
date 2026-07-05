@@ -363,6 +363,8 @@ public partial class Hud : CanvasLayer
         _warnWasVisible = _warning.Visible;
         // Top-left readout: the live flight stats while flying; nothing otherwise (the
         // hangar owns the pre-spawn screen, the lobby overlay everything outside a match).
+        // Hidden in the F3 sector map — telemetry is ship-centric combat chrome, not a map aid.
+        _label.Visible = !SectorOverview.Active;
         _label.Text = flying
             ? ship!.IsPod
                 // Ejected: flying the escape pod. Just the resolve hint — hull/speed now read

@@ -572,6 +572,12 @@ public partial class ShipLoadout : Control
 
     public override void _Process(double delta)
     {
+        // Let the pilot peek at the F3 sector map from the hangar: this overlay is opaque and
+        // would otherwise occlude the map. Hiding it (rather than closing) keeps `Active` true so
+        // flight input stays neutralized and the Hud won't recreate this instance; F3-close flips
+        // it back. See SectorOverview.
+        Visible = !SectorOverview.Active;
+
         if (_defs == null)
             return;
 

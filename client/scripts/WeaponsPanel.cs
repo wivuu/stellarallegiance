@@ -60,7 +60,7 @@ public partial class WeaponsPanel : Control
         var local = _world.LocalShip;
         // Only armed hulls in flight get the readout — a pod (no weapon hardpoint) shows nothing.
         BuildWeapons(local);
-        Visible = local != null && !local.IsPod && _weapons.Count > 0;
+        Visible = local != null && !local.IsPod && _weapons.Count > 0 && !SectorOverview.Active;
         if (Visible)
             QueueRedraw();
     }

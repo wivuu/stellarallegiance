@@ -479,52 +479,58 @@ public partial class TargetMarkers : Control
             DrawLockArc(focusedShip);
         }
 
-        // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
-        // view axis — and the chase camera is offset above/behind the ship, so screen
-        // center is NOT where shots go. Draw an aim reticle on the real firing line so the
-        // player has something to line up on the lead circle.
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
-
-        // Lead indicator for the focused target: TryLead returns the world point to aim
-        // the nose at (the target's position led by the RELATIVE velocity, so the shot's
-        // inherited ship velocity carries it onto the target). The aim reticle is ranged to
-        // match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
-        // with no target it sits at a default range just to show the aim line.
-        float aimRange = DefaultAimRange;
-        if (
-            focusedShip != null
-            && TryLead(
-                muzzle,
-                local.Velocity,
-                focusedShip.GlobalPosition,
-                focusedShip.Velocity,
-                out Vector3 aimPoint,
-                out float t
-            )
-        )
+        // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
+        // banner are ship-centric combat readouts, meaningless in the F3 orbit view — skip them
+        // there. The entity brackets/glyphs/ghosts above still reproject onto the map.
+        if (!SectorOverview.Active)
         {
-            aimRange = ProjectileSpeed * t;
-            if (!Cam.IsPositionBehind(aimPoint))
+            // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
+            // view axis — and the chase camera is offset above/behind the ship, so screen
+            // center is NOT where shots go. Draw an aim reticle on the real firing line so the
+            // player has something to line up on the lead circle.
+            Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
+            Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
+
+            // Lead indicator for the focused target: TryLead returns the world point to aim
+            // the nose at (the target's position led by the RELATIVE velocity, so the shot's
+            // inherited ship velocity carries it onto the target). The aim reticle is ranged to
+            // match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
+            // with no target it sits at a default range just to show the aim line.
+            float aimRange = DefaultAimRange;
+            if (
+                focusedShip != null
+                && TryLead(
+                    muzzle,
+                    local.Velocity,
+                    focusedShip.GlobalPosition,
+                    focusedShip.Velocity,
+                    out Vector3 aimPoint,
+                    out float t
+                )
+            )
             {
-                Vector2 lp = Cam.UnprojectPosition(aimPoint);
-                Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
-                    ? null
-                    : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                DrawLeadIndicator(targetSp, lp);
+                aimRange = ProjectileSpeed * t;
+                if (!Cam.IsPositionBehind(aimPoint))
+                {
+                    Vector2 lp = Cam.UnprojectPosition(aimPoint);
+                    Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
+                        ? null
+                        : Cam.UnprojectPosition(focusedShip.GlobalPosition);
+                    DrawLeadIndicator(targetSp, lp);
+                }
             }
+
+            Vector3 reticlePoint = muzzle + fwd * aimRange;
+            if (!Cam.IsPositionBehind(reticlePoint))
+                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+
+            // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
+            // missile homing on us (drawn last so it sits over everything). State cached in _Process.
+            DrawIncomingWarning(view);
+
+            // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
+            DrawLockWarning(view);
         }
-
-        Vector3 reticlePoint = muzzle + fwd * aimRange;
-        if (!Cam.IsPositionBehind(reticlePoint))
-            DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
-
-        // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
-        // missile homing on us (drawn last so it sits over everything). State cached in _Process.
-        DrawIncomingWarning(view);
-
-        // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
-        DrawLockWarning(view);
     }
 
     // The being-locked warning banner (A2): "⚠ MISSILE LOCK" flashing amber (state 1, a lock is
