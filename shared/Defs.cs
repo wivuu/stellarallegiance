@@ -269,6 +269,13 @@ namespace StellarAllegiance.Shared
         // precedent).
         public float FireSignatureBoost;
         public float FireSignatureWindow;
+
+        // Seconds a lost-contact ship GHOST lingers before it expires on its own (in addition to
+        // being cleared early by re-scout or radar re-detection). Refreshed whenever contact is
+        // re-established (an eyeball glimpse re-stamps it), so the clock counts time with NO contact.
+        // Default 120s at projection (<= 0 -> stock). Server-side only — ghost lifetime is resolved
+        // entirely in the sim's vision state; the client just renders whatever ghosts it's sent.
+        public float FogGhostTimeout;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

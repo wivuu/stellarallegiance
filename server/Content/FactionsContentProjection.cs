@@ -340,6 +340,7 @@ public static class FactionsContentProjection
                 FogEyeballMultiplier = 1.5f,
                 FireSignatureBoost = 2.5f,
                 FireSignatureWindow = 4f,
+                FogGhostTimeout = 120f,
             }
             : new WorldConfig
             {
@@ -356,5 +357,7 @@ public static class FactionsContentProjection
                 // to the stock 2.5x over 4 s; author fire-signature-boost: 1.0 to disable.
                 FireSignatureBoost = w.FireSignatureBoost <= 0 ? 2.5f : (float)w.FireSignatureBoost,
                 FireSignatureWindow = w.FireSignatureWindow <= 0 ? 4f : (float)w.FireSignatureWindow,
+                // Ghost lifetime is server-side only too. 0/omitted -> stock 120 s.
+                FogGhostTimeout = w.FogGhostTimeout <= 0 ? 120f : (float)w.FogGhostTimeout,
             };
 }

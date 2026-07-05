@@ -46,6 +46,11 @@ public sealed partial class Simulation
     private float _fireSigBoost = 2.5f;
     private float _fireSigWindowTicks = 80f;
 
+    // Ticks a lost-contact ghost survives before self-expiring (FogGhostTimeout seconds × TickHz),
+    // cached in InitVision like _eyeballMult. Re-scout / radar re-detection still clear it earlier;
+    // an eyeball glimpse re-stamps its clock. <= 0 disables the timeout (ghosts persist as before).
+    private uint _ghostTimeoutTicks;
+
     // Ships that left a team's STREAMED union (radar ∪ eyeball) this step, drained by the hub (WP3)
     // into MsgShipGone reason=2 (quiet fade). Cleared at the top of Step, populated only at an apply.
     public readonly List<(byte team, ulong shipId)> LostContactsThisStep = new();
@@ -80,6 +85,11 @@ public sealed partial class Simulation
         public Vec3 Pos;
         public float Yaw;
         public float Pitch;
+
+        // Sim tick contact was last had for this ship (frozen at ghost creation, re-stamped on an
+        // eyeball refresh). Drives the FogGhostTimeout expiry; never rides the wire (BuildContacts
+        // hand-picks fields). Meaningless on the transient StreamInfo records — only read for ghosts.
+        public uint SinceTick;
     }
 
     // Per-team shared vision state. Discovered* + LastKnownBaseHealth persist for the match (fog is
@@ -262,6 +272,7 @@ public sealed partial class Simulation
         _eyeballMult = Content.World.FogEyeballMultiplier > 0f ? Content.World.FogEyeballMultiplier : 1.5f;
         _fireSigBoost = Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f;
         _fireSigWindowTicks = (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate;
+        _ghostTimeoutTicks = (uint)MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
         foreach (var b in World.Bases)
             if (!_teamVisions.ContainsKey(b.Team))
                 _teamVisions[b.Team] = new TeamVision();
@@ -348,7 +359,7 @@ public sealed partial class Simulation
         {
             var result = _visionResult;
             if (result != null)
-                ApplyVisionResult(result);
+                ApplyVisionResult(result, tick);
             _visionHasPending = false;
         }
 
@@ -707,7 +718,7 @@ public sealed partial class Simulation
     }
 
     // ---- Apply (sim thread only; ALL TeamVision mutation happens here) ---------------------------
-    private void ApplyVisionResult(VisionComputeResult res)
+    private void ApplyVisionResult(VisionComputeResult res, uint tick)
     {
         foreach (byte team in _inTeams)
         {
@@ -729,10 +740,10 @@ public sealed partial class Simulation
             // Leave-diff computed against the PRE-swap streamed union, using the OLD StreamInfo for the
             // ghost's frozen pose.
             foreach (var id in tv.VisibleEnemyShips)
-                HandleLeave(team, tv, id, newRadar, newEyeball);
+                HandleLeave(team, tv, id, newRadar, newEyeball, tick);
             foreach (var id in tv.EyeballShips)
                 if (!tv.VisibleEnemyShips.Contains(id))
-                    HandleLeave(team, tv, id, newRadar, newEyeball);
+                    HandleLeave(team, tv, id, newRadar, newEyeball, tick);
 
             // Radar re-detection removes an id's ghost and (re)marks its episode as radar-seen.
             foreach (var id in newRadar)
@@ -746,6 +757,22 @@ public sealed partial class Simulation
             tv.VisibleEnemyShips = newRadar;
             tv.EyeballShips = newEyeball;
             tv.StreamInfo = r.StreamInfo;
+
+            // Eyeball soft-track: a ship we can still SEE (eyeball tier) but haven't radar-locked keeps
+            // its ghost, refreshed to the ship's current pose so the HUD blip FOLLOWS the mesh instead
+            // of sitting stale at the last radar fix. Radar re-detection (above) then converts it to a
+            // live contact — so closing on a lingering foe firms the blip up seamlessly instead of the
+            // old vanish-then-reappear (the frozen point being scouted "empty" the instant it entered
+            // radar range while the drifted ship was still just outside it, in the eyeball tier).
+            // Refreshes an EXISTING (radar-born) ghost only — a never-radar eyeball glimpse still leaves
+            // no memory (no ghost is created here), preserving that invariant.
+            foreach (var id in newEyeball)
+                if (tv.Ghosts.ContainsKey(id) && r.StreamInfo.TryGetValue(id, out var egi))
+                {
+                    egi.SinceTick = tick; // contact re-established → restart the expiry clock
+                    tv.Ghosts[id] = egi;
+                    tv.ContactsDirty = true;
+                }
 
             // Enemy-probe visibility: keep only ids whose probe still exists, then swap. If the set
             // changed, flag a prompt probe resend so a probe fogging in/out reaches the client at the
@@ -768,12 +795,37 @@ public sealed partial class Simulation
                     _ghostScratch.Add(kv.Value);
                 foreach (var g in _ghostScratch)
                 {
-                    if (!tv.VisibleEnemyShips.Contains(g.ShipId) && IsPointVisibleToTeam(team, g.Sector, g.Pos))
+                    // A ghost is stale memory to forget ONLY if we can see its frozen spot AND we can no
+                    // longer see the ship itself. "See the ship" is tested against LIVE state including
+                    // the eyeball tier (TeamStillSeesShipLive) — NOT the streamed sets, which lag the
+                    // live viewer pose by one interval: on the boundary a viewer arrives, the frozen spot
+                    // already reads visible while the ship hasn't yet landed in newEyeball, and the bare
+                    // set-check would kill a ghost the soft-track is about to reposition. A ship we still
+                    // see keeps its ghost (soft-tracked to the live pose here / next interval).
+                    if (!TeamStillSeesShipLive(team, tv, g.ShipId)
+                        && IsPointVisibleToTeam(team, g.Sector, g.Pos))
                     {
                         tv.Ghosts.Remove(g.ShipId);
                         tv.ContactsDirty = true;
                     }
                 }
+            }
+
+            // Ghost timeout: a lost-contact ghost older than FogGhostTimeout self-expires (stale
+            // last-known memory decays even if the area is never re-scouted). The clock is the ghost's
+            // SinceTick — restarted by an eyeball refresh above, so this counts time with NO contact.
+            // Uses unsigned diff (tick only advances). _ghostTimeoutTicks <= 0 disables the timeout.
+            if (_ghostTimeoutTicks > 0 && tv.Ghosts.Count > 0)
+            {
+                _ghostScratch.Clear();
+                foreach (var kv in tv.Ghosts)
+                    _ghostScratch.Add(kv.Value);
+                foreach (var g in _ghostScratch)
+                    if (tick - g.SinceTick >= _ghostTimeoutTicks)
+                    {
+                        tv.Ghosts.Remove(g.ShipId);
+                        tv.ContactsDirty = true;
+                    }
             }
 
             // Newly-discovered statics → persistent sets + append to the reveal LOG (never drained;
@@ -816,7 +868,7 @@ public sealed partial class Simulation
     private readonly List<GhostContact> _ghostScratch = new();
 
     // Resolve one ship's transition out of the streamed union.
-    private void HandleLeave(byte team, TeamVision tv, ulong id, HashSet<ulong> newRadar, HashSet<ulong> newEyeball)
+    private void HandleLeave(byte team, TeamVision tv, ulong id, HashSet<ulong> newRadar, HashSet<ulong> newEyeball, uint tick)
     {
         if (newRadar.Contains(id) || newEyeball.Contains(id))
             return; // still streamed
@@ -834,9 +886,36 @@ public sealed partial class Simulation
         LostContactsThisStep.Add((team, id));
         if (tv.RadarEpisode.Remove(id) && tv.StreamInfo.TryGetValue(id, out var gi))
         {
+            gi.SinceTick = tick; // start the expiry clock at the moment contact was lost
             tv.Ghosts[id] = gi;
             tv.ContactsDirty = true;
         }
+    }
+
+    // True if `team` can currently SEE enemy ship `shipId` — by the lagged streamed sets OR, to close
+    // the one-interval lag between those sets and live viewer poses, by a LIVE test of the ship's actual
+    // position against this team's viewers including the eyeball tier (radar sphere × _eyeballMult) and
+    // the radar/cone/probe/base volumes (IsPointVisibleToTeam). Used only to guard ghost invalidation:
+    // a ship we still see must never have its ghost scouted "empty" out from under the eyeball soft-track.
+    private bool TeamStillSeesShipLive(byte team, TeamVision tv, ulong shipId)
+    {
+        if (tv.VisibleEnemyShips.Contains(shipId) || tv.EyeballShips.Contains(shipId))
+            return true;
+        if (!_ships.TryGetValue(shipId, out var s) || !s.Alive)
+            return false;
+        // Radar / cone / probe / base coverage of the ship's live position.
+        if (IsPointVisibleToTeam(team, s.SectorId, s.State.Pos))
+            return true;
+        // Eyeball tier: the live ship inside any team SHIP-viewer's eyeball sphere (bases/probes have none).
+        foreach (var vw in _order)
+        {
+            if (!vw.Alive || vw.Team != team || vw.SectorId != s.SectorId)
+                continue;
+            float er = VisionDefFor(vw).VisionSphereRadius * _eyeballMult;
+            if (er > 0f && (s.State.Pos - vw.State.Pos).LengthSquared() <= er * er)
+                return true;
+        }
+        return false;
     }
 
     // ---- Public point-visibility test (sim thread; sig 1.0) --------------------------------------
