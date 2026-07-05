@@ -210,6 +210,10 @@ jobs:
         with:
           files: dist/*.zip
           generate_release_notes: true
+          # Keep any existing release body (e.g. a hand-written changelog on a
+          # pre-created release) and append the download/self-hosting boilerplate
+          # below instead of overwriting it.
+          append_body: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             ## Client downloads
