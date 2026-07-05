@@ -25,6 +25,7 @@ Archives:
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
 - Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
+- Add more size variability randomness for asteroids - within a reasonable range
 ---
 
 ## Content philosophy (the through-line)
