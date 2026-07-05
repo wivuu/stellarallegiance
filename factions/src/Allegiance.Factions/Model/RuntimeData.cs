@@ -120,4 +120,11 @@ public record WorldConfig
     /// 0/omitted -&gt; 4.0 at projection. Server-side only — does NOT ride the wire.
     /// </summary>
     public double FireSignatureWindow { get; set; }
+
+    /// <summary>
+    /// Seconds a lost-contact ship ghost lingers before expiring on its own (re-scout / radar
+    /// re-detection still clear it earlier; an eyeball glimpse re-stamps it). 0/omitted -&gt; 120 at
+    /// projection. Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double FogGhostTimeout { get; set; }
 }

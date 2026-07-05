@@ -2,10 +2,10 @@ using Godot;
 using StellarAllegiance.Ui;
 
 // Telescopic scope: a circular picture-in-picture render of the LIVE game world, centred on
-// screen, that replaces the SystemRing gauges while open. '+' opens it at 5x and steps the
+// screen, that replaces the SystemRing gauges while open. '+' eases it open to 5x and steps the
 // magnification up (5→10→20, capped); '−' steps down and closes below 5x; Esc dismisses.
-// Magnification eases toward each step (exponential decay, not an instant snap) so the PiP
-// zoom, FOV, and mouse-look sensitivity all glide together. A second Camera3D looks down the
+// Magnification eases toward each step — including the initial 1x→5x on open — (exponential
+// decay, not an instant snap) so the PiP zoom, FOV, and mouse-look sensitivity all glide together. A second Camera3D looks down the
 // local ship's firing line through a narrow FOV (optical magnification M ⇒ FOV =
 // 2·atan(tan(75°/2)/M)), rendered into a SubViewport that SHARES the main World3D (split-screen
 // idiom — NOT OwnWorld3D, which only fits the hangar's isolated preview). The viewport texture
@@ -94,8 +94,10 @@ public partial class ZoomView : Control
     {
         Active = true;
         _step = 0;
-        Magnification = Steps[_step]; // opens straight at 5x — only step changes ease
-        _targetMag = Magnification;
+        // Leave Magnification where it is (1x while closed) and only set the target, so _Process
+        // eases the first zoom-in from 1x→5x with the same glide as a step (image, FOV, and
+        // mouse-look sensitivity all ramp up together) instead of snapping.
+        _targetMag = Steps[_step];
         _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         QueueRedraw();

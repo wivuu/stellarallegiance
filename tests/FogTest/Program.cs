@@ -416,6 +416,81 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // ================================================================================================
+// 9b. Eyeball soft-track — a ghost of a ship we can still SEE (eyeball tier, not radar) is NOT
+//     scouted-empty away; it is refreshed to the ship's live pose so the blip follows the mesh and
+//     then firms into a live radar contact when it closes — no vanish-then-reappear gap.
+// ================================================================================================
+{
+    float sphere, sig, eyeMult;
+    {
+        var probe = BootSim(96);
+        sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
+        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        eyeMult = probe.Content.World.FogEyeballMultiplier;
+    }
+    float radarDist = sphere * sig * 0.5f;            // well inside the radar sphere
+    float eyeDist = sphere * sig * (1f + eyeMult) * 0.5f; // mid eyeball band: > sphere, < sphere×eyeMult
+    Vec3 origin = new Vec3(0, 0, 0);
+    Vec3 spotA = new Vec3(radarDist, 0, 0);  // first radar fix (also the ghost's frozen spot)
+    Vec3 spotB = new Vec3(eyeDist, 0, 0);    // later eyeball-only position, a DIFFERENT point than A
+    Vec3 viewerFar = new Vec3(60000f, 0, 0);
+
+    var sim = BootSim(96);
+    var v = Join(sim, 1, 0, FlightModel.ClassFighter);
+    var t = Join(sim, 2, 1, FlightModel.ClassFighter);
+    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotA); }, Settle); // radar at A
+    Check(Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId), "target radar-detected at spot A (pre-condition)", "target not radar-detected at A");
+    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotA); }, Settle); // flee → ghost at A
+    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost created at A on contact loss (pre-condition)", "no ghost created at A");
+
+    // Return the viewer while the target sits at B in the EYEBALL band (not radar). The old ghost spot
+    // A is now inside the viewer's radar sphere — pre-fix that "empty re-scout" would delete the ghost.
+    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotB); }, Settle);
+    var tvE = Vision(sim, 0);
+    Check(tvE.EyeballShips.Contains(t.ShipId) && !tvE.VisibleEnemyShips.Contains(t.ShipId), "the target sits in the eyeball tier (streamed, not radar) at B", "target was not eyeball-only at B");
+    bool tracked = tvE.Ghosts.TryGetValue(t.ShipId, out var gE);
+    Check(tracked, "an eyeball glimpse KEEPS the ghost instead of scouting the stale spot empty", "the ghost was cleared while the ship was still visible (eyeball)");
+    Check(tracked && (gE.Pos - spotB).Length() < 60f, $"the ghost is soft-tracked to the ship's live eyeball pose (~{spotB.X:F0}), not left at A (~{spotA.X:F0})", "the eyeball-tracked ghost was not repositioned to the live pose");
+
+    // Closing to radar range firms the blip into a live contact (ghost gone, exactly one contact).
+    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotA); }, Settle);
+    var tvR = Vision(sim, 0);
+    Check(tvR.VisibleEnemyShips.Contains(t.ShipId) && !tvR.Ghosts.ContainsKey(t.ShipId), "the eyeball-tracked ghost firms into a live radar contact on close (no lingering ghost)", "closing to radar left both a ghost and a live contact");
+}
+
+// ================================================================================================
+// 9c. Ghost timeout — a lost-contact ghost that is never re-scouted self-expires after
+//     FogGhostTimeout, but persists up to that point.
+// ================================================================================================
+{
+    float sphere, sig;
+    {
+        var probe = BootSim(97);
+        sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
+        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+    }
+    float radarDist = sphere * sig * 0.5f;
+    Vec3 origin = new Vec3(0, 0, 0);
+    Vec3 spotS = new Vec3(radarDist, 0, 0);
+    Vec3 viewerFar = new Vec3(60000f, 0, 0);
+
+    var sim = BootSim(97);
+    var v = Join(sim, 1, 0, FlightModel.ClassFighter);
+    var t = Join(sim, 2, 1, FlightModel.ClassFighter);
+    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotS); }, Settle); // radar
+    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, Settle); // flee → ghost
+    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost created on contact loss (pre-condition for timeout)", "no ghost created before timeout test");
+
+    int timeoutTicks = (int)MathF.Round(sim.Content.World.FogGhostTimeout * FlightModel.TickRate); // 120 s × 20 Hz = 2400
+    // Hold the viewer away (no re-scout, no re-detect) well past ghost creation but before the timeout.
+    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, timeoutTicks - 400);
+    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "a never-re-scouted ghost persists until FogGhostTimeout elapses", "a ghost expired before its timeout");
+    // Cross the timeout — the stale ghost self-expires even though the area was never re-scouted.
+    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, 800);
+    Check(!Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "a lost-contact ghost self-expires after FogGhostTimeout", "a ghost outlived its FogGhostTimeout");
+}
+
+// ================================================================================================
 // 10. Determinism — two sync sims on the same seed+script produce bit-identical vision timelines,
 //     and an async run (worker thread) produces the SAME timeline (fixed-boundary apply is
 //     worker-speed independent).
