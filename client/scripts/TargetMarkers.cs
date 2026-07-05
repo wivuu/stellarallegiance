@@ -673,13 +673,8 @@ public partial class TargetMarkers : Control
         Vector2 sp = cam.UnprojectPosition(threat);
         if (behind)
             sp = center * 2f - sp;
-        Vector2 dir = sp - center;
-        if (dir.LengthSquared() < 1e-4f)
-            dir = Vector2.Down;
-        dir = dir.Normalized();
-        Vector2 half = view * 0.5f - new Vector2(EdgeMargin, EdgeMargin);
-        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
-        DrawArrow(center + dir * scale, dir, c);
+        Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
+        DrawArrow(edge, dir, c);
     }
 
     // Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class.
@@ -739,13 +734,7 @@ public partial class TargetMarkers : Control
 
         // Off screen: clamp the marker to the inset viewport edge along the ray from center,
         // draw the class glyph there and an arrow just outside it pointing outward.
-        Vector2 dir = sp - center;
-        if (dir.LengthSquared() < 1e-4f)
-            dir = Vector2.Down;
-        dir = dir.Normalized();
-        Vector2 half = size * 0.5f - new Vector2(EdgeMargin, EdgeMargin);
-        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
-        Vector2 edge = center + dir * scale;
+        Vector2 edge = ClampToEdge(sp, size, out Vector2 dir);
         float glyphScale = focused ? GlyphSize * 1.15f : GlyphSize;
         DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, color, glyphScale, glyph);
         DrawArrow(edge, dir, color);
@@ -777,26 +766,44 @@ public partial class TargetMarkers : Control
 
     // Fog last-known enemy ghosts in the current view sector: a dim, low-alpha class glyph at the
     // remembered position, wrapped in a faint hollow ring so it reads as a stale contact rather than
-    // a live enemy marker. Never a bracket / lead / off-screen arrow — a ghost is memory, not
-    // something to chase or lock. WorldRenderer.GhostContacts(sector) has already applied the
-    // radar-visible / live-row-nearby suppression, so whatever it returns is safe to draw straight.
+    // a live enemy marker. On screen it sits at the remembered position; off screen (or behind the
+    // camera) it clamps to the viewport edge with a hollow arrow pointing the way to the last-known
+    // contact — the same edge treatment as live entities, but dimmed to read as memory (never a
+    // bracket or lead — a ghost isn't something to chase or lock). WorldRenderer.GhostContacts(sector)
+    // has already applied the radar-visible / live-row-nearby suppression, so whatever it returns is
+    // safe to draw straight.
     private void DrawGhosts(Vector2 view)
     {
         Camera3D cam = Cam;
+        Vector2 center = view * 0.5f;
         var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
         foreach (var g in _world.GhostContacts(_world.ViewSector))
         {
-            if (cam.IsPositionBehind(g.Pos))
-                continue;
+            bool behind = cam.IsPositionBehind(g.Pos);
             Vector2 sp = cam.UnprojectPosition(g.Pos);
-            if (!onScreen.HasPoint(sp))
-                continue; // stale contacts don't get an edge arrow — only shown when in view
+            // A point behind the camera unprojects mirrored about the center; flip it back so the
+            // edge marker pins to the correct side.
+            if (behind)
+                sp = center * 2f - sp;
             Color c = new(TeamColor(g.Team), GhostAlpha);
+            Kind kind = KindOfClass(g.Cls);
             string glyph = _defs.TryGetShipDef(g.Cls, out ShipClassDef def) ? def.Glyph : "";
-            DrawClassGlyph(sp, KindOfClass(g.Cls), c, GlyphSize * 0.85f, glyph);
-            // Faint hollow ring: the "last-known contact" cue that sets a ghost apart from a live
-            // (but dim) friendly/base glyph.
-            DrawArc(sp, GlyphSize * 1.5f, 0f, Mathf.Tau, 16, new Color(TeamColor(g.Team), GhostAlpha * 0.7f), 1f, true);
+
+            if (!behind && onScreen.HasPoint(sp))
+            {
+                DrawClassGlyph(sp, kind, c, GlyphSize * 0.85f, glyph);
+                // Faint hollow ring: the "last-known contact" cue that sets a ghost apart from a live
+                // (but dim) friendly/base glyph.
+                DrawArc(sp, GlyphSize * 1.5f, 0f, Mathf.Tau, 16, new Color(TeamColor(g.Team), GhostAlpha * 0.7f), 1f, true);
+                continue;
+            }
+
+            // Off screen: clamp to the inset viewport edge, draw the dim class glyph there and an
+            // arrow pointing outward — the reduced alpha (GhostAlpha) keeps it reading as a
+            // remembered contact, not a live threat.
+            Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
+            DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, c, GlyphSize * 0.85f, glyph);
+            DrawArrow(edge, dir, c);
         }
     }
 
@@ -1008,6 +1015,24 @@ public partial class TargetMarkers : Control
             Vector2 e = a + dir * Mathf.Min(t + dash, len);
             DrawLine(s, e, color, width, true);
         }
+    }
+
+    // Clamp an off-screen (or behind-camera) marker to the inset viewport edge: given the
+    // marker's projected screen point `sp` (already un-mirrored for behind-camera points via
+    // center*2 - sp) and the viewport size, return the point on the EdgeMargin-inset rectangle
+    // edge along the ray from center, and the outward unit direction along that ray. Shared by
+    // every edge indicator — live entities, the incoming-missile threat arrow, and fog ghosts —
+    // so they all pin to the same border.
+    private static Vector2 ClampToEdge(Vector2 sp, Vector2 view, out Vector2 dir)
+    {
+        Vector2 center = view * 0.5f;
+        dir = sp - center;
+        if (dir.LengthSquared() < 1e-4f)
+            dir = Vector2.Down;
+        dir = dir.Normalized();
+        Vector2 half = center - new Vector2(EdgeMargin, EdgeMargin);
+        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
+        return center + dir * scale;
     }
 
     // A filled triangle at p pointing along dir (unit).
