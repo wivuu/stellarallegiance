@@ -396,7 +396,8 @@ public partial class ShipController : Node
 
         // T5 divergence injection (debug). Press P to force a misprediction and
         // watch reconciliation snap + re-sim back; autofly fires one self-test.
-        bool perturb = !Chat.Capturing && Input.IsPhysicalKeyPressed(Key.P);
+        // Debug-build only so release exports never expose the key.
+        bool perturb = OS.IsDebugBuild() && !Chat.Capturing && Input.IsPhysicalKeyPressed(Key.P);
         if (perturb && !_perturbHeld)
             pc.InjectDivergence(new Vector3(25f, 0f, 0f));
         _perturbHeld = perturb;
