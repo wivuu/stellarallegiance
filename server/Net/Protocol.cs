@@ -416,6 +416,7 @@ public static class Protocol
     {
         w.Write(s.Id);
         w.Write(s.Radius);
+        w.Write(s.Name ?? ""); // length-prefixed UTF-8; client reads with ReadString()
     }
 
     // Welcome handshake. When fog is OFF the world block is byte-identical to before: every static

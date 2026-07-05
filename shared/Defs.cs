@@ -242,6 +242,16 @@ namespace StellarAllegiance.Shared
         public List<HardpointDef> Hardpoints = new();
     }
 
+    // One per-sector radius override carried on WorldConfig. Radius is nullable: null → the sim uses
+    // the sector's built-in default radius × WorldConfig.SectorScale. Server-consumed only (World map
+    // seeding); NOT streamed — the client learns each sector's radius from the per-sector statics.
+    public sealed class WorldSectorConfig
+    {
+        public uint Id;
+        public float? Radius;
+        public string? Name; // optional display name for the sector (streamed per-sector static)
+    }
+
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale
     // multiplies the authored per-sector radii; AsteroidDensity scales asteroid counts.
     public sealed class WorldConfig
@@ -249,6 +259,11 @@ namespace StellarAllegiance.Shared
         public byte Id; // always 0 (singleton)
         public float SectorScale; // multiplier on authored sector radii
         public float AsteroidDensity; // asteroids per unit of normalized sector volume
+
+        // Per-sector radius overrides resolved from the authored `world.sectors` YAML. Consumed by World
+        // map seeding (server) only; deliberately NOT written to the wire (Protocol.BuildDefs skips it —
+        // the client already learns radii from the per-sector statics).
+        public List<WorldSectorConfig> Sectors = new();
         public bool DebugFreezeBrain; // skip the per-drone AI decision loop (benchmarking)
         public bool DebugNoFire; // force every ship's Firing input false (benchmarking)
 

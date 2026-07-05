@@ -90,7 +90,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
     int tl = br.ReadByte(); br.ReadBytes(tl);
     int ns = br.ReadUInt16();
-    for (int i = 0; i < ns; i++) { br.ReadUInt32(); br.ReadSingle(); }
+    for (int i = 0; i < ns; i++) { br.ReadUInt32(); br.ReadSingle(); br.ReadString(); } // id, radius, name
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);

@@ -80,6 +80,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             State: NormalizeState(req.State),
             ProtocolVersion: Math.Max(0, req.ProtocolVersion),
             HostedBy: NormalizeHostedBy(req.HostedBy),
+            MapName: req.MapName,
             Map: SanitizeMap(req.Map),
             Roster: SanitizeRoster(req.Roster, req.MaxPlayers)
         );

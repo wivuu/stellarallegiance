@@ -1,4 +1,5 @@
 using Godot;
+using StellarAllegiance.Ui;
 
 // F3 sector overview: an orbiting tactical-map camera around the local sector.
 //
@@ -56,6 +57,7 @@ public partial class SectorOverview : Node3D
     private readonly System.Collections.Generic.List<Vector3> _stemPoints = new();
     private CanvasLayer _hudLayer = null!;
     private Label _hint = null!;
+    private Label _sectorName = null!; // viewed sector's name (WorldRenderer.SectorName); hidden when blank
     private Minimap? _minimap; // resolved lazily; clicking its nodes retargets the view
 
     private Vector3 _target; // orbit focus point
@@ -107,17 +109,34 @@ public partial class SectorOverview : Node3D
 
         _hudLayer = new CanvasLayer { Name = "OverviewHud", Layer = 2 };
         AddChild(_hudLayer);
+
+        _sectorName = UiKit.MakeLabel("", UiKit.TextStyle.Title, DesignTokens.TextHi);
+        _sectorName.Visible = false;
+        _sectorName.HorizontalAlignment = HorizontalAlignment.Center;
+        _sectorName.AnchorRight = 1f;
+        _sectorName.OffsetTop = 14f;
+        _hudLayer.AddChild(_sectorName);
+
         _hint = new Label
         {
             Visible = false,
             HorizontalAlignment = HorizontalAlignment.Center,
             AnchorRight = 1f,
-            OffsetTop = 14f,
+            OffsetTop = 46f,
             Text = "SECTOR MAP — drag / arrows to orbit · shift-drag to pan · wheel or pinch to zoom · F3 to exit",
         };
         _hint.AddThemeFontSizeOverride("font_size", 18);
         _hint.AddThemeColorOverride("font_color", new Color(0.6f, 0.85f, 1f));
         _hudLayer.AddChild(_hint);
+    }
+
+    // Refresh the viewed-sector name label; hidden entirely when the sector has no name
+    // (e.g. a server that predates per-sector names).
+    private void UpdateSectorNameLabel()
+    {
+        string name = _world.SectorName(_world.ViewSector);
+        _sectorName.Text = name;
+        _sectorName.Visible = Active && !string.IsNullOrEmpty(name);
     }
 
     public override void _Process(double delta)
@@ -134,7 +153,10 @@ public partial class SectorOverview : Node3D
         // View sector changed (warp, or a minimap click): rebuild the grid to its size.
         float radius = _world.ViewSectorRadius;
         if (radius > 0f && !Mathf.IsEqualApprox(radius, _gridRadius))
+        {
             BuildGrid(radius);
+            UpdateSectorNameLabel();
+        }
 
         HandleKeys(delta);
         PlaceCamera();
@@ -226,6 +248,7 @@ public partial class SectorOverview : Node3D
         _cam.Current = true;
         Input.MouseMode = Input.MouseModeEnum.Visible; // free the cursor for dragging
         PlaceCamera();
+        UpdateSectorNameLabel();
     }
 
     private void Close()
@@ -234,6 +257,7 @@ public partial class SectorOverview : Node3D
         _grid.Visible = false;
         _stems.Visible = false;
         _hint.Visible = false;
+        _sectorName.Visible = false;
         _orbitDrag = _panDrag = false;
         _world.SetViewSector(null); // restore the local-sector view for normal flight
         _chaseCam.Current = true;
@@ -349,6 +373,7 @@ public partial class SectorOverview : Node3D
         if (r <= 0f)
             return;
         BuildGrid(r);
+        UpdateSectorNameLabel();
         if (sector == _world.LocalSector && _world.LocalShip != null)
         {
             _target = _world.LocalShip.GlobalPosition;

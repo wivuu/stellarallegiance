@@ -954,8 +954,8 @@ public partial class GameNetClient : Node
                 new Sector
                 {
                     SectorId = r.ReadUInt32(),
-                    Name = "",
                     Radius = r.ReadSingle(),
+                    Name = r.ReadString(),
                 }
             );
 
@@ -1045,8 +1045,8 @@ public partial class GameNetClient : Node
                 new Sector
                 {
                     SectorId = r.ReadUInt32(),
-                    Name = "",
                     Radius = r.ReadSingle(),
+                    Name = r.ReadString(),
                 }
             );
     }

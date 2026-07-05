@@ -40,17 +40,27 @@ public sealed class World
     public const float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
     public const uint HomeSector = 0;
     public const uint VergeSector = 1;
-    public const float CoreRadius = 2100f;
-    public const float VergeRadius = 700f;
-    public const int AsteroidCount = 4; // base count, scaled by cube law below
-    public const int VergeAsteroidCount = 4;
-    public const float VergeBeltRadius = 380f;
+    public const float CoreRadius = 2100f;  // home sector default radius (before scale / per-sector override)
+    public const float VergeRadius = 700f;  // verge sector default radius (before scale / per-sector override)
     // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
     // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
     // the generated map, not just what's streamed. No compile-in defaults live here.
     public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
 
-    public readonly record struct Sector(uint Id, float Radius);
+    // Asteroid field/belt shape knobs. Rocks fill a SHALLOW DISC (core) or annular BELT (verge)
+    // that reaches outward toward the sector edge, and counts derive from the filled area so
+    // density (spacing) is invariant to sector size — a bigger sector just gets proportionally
+    // more rocks at the same spacing. RockAreaDensity/BeltAreaDensity are calibrated so the legacy
+    // stock map's rock spacing is preserved.
+    public const float FieldFillFrac = 0.9f;       // core disc radius as a fraction of sector radius
+    public const float FieldFlatten = 0.1f;        // core disc half-thickness as a fraction of its radius (shallow)
+    public const float RockAreaDensity = 4.5e-6f;  // core rocks per unit² of disc footprint (at density 1)
+    public const float BeltInnerFrac = 0.25f;      // verge belt inner radius / sector radius
+    public const float BeltOuterFrac = 0.95f;      // verge belt outer radius / sector radius
+    public const float BeltFlatten = 0.13f;        // verge belt half-thickness / sector radius (shallow)
+    public const float BeltAreaDensity = 2.4e-5f;  // verge belt rocks per unit² of annulus (at density 1)
+
+    public readonly record struct Sector(uint Id, float Radius, string Name);
 
     public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
 
@@ -159,14 +169,30 @@ public sealed class World
         // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
-        float coreR = CoreRadius * sectorScale;
-        float vergeR = VergeRadius * sectorScale;
-        float scale3 = sectorScale * sectorScale * sectorScale;
-        int coreCount = (int)MathF.Round(density * AsteroidCount * scale3);
-        int vergeCount = (int)MathF.Round(density * VergeAsteroidCount * scale3);
 
-        Sectors.Add(new Sector(HomeSector, coreR));
-        Sectors.Add(new Sector(VergeSector, vergeR));
+        // Per-sector radius: an authored absolute override (world.sectors[id].radius) wins; otherwise
+        // fall back to the sector's built-in default × the global sector-scale. This is "the map":
+        // a different content bundle can resize each sector independently.
+        float ResolveRadius(uint id, float baseRadius)
+        {
+            foreach (var sc in cfg.Sectors)
+                if (sc.Id == id && sc.Radius.HasValue)
+                    return sc.Radius.Value;
+            return baseRadius * sectorScale;
+        }
+        // Optional per-sector display name from the map (empty when the map leaves it unset).
+        string ResolveName(uint id)
+        {
+            foreach (var sc in cfg.Sectors)
+                if (sc.Id == id && !string.IsNullOrWhiteSpace(sc.Name))
+                    return sc.Name!;
+            return "";
+        }
+        float coreR = ResolveRadius(HomeSector, CoreRadius);
+        float vergeR = ResolveRadius(VergeSector, VergeRadius);
+
+        Sectors.Add(new Sector(HomeSector, coreR, ResolveName(HomeSector)));
+        Sectors.Add(new Sector(VergeSector, vergeR, ResolveName(VergeSector)));
 
         // Team 0 base in HomeSector, Team 1 base in VergeSector — semi-random positions
         // derived from a dedicated RNG so the asteroid/aleph sequence is unaffected.
@@ -185,8 +211,8 @@ public sealed class World
 
         var rng = new DetRng(seed);
         ulong rockId = 1;
-        SeedAsteroidField(ref rng, HomeSector, coreCount, sectorScale, ref rockId);
-        SeedAsteroidBelt(ref rng, VergeSector, vergeCount, sectorScale, ref rockId);
+        SeedAsteroidField(ref rng, HomeSector, coreR, density, ref rockId);
+        SeedAsteroidBelt(ref rng, VergeSector, vergeR, density, ref rockId);
 
         // One linked aleph pair, placed toward the outer reaches of each sector.
         var corePos = RandomOuterPos(ref rng, coreR);
@@ -353,47 +379,45 @@ public sealed class World
         return float.MaxValue;
     }
 
-    // Core pattern: diffuse sheared bands (module SeedAsteroidField, byte-equivalent draws).
-    private void SeedAsteroidField(ref DetRng rng, uint sector, int count, float scale, ref ulong id)
+    // Core pattern: a SHALLOW DISC filling outward to ~FieldFillFrac of the sector radius, at
+    // constant areal density (count ∝ disc area) so a bigger sector gets proportionally more rocks
+    // at the same spacing. sqrt-uniform radius = even density; the disc stays thin in Y (shallow).
+    private void SeedAsteroidField(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
-        const double halfX = 800.0,
-            halfY = 200.0,
-            halfZ = 800.0;
-        int bandCount = 3 + rng.NextInt(3);
-        var bandZ = new double[bandCount];
-        var bandThick = new double[bandCount];
-        var bandShear = new double[bandCount];
-        for (int b = 0; b < bandCount; b++)
-        {
-            bandZ[b] = (rng.NextDouble() * 2.0 - 1.0) * halfZ;
-            bandThick[b] = 40.0 + rng.NextDouble() * 70.0;
-            bandShear[b] = (rng.NextDouble() * 2.0 - 1.0) * 0.6;
-        }
+        float maxR = sectorRadius * FieldFillFrac;
+        float hY = maxR * FieldFlatten;
+        int count = (int)MathF.Round(density * RockAreaDensity * MathF.PI * maxR * maxR);
         for (int i = 0; i < count; i++)
         {
-            int b = rng.NextInt(bandCount);
-            double ux = rng.NextDouble() * 2.0 - 1.0;
-            double across = (rng.NextDouble() + rng.NextDouble() - 1.0) * bandThick[b];
-            double zc = bandZ[b] + bandShear[b] * (ux * halfX);
-            float px = (float)(ux * halfX * scale);
-            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * halfY * scale);
-            float pz = (float)((zc + across) * scale);
+            double ang = rng.NextDouble() * Math.PI * 2.0;
+            double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density, bounded by maxR
+            float px = (float)(Math.Cos(ang) * rr);
+            float pz = (float)(Math.Sin(ang) * rr);
+            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
             float radius = (float)(rng.NextDouble() * 30.0 + 10.0);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
     }
 
-    // Verge pattern: flattened ring belt (module SeedAsteroidBelt).
-    private void SeedAsteroidBelt(ref DetRng rng, uint sector, int count, float scale, ref ulong id)
+    // Verge pattern: a flattened ANNULAR BELT spanning BeltInnerFrac..BeltOuterFrac of the sector
+    // radius, reaching outward toward the edge. Count ∝ annulus area at constant density; sqrt-in-
+    // area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
+    private void SeedAsteroidBelt(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
+        float rIn = sectorRadius * BeltInnerFrac;
+        float rOut = sectorRadius * BeltOuterFrac;
+        float hY = sectorRadius * BeltFlatten;
+        float area = MathF.PI * (rOut * rOut - rIn * rIn);
+        int count = (int)MathF.Round(density * BeltAreaDensity * area);
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
-            double r = (VergeBeltRadius + (rng.NextDouble() - 0.5) * 160.0) * scale;
-            float px = (float)(Math.Cos(ang) * r);
-            float py = (float)((rng.NextDouble() - 0.5) * 90.0 * scale);
-            float pz = (float)(Math.Sin(ang) * r);
+            double t = rng.NextDouble();
+            double rr = Math.Sqrt(rIn * rIn + t * (rOut * rOut - rIn * rIn)); // uniform areal density across the annulus
+            float px = (float)(Math.Cos(ang) * rr);
+            float pz = (float)(Math.Sin(ang) * rr);
+            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
             float radius = (float)(rng.NextDouble() * 18.0 + 8.0);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
