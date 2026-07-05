@@ -534,11 +534,22 @@ public partial class ShipLoadout : Control
         if (@event is not InputEventKey { Pressed: true, Echo: false } key)
             return;
 
-        // ESC only dismisses a browse-while-flying hangar; the spawn select has no exit
-        // but LAUNCH (mirrors the old always-there buy menu).
-        if (key.Keycode == Key.Escape && !OpenedForSpawn)
+        // A game menu / settings overlay stacks above and owns Esc while it's up (its own
+        // handler closes it) — don't also dismiss/re-open underneath it.
+        if (EscapeMenu.Active || SettingsDialog.Active)
+            return;
+
+        if (key.Keycode == Key.Escape)
         {
-            Close();
+            // Browse-while-flying hangar: Esc dismisses it back to flight. The mandatory
+            // spawn-select ("base") has no dismiss — LAUNCH is the only way out — so there
+            // Esc opens the game menu instead, keeping SETTINGS / LEAVE MATCH / QUIT reachable
+            // without a ship. The cursor is already free here (UI mode), so there's no
+            // two-step release like flight — Esc opens the menu directly.
+            if (OpenedForSpawn)
+                EscapeMenu.Open(this, EscapeMenu.Context.Lobby);
+            else
+                Close();
             GetViewport().SetInputAsHandled();
             return;
         }
