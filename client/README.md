@@ -1,6 +1,6 @@
 # client/
 
-The **Godot 4.6.3 (C#/.NET 8) game client**. It renders the world, takes input, and runs
+The **Godot 4.7 (C#/.NET 8) game client**. It renders the world, takes input, and runs
 client-side prediction — but it is **never** authoritative. It predicts the local ship,
 interpolates remote ships, and reconciles everything against the authoritative 20 Hz snapshots
 streamed by [`server/`](../server). All content (world layout, ship/asteroid catalogs, tuning

@@ -112,6 +112,19 @@ public record Hull : Buildable
     public double ShieldRecharge { get; set; }
     public double ShieldDelay { get; set; }
 
+    /// <summary>
+    /// Long-range directional sensor cone: <see cref="VisionConeLength"/> is its max range (u),
+    /// <see cref="VisionConeAngleDeg"/> its half-angle (degrees); asteroids occlude it. Paired with
+    /// an omnidirectional <see cref="VisionSphereRadius"/> proximity sensor (unoccluded, shorter
+    /// range). <see cref="RadarSignature"/> is a detection-range multiplier applied to every
+    /// viewer's range against THIS hull (0/omitted -&gt; 1.0 at projection; &lt;1 stealthier, &gt;1
+    /// easier to spot). All omit-when-default; projected onto the ShipClassDef vision fields.
+    /// </summary>
+    public double VisionConeLength { get; set; }
+    public double VisionConeAngleDeg { get; set; }
+    public double VisionSphereRadius { get; set; }
+    public double RadarSignature { get; set; }
+
     /// <summary>Local-space mount points (weapon muzzles, engine nozzles, lights) the client renders from.</summary>
     public List<Hardpoint> Hardpoints { get; set; } = new();
 

@@ -32,6 +32,9 @@ public partial class TargetMarkers : Control
     private const float AimRadius = 8f; // aim-reticle gunsight radius (px)
     private const float GlyphSize = 8f; // class-glyph radius (px)
 
+    // Fog last-known ghost contact opacity — dim enough to read as memory, not a live marker.
+    private const float GhostAlpha = 0.32f;
+
     // Screen-space base damage bar (px). Drawn directly over each damaged base's projected
     // position so it can never clip behind the base geometry the way a world-space quad did.
     private const float BaseBarWidth = 64f;
@@ -417,9 +420,14 @@ public partial class TargetMarkers : Control
         // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
         // The focused base is skipped here — it's drawn bright/bracketed below instead.
         byte focusedBaseTeam = 1; // resolved from VisibleBases below when a base is focused
-        foreach (var (pos, team) in _world.VisibleBases())
+        foreach (var (pos, team, dead) in _world.VisibleBases())
             if (focusedBasePos is Vector3 fbp && pos == fbp)
                 focusedBaseTeam = team; // skip the dim pass; drawn bright/bracketed below
+            else if (dead)
+                // Fog stale memory: a destroyed base still remembered on the team map draws as a
+                // dim hollow marker (no health bar — VisibleBaseHealth() skips it) so it reads as
+                // wreckage, not a live station.
+                DrawStaleBase(view, pos, team);
             else
                 DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
         foreach (var (pos, frac) in _world.VisibleBaseHealth())
@@ -438,6 +446,12 @@ public partial class TargetMarkers : Control
         // edge arrow off-screen) so the way to the nearest aleph always reads.
         foreach (var pos in _world.VisibleAlephs())
             DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true);
+
+        // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
+        // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
+        // in the F3 overview (which reprojects through Cam like everything else here).
+        DrawGhosts(view);
+        DrawContactLost(view);
 
         var local = _world.LocalShip;
         if (local == null)
@@ -465,52 +479,58 @@ public partial class TargetMarkers : Control
             DrawLockArc(focusedShip);
         }
 
-        // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
-        // view axis — and the chase camera is offset above/behind the ship, so screen
-        // center is NOT where shots go. Draw an aim reticle on the real firing line so the
-        // player has something to line up on the lead circle.
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
-
-        // Lead indicator for the focused target: TryLead returns the world point to aim
-        // the nose at (the target's position led by the RELATIVE velocity, so the shot's
-        // inherited ship velocity carries it onto the target). The aim reticle is ranged to
-        // match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
-        // with no target it sits at a default range just to show the aim line.
-        float aimRange = DefaultAimRange;
-        if (
-            focusedShip != null
-            && TryLead(
-                muzzle,
-                local.Velocity,
-                focusedShip.GlobalPosition,
-                focusedShip.Velocity,
-                out Vector3 aimPoint,
-                out float t
-            )
-        )
+        // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
+        // banner are ship-centric combat readouts, meaningless in the F3 orbit view — skip them
+        // there. The entity brackets/glyphs/ghosts above still reproject onto the map.
+        if (!SectorOverview.Active)
         {
-            aimRange = ProjectileSpeed * t;
-            if (!Cam.IsPositionBehind(aimPoint))
+            // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
+            // view axis — and the chase camera is offset above/behind the ship, so screen
+            // center is NOT where shots go. Draw an aim reticle on the real firing line so the
+            // player has something to line up on the lead circle.
+            Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
+            Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
+
+            // Lead indicator for the focused target: TryLead returns the world point to aim
+            // the nose at (the target's position led by the RELATIVE velocity, so the shot's
+            // inherited ship velocity carries it onto the target). The aim reticle is ranged to
+            // match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
+            // with no target it sits at a default range just to show the aim line.
+            float aimRange = DefaultAimRange;
+            if (
+                focusedShip != null
+                && TryLead(
+                    muzzle,
+                    local.Velocity,
+                    focusedShip.GlobalPosition,
+                    focusedShip.Velocity,
+                    out Vector3 aimPoint,
+                    out float t
+                )
+            )
             {
-                Vector2 lp = Cam.UnprojectPosition(aimPoint);
-                Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
-                    ? null
-                    : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                DrawLeadIndicator(targetSp, lp);
+                aimRange = ProjectileSpeed * t;
+                if (!Cam.IsPositionBehind(aimPoint))
+                {
+                    Vector2 lp = Cam.UnprojectPosition(aimPoint);
+                    Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
+                        ? null
+                        : Cam.UnprojectPosition(focusedShip.GlobalPosition);
+                    DrawLeadIndicator(targetSp, lp);
+                }
             }
+
+            Vector3 reticlePoint = muzzle + fwd * aimRange;
+            if (!Cam.IsPositionBehind(reticlePoint))
+                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+
+            // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
+            // missile homing on us (drawn last so it sits over everything). State cached in _Process.
+            DrawIncomingWarning(view);
+
+            // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
+            DrawLockWarning(view);
         }
-
-        Vector3 reticlePoint = muzzle + fwd * aimRange;
-        if (!Cam.IsPositionBehind(reticlePoint))
-            DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
-
-        // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
-        // missile homing on us (drawn last so it sits over everything). State cached in _Process.
-        DrawIncomingWarning(view);
-
-        // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
-        DrawLockWarning(view);
     }
 
     // The being-locked warning banner (A2): "⚠ MISSILE LOCK" flashing amber (state 1, a lock is
@@ -696,6 +716,77 @@ public partial class TargetMarkers : Control
         // Left-anchored fill, width scaled by the health fraction.
         DrawRect(new Rect2(topLeft, new Vector2(BaseBarWidth * frac, BaseBarHeight)), HealthColor(frac));
     }
+
+    // Fog last-known enemy ghosts in the current view sector: a dim, low-alpha class glyph at the
+    // remembered position, wrapped in a faint hollow ring so it reads as a stale contact rather than
+    // a live enemy marker. Never a bracket / lead / off-screen arrow — a ghost is memory, not
+    // something to chase or lock. WorldRenderer.GhostContacts(sector) has already applied the
+    // radar-visible / live-row-nearby suppression, so whatever it returns is safe to draw straight.
+    private void DrawGhosts(Vector2 view)
+    {
+        Camera3D cam = Cam;
+        var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
+        foreach (var g in _world.GhostContacts(_world.ViewSector))
+        {
+            if (cam.IsPositionBehind(g.Pos))
+                continue;
+            Vector2 sp = cam.UnprojectPosition(g.Pos);
+            if (!onScreen.HasPoint(sp))
+                continue; // stale contacts don't get an edge arrow — only shown when in view
+            Color c = new(TeamColor(g.Team), GhostAlpha);
+            string glyph = _defs.TryGetShipDef(g.Cls, out ShipClassDef def) ? def.Glyph : "";
+            DrawClassGlyph(sp, KindOfClass(g.Cls), c, GlyphSize * 0.85f, glyph);
+            // Faint hollow ring: the "last-known contact" cue that sets a ghost apart from a live
+            // (but dim) friendly/base glyph.
+            DrawArc(sp, GlyphSize * 1.5f, 0f, Mathf.Tau, 16, new Color(TeamColor(g.Team), GhostAlpha * 0.7f), 1f, true);
+        }
+    }
+
+    // A fog stale-memory base marker: a dim, desaturated hollow square with a small cross, so a
+    // destroyed-but-remembered station reads as wreckage rather than a live base (which draws a
+    // filled square). On-screen only — a wreck needs no chase arrow. Skipped if behind the camera.
+    private void DrawStaleBase(Vector2 view, Vector3 worldPos, byte team)
+    {
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(worldPos))
+            return;
+        Vector2 sp = cam.UnprojectPosition(worldPos);
+        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+            return;
+
+        // Desaturate the team colour toward the dim text token and drop the alpha — a faded memory.
+        Color c = new(TeamColor(team).Lerp(DesignTokens.TextDim, 0.5f), 0.5f);
+        float r = GlyphSize;
+        DrawRect(new Rect2(sp - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), c, filled: false, width: 1.5f);
+        // Small cross through the centre: the "destroyed" cue.
+        DrawLine(sp + new Vector2(-r * 0.5f, -r * 0.5f), sp + new Vector2(r * 0.5f, r * 0.5f), c, 1f, true);
+        DrawLine(sp + new Vector2(-r * 0.5f, r * 0.5f), sp + new Vector2(r * 0.5f, -r * 0.5f), c, 1f, true);
+    }
+
+    // A brief "CONTACT LOST" note when an enemy just slipped out of the team's streamed set (fog
+    // lost-contact). Mono, DesignTokens.Warn (an information change, not a Danger threat), sat above
+    // the missile banners so it never collides with them. Time-gated by WorldRenderer.ContactLostActive.
+    private void DrawContactLost(Vector2 view)
+    {
+        if (!_world.ContactLostActive)
+            return;
+        float pulse = 0.5f + 0.4f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 4f);
+        Color c = new(DesignTokens.Warn, pulse);
+        Font font = UiFonts.Mono;
+        const string txt = "CONTACT LOST";
+        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 13).X;
+        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.27f), txt, HorizontalAlignment.Left, -1, 13, c);
+    }
+
+    // Map a ship class byte (ghost contacts carry the raw class, not a RemoteShip) to its HUD glyph
+    // kind. Ghosts are enemy hulls — pods don't leave ghosts — so no pod case is needed.
+    private static Kind KindOfClass(byte cls) =>
+        (ShipClass)cls switch
+        {
+            ShipClass.Scout => Kind.Scout,
+            ShipClass.Bomber => Kind.Bomber,
+            _ => Kind.Fighter,
+        };
 
     // Green at full health, through yellow at half, to red when nearly destroyed.
     private static Color HealthColor(float frac) =>

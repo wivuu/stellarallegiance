@@ -4,7 +4,7 @@
        <ProjectReference>. Each consumer's own runtime compiles this same source,
        so the wasm-server and mono-client math stays bit-identical. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Folder is shared/ but the namespace is StellarAllegiance.Shared (used by
@@ -14,8 +14,9 @@
          project (e.g. the wasi-wasm module) supplies the RID and recompiles. -->
   </PropertyGroup>
   <ItemGroup>
-    <!-- shared/Net/ holds SIPSorcery-dependent WebRTC source that the client and server compile
-         in via <Compile Include Link>. This project stays dependency-free, so exclude it here. -->
-    <Compile Remove="Net/**/*.cs" />
+    <!-- Net/WebRtcSdp.cs is SIPSorcery-dependent WebRTC source that the client and server compile
+         in via <Compile Include Link>. This project stays dependency-free, so exclude that file
+         (dependency-free shared/Net sources like Wire.cs DO compile here). -->
+    <Compile Remove="Net/WebRtcSdp.cs" />
   </ItemGroup>
 </Project>

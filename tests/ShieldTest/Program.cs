@@ -78,9 +78,16 @@ float ShieldCap(Simulation sim, byte cls) => sim.Content.Ships.First(s => s.Clas
     Check(fighterCap > 0f && Near(attacker.Shield, fighterCap),
         $"fighter spawns with full authored shield ({fighterCap})",
         $"fighter spawn shield wrong ({attacker.Shield}, expected {fighterCap})");
-    Check(Near(ShieldCap(sim, FlightModel.ClassScout), 0f) && Near(target.Shield, 0f),
-        "scout has no shield (capacity 0, spawns with 0)",
-        $"scout shield wrong (cap {ShieldCap(sim, FlightModel.ClassScout)}, spawn {target.Shield})");
+    float scoutCap = ShieldCap(sim, FlightModel.ClassScout);
+    Check(scoutCap > 0f && Near(target.Shield, scoutCap),
+        $"scout spawns with full authored shield ({scoutCap})",
+        $"scout spawn shield wrong ({target.Shield}, expected {scoutCap})");
+    // The pod hull authors no shield keys at all — a genuinely shieldless class, read straight
+    // from the loaded def rather than hardcoded (a pod never joins the fight directly; it's only
+    // ever reached via a death eject, so this checks the content fact, not a live spawn).
+    Check(Near(ShieldCap(sim, GameContent.PodClassId), 0f),
+        "pod has no authored shield (capacity 0)",
+        $"pod shield capacity wrong ({ShieldCap(sim, GameContent.PodClassId)}, expected 0)");
 }
 
 // A helper that locks + fires one seeker from `attacker` at `target` and steps until it resolves,

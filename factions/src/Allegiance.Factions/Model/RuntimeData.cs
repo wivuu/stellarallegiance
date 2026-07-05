@@ -95,4 +95,29 @@ public record WorldConfig
 
     /// <summary>Force every ship's firing input false (benchmarking).</summary>
     public bool DebugNoFire { get; set; }
+
+    /// <summary>
+    /// Per-server fog-of-war toggle. Null/omitted -&gt; on at projection (default true); when off,
+    /// behavior/bytes are identical to no-fog. Rides the wire (WorldConfig.FogOfWar).
+    /// </summary>
+    public bool? FogOfWar { get; set; }
+
+    /// <summary>
+    /// Outer "eyeball" tier multiplier on a ship's vision-sphere radius (mesh streams but isn't
+    /// radar-detected). 0/omitted -&gt; 1.5 at projection. Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double FogEyeballMultiplier { get; set; }
+
+    /// <summary>
+    /// Radar-signature multiplier applied to a ship the instant it fires (guns or missiles),
+    /// decaying linearly back to 1x over <see cref="FireSignatureWindow"/>. 0/omitted -&gt; 2.5 at
+    /// projection; author 1.0 to disable. Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double FireSignatureBoost { get; set; }
+
+    /// <summary>
+    /// Seconds after the last shot over which <see cref="FireSignatureBoost"/> decays back to 1x.
+    /// 0/omitted -&gt; 4.0 at projection. Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double FireSignatureWindow { get; set; }
 }

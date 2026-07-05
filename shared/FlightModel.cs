@@ -246,6 +246,11 @@ namespace StellarAllegiance.Shared
         // existing FlightModel goldens are unchanged (they default false).
         public bool DropChaff;
         public bool DropMine;
+
+        // Recon-probe dispenser trigger. Rides the input ring / HeldInput replay exactly like
+        // DropChaff/DropMine; the server's TryDeployProbe (Simulation.Probes.cs) reads it directly
+        // with its own authoritative cadence gate.
+        public bool DropProbe;
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)

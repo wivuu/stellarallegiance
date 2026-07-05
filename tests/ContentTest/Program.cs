@@ -11,6 +11,7 @@ using System.Linq;
 using SimServer.Content;
 using SimServer.Net;
 using StellarAllegiance.Shared;
+using Factions = Allegiance.Factions.Model;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -70,12 +71,46 @@ Check(
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
+// Fog-of-war vision (behavior-inert until a later WP): scout carries the longest cone + an
+// explicit stealthy RadarSignature < 1.
+Check(
+    scout.VisionConeLength == 2400f && scout.VisionConeAngleDeg == 30f
+        && scout.VisionSphereRadius == 900f && scout.RadarSignature == 0.5f,
+    "loader projected scout vision fields",
+    $"scout vision wrong (cone {scout.VisionConeLength}/{scout.VisionConeAngleDeg}, sphere {scout.VisionSphereRadius}, sig {scout.RadarSignature})"
+);
+// Fighter authors RadarSignature explicitly at the baseline (1.0) — distinct from the "omitted ->
+// resolves to 1.0" default path, which is exercised separately below via a synthetic hull.
+var fighterVis = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter);
+Check(
+    fighterVis.VisionConeLength == 1200f && fighterVis.VisionConeAngleDeg == 20f
+        && fighterVis.VisionSphereRadius == 450f && fighterVis.RadarSignature == 1.0f,
+    "loader projected fighter vision fields (explicit baseline signature)",
+    $"fighter vision wrong (cone {fighterVis.VisionConeLength}/{fighterVis.VisionConeAngleDeg}, sphere {fighterVis.VisionSphereRadius}, sig {fighterVis.RadarSignature})"
+);
+// A hull/base that OMITS radar-signature (0 authored) must resolve to 1.0 at projection — never
+// streamed as 0 (which would make it undetectable at any range). Built as a synthetic minimal
+// bundle since every real stock hull/base authors an explicit signature.
+var sigLessCore = new Factions.Core
+{
+    Hulls = { new Factions.Hull { Id = "sigless", Name = "SigLess", ClassId = 50 } },
+    Stations = { new Factions.Station { Id = "sigless-base", Name = "SigLessBase", BaseTypeId = 50 } },
+    Factions = { new Factions.Faction { Id = "f", Name = "F", LifepodHullId = "sigless", InitialStationId = "sigless-base" } },
+};
+var sigLessSet = FactionsContentProjection.Project(sigLessCore);
+var sigLessShip = sigLessSet.Ships.First(s => s.ClassId == 50);
+var sigLessBase = sigLessSet.Bases.First(b => b.BaseTypeId == 50);
+Check(
+    sigLessShip.RadarSignature == 1f && sigLessBase.RadarSignature == 1f,
+    "loader resolved an omitted RadarSignature (0) to 1.0 for both a hull and a base",
+    $"signature-less resolution wrong (ship {sigLessShip.RadarSignature}, base {sigLessBase.RadarSignature})"
+);
 // Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 8,
-    "loader projected guns + missile launchers + dispensers (3 guns + 3 racks + chaff + mine)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 8)"
+    stock.Weapons.Count == 9,
+    "loader projected guns + missile launchers + dispensers (3 guns + 3 racks + chaff + mine + probe)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 9)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
@@ -105,11 +140,20 @@ Check(
 var mineW = stock.Weapons.First(w => w.WeaponId == 7);
 Check(
     mineW.Kind == WeaponKind.Mine
-        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 40
-        && mineW.MineCloudRadius == 15f && mineW.BlastPower == 20f
+        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 10
+        && mineW.MineCloudRadius == 80f && mineW.BlastPower == 200f
         && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "acs41",
     "loader projected the mine-dispenser (mine-kind WeaponDef)",
     $"mine weapon wrong (kind {mineW.Kind}, cloudCount {mineW.MineCloudCount}, arm {mineW.MineArmTicks}, trigger {mineW.MineTriggerRadius}, cloudR {mineW.MineCloudRadius}, cargo {mineW.CargoId})"
+);
+// Probe dispenser (weapon-id 8): Probe-kind, sight-radius/lifespan + linked cargo id.
+var probeW = stock.Weapons.First(w => w.WeaponId == 8);
+Check(
+    probeW.Kind == WeaponKind.Probe
+        && probeW.ProbeSightRadius == 1200f && probeW.ProbeLifespanSec == 600f
+        && probeW.ProjectileLifeTicks == 12000 && probeW.CargoId == 4 && probeW.ModelName == "acs64",
+    "loader projected the probe-dispenser (probe-kind WeaponDef)",
+    $"probe weapon wrong (kind {probeW.Kind}, sight {probeW.ProbeSightRadius}, lifespan {probeW.ProbeLifespanSec}, life-ticks {probeW.ProjectileLifeTicks}, cargo {probeW.CargoId}, model {probeW.ModelName})"
 );
 // Fighter default consumable hold: 2x sensor-decoy (cargo-id 3), authored order.
 var fighterCargo = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter).DefaultCargo;
@@ -136,22 +180,27 @@ Check(
     scoutW.Kind == WeaponKind.Bolt && scoutW.MagazineSize == 0 && scoutW.LockTicks == 0
         && scoutW.LockRange == 0f && scoutW.MissileMaxSpeed == 0f && scoutW.ModelName == "" && scoutW.TrailColor == 0u
         && scoutW.BlastPower == 0f && scoutW.BlastRadius == 0f && scoutW.DirectHitMult == 0f
-        // ...and the 8 chaff/mine dispenser fields stay zero/empty on a bolt gun too.
+        // ...and the chaff/mine/probe dispenser fields stay zero/empty on a bolt gun too.
         && scoutW.ChaffResistance == 0f && scoutW.ChaffStrength == 0f && scoutW.DecoyRadius == 0f
         && scoutW.MineCloudRadius == 0f && scoutW.MineCloudCount == 0 && scoutW.MineArmTicks == 0u
-        && scoutW.MineTriggerRadius == 0f && scoutW.CargoId == 0u,
+        && scoutW.MineTriggerRadius == 0f && scoutW.CargoId == 0u
+        && scoutW.ProbeSightRadius == 0f && scoutW.ProbeLifespanSec == 0f,
     "loader left bolt weapon's missile + dispenser fields zero/empty",
-    $"scout bolt has stray missile/dispenser fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, chaffStr {scoutW.ChaffStrength}, cloudCount {scoutW.MineCloudCount})"
+    $"scout bolt has stray missile/dispenser fields (kind {scoutW.Kind}, mag {scoutW.MagazineSize}, chaffStr {scoutW.ChaffStrength}, cloudCount {scoutW.MineCloudCount}, probeSight {scoutW.ProbeSightRadius})"
 );
 // Cargo items: the seeker lost its cargo-id (missiles aren't hold consumables — payload can't fit
-// mass-4 seekers), so the hold lists only the real consumables — proximity-mine (2) + sensor-decoy (3).
+// mass-4 seekers), so the hold lists only the real consumables — proximity-mine (2) + sensor-decoy
+// (3) + recon-probe (4).
 Check(
-    stock.CargoItems.Count == 2
-        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 2, 3 })
+    stock.CargoItems.Count == 3
+        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 2, 3, 4 })
         && stock.CargoItems.First(c => c.CargoId == 2).Mass == 1f
-        && stock.CargoItems.First(c => c.CargoId == 3).Mass == 3f
-        && stock.CargoItems.First(c => c.CargoId == 3).Glyph.Length > 0,
-    "loader projected cargo items from expendables (mine + decoy only)",
+        && stock.CargoItems.First(c => c.CargoId == 3).Mass == 1f
+        && stock.CargoItems.First(c => c.CargoId == 3).Glyph.Length > 0
+        && stock.CargoItems.First(c => c.CargoId == 4).Mass == 2f
+        && stock.CargoItems.First(c => c.CargoId == 4).ChargesPerPack == 2
+        && stock.CargoItems.First(c => c.CargoId == 4).Glyph.Length > 0,
+    "loader projected cargo items from expendables (mine + decoy + probe)",
     $"cargo items wrong (count {stock.CargoItems.Count}, ids {string.Join(",", stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id))})"
 );
 // Booster fuel: only the fighter is authored with a fuel gauge (max-fuel/ab-fuel-drain/
@@ -170,9 +219,14 @@ Check(
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
 Check(
-    stock.World.SectorScale == 2.25f && stock.World.AsteroidDensity == 1.0f,
-    "loader parsed world knobs",
-    $"world wrong (scale {stock.World.SectorScale}, density {stock.World.AsteroidDensity})"
+    garrison.VisionSphereRadius == 1500f && garrison.RadarSignature == 2.5f,
+    "loader projected garrison vision fields",
+    $"garrison vision wrong (sphere {garrison.VisionSphereRadius}, sig {garrison.RadarSignature})"
+);
+Check(
+    stock.World.SectorScale == 2.25f && stock.World.AsteroidDensity == 1.0f && stock.World.FogOfWar,
+    "loader parsed world knobs (incl. fog-of-war)",
+    $"world wrong (scale {stock.World.SectorScale}, density {stock.World.AsteroidDensity}, fog {stock.World.FogOfWar})"
 );
 
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the
@@ -189,7 +243,7 @@ var badShip = new ShipClassDef
     MaxHull = 50f,
     Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 9999 } },
 };
-var okBase = new BaseDef { BaseTypeId = 0, Name = "B", Radius = 1f, MaxHealth = 1f };
+var okBase = new BaseDef { BaseTypeId = 0, Name = "B", Radius = 1f, MaxHealth = 1f, RadarSignature = 1f };
 var danglingErrors = ContentValidator.Validate(new[] { badShip }, System.Array.Empty<WeaponDef>(), new[] { okBase });
 Check(danglingErrors.Any(e => e.Contains("9999")), "validator flags a dangling weapon hardpoint", "validator missed a dangling weapon hardpoint");
 
@@ -232,6 +286,7 @@ ShipClassDef FuelShip(byte classId, float abAccel, float maxFuel, float fuelDrai
         ClassId = classId,
         Name = $"Fuel{classId}",
         MaxHull = 50f,
+        RadarSignature = 1f, // unrelated to the fuel rules under test; keep vision validation quiet
         AbAccel = abAccel,
         MaxFuel = maxFuel,
         AbFuelDrain = fuelDrain,
@@ -313,6 +368,41 @@ Check(
     !winnableErrors.Any(e => e.Contains("can-damage-base")),
     "validator accepts a bundle where a default loadout mounts a can-damage-base weapon",
     $"validator wrongly flagged a winnable bundle: {string.Join("; ", winnableErrors)}"
+);
+
+// 3f. Fog-of-war vision authoring rules (ContentValidator.ValidateVision / ValidateBaseVision):
+// a Probe-kind weapon with non-positive ProbeSightRadius must refuse to boot...
+var badProbeWeapon = new WeaponDef { WeaponId = 60, Name = "BadProbe", Kind = WeaponKind.Probe, ProbeSightRadius = 0f, ProbeLifespanSec = 600f };
+var badProbeErrors = ContentValidator.Validate(System.Array.Empty<ShipClassDef>(), new[] { badProbeWeapon }, new[] { okBase });
+Check(
+    badProbeErrors.Any(e => e.Contains("ProbeSightRadius")),
+    "validator flags a probe dispenser with non-positive ProbeSightRadius",
+    "validator missed a probe dispenser with non-positive ProbeSightRadius"
+);
+// ...and a hull/base with a non-positive (resolved) RadarSignature must refuse to boot too — this
+// simulates a def set built by hand (bypassing projection's 0->1.0 resolution), which is exactly
+// what a malformed projection or a hand-authored test fixture would produce.
+var negSigShip = new ShipClassDef { ClassId = 61, Name = "NegSig", MaxHull = 50f, RadarSignature = -1f };
+var negSigErrors = ContentValidator.Validate(new[] { negSigShip }, System.Array.Empty<WeaponDef>(), new[] { okBase });
+Check(
+    negSigErrors.Any(e => e.Contains("RadarSignature")),
+    "validator flags a ship with a non-positive RadarSignature",
+    "validator missed a ship with a non-positive RadarSignature"
+);
+var negSigBase = new BaseDef { BaseTypeId = 62, Name = "NegSigBase", Radius = 1f, MaxHealth = 1f, RadarSignature = 0f };
+var negSigBaseErrors = ContentValidator.Validate(System.Array.Empty<ShipClassDef>(), System.Array.Empty<WeaponDef>(), new[] { negSigBase });
+Check(
+    negSigBaseErrors.Any(e => e.Contains("RadarSignature")),
+    "validator flags a base with a non-positive RadarSignature",
+    "validator missed a base with a non-positive RadarSignature"
+);
+// A vision cone with reach but no angle sees nothing — an authoring bug.
+var deadConeShip = new ShipClassDef { ClassId = 63, Name = "DeadCone", MaxHull = 50f, VisionConeLength = 500f, VisionConeAngleDeg = 0f, RadarSignature = 1f };
+var deadConeErrors = ContentValidator.Validate(new[] { deadConeShip }, System.Array.Empty<WeaponDef>(), new[] { okBase });
+Check(
+    deadConeErrors.Any(e => e.Contains("VisionConeLength > 0")),
+    "validator flags a vision cone with reach but no angle",
+    "validator missed a vision cone with reach but no angle"
 );
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");

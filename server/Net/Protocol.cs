@@ -18,21 +18,22 @@ namespace SimServer.Net;
 // request ride the same socket.
 public static class Protocol
 {
-    // Wire-format version. Bump whenever a frame layout changes. The client checks this in the
+    // Wire-format version — single source: shared/Net/Wire.cs (the client aliases the same
+    // constant). Bump it THERE whenever a frame layout changes. The client checks this in the
     // Welcome handshake and refuses to play against a skewed server instead of misreading
     // frames — the failure mode that a stale sim-server process otherwise produced as garbled
     // snapshots / EndOfStream spam.
-    public const byte Version = 22;
+    public const byte Version = Wire.ProtocolVersion;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). A fresh
     // joiner starts here and must actively pick BLUE/RED before they can deploy. It travels on the
     // wire anywhere a team byte does (Welcome, lobby roster, chat fromTeam) and never indexes a
-    // real team array — only teams 0/1 have bases, economy, or ships.
-    public const byte NoTeam = 0xFF;
+    // real team array — only teams 0/1 have bases, economy, or ships. Single source: shared Wire.
+    public const byte NoTeam = Wire.NoTeam;
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 55;
+    public const int ShipRecordSize = 56;
 
     // Fixed serialized size of one in-flight guided-missile record (see WriteMissile). The hub
     // strides a second per-tick scratch by this, mirroring the ship-record scratch.
@@ -41,6 +42,15 @@ public static class Protocol
     // Fixed serialized size of one minefield record (see WriteMinefield). The hub assembles a
     // MsgMinefields frame as [13][u8 count] + count x MinefieldRecordSize.
     public const int MinefieldRecordSize = 41;
+
+    // Fixed serialized size of one MsgContacts ghost record (see BuildContacts). Layout:
+    // u64 id | u8 team | u8 cls | u16 sector | 3x f32 pos | i16 yawQ | i16 pitchQ.
+    public const int ContactRecordSize = 8 + 1 + 1 + 2 + 12 + 2 + 2; // 28
+
+    // Fixed serialized size of one MsgProbes record (see WriteProbe). Layout: u64 id | u8 team |
+    // u32 weaponId | u16 sector | 3x f32 pos (full precision — probes are stationary and rare, no
+    // need to quantize) | u16 ticksLeft.
+    public const int ProbeRecordSize = 8 + 1 + 4 + 2 + 12 + 2; // 29
 
     // client -> server
     // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
@@ -62,7 +72,7 @@ public static class Protocol
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
     public const byte MsgYouAre = 2; // u64 shipId
     public const byte MsgSnapshot = 3; // u32 tick, u8 phase, u8 winner, u16 count, count x ShipRecord
-    public const byte MsgShipGone = 4; // u64 shipId + u8 reason (0 destroyed/blast, 1 clean despawn)
+    public const byte MsgShipGone = 4; // u64 shipId + u8 reason (0 destroyed/blast, 1 clean despawn, 2 fog lost-contact quiet fade)
     public const byte MsgBases = 5; // u8 count, count x (u64 baseId, f32 health) — streamed base health
     public const byte MsgPong = 6; // u32 nonce (echo of the client's MsgPing)
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
@@ -74,12 +84,21 @@ public static class Protocol
     public const byte MsgMinefields = 13; // u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change + coarse keepalive)
     public const byte MsgMineGone = 14; // u64 fieldId, u8 mineIndex, u8 reason, u16 sector, 3x i16 pos — per-mine pop FX
     public const byte MsgChaff = 15; // u64 id, u8 team, u16 sector, 3x i16 pos, 3x f16 vel, u32 weaponId — one-shot chaff spawn broadcast
+    // Fog of war (WP3), per-team. MsgReveal streams newly-scouted statics (same record encodings as
+    // Welcome); MsgContacts streams the team's last-known enemy ghost set + its radar-detected id list.
+    public const byte MsgReveal = 16; // u8 nBases x BaseStatic, u16 nRocks x RockStatic, u8 nAlephs x AlephStatic, u8 nSectors x SectorStatic
+    public const byte MsgContacts = 17; // u8 nGhosts x GhostRecord, u8 nRadar x u64 — full reconcile per frame
+    // Deployable recon probes (WP5). Per-team COMPLETE visible set (own probes + enemy probes the
+    // team can radar-detect; fog off = all): the client reconciles by omission. Gone is broadcast.
+    public const byte MsgProbes = 18; // u8 count x ProbeRecord — minefield-style cadence (on change + coarse keepalive)
+    public const byte MsgProbeGone = 19; // u64 id, u8 reason (0 expired, 1 cleanup, 2 destroyed), u16 sector, 3x i16 pos — mirrors MsgMissileGone
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
     public const byte FlagFiring2 = 4; // secondary fire (missile launch)
     public const byte FlagDropChaff = 8; // eject a chaff puff (dispenser cadence-gated server-side)
     public const byte FlagDropMine = 16; // deploy a mine field (dispenser cadence-gated server-side)
+    public const byte FlagDropProbe = 32; // deploy a recon probe (dispenser cadence-gated server-side)
 
     // ShipRecord flags byte (server->client): how the client should render/classify the ship.
     public const byte ShipFlagPig = 1; // AI combat drone — HUD highlight, never predicted
@@ -100,7 +119,7 @@ public static class Protocol
     //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health | f16 shield
     //   u32 lastInputTick | u32 lastFireTick
     //   u8 missileAmmo | u8 lockState (bit7 = locked, bits0-6 = lock progress 0..100)
-    //   u8 chaffAmmo | u8 mineAmmo
+    //   u8 chaffAmmo | u8 mineAmmo | u8 probeAmmo
     // Flags byte also carries the being-locked threat bits (ShipFlagLockingMe/LockedMe) from
     // ShipSim.ThreatLockState — the target always gets its own record, so it costs no AOI work.
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
@@ -168,7 +187,8 @@ public static class Protocol
         dst[o++] = s.LockState; // bit7 = locked, bits0-6 = lock progress 0..100 (computed sim-side)
         dst[o++] = s.ChaffAmmo;
         dst[o++] = s.MineAmmo;
-        // o == ShipRecordSize (55)
+        dst[o++] = s.ProbeAmmo;
+        // o == ShipRecordSize (56)
     }
 
     // Serialize one in-flight missile record (exactly MissileRecordSize bytes) into dst. Layout:
@@ -305,7 +325,117 @@ public static class Protocol
         // o == MinefieldRecordSize (41)
     }
 
-    public static byte[] BuildWelcome(int clientId, byte team, World world, uint tick, byte[] reconnectToken)
+    // Serialize one deployed recon-probe record (exactly ProbeRecordSize bytes) into dst. Position is
+    // full-precision f32 (probes are stationary and rare — no need for the sector-local quantization
+    // the hot ship/missile paths use). `tick` is the current sim tick, used only to derive the
+    // remaining lifespan (ExpireAtTick - tick) sent as ticksLeft. Layout: u64 id | u8 team | u32
+    // weaponId | u16 sector | 3x f32 pos | u16 ticksLeft.
+    public static void WriteProbe(Span<byte> dst, Simulation.ProbeSim p, uint tick)
+    {
+        int o = 0;
+        BitConverter.TryWriteBytes(dst.Slice(o), p.ProbeId);
+        o += 8;
+        dst[o++] = p.Team;
+        BitConverter.TryWriteBytes(dst.Slice(o), p.WeaponId);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), (ushort)p.SectorId);
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), p.Pos.X);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), p.Pos.Y);
+        o += 4;
+        BitConverter.TryWriteBytes(dst.Slice(o), p.Pos.Z);
+        o += 4;
+        uint left = p.ExpireAtTick > tick ? p.ExpireAtTick - tick : 0u;
+        BitConverter.TryWriteBytes(dst.Slice(o), (ushort)Math.Min(left, ushort.MaxValue));
+        o += 2;
+        // o == ProbeRecordSize (29)
+    }
+
+    // A probe was removed (19 bytes, mirrors BuildMissileGone exactly). reason: 0 expired, 1 match
+    // cleanup, 2 destroyed by enemy fire (client plays an explosion). Layout: [19][u64 id][u8 reason]
+    // [u16 sector][3x i16 pos]. Broadcast to every client (an unknown id no-ops client-side).
+    public static byte[] BuildProbeGone(ulong id, byte reason, uint sector, Vec3 pos)
+    {
+        var buf = new byte[18];
+        buf[0] = MsgProbeGone;
+        int o = 1;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+        o += 8;
+        buf[o++] = reason;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)sector);
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Z));
+        o += 2;
+        return buf; // o == 18
+    }
+
+    // One base static record (used by Welcome + MsgReveal — byte-identical output, load-bearing).
+    // Layout: u64 id | u8 team | u32 sector | 3x f32 pos | f32 radius | f32 health.
+    private static void WriteBaseStatic(BinaryWriter w, in World.BaseSite b, float health)
+    {
+        w.Write(b.Id);
+        w.Write(b.Team);
+        w.Write(b.SectorId);
+        WriteVec3(w, b.Pos);
+        w.Write(World.BaseRadius);
+        w.Write(health);
+    }
+
+    // One asteroid static record (Welcome + MsgReveal). Cosmetic shape: variant index into
+    // Shared.AsteroidShapes + fixed orientation. One-time (not hot), so no quantization.
+    // Layout: u64 id | u32 sector | 3x f32 pos | f32 radius | u8 variant | 3x f32 rot.
+    private static void WriteRockStatic(BinaryWriter w, in World.Rock a)
+    {
+        w.Write(a.Id);
+        w.Write(a.SectorId);
+        WriteVec3(w, a.Pos);
+        w.Write(a.Radius);
+        w.Write(a.Variant);
+        w.Write(a.RotX);
+        w.Write(a.RotY);
+        w.Write(a.RotZ);
+    }
+
+    // One aleph static record (Welcome + MsgReveal). Layout: u64 id | u32 sector | u32 destSector | 3x f32 pos.
+    private static void WriteAlephStatic(BinaryWriter w, in World.Gate g)
+    {
+        w.Write(g.Id);
+        w.Write(g.SectorId);
+        w.Write(g.DestSectorId);
+        WriteVec3(w, g.Pos);
+    }
+
+    // One sector static record (Welcome + MsgReveal). Layout: u32 id | f32 radius. Shared by both
+    // paths so the fog-gated Welcome and the incremental reveal can never drift byte-wise.
+    private static void WriteSectorStatic(BinaryWriter w, in World.Sector s)
+    {
+        w.Write(s.Id);
+        w.Write(s.Radius);
+    }
+
+    // Welcome handshake. When fog is OFF the world block is byte-identical to before: every static
+    // streams, base health is live (vision is ignored). When fog is ON, ONLY that team's discovered
+    // statics stream, base health comes from its remembered LastKnownBaseHealth (stale memory), and
+    // the garrison's own bases are always in the discovered set. Under fog a NULL vision means the
+    // client SEES NOTHING yet (a NoTeam/spectator join: empty statics — consistent with the snapshot
+    // path's Hidden(); the client re-Welcomes with real vision once it picks a team). Streaming the
+    // full world for a null vision under fog would leak the entire map (F1). Under fog the SECTOR
+    // list is gated too: a team knows only its home sector(s) + any it has discovered an aleph to;
+    // newly-reached sectors stream incrementally via MsgReveal. Fog-off streams the full list.
+    public static byte[] BuildWelcome(
+        int clientId,
+        byte team,
+        World world,
+        uint tick,
+        byte[] reconnectToken,
+        bool fog,
+        Simulation.TeamVision? vision = null
+    )
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
@@ -322,50 +452,269 @@ public static class Protocol
         w.Write((byte)reconnectToken.Length);
         w.Write(reconnectToken);
 
-        w.Write((ushort)world.Sectors.Count);
-        foreach (var s in world.Sectors)
+        if (!fog)
         {
-            w.Write(s.Id);
-            w.Write(s.Radius);
-        }
+            // Fog off: full-world dump, live base health — byte-identical to the pre-fog Welcome.
+            // The sector list rides inside this branch so the fog-off bytes are unchanged.
+            w.Write((ushort)world.Sectors.Count);
+            foreach (var s in world.Sectors)
+                WriteSectorStatic(w, s);
 
-        w.Write((ushort)world.Bases.Count);
-        for (int i = 0; i < world.Bases.Count; i++)
-        {
-            var b = world.Bases[i];
-            w.Write(b.Id);
-            w.Write(b.Team);
-            w.Write(b.SectorId);
-            WriteVec3(w, b.Pos);
-            w.Write(World.BaseRadius);
-            w.Write(world.BaseHealth[i]);
-        }
+            w.Write((ushort)world.Bases.Count);
+            for (int i = 0; i < world.Bases.Count; i++)
+                WriteBaseStatic(w, world.Bases[i], world.BaseHealth[i]);
 
-        w.Write((uint)world.Asteroids.Count);
-        foreach (var a in world.Asteroids)
-        {
-            w.Write(a.Id);
-            w.Write(a.SectorId);
-            WriteVec3(w, a.Pos);
-            w.Write(a.Radius);
-            // Cosmetic shape: variant index into Shared.AsteroidShapes + fixed orientation.
-            // One-time in Welcome, so no quantization — egress is irrelevant here.
-            w.Write(a.Variant);
-            w.Write(a.RotX);
-            w.Write(a.RotY);
-            w.Write(a.RotZ);
-        }
+            w.Write((uint)world.Asteroids.Count);
+            foreach (var a in world.Asteroids)
+                WriteRockStatic(w, a);
 
-        w.Write((ushort)world.Alephs.Count);
-        foreach (var g in world.Alephs)
+            w.Write((ushort)world.Alephs.Count);
+            foreach (var g in world.Alephs)
+                WriteAlephStatic(w, g);
+        }
+        else if (vision == null)
         {
-            w.Write(g.Id);
-            w.Write(g.SectorId);
-            w.Write(g.DestSectorId);
-            WriteVec3(w, g.Pos);
+            // Fog on, but this client has no team vision yet (NoTeam/spectator): SEES NOTHING. Empty
+            // static counts — the client re-Welcomes with real vision the moment it picks a team (F1).
+            // Even the sector list is withheld: an undiscovered sector's existence is fog-gated now.
+            w.Write((ushort)0); // sectors
+            w.Write((ushort)0); // bases
+            w.Write((uint)0); // asteroids
+            w.Write((ushort)0); // alephs
+        }
+        else
+        {
+            // BuildWelcome runs on the join's receive task, off the sim thread — take the team's
+            // DiscoverLock so the discovered sets / remembered-health map can't be mutated mid-read
+            // by a concurrent vision apply (or match reseed) on the sim thread.
+            lock (vision.DiscoverLock)
+            {
+                // Sectors are fog-gated now: a team knows only its home sector(s) plus any it has
+                // reached an aleph to. Iterate world.Sectors in list order for determinism.
+                int sectorCount = 0;
+                foreach (var s in world.Sectors)
+                    if (vision.DiscoveredSectors.Contains(s.Id))
+                        sectorCount++;
+                w.Write((ushort)sectorCount);
+                foreach (var s in world.Sectors)
+                    if (vision.DiscoveredSectors.Contains(s.Id))
+                        WriteSectorStatic(w, s);
+
+                int baseCount = 0;
+                for (int i = 0; i < world.Bases.Count; i++)
+                    if (vision.DiscoveredBases.Contains(world.Bases[i].Id))
+                        baseCount++;
+                w.Write((ushort)baseCount);
+                for (int i = 0; i < world.Bases.Count; i++)
+                {
+                    var b = world.Bases[i];
+                    if (!vision.DiscoveredBases.Contains(b.Id))
+                        continue;
+                    float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[i];
+                    WriteBaseStatic(w, b, h);
+                }
+
+                int rockCount = 0;
+                foreach (var a in world.Asteroids)
+                    if (vision.DiscoveredRocks.Contains(a.Id))
+                        rockCount++;
+                w.Write((uint)rockCount);
+                foreach (var a in world.Asteroids)
+                    if (vision.DiscoveredRocks.Contains(a.Id))
+                        WriteRockStatic(w, a);
+
+                int alephCount = 0;
+                foreach (var g in world.Alephs)
+                    if (vision.DiscoveredAlephs.Contains(g.Id))
+                        alephCount++;
+                w.Write((ushort)alephCount);
+                foreach (var g in world.Alephs)
+                    if (vision.DiscoveredAlephs.Contains(g.Id))
+                        WriteAlephStatic(w, g);
+            }
         }
         w.Flush();
         return ms.ToArray();
+    }
+
+    // Per-frame slice caps (F3/F4): well under the u8 (bases/alephs) and u16 (rocks) count prefixes so
+    // a frame can never overflow its length prefix, and a single reveal stays small. A client far
+    // behind (a late joiner streaming a whole match's discoveries) catches up over successive ticks.
+    public const int RevealMaxBases = 64;
+    public const int RevealMaxRocks = 512;
+    public const int RevealMaxAlephs = 64;
+    public const int RevealMaxSectors = 16;
+
+    // Bounded per-team fog reveal slice (MsgReveal). Streams the next unshown chunk of each per-team
+    // reveal LOG starting at the caller's cursors, capped per frame. Record encodings are the SAME
+    // Write*Static helpers Welcome uses, so the two paths can't drift. Returns null when the client is
+    // already caught up on all three logs (nothing to send). The record loop iterates the EXACT slice
+    // it counted — resolving each id to a static BEFORE counting — so the count prefix always equals
+    // the body (F4, no capped-count-vs-uncapped-body desync). The out-cursors advance past the whole
+    // slice CONSUMED, so an unresolvable id (never expected — ids come from world statics) is skipped
+    // without wedging the cursor or desyncing the count. `rockIndex` maps rock id -> Asteroids index
+    // (built once by the hub) so the rock lookup isn't an O(asteroids) scan per frame.
+    //
+    // Cursors, not a drain: the log is append-only and never emptied mid-match, and each client owns
+    // its cursor — so a dropped MsgReveal is simply resent next tick (the client is still "behind"),
+    // fixing the old drain-on-build path where one client's build lost the data for every other and a
+    // dropped frame lost it forever. Read on the sim thread (AfterStep, quiescent — the log's only
+    // writers are the sim-thread apply/warp under DiscoverLock, never concurrent with AfterStep).
+    public static byte[]? BuildRevealSlice(
+        World world,
+        Simulation.TeamVision vision,
+        IReadOnlyDictionary<ulong, int> rockIndex,
+        int baseCur,
+        int rockCur,
+        int alephCur,
+        int sectorCur,
+        out int nextBase,
+        out int nextRock,
+        out int nextAleph,
+        out int nextSector
+    )
+    {
+        int baseEnd = Math.Min(vision.RevealLogBases.Count, baseCur + RevealMaxBases);
+        int rockEnd = Math.Min(vision.RevealLogRocks.Count, rockCur + RevealMaxRocks);
+        int alephEnd = Math.Min(vision.RevealLogAlephs.Count, alephCur + RevealMaxAlephs);
+        int sectorEnd = Math.Min(vision.RevealLogSectors.Count, sectorCur + RevealMaxSectors);
+        nextBase = baseEnd;
+        nextRock = rockEnd;
+        nextAleph = alephEnd;
+        nextSector = sectorEnd;
+        if (baseEnd <= baseCur && rockEnd <= rockCur && alephEnd <= alephCur && sectorEnd <= sectorCur)
+            return null; // caught up on every log — no frame
+
+        // Resolve the slice to static indices FIRST so each written record is counted (count == body).
+        var baseIdx = new List<int>();
+        for (int i = baseCur; i < baseEnd; i++)
+        {
+            int idx = world.Bases.FindIndex(b => b.Id == vision.RevealLogBases[i]);
+            if (idx >= 0)
+                baseIdx.Add(idx);
+        }
+        var rockIdx = new List<int>();
+        for (int i = rockCur; i < rockEnd; i++)
+            if (rockIndex.TryGetValue(vision.RevealLogRocks[i], out int idx))
+                rockIdx.Add(idx);
+        var alephIdx = new List<int>();
+        for (int i = alephCur; i < alephEnd; i++)
+        {
+            int idx = world.Alephs.FindIndex(g => g.Id == vision.RevealLogAlephs[i]);
+            if (idx >= 0)
+                alephIdx.Add(idx);
+        }
+        var sectorIdx = new List<int>();
+        for (int i = sectorCur; i < sectorEnd; i++)
+        {
+            int idx = world.Sectors.FindIndex(s => s.Id == vision.RevealLogSectors[i]);
+            if (idx >= 0)
+                sectorIdx.Add(idx);
+        }
+
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgReveal);
+        w.Write((byte)baseIdx.Count);
+        foreach (int idx in baseIdx)
+        {
+            var b = world.Bases[idx];
+            float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[idx];
+            WriteBaseStatic(w, b, h);
+        }
+        w.Write((ushort)rockIdx.Count);
+        foreach (int idx in rockIdx)
+            WriteRockStatic(w, world.Asteroids[idx]);
+        w.Write((byte)alephIdx.Count);
+        foreach (int idx in alephIdx)
+            WriteAlephStatic(w, world.Alephs[idx]);
+        // Sector slice appended LAST so the base/rock/aleph blocks stay byte-stable (a client that
+        // predates this field would stop reading after alephs; the protocol bump forbids that mix).
+        w.Write((byte)sectorIdx.Count);
+        foreach (int idx in sectorIdx)
+            WriteSectorStatic(w, world.Sectors[idx]);
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // Per-team fog contacts (MsgContacts): the full last-known ghost set + the radar-detected id list,
+    // both with reconcile semantics (the client replaces its stores wholesale each frame). Ghost pos
+    // is sector-local f32 (frozen at last stream); yaw/pitch quantized to i16. Counts capped at 255.
+    public static byte[] BuildContacts(Simulation.TeamVision vision)
+    {
+        int nGhost = Math.Min(vision.Ghosts.Count, 255);
+        int nRadar = Math.Min(vision.VisibleEnemyShips.Count, 255);
+        var buf = new byte[1 + 1 + nGhost * ContactRecordSize + 1 + nRadar * 8];
+        int o = 0;
+        buf[o++] = MsgContacts;
+        buf[o++] = (byte)nGhost;
+        int gw = 0;
+        foreach (var kv in vision.Ghosts)
+        {
+            if (gw >= nGhost)
+                break;
+            var g = kv.Value;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), g.ShipId);
+            o += 8;
+            buf[o++] = g.Team;
+            buf[o++] = g.Cls;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)g.Sector);
+            o += 2;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), g.Pos.X);
+            o += 4;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), g.Pos.Y);
+            o += 4;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), g.Pos.Z);
+            o += 4;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), QuantAngle(g.Yaw, MathF.PI));
+            o += 2;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), QuantAngle(g.Pitch, MathF.PI / 2f));
+            o += 2;
+            gw++;
+        }
+        buf[o++] = (byte)nRadar;
+        int rw = 0;
+        foreach (var id in vision.VisibleEnemyShips)
+        {
+            if (rw >= nRadar)
+                break;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+            o += 8;
+            rw++;
+        }
+        return buf;
+    }
+
+    // Quantize an angle in [-range, range] to a signed 16-bit fraction of range (client mirrors).
+    private static short QuantAngle(float a, float range) =>
+        (short)Math.Clamp(a / range * 32767f, -32767f, 32767f);
+
+    // Per-team variant of BuildBases (fog on): discovered bases only, remembered (last-known) health.
+    // A base damaged/destroyed while unseen keeps its stale value here until the team re-scouts it.
+    public static byte[] BuildBasesFor(World world, Simulation.TeamVision? vision)
+    {
+        int count = 0;
+        if (vision != null)
+            for (int i = 0; i < world.Bases.Count; i++)
+                if (vision.DiscoveredBases.Contains(world.Bases[i].Id))
+                    count++;
+        var buf = new byte[2 + count * 12];
+        buf[0] = MsgBases;
+        buf[1] = (byte)count;
+        int o = 2;
+        if (vision != null)
+            for (int i = 0; i < world.Bases.Count; i++)
+            {
+                var b = world.Bases[i];
+                if (!vision.DiscoveredBases.Contains(b.Id))
+                    continue;
+                float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[i];
+                BitConverter.TryWriteBytes(buf.AsSpan(o), b.Id);
+                o += 8;
+                BitConverter.TryWriteBytes(buf.AsSpan(o), h);
+                o += 4;
+            }
+        return buf;
     }
 
     public static byte[] BuildYouAre(ulong shipId)
@@ -509,6 +858,11 @@ public static class Protocol
             w.Write(s.ShieldCapacity);
             w.Write(s.ShieldRecharge);
             w.Write(s.ShieldDelaySec);
+            // Fog-of-war vision (behavior-inert until a later WP). Reader mirrors this order exactly.
+            w.Write(s.VisionConeLength);
+            w.Write(s.VisionConeAngleDeg);
+            w.Write(s.VisionSphereRadius);
+            w.Write(s.RadarSignature);
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);
             w.Write(s.FactionId);
@@ -561,9 +915,16 @@ public static class Protocol
             w.Write(wp.MineArmTicks);
             w.Write(wp.MineTriggerRadius);
             w.Write(wp.CargoId);
+            // Probe dispenser block (zero for other weapon kinds). Reader mirrors this order.
+            w.Write(wp.ProbeSightRadius);
+            w.Write(wp.ProbeLifespanSec);
             w.Write(wp.ShieldMult); // damage-vs-shield multiplier (reader mirrors)
-            w.Write(wp.BoltRadius); // client bolt-mesh dims (streamed last; reader mirrors)
+            w.Write(wp.BoltRadius); // client bolt-mesh dims (reader mirrors)
             w.Write(wp.BoltLength);
+            // Probe combat/visual block, streamed LAST so the blocks above stay byte-stable.
+            // ProbeHitPoints/ProbeSignature stay server-only (deliberately not written).
+            w.Write(wp.ProbeHitRadius);
+            w.Write(wp.ProbeModelSize);
         }
 
         var cargoItems = content.CargoItems;
@@ -586,6 +947,9 @@ public static class Protocol
             WriteString(w, b.Name);
             w.Write(b.Radius);
             w.Write(b.MaxHealth);
+            // Fog-of-war vision (behavior-inert until a later WP). Reader mirrors this order exactly.
+            w.Write(b.VisionSphereRadius);
+            w.Write(b.RadarSignature);
             WriteHardpoints(w, b.Hardpoints);
         }
 
@@ -595,6 +959,9 @@ public static class Protocol
         w.Write(cfg.AsteroidDensity);
         w.Write(cfg.DebugFreezeBrain);
         w.Write(cfg.DebugNoFire);
+        // Per-server fog-of-war toggle (byte flag next to the other world flags). EyeballMultiplier
+        // stays server-side only — deliberately NOT written here.
+        w.Write(cfg.FogOfWar);
 
         w.Flush();
         return ms.ToArray();

@@ -62,7 +62,7 @@ stellar-allegiance/
 │   └── Lib.cs                   # Tables + reducers
 ├── shared/
 │   ├── FlightModel.cs           # Deterministic flight math (the only copy)
-│   └── Shared.csproj            # net8.0 lib referenced by module/, client/, tests/
+│   └── Shared.csproj            # net10.0 lib referenced by module/, client/, tests/
 ├── client/                      # Godot 4.6 C# project
 │   ├── project.godot
 │   ├── module_bindings/         # Generated — never hand-edit
@@ -91,7 +91,7 @@ stellar-allegiance/
 | SpacetimeDB CLI | 2.3.0 | `spacetime --version` |
 | .NET SDK | 8.0 | Module + Godot client |
 | .NET WASI workload | experimental | Module → WASM compilation |
-| Godot | 4.6.3 (.NET build) | C#-capable build required |
+| Godot | 4.7 (.NET build) | C#-capable build required |
 
 ---
 

@@ -60,7 +60,7 @@ public partial class WeaponsPanel : Control
         var local = _world.LocalShip;
         // Only armed hulls in flight get the readout — a pod (no weapon hardpoint) shows nothing.
         BuildWeapons(local);
-        Visible = local != null && !local.IsPod && _weapons.Count > 0;
+        Visible = local != null && !local.IsPod && _weapons.Count > 0 && !SectorOverview.Active;
         if (Visible)
             QueueRedraw();
     }
@@ -97,13 +97,19 @@ public partial class WeaponsPanel : Control
             primaryIdx = 0; // pathological all-missile hull: still show something as primary
         WeaponDef primary = _weapons[primaryIdx];
 
-        // Dispenser rows (chaff / mine) — NOT hardpoint-mounted, so absent from _weapons; resolved
-        // from the class's default hold OR live ammo (the spawned hold can differ from the default).
+        // Dispenser rows (chaff / mine / probe) — NOT hardpoint-mounted, so absent from _weapons;
+        // resolved from the class's default hold OR live ammo (the spawned hold can differ from the
+        // default).
         byte cls = (byte)local.Class;
         WeaponDef? chaffDisp = DispenserFor(cls, WeaponKind.Chaff, _net.LocalChaffAmmo);
         WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
+        WeaponDef? probeDisp = DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
 
-        int secCount = _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0);
+        int secCount =
+            _weapons.Count - 1
+            + (chaffDisp != null ? 1 : 0)
+            + (mineDisp != null ? 1 : 0)
+            + (probeDisp != null ? 1 : 0);
         float panelH =
             PadTop
             + HeaderH
@@ -158,7 +164,7 @@ public partial class WeaponsPanel : Control
             y += SecRowH;
         }
 
-        // ---- Dispenser rows (chaff [C] / mine [B]), keyed to their hotkeys ----
+        // ---- Dispenser rows (chaff [C] / mine [B] / probe [G]), keyed to their hotkeys ----
         if (chaffDisp != null)
         {
             DrawDispenserRow("C", chaffDisp, _net.LocalChaffAmmo, left, right, y, mono);
@@ -167,6 +173,11 @@ public partial class WeaponsPanel : Control
         if (mineDisp != null)
         {
             DrawDispenserRow("B", mineDisp, _net.LocalMineAmmo, left, right, y, mono);
+            y += SecRowH;
+        }
+        if (probeDisp != null)
+        {
+            DrawDispenserRow("G", probeDisp, _net.LocalProbeAmmo, left, right, y, mono);
             y += SecRowH;
         }
     }

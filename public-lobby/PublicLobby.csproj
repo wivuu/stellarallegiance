@@ -6,10 +6,10 @@
        (or TURN-relayed via the coturn sidecar), never through this process.
 
        Was originally a .NET-10 file-based app (single PublicLobby.cs with a #:sdk header); file
-       based apps can't span multiple .cs files, so it is a normal net8.0 csproj now — same
+       based apps can't span multiple .cs files, so it is a normal net10.0 csproj now — same
        toolchain/Docker pattern as server/ and shared/. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>

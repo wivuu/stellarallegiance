@@ -126,8 +126,9 @@ public partial class ChaffFx : Node3D
     }
 
     // Fallback: the old soft additive billboard puff (team-tinted, self-lit) so a decoy is never
-    // invisible when the GLB is missing.
-    private static MeshInstance3D FallbackPuff(byte team)
+    // invisible when the GLB is missing. Public: ProbeView reuses this exact recipe for its own
+    // GLB-missing fallback so the two dispenser visuals don't duplicate the tint/material logic.
+    public static MeshInstance3D FallbackPuff(byte team)
     {
         Color tint = team == 0 ? new Color(0.8f, 0.95f, 1.25f) : new Color(1.25f, 0.9f, 0.8f);
         return new MeshInstance3D

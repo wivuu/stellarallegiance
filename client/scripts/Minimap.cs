@@ -154,13 +154,21 @@ public partial class Minimap : Control
                 fill = tp.t0 && tp.t1 ? Disputed : tp.t0 ? Team0 : Team1;
             }
 
+            // Fog stale memory: a single team's base(s) here are all destroyed but still remembered.
+            // Dim the tint to a hollow outline so the map reads it as lost ground, not a live hold.
+            // (Disputed sectors keep the live tint — a mixed presence isn't cleanly "stale".)
+            bool stale = !neutral && !(tp.t0 && tp.t1) && _world.SectorTeamStale(s.SectorId, tp.t0 ? (byte)0 : (byte)1);
+
             bool current = s.SectorId == localSector;
             if (current)
                 DrawArc(p, HaloRadius, 0f, Mathf.Tau, 28, HaloColor, 1.5f, true); // current-sector ring
 
             DiamondPoints(p, current ? NodeRadius + 2f : NodeRadius, _diamond);
+            bool hollow = neutral || stale;
             if (neutral)
                 DrawPolyline(ClosedDiamond(), Neutral, 1.5f, true); // hollow outline
+            else if (stale)
+                DrawPolyline(ClosedDiamond(), new Color(fill, 0.4f), 1.5f, true); // stale-memory: dim hollow
             else
             {
                 DrawColoredPolygon(_diamond, fill);
@@ -169,7 +177,7 @@ public partial class Minimap : Control
 
             string lbl = s.SectorId.ToString();
             Vector2 ts = font.GetStringSize(lbl, HorizontalAlignment.Left, -1, 11);
-            DrawString(font, p + new Vector2(-ts.X * 0.5f, ts.Y * 0.30f), lbl, HorizontalAlignment.Left, -1, 11, neutral ? TextColor : NodeEdge);
+            DrawString(font, p + new Vector2(-ts.X * 0.5f, ts.Y * 0.30f), lbl, HorizontalAlignment.Left, -1, 11, hollow ? TextColor : NodeEdge);
         }
 
         // Current-sector name along the panel's bottom edge.

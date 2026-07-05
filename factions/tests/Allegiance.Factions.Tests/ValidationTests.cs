@@ -213,24 +213,63 @@ public class ValidationTests
         Assert.True(result.IsValid, string.Join("\n", result.Errors));
     }
 
-    // A launcher carrying a weapon-id projects to a Missile / Mine / Chaff WeaponDef dispatched off
-    // its expendable — pointing it at a Probe (no projected weapon kind) is a boot-refusing error.
+    // A launcher carrying a weapon-id projects to a Missile / Mine / Chaff / Probe WeaponDef
+    // dispatched off its expendable — an expendable that resolves to none of those is a
+    // boot-refusing error.
     [Fact]
-    public void LauncherPointingAtProbeExpendable_IsReported()
+    public void LauncherPointingAtUnresolvedExpendable_IsReported()
     {
         var core = new Core
         {
-            Probes = { new Probe { Id = "probe1", Name = "Probe" } },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "probe1" },
+                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "does-not-exist" },
             },
         };
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile, mine, or chaff") && e.Contains("rack"));
+        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile, mine, chaff, or probe") && e.Contains("rack"));
+    }
+
+    // A probe dispenser (launcher → Probe) is a valid, boot-accepted launcher kind.
+    [Fact]
+    public void CorrectlyAuthoredProbeLauncher_IsValid()
+    {
+        var core = new Core
+        {
+            Probes = { ValidProbe() },
+            Launchers =
+            {
+                new Launcher { Id = "probe-rack", Name = "Probe Rack", WeaponId = 8, Amount = 1, FireIntervalTicks = 100, ExpendableId = "recon-probe" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("probe-rack"));
+    }
+
+    // A probe dispenser (launcher → Probe) with zero sight-radius must refuse boot.
+    [Fact]
+    public void ProbeDispenserWithZeroSightRadius_IsReported()
+    {
+        var probe = ValidProbe();
+        probe.SightRadius = 0;
+        var core = new Core
+        {
+            Probes = { probe },
+            Launchers =
+            {
+                new Launcher { Id = "probe-rack", Name = "Probe Rack", WeaponId = 8, Amount = 1, FireIntervalTicks = 100, ExpendableId = "recon-probe" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("sight-radius") && e.Contains("probe-rack"));
     }
 
     // A mine dispenser (launcher → Mine) with a bad cloud-count must refuse boot.
@@ -512,6 +551,19 @@ public class ValidationTests
             Lifespan = 10,
             ChaffStrength = 1,
             DecoyRadius = 60,
+        };
+
+    // A probe with the sight-radius/lifespan/model-name stats the launcher projection needs.
+    private static Probe ValidProbe(string id = "recon-probe") =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            CargoId = 4,
+            Mass = 2,
+            Lifespan = 600,
+            SightRadius = 1200,
+            ModelName = "acs64",
         };
 
     private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>

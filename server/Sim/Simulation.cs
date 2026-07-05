@@ -205,6 +205,12 @@ public sealed partial class Simulation
         public uint ChaffWeaponId;
         public uint MineWeaponId;
 
+        // ---- Recon-probe dispenser state (0 on hulls carrying no probe cargo) — same D6/D9 seam
+        // as the chaff/mine ammo above (Simulation.Probes.cs). ----
+        public byte ProbeAmmo;
+        public uint LastProbeTick;
+        public uint ProbeWeaponId;
+
         // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
         // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
         public uint LastMineFxTick;
@@ -278,7 +284,7 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
-    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult);
+    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0);
 
     public readonly World World;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
@@ -438,10 +444,10 @@ public sealed partial class Simulation
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
 
-        // Dispenser (chaff/mine) WeaponDefs indexed by the cargo item they consume, + cargo masses
-        // for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
+        // Dispenser (chaff/mine/probe) WeaponDefs indexed by the cargo item they consume, + cargo
+        // masses for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
         foreach (var w in content.Weapons)
-            if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine) && w.CargoId != 0)
+            if ((w.Kind == WeaponKind.Chaff || w.Kind == WeaponKind.Mine || w.Kind == WeaponKind.Probe) && w.CargoId != 0)
                 _dispenserByCargo[w.CargoId] = w;
         foreach (var c in content.CargoItems)
         {
@@ -460,6 +466,8 @@ public sealed partial class Simulation
         _shotRing = new List<PendingShot>[ShotRingSize];
         for (int i = 0; i < ShotRingSize; i++)
             _shotRing[i] = new List<PendingShot>();
+
+        InitVision(); // fog-of-war switch + per-team vision state (Simulation.Vision.cs)
     }
 
     // ---- Thread-safe intake (called from socket tasks) -------------------
@@ -517,11 +525,19 @@ public sealed partial class Simulation
     {
         uint tick = ++_tick;
         float dt = FlightModel.Dt;
+        // Accumulate the prior step's completed deaths for the fog witnessed-death rule BEFORE the
+        // drain list is cleared (consumed + reset at the next vision apply, Simulation.Vision.cs).
+        if (FogEnabled)
+            foreach (var d in DeathsThisStep)
+                _visionDeaths.Add(d.id);
         DeathsThisStep.Clear();
+        LostContactsThisStep.Clear();
         MissileGoneThisStep.Clear();
         ChaffSpawnedThisStep.Clear();
         MineGoneThisStep.Clear();
         MinefieldsChangedThisStep = false;
+        ProbeGoneThisStep.Clear();
+        ProbesChangedThisStep = false;
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
@@ -546,6 +562,10 @@ public sealed partial class Simulation
         {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+            // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
+            // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
+            if (FogEnabled && tick % VisionEvery == 0)
+                VisionStep(tick);
         }
         ResolveDueShots(tick);
         RebuildShipGrid();
@@ -576,6 +596,8 @@ public sealed partial class Simulation
                     TryDropChaff(s, tick); // dispenser cadence-gated (Simulation.Chaff.cs)
                 if (input.DropMine)
                     TryDeployMine(s, tick); // dispenser cadence-gated (Simulation.Mines.cs)
+                if (input.DropProbe)
+                    TryDeployProbe(s, tick); // dispenser cadence-gated (Simulation.Probes.cs)
             }
             TryWarp(s);
         }
@@ -590,6 +612,9 @@ public sealed partial class Simulation
 
         // Mines: expire/deplete fields + proximity-trigger armed mines against the ship grid.
         StepMines(tick); // Simulation.Mines.cs
+
+        // Recon probes: expire past their lifespan (passive — no per-tick effect otherwise).
+        StepProbes(tick); // Simulation.Probes.cs
 
         // Pass C: enemy ship-vs-ship collisions (mass-weighted impulse, module-identical),
         // O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -615,6 +640,7 @@ public sealed partial class Simulation
                 ApplyDamage(s, MathF.Min(World.BoundaryBaseDps + over * World.BoundaryRampDps, World.BoundaryMaxDps) * dt, tick);
 
             ResolveAsteroidCollisions(s);
+            ResolveDeployableCollisions(s, tick); // solid deployables (recon probes today)
 
             // Bases in this ship's sector: an ENEMY base is solid (bounce); your OWN base is
             // your dock — fly into its core and the ship/pod resolves (player ship/pod ->
@@ -807,6 +833,7 @@ public sealed partial class Simulation
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
         ResolveTeamUnlocks();
+        ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
     }
@@ -841,6 +868,14 @@ public sealed partial class Simulation
         _chaff.Clear();
         _minefields.Clear();
         MinefieldsChangedThisStep = true;
+        // Tear down probes too (match reseed clears them). MsgProbes has NO reconcile-by-omission (a
+        // probe is only ever removed by an explicit MsgProbeGone — client ApplyProbes never drops on
+        // absence), so emit a ProbeGone (reason 1 = cleanup/despawn, rendered as a silent removal — no
+        // FX) for every live probe BEFORE clearing, or the client would keep phantom probes (F7).
+        foreach (var p in _probes)
+            ProbeGoneThisStep.Add((p.ProbeId, 1, p.Team, p.SectorId, p.Pos));
+        _probes.Clear();
+        ProbesChangedThisStep = true;
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
@@ -859,6 +894,7 @@ public sealed partial class Simulation
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
+        ResetVision(); // drain any in-flight vision compute + clear fog state (Simulation.Vision.cs)
         OnReturnToLobby?.Invoke();
     }
 
@@ -920,6 +956,11 @@ public sealed partial class Simulation
             {
                 s.MineAmmo = charges;
                 s.MineWeaponId = w.WeaponId;
+            }
+            else if (w.Kind == WeaponKind.Probe)
+            {
+                s.ProbeAmmo = charges;
+                s.ProbeWeaponId = w.WeaponId;
             }
         }
     }
@@ -1305,6 +1346,7 @@ public sealed partial class Simulation
         float bestT = maxT;
         ulong targetShip = 0;
         int targetBase = -1;
+        ulong targetProbe = 0;
 
         if (w.CanDamageBase)
         {
@@ -1410,10 +1452,28 @@ public sealed partial class Simulation
             }
         }
 
-        if (targetShip != 0 || targetBase >= 0)
+        // Deployed enemy probes are destructible: a stationary hit-sphere scan (probes are few and
+        // not in the ship grid, so a linear scan is cheap and stays replay-deterministic in list
+        // order). A closer probe hit wins and clears any ship/base target.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != ship.SectorId || p.Team == ship.Team || p.Health <= 0f)
+                continue;
+            float pr = (WeaponDefs.TryGetValue(p.WeaponId, out var pw) ? pw.ProbeHitRadius : 0f) + World.ProjectileRadius;
+            if (pr > World.ProjectileRadius && FirstEntryTime(mp, mv, p.Pos, default, pr, bestT, out float pt) && pt < bestT)
+            {
+                bestT = pt;
+                targetProbe = p.ProbeId;
+                targetShip = 0;
+                targetBase = -1;
+            }
+        }
+
+        if (targetShip != 0 || targetBase >= 0 || targetProbe != 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult));
+            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult, targetProbe));
         }
     }
 
@@ -1457,6 +1517,9 @@ public sealed partial class Simulation
             && t.Team != ship.Team
             && !t.IsPod // locking a helpless pod is bad feel — pods are never lockable
             && t.SectorId == ship.SectorId
+            // Fog of war: only a RADAR-detected foe is lockable (eyeball-tier / ghosts are not). An
+            // in-flight missile keeps tracking a target that later fogs out — this gates ACQUISITION.
+            && TeamRadarSees(ship.Team, t.ShipId)
         )
         {
             Vec3 to = t.State.Pos - ship.State.Pos;
@@ -1606,7 +1669,7 @@ public sealed partial class Simulation
             if (chaffDetonate)
             {
                 var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
-                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick);
+                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1711,7 +1774,7 @@ public sealed partial class Simulation
                     ApplyDamage(victim, w.Damage * w.DirectHitMult, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
                     ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
-                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick);
+                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1737,11 +1800,30 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
-    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick)
+    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick, uint sector)
     {
-        if (shipGrid is null || w.BlastRadius <= 0f || w.BlastPower <= 0f)
+        if (w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
         float fuseR = w.ProjectileRadius;
+
+        // Enemy probes within the blast take splash too (same inverse-square falloff), so a missile
+        // detonation is a valid probe counter. Probes aren't gridded — a linear scan (few probes) in
+        // the detonation sector, deterministic in list order. Done before the ship grid so a probe
+        // killed here is removed for any same-tick follow-up.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != sector || p.Team == team || p.Health <= 0f)
+                continue;
+            float d = (p.Pos - hitPos).Length();
+            if (d > w.BlastRadius)
+                continue;
+            float f = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
+            DamageProbe(p, w.BlastPower * f, tick);
+        }
+
+        if (shipGrid is null)
+            return;
         int x0 = World.CellOf(hitPos.X - w.BlastRadius),
             x1 = World.CellOf(hitPos.X + w.BlastRadius);
         int y0 = World.CellOf(hitPos.Y - w.BlastRadius),
@@ -1829,7 +1911,13 @@ public sealed partial class Simulation
         var due = _shotRing[tick % ShotRingSize];
         foreach (var shot in due)
         {
-            if (shot.BaseIndex >= 0)
+            if (shot.TargetProbeId != 0)
+            {
+                // The probe may have expired/been killed since the bolt was queued — skip if gone.
+                if (FindDamageableProbe(shot.TargetProbeId) is { } probe)
+                    DamageProbe(probe, shot.Damage, tick);
+            }
+            else if (shot.BaseIndex >= 0)
             {
                 ApplyBaseDamage(shot.BaseIndex, shot.Damage, tick);
             }
@@ -2100,6 +2188,56 @@ public sealed partial class Simulation
             ResolveStaticCollision(s, center, World.BaseRadius);
     }
 
+    // Resolve a ship against every DEPLOYABLE solid body in its sector. A deployable is a small,
+    // stationary, low-HP object a ship can bounce off AND wreck by ramming — unlike a base (which uses
+    // the base-health system, and is only DESTROYED via that system), a deployable dies from the same
+    // collision/weapon damage anything else does. Recon probes are the only deployable today; a future
+    // drop-turret / sensor buoy / decoy drone slots in here the SAME way: iterate its live list,
+    // resolve each element through the ResolveDeployableSphere kernel, and feed the returned impact
+    // damage into that deployable's own HP sink. Keep the generic bounce in the kernel; keep only the
+    // per-type "which list / which radius / which damage sink" here. O(ships × deployables); few of each.
+    private void ResolveDeployableCollisions(ShipSim s, uint tick)
+    {
+        // Recon probes (Simulation.Probes.cs): solid sphere = the combat hit radius, so "what you
+        // shoot is what you bump"; a hard ram spends the impact on the probe's low HP → gone reason 2.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != s.SectorId)
+                continue;
+            if (!WeaponDefs.TryGetValue(p.WeaponId, out var w) || w.ProbeHitRadius <= 0f)
+                continue;
+            float dmg = ResolveDeployableSphere(s, p.Pos, w.ProbeHitRadius, tick);
+            if (dmg > 0f && p.Health > 0f) // Health 0 = authored-invulnerable: solid but undamageable
+            {
+                DamageProbe(p, dmg, tick);
+                if (p.Health <= 0f)
+                    i--; // DamageProbe removed p from _probes; don't skip the next entry
+            }
+        }
+    }
+
+    // Bounce a ship off ONE solid deployable sphere (the shared kernel behind ResolveDeployableCollisions).
+    // Pushes the ship out of penetration (solid) and, on a closing contact, applies collision damage to
+    // the SHIP (exactly like a base) and RETURNS that same damage so the caller can also spend it on the
+    // deployable's own HP. Returns 0 on no contact or a below-min-speed kiss. Symmetric across teams —
+    // you bounce off (and can wreck) your own deployables too.
+    private float ResolveDeployableSphere(ShipSim s, Vec3 center, float radius, uint tick)
+    {
+        if (radius <= 0f)
+            return 0f;
+        if (
+            Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
+            && vn < 0f
+        )
+        {
+            float dmg = CollisionDamage(-vn, World.CollisionDamageScale);
+            ApplyDamage(s, dmg, tick);
+            return dmg;
+        }
+        return 0f;
+    }
+
     // Sphere-vs-convex-hull bounce (the convex analogue of ResolveStaticCollision). The hull is
     // in its own authored frame at (center, rot, uniform scale); SphereVsHull maps the ship sphere
     // into that frame, resolves against the nearest face, and maps the contact back to world.
@@ -2202,6 +2340,19 @@ public sealed partial class Simulation
             // pointed the way it's travelling instead of keeping its pre-warp heading.
             s.State.Rot = LookRotationZ(e);
             s.State.AngVel = default;
+            // Fog: immediately scout the rocks around the arrival point (same tick) so gate-exit
+            // surroundings reveal now instead of at the next 2 Hz vision boundary (Simulation.Vision.cs, F8).
+            WarpDiscoverRocks(s);
+            // Fog: a ship physically arriving in a sector reveals it (belt-and-braces — the gate
+            // discovery usually already did via both aleph endpoints). Immediate write is safe
+            // here, unlike DiscoveredRocks: the vision worker never reads DiscoveredSectors (only
+            // the lock-holding Welcome/reveal builders do), so no _warpRevealPending deferral.
+            if (FogEnabled && _teamVisions.TryGetValue(s.Team, out var wtv))
+                lock (wtv.DiscoverLock)
+                {
+                    if (wtv.DiscoveredSectors.Add(g.DestSectorId))
+                        wtv.RevealLogSectors.Add(g.DestSectorId);
+                }
             return;
         }
     }

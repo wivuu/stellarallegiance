@@ -530,6 +530,10 @@ public sealed partial class Simulation
                 continue;
             if (s.IsPod)
                 continue;
+            // Fog of war: a PIG only hunts foes its team has radar contact on (no wallhack). Eyeball
+            // glimpses and ghosts don't count — PIGs have no eyeballs. Fog off ⇒ TeamRadarSees true.
+            if (!TeamRadarSees(me.Team, s.ShipId))
+                continue;
             float d2 = (ctx.MyPos - s.State.Pos).LengthSquared();
             if (d2 > keep2)
                 continue;

@@ -47,4 +47,13 @@ public record Station : Buildable
 
     /// <summary>Local-space mount points (docking entrance/exit, nav lights) the client renders from.</summary>
     public List<Hardpoint> Hardpoints { get; set; } = new();
+
+    /// <summary>
+    /// Omnidirectional, unoccluded vision sphere this base contributes to its owning team (the
+    /// garrison watches its surroundings from tick 0). <see cref="RadarSignature"/> is a
+    /// detection-range multiplier applied to every viewer's range against this base (0/omitted
+    /// -&gt; 1.0 at projection). Both omit-when-default; projected onto BaseDef.
+    /// </summary>
+    public double VisionSphereRadius { get; set; }
+    public double RadarSignature { get; set; }
 }

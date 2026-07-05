@@ -156,7 +156,7 @@ public partial class SectorOverview : Node3D
             _stemPoints.Add(s.GlobalPosition);
         foreach (var s in _world.EnemyShips())
             _stemPoints.Add(s.GlobalPosition);
-        foreach (var (pos, _) in _world.VisibleBases())
+        foreach (var (pos, _, _) in _world.VisibleBases())
             _stemPoints.Add(pos);
 
         // ClearSurfaces then SurfaceEnd with zero verts logs an error, so bail when empty.

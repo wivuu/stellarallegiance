@@ -325,6 +325,26 @@ public sealed class World
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>
         _rockGrid.TryGetValue(sector, out var g) ? g : NoGrid;
 
+    // TEST SEAM: hand-place an occluder rock into a sector's spatial grid (and the flat list) so the
+    // sentinel empty sector 999 can exercise the fog cone-occlusion path — the grid is immutable in
+    // production (built once at world-gen), so this must only be called from tests before ticking.
+    public Rock AddRockForTest(uint sector, Vec3 pos, float radius, byte variant = 0)
+    {
+        ulong id = 1;
+        foreach (var r in Asteroids)
+            if (r.Id >= id)
+                id = r.Id + 1;
+        var rock = new Rock(id, sector, pos, radius, variant, 0f, 0f, 0f);
+        Asteroids.Add(rock);
+        if (!_rockGrid.TryGetValue(sector, out var grid))
+            _rockGrid[sector] = grid = new Dictionary<(int, int, int), List<Rock>>();
+        var key = (CellOf(pos.X), CellOf(pos.Y), CellOf(pos.Z));
+        if (!grid.TryGetValue(key, out var cell))
+            grid[key] = cell = new List<Rock>();
+        cell.Add(rock);
+        return rock;
+    }
+
     public float SectorRadius(uint sector)
     {
         foreach (var s in Sectors)

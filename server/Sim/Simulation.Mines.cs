@@ -14,7 +14,7 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     // Speed the field deals its full authored DPS at (u/s); a victim's damage scales speed/ref.
-    private const float MineSpeedRef = 120f;
+    private const float MineSpeedRef = 40f;
     // Cap on the speed multiplier — a blisteringly fast pass can't exceed this × the authored DPS.
     private const float MineMaxSpeedMult = 2.5f;
     // Min ticks between hit-FX pings for one victim (~0.4s at 20 Hz) so a plow-through pops a few
@@ -132,11 +132,12 @@ public sealed partial class Simulation
         }
     }
 
-    // The armed field is ONE lethal sphere (center + MineCloudRadius). Damage every ENEMY non-pod
-    // ship inside it this tick by BlastPower (damage/sec at MineSpeedRef) scaled by the victim's own
-    // speed — a stationary ship takes ~0, a fast plow-through takes the capped max. AliveMask is left
-    // untouched (the meshes are cosmetic); a rate-limited MsgMineGone(reason=2) ping per victim drives
-    // the client's small hit explosion + pop. Fixed grid-cube order = replay-deterministic.
+    // The armed field is ONE lethal sphere (center + MineCloudRadius). Damage every ENEMY ship
+    // (including ejection pods) inside it this tick by BlastPower (damage/sec at MineSpeedRef)
+    // scaled by the victim's own speed — a stationary ship takes ~0, a fast plow-through takes the
+    // capped max. AliveMask is left untouched (the meshes are cosmetic); a rate-limited
+    // MsgMineGone(reason=2) ping per victim drives the client's small hit explosion + pop. Fixed
+    // grid-cube order = replay-deterministic.
     private void DamageFieldVolume(MineFieldSim field, uint tick)
     {
         var w = WeaponDefs[field.WeaponId];
@@ -161,7 +162,7 @@ public sealed partial class Simulation
                         continue;
                     foreach (var s in shipsInCell)
                     {
-                        if (s.Team == field.Team || !s.Alive || s.IsPod)
+                        if (s.Team == field.Team || !s.Alive)
                             continue;
                         if ((s.State.Pos - c).LengthSquared() > radiusSq)
                             continue;

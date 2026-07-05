@@ -97,6 +97,36 @@ for a `BlastPower`/`BlastRadius` splash; the field depletes mine-by-mine.
 - **Related:** [[Chaff]], [[Blast Radius]], [[Expendables]]
 - **Notes:** Proto v18: seed-based wire (client regenerates offsets); `aliveMask` (CloudCount ≤ 64) self-heals a resync
 
+### Fog of War (Team Vision)
+Server-authoritative per-team vision: undiscovered map data never reaches the client. Ships/bases/
+probes contribute a directional cone (occluded by asteroids) and/or an omnidirectional proximity
+sphere, both scaled by the target's `RadarSignature`; an outer "eyeball" tier streams a ship's mesh
+without radar/HUD detection. Computed at 2 Hz on a dedicated worker thread, pipelined one interval
+deep so the applied timeline is tick-deterministic regardless of worker speed. Enemy ships lost from
+view persist as last-known "ghost" contacts (HUD/radar only) until re-scouted or re-spotted.
+- **Frequency:** Core (fog-of-war on by default)
+- **Key Files:**
+  - `server/Sim/Simulation.Vision.cs` — `TeamVision`, the 2 Hz snapshot-in/apply-at-boundary worker, `IsPointVisibleToTeam`
+  - `server/Net/Protocol.cs` — `MsgReveal=16` (newly-scouted statics), `MsgContacts=17` (ghosts + radar-id list)
+  - `client/scripts/WorldRenderer.cs` — `GhostContacts`, `NetSetContacts`; `TargetMarkers.cs` — dim ghost glyphs
+  - `server/Sim/Simulation.Pig.cs` / missile lock gating — PIGs and lock acquisition respect team vision
+- **Related:** [[Recon Probe]], [[Threat Lock (being-locked warning)]]
+- **Notes:** Per-server world-YAML knob `fog-of-war` (default on); off ⇒ behavior/bytes identical to pre-fog
+
+### Recon Probe
+Deployable, invulnerable, stationary sensor buoy (key `G`): one deploy spends a probe-cargo charge
+and drops a probe just ahead of the ship, granting its team an unoccluded vision sphere
+(`ProbeSightRadius`) until it expires after `ProbeLifespanSec`. Streams only to the owning team.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Expendables/Probe.cs` — probe model (SightRadius/Lifespan/ModelName)
+  - `server/Sim/Simulation.Probes.cs` — `ProbeSim` + `TryDeployProbe`/`StepProbes`; feeds an extra unoccluded
+    sphere viewer into `Simulation.Vision.cs`'s `CaptureVisionInput` (no new worker code path)
+  - `server/Net/Protocol.cs` — `MsgProbes=18` (owner-team-only, minefield-style cadence), `MsgProbeGone=19`
+  - `client/scripts/ProbeView.cs` — stationary GLB visual (`assets/probes/<ModelName>.glb`), team-tinted fallback
+- **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
+- **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
+
 ### Threat Lock (being-locked warning)
 Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockState` (0 none / 1 locking /
 2 locked) rides free bits in the snapshot flags byte (`ShipFlagLockingMe=4`, `ShipFlagLockedMe=8`).

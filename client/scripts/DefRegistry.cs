@@ -35,15 +35,23 @@ public partial class DefRegistry : Node
     private readonly Dictionary<byte, ShipStats> _statsCache = [];
     private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef weapon)>> _mountsCache = [];
 
+    // Latest streamed world config. Fog-of-war (server-authoritative per-server toggle) drives the
+    // client's fog presentation: eyeball-only marker suppression + ghost rendering only apply when
+    // fog is on. Defaults to fog-off so a pre-defs client behaves as today; a spawned ship can't
+    // exist before the defs arrive, so no fog decision is ever made against this default.
+    private WorldConfig _world = new();
+    public bool FogOfWar => _world.FogOfWar;
+
     // Apply the defs downloaded from the server (GameNetClient.ApplyDefs).
     public void Load(
         IReadOnlyList<ShipClassDef> ships,
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
         IReadOnlyList<CargoItemDef> cargoItems,
-        WorldConfig _
+        WorldConfig world
     )
     {
+        _world = world;
         _ships.Clear();
         _weapons.Clear();
         _bases.Clear();

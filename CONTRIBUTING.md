@@ -4,7 +4,7 @@
 
 | Path | What it is |
 |------|------------|
-| `client/` | Godot 4.6.3 (C#/.NET 8) client — rendering, input, client-side prediction. Scripts live in `client/scripts/`. |
+| `client/` | Godot 4.7 (C#/.NET 8) client — rendering, input, client-side prediction. Scripts live in `client/scripts/`. |
 | `server/` | .NET 8 console — the authoritative 20 Hz sim (`Sim/`), the networking/lobby layer (`Net/`), and pluggable backend seams (`Backend/`). |
 | `shared/` | Deterministic `FlightModel` + content `Defs` (ship/weapon/base/world). **Referenced** by both client and server so physics + content stay bit-identical — edit it once, here. |
 | `tools/simbot/` | Bot swarm for load testing the server. |

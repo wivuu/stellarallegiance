@@ -70,6 +70,11 @@ public partial class GameNetClient : Node
     // ApplyMineGone. Cleared wherever _missileRows resets (reconnect / world rebuild / leave).
     private readonly Dictionary<ulong, Minefield> _minefieldRows = [];
 
+    // Last-decoded recon probe per id (from MsgProbes). Maintained by ApplyProbes / ApplyProbeGone.
+    // Owner-team-only (v1), so this only ever holds OUR team's probes. Cleared wherever the other
+    // per-connection caches reset (reconnect / world rebuild / leave).
+    private readonly Dictionary<ulong, Probe> _probeRows = [];
+
     // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
     // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
     public IReadOnlyDictionary<ulong, Missile> MissileRows => _missileRows;
@@ -80,6 +85,7 @@ public partial class GameNetClient : Node
     // from its snapshot ShipRecord (not predicted). Read by the HUD (WeaponsPanel / TargetMarkers).
     public byte LocalChaffAmmo { get; private set; }
     public byte LocalMineAmmo { get; private set; }
+    public byte LocalProbeAmmo { get; private set; }
     public byte LocalThreatLock { get; private set; } // 0 none, 1 being locked, 2 locked
 
     // Optional connect credentials. Secret = shared-secret password (env SIM_SECRET, empty =
@@ -153,6 +159,7 @@ public partial class GameNetClient : Node
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
+        _probeRows.Clear();
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         GD.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
@@ -193,6 +200,7 @@ public partial class GameNetClient : Node
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
+        _probeRows.Clear();
         LobbyPlayers = [];
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -228,6 +236,7 @@ public partial class GameNetClient : Node
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
+        _probeRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         LobbyChanged?.Invoke();
         _world.Reset();
@@ -245,6 +254,7 @@ public partial class GameNetClient : Node
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
+        _probeRows.Clear();
         _world.Reset();
     }
 
@@ -335,6 +345,7 @@ public partial class GameNetClient : Node
             | (input.Firing2 ? 4 : 0)
             | (input.DropChaff ? 8 : 0)
             | (input.DropMine ? 16 : 0)
+            | (input.DropProbe ? 32 : 0)
         );
         BitConverter.TryWriteBytes(f[30..], input.LockTargetId); // u64 Tab-target for server-authoritative missile lock
         _tx.Writer.TryWrite(f.ToArray());
@@ -616,6 +627,18 @@ public partial class GameNetClient : Node
             case 15:
                 ApplyChaff(r);
                 break;
+            case 16:
+                ApplyReveal(r);
+                break;
+            case 17:
+                ApplyContacts(r);
+                break;
+            case 18:
+                ApplyProbes(r);
+                break;
+            case 19:
+                ApplyProbeGone(r);
+                break;
         }
     }
 
@@ -684,6 +707,77 @@ public partial class GameNetClient : Node
             pz = r.ReadInt16();
         _missileRows.Remove(id);
         _world.NetMissileGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
+    }
+
+    // Recon probes visible to our team (mirrors Protocol.WriteProbe): our own probes always, plus any
+    // enemy probe we can currently radar-detect. The frame is the COMPLETE visible set across all
+    // sectors, so it reconciles by omission — an enemy probe that fogs out simply stops appearing (no
+    // gone-message), so any cached probe absent from this frame is dropped silently. An explicit
+    // MsgProbeGone still drives expiry/destruction FX when the server sends one.
+    private void ApplyProbes(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        _probeSeen.Clear();
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            byte team = r.ReadByte();
+            uint weaponId = r.ReadUInt32();
+            ushort sector = r.ReadUInt16();
+            float px = r.ReadSingle();
+            float py = r.ReadSingle();
+            float pz = r.ReadSingle();
+            ushort ticksLeft = r.ReadUInt16();
+
+            var row = new Probe
+            {
+                ProbeId = id,
+                Team = team,
+                WeaponId = weaponId,
+                SectorId = sector,
+                PosX = px,
+                PosY = py,
+                PosZ = pz,
+                TicksLeft = ticksLeft,
+            };
+            _probeRows[id] = row;
+            _probeSeen.Add(id);
+            _world.NetUpsertProbe(row);
+        }
+
+        // Prune any cached probe the frame no longer lists (fogged-out enemy probe). Reason 255 =
+        // silent local reconcile — the renderer just frees the node, no FX.
+        if (_probeRows.Count != _probeSeen.Count)
+        {
+            _probeReconcileScratch.Clear();
+            foreach (var kv in _probeRows)
+                if (!_probeSeen.Contains(kv.Key))
+                    _probeReconcileScratch.Add(kv.Key);
+            foreach (var id in _probeReconcileScratch)
+            {
+                var g = _probeRows[id];
+                _probeRows.Remove(id);
+                _world.NetProbeGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
+            }
+        }
+    }
+
+    private readonly HashSet<ulong> _probeSeen = new();
+    private readonly List<ulong> _probeReconcileScratch = new();
+
+    // A probe was removed (mirrors Protocol.BuildProbeGone): reason 0 expired, 1 cleanup, 2 destroyed
+    // by enemy fire (renderer plays an explosion). Drop it from the cache and hand the renderer the
+    // reported position + reason so it can decide FX. Broadcast, so an unknown id is a harmless no-op.
+    private void ApplyProbeGone(BinaryReader r)
+    {
+        ulong id = r.ReadUInt64();
+        byte reason = r.ReadByte();
+        ushort sector = r.ReadUInt16();
+        short px = r.ReadInt16(),
+            py = r.ReadInt16(),
+            pz = r.ReadInt16();
+        _probeRows.Remove(id);
+        _world.NetProbeGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
     // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). The full
@@ -804,14 +898,15 @@ public partial class GameNetClient : Node
         }
     }
 
-    // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
+    // Single source: shared/Net/Wire.cs (the server's Protocol.Version aliases the same
+    // constant). Bump it THERE when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 22;
+    public const byte ProtocolVersion = Wire.ProtocolVersion;
 
-    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
-    // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
-    // must pick BLUE/RED before deploying.
-    public const byte NoTeam = 0xFF;
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Single source: shared
+    // Wire.NoTeam — a fresh joiner starts here (Welcome/roster carry it) and must pick BLUE/RED
+    // before deploying.
+    public const byte NoTeam = Wire.NoTeam;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -849,6 +944,7 @@ public partial class GameNetClient : Node
             _world.Reset();
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
             _minefieldRows.Clear();
+            _probeRows.Clear();
         }
         _worldLoaded = true;
 
@@ -865,55 +961,133 @@ public partial class GameNetClient : Node
 
         ushort bases = r.ReadUInt16();
         for (int i = 0; i < bases; i++)
-        {
-            var row = new Base
-            {
-                BaseId = r.ReadUInt64(),
-                Team = r.ReadByte(),
-                SectorId = r.ReadUInt32(),
-                PosX = r.ReadSingle(),
-                PosY = r.ReadSingle(),
-                PosZ = r.ReadSingle(),
-            };
-            r.ReadSingle(); // radius (client renders from BaseDef)
-            row.Health = r.ReadSingle();
-            _world.NetAddBase(row);
-        }
+            _world.NetAddBase(ReadBaseStatic(r));
         uint asteroids = r.ReadUInt32();
         for (int i = 0; i < asteroids; i++)
-        {
-            var row = new Asteroid
-            {
-                AsteroidId = r.ReadUInt64(),
-                SectorId = r.ReadUInt32(),
-                PosX = r.ReadSingle(),
-                PosY = r.ReadSingle(),
-                PosZ = r.ReadSingle(),
-                Radius = r.ReadSingle(),
-            };
-            byte variant = r.ReadByte();
-            row.RotX = r.ReadSingle();
-            row.RotY = r.ReadSingle();
-            row.RotZ = r.ReadSingle();
-            row.Variant = AsteroidShapes.NameForIndex(variant);
-            _world.NetAddAsteroid(row);
-        }
+            _world.NetAddAsteroid(ReadRockStatic(r));
         ushort alephs = r.ReadUInt16();
         for (int i = 0; i < alephs; i++)
-            _world.NetAddAleph(
-                new Aleph
-                {
-                    AlephId = r.ReadUInt64(),
-                    SectorId = r.ReadUInt32(),
-                    DestSectorId = r.ReadUInt32(),
-                    PosX = r.ReadSingle(),
-                    PosY = r.ReadSingle(),
-                    PosZ = r.ReadSingle(),
-                }
-            );
+            _world.NetAddAleph(ReadAlephStatic(r));
         GD.Print($"[GameNet] world received — {sectors} sectors, {bases} bases, {asteroids} asteroids");
         _cm.NotifyConnected();
         Connected?.Invoke();
+    }
+
+    // Shared per-record static decoders — mirror Protocol.WriteBaseStatic/WriteRockStatic/
+    // WriteAlephStatic byte-for-byte. Used by BOTH ApplyWelcome and ApplyReveal so the two paths
+    // can never drift (a fog reveal must decode a record identically to the initial world dump).
+    private static Base ReadBaseStatic(BinaryReader r)
+    {
+        var row = new Base
+        {
+            BaseId = r.ReadUInt64(),
+            Team = r.ReadByte(),
+            SectorId = r.ReadUInt32(),
+            PosX = r.ReadSingle(),
+            PosY = r.ReadSingle(),
+            PosZ = r.ReadSingle(),
+        };
+        r.ReadSingle(); // radius (client renders from BaseDef)
+        row.Health = r.ReadSingle();
+        return row;
+    }
+
+    private static Asteroid ReadRockStatic(BinaryReader r)
+    {
+        var row = new Asteroid
+        {
+            AsteroidId = r.ReadUInt64(),
+            SectorId = r.ReadUInt32(),
+            PosX = r.ReadSingle(),
+            PosY = r.ReadSingle(),
+            PosZ = r.ReadSingle(),
+            Radius = r.ReadSingle(),
+        };
+        byte variant = r.ReadByte();
+        row.RotX = r.ReadSingle();
+        row.RotY = r.ReadSingle();
+        row.RotZ = r.ReadSingle();
+        row.Variant = AsteroidShapes.NameForIndex(variant);
+        return row;
+    }
+
+    private static Aleph ReadAlephStatic(BinaryReader r) =>
+        new Aleph
+        {
+            AlephId = r.ReadUInt64(),
+            SectorId = r.ReadUInt32(),
+            DestSectorId = r.ReadUInt32(),
+            PosX = r.ReadSingle(),
+            PosY = r.ReadSingle(),
+            PosZ = r.ReadSingle(),
+        };
+
+    // MsgReveal (fog): statics this team just scouted for the first time. Same record layout as
+    // Welcome (shared readers above). The renderer's Insert* paths are idempotent and also feed the
+    // Minimap source caches (_baseTeams via InsertBase, _alephLinks via InsertAleph), so revealing a
+    // base/aleph updates MapBaseTeams/MapAlephLinks the same way Welcome does — no extra refresh.
+    private void ApplyReveal(BinaryReader r)
+    {
+        byte nBases = r.ReadByte();
+        for (int i = 0; i < nBases; i++)
+            _world.NetAddBase(ReadBaseStatic(r));
+        ushort nRocks = r.ReadUInt16();
+        for (int i = 0; i < nRocks; i++)
+            _world.NetAddAsteroid(ReadRockStatic(r));
+        byte nAlephs = r.ReadByte();
+        for (int i = 0; i < nAlephs; i++)
+            _world.NetAddAleph(ReadAlephStatic(r));
+        // Sectors this team just reached (via a discovered aleph or a warp) — appended after the
+        // aleph block. NetAddSector is an idempotent upsert, so re-revealing a known sector is safe.
+        byte nSectors = r.ReadByte();
+        for (int i = 0; i < nSectors; i++)
+            _world.NetAddSector(
+                new Sector
+                {
+                    SectorId = r.ReadUInt32(),
+                    Name = "",
+                    Radius = r.ReadSingle(),
+                }
+            );
+    }
+
+    // MsgContacts (fog): the team's full last-known enemy ghost set + its radar-detected id list,
+    // both reconciled wholesale (the renderer replaces its stores each frame — no gone-message). A
+    // ghost is a HUD/radar glyph only (never a 3D node); a streamed enemy whose id is absent from the
+    // radar list is eyeball-tier (mesh renders, but WP4 suppresses its marker). Yaw/pitch dequantized.
+    private void ApplyContacts(BinaryReader r)
+    {
+        byte nGhosts = r.ReadByte();
+        var ghosts = new List<WorldRenderer.GhostContact>(nGhosts);
+        for (int i = 0; i < nGhosts; i++)
+        {
+            ulong id = r.ReadUInt64();
+            byte team = r.ReadByte();
+            byte cls = r.ReadByte();
+            ushort sector = r.ReadUInt16();
+            float px = r.ReadSingle();
+            float py = r.ReadSingle();
+            float pz = r.ReadSingle();
+            short yawQ = r.ReadInt16();
+            short pitchQ = r.ReadInt16();
+            ghosts.Add(
+                new WorldRenderer.GhostContact
+                {
+                    ShipId = id,
+                    Team = team,
+                    Cls = cls,
+                    Sector = sector,
+                    Pos = new Vector3(px, py, pz),
+                    Yaw = yawQ / 32767f * Mathf.Pi,
+                    Pitch = pitchQ / 32767f * (Mathf.Pi / 2f),
+                }
+            );
+        }
+        byte nRadar = r.ReadByte();
+        var radar = new List<ulong>(nRadar);
+        for (int i = 0; i < nRadar; i++)
+            radar.Add(r.ReadUInt64());
+        _world.NetSetContacts(ghosts, radar);
     }
 
     private static List<HardpointDef> ReadHardpoints(BinaryReader r)
@@ -970,6 +1144,11 @@ public partial class GameNetClient : Node
             d.ShieldCapacity = r.ReadSingle();
             d.ShieldRecharge = r.ReadSingle();
             d.ShieldDelaySec = r.ReadSingle();
+            // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
+            d.VisionConeLength = r.ReadSingle();
+            d.VisionConeAngleDeg = r.ReadSingle();
+            d.VisionSphereRadius = r.ReadSingle();
+            d.RadarSignature = r.ReadSingle();
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
             d.FactionId = r.ReadUInt32();
@@ -1023,9 +1202,16 @@ public partial class GameNetClient : Node
                     MineArmTicks = r.ReadUInt32(),
                     MineTriggerRadius = r.ReadSingle(),
                     CargoId = r.ReadUInt32(),
+                    // Probe dispenser block (mirror of Protocol.BuildDefs, exact field order).
+                    ProbeSightRadius = r.ReadSingle(),
+                    ProbeLifespanSec = r.ReadSingle(),
                     ShieldMult = r.ReadSingle(),
                     BoltRadius = r.ReadSingle(),
                     BoltLength = r.ReadSingle(),
+                    // Probe combat/visual block (mirrors BuildDefs order; HitPoints/Signature
+                    // are server-only and never ride the wire).
+                    ProbeHitRadius = r.ReadSingle(),
+                    ProbeModelSize = r.ReadSingle(),
                 }
             );
 
@@ -1054,6 +1240,9 @@ public partial class GameNetClient : Node
                 Name = ReadStr(r),
                 Radius = r.ReadSingle(),
                 MaxHealth = r.ReadSingle(),
+                // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
+                VisionSphereRadius = r.ReadSingle(),
+                RadarSignature = r.ReadSingle(),
             };
             b.Hardpoints = ReadHardpoints(r);
             bases.Add(b);
@@ -1066,6 +1255,8 @@ public partial class GameNetClient : Node
             AsteroidDensity = r.ReadSingle(),
             DebugFreezeBrain = r.ReadBoolean(),
             DebugNoFire = r.ReadBoolean(),
+            // Per-server fog-of-war toggle (EyeballMultiplier stays server-side, never streamed).
+            FogOfWar = r.ReadBoolean(),
         };
 
         _defs.Load(ships, weapons, bases, cargoItems, cfg);
@@ -1141,6 +1332,7 @@ public partial class GameNetClient : Node
             byte lockState = r.ReadByte();
             byte chaffAmmo = r.ReadByte();
             byte mineAmmo = r.ReadByte();
+            byte probeAmmo = r.ReadByte();
             // Being-locked threat from the flags byte (ShipFlagLockingMe=4, ShipFlagLockedMe=8).
             byte threatLock = (byte)((flags & 8) != 0 ? 2 : (flags & 4) != 0 ? 1 : 0);
 
@@ -1154,6 +1346,7 @@ public partial class GameNetClient : Node
                 IsPod = (flags & 2) != 0,
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,
+                ProbeAmmo = probeAmmo,
                 ThreatLock = threatLock,
                 SectorId = sector,
             };
@@ -1186,6 +1379,7 @@ public partial class GameNetClient : Node
                 LocalLockState = lockState;
                 LocalChaffAmmo = chaffAmmo;
                 LocalMineAmmo = mineAmmo;
+                LocalProbeAmmo = probeAmmo;
                 LocalThreatLock = threatLock;
             }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server

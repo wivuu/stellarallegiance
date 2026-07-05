@@ -24,11 +24,13 @@ public partial class EscapeMenu : Control
 
     private Context _ctx;
     private ConnectionManager? _cm;
+    private WorldRenderer? _world;
 
     // Opens the menu on the shared modal layer. No-op while a menu or the settings dialog
     // is already up (their Esc handlers own the key). ConnectionManager is resolved
     // best-effort so the menu also works where no game nodes exist (UiShowcase): LEAVE
-    // MATCH is hidden and QUIT TO DESKTOP disabled when it's missing.
+    // MATCH is hidden and QUIT TO DESKTOP disabled when it's missing. WorldRenderer is
+    // resolved the same way so Close() can recapture the cursor for flight (see Close()).
     public static void Open(Node context, Context ctx)
     {
         if (Active || SettingsDialog.Active)
@@ -37,6 +39,7 @@ public partial class EscapeMenu : Control
         {
             _ctx = ctx,
             _cm = context.GetTree().Root.GetNodeOrNull<ConnectionManager>("Main/ConnectionManager"),
+            _world = context.GetTree().Root.GetNodeOrNull<WorldRenderer>("Main/WorldRenderer"),
         };
         ModalHost.Ensure(context).AddChild(menu);
     }
@@ -127,6 +130,11 @@ public partial class EscapeMenu : Control
         if (IsQueuedForDeletion())
             return;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
+        // Mirror SectorOverview.Close(): the menu itself freed the cursor (ShipController's
+        // Esc handler only releases it, never re-captures), so re-capture here whenever
+        // we're closing back into flight, or the ship coasts uncontrollable.
+        if (_ctx == Context.Flight && _world?.LocalShip != null)
+            Input.MouseMode = Input.MouseModeEnum.Captured;
         QueueFree();
     }
 

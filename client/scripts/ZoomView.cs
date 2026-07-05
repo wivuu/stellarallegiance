@@ -3,13 +3,15 @@ using StellarAllegiance.Ui;
 
 // Telescopic scope: a circular picture-in-picture render of the LIVE game world, centred on
 // screen, that replaces the SystemRing gauges while open. '+' opens it at 5x and steps the
-// magnification up (5→10→20, capped); '−' steps down and closes below 5x; Esc dismisses. A
-// second Camera3D looks down the local ship's firing line through a narrow FOV (optical
-// magnification M ⇒ FOV = 2·atan(tan(75°/2)/M)), rendered into a SubViewport that SHARES the
-// main World3D (split-screen idiom — NOT OwnWorld3D, which only fits the hangar's isolated
-// preview). The viewport texture is drawn clipped to a circle in _Draw; the centre flight HUD
-// (arcs / reticle / velocity marker) hides while scoped and ShipController divides mouse-look
-// sensitivity by the magnification so fine aiming at 20x is possible.
+// magnification up (5→10→20, capped); '−' steps down and closes below 5x; Esc dismisses.
+// Magnification eases toward each step (exponential decay, not an instant snap) so the PiP
+// zoom, FOV, and mouse-look sensitivity all glide together. A second Camera3D looks down the
+// local ship's firing line through a narrow FOV (optical magnification M ⇒ FOV =
+// 2·atan(tan(75°/2)/M)), rendered into a SubViewport that SHARES the main World3D (split-screen
+// idiom — NOT OwnWorld3D, which only fits the hangar's isolated preview). The viewport texture
+// is drawn clipped to a circle in _Draw; the centre flight HUD (arcs / reticle / velocity
+// marker) hides while scoped and ShipController divides mouse-look sensitivity by the
+// magnification so fine aiming at 20x is possible.
 //
 // Pure overlay: reads the local ship's render transform and drives its own camera, never
 // touching authoritative state. Created and wired up by the Hud like the other combat overlays.
@@ -27,6 +29,14 @@ public partial class ZoomView : Control
     public static float Magnification { get; private set; } = 1f;
 
     private static readonly float[] Steps = [5f, 10f, 20f];
+
+    // Magnification eases toward _targetMag rather than snapping, so the PiP image, the FOV,
+    // and (since ShipController reads Magnification live) mouse-look sensitivity all glide
+    // together on a step. Exponential decay = frame-rate independent and reaches the target
+    // fast ("quickly can animate") without a fixed-duration tween.
+    private const float LerpRate = 10f;
+    private const float SnapEpsilon = 0.02f;
+    private float _targetMag = 1f;
 
     // A Camera3D looks down its own -Z but ships fly along +Z, so rotate the ship basis 180° about
     // its OWN up to aim the scope down the nose (same trick as CameraRig.FaceForward — no world-up
@@ -84,7 +94,8 @@ public partial class ZoomView : Control
     {
         Active = true;
         _step = 0;
-        Magnification = Steps[_step];
+        Magnification = Steps[_step]; // opens straight at 5x — only step changes ease
+        _targetMag = Magnification;
         _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         QueueRedraw();
@@ -95,7 +106,7 @@ public partial class ZoomView : Control
         if (_step >= Steps.Length - 1)
             return; // capped at 20x — no blip
         _step++;
-        Magnification = Steps[_step];
+        _targetMag = Steps[_step];
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
@@ -107,7 +118,7 @@ public partial class ZoomView : Control
             return;
         }
         _step--;
-        Magnification = Steps[_step];
+        _targetMag = Steps[_step];
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
@@ -117,6 +128,7 @@ public partial class ZoomView : Control
             return;
         Active = false;
         Magnification = 1f; // sensitivity divide becomes a no-op while closed
+        _targetMag = 1f;
         _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         QueueRedraw();
@@ -171,6 +183,16 @@ public partial class ZoomView : Control
 
         if (!Active || ship == null)
             return;
+
+        if (!Mathf.IsEqualApprox(Magnification, _targetMag, SnapEpsilon))
+        {
+            float ease = 1f - Mathf.Exp(-LerpRate * (float)delta);
+            Magnification = Mathf.Lerp(Magnification, _targetMag, ease);
+        }
+        else
+        {
+            Magnification = _targetMag;
+        }
 
         // Mirror the ship down its firing line: sit a little forward of the nose (own hull out of
         // frame) and inherit the ship's full orientation (FaceForward), so the scope looks exactly

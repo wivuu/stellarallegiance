@@ -8,6 +8,9 @@ stations:
     class: garrison
     radius: 90
     max-armor: 2000
+    # Fog-of-war vision: an unoccluded sphere the garrison contributes to its team from tick 0.
+    vision-sphere-radius: 1500
+    radar-signature: 2.5   # a base is seen from far away
     abilities: [start, restart]
     required-capabilities: [base]
     hardpoints:

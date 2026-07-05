@@ -56,7 +56,7 @@ public partial class VelocityIndicator : Control
 
     public override void _Process(double delta)
     {
-        Visible = !ZoomView.Active; // hidden while the telescopic scope owns the centre HUD
+        Visible = !ZoomView.Active && !SectorOverview.Active; // hidden while the telescopic scope or F3 map owns the centre HUD
         if (!Visible)
             return;
         bool wasVisible = _visible;
