@@ -39,6 +39,13 @@ public sealed partial class Simulation
     // Outer "eyeball" tier multiplier on a ship's vision-sphere radius (mesh streams but no radar).
     private float _eyeballMult = 1.5f;
 
+    // Fire-signature boost (content world knobs, cached in InitVision like _eyeballMult): a ship
+    // that just fired (guns or missiles) has its radar signature multiplied by _fireSigBoost,
+    // decaying linearly back to 1x over _fireSigWindowTicks. Target-side only — never a vision
+    // SOURCE change, so IsPointVisibleToTeam is deliberately untouched.
+    private float _fireSigBoost = 2.5f;
+    private float _fireSigWindowTicks = 80f;
+
     // Ships that left a team's STREAMED union (radar ∪ eyeball) this step, drained by the hub (WP3)
     // into MsgShipGone reason=2 (quiet fade). Cleared at the top of Step, populated only at an apply.
     public readonly List<(byte team, ulong shipId)> LostContactsThisStep = new();
@@ -84,6 +91,13 @@ public sealed partial class Simulation
         public readonly HashSet<ulong> DiscoveredRocks = new();
         public readonly HashSet<ulong> DiscoveredAlephs = new();
 
+        // Sectors this team knows EXIST (home sectors seeded at reset; discovering an aleph reveals
+        // both its endpoints; warping reveals the arrival). Gates the Welcome sector list and the
+        // minimap — an unscouted sector simply isn't on the team's map. Unlike DiscoveredRocks, the
+        // vision WORKER never reads this set (only the lock-holding Welcome/reveal builders and the
+        // sim-thread apply/TryWarp do), so sim-thread writes need no worker-join deferral.
+        public readonly HashSet<uint> DiscoveredSectors = new();
+
         // Guards the persistent discovered sets + LastKnownBaseHealth against the one off-sim-thread
         // reader: Protocol.BuildWelcome, built on a join's receive task (WP3). The sim-thread apply
         // takes it while mutating those collections; AfterStep's per-team builders run on the sim
@@ -101,6 +115,10 @@ public sealed partial class Simulation
         public HashSet<ulong> VisibleEnemyShips = new();
         public HashSet<ulong> EyeballShips = new();
 
+        // Enemy probes this team can currently radar-detect (swapped whole each apply, like
+        // VisibleEnemyShips). The hub streams these to the team so it can render + shoot them.
+        public HashSet<ulong> VisibleEnemyProbes = new();
+
         // Last-known contacts, keyed by ship id — HUD/radar glyph only.
         public readonly Dictionary<ulong, GhostContact> Ghosts = new();
 
@@ -113,6 +131,7 @@ public sealed partial class Simulation
         public readonly List<ulong> RevealLogBases = new();
         public readonly List<ulong> RevealLogRocks = new();
         public readonly List<ulong> RevealLogAlephs = new();
+        public readonly List<uint> RevealLogSectors = new();
         // ContactsDirty gates the ghost frame (MsgContacts).
         public bool ContactsDirty;
 
@@ -142,6 +161,7 @@ public sealed partial class Simulation
     private readonly List<BaseSnap> _inBaseViewers = new(); // ALIVE bases only — vision contributors
     private readonly List<BaseTargetSnap> _inBaseTargets = new(); // ALL bases (+ captured health) — discovery/refresh targets
     private readonly List<TargetSnap> _inTargets = new();
+    private readonly List<ProbeTargetSnap> _inProbeTargets = new(); // ALL live probes — enemy-visibility targets
     private readonly List<byte> _inTeams = new();
 
     // Warp-discovery staging (F8): rocks a ship revealed synchronously at a gate exit this interval,
@@ -200,6 +220,17 @@ public sealed partial class Simulation
         public float Sig; // radar signature: every viewer's range is scaled by this
     }
 
+    // A deployed probe as an ENEMY-VISIBILITY target (not the vision-source ViewerSnap it also emits):
+    // captured for every live probe so the worker can classify which teams radar-detect it.
+    private struct ProbeTargetSnap
+    {
+        public ulong Id;
+        public byte Team; // owner (only NON-owning teams classify against it)
+        public uint Sector;
+        public Vec3 Pos;
+        public float Sig; // probe radar signature (WeaponDef.ProbeSignature)
+    }
+
     // The worker's output: per-team recomputed sets + newly-discovered statics + base-health refresh.
     private sealed class VisionComputeResult
     {
@@ -215,6 +246,10 @@ public sealed partial class Simulation
         public readonly List<ulong> NewAlephs = [];
         public readonly List<(ulong id, float health)> BaseHealth = [];
         public readonly Dictionary<ulong, GhostContact> StreamInfo = [];
+        // Enemy probes this team can radar-detect this compute (radar tier only — a probe either
+        // shows or it doesn't; no eyeball glimpse, no ghost). Drives the enemy MsgProbes stream so a
+        // team can see (and shoot) an enemy probe within sensor range.
+        public readonly HashSet<ulong> VisibleEnemyProbes = [];
     }
 
     // ---- Init / reset ---------------------------------------------------------------------------
@@ -225,6 +260,8 @@ public sealed partial class Simulation
     {
         FogEnabled = Content.World.FogOfWar;
         _eyeballMult = Content.World.FogEyeballMultiplier > 0f ? Content.World.FogEyeballMultiplier : 1.5f;
+        _fireSigBoost = Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f;
+        _fireSigWindowTicks = (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate;
         foreach (var b in World.Bases)
             if (!_teamVisions.ContainsKey(b.Team))
                 _teamVisions[b.Team] = new TeamVision();
@@ -257,16 +294,19 @@ public sealed partial class Simulation
                 tv.DiscoveredBases.Clear();
                 tv.DiscoveredRocks.Clear();
                 tv.DiscoveredAlephs.Clear();
+                tv.DiscoveredSectors.Clear();
                 tv.LastKnownBaseHealth.Clear();
             }
             tv.VisibleEnemyShips.Clear();
             tv.EyeballShips.Clear();
+            tv.VisibleEnemyProbes.Clear();
             tv.Ghosts.Clear();
             lock (tv.DiscoverLock)
             {
                 tv.RevealLogBases.Clear();
                 tv.RevealLogRocks.Clear();
                 tv.RevealLogAlephs.Clear();
+                tv.RevealLogSectors.Clear();
             }
             tv.RadarEpisode.Clear();
             tv.StreamInfo = new Dictionary<ulong, GhostContact>();
@@ -281,6 +321,11 @@ public sealed partial class Simulation
                 lock (tv.DiscoverLock)
                 {
                     tv.DiscoveredBases.Add(b.Id);
+                    // The home sector (any sector this team has a base in) is known from tick 0.
+                    // Seeded WITHOUT logging, exactly like the seeded DiscoveredBases: the (re)sent
+                    // Welcome carries seeded state, and each client's reveal cursors seed at the
+                    // log length (ClientHub.SendWelcome).
+                    tv.DiscoveredSectors.Add(b.SectorId);
                     tv.LastKnownBaseHealth[b.Id] = World.BaseHealth[i];
                 }
         }
@@ -308,7 +353,7 @@ public sealed partial class Simulation
         }
 
         // (b) Capture this boundary's input snapshot and kick the next compute.
-        CaptureVisionInput();
+        CaptureVisionInput(tick);
         if (VisionSynchronous)
         {
             _visionResult = ComputeVision();
@@ -369,12 +414,13 @@ public sealed partial class Simulation
     }
 
     // ---- Input snapshot (sim thread) -------------------------------------------------------------
-    private void CaptureVisionInput()
+    private void CaptureVisionInput(uint tick)
     {
         _inViewers.Clear();
         _inBaseViewers.Clear();
         _inBaseTargets.Clear();
         _inTargets.Clear();
+        _inProbeTargets.Clear();
         _inTeams.Clear();
         foreach (var t in _teamVisions.Keys)
             _inTeams.Add(t);
@@ -399,6 +445,18 @@ public sealed partial class Simulation
                     EyeballRadius = sphere * _eyeballMult,
                 }
             );
+            // Firing is loud: a shot (gun or missile) multiplies this ship's signature by
+            // _fireSigBoost, decaying linearly back to 1x over the window. Captured on the sim
+            // thread from the live ShipSim, so LastFireTick needs no extra plumbing; the boost
+            // reaches enemy radar at the next vision boundary (<= 500 ms, by design).
+            float sig = def.RadarSignature > 0f ? def.RadarSignature : 1f;
+            uint lastFire = Math.Max(s.LastFireTick, s.LastMissileTick); // 0 = never fired
+            if (lastFire != 0 && tick >= lastFire)
+            {
+                float age = tick - lastFire;
+                if (age < _fireSigWindowTicks)
+                    sig *= 1f + (_fireSigBoost - 1f) * (1f - age / _fireSigWindowTicks);
+            }
             _inTargets.Add(
                 new TargetSnap
                 {
@@ -408,7 +466,7 @@ public sealed partial class Simulation
                     Sector = s.SectorId,
                     Pos = s.State.Pos,
                     Fwd = fwd,
-                    Sig = def.RadarSignature > 0f ? def.RadarSignature : 1f,
+                    Sig = sig,
                 }
             );
         }
@@ -446,6 +504,19 @@ public sealed partial class Simulation
                     ConeCos = 1f,
                     SphereRadius = pw.ProbeSightRadius,
                     EyeballRadius = 0f,
+                }
+            );
+            // ...and a destructible probe is ALSO an enemy-visibility target: a non-owning team that
+            // radar-detects it (below) gets it streamed so it can render + shoot it. Signature from
+            // ProbeSignature (resolved > 0 at projection).
+            _inProbeTargets.Add(
+                new ProbeTargetSnap
+                {
+                    Id = p.ProbeId,
+                    Team = p.Team,
+                    Sector = p.SectorId,
+                    Pos = p.Pos,
+                    Sig = pw.ProbeSignature > 0f ? pw.ProbeSignature : 1f,
                 }
             );
         }
@@ -507,9 +578,20 @@ public sealed partial class Simulation
             {
                 if (tv.DiscoveredAlephs.Contains(a.Id))
                     continue;
-                ClassifyTarget(team, a.SectorId, a.Pos, 1f, 0UL, out bool alephRadar, out _);
+                ClassifyTarget(team, a.SectorId, a.Pos, 1.4f, 0UL, out bool alephRadar, out _);
                 if (alephRadar)
                     tr.NewAlephs.Add(a.Id);
+            }
+
+            // Enemy probes: radar-detected ones this team can see + shoot. Radar tier only (a probe
+            // has no cone/eyeball/ghost — it either shows or it doesn't). Signature is the probe's own.
+            foreach (var pt in _inProbeTargets)
+            {
+                if (pt.Team == team)
+                    continue; // your own probes always stream (unconditional, hub side)
+                ClassifyTarget(team, pt.Sector, pt.Pos, pt.Sig, 0UL, out bool probeRadar, out _);
+                if (probeRadar)
+                    tr.VisibleEnemyProbes.Add(pt.Id);
             }
 
             // Rocks: only near-viewer, still-undiscovered rocks, gathered via the sector rock grid.
@@ -576,7 +658,7 @@ public sealed partial class Simulation
     }
 
     // Discover still-unknown rocks near any team viewer, using the per-sector rock grid so we never
-    // scan the full rock list. Rocks carry signature 1.0 and are excluded from their own occluder scan.
+    // scan the full rock list. Rocks carry signature 2.0 and are excluded from their own occluder scan.
     private void DiscoverRocks(byte team, TeamVision tv, TeamResult tr)
     {
         void ScanVolume(uint sector, Vec3 center, float range)
@@ -602,7 +684,7 @@ public sealed partial class Simulation
                         {
                             if (tv.DiscoveredRocks.Contains(r.Id) || tr.NewRocks.Contains(r.Id))
                                 continue;
-                            ClassifyTarget(team, r.SectorId, r.Pos, 1f, r.Id, out bool radar, out _);
+                            ClassifyTarget(team, r.SectorId, r.Pos, 2f, r.Id, out bool radar, out _);
                             if (radar)
                                 tr.NewRocks.Add(r.Id);
                         }
@@ -665,6 +747,18 @@ public sealed partial class Simulation
             tv.EyeballShips = newEyeball;
             tv.StreamInfo = r.StreamInfo;
 
+            // Enemy-probe visibility: keep only ids whose probe still exists, then swap. If the set
+            // changed, flag a prompt probe resend so a probe fogging in/out reaches the client at the
+            // next hub tick instead of waiting for the coarse keepalive (ProbesChangedThisStep's
+            // private setter is reachable here — same partial class as Simulation.Probes.cs).
+            var newProbes = new HashSet<ulong>();
+            foreach (var id in r.VisibleEnemyProbes)
+                if (ProbeExists(id))
+                    newProbes.Add(id);
+            if (!newProbes.SetEquals(tv.VisibleEnemyProbes))
+                ProbesChangedThisStep = true;
+            tv.VisibleEnemyProbes = newProbes;
+
             // Ghost invalidation: a ghost whose frozen point is now inside this team's vision (sig 1.0)
             // and whose id is not currently radar-visible is stale memory the team just re-scouted empty.
             if (tv.Ghosts.Count > 0)
@@ -695,7 +789,21 @@ public sealed partial class Simulation
                         tv.RevealLogRocks.Add(id);
                 foreach (var id in r.NewAlephs)
                     if (tv.DiscoveredAlephs.Add(id))
+                    {
                         tv.RevealLogAlephs.Add(id);
+                        // Discovering an aleph reveals both sectors it connects — knowing a gate
+                        // means knowing where it leads. Revealed in the SAME apply so the client's
+                        // minimap never draws an aleph edge with a missing endpoint node.
+                        foreach (var g in World.Alephs)
+                            if (g.Id == id)
+                            {
+                                if (tv.DiscoveredSectors.Add(g.SectorId))
+                                    tv.RevealLogSectors.Add(g.SectorId);
+                                if (tv.DiscoveredSectors.Add(g.DestSectorId))
+                                    tv.RevealLogSectors.Add(g.DestSectorId);
+                                break;
+                            }
+                    }
 
                 // Stale-base memory: refresh remembered health ONLY for bases in vision this tick.
                 foreach (var (id, health) in r.BaseHealth)

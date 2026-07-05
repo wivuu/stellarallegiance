@@ -10,11 +10,13 @@ namespace SimServer.Sim;
 // its authored lifespan (ProbeLifespanSec, already resolved into WeaponDef.ProjectileLifeTicks at
 // content projection, same field missiles/mines/chaff use for their own lifespans).
 //
-// Probes carry no physics/collision and are never a combat target (v1 — "shootable probes
-// deferred" per the plan); their only effect is an unoccluded team vision sphere of
-// ProbeSightRadius, folded into Simulation.Vision.cs's existing ViewerSnap list (see
-// CaptureVisionInput) — no new code path in the vision worker. They stream to the owning team
-// ONLY (server/Net/ClientHub.cs), unconditionally (not gated on FogEnabled).
+// Probes carry no physics/collision. They are a DESTRUCTIBLE combat target now (ProbeHitPoints/
+// ProbeHitRadius): a bolt or missile blast from an enemy team removes one (DamageProbe → gone
+// reason 2). Their vision contribution is an unoccluded team vision sphere of ProbeSightRadius,
+// folded into Simulation.Vision.cs's existing ViewerSnap list (see CaptureVisionInput) — no new
+// code path in the vision worker. They stream to the OWNING team unconditionally, PLUS any enemy
+// team that can currently radar-detect them (Simulation.Vision.cs VisibleEnemyProbes → ClientHub
+// BuildProbesFor), so an enemy can see what it is allowed to shoot.
 public sealed partial class Simulation
 {
     // A deployed recon probe: stationary from the moment it's dropped (no velocity/integration).
@@ -26,6 +28,7 @@ public sealed partial class Simulation
         public uint SectorId;
         public Vec3 Pos;
         public uint ExpireAtTick; // deploy tick + WeaponDef.ProjectileLifeTicks (ProbeLifespanSec × 20)
+        public float Health; // remaining hit points (seeded from WeaponDef.ProbeHitPoints; 0 = invulnerable)
     }
 
     // Live probes (appended by TryDeployProbe, stepped in StepProbes). Exposed to the hub for the
@@ -33,10 +36,11 @@ public sealed partial class Simulation
     private readonly List<ProbeSim> _probes = new();
     public IReadOnlyList<ProbeSim> Probes => _probes;
 
-    // Probes that expired/were cleared this step, drained by the hub into per-owner-team MsgProbeGone
-    // frames. Reason 0 = expired past lifespan; reason 1 = match-clear cleanup/despawn (both rendered
-    // as a silent removal client-side — probes are invulnerable, no impact/pop FX). Cleared at the top
-    // of Step (mirrors MineGoneThisStep).
+    // Probes that expired/were cleared/were destroyed this step, drained by the hub into MsgProbeGone
+    // frames (broadcast to all clients now — the owner AND the destroyer both want the outcome).
+    // Reason 0 = expired past lifespan, 1 = match-clear cleanup/despawn (both silent removals), 2 =
+    // destroyed by enemy fire (client plays an explosion + impact FX). Cleared at the top of Step
+    // (mirrors MineGoneThisStep).
     public readonly List<(ulong id, byte reason, byte team, uint sector, Vec3 pos)> ProbeGoneThisStep = new();
 
     // Set whenever a probe was added/removed this step, so the hub sends a fresh (possibly empty)
@@ -59,10 +63,11 @@ public sealed partial class Simulation
         ship.ProbeAmmo -= 1;
         ship.LastProbeTick = tick;
 
-        // Just ahead of the ship (local +Z), clear of the hull — no physics, so it never has to
-        // separate further; it simply sits where it was dropped for the rest of its lifespan.
+        // Behind the ship's engine (local −Z), clear of the hull — deployed out the back like a
+        // dropped buoy. No physics, so it never separates further; it simply sits where it was
+        // dropped for the rest of its lifespan (mirrors how mines/chaff eject behind the ship).
         Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
-        Vec3 pos = ship.State.Pos + fwd * (World.ShipRadius + 4f);
+        Vec3 pos = ship.State.Pos - fwd * (World.ShipRadius + 4f);
 
         _probes.Add(
             new ProbeSim
@@ -73,9 +78,49 @@ public sealed partial class Simulation
                 SectorId = ship.SectorId,
                 Pos = pos,
                 ExpireAtTick = tick + w.ProjectileLifeTicks,
+                Health = w.ProbeHitPoints, // 0 = authored-invulnerable (no combat target this deploy)
             }
         );
         ProbesChangedThisStep = true;
+    }
+
+    // Apply damage to a live probe (bolt or missile blast). At/below zero health the probe is removed
+    // and a gone reason-2 (destroyed) is queued for broadcast. A 0-health (invulnerable) probe never
+    // reaches this path — the shooter's target scan skips it. Sim-thread only (called from the shot
+    // resolution / missile passes, exactly where ship/base damage is applied).
+    private void DamageProbe(ProbeSim p, float dmg, uint tick)
+    {
+        if (p.Health <= 0f)
+            return; // invulnerable — should not have been targeted
+        p.Health -= dmg;
+        if (p.Health > 0f)
+            return;
+        int idx = _probes.IndexOf(p);
+        if (idx < 0)
+            return; // already removed this step (e.g. a second bolt resolving the same tick)
+        _probes.RemoveAt(idx);
+        ProbeGoneThisStep.Add((p.ProbeId, 2, p.Team, p.SectorId, p.Pos));
+        ProbesChangedThisStep = true;
+    }
+
+    // Find a live, damageable (Health > 0) probe by id — used by the shot/missile resolution passes to
+    // resolve a queued probe hit (the probe may already be gone by resolution time; caller skips null).
+    private ProbeSim? FindDamageableProbe(ulong id)
+    {
+        for (int i = 0; i < _probes.Count; i++)
+            if (_probes[i].ProbeId == id && _probes[i].Health > 0f)
+                return _probes[i];
+        return null;
+    }
+
+    // Whether a probe id is still live (any health, incl. invulnerable 0-health probes) — used by the
+    // vision apply to prune a stale enemy-visibility id whose probe expired during the compute window.
+    private bool ProbeExists(ulong id)
+    {
+        for (int i = 0; i < _probes.Count; i++)
+            if (_probes[i].ProbeId == id)
+                return true;
+        return false;
     }
 
     // Expire probes past their lifespan. Fixed index-loop order (like StepMines) keeps this

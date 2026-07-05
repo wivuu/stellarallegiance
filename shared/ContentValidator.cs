@@ -111,6 +111,12 @@ namespace StellarAllegiance.Shared
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}");
                     if (w.ProbeLifespanSec <= 0f)
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}");
+                    // Combat block: signature must resolve positive (projection maps 0 -> 1), and
+                    // a destructible probe (ProbeHitPoints > 0) needs a live hit sphere.
+                    if (w.ProbeSignature <= 0f)
+                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}");
+                    if (w.ProbeHitPoints > 0f && w.ProbeHitRadius <= 0f)
+                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}");
                     if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }

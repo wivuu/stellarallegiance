@@ -152,15 +152,105 @@ public partial class WorldRenderer : Node3D
     private double _contactLostUntil = -1.0;
     public bool ContactLostActive => Time.GetTicksMsec() / 1000.0 < _contactLostUntil;
 
-    // Replace the ghost set + radar-id set wholesale (MsgContacts reconcile semantics).
+    // New-contact chime state: one blip per MsgContacts frame at most, time-debounced (contacts
+    // flicker across the detection edge at the 2 Hz vision cadence), and suppressed on the first
+    // frame after a world (re)build so a reconnect/late-join doesn't chirp for the whole existing set.
+    private bool _contactsPrimed;
+    private double _nextContactSfxSec;
+    private const double ContactSfxCooldownSec = 1.5;
+
+    // Semi-spatial contact blip: placed this far from the local ship in the new contact's direction.
+    // Short (near SfxManager's UnitSize) so the sting stays loud and clearly panned toward the
+    // contact rather than attenuating with the real (possibly huge) contact distance.
+    private const float ContactBlipDist = 70f;
+
+    // Replace the ghost set + radar-id set wholesale (MsgContacts reconcile semantics), and chime once
+    // when a ship id newly reaches RADAR tier (present now, absent last frame). Ghost/eyeball-tier
+    // detections stay silent (radar contacts only). Enemy contacts play the enemy sting, friendlies/
+    // neutrals the neutral tone; a radar contact is an enemy by construction, so enemy is the norm.
+    // The blip is positional — panned toward the first new contact's direction from the local ship.
     public void NetSetContacts(IReadOnlyList<GhostContact> ghosts, IReadOnlyList<ulong> radarIds)
     {
+        bool anyNew = false;
+        bool enemyTone = false;
+        Vector3? contactPos = null; // world position of the first new contact (drives the blip pan)
+        if (_contactsPrimed)
+            foreach (var id in radarIds)
+            {
+                if (_radarVisible.Contains(id))
+                    continue; // already had radar contact last frame — not new
+                anyNew = true;
+                if (!ContactIsFriendly(id, ghosts))
+                    enemyTone = true; // any new hostile in the batch → enemy sting wins
+                if (contactPos is null && TryContactPos(id, ghosts, out var cp))
+                    contactPos = cp;
+            }
+
         _ghosts.Clear();
         foreach (var g in ghosts)
             _ghosts[g.ShipId] = g;
         _radarVisible.Clear();
         foreach (var id in radarIds)
             _radarVisible.Add(id);
+
+        if (anyNew)
+        {
+            double now = Time.GetTicksMsec() / 1000.0;
+            if (now >= _nextContactSfxSec)
+            {
+                var tone = enemyTone ? SfxManager.SfxId.ContactEnemy : SfxManager.SfxId.ContactNeutral;
+                // Semi-spatial: pan the sting toward the contact's direction from the local ship,
+                // at a fixed short distance so a far contact is still audible. No ship/position (dead
+                // or spectating) → fall back to the non-positional UI blip.
+                if (LocalShip is { } ship && contactPos is Vector3 cp)
+                {
+                    Vector3 lp = ship.GlobalPosition;
+                    Vector3 to = cp - lp;
+                    float d = to.Length();
+                    Vector3 dir = d > 1e-3f ? to / d : Vector3.Forward;
+                    SfxManager.Instance?.PlayAt(tone, lp + dir * ContactBlipDist);
+                }
+                else
+                {
+                    SfxManager.Instance?.PlayUi(tone);
+                }
+                _nextContactSfxSec = now + ContactSfxCooldownSec;
+            }
+        }
+        _contactsPrimed = true;
+    }
+
+    // World position of a radar contact: its live rendered row if present, else its ghost's frozen
+    // pose from the incoming set. False when neither is known (can't place the blip → caller pans off).
+    private bool TryContactPos(ulong id, IReadOnlyList<GhostContact> ghosts, out Vector3 pos)
+    {
+        if (_shipNodes.TryGetValue(id, out var node))
+        {
+            pos = node.GlobalPosition;
+            return true;
+        }
+        foreach (var g in ghosts)
+            if (g.ShipId == id)
+            {
+                pos = g.Pos;
+                return true;
+            }
+        pos = Vector3.Zero;
+        return false;
+    }
+
+    // Whether a contact id belongs to the local team (a friendly). Resolves the team from the live
+    // rendered row or the incoming ghost set; unknown → treated as hostile (the default for radar).
+    private bool ContactIsFriendly(ulong id, IReadOnlyList<GhostContact> ghosts)
+    {
+        if (_localTeam is not byte lt)
+            return false;
+        if (_shipNodes.TryGetValue(id, out var node) && node is RemoteShip rs)
+            return rs.Team == lt;
+        foreach (var g in ghosts)
+            if (g.ShipId == id)
+                return g.Team == lt;
+        return false;
     }
 
     public string SectorName(uint id) => _sectors.TryGetValue(id, out var s) ? s.Name : "";
@@ -674,11 +764,24 @@ public partial class WorldRenderer : Node3D
         _probes[row.ProbeId] = pv;
     }
 
+    // reason 0 expired, 1 match cleanup, 255 silent local reconcile (fogged-out enemy probe) → the
+    // node just vanishes. reason 2 = destroyed by enemy fire → a small blast + boom at the probe.
+    // The gone is broadcast, so only play the FX if THIS client was actually rendering the probe —
+    // otherwise a client that never saw it (blind teammate of the shooter) pops a phantom explosion.
     public void NetProbeGone(ulong id, byte reason, uint sector, Vec3 pos)
     {
-        if (_probes.Remove(id, out var view))
-            view.QueueFree();
+        bool had = _probes.Remove(id, out var view);
+        if (reason == 2 && had)
+        {
+            Vector3 p = new(pos.X, pos.Y, pos.Z);
+            SpawnEffect(ExplosionEffect.CreateBlast(ProbeBlastRadius, view!.Team), p, sector);
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, p, pitch: 1.35f);
+        }
+        view?.QueueFree();
     }
+
+    // Visual blast radius for a destroyed probe (a small pop — smaller than a ship's death boom).
+    private const float ProbeBlastRadius = 8f;
 
     // ---- Chaff + minefields (render stubs — Track A/B fill ChaffFx / MinefieldViews) ----
     // GameNetClient decodes MsgChaff / MsgMinefields / MsgMineGone and calls these; they forward to
@@ -747,6 +850,7 @@ public partial class WorldRenderer : Node3D
         _alephNodes.Clear();
         _ghosts.Clear();
         _radarVisible.Clear();
+        _contactsPrimed = false; // suppress the contact chime on the first frame after a (re)build
         _asteroidClip.Clear();
         _baseClip.Clear();
         _collisionWorld.Clear();
@@ -1469,7 +1573,7 @@ public partial class WorldRenderer : Node3D
     // avoids cross-sector hits.
     private void CheckBoltImpacts(double delta)
     {
-        if (_bolts.Count == 0 || _shipNodes.Count == 0)
+        if (_bolts.Count == 0 || (_shipNodes.Count == 0 && _probes.Count == 0))
             return;
 
         for (int i = _bolts.Count - 1; i >= 0; i--)
@@ -1479,6 +1583,7 @@ public partial class WorldRenderer : Node3D
                 continue;
             Vector3 b = pv.GlobalPosition;
             Vector3 a = b - pv.Velocity * (float)delta; // swept path across this frame
+            bool consumed = false;
             foreach (var (shipId, ship) in _shipNodes)
             {
                 // Never spark on the firing ship. Skipping by owner id (rather than a static
@@ -1504,6 +1609,28 @@ public partial class WorldRenderer : Node3D
                         SpawnEffect(new HitFlash(), hit, _localSector);
                         SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
                     }
+                    pv.QueueFree();
+                    _bolts.RemoveAt(i);
+                    consumed = true;
+                    break;
+                }
+            }
+            if (consumed)
+                continue;
+
+            // A deployed probe is a solid, shootable object too: spark + consume the bolt where it
+            // meets a visible probe (the server resolved the real damage). Team-agnostic, like ships.
+            foreach (var (probeId, probe) in _probes)
+            {
+                if (!probe.Visible)
+                    continue;
+                Vector3 c = probe.GlobalPosition;
+                float r = Mathf.Max(VisualHitRadius, probe.HitRadius);
+                Vector3 hit = ClosestPointOnSegment(a, b, c);
+                if (c.DistanceSquaredTo(hit) <= r * r)
+                {
+                    SpawnEffect(new HitFlash(), hit, _localSector);
+                    SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
                     break;

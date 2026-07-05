@@ -13,13 +13,18 @@ using StellarAllegiance.Shared;
 // =====================================================================
 public partial class ProbeView : Node3D
 {
-    // Longest local axis (world units) a loaded probe GLB is uniform-scaled to.
-    private const float TargetSize = 1.2f;
+    // Guard fallback for the longest-axis normalization when a def carries no authored ProbeModelSize
+    // (0). NOT a tuning default — the authored value (expendables.yaml model-size) is the real size.
+    private const float FallbackSize = 1.2f;
 
     // Slow cosmetic yaw spin (deg/s) so a stationary probe still reads as "alive".
     private const float SpinRateDeg = 12f;
 
     public byte Team { get; private set; }
+
+    // Server hit-sphere radius (from the def), so the client's cosmetic bolt sparks land where the
+    // server would resolve a hit. Falls back to the visual size when unauthored.
+    public float HitRadius { get; private set; }
 
     // Build the visual from the launching probe-kind WeaponDef (model only — probes have no trail).
     // A null def (shouldn't happen; defs precede any ship) falls back to the team-tinted puff.
@@ -27,7 +32,9 @@ public partial class ProbeView : Node3D
     {
         Team = team;
         Position = pos;
-        AddChild(LoadHull(def?.ModelName, team));
+        float size = def is { ProbeModelSize: > 0f } ? def.ProbeModelSize : FallbackSize;
+        HitRadius = def is { ProbeHitRadius: > 0f } ? def.ProbeHitRadius : size;
+        AddChild(LoadHull(def?.ModelName, team, size));
     }
 
     public override void _Process(double delta)
@@ -35,15 +42,17 @@ public partial class ProbeView : Node3D
         RotateY(Mathf.DegToRad(SpinRateDeg) * (float)delta);
     }
 
-    // Load `assets/probes/<name>.glb` normalized to TargetSize, or the ChaffFx team-tinted puff when
+    // Load `assets/probes/<name>.glb` normalized to `size`, or the ChaffFx team-tinted puff when
     // it's absent. Mirrors MissileView.LoadHull / ChaffFx.LoadModel.
-    private static Node3D LoadHull(string? modelName, byte team)
+    private static Node3D LoadHull(string? modelName, byte team, float size)
     {
         if (!string.IsNullOrEmpty(modelName) && GlbLoader.Load($"res://assets/probes/{modelName}.glb") is { } hull)
         {
-            GlbLoader.NormalizeLongestAxis(hull, TargetSize);
+            GlbLoader.NormalizeLongestAxis(hull, size);
             return hull;
         }
-        return ChaffFx.FallbackPuff(team);
+        var puff = ChaffFx.FallbackPuff(team);
+        puff.Scale = Vector3.One * (size / FallbackSize);
+        return puff;
     }
 }

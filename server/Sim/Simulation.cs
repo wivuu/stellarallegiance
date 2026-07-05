@@ -284,7 +284,7 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
-    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult);
+    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0);
 
     public readonly World World;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
@@ -1345,6 +1345,7 @@ public sealed partial class Simulation
         float bestT = maxT;
         ulong targetShip = 0;
         int targetBase = -1;
+        ulong targetProbe = 0;
 
         if (w.CanDamageBase)
         {
@@ -1450,10 +1451,28 @@ public sealed partial class Simulation
             }
         }
 
-        if (targetShip != 0 || targetBase >= 0)
+        // Deployed enemy probes are destructible: a stationary hit-sphere scan (probes are few and
+        // not in the ship grid, so a linear scan is cheap and stays replay-deterministic in list
+        // order). A closer probe hit wins and clears any ship/base target.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != ship.SectorId || p.Team == ship.Team || p.Health <= 0f)
+                continue;
+            float pr = (WeaponDefs.TryGetValue(p.WeaponId, out var pw) ? pw.ProbeHitRadius : 0f) + World.ProjectileRadius;
+            if (pr > World.ProjectileRadius && FirstEntryTime(mp, mv, p.Pos, default, pr, bestT, out float pt) && pt < bestT)
+            {
+                bestT = pt;
+                targetProbe = p.ProbeId;
+                targetShip = 0;
+                targetBase = -1;
+            }
+        }
+
+        if (targetShip != 0 || targetBase >= 0 || targetProbe != 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult));
+            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult, targetProbe));
         }
     }
 
@@ -1649,7 +1668,7 @@ public sealed partial class Simulation
             if (chaffDetonate)
             {
                 var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
-                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick);
+                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1754,7 +1773,7 @@ public sealed partial class Simulation
                     ApplyDamage(victim, w.Damage * w.DirectHitMult, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
                     ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
-                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick);
+                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -1780,11 +1799,30 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
-    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick)
+    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick, uint sector)
     {
-        if (shipGrid is null || w.BlastRadius <= 0f || w.BlastPower <= 0f)
+        if (w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
         float fuseR = w.ProjectileRadius;
+
+        // Enemy probes within the blast take splash too (same inverse-square falloff), so a missile
+        // detonation is a valid probe counter. Probes aren't gridded — a linear scan (few probes) in
+        // the detonation sector, deterministic in list order. Done before the ship grid so a probe
+        // killed here is removed for any same-tick follow-up.
+        for (int i = 0; i < _probes.Count; i++)
+        {
+            var p = _probes[i];
+            if (p.SectorId != sector || p.Team == team || p.Health <= 0f)
+                continue;
+            float d = (p.Pos - hitPos).Length();
+            if (d > w.BlastRadius)
+                continue;
+            float f = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
+            DamageProbe(p, w.BlastPower * f, tick);
+        }
+
+        if (shipGrid is null)
+            return;
         int x0 = World.CellOf(hitPos.X - w.BlastRadius),
             x1 = World.CellOf(hitPos.X + w.BlastRadius);
         int y0 = World.CellOf(hitPos.Y - w.BlastRadius),
@@ -1872,7 +1910,13 @@ public sealed partial class Simulation
         var due = _shotRing[tick % ShotRingSize];
         foreach (var shot in due)
         {
-            if (shot.BaseIndex >= 0)
+            if (shot.TargetProbeId != 0)
+            {
+                // The probe may have expired/been killed since the bolt was queued — skip if gone.
+                if (FindDamageableProbe(shot.TargetProbeId) is { } probe)
+                    DamageProbe(probe, shot.Damage, tick);
+            }
+            else if (shot.BaseIndex >= 0)
             {
                 ApplyBaseDamage(shot.BaseIndex, shot.Damage, tick);
             }
@@ -2248,6 +2292,16 @@ public sealed partial class Simulation
             // Fog: immediately scout the rocks around the arrival point (same tick) so gate-exit
             // surroundings reveal now instead of at the next 2 Hz vision boundary (Simulation.Vision.cs, F8).
             WarpDiscoverRocks(s);
+            // Fog: a ship physically arriving in a sector reveals it (belt-and-braces — the gate
+            // discovery usually already did via both aleph endpoints). Immediate write is safe
+            // here, unlike DiscoveredRocks: the vision worker never reads DiscoveredSectors (only
+            // the lock-holding Welcome/reveal builders do), so no _warpRevealPending deferral.
+            if (FogEnabled && _teamVisions.TryGetValue(s.Team, out var wtv))
+                lock (wtv.DiscoverLock)
+                {
+                    if (wtv.DiscoveredSectors.Add(g.DestSectorId))
+                        wtv.RevealLogSectors.Add(g.DestSectorId);
+                }
             return;
         }
     }

@@ -271,6 +271,12 @@ public static class FactionsContentProjection
                 CargoId = pr.CargoId ?? 0,
                 ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
                 ModelName = pr.ModelName ?? "",
+                // Probe combat/visual block. Signature resolves an authored 0/omitted to 1.0
+                // (hull rule); HitPoints 0 = authored-invulnerable.
+                ProbeHitPoints = (float)pr.HitPoints,
+                ProbeSignature = pr.Signature <= 0 ? 1f : (float)pr.Signature,
+                ProbeHitRadius = (float)pr.HitRadius,
+                ProbeModelSize = (float)pr.ModelSize,
             };
 
         throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff/probe expendable-id");
@@ -328,7 +334,13 @@ public static class FactionsContentProjection
 
     private static WorldConfig ProjectWorld(Factions.WorldConfig? w) =>
         w is null
-            ? new WorldConfig { FogOfWar = true, FogEyeballMultiplier = 1.5f }
+            ? new WorldConfig
+            {
+                FogOfWar = true,
+                FogEyeballMultiplier = 1.5f,
+                FireSignatureBoost = 2.5f,
+                FireSignatureWindow = 4f,
+            }
             : new WorldConfig
             {
                 Id = w.Id,
@@ -340,5 +352,9 @@ public static class FactionsContentProjection
                 // Protocol.BuildDefs deliberately skips it).
                 FogOfWar = w.FogOfWar ?? true,
                 FogEyeballMultiplier = w.FogEyeballMultiplier <= 0 ? 1.5f : (float)w.FogEyeballMultiplier,
+                // Fire-boost knobs are server-side only too (never streamed). 0/omitted resolve
+                // to the stock 2.5x over 4 s; author fire-signature-boost: 1.0 to disable.
+                FireSignatureBoost = w.FireSignatureBoost <= 0 ? 2.5f : (float)w.FireSignatureBoost,
+                FireSignatureWindow = w.FireSignatureWindow <= 0 ? 4f : (float)w.FireSignatureWindow,
             };
 }

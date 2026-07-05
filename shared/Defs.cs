@@ -190,9 +190,18 @@ namespace StellarAllegiance.Shared
 
         // Client bolt-mesh dimensions (visual only), authored on the projectile (projectiles.yaml)
         // and folded in via ProjectWeapon. 0 = the client's built-in default bolt size. Streamed
-        // LAST in BuildDefs (after ShieldMult) so the blocks above stay byte-stable.
+        // after ShieldMult so the blocks above stay byte-stable.
         public float BoltRadius;
         public float BoltLength;
+
+        // --- Probe combat/visual block (probe dispensers only; zero for other kinds) ---
+        // HitPoints/Signature are SERVER-ONLY (BuildDefs skips them, FogEyeballMultiplier
+        // precedent); HitRadius/ModelSize are streamed LAST (after BoltLength) so every block
+        // above stays byte-stable.
+        public float ProbeHitPoints; // health of the deployed probe; 0 = authored-invulnerable
+        public float ProbeSignature; // radar signature of the deployed probe (0 authored -> 1.0 at projection)
+        public float ProbeHitRadius; // server hit-sphere radius for bolts/blasts vs the probe, u
+        public float ProbeModelSize; // client visual normalization length, u (0 = client guard default)
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -252,6 +261,14 @@ namespace StellarAllegiance.Shared
         // to the wire (Protocol.BuildDefs skips it; the client learns eyeball state from the
         // per-team radar-id list instead, added by a later WP).
         public float FogEyeballMultiplier;
+
+        // Radar-signature multiplier applied to a ship the instant it fires (guns or missiles),
+        // decaying linearly back to 1x over FireSignatureWindow seconds. Defaults at projection:
+        // boost 2.5, window 4.0 (authored boost 1.0 disables). Server-side only — deliberately
+        // NOT written to the wire (the client never reads signatures; FogEyeballMultiplier
+        // precedent).
+        public float FireSignatureBoost;
+        public float FireSignatureWindow;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

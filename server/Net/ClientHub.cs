@@ -114,7 +114,8 @@ public sealed class ClientHub
         // A team change / match reseed re-sends Welcome, which re-seeds these to the new team's logs.
         public int RevealBaseCur,
             RevealRockCur,
-            RevealAlephCur;
+            RevealAlephCur,
+            RevealSectorCur;
     }
 
     // Per-tick record scratch (sim thread only): every alive ship's quantized record is
@@ -328,13 +329,14 @@ public sealed class ClientHub
                 client.RevealBaseCur = vision.RevealLogBases.Count;
                 client.RevealRockCur = vision.RevealLogRocks.Count;
                 client.RevealAlephCur = vision.RevealLogAlephs.Count;
+                client.RevealSectorCur = vision.RevealLogSectors.Count;
                 frame = Protocol.BuildWelcome(
                     client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
             }
         }
         else
         {
-            client.RevealBaseCur = client.RevealRockCur = client.RevealAlephCur = 0;
+            client.RevealBaseCur = client.RevealRockCur = client.RevealAlephCur = client.RevealSectorCur = 0;
             frame = Protocol.BuildWelcome(
                 client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
         }
@@ -733,14 +735,15 @@ public sealed class ClientHub
             }
         }
 
-        // Recon probes (WP5): owner-team-only, always (not gated on FogEnabled — a separate mechanic
-        // from vision filtering). Gone events carry their team so the send loop can filter per client.
-        List<(byte team, byte[] frame)>? probeGoneFrames = null;
+        // Recon probes (WP5): a probe is now a destructible, enemy-visible object, so gone events are
+        // BROADCAST to every client (the owner AND the destroyer both want the outcome — reason 2
+        // plays an explosion). A client that never had the probe no-ops the unknown id.
+        List<byte[]>? probeGoneFrames = null;
         if (_sim.ProbeGoneThisStep.Count > 0)
         {
             probeGoneFrames = new(_sim.ProbeGoneThisStep.Count);
             foreach (var g in _sim.ProbeGoneThisStep)
-                probeGoneFrames.Add((g.team, Protocol.BuildProbeGone(g.id, g.reason, g.sector, g.pos)));
+                probeGoneFrames.Add(Protocol.BuildProbeGone(g.id, g.reason, g.sector, g.pos));
         }
         // MsgProbes: minefield-style cadence (on change + coarse keepalive), one buffer per team.
         bool sendProbes = _sim.ProbesChangedThisStep || coarse;
@@ -906,13 +909,14 @@ public sealed class ClientHub
                 {
                     var rf = Protocol.BuildRevealSlice(
                         _sim.World, vision, RockIndexById(),
-                        client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur,
-                        out int nb, out int nr, out int na);
+                        client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur, client.RevealSectorCur,
+                        out int nb, out int nr, out int na, out int ns);
                     if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
                     {
                         client.RevealBaseCur = nb;
                         client.RevealRockCur = nr;
                         client.RevealAlephCur = na;
+                        client.RevealSectorCur = ns;
                     }
                 }
 
@@ -962,11 +966,10 @@ public sealed class ClientHub
                 foreach (var f in mineGoneFrames)
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
 
-            // Recon probes: owner-team-only, always (v1 — no enemy ever receives 18/19).
+            // Recon probes: gone events broadcast to everyone (unknown ids no-op client-side).
             if (probeGoneFrames is not null)
-                foreach (var (team, f) in probeGoneFrames)
-                    if (team == client.Team)
-                        client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+                foreach (var f in probeGoneFrames)
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
 
             if (sendProbes)
             {
@@ -1210,16 +1213,24 @@ public sealed class ClientHub
         return buf;
     }
 
-    // Build the per-team MsgProbes frame: [18][u8 count] + count x 29-B records — every live probe
-    // this team owns, regardless of sector (a probe is a strategic team asset, not anchor-sector
-    // scoped like a minefield). v1: owner-team-only and unconditional — enemy teams never receive
-    // 18/19, fog on or off.
+    // Build the per-team MsgProbes frame: [18][u8 count] + count x 29-B records. The frame is the
+    // team's COMPLETE visible probe set (all sectors — a probe is a strategic team asset, not anchor-
+    // sector scoped like a minefield), so the client reconciles by omission (ApplyProbes drops any
+    // probe absent from the frame). A team sees: its OWN probes always, PLUS enemy probes it can
+    // currently radar-detect (fog on, VisibleEnemyProbes) or ALL probes (fog off — a destructible
+    // object must be visible to be countered, symmetric for both teams).
     private byte[] BuildProbesFor(byte team)
     {
         var probes = _sim.Probes;
+        bool fog = _sim.FogEnabled;
+        var vision = fog ? _sim.VisionFor(team) : null;
+
+        bool ShouldSend(Simulation.ProbeSim p) =>
+            p.Team == team || (!fog) || (vision is not null && vision.VisibleEnemyProbes.Contains(p.ProbeId));
+
         int cnt = 0;
         for (int i = 0; i < probes.Count; i++)
-            if (probes[i].Team == team)
+            if (ShouldSend(probes[i]))
                 cnt++;
         cnt = Math.Min(cnt, 255);
         byte[] buf = new byte[2 + cnt * Protocol.ProbeRecordSize];
@@ -1230,7 +1241,7 @@ public sealed class ClientHub
         uint tick = _sim.Tick;
         for (int i = 0; i < probes.Count && written < cnt; i++)
         {
-            if (probes[i].Team != team)
+            if (!ShouldSend(probes[i]))
                 continue;
             Protocol.WriteProbe(buf.AsSpan(dst, Protocol.ProbeRecordSize), probes[i], tick);
             dst += Protocol.ProbeRecordSize;
@@ -1313,8 +1324,29 @@ public sealed class ClientHub
             && s.Team != myTeam
             && (vision == null || (!vision.VisibleEnemyShips.Contains(s.ShipId) && !vision.EyeballShips.Contains(s.ShipId)));
 
+        // A radar-visible enemy is streamed LIVE every tick — regardless of AOI distance or sector —
+        // so a remote team sensor (a deployed probe, a distant scout, a base) reads as a continuous
+        // feed rather than a coarse-cadence blip. Without this, an enemy the team can see ONLY through
+        // a far-off probe refreshes solely on the coarse keepalive (~500 ms) unless a friendly ship
+        // happens to be nearby. The distance tiers below skip these ids so they aren't double-added.
+        // Eyeball-tier contacts stay distance-gated (they're a proximity glimpse near a friendly ship);
+        // fog off ⇒ vision == null ⇒ this whole path is inert, so the LOD is byte-identical to pre-fog.
+        bool RadarSeen(Simulation.ShipSim s) =>
+            vision != null && s.Team != myTeam && vision.VisibleEnemyShips.Contains(s.ShipId);
+
         var picks = client.Scratch;
         picks.Clear();
+        if (vision != null)
+            foreach (var id in vision.VisibleEnemyShips)
+                if (_shipIndexById.TryGetValue(id, out int ri) && ships[ri].Alive)
+                {
+                    var s = ships[ri];
+                    // Real distance when co-sector (so a MaxRecords furball overflow still ranks these
+                    // sensibly against nearby ships); MaxValue cross-sector — kept at full rate on a
+                    // normal tick, dropped first only if that rare overflow backstop ever fires.
+                    float d2 = s.SectorId == mySector ? (s.State.Pos - myPos).LengthSquared() : float.MaxValue;
+                    picks.Add((d2, ri));
+                }
         if (coarseTick)
         {
             // Coarse keepalive: every ship, all sectors (far same-sector + other-sector contacts)
@@ -1326,6 +1358,8 @@ public sealed class ClientHub
                     continue;
                 if (Hidden(s))
                     continue;
+                if (RadarSeen(s))
+                    continue; // already added at full rate above
                 if (s.SectorId == mySector)
                     picks.Add(((s.State.Pos - myPos).LengthSquared(), i));
                 else
@@ -1342,6 +1376,8 @@ public sealed class ClientHub
                 {
                     if (Hidden(ships[i]))
                         continue;
+                    if (RadarSeen(ships[i]))
+                        continue; // streamed live above, distance-independent
                     float d2 = (ships[i].State.Pos - myPos).LengthSquared();
                     if (d2 <= r2sq)
                         picks.Add((d2, i));
@@ -1365,6 +1401,8 @@ public sealed class ClientHub
                         {
                             if (Hidden(ships[i]))
                                 continue;
+                            if (RadarSeen(ships[i]))
+                                continue; // streamed live above, distance-independent
                             float d2 = (ships[i].State.Pos - myPos).LengthSquared();
                             if (d2 <= r1sq)
                                 picks.Add((d2, i));

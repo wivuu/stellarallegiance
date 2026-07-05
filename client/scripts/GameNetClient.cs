@@ -709,12 +709,15 @@ public partial class GameNetClient : Node
         _world.NetMissileGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
-    // Recon probes owned by our team (mirrors Protocol.WriteProbe). v1 probes stream ONLY to their
-    // owning team, so every record decoded here is one of ours. No reconcile-by-omission (unlike
-    // minefields) — a probe's removal is always an explicit MsgProbeGone, exactly like a missile.
+    // Recon probes visible to our team (mirrors Protocol.WriteProbe): our own probes always, plus any
+    // enemy probe we can currently radar-detect. The frame is the COMPLETE visible set across all
+    // sectors, so it reconciles by omission — an enemy probe that fogs out simply stops appearing (no
+    // gone-message), so any cached probe absent from this frame is dropped silently. An explicit
+    // MsgProbeGone still drives expiry/destruction FX when the server sends one.
     private void ApplyProbes(BinaryReader r)
     {
         byte count = r.ReadByte();
+        _probeSeen.Clear();
         for (int i = 0; i < count; i++)
         {
             ulong id = r.ReadUInt64();
@@ -738,12 +741,33 @@ public partial class GameNetClient : Node
                 TicksLeft = ticksLeft,
             };
             _probeRows[id] = row;
+            _probeSeen.Add(id);
             _world.NetUpsertProbe(row);
+        }
+
+        // Prune any cached probe the frame no longer lists (fogged-out enemy probe). Reason 255 =
+        // silent local reconcile — the renderer just frees the node, no FX.
+        if (_probeRows.Count != _probeSeen.Count)
+        {
+            _probeReconcileScratch.Clear();
+            foreach (var kv in _probeRows)
+                if (!_probeSeen.Contains(kv.Key))
+                    _probeReconcileScratch.Add(kv.Key);
+            foreach (var id in _probeReconcileScratch)
+            {
+                var g = _probeRows[id];
+                _probeRows.Remove(id);
+                _world.NetProbeGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
+            }
         }
     }
 
-    // A probe expired (mirrors Protocol.BuildProbeGone / ApplyMissileGone): drop it from the cache
-    // and let the renderer free its node at the reported position.
+    private readonly HashSet<ulong> _probeSeen = new();
+    private readonly List<ulong> _probeReconcileScratch = new();
+
+    // A probe was removed (mirrors Protocol.BuildProbeGone): reason 0 expired, 1 cleanup, 2 destroyed
+    // by enemy fire (renderer plays an explosion). Drop it from the cache and hand the renderer the
+    // reported position + reason so it can decide FX. Broadcast, so an unknown id is a harmless no-op.
     private void ApplyProbeGone(BinaryReader r)
     {
         ulong id = r.ReadUInt64();
@@ -874,14 +898,15 @@ public partial class GameNetClient : Node
         }
     }
 
-    // Must match server/Net/Protocol.cs Version. Bump together when a frame layout changes.
+    // Single source: shared/Net/Wire.cs (the server's Protocol.Version aliases the same
+    // constant). Bump it THERE when a frame layout changes.
     // Public so the server browser can filter the lobby list to our protocol (ServerLobbyOverlay).
-    public const byte ProtocolVersion = 23;
+    public const byte ProtocolVersion = Wire.ProtocolVersion;
 
-    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Mirrors
-    // server/Net/Protocol.cs NoTeam — a fresh joiner starts here (Welcome/roster carry it) and
-    // must pick BLUE/RED before deploying.
-    public const byte NoTeam = 0xFF;
+    // Sentinel team byte for a pilot who hasn't picked a side ("NOAT"). Single source: shared
+    // Wire.NoTeam — a fresh joiner starts here (Welcome/roster carry it) and must pick BLUE/RED
+    // before deploying.
+    public const byte NoTeam = Wire.NoTeam;
 
     private void ApplyWelcome(BinaryReader r)
     {
@@ -1012,6 +1037,18 @@ public partial class GameNetClient : Node
         byte nAlephs = r.ReadByte();
         for (int i = 0; i < nAlephs; i++)
             _world.NetAddAleph(ReadAlephStatic(r));
+        // Sectors this team just reached (via a discovered aleph or a warp) — appended after the
+        // aleph block. NetAddSector is an idempotent upsert, so re-revealing a known sector is safe.
+        byte nSectors = r.ReadByte();
+        for (int i = 0; i < nSectors; i++)
+            _world.NetAddSector(
+                new Sector
+                {
+                    SectorId = r.ReadUInt32(),
+                    Name = "",
+                    Radius = r.ReadSingle(),
+                }
+            );
     }
 
     // MsgContacts (fog): the team's full last-known enemy ghost set + its radar-detected id list,
@@ -1171,6 +1208,10 @@ public partial class GameNetClient : Node
                     ShieldMult = r.ReadSingle(),
                     BoltRadius = r.ReadSingle(),
                     BoltLength = r.ReadSingle(),
+                    // Probe combat/visual block (mirrors BuildDefs order; HitPoints/Signature
+                    // are server-only and never ride the wire).
+                    ProbeHitRadius = r.ReadSingle(),
+                    ProbeModelSize = r.ReadSingle(),
                 }
             );
 

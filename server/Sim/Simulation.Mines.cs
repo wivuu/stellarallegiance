@@ -14,7 +14,7 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     // Speed the field deals its full authored DPS at (u/s); a victim's damage scales speed/ref.
-    private const float MineSpeedRef = 120f;
+    private const float MineSpeedRef = 40f;
     // Cap on the speed multiplier — a blisteringly fast pass can't exceed this × the authored DPS.
     private const float MineMaxSpeedMult = 2.5f;
     // Min ticks between hit-FX pings for one victim (~0.4s at 20 Hz) so a plow-through pops a few

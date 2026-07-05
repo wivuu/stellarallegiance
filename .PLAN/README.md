@@ -20,17 +20,21 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Password-protect game servers — done; set `--secret` / `SIM_SECRET`, display as 'private' in lobby, and allow clients to enter password on-join
-- **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
+- Password-protection for game servers: and allow clients to enter password on-join
 - F3 improvements
   - Hide HUD elements in F3 mode (reticule, hull, shields, weapons, etc)
   - Allow user to 'F3' while docker in base (hangar, etc)
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area, increase the distance weighting from alephs from the center of the sector
 - Mine changes
-  - Mines are maybe a bit **too** powerful.
   - Mines should animate as they are deployed (rapidly expand spherically)
+  - Mines should also kill ejection pods
+  - Where is the setting for how ship speed affects mine damage
 - Esc menu should work from hangar/base as well (currenetly only works in-ship)
+  - 'Esc' key while menu should open can give focus back to the game if in-game
 - Zoom quickly can animate; smooth zoom between 5-10-20
+- Radar tuning:
+  - Probes should be collideable, considered to be 'bases' but with low HP and not require base damage to be destroyed
+- Dont include the 'injected divergence' button in release builds
 ---
 
 ## Content philosophy (the through-line)
@@ -277,6 +281,7 @@ Stage-1 YAML pipeline.
   incoming-warning leak), vision-cone HUD rendering, eyeball-tier occlusion (unoccluded in v1).*
 - ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
+- ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.

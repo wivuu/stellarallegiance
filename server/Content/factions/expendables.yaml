@@ -109,10 +109,10 @@ mines:
     glyph: "◈"
     model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
     lifespan: 60         # field lifetime, s
-    power: 180           # damage-PER-SECOND at reference speed, scaled by the victim's speed
+    power: 60            # damage-PER-SECOND at reference speed, scaled by the victim's speed
     cloud-radius: 80     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
     cloud-count: 64      # mine meshes scattered per deploy — cosmetic density (<= 64)
-    arm-delay: 0.5       # seconds before the field arms
+    arm-delay: 1         # seconds before the field arms
 
 chaffs:
   - id: sensor-decoy
@@ -128,18 +128,24 @@ chaffs:
     decoy-radius: 60     # u within which a missile can be lured onto this puff
 
 probes:
-  # A deployed, passive, invulnerable sensor buoy: grants its owning team a vision sphere
-  # (sight-radius) around its drop point until it expires (lifespan, reusing the shared Expendable
-  # field every expendable carries). model-name is the GLB the client instances per deployed probe
-  # (assets/probes/<name>.glb). mass is authored low (not the "realistic" heavier value) so a single
-  # pack fits inside the scout's existing payload-capacity alongside its other cargo.
+  # A deployed, destructible sensor buoy: grants its owning team a vision sphere (sight-radius)
+  # around its drop point until it expires (lifespan, reusing the shared Expendable field every
+  # expendable carries) or an enemy shoots it dead (hit-points/hit-radius; signature scales how
+  # far away enemies radar-detect it). model-name is the GLB the client instances per deployed
+  # probe (assets/probes/<name>.glb); model-size is the visual normalization length in u. mass is
+  # authored low (not the "realistic" heavier value) so a single pack fits inside the scout's
+  # existing payload-capacity alongside its other cargo.
   - id: recon-probe
     name: Recon Probe
-    description: Deployable sensor buoy. Passive and invulnerable; expires after 10 minutes.
+    description: Deployable sensor buoy. Destructible; expires after 10 minutes.
     cargo-id: 4
     mass: 2              # payload cost per PACK (one hangar count = one pack)
     charges-per-pack: 2 # probes deployable from one loaded pack (one probe per press)
     glyph: "◉"
     model-name: acs64    # GLB the client instances per deployed probe (assets/probes/acs64.glb)
-    lifespan: 600        # seconds before the deployed probe expires
-    sight-radius: 1200   # u radius of the team vision sphere the probe grants while alive
+    model-size: 4.0      # u visual normalization length (was a hardcoded 1.2 client-side)
+    lifespan: 1200        # seconds before the deployed probe expires
+    sight-radius: 4800   # u radius of the team vision sphere the probe grants while alive
+    hit-points: 5        # ~2 fighter twin-gun volleys or 2 bomber bolts; 0 = invulnerable
+    hit-radius: 12       # u server hit sphere for bolts/blasts (generous vs the visual, feels fair)
+    signature: 1.0       # radar signature enemies detect the deployed probe at

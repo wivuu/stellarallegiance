@@ -83,7 +83,7 @@ HashSet<(byte, ulong)> Run(Simulation sim, Action hold, int ticks)
 Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
 
 // Parse the (base, rock, aleph) static counts out of a MsgWelcome frame, asserting count == body.
-(int b, int r, int a) WelcomeCounts(byte[] frame)
+(int s, int b, int r, int a) WelcomeCounts(byte[] frame)
 {
     using var ms = new MemoryStream(frame);
     using var br = new BinaryReader(ms);
@@ -95,7 +95,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
     if (ms.Position != frame.Length) throw new Exception("Welcome count != body");
-    return (nb, (int)nr, na);
+    return (ns, nb, (int)nr, na);
 }
 
 // A point at `dist` along a viewer's forward (+Z), tilted `angleDeg` off-axis in the XZ plane.
@@ -601,6 +601,66 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // ================================================================================================
+// 13b. Enemy-probe visibility: a deployed probe is a radar TARGET for the OTHER team — an enemy in
+//      sensor range sees it (so it can shoot it), and it fogs out again when the enemy leaves range.
+// ================================================================================================
+{
+    var sim = BootSim(661);
+    var probeW = sim.Content.Weapons.First(w => w.WeaponId == 8);
+    var layer = Join(sim, 1, 0, FlightModel.ClassFighter);
+    layer.ProbeAmmo = 1;
+    layer.ProbeWeaponId = probeW.WeaponId;
+    Park(layer, EmptySector, new Vec3(0, 0, 0));
+    layer.HeldInput = new ShipInputState { DropProbe = true };
+    sim.Step();
+    layer.HeldInput = new ShipInputState();
+    var probe = sim.Probes[^1];
+    Park(layer, EmptySector, new Vec3(90000f, 0, 0)); // deployer far away — only the enemy's own sensors matter
+
+    var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
+    float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
+    Run(sim, () => Park(enemy, EmptySector, probe.Pos + new Vec3(sphere * 0.5f, 0, 0)), Settle);
+    Check(sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
+        "an enemy within sensor range detects a deployed probe (it can see what it may shoot)", "an enemy in range did not see the probe");
+
+    Run(sim, () => Park(enemy, EmptySector, probe.Pos + new Vec3(90000f, 0, 0)), Settle);
+    Check(!sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
+        "the probe fogs out of an enemy's view once out of sensor range", "the probe stayed visible to a far enemy");
+}
+
+// ================================================================================================
+// 13c. Probe destruction: an enemy bolt through a deployed probe destroys it (gone reason 2), and it
+//      is removed from the live set. Probe health is forced to 1 so a single hit resolves the kill.
+// ================================================================================================
+{
+    var sim = BootSim(662);
+    var probeW = sim.Content.Weapons.First(w => w.WeaponId == 8);
+    var layer = Join(sim, 1, 0, FlightModel.ClassFighter);
+    layer.ProbeAmmo = 1;
+    layer.ProbeWeaponId = probeW.WeaponId;
+    Park(layer, EmptySector, new Vec3(0, 0, 0));
+    layer.HeldInput = new ShipInputState { DropProbe = true };
+    sim.Step();
+    layer.HeldInput = new ShipInputState();
+    Park(layer, EmptySector, new Vec3(90000f, 0, 0)); // deployer out of the line of fire
+    var probe = sim.Probes[^1];
+    probe.Health = 1f; // one bolt kills it (avoids multi-hit cadence timing in the test)
+
+    var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
+    bool gone = false;
+    for (uint i = 0; i < 60 && !gone; i++)
+    {
+        Park(enemy, EmptySector, probe.Pos - new Vec3(0, 0, 120f)); // behind the probe, facing +Z straight at it
+        enemy.HeldInput = new ShipInputState { Firing = true };
+        sim.Step();
+        if (sim.ProbeGoneThisStep.Any(g => g.id == probe.ProbeId && g.reason == 2))
+            gone = true;
+    }
+    Check(gone, "an enemy bolt destroys a deployed probe (gone reason 2)", "the enemy never destroyed the probe");
+    Check(!sim.Probes.Any(p => p.ProbeId == probe.ProbeId), "the destroyed probe is removed from the live set", "the probe survived in the live set after destruction");
+}
+
+// ================================================================================================
 // 14. F8 — warp discovery: a ship warping through an aleph immediately scouts the rocks around its
 //     arrival point (reveal log THIS tick; persisted to DiscoveredRocks by the next vision boundary).
 // ================================================================================================
@@ -639,19 +699,94 @@ Vec3 AtAngle(float dist, float angleDeg)
     var tv0 = sim.VisionFor(0)!;
 
     var full = WelcomeCounts(Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null));
-    Check(full.b == sim.World.Bases.Count && full.r == sim.World.Asteroids.Count && full.a == sim.World.Alephs.Count,
-        "fog-off Welcome dumps the full world (byte-compatible with pre-fog)", "fog-off Welcome did not carry the full world");
+    Check(full.s == sim.World.Sectors.Count && full.b == sim.World.Bases.Count && full.r == sim.World.Asteroids.Count && full.a == sim.World.Alephs.Count,
+        "fog-off Welcome dumps the full world incl. all sectors (byte-compatible with pre-fog)", "fog-off Welcome did not carry the full world");
 
     var noTeam = WelcomeCounts(Protocol.BuildWelcome(1, Protocol.NoTeam, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: null));
-    Check(noTeam.b == 0 && noTeam.r == 0 && noTeam.a == 0,
-        "fog-on Welcome for a NoTeam join (null vision) contains ZERO statics — the full-world leak is fixed (F1)",
-        $"a fog NoTeam Welcome leaked statics ({noTeam.b} bases, {noTeam.r} rocks, {noTeam.a} alephs)");
+    Check(noTeam.s == 0 && noTeam.b == 0 && noTeam.r == 0 && noTeam.a == 0,
+        "fog-on Welcome for a NoTeam join (null vision) contains ZERO statics AND zero sectors — the full-world leak is fixed (F1)",
+        $"a fog NoTeam Welcome leaked statics ({noTeam.s} sectors, {noTeam.b} bases, {noTeam.r} rocks, {noTeam.a} alephs)");
 
     var team = WelcomeCounts(Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv0));
     Check(team.b == tv0.DiscoveredBases.Count && team.r == tv0.DiscoveredRocks.Count && team.a == tv0.DiscoveredAlephs.Count,
         $"fog-on team Welcome carries exactly the discovered set ({team.b}B/{team.r}R/{team.a}A)",
         "fog-on team Welcome did not match the discovered set");
     Check(tv0.DiscoveredRocks.Contains(rock.Id) && team.r >= 1, "the discovered set (and its Welcome) includes the scouted rock", "the scouted rock was missing from the team Welcome");
+    // Sector gating: without discovering the aleph to sector 1, team 0 knows only its home sector.
+    Check(team.s == tv0.DiscoveredSectors.Count && team.s >= 1 && team.s < sim.World.Sectors.Count,
+        $"fog-on team Welcome carries only discovered sectors ({team.s} of {sim.World.Sectors.Count}) — undiscovered sectors are hidden",
+        $"fog-on team Welcome leaked sectors ({team.s} sent, {tv0.DiscoveredSectors.Count} discovered, {sim.World.Sectors.Count} total)");
+}
+
+// ================================================================================================
+// 15b. Sector discovery: a team knows only its home sector until it discovers an aleph, which
+//      reveals BOTH endpoint sectors, logs them, and streams them in a MsgReveal sector slice.
+// ================================================================================================
+{
+    var sim = BootSim(1515);
+    var g = sim.World.Alephs[0]; // aleph in team 0's home sector, leading to g.DestSectorId
+    var tv = sim.VisionFor(0)!;
+    uint home = g.SectorId, dest = g.DestSectorId;
+
+    Check(tv.DiscoveredSectors.Contains(home) && !tv.DiscoveredSectors.Contains(dest),
+        "before scouting the aleph, the team knows its home sector but NOT the destination",
+        $"initial discovered sectors wrong (home={tv.DiscoveredSectors.Contains(home)}, dest={tv.DiscoveredSectors.Contains(dest)})");
+
+    // Park a scout on top of the aleph so it discovers it; hold a couple of vision boundaries so the
+    // discovery applies (aleph → both endpoint sectors), then verify the destination is now known.
+    var scout = Join(sim, 1, 0, FlightModel.ClassScout);
+    Run(sim, () => Park(scout, home, g.Pos), Settle);
+    var tv2 = sim.VisionFor(0)!;
+    Check(tv2.DiscoveredAlephs.Contains(g.Id), "the scout discovers the aleph (pre-condition)", "the aleph was not discovered");
+    Check(tv2.DiscoveredSectors.Contains(dest) && tv2.RevealLogSectors.Contains(dest),
+        "discovering the aleph reveals the destination sector AND logs it for streaming",
+        "the destination sector was not revealed/logged after aleph discovery");
+
+    // A reveal slice from a fresh (zero) sector cursor must carry the destination sector record.
+    var rockIndex = new Dictionary<ulong, int>();
+    for (int i = 0; i < sim.World.Asteroids.Count; i++) rockIndex[sim.World.Asteroids[i].Id] = i;
+    var rf = Protocol.BuildRevealSlice(sim.World, tv2, rockIndex, 0, 0, 0, 0,
+        out _, out _, out _, out int nextSector);
+    Check(rf is not null && nextSector == tv2.RevealLogSectors.Count && nextSector >= 1,
+        "BuildRevealSlice emits the newly-revealed sector(s) and advances the sector cursor to the log end",
+        "the reveal slice did not carry the revealed sector / advance the cursor");
+}
+
+// ================================================================================================
+// 15c. Fire-signature boost: a ship parked just OUTSIDE a viewer's detection range is undetected at
+//      rest, becomes a radar contact while it is firing (signature multiplied), and fades again once
+//      the boost window elapses. Distances derive from the loaded content so retuning never breaks it.
+// ================================================================================================
+{
+    var sim = BootSim(1516);
+    float boost = sim.Content.World.FireSignatureBoost; // 2.5 stock
+    float window = sim.Content.World.FireSignatureWindow; // 4.0 s stock
+    Check(boost > 1f && window > 0f, "fire-signature boost/window are authored positive (pre-condition)", "fire-signature knobs did not load positive");
+
+    var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
+    var target = Join(sim, 2, 1, FlightModel.ClassFighter);
+    float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
+    float eyeMult = sim.Content.World.FogEyeballMultiplier; // 1.5 stock
+    // Place the target BEHIND the viewer (−Z) so the forward cone never applies — only the
+    // omnidirectional sphere/eyeball. Distance sits between the resting reach (sphere × eyeball) and
+    // the boosted reach (sphere × boost): undetected at rest, radar-detected only while firing.
+    float dist = sphere * (eyeMult + boost) / 2f;
+    Vec3 behind = new Vec3(0, 0, -dist);
+
+    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); }, Settle);
+    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "a ship beyond the resting detection range is NOT a contact at rest", "the resting ship was detected without firing");
+
+    // Keep the target "just fired" every tick so the boost stays maxed while the 2 Hz apply catches up.
+    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); target.LastFireTick = sim.Tick + 1; }, Settle);
+    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "firing multiplies the ship's radar signature — it becomes a contact while shooting", "a firing ship at boosted range was not detected");
+
+    // Stop firing and hold longer than the boost window: the signature decays and the contact fades.
+    int decayTicks = (int)(window * FlightModel.TickRate) + Settle + 10;
+    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); }, decayTicks);
+    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "after the fire-signature window elapses, the boosted contact fades back out", "the fire-boost contact never decayed");
 }
 
 // ================================================================================================
@@ -670,7 +805,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     for (int i = 0; i < world.Asteroids.Count; i++)
         rockIndex[world.Asteroids[i].Id] = i;
 
-    (int b, int r, int a) RevealCounts(byte[] frame)
+    (int b, int r, int a, int s) RevealCounts(byte[] frame)
     {
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
@@ -678,19 +813,20 @@ Vec3 AtAngle(float dist, float angleDeg)
         int nb = br.ReadByte(); br.ReadBytes(nb * 33);
         int nr = br.ReadUInt16(); br.ReadBytes(nr * 41);
         int na = br.ReadByte(); br.ReadBytes(na * 28);
+        int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
         if (ms.Position != frame.Length) throw new Exception("Reveal count != body");
-        return (nb, nr, na);
+        return (nb, nr, na, ns);
     }
 
-    var f1 = Protocol.BuildRevealSlice(world, tv, rockIndex, 0, 0, 0, out int nb1, out int nr1, out int na1);
+    var f1 = Protocol.BuildRevealSlice(world, tv, rockIndex, 0, 0, 0, 0, out int nb1, out int nr1, out int na1, out int nsx1);
     var c1 = RevealCounts(f1!);
     Check(c1.r == Protocol.RevealMaxRocks && nr1 == Protocol.RevealMaxRocks, $"the first reveal slice is capped at {Protocol.RevealMaxRocks} rocks (count == body)", "the first reveal slice was not capped / count != body");
 
-    var f2 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb1, nr1, na1, out int nb2, out int nr2, out int na2);
+    var f2 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb1, nr1, na1, nsx1, out int nb2, out int nr2, out int na2, out int nsx2);
     var c2 = RevealCounts(f2!);
     Check(c2.r == total - Protocol.RevealMaxRocks && nr2 == total, $"the remainder ({total - Protocol.RevealMaxRocks}) streams in the next slice (cursor advances)", "the reveal remainder did not stream correctly");
 
-    var f3 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb2, nr2, na2, out _, out _, out _);
+    var f3 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb2, nr2, na2, nsx2, out _, out _, out _, out _);
     Check(f3 is null, "once the cursor reaches the log end, BuildRevealSlice returns null (caught up)", "BuildRevealSlice kept emitting frames past the log end");
 }
 

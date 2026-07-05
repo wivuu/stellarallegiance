@@ -167,6 +167,10 @@ public static class CoreValidator
                     result.Error($"{ctx} probe '{probe.Id}' needs lifespan > 0.");
                 if (string.IsNullOrEmpty(probe.ModelName))
                     result.Error($"{ctx} probe '{probe.Id}' needs model-name set.");
+                if (probe.HitPoints > 0 && probe.HitRadius <= 0)
+                    result.Error($"{ctx} probe '{probe.Id}' with hit-points needs hit-radius > 0.");
+                if (probe.HitPoints < 0 || probe.HitRadius < 0 || probe.ModelSize < 0 || probe.Signature < 0)
+                    result.Error($"{ctx} probe '{probe.Id}' hit-points/hit-radius/model-size/signature must not be negative.");
             }
             else
             {

@@ -45,7 +45,7 @@ hulls:
     # proximity sphere (unoccluded). Scouts trade armor for the best eyes in the fleet.
     vision-cone-length: 2400
     vision-cone-angle-deg: 30
-    vision-sphere-radius: 900
+    vision-sphere-radius: 1080  # 900 x1.2 — scout's omnidirectional radar bubble
     radar-signature: 0.5   # small + quiet — must be approached closer before being seen
     price: 100
     payload-capacity: 8 # cannon 2 -> 6 free for cargo
