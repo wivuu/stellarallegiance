@@ -5,7 +5,7 @@
 # shared with the Godot client). Build with:
 #     docker build -f server/Dockerfile -t stellarallegiance-sim .
 # or via the repo-root docker-compose.yml (which sets context: .).
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Restore against just the project files first so the (slow) restore layer caches across
@@ -30,7 +30,7 @@ RUN dotnet publish server/SimServer.csproj -c Release -o /app /p:UseAppHost=fals
 # recompute hulls on first start. Self-heals at run time if a GLB ever changes.
 RUN dotnet /app/SimServer.dll --pregen-assets
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 # Carries the published binary, /app/assets (GLBs), and /app/sim-cache (warm hull cache).
 COPY --from=build /app ./
