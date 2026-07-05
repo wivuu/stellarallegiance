@@ -109,7 +109,7 @@ mines:
     glyph: "◈"
     model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
     lifespan: 60         # field lifetime, s
-    power: 200           # damage-PER-SECOND at reference speed, scaled by the victim's speed
+    power: 180           # damage-PER-SECOND at reference speed, scaled by the victim's speed
     cloud-radius: 80     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
     cloud-count: 64      # mine meshes scattered per deploy — cosmetic density (<= 64)
     arm-delay: 0.5       # seconds before the field arms
