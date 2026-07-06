@@ -54,8 +54,8 @@ public partial class SectorEnvironment : Node3D
     // density → per-puff billboard alpha. MANY densely-packed, low-alpha puffs fuse into a continuous
     // medium (rather than reading as a pile of discrete discs), so each puff stays very translucent and
     // the cloud emerges from their heavy overlap.
-    private const float PuffAlphaGain = 0.3f;
-    private const float PuffAlphaMax = 0.45f;
+    private const float PuffAlphaGain = 0.42f;
+    private const float PuffAlphaMax = 0.6f;
     // Puff diameter as a fraction of the cloud radius (further scaled per-puff by the local fractal
     // strength). Kept small so the many puffs read as fine dust rather than a few big poofy balls.
     private const float PuffSizeFrac = 0.6f;
@@ -78,6 +78,10 @@ public partial class SectorEnvironment : Node3D
 
         _puffMesh = new QuadMesh { Size = new Vector2(1f, 1f) };
         _puffMat = BuildPuffMaterial();
+        // Bake the per-puff cloud mottling into a tiling noise texture sampled ONCE per fragment, instead
+        // of evaluating a 3-octave fbm (~12 hash/sin ops) live for every one of the many overlapping,
+        // overdrawn dust fragments. Seamless so the per-instance UV offset can wrap freely.
+        _puffMat.SetShaderParameter("noise_tex", BuildNoiseTexture());
 
         _dustRoot = new Node3D { Name = "DustClouds" };
         AddChild(_dustRoot);
@@ -221,7 +225,11 @@ public partial class SectorEnvironment : Node3D
     {
         var center = new Vector3(c.PosX, c.PosY, c.PosZ);
         var rng = new RandomNumberGenerator { Seed = SeedForCloud(c) };
-        int count = Mathf.Clamp((int)Mathf.Round(c.Radius / 4f), 150, 460);
+        // Overdraw (fill-rate) is the dominant GPU cost of the dust: hundreds of big translucent
+        // billboards stack up per pixel. Because the puffs are low-alpha and fuse into a continuous
+        // medium, ~40% FEWER puffs at correspondingly higher alpha (PuffAlphaGain/Max above) reads almost
+        // identically while shading far fewer fragments. Tune this divisor/clamp to trade density vs perf.
+        int count = Mathf.Clamp((int)Mathf.Round(c.Radius / 6.5f), 100, 280);
 
         // Sample the noise at a few units across the cloud (like the nebula's dir*2.6), and offset each
         // cloud into a different region of noise space so no two clouds share a silhouette.
@@ -287,13 +295,17 @@ public partial class SectorEnvironment : Node3D
             mm.SetInstanceColor(i, colors[i]);
         }
 
+        // A real cloud-sized AABB (centre ± ~2×radius covers puff offsets up to Radius plus the ~0.8R
+        // half-size of a rim puff) so Godot frustum-culls clouds that are off-screen or behind the
+        // camera — instead of the old effectively-infinite box that forced every sector cloud to draw
+        // every frame. Still big enough that a soft cloud never pops when its centre quad leaves frame.
+        float ext = c.Radius * 2f;
         return new MultiMeshInstance3D
         {
             Name = "DustBillboards",
             Multimesh = mm,
             MaterialOverride = _puffMat,
-            // The big soft cloud must not be culled when its origin quad leaves frame.
-            CustomAabb = new Aabb(new Vector3(-1e5f, -1e5f, -1e5f), new Vector3(2e5f, 2e5f, 2e5f)),
+            CustomAabb = new Aabb(center - Vector3.One * ext, Vector3.One * (2f * ext)),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
     }
@@ -374,33 +386,39 @@ public partial class SectorEnvironment : Node3D
     private ShaderMaterial BuildPuffMaterial() =>
         new() { Shader = new Shader { Code = PuffShaderCode } };
 
+    // A small tiling fbm noise texture that replaces the shader's live per-fragment fbm. Value-cubic +
+    // 3 fractal octaves mirrors the old vnoise-based fbm's soft cloudy character; Seamless lets the
+    // per-instance UV offset (v_seed) wrap without a visible seam. Generated once at boot, sampled by
+    // every puff of every cloud.
+    private static NoiseTexture2D BuildNoiseTexture() =>
+        new()
+        {
+            Width = 512,
+            Height = 512,
+            Seamless = true,
+            GenerateMipmaps = false,
+            // Perlin fbm (organic, no blocky cells) with enough octaves that no single low-frequency blob
+            // dominates — a dominant blob is what repeats into the visible "waffle" grid when the texture
+            // tiles. The shader further hides tiling by rotating the lookup per instance.
+            Noise = new FastNoiseLite
+            {
+                NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
+                FractalType = FastNoiseLite.FractalTypeEnum.Fbm,
+                FractalOctaves = 5,
+                FractalLacunarity = 2.1f,
+                Frequency = 0.02f,
+            },
+        };
+
     private const string PuffShaderCode =
         @"
 shader_type spatial;
 render_mode blend_mix, unshaded, cull_disabled, depth_draw_never, shadows_disabled;
 
+uniform sampler2D noise_tex : filter_linear, repeat_enable; // baked fbm mottling (see BuildNoiseTexture)
+
 varying vec4 v_col;
 varying vec2 v_seed;
-
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-
-float vnoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
-	float a = hash(i);
-	float b = hash(i + vec2(1.0, 0.0));
-	float c = hash(i + vec2(0.0, 1.0));
-	float d = hash(i + vec2(1.0, 1.0));
-	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-float fbm(vec2 p) {
-	float v = 0.0;
-	float a = 0.5;
-	for (int i = 0; i < 3; i++) { v += a * vnoise(p); p *= 2.0; a *= 0.5; }
-	return v;
-}
 
 void vertex() {
 	v_col = COLOR; // MultiMesh per-instance colour (sun-shaded, colour-varied, + alpha)
@@ -418,9 +436,16 @@ void fragment() {
 	vec2 d = UV - vec2(0.5);
 	float r = length(d) * 2.0;
 	float fall = smoothstep(1.0, 0.0, r);          // soft round core → transparent rim
-	float n = fbm(UV * 3.5 + v_seed);              // per-puff cloudy mottling
+	// Rotate + offset the noise lookup per instance so the tiling texture never lines up across
+	// neighbouring puffs into a regular grid / waffle. v_seed is instance-varying.
+	float ca = cos(v_seed.x);
+	float sa = sin(v_seed.x);
+	vec2 nuv = mat2(vec2(ca, -sa), vec2(sa, ca)) * (UV - vec2(0.5)) * 1.7 + v_seed;
+	float n = texture(noise_tex, nuv).r;           // per-puff cloudy mottling (baked, 1 fetch)
+	float a = v_col.a * fall * clamp(0.45 + 0.85 * n, 0.0, 1.1);
+	if (a < 0.003) discard;                        // skip near-transparent rim: kill fill-rate overdraw
 	ALBEDO = v_col.rgb * (0.7 + 0.6 * n);          // noise breaks up the flat colour
-	ALPHA = v_col.a * fall * clamp(0.45 + 0.85 * n, 0.0, 1.1);
+	ALPHA = a;
 }
 ";
 
