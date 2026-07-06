@@ -519,8 +519,9 @@ public partial class Lobby : Control
 
     // ---- team-name inline editor -------------------------------------------
 
-    // Only a real side (0/1), and only when the local pilot is currently on it, may be renamed.
-    private bool CanEditTeam(int team) => (team == 0 || team == 1) && MyTeamNow() == team;
+    // Only a real side (0/1), and only that side's LEADER — the earliest-joined pilot on it (the
+    // roster's top row) — may rename it. Mirrors the server's gate (ClientHub MsgSetTeamName).
+    private bool CanEditTeam(int team) => (team == 0 || team == 1) && LeaderOf(team) == _net.LocalClientId;
 
     // Rebuild the roster header's name line: display ("{NAME} ✎") or the inline editor. Called from
     // RebuildBody so it tracks tab selection, edit state, and streamed name changes.
@@ -933,14 +934,16 @@ public partial class Lobby : Control
         foreach (var c in _rosterRows.GetChildren())
             c.QueueFree();
         bool noatTab = _selectedTeam == NoatTeam;
-        bool any = false;
+        // Order by client id so the earliest-joined pilot — the team leader who owns the rename
+        // affordance — is literally the top row.
+        var roster = new List<LobbyPlayer>();
         foreach (var p in _net.LobbyPlayers)
-        {
-            if (noatTab ? !IsNoat(p.Team) : p.Team != _selectedTeam)
-                continue;
-            any = true;
+            if (noatTab ? IsNoat(p.Team) : p.Team == _selectedTeam)
+                roster.Add(p);
+        roster.Sort((a, b) => a.Id.CompareTo(b.Id));
+        bool any = roster.Count > 0;
+        foreach (var p in roster)
             _rosterRows.AddChild(RosterRow(p));
-        }
         if (!any)
             _rosterRows.AddChild(EmptyNote(noatTab ? "No unassigned pilots." : "Waiting for pilots…"));
 
@@ -1145,6 +1148,17 @@ public partial class Lobby : Control
             if (p.Id == _net.LocalClientId)
                 return p;
         return null;
+    }
+
+    // The team's leader: the earliest-joined (lowest client-id) pilot on that side, or -1 if empty.
+    // The leader is the roster's top row and the only pilot allowed to rename the team.
+    private int LeaderOf(int team)
+    {
+        int leader = -1;
+        foreach (var p in _net.LobbyPlayers)
+            if (p.Team == team && (leader == -1 || p.Id < leader))
+                leader = p.Id;
+        return leader;
     }
 
     private int CountFor(int team)
