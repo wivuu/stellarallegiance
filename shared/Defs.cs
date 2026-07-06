@@ -250,6 +250,72 @@ namespace StellarAllegiance.Shared
         public uint Id;
         public float? Radius;
         public string? Name; // optional display name for the sector (streamed per-sector static)
+
+        // Optional per-sector environment authored in map YAML (`sectors[].environment`). Null → legacy
+        // behavior. The Sun/Nebula/Dust-VISUAL parts are streamed to the client per-sector static; Belt
+        // and the dust ATTENUATION are server-only (World seeding + the vision sim). Consumed by the
+        // World ctor (which resolves these into World.Sector.Env + World.DustClouds); like Radius, the
+        // config object itself is projected server-side, never written to the wire as-is.
+        public SectorEnvironment? Env;
+    }
+
+    // Per-sector visual + gameplay environment. Every field is optional so any omitted sub-block leaves
+    // that concern at its legacy default (procedural client nebula, static sun, no fog/dust, stock belt).
+    public sealed class SectorEnvironment
+    {
+        public SectorSun? Sun;
+        public SectorNebula? Nebula;
+        public SectorBelt? Belt; // server-only (asteroid field/belt shape)
+        public SectorDust? Dust;
+    }
+
+    // Streamed. Drives the client's directional sun light + volumetric god-ray shafts.
+    public sealed class SectorSun
+    {
+        public float? Azimuth;   // degrees around +Y; null → client keeps its static light direction
+        public float? Elevation; // degrees above the sector plane
+        public Vec3? Color;      // linear rgb; null → client default warm tint
+        public float? Energy;    // directional-light energy; null → client default
+        public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
+    }
+
+    // Streamed. Optional override of the client's sector-id-seeded nebula backdrop.
+    public sealed class SectorNebula
+    {
+        public Vec3? ColorA;
+        public Vec3? ColorB;
+        public float? Intensity;
+        public uint? Seed; // null → client seeds nebula shape from the sector id (legacy look)
+
+        // True when any field is authored — the client uses these values instead of its procedural seed.
+        public bool HasOverride => ColorA.HasValue || ColorB.HasValue || Intensity.HasValue || Seed.HasValue;
+    }
+
+    // Server-only. Overrides the compile-time asteroid field/belt shape constants (World.cs) per sector.
+    // Each null field falls back to the stock constant, so a partial belt block tweaks only what it sets.
+    public sealed class SectorBelt
+    {
+        public float? AreaDensity; // rocks per unit² of footprint (at density 1)
+        public float? InnerFrac;   // belt inner radius / sector radius (annular/verge sectors)
+        public float? OuterFrac;   // belt outer radius / sector radius
+        public float? Flatten;     // half-thickness / radius (shallow disc/belt)
+        public float? FillFrac;    // disc radius / sector radius (core/field sectors)
+    }
+
+    // Dust CLOUD distribution + characteristics. The server seeds the actual clouds deterministically
+    // (World.SeedDustClouds); the seeded cloud list + the visual knobs stream to the client, while
+    // VisionMult drives the sim's radar/vision attenuation (server-only).
+    public sealed class SectorDust
+    {
+        public int CloudCount;            // number of dust clouds distributed in the sector
+        public float RadiusMin = 300f;    // per-cloud radius draw range
+        public float RadiusMax = 900f;
+        public float CoverageFrac = 0.85f; // clouds distributed within this fraction of sector radius
+        public float Flatten = 0.15f;     // vertical squash (shallow, like belts)
+        public float Density = 0.7f;      // visual thickness + attenuation strength
+        public Vec3? Color;               // dust albedo; null → client default
+        public float VisionMult = 1f;     // effective radar/eyeball range multiplier through full dust (1 = none)
+        public uint? Seed;                // optional; null → derived from world seed + sector id
     }
 
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale

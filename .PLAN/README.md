@@ -27,6 +27,7 @@ Archives:
 - Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
 - Add more size variability randomness for asteroids - within a reasonable range
 - Bug: Leaving match and rejoining cannot re-launch
+- Configure sector connections and 2d layout in map YAML
 ---
 
 ## Content philosophy (the through-line)

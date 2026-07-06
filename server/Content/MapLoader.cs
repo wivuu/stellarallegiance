@@ -34,6 +34,59 @@ public sealed class MapSectorDef
     public byte Id { get; set; }
     public double? Radius { get; set; } // absolute world units; null/omitted → built-in default × sector-scale
     public string? Name { get; set; }   // optional display name (shown in the sector overview + lobby preview)
+
+    // Optional per-sector environment (sun/god-rays, nebula, belt tuning, dust clouds). Omitted → the
+    // sector keeps every legacy default. Projected into WorldSectorConfig.Env by ApplyTo.
+    public SectorEnvDef? Environment { get; set; }
+}
+
+// YAML shape of a sector's `environment:` block. Kebab-case keys (YamlDotNet via CoreSerializer, same
+// as the rest of the map/content bundle). Doubles/arrays here are downcast to float/Vec3 in ApplyTo.
+public sealed class SectorEnvDef
+{
+    public SunDef? Sun { get; set; }
+    public NebulaDef? Nebula { get; set; }
+    public BeltDef? Belt { get; set; }
+    public DustDef? Dust { get; set; }
+}
+
+public sealed class SunDef
+{
+    public double? Azimuth { get; set; }
+    public double? Elevation { get; set; }
+    public double[]? Color { get; set; }
+    public double? Energy { get; set; }
+    public double? GodRays { get; set; }
+}
+
+public sealed class NebulaDef
+{
+    public double[]? ColorA { get; set; }
+    public double[]? ColorB { get; set; }
+    public double? Intensity { get; set; }
+    public uint? Seed { get; set; }
+}
+
+public sealed class BeltDef
+{
+    public double? AreaDensity { get; set; }
+    public double? InnerFrac { get; set; }
+    public double? OuterFrac { get; set; }
+    public double? Flatten { get; set; }
+    public double? FillFrac { get; set; }
+}
+
+public sealed class DustDef
+{
+    public int? CloudCount { get; set; }
+    public double? RadiusMin { get; set; }
+    public double? RadiusMax { get; set; }
+    public double? CoverageFrac { get; set; }
+    public double? Flatten { get; set; }
+    public double? Density { get; set; }
+    public double[]? Color { get; set; }
+    public double? VisionMult { get; set; }
+    public uint? Seed { get; set; }
 }
 
 // Loads and resolves the set of available maps, and overlays a chosen map onto the runtime world
@@ -100,6 +153,7 @@ public static class MapLoader
                 Id = s.Id,
                 Radius = s.Radius.HasValue ? (float?)(float)s.Radius.Value : null,
                 Name = string.IsNullOrWhiteSpace(s.Name) ? null : s.Name!.Trim(),
+                Env = ProjectEnv(s.Environment),
             })
             .ToList();
         if (map.SectorScale.HasValue)
@@ -107,4 +161,55 @@ public static class MapLoader
         if (map.AsteroidDensity.HasValue)
             world.AsteroidDensity = (float)map.AsteroidDensity.Value;
     }
+
+    // Project the authored YAML env DTOs onto the runtime SectorEnvironment (double→float, [r,g,b]→Vec3).
+    // Null in → null out so an omitted `environment:` block leaves WorldSectorConfig.Env null (legacy).
+    private static SectorEnvironment? ProjectEnv(SectorEnvDef? e)
+    {
+        if (e is null)
+            return null;
+        return new SectorEnvironment
+        {
+            Sun = e.Sun is null ? null : new SectorSun
+            {
+                Azimuth = F(e.Sun.Azimuth),
+                Elevation = F(e.Sun.Elevation),
+                Color = ToVec3(e.Sun.Color),
+                Energy = F(e.Sun.Energy),
+                GodRays = F(e.Sun.GodRays) ?? 0f,
+            },
+            Nebula = e.Nebula is null ? null : new SectorNebula
+            {
+                ColorA = ToVec3(e.Nebula.ColorA),
+                ColorB = ToVec3(e.Nebula.ColorB),
+                Intensity = F(e.Nebula.Intensity),
+                Seed = e.Nebula.Seed,
+            },
+            Belt = e.Belt is null ? null : new SectorBelt
+            {
+                AreaDensity = F(e.Belt.AreaDensity),
+                InnerFrac = F(e.Belt.InnerFrac),
+                OuterFrac = F(e.Belt.OuterFrac),
+                Flatten = F(e.Belt.Flatten),
+                FillFrac = F(e.Belt.FillFrac),
+            },
+            Dust = e.Dust is null ? null : new SectorDust
+            {
+                CloudCount = e.Dust.CloudCount ?? 0,
+                RadiusMin = F(e.Dust.RadiusMin) ?? 300f,
+                RadiusMax = F(e.Dust.RadiusMax) ?? 900f,
+                CoverageFrac = F(e.Dust.CoverageFrac) ?? 0.85f,
+                Flatten = F(e.Dust.Flatten) ?? 0.15f,
+                Density = F(e.Dust.Density) ?? 0.7f,
+                Color = ToVec3(e.Dust.Color),
+                VisionMult = F(e.Dust.VisionMult) ?? 1f,
+                Seed = e.Dust.Seed,
+            },
+        };
+    }
+
+    private static float? F(double? d) => d.HasValue ? (float?)(float)d.Value : null;
+
+    private static Vec3? ToVec3(double[]? c) =>
+        c is { Length: >= 3 } ? new Vec3((float)c[0], (float)c[1], (float)c[2]) : null;
 }

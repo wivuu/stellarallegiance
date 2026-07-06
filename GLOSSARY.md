@@ -113,6 +113,41 @@ view persist as last-known "ghost" contacts (HUD/radar only) until re-scouted or
 - **Related:** [[Recon Probe]], [[Threat Lock (being-locked warning)]]
 - **Notes:** Per-server world-YAML knob `fog-of-war` (default on); off ⇒ behavior/bytes identical to pre-fog
 
+### Per-Sector Environment (God Rays / Nebula / Dust Clouds)
+Optional `environment:` block on each sector in a map YAML, driving that sector's look AND — for dust —
+its gameplay. Four sub-blocks, all optional (an omitted block keeps the legacy default): `sun`
+(azimuth/elevation + color + energy + `god-rays` strength), `nebula` (color/intensity/seed override of
+the client's procedural backdrop), `belt` (per-sector asteroid field/belt shape — **server-only**, the
+client already receives concrete rocks), and `dust`. **Dust clouds** are procedurally *distributed*
+(YAML sets count/size/coverage/density/color + attenuation; the server seeds the actual clouds
+deterministically on a dedicated RNG so they never perturb asteroid/aleph placement). Sun/nebula/dust
+stream to the client per sector; the client renders each dust cloud as a **3D entity** — a `MultiMesh`
+of soft billboard "puffs" (one MultiMesh per cloud) whose puffs are placed along a **ridged fractal-noise
+(fbm) field ported from the nebula sky shader** (Starscape.cs), so a cloud clumps into wispy filaments
+rather than a round ball. A custom billboard shader adds per-puff **fbm noise** (cloudy internal texture)
+and reads the per-instance colour; each puff gets a two-tone **colour variation** plus **sun shading
+baked in** (sun-facing side of the cloud bright, far side in shadow — the sector sun is static). It
+**never touches Godot's volumetric fog** (an earlier global-fog + `FogVolume` attempt tinted every
+ship/asteroid instead of drawing clouds and was removed). **God rays** are a **screen-space crepuscular
+pass** (`GodRayShaderCode`) on a CanvasLayer below the HUD: it smears the bright sun + sunlit dust into
+shafts and only amplifies already-bright pixels, so it never flat-tints geometry; driven by
+`sun.god-rays`.
+- **Frequency:** Core (map-authored; stock map "Brimstone Gambit" ships env blocks)
+- **Gameplay:** A dust cloud on the viewer→target sightline **shrinks radar/vision range** via
+  `dust.vision-mult` — the effective sphere/cone/eyeball radius is multiplied by an optical-depth factor
+  in `ClassifyTarget` + `IsPointVisibleToTeam` + `TeamStillSeesShipLive`. Fog-off never runs this path
+  (byte-identical). New vision-range modifiers must fold into all three, like signature.
+- **Key Files:**
+  - `shared/Defs.cs` — `SectorEnvironment`/`SectorSun`/`SectorNebula`/`SectorBelt`/`SectorDust` on `WorldSectorConfig.Env`
+  - `server/Content/MapLoader.cs` — YAML DTOs + `ProjectEnv`; `server/Content/maps/brimstone-gambit.yaml` — reference
+  - `server/Sim/World.cs` — `DustCloud`/`DustClouds`, `SeedDustClouds` (own RNG), belt overrides threaded into `SeedAsteroid*`
+  - `server/Sim/Simulation.Vision.cs` — `DustVisionMult`/`SegmentSphereChord`, `_dustClouds`/`_dustFloor` cache
+  - `server/Net/Protocol.cs` — `WriteSectorEnv` appended to `WriteSectorStatic` (Welcome + `MsgReveal`); proto v25
+  - `client/scripts/SectorEnvironment.cs` — sun + 3D dust (`MultiMesh` fractal billboard puffs, custom shader: noise + colour variation + baked sun shading) + screen-space god rays; `Starscape.cs` — nebula override
+  - `client/scripts/WorldRenderer.cs` — `ApplySectorEnv` seam (routes every sector transition)
+- **Related:** [[Fog of War (Team Vision)]], [[YAML Content Pipeline]], [[MsgWelcome]]
+- **Notes:** Belt tuning is server-only; only sun/nebula/dust-visual + the seeded cloud list ride the wire
+
 ### Recon Probe
 Deployable, invulnerable, stationary sensor buoy (key `G`): one deploy spends a probe-cargo charge
 and drops a probe just ahead of the ship, granting its team an unoccluded vision sphere

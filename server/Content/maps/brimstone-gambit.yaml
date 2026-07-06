@@ -8,11 +8,61 @@
 # A map MUST declare a name. `sectors` lists per-sector radius overrides: radius is nullable — omit
 # it (or set null) to fall back to that sector's built-in default radius × sector-scale. Optional
 # top-level `sector-scale` / `asteroid-density` override the content world defaults for this map.
+#
+# Each sector may also carry an optional `environment:` block (all fields optional; an omitted block
+# leaves the sector at its legacy look):
+#   sun:    azimuth/elevation (deg) + color [r,g,b] + energy + god-rays (0..1 screen-space light shafts)
+#   nebula: color-a/color-b [r,g,b] + intensity + seed (override the client's procedural backdrop)
+#   belt:   asteroid field/belt shape overrides (server-only; area-density/inner-frac/outer-frac/flatten/fill-frac)
+#   dust:   procedurally distributed dust clouds — cloud-count/radius-min/max/coverage-frac/flatten/
+#           density/color + vision-mult (radar/vision range through full dust)
 name: Brimstone Gambit
 sectors:
   - id: 0        # home — an explicit larger arena
     name: Delamere
     radius: 4000
+    environment:
+      sun:
+        azimuth: 40
+        elevation: 22
+        color: [1.0, 0.86, 0.62]
+        energy: 1.35
+        god-rays: 0.45
+      nebula:
+        color-a: [0.42, 0.20, 0.55]
+        color-b: [0.20, 0.34, 0.68]
+        intensity: 0.08
+      dust:
+        cloud-count: 8
+        radius-min: 350
+        radius-max: 850
+        coverage-frac: 0.85
+        density: 0.55
+        color: [0.26, 0.24, 0.3]    # dusky space dust; the shader sun-shades + noise-mottles it per puff
+        vision-mult: 0.7    # sightlines through dust see ~70% as far
   - id: 1        # verge — null → 700 × sector-scale
     name: Verge
     radius: null
+    environment:
+      sun:
+        azimuth: -25
+        elevation: 22
+        color: [1.0, 0.66, 0.48]   # low amber brimstone sun (warm key, not pure red)
+        energy: 1.4
+        god-rays: 0.5
+      nebula:
+        color-a: [0.5, 0.22, 0.2]
+        color-b: [0.26, 0.14, 0.32]
+        intensity: 0.07
+      belt:
+        area-density: 3.0e-5          # a denser, meaner belt than stock
+        inner-frac: 0.22
+        outer-frac: 0.97
+      dust:
+        cloud-count: 8
+        radius-min: 300
+        radius-max: 1000
+        coverage-frac: 0.9
+        density: 0.5
+        color: [0.22, 0.14, 0.12]   # dark rusty brimstone dust
+        vision-mult: 0.15    # thick dust — radar/vision cut in half through a cloud

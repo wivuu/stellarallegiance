@@ -326,8 +326,19 @@ public partial class WorldRenderer : Node3D
         if (_viewOverride == sector)
             return;
         _viewOverride = sector;
-        _starscape?.SetSector(ViewSector);
+        ApplySectorEnv(ViewSector);
         RefreshSectorVisibility();
+    }
+
+    // Central per-sector environment seam: repaint the nebula backdrop (Starscape) AND drive the sun +
+    // 3D dust clouds (SectorEnvironment) for `sector`. Every place the local or viewed sector changes
+    // routes through here so they stay in lockstep. When the sector carried no streamed environment
+    // (env == null) both drivers fall back to their legacy look.
+    private void ApplySectorEnv(uint sector)
+    {
+        _sectors.TryGetValue(sector, out var row);
+        _starscape?.SetSector(sector, row?.Env);
+        _sectorEnv?.Apply(sector, row?.Env);
     }
 
     private byte? _localTeam;
@@ -365,6 +376,7 @@ public partial class WorldRenderer : Node3D
 
     private ShipController? _ship; // sibling; lazily resolved for the live latency readout
     private Starscape? _starscape; // sibling; repaints the backdrop as the local sector changes
+    private SectorEnvironment? _sectorEnv; // sibling; drives per-sector sun + 3D dust clouds
     private DefRegistry _defs = null!; // sibling; runtime ship/weapon/base defs the local ship predicts from
 
     // Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
@@ -622,6 +634,7 @@ public partial class WorldRenderer : Node3D
 
         _defs = GetNode<DefRegistry>("../DefRegistry");
         _starscape = GetNodeOrNull<Starscape>("../Starscape");
+        _sectorEnv = GetNodeOrNull<SectorEnvironment>("../SectorEnvironment");
 
         if (float.TryParse(OS.GetEnvironment("SHOT_MASK_MS"), out var ms) && ms >= 0f)
             _shotMaskMs = ms;
@@ -874,7 +887,7 @@ public partial class WorldRenderer : Node3D
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
         _contactLostUntil = -1.0;
-        _starscape?.SetSector(HomeSector);
+        ApplySectorEnv(HomeSector);
     }
 
     // Static world from the Welcome frame, feeding the same bodies the STDB path uses.
@@ -1151,7 +1164,7 @@ public partial class WorldRenderer : Node3D
             _pendingHomeReset = false;
             // Follow the local ship's sector and re-show that sector's world.
             _localSector = row.SectorId;
-            _starscape?.SetSector(row.SectorId);
+            ApplySectorEnv(row.SectorId);
             _shipNodes[row.ShipId] = node;
             SetNodeSector(node, row.SectorId);
             RefreshSectorVisibility();
@@ -1203,7 +1216,7 @@ public partial class WorldRenderer : Node3D
                 if (warped)
                 {
                     _localSector = newRow.SectorId;
-                    _starscape?.SetSector(newRow.SectorId);
+                    ApplySectorEnv(newRow.SectorId);
                     RefreshSectorVisibility();
                 }
                 break;
@@ -1541,7 +1554,7 @@ public partial class WorldRenderer : Node3D
         if (_pendingHomeReset && LocalShip == null && !DeathCamActive)
         {
             _localSector = HomeSector;
-            _starscape?.SetSector(HomeSector);
+            ApplySectorEnv(HomeSector);
             RefreshSectorVisibility();
             _pendingHomeReset = false;
         }

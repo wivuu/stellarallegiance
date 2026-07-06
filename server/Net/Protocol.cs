@@ -413,13 +413,106 @@ public static class Protocol
         WriteVec3(w, g.Pos);
     }
 
-    // One sector static record (Welcome + MsgReveal). Layout: u32 id | f32 radius. Shared by both
-    // paths so the fog-gated Welcome and the incremental reveal can never drift byte-wise.
-    private static void WriteSectorStatic(BinaryWriter w, in World.Sector s)
+    // One sector static record (Welcome + MsgReveal). Layout: u32 id | f32 radius | string name |
+    // per-sector ENVIRONMENT (sun/god-rays, nebula override, dust visuals + seeded cloud list — see
+    // WriteSectorEnv). Shared by both paths so the fog-gated Welcome and the incremental reveal can
+    // never drift byte-wise. `world` is needed to pull this sector's seeded dust clouds.
+    private static void WriteSectorStatic(BinaryWriter w, World world, in World.Sector s)
     {
         w.Write(s.Id);
         w.Write(s.Radius);
         w.Write(s.Name ?? ""); // length-prefixed UTF-8; client reads with ReadString()
+        WriteSectorEnv(w, world, s);
+    }
+
+    // Streamed slice of a sector's environment. Belt tuning is NOT here (server-only — the client
+    // already gets concrete rocks). Fixed-shape with sentinels (color rgb = -1 → "client default";
+    // dir = 0,0,0 → "keep the client's static sun") so the reader stays a straight mirror.
+    private static void WriteSectorEnv(BinaryWriter w, World world, in World.Sector s)
+    {
+        var env = s.Env;
+
+        // --- Sun / god rays ---
+        var sun = env?.Sun;
+        w.Write((byte)(sun != null ? 1 : 0));
+        if (sun != null)
+        {
+            w.Write(sun.GodRays);
+            // Sky direction (origin → sun). Zero vector when no azimuth/elevation was authored.
+            var dir = SunSkyDir(sun);
+            w.Write(dir.X);
+            w.Write(dir.Y);
+            w.Write(dir.Z);
+            WriteColor(w, sun.Color);
+            w.Write(sun.Energy ?? -1f);
+        }
+
+        // --- Nebula override ---
+        var neb = env?.Nebula;
+        bool hasNeb = neb != null && neb.HasOverride;
+        w.Write((byte)(hasNeb ? 1 : 0));
+        if (hasNeb)
+        {
+            WriteColor(w, neb!.ColorA);
+            WriteColor(w, neb.ColorB);
+            w.Write(neb.Intensity ?? -1f);
+            w.Write((byte)(neb.Seed.HasValue ? 1 : 0));
+            if (neb.Seed.HasValue)
+                w.Write(neb.Seed.Value);
+        }
+
+        // --- Dust: visuals + the seeded cloud list for this sector ---
+        var dust = env?.Dust;
+        w.Write((byte)(dust != null ? 1 : 0));
+        if (dust != null)
+        {
+            WriteColor(w, dust.Color);
+            // Concrete seeded clouds (server-authoritative positions the sim also attenuates through).
+            ushort n = 0;
+            foreach (var c in world.DustClouds)
+                if (c.SectorId == s.Id)
+                    n++;
+            w.Write(n);
+            foreach (var c in world.DustClouds)
+                if (c.SectorId == s.Id)
+                {
+                    w.Write(c.Pos.X);
+                    w.Write(c.Pos.Y);
+                    w.Write(c.Pos.Z);
+                    w.Write(c.Radius);
+                    w.Write(c.Density);
+                }
+        }
+    }
+
+    // rgb triple; a null color writes the (-1,-1,-1) sentinel the client reads as "use my default".
+    private static void WriteColor(BinaryWriter w, Vec3? c)
+    {
+        if (c.HasValue)
+        {
+            w.Write(c.Value.X);
+            w.Write(c.Value.Y);
+            w.Write(c.Value.Z);
+        }
+        else
+        {
+            w.Write(-1f);
+            w.Write(-1f);
+            w.Write(-1f);
+        }
+    }
+
+    // Unit sky direction (origin → sun) from authored azimuth/elevation degrees. Zero vector when
+    // neither is set → the client keeps its existing static sun direction. Azimuth 0 points +Z,
+    // increasing toward +X; elevation lifts toward +Y.
+    private static Vec3 SunSkyDir(SectorSun sun)
+    {
+        if (!sun.Azimuth.HasValue && !sun.Elevation.HasValue)
+            return new Vec3(0f, 0f, 0f);
+        float az = (sun.Azimuth ?? 0f) * (MathF.PI / 180f);
+        float el = (sun.Elevation ?? 0f) * (MathF.PI / 180f);
+        float ce = MathF.Cos(el);
+        return new Vec3(ce * MathF.Sin(az), MathF.Sin(el), ce * MathF.Cos(az));
     }
 
     // Welcome handshake. When fog is OFF the world block is byte-identical to before: every static
@@ -462,7 +555,7 @@ public static class Protocol
             // The sector list rides inside this branch so the fog-off bytes are unchanged.
             w.Write((ushort)world.Sectors.Count);
             foreach (var s in world.Sectors)
-                WriteSectorStatic(w, s);
+                WriteSectorStatic(w, world, s);
 
             w.Write((ushort)world.Bases.Count);
             for (int i = 0; i < world.Bases.Count; i++)
@@ -502,7 +595,7 @@ public static class Protocol
                 w.Write((ushort)sectorCount);
                 foreach (var s in world.Sectors)
                     if (vision.DiscoveredSectors.Contains(s.Id))
-                        WriteSectorStatic(w, s);
+                        WriteSectorStatic(w, world, s);
 
                 int baseCount = 0;
                 for (int i = 0; i < world.Bases.Count; i++)
@@ -636,7 +729,7 @@ public static class Protocol
         // predates this field would stop reading after alephs; the protocol bump forbids that mix).
         w.Write((byte)sectorIdx.Count);
         foreach (int idx in sectorIdx)
-            WriteSectorStatic(w, world.Sectors[idx]);
+            WriteSectorStatic(w, world, world.Sectors[idx]);
         w.Flush();
         return ms.ToArray();
     }

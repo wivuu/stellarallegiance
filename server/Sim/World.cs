@@ -60,7 +60,14 @@ public sealed class World
     public const float BeltFlatten = 0.13f;        // verge belt half-thickness / sector radius (shallow)
     public const float BeltAreaDensity = 2.4e-5f;  // verge belt rocks per unit² of annulus (at density 1)
 
-    public readonly record struct Sector(uint Id, float Radius, string Name);
+    // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
+    // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop.
+    public readonly record struct Sector(uint Id, float Radius, string Name, SectorEnvironment? Env = null);
+
+    // One procedurally-seeded dust cloud: a soft volumetric sphere that hazes visuals AND attenuates
+    // radar/vision (Simulation.Vision). Immutable after the World ctor → the vision worker reads the
+    // list lock-free, exactly like the rock grid.
+    public readonly record struct DustCloud(uint SectorId, Vec3 Pos, float Radius, float Density);
 
     public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
 
@@ -84,6 +91,7 @@ public sealed class World
     public readonly List<BaseSite> Bases = new();
     public readonly float[] BaseHealth; // indexed like Bases
     public readonly List<Rock> Asteroids = new();
+    public readonly List<DustCloud> DustClouds = new();
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
 
@@ -188,11 +196,21 @@ public sealed class World
                     return sc.Name!;
             return "";
         }
+        // Optional per-sector environment (sun/nebula/belt/dust) authored in the map.
+        SectorEnvironment? ResolveEnv(uint id)
+        {
+            foreach (var sc in cfg.Sectors)
+                if (sc.Id == id)
+                    return sc.Env;
+            return null;
+        }
         float coreR = ResolveRadius(HomeSector, CoreRadius);
         float vergeR = ResolveRadius(VergeSector, VergeRadius);
+        var homeEnv = ResolveEnv(HomeSector);
+        var vergeEnv = ResolveEnv(VergeSector);
 
-        Sectors.Add(new Sector(HomeSector, coreR, ResolveName(HomeSector)));
-        Sectors.Add(new Sector(VergeSector, vergeR, ResolveName(VergeSector)));
+        Sectors.Add(new Sector(HomeSector, coreR, ResolveName(HomeSector), homeEnv));
+        Sectors.Add(new Sector(VergeSector, vergeR, ResolveName(VergeSector), vergeEnv));
 
         // Team 0 base in HomeSector, Team 1 base in VergeSector — semi-random positions
         // derived from a dedicated RNG so the asteroid/aleph sequence is unaffected.
@@ -211,14 +229,19 @@ public sealed class World
 
         var rng = new DetRng(seed);
         ulong rockId = 1;
-        SeedAsteroidField(ref rng, HomeSector, coreR, density, ref rockId);
-        SeedAsteroidBelt(ref rng, VergeSector, vergeR, density, ref rockId);
+        SeedAsteroidField(ref rng, HomeSector, coreR, density, ref rockId, homeEnv?.Belt);
+        SeedAsteroidBelt(ref rng, VergeSector, vergeR, density, ref rockId, vergeEnv?.Belt);
 
         // One linked aleph pair, placed toward the outer reaches of each sector.
         var corePos = RandomOuterPos(ref rng, coreR);
         var vergePos = RandomOuterPos(ref rng, vergeR);
         Alephs.Add(new Gate(1, HomeSector, VergeSector, corePos, vergePos));
         Alephs.Add(new Gate(2, VergeSector, HomeSector, vergePos, corePos));
+
+        // Dust clouds are seeded on their OWN rng (independent of `rng`), so authoring dust never
+        // shifts a single asteroid or aleph — a map with dust reads byte-identical rocks to one without.
+        SeedDustClouds(HomeSector, coreR, homeEnv?.Dust);
+        SeedDustClouds(VergeSector, vergeR, vergeEnv?.Dust);
 
         foreach (var r in Asteroids)
         {
@@ -382,11 +405,16 @@ public sealed class World
     // Core pattern: a SHALLOW DISC filling outward to ~FieldFillFrac of the sector radius, at
     // constant areal density (count ∝ disc area) so a bigger sector gets proportionally more rocks
     // at the same spacing. sqrt-uniform radius = even density; the disc stays thin in Y (shallow).
-    private void SeedAsteroidField(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
+    private void SeedAsteroidField(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id, SectorBelt? belt = null)
     {
-        float maxR = sectorRadius * FieldFillFrac;
-        float hY = maxR * FieldFlatten;
-        int count = (int)MathF.Round(density * RockAreaDensity * MathF.PI * maxR * maxR);
+        // Per-sector belt overrides win; each null field falls back to the stock compile-time constant,
+        // so the RNG draw order (and thus rock positions) is unchanged when a sector authors no belt.
+        float fillFrac = belt?.FillFrac ?? FieldFillFrac;
+        float flatten = belt?.Flatten ?? FieldFlatten;
+        float areaDensity = belt?.AreaDensity ?? RockAreaDensity;
+        float maxR = sectorRadius * fillFrac;
+        float hY = maxR * flatten;
+        int count = (int)MathF.Round(density * areaDensity * MathF.PI * maxR * maxR);
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
@@ -403,13 +431,17 @@ public sealed class World
     // Verge pattern: a flattened ANNULAR BELT spanning BeltInnerFrac..BeltOuterFrac of the sector
     // radius, reaching outward toward the edge. Count ∝ annulus area at constant density; sqrt-in-
     // area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
-    private void SeedAsteroidBelt(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
+    private void SeedAsteroidBelt(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id, SectorBelt? belt = null)
     {
-        float rIn = sectorRadius * BeltInnerFrac;
-        float rOut = sectorRadius * BeltOuterFrac;
-        float hY = sectorRadius * BeltFlatten;
+        float innerFrac = belt?.InnerFrac ?? BeltInnerFrac;
+        float outerFrac = belt?.OuterFrac ?? BeltOuterFrac;
+        float flatten = belt?.Flatten ?? BeltFlatten;
+        float areaDensity = belt?.AreaDensity ?? BeltAreaDensity;
+        float rIn = sectorRadius * innerFrac;
+        float rOut = sectorRadius * outerFrac;
+        float hY = sectorRadius * flatten;
         float area = MathF.PI * (rOut * rOut - rIn * rIn);
-        int count = (int)MathF.Round(density * BeltAreaDensity * area);
+        int count = (int)MathF.Round(density * areaDensity * area);
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
@@ -421,6 +453,30 @@ public sealed class World
             float radius = RockRadius(ref rng, 6.0, 40.0);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
+        }
+    }
+
+    // Distribute `CloudCount` dust clouds across a shallow disc (like the asteroid FIELD), flattened
+    // on Y and bounded to CoverageFrac × sector radius. Uses its OWN DetRng (seeded from the world seed
+    // + sector, or the authored dust seed) so it's independent of the asteroid/aleph draw. No-op when a
+    // sector authors no dust. Clouds are immutable after this runs.
+    private void SeedDustClouds(uint sector, float sectorRadius, SectorDust? dust)
+    {
+        if (dust is null || dust.CloudCount <= 0)
+            return;
+        ulong s = dust.Seed ?? (Seed ^ 0xD005_7D05_D005_7D05UL ^ ((ulong)sector * 0x9E37_79B9_7F4A_7C15UL));
+        var rng = new DetRng(s);
+        float maxR = sectorRadius * dust.CoverageFrac;
+        float hY = maxR * dust.Flatten;
+        for (int i = 0; i < dust.CloudCount; i++)
+        {
+            double ang = rng.NextDouble() * Math.PI * 2.0;
+            double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density
+            float px = (float)(Math.Cos(ang) * rr);
+            float pz = (float)(Math.Sin(ang) * rr);
+            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            float radius = (float)(dust.RadiusMin + rng.NextDouble() * (dust.RadiusMax - dust.RadiusMin));
+            DustClouds.Add(new DustCloud(sector, new Vec3(px, py, pz), radius, dust.Density));
         }
     }
 

@@ -90,7 +90,14 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
     int tl = br.ReadByte(); br.ReadBytes(tl);
     int ns = br.ReadUInt16();
-    for (int i = 0; i < ns; i++) { br.ReadUInt32(); br.ReadSingle(); br.ReadString(); } // id, radius, name
+    for (int i = 0; i < ns; i++)
+    {
+        br.ReadUInt32(); br.ReadSingle(); br.ReadString(); // id, radius, name
+        // Per-sector environment (mirror Protocol.WriteSectorEnv): 3 presence bytes always present.
+        if (br.ReadByte() != 0) br.ReadBytes(32); // sun: godRays + dir(3) + color(3) + energy
+        if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
+        if (br.ReadByte() != 0) { br.ReadBytes(12); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + clouds
+    }
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
@@ -1142,6 +1149,244 @@ Vec3 AtAngle(float dist, float angleDeg)
     Check(shipHurt, "ramming a probe damages the ship (collision damage, like a base)", "the ramming ship took no collision damage");
     Check(probeHurt, "ramming a probe damages the probe", "the rammed probe took no damage from the ram");
     Check(destroyed, "enough ramming destroys the low-HP probe (gone reason 2, no base-damage system)", "the probe never died from ramming");
+}
+
+// ---- Per-sector environment: map parse, dust-cloud seeding determinism, dust radar attenuation ----
+
+// (env-1) The map `environment:` block round-trips through MapLoader → WorldConfig.Sectors[].Env, and
+// a sector with no block projects to a null Env.
+{
+    string dir = Path.Combine(Path.GetTempPath(), "envmap_" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    File.WriteAllText(
+        Path.Combine(dir, "envmap.yaml"),
+        "name: EnvMap\n"
+            + "sectors:\n"
+            + "  - id: 0\n"
+            + "    radius: 3000\n"
+            + "    environment:\n"
+            + "      sun:\n"
+            + "        azimuth: 30\n"
+            + "        elevation: 15\n"
+            + "        color: [1.0, 0.8, 0.6]\n"
+            + "        god-rays: 0.5\n"
+            + "      nebula:\n"
+            + "        color-a: [0.4, 0.2, 0.6]\n"
+            + "        intensity: 0.09\n"
+            + "      belt:\n"
+            + "        area-density: 3.0e-5\n"
+            + "      dust:\n"
+            + "        cloud-count: 5\n"
+            + "        density: 0.7\n"
+            + "        vision-mult: 0.4\n"
+            + "  - id: 1\n"
+            + "    radius: null\n"
+    );
+    var maps = MapLoader.LoadAvailable(dir, null);
+    var map = MapLoader.Resolve(maps, "EnvMap");
+    var wc = new WorldConfig();
+    MapLoader.ApplyTo(map, wc);
+    var s0 = wc.Sectors.First(s => s.Id == 0);
+    var s1 = wc.Sectors.First(s => s.Id == 1);
+    Check(
+        s0.Env?.Sun is { GodRays: 0.5f, Azimuth: 30f },
+        "map env: sun god-rays + azimuth round-trip through ApplyTo",
+        "sun env did not round-trip"
+    );
+    Check(
+        s0.Env?.Dust is { CloudCount: 5, VisionMult: 0.4f },
+        "map env: dust cloud-count + vision-mult round-trip",
+        "dust env did not round-trip"
+    );
+    Check(
+        s0.Env?.Belt?.AreaDensity is { } ad && MathF.Abs(ad - 3.0e-5f) < 1e-9f,
+        "map env: server-only belt area-density round-trip",
+        "belt env did not round-trip"
+    );
+    Check(
+        s0.Env?.Nebula?.ColorA is { } ca && MathF.Abs(ca.X - 0.4f) < 1e-4f,
+        "map env: nebula color-a round-trip",
+        "nebula env did not round-trip"
+    );
+    Check(
+        s1.Env == null,
+        "a sector with no environment block projects to a null Env",
+        "an omitted environment block did not yield a null Env"
+    );
+    Directory.Delete(dir, true);
+}
+
+// (env-2) Dust clouds are deterministic for a fixed world seed, AND authoring dust leaves the asteroid
+// field byte-identical (dust runs on its own RNG stream — it must never perturb rock/aleph placement).
+{
+    var content = ContentLoader.Load(stockPath);
+    float mh = content.Bases[0].MaxHealth;
+
+    WorldConfig DustCfg() =>
+        new()
+        {
+            SectorScale = 1f,
+            AsteroidDensity = 1f,
+            Sectors = new List<WorldSectorConfig>
+            {
+                new()
+                {
+                    Id = 0,
+                    Env = new SectorEnvironment
+                    {
+                        Dust = new SectorDust
+                        {
+                            CloudCount = 6,
+                            RadiusMin = 200f,
+                            RadiusMax = 400f,
+                            Density = 0.8f,
+                            VisionMult = 0.5f,
+                        },
+                    },
+                },
+                new() { Id = 1 },
+            },
+        };
+
+    var wA = new World(12345, DustCfg(), mh, content.Start);
+    var wB = new World(12345, DustCfg(), mh, content.Start);
+    bool cloudsMatch =
+        wA.DustClouds.Count == wB.DustClouds.Count
+        && wA.DustClouds.Count > 0
+        && wA.DustClouds.Zip(wB.DustClouds)
+            .All(p =>
+                p.First.SectorId == p.Second.SectorId
+                && p.First.Pos.X == p.Second.Pos.X
+                && p.First.Pos.Y == p.Second.Pos.Y
+                && p.First.Pos.Z == p.Second.Pos.Z
+                && p.First.Radius == p.Second.Radius
+            );
+    Check(cloudsMatch, "dust clouds are deterministic for a fixed world seed", "dust clouds differed across two same-seed Worlds");
+
+    var noDust = new World(
+        12345,
+        new WorldConfig
+        {
+            SectorScale = 1f,
+            AsteroidDensity = 1f,
+            Sectors = new List<WorldSectorConfig> { new() { Id = 0 }, new() { Id = 1 } },
+        },
+        mh,
+        content.Start
+    );
+    bool rocksUnchanged =
+        wA.Asteroids.Count == noDust.Asteroids.Count
+        && wA.Asteroids.Count > 0
+        && wA.Asteroids.Zip(noDust.Asteroids)
+            .All(p =>
+                p.First.Pos.X == p.Second.Pos.X
+                && p.First.Pos.Y == p.Second.Pos.Y
+                && p.First.Pos.Z == p.Second.Pos.Z
+                && p.First.Radius == p.Second.Radius
+            );
+    Check(rocksUnchanged, "authoring dust leaves the asteroid field byte-identical (separate RNG stream)", "dust seeding perturbed the asteroid field");
+    Check(noDust.DustClouds.Count == 0, "a world with no dust config seeds zero dust clouds", "a no-dust world produced dust clouds");
+}
+
+// (env-3) A dust cloud on the sightline shrinks radar range: an enemy detected in clear air at 0.6× the
+// sphere radius drops OFF radar once a full-density cloud sits between viewer and target. Geometry is
+// sized from the defs so it holds regardless of tuning; base vision + rocks are removed to isolate dust.
+{
+    var probe = ContentLoader.Load(stockPath);
+    var fighter = probe.Ships.First(d => d.ClassId == FlightModel.ClassFighter);
+    float baseR = fighter.VisionSphereRadius * fighter.RadarSignature; // effective clear-air sphere
+    float cloudR = baseR * 0.3f; // viewer & target sit on opposite edges → D = 2·cloudR = 0.6·baseR
+
+    Simulation MkDustSim(float visionMult, out World w)
+    {
+        var c = ContentLoader.Load(stockPath);
+        c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
+        foreach (var bd in c.Bases)
+            bd.VisionSphereRadius = 0f; // silence the home base so only the ship viewer detects
+        c.World.Sectors = new List<WorldSectorConfig>
+        {
+            new()
+            {
+                Id = 0,
+                Env = new SectorEnvironment
+                {
+                    Dust = new SectorDust
+                    {
+                        CloudCount = 1,
+                        RadiusMin = cloudR,
+                        RadiusMax = cloudR,
+                        CoverageFrac = 0.1f,
+                        Flatten = 0f,
+                        Density = 1.0f,
+                        VisionMult = visionMult,
+                    },
+                },
+            },
+            new() { Id = 1 },
+        };
+        w = new World(77, c.World, c.Bases[0].MaxHealth, c.Start);
+        var s = new Simulation(w, c);
+        s.PigsEnabled = false;
+        s.FogEnabled = true;
+        s.VisionSynchronous = true;
+        s.StartMatch();
+        return s;
+    }
+
+    bool RadarSeesAcrossDust(float visionMult)
+    {
+        var sim = MkDustSim(visionMult, out var w);
+        var cloud = w.DustClouds[0];
+        // Along +X (perpendicular to the viewer's +Z forward) so the omnidirectional sphere — not the
+        // cone — is what's under test; the segment passes straight through the cloud's center.
+        var vpos = cloud.Pos + new Vec3(-cloudR, 0f, 0f);
+        var tpos = cloud.Pos + new Vec3(cloudR, 0f, 0f);
+        var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
+        var target = Join(sim, 2, 1, FlightModel.ClassFighter);
+        Run(
+            sim,
+            () =>
+            {
+                Park(viewer, 0, vpos);
+                Park(target, 0, tpos);
+            },
+            Settle
+        );
+        return Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId);
+    }
+
+    Check(RadarSeesAcrossDust(1.0f), "clear air: the enemy at 0.6× sphere range is on radar", "baseline radar detection failed (env-3 geometry is off)");
+    Check(!RadarSeesAcrossDust(0.3f), "a dust cloud on the sightline drops the enemy off radar (range attenuated)", "dust did NOT attenuate radar — the enemy was still detected through the cloud");
+}
+
+// (env-4) A Welcome built from a world with a FULL environment (sun + nebula + dust clouds) round-trips
+// byte-exact through the env-aware WelcomeCounts parser — exercising every non-zero presence branch of
+// Protocol.WriteSectorEnv and proving the appended payload keeps the frame self-consistent.
+{
+    var content = ContentLoader.Load(stockPath);
+    var cfg = new WorldConfig
+    {
+        SectorScale = 1f,
+        AsteroidDensity = 0.2f,
+        Sectors = new List<WorldSectorConfig>
+        {
+            new()
+            {
+                Id = 0,
+                Env = new SectorEnvironment
+                {
+                    Sun = new SectorSun { Azimuth = 30f, Elevation = 15f, Color = new Vec3(1f, 0.8f, 0.6f), Energy = 1.3f, GodRays = 0.5f },
+                    Nebula = new SectorNebula { ColorA = new Vec3(0.4f, 0.2f, 0.6f), Intensity = 0.09f, Seed = 42u },
+                    Dust = new SectorDust { CloudCount = 4, RadiusMin = 200f, RadiusMax = 300f, Density = 0.7f, VisionMult = 0.5f, Color = new Vec3(0.4f, 0.4f, 0.5f) },
+                },
+            },
+            new() { Id = 1 },
+        },
+    };
+    var w = new World(9, cfg, content.Bases[0].MaxHealth, content.Start);
+    byte[] frame = Protocol.BuildWelcome(1, 0, w, 0, Array.Empty<byte>(), fog: false);
+    var (ns, _, _, _) = WelcomeCounts(frame); // throws if the appended env desyncs the frame length
+    Check(ns == 2 && w.DustClouds.Count == 4, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");

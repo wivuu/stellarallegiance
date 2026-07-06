@@ -47,15 +47,19 @@ public partial class Starscape : Node3D
         SetSector(HomeSector);
     }
 
-    // Repaint the backdrop for a sector. Deterministic in the sector id alone, so the
-    // same sector renders identically for every player. No-op if unchanged.
-    public void SetSector(uint sectorId)
+    // Repaint the backdrop for a sector. Deterministic in the sector id alone (so the same sector
+    // renders identically for every player) UNLESS the map authored a nebula override in `env`, which
+    // wins over the procedural hues/intensity/seed. No-op only when the sector is unchanged AND carries
+    // no override (an override always re-applies so late-arriving env still takes effect).
+    public void SetSector(uint sectorId, StellarAllegiance.Net.SectorEnv? env = null)
     {
-        if (sectorId == _currentSector)
+        bool hasOverride = env is { HasNebula: true };
+        if (sectorId == _currentSector && !hasOverride)
             return;
         _currentSector = sectorId;
 
-        var rng = new RandomNumberGenerator { Seed = SeedFor(sectorId) };
+        ulong seed = env is { HasNebulaSeed: true } ? env.NebulaSeed : SeedFor(sectorId);
+        var rng = new RandomNumberGenerator { Seed = seed };
 
         // Sampling offset: shifts every sector to a different region of noise space, so
         // nebula shapes and star placement differ. Kept finite to preserve float precision.
@@ -71,6 +75,17 @@ public partial class Starscape : Node3D
         // values wash the scene out via sky reflections bouncing onto ships/asteroids.
         float intensity = rng.RandfRange(0.05f, 0.1f);
 
+        // Map-authored nebula override: each set field replaces the procedural draw for this sector.
+        if (env is { HasNebula: true })
+        {
+            if (env.HasNebulaColorA)
+                colorA = new Color(env.NebulaColorAR, env.NebulaColorAG, env.NebulaColorAB);
+            if (env.HasNebulaColorB)
+                colorB = new Color(env.NebulaColorBR, env.NebulaColorBG, env.NebulaColorBB);
+            if (env.NebulaIntensity >= 0f)
+                intensity = env.NebulaIntensity;
+        }
+
         _mat.SetShaderParameter("seed_offset", offset);
         _mat.SetShaderParameter("nebula_color_a", colorA);
         _mat.SetShaderParameter("nebula_color_b", colorB);
@@ -80,8 +95,11 @@ public partial class Starscape : Node3D
         // colours) but lifted toward white so it lights the scene without over-saturating
         // the shadowed sides of ships and asteroids. Energy is well above the old 0.2 so
         // the world no longer reads as dim.
-        _env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.45f);
-        _env.AmbientLightEnergy = 0.2f;
+        // Lifted well toward white so a SATURATED nebula (e.g. a red brimstone sector) doesn't flood
+        // every surface with its own hue — that flattens ships/asteroids into monochrome silhouettes
+        // with no fill/key contrast. A mostly-neutral fill lets the directional sun's warm/cool key read.
+        _env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.65f);
+        _env.AmbientLightEnergy = 0.25f;
     }
 
     // Deterministic ulong seed from a sector id (splitmix64 finalizer over a mixed id).

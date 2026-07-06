@@ -35,6 +35,15 @@ public partial class Sun : MeshInstance3D
         CastShadow = ShadowCastingSetting.Off;
     }
 
+    // Re-read the light direction after the per-sector environment driver (SectorEnvironment) reorients
+    // the DirectionalLight3D, so the disc AND the LensFlare (both key off SkyDirection) follow the sun.
+    public void RefreshFromLight()
+    {
+        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+        _skyDir = light.GlobalTransform.Basis.Z.Normalized();
+        SkyDirection = _skyDir;
+    }
+
     public override void _Process(double delta)
     {
         // Anchor to whichever camera is currently rendering so the sun always sits in
