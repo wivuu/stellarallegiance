@@ -135,8 +135,9 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // ================================================================================================
-// 2. Sphere — omnidirectional + unoccluded (a rock directly between still leaves an in-sphere target
-//    detected; a target behind the viewer, well inside the sphere, is still seen).
+// 2. Sphere — omnidirectional but rock-occluded (with a clear line of sight the sphere sees in every
+//    direction, incl. behind the viewer; a rock straddling the line of sight casts a radar shadow —
+//    move the same rock off the line and the in-sphere target is detected again).
 // ================================================================================================
 {
     var sim = BootSim(2);
@@ -145,17 +146,26 @@ Vec3 AtAngle(float dist, float angleDeg)
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
     float sig = Def(sim, FlightModel.ClassFighter).RadarSignature;        // 1.0
 
-    // Behind the viewer (−Z), well inside the sphere → omnidirectional detection.
+    // Behind the viewer (−Z), well inside the sphere, clear LoS → omnidirectional detection.
     Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, new Vec3(0, 0, -sphere * 0.4f)); }, Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId), "the proximity sphere is omnidirectional (target behind the viewer is detected)", "sphere missed a target behind the viewer");
+    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId), "the proximity sphere is omnidirectional (target behind the viewer, clear LoS, is detected)", "sphere missed a target behind the viewer");
 
-    // A rock straddling the line of sight does NOT block the (unoccluded) sphere.
+    // A rock straddling the line of sight casts a radar shadow — an in-sphere target is NOT detected.
     var sim2 = BootSim(22);
     sim2.World.AddRockForTest(EmptySector, new Vec3(0, 0, 200f), 120f);
     var v2 = Join(sim2, 1, 0, FlightModel.ClassFighter);
     var t2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
     Run(sim2, () => { Park(v2, EmptySector, new Vec3(0, 0, 0)); Park(t2, EmptySector, new Vec3(0, 0, sphere * 0.9f)); }, Settle);
-    Check(Vision(sim2, 0).VisibleEnemyShips.Contains(t2.ShipId), "the sphere is unoccluded (a rock between viewer and target still yields detection inside the sphere)", "a rock occluded the omnidirectional sphere");
+    Check(!Vision(sim2, 0).VisibleEnemyShips.Contains(t2.ShipId), "the proximity sphere is rock-occluded (a rock between viewer and target blocks the in-sphere radar return)", "a rock between viewer and target failed to occlude the sphere");
+
+    // Same viewer/target/range with the rock moved off the line of sight → detected again (proves the
+    // miss above is occlusion, not range).
+    var sim3 = BootSim(22);
+    sim3.World.AddRockForTest(EmptySector, new Vec3(400f, 0, 200f), 120f);
+    var v3 = Join(sim3, 1, 0, FlightModel.ClassFighter);
+    var t3 = Join(sim3, 2, 1, FlightModel.ClassFighter);
+    Run(sim3, () => { Park(v3, EmptySector, new Vec3(0, 0, 0)); Park(t3, EmptySector, new Vec3(0, 0, sphere * 0.9f)); }, Settle);
+    Check(Vision(sim3, 0).VisibleEnemyShips.Contains(t3.ShipId), "the same in-sphere target with the rock moved off-axis is detected (clear LoS)", "the sphere missed a target with an unobstructed line of sight");
 }
 
 // ================================================================================================
@@ -243,6 +253,29 @@ Vec3 AtAngle(float dist, float angleDeg)
         Check(tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
             $"an enemy in the eyeball band ({bandDist:F0}, between {sphere * sig:F0} and {sphere * eyeMult * sig:F0}) is streamed but NOT radar-detected",
             "eyeball-band enemy was misclassified (radar vs eyeball)");
+    }
+
+    // Eyeball occlusion — a rock on the line of sight hides an eyeball-band enemy ENTIRELY (a ship
+    // hiding behind an asteroid streams neither radar nor mesh); move the rock off-axis → streams again.
+    {
+        var sim = BootSim(56);
+        sim.World.AddRockForTest(EmptySector, new Vec3(bandDist * 0.5f, 0, 0), 120f);
+        var v = Join(sim, 1, 0, FlightModel.ClassFighter);
+        var t = Join(sim, 2, 1, FlightModel.ClassFighter);
+        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
+        var tv = Vision(sim, 0);
+        Check(!tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
+            "a rock on the line of sight hides an eyeball-band enemy entirely (not streamed by radar OR eyeball)",
+            "an eyeball-band enemy behind a rock was still streamed");
+
+        var sim2 = BootSim(56);
+        sim2.World.AddRockForTest(EmptySector, new Vec3(bandDist * 0.5f, 400f, 0), 120f);
+        var v2 = Join(sim2, 1, 0, FlightModel.ClassFighter);
+        var t2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
+        Run(sim2, () => { Park(v2, EmptySector, new Vec3(0, 0, 0)); Park(t2, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
+        Check(Vision(sim2, 0).EyeballShips.Contains(t2.ShipId),
+            "the same eyeball-band enemy with the rock moved off-axis is streamed again (clear LoS)",
+            "an eyeball-band enemy with clear LoS was not streamed");
     }
 
     // Radar → the VIEWER flies away (so the last-seen spot is no longer in vision) → ghost + lost.
