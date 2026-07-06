@@ -394,7 +394,7 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = (float)(rng.NextDouble() * 30.0 + 10.0);
+            float radius = RockRadius(ref rng, 8.0, 55.0);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
@@ -418,7 +418,7 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = (float)(rng.NextDouble() * 18.0 + 8.0);
+            float radius = RockRadius(ref rng, 6.0, 40.0);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
@@ -435,6 +435,17 @@ public sealed class World
         float ry = (float)rng.NextRange(0, Math.PI * 2.0);
         float rz = (float)rng.NextRange(0, Math.PI * 2.0);
         return (variant, rx, ry, rz);
+    }
+
+    // Rock size draw: one RNG sample mapped across [minR, maxR] with a mild power-law skew
+    // (exponent > 1 biases toward the small end) so a field is mostly modest rocks with the
+    // occasional large one — more visual variety than a flat uniform draw, still bounded to a
+    // reasonable range. Consumes exactly one NextDouble so the asteroid RNG sequence is unchanged.
+    private static float RockRadius(ref DetRng rng, double minR, double maxR)
+    {
+        const double Skew = 1.8;
+        double t = Math.Pow(rng.NextDouble(), Skew);
+        return (float)(minR + t * (maxR - minR));
     }
 
     private static Vec3 RandomOuterPos(ref DetRng rng, float sectorRadius)
