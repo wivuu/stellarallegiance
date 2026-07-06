@@ -197,6 +197,17 @@ namespace StellarAllegiance.Net
         }
     }
 
+    // One available map, decoded from MsgMapList (sent once after Defs). The in-game lobby's sector
+    // pane + map picker render from these. Layout is prebuilt (thumbnail-ready) at decode time so the
+    // UI just calls SectorMapPreview.SetMap.
+    public sealed record MapInfo(
+        string Name,
+        string Mode,
+        string SizeLabel,
+        string SectorLabel,
+        int GarrisonCount,
+        StellarAllegiance.Ui.SectorMapPreview.MapModel Layout);
+
     // One chat line, decoded from MsgChatRelay (scope 0 = all, 1 = team).
     public readonly struct ChatLine
     {

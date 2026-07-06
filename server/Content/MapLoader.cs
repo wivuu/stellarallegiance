@@ -14,6 +14,11 @@ public sealed class MapDef
     // Required. The human-facing map name (also the selection key, case-insensitive).
     public string? Name { get; set; }
 
+    // Optional game-mode label shown in the lobby's Sector Intel / map picker (e.g. "Conquest",
+    // "Skirmish"). Purely descriptive today — the sim doesn't branch on it. Defaults to "CONQUEST"
+    // in the client catalog when omitted.
+    public string? Mode { get; set; }
+
     // Optional map-level overrides of the content world knobs. Null/omitted → inherit the value from
     // the loaded content bundle's `world:` block.
     public double? SectorScale { get; set; }

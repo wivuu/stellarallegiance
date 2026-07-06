@@ -139,10 +139,14 @@ IMatchResultSink results = new LoggingMatchResultSink();
 // overlay its sector layout onto the world config. Fail fast (like content) on a bad/nameless map
 // file or an unknown selection so the operator gets a clear boot error instead of a wrong arena.
 MapDef selectedMapDef;
+IReadOnlyList<MapCatalogEntry> mapCatalog;
 try
 {
     var maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
     selectedMapDef = MapLoader.Resolve(maps, selectedMap);
+    // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
+    // content.World for the live arena (Build clones per map, so this doesn't disturb it).
+    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start);
     MapLoader.ApplyTo(selectedMapDef, content.World);
     Console.WriteLine(
         $"[SimServer] map: '{selectedMapDef.Name}' ({selectedMapDef.Sectors.Count} sector override(s))"
@@ -160,7 +164,7 @@ string mapName = selectedMapDef.Name!.Trim();
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
 var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
 var sim = new Simulation(world, content);
-var hub = new ClientHub(sim, auth, players, matchmaker);
+var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
 
 // Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when
 // it returns to the lobby so ready flags reset. Both run on the sim thread.

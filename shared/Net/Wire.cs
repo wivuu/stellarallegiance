@@ -7,7 +7,7 @@ public static class Wire
 {
     // Wire-format version. Bump whenever a frame layout changes. The client checks this in the
     // Welcome handshake and refuses to play against a skewed server instead of misreading frames.
-    public const byte ProtocolVersion = 24; // 24: per-sector name in SectorStatic
+    public const byte ProtocolVersion = 25; // 25: lobby team names, host, map list + selected map
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

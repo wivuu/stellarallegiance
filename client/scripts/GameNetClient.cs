@@ -13,6 +13,7 @@ using Godot;
 using SIPSorcery.Net;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Ui;
 // Godot ships its own HttpClient; the signaling exchange uses the BCL one.
 using HttpClient = System.Net.Http.HttpClient;
 
@@ -35,11 +36,25 @@ public partial class GameNetClient : Node
     // Lobby roster (from MsgLobbyState). Read by the Lobby overlay; LobbyChanged fires on update.
     public IReadOnlyList<LobbyPlayer> LobbyPlayers { get; private set; } = Array.Empty<LobbyPlayer>();
 
+    // Session-global lobby state, carried on the tail of MsgLobbyState. Team names default to the
+    // design's until the server streams the real ones; HostId is the server-designated host (first
+    // pilot on the server), -1 when unknown; SelectedMap is the current/"next" map name.
+    public string Team0Name { get; private set; } = "IRON COIL";
+    public string Team1Name { get; private set; } = "ASH SYNDICATE";
+    public int HostId { get; private set; } = -1;
+    public bool IsHost => HostId >= 0 && HostId == LocalClientId;
+    public string SelectedMap { get; private set; } = "";
+
+    // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
+    // picker; MapListChanged fires when it arrives.
+    public IReadOnlyList<MapInfo> Maps { get; private set; } = Array.Empty<MapInfo>();
+
     // Raised on the main thread. Connected = Welcome received; DefsReceived = defs applied;
     // LobbyChanged = roster/phase update; ChatReceived = a chat line; Pong = ping echo (RTT).
     public event Action? Connected;
     public event Action? DefsReceived;
     public event Action? LobbyChanged;
+    public event Action? MapListChanged;
     public event Action<ChatLine>? ChatReceived;
     public event Action<uint>? Pong;
 
@@ -202,6 +217,8 @@ public partial class GameNetClient : Node
         _minefieldRows.Clear();
         _probeRows.Clear();
         LobbyPlayers = [];
+        HostId = -1;
+        Maps = Array.Empty<MapInfo>();
         LobbyChanged?.Invoke();
         _world.Reset();
     }
@@ -238,6 +255,8 @@ public partial class GameNetClient : Node
         _minefieldRows.Clear();
         _probeRows.Clear();
         LobbyPlayers = Array.Empty<LobbyPlayer>();
+        HostId = -1;
+        Maps = Array.Empty<MapInfo>();
         LobbyChanged?.Invoke();
         _world.Reset();
     }
@@ -325,6 +344,33 @@ public partial class GameNetClient : Node
         f[1] = (byte)(teamOnly ? 1 : 0);
         BitConverter.TryWriteBytes(f.AsSpan(2), (ushort)t.Length);
         t.CopyTo(f, 4);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Rename a team (0/1) you belong to. The server re-validates membership and uppercases/caps to
+    // 18; we cap here too so the wire and the UI agree on what got sent.
+    public void SetTeamName(byte team, string name)
+    {
+        var n = (name ?? "").Trim();
+        if (n.Length > 18)
+            n = n[..18];
+        var t = System.Text.Encoding.UTF8.GetBytes(n);
+        var f = new byte[4 + t.Length];
+        f[0] = 9; // MsgSetTeamName
+        f[1] = team;
+        BitConverter.TryWriteBytes(f.AsSpan(2), (ushort)t.Length);
+        t.CopyTo(f, 4);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Host picks the next map (the server enforces host-only). mapName must match a catalog entry.
+    public void SetMap(string mapName)
+    {
+        var t = System.Text.Encoding.UTF8.GetBytes(mapName ?? "");
+        var f = new byte[3 + t.Length];
+        f[0] = 10; // MsgSetMap
+        BitConverter.TryWriteBytes(f.AsSpan(1), (ushort)t.Length);
+        t.CopyTo(f, 3);
         _tx.Writer.TryWrite(f);
     }
 
@@ -638,6 +684,9 @@ public partial class GameNetClient : Node
                 break;
             case 19:
                 ApplyProbeGone(r);
+                break;
+            case 20:
+                ApplyMapList(r);
                 break;
         }
     }
@@ -1280,11 +1329,55 @@ public partial class GameNetClient : Node
             ulong shipId = r.ReadUInt64();
             list.Add(new LobbyPlayer(id, name, team, ready, hasShip, shipId));
         }
+        // Session-global state appended after the roster (see Protocol.BuildLobbyState).
+        Team0Name = ReadStr(r);
+        Team1Name = ReadStr(r);
+        HostId = r.ReadInt32();
+        SelectedMap = ReadStr(r);
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
         _world.NetApplyPilotNames(list);
         LobbyChanged?.Invoke();
+    }
+
+    // The server's available-maps catalog (Protocol.BuildMapList) — decoded once, right after Defs.
+    // Each map's sector/base layout is turned straight into a thumbnail-ready SectorMapPreview.MapModel
+    // (mirrors ServerLobbyOverlay.ToMapModel; the lobby carries no gate dots).
+    private void ApplyMapList(BinaryReader r)
+    {
+        byte mapCount = r.ReadByte();
+        var maps = new List<MapInfo>(mapCount);
+        for (int i = 0; i < mapCount; i++)
+        {
+            string name = ReadStr(r);
+            string mode = ReadStr(r);
+            string size = ReadStr(r);
+            string sectorLabel = ReadStr(r);
+            int garrisons = r.ReadByte();
+            byte sectorCount = r.ReadByte();
+            var sectors = new List<SectorMapPreview.SectorModel>(sectorCount);
+            for (int s = 0; s < sectorCount; s++)
+            {
+                uint id = r.ReadUInt32();
+                float radius = r.ReadSingle();
+                string sname = ReadStr(r);
+                byte baseCount = r.ReadByte();
+                var bases = new List<SectorMapPreview.BaseMark>(baseCount);
+                for (int b = 0; b < baseCount; b++)
+                {
+                    byte team = r.ReadByte();
+                    float x = r.ReadSingle();
+                    float z = r.ReadSingle();
+                    bases.Add(new SectorMapPreview.BaseMark(team, new Vector2(x, z)));
+                }
+                sectors.Add(new SectorMapPreview.SectorModel(
+                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname));
+            }
+            maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors)));
+        }
+        Maps = maps;
+        MapListChanged?.Invoke();
     }
 
     private void ApplyChat(BinaryReader r)

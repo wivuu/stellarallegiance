@@ -950,7 +950,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(18);
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(false));
+        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(false),
+        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
 
     var ft = new FakeHubTransport();
     var cts = new CancellationTokenSource();
@@ -1005,7 +1006,8 @@ Vec3 AtAngle(float dist, float angleDeg)
     var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content) { PigsEnabled = false, FogEnabled = true, VisionSynchronous = false };
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true));
+        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true),
+        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
     sim.ShouldStartMatch = hub.ShouldStartMatch;
     sim.OnReturnToLobby = hub.OnReturnToLobby;
 

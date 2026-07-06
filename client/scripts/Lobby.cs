@@ -45,6 +45,9 @@ public partial class Lobby : Control
     private StatusPill _phasePill = null!;
     private Label _clock = null!;
     private Label _matchTitle = null!;
+    private Label _matchSub = null!; // "{mode} · {sector} · {n} GARRISONS" — driven by the selected map
+    private Label _scoreName0 = null!; // team-name labels flanking the score (live-updated on rename)
+    private Label _scoreName1 = null!;
     private Label _score0 = null!;
     private Label _score1 = null!;
     private ChamferButton _joinBtn = null!;
@@ -53,11 +56,26 @@ public partial class Lobby : Control
     // Body.
     private VBoxContainer _teamTabs = null!; // the two team tab cards
     private Control _noatTabHost = null!; // the pinned NOAT tab card slot
-    private Label _rosterTeamName = null!;
+    private HBoxContainer _rosterNameRow = null!; // team name + ✎, or the inline rename editor
     private Label _rosterTeamSub = null!;
     private Label _rosterPoints = null!;
     private Label _rosterCount = null!;
     private VBoxContainer _rosterRows = null!;
+
+    // Team-name inline editor. _editingTeam is the team currently being renamed (-1 = none); it's
+    // only ever the selected real-team tab, and only for a side the local pilot is on.
+    private int _editingTeam = -1;
+    private LineEdit _nameEdit = null!;
+
+    // Right-hand sector pane (map thumbnail + Sector Intel + Garrison Control).
+    private SectorMapPreview _sectorMap = null!;
+    private Label _mapName = null!;
+    private Label _mapMeta = null!;
+    private Label _mapCta = null!; // CHANGE ▸ (host) / VIEW ▸ (non-host)
+    private Label _mapHostBadge = null!; // HOST / LOCKED
+    private Label _siMode = null!, _siSector = null!, _siGarrisons = null!, _siSize = null!;
+    private HBoxContainer _garrisonBar = null!; // proportional owner split
+    private VBoxContainer _garrisonRows = null!; // per-faction node counts
 
     // Comms.
     private RichTextLabel _commsLog = null!;
@@ -117,6 +135,7 @@ public partial class Lobby : Control
         root.AddChild(BuildComms());
 
         _net.LobbyChanged += OnLobbyChanged;
+        _net.MapListChanged += OnLobbyChanged; // catalog arrival refreshes the sector pane too
         _net.ChatReceived += OnChat;
 
         UpdateChannelButtons();
@@ -126,6 +145,7 @@ public partial class Lobby : Control
     public override void _ExitTree()
     {
         _net.LobbyChanged -= OnLobbyChanged;
+        _net.MapListChanged -= OnLobbyChanged;
         _net.ChatReceived -= OnChat;
     }
 
@@ -190,7 +210,9 @@ public partial class Lobby : Control
         _matchTitle = UiKit.MakeLabel("SKIRMISH", UiKit.TextStyle.Title, DesignTokens.TextHi);
         _matchTitle.AddThemeFontSizeOverride("font_size", 15);
         titleCol.AddChild(_matchTitle);
-        titleCol.AddChild(UiKit.MakeLabel("CONQUEST · UNCHARTED SECTOR", UiKit.TextStyle.Data, DesignTokens.Text2).With(l => l.AddThemeFontSizeOverride("font_size", 11)));
+        _matchSub = UiKit.MakeLabel("CONQUEST · UNCHARTED SECTOR", UiKit.TextStyle.Data, DesignTokens.Text2);
+        _matchSub.AddThemeFontSizeOverride("font_size", 11);
+        titleCol.AddChild(_matchSub);
         left.AddChild(titleCol);
         row.AddChild(left);
 
@@ -200,7 +222,9 @@ public partial class Lobby : Control
         score.AddThemeConstantOverride("separation", 12);
         score.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         score.AddChild(Diamond(Team0, false));
-        score.AddChild(UiKit.MakeLabel(TeamName(0), UiKit.TextStyle.Label, Team0).With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
+        _scoreName0 = UiKit.MakeLabel(TeamName(0), UiKit.TextStyle.Label, Team0);
+        _scoreName0.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        score.AddChild(_scoreName0);
         _score0 = UiKit.MakeLabel("0", UiKit.TextStyle.Data, Team0);
         _score0.AddThemeFontSizeOverride("font_size", 22);
         score.AddChild(_score0);
@@ -208,7 +232,9 @@ public partial class Lobby : Control
         _score1 = UiKit.MakeLabel("0", UiKit.TextStyle.Data, Team1);
         _score1.AddThemeFontSizeOverride("font_size", 22);
         score.AddChild(_score1);
-        score.AddChild(UiKit.MakeLabel(TeamName(1), UiKit.TextStyle.Label, Team1).With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
+        _scoreName1 = UiKit.MakeLabel(TeamName(1), UiKit.TextStyle.Label, Team1);
+        _scoreName1.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        score.AddChild(_scoreName1);
         score.AddChild(Diamond(Team1, false));
         row.AddChild(score);
         row.AddChild(Spacer());
@@ -263,10 +289,13 @@ public partial class Lobby : Control
         headRow.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(headRow);
         var nameCol = new VBoxContainer();
-        nameCol.AddThemeConstantOverride("separation", 0);
-        _rosterTeamName = UiKit.MakeLabel("", UiKit.TextStyle.Title, DesignTokens.TextHi);
-        _rosterTeamSub = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2).With(l => l.AddThemeFontSizeOverride("font_size", 11));
-        nameCol.AddChild(_rosterTeamName);
+        nameCol.AddThemeConstantOverride("separation", 2);
+        // The name line is rebuilt each RebuildBody — it's either "{name} ✎" or the inline editor.
+        _rosterNameRow = new HBoxContainer();
+        _rosterNameRow.AddThemeConstantOverride("separation", 10);
+        _rosterTeamSub = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
+        _rosterTeamSub.AddThemeFontSizeOverride("font_size", 11);
+        nameCol.AddChild(_rosterNameRow);
         nameCol.AddChild(_rosterTeamSub);
         headRow.AddChild(nameCol);
         headRow.AddChild(Spacer());
@@ -287,7 +316,277 @@ public partial class Lobby : Control
         rightCol.AddChild(scroll);
 
         body.AddChild(rightCol);
+
+        // Third column: the sector pane (map thumbnail + Sector Intel + Garrison Control).
+        body.AddChild(Hairline(vertical: true));
+        var sectorMargin = new MarginContainer { CustomMinimumSize = new Vector2(320, 0) };
+        Margins(sectorMargin, 16, 16);
+        sectorMargin.AddChild(BuildSectorPane());
+        body.AddChild(sectorMargin);
+
         return body;
+    }
+
+    // Right-hand sector pane: the map thumbnail (opens the picker), a Sector Intel stat grid, and
+    // Garrison Control. Static skeleton here; UpdateSectorPane fills the live values each RebuildBody.
+    private Control BuildSectorPane()
+    {
+        var col = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        col.AddThemeConstantOverride("separation", 16);
+
+        // --- SECTOR MAP: header (label + HOST/LOCKED badge) + a clickable map card ---
+        var mapSection = new VBoxContainer();
+        mapSection.AddThemeConstantOverride("separation", 10);
+        var mapHead = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        mapHead.AddChild(UiKit.MakeLabel("SECTOR MAP", UiKit.TextStyle.Label, DesignTokens.TextDim).With(l => l.SizeFlagsHorizontal = SizeFlags.ExpandFill));
+        _mapHostBadge = Mono("LOCKED", DesignTokens.Text2);
+        mapHead.AddChild(_mapHostBadge);
+        mapSection.AddChild(mapHead);
+
+        var card = new PanelContainer { MouseFilter = MouseFilterEnum.Stop };
+        var cardSb = new StyleBoxFlat { BgColor = DesignTokens.Well, BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        cardSb.SetCornerRadiusAll(0);
+        cardSb.SetBorderWidthAll(1);
+        card.AddThemeStyleboxOverride("panel", cardSb);
+        card.GuiInput += ev => { if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) OpenMapPicker(); };
+        var cardCol = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        cardCol.AddThemeConstantOverride("separation", 0);
+        card.AddChild(cardCol);
+
+        _sectorMap = new SectorMapPreview { CustomMinimumSize = new Vector2(0, 150), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        cardCol.AddChild(_sectorMap);
+
+        var bar = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
+        Margins(bar, 12, 10);
+        var barRow = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        barRow.AddThemeConstantOverride("separation", 8);
+        var barNames = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        barNames.AddThemeConstantOverride("separation", 2);
+        _mapName = UiKit.MakeLabel("—", UiKit.TextStyle.Label, DesignTokens.TextHi);
+        _mapName.MouseFilter = MouseFilterEnum.Ignore;
+        _mapMeta = Mono("—", DesignTokens.Text2);
+        _mapMeta.AddThemeFontSizeOverride("font_size", 9);
+        barNames.AddChild(_mapName);
+        barNames.AddChild(_mapMeta);
+        barRow.AddChild(barNames);
+        _mapCta = Mono("VIEW ▸", DesignTokens.TeamAccent);
+        _mapCta.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        barRow.AddChild(_mapCta);
+        bar.AddChild(barRow);
+        cardCol.AddChild(bar);
+        mapSection.AddChild(card);
+        col.AddChild(mapSection);
+
+        // --- SECTOR INTEL: 2-col stat grid ---
+        var intel = new VBoxContainer();
+        intel.AddThemeConstantOverride("separation", 10);
+        intel.AddChild(UiKit.MakeLabel("SECTOR INTEL", UiKit.TextStyle.Label, DesignTokens.TextDim));
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 1);
+        grid.AddThemeConstantOverride("v_separation", 1);
+        grid.AddChild(StatCell("MODE", out _siMode, DesignTokens.TextHi));
+        grid.AddChild(StatCell("SECTOR", out _siSector, DesignTokens.Data));
+        grid.AddChild(StatCell("GARRISONS", out _siGarrisons, DesignTokens.TextHi));
+        grid.AddChild(StatCell("MAP SIZE", out _siSize, DesignTokens.Data));
+        intel.AddChild(grid);
+        col.AddChild(intel);
+
+        // --- GARRISON CONTROL: proportional owner bar + per-faction node counts ---
+        var garr = new VBoxContainer();
+        garr.AddThemeConstantOverride("separation", 10);
+        garr.AddChild(UiKit.MakeLabel("GARRISON CONTROL", UiKit.TextStyle.Label, DesignTokens.TextDim));
+        _garrisonBar = new HBoxContainer { CustomMinimumSize = new Vector2(0, 10), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _garrisonBar.AddThemeConstantOverride("separation", 2);
+        garr.AddChild(_garrisonBar);
+        _garrisonRows = new VBoxContainer();
+        _garrisonRows.AddThemeConstantOverride("separation", 7);
+        garr.AddChild(_garrisonRows);
+        col.AddChild(garr);
+
+        return col;
+    }
+
+    // The current/"next" map, resolved from the streamed catalog by SelectedMap (falls back to the
+    // first advertised map, or null before the catalog arrives).
+    private MapInfo? CurrentMap()
+    {
+        foreach (var m in _net.Maps)
+            if (string.Equals(m.Name, _net.SelectedMap, StringComparison.OrdinalIgnoreCase))
+                return m;
+        return _net.Maps.Count > 0 ? _net.Maps[0] : null;
+    }
+
+    private void OpenMapPicker()
+    {
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+        MapPickerModal.Open(this, _net);
+    }
+
+    // Refresh the sector pane from the current map + host/team state (called from RebuildBody).
+    private void UpdateSectorPane()
+    {
+        var cm = CurrentMap();
+        bool host = _net.IsHost;
+        _mapHostBadge.Text = host ? "HOST" : "LOCKED";
+        _mapHostBadge.AddThemeColorOverride("font_color", host ? DesignTokens.Ok : DesignTokens.Text2);
+        _mapCta.Text = host ? "CHANGE ▸" : "VIEW ▸";
+        _mapCta.AddThemeColorOverride("font_color", host ? DesignTokens.TeamAccent : DesignTokens.Text2);
+
+        _sectorMap.SetMap(cm?.Layout);
+        _mapName.Text = cm?.Name ?? "NO MAP";
+        _mapMeta.Text = cm != null ? $"{cm.SectorLabel} · {cm.GarrisonCount} GARRISONS · {cm.SizeLabel}" : "—";
+        _siMode.Text = cm?.Mode ?? "—";
+        _siSector.Text = cm?.SectorLabel ?? "—";
+        _siGarrisons.Text = cm != null ? cm.GarrisonCount.ToString() : "—";
+        _siSize.Text = cm?.SizeLabel ?? "—";
+
+        // Garrison ownership counts across every sector base. Neutral (team != 0/1) is always 0 on
+        // current maps — supported here for forward-compat but never fabricated.
+        int t0 = 0, t1 = 0, neu = 0;
+        if (cm != null)
+            foreach (var s in cm.Layout.Sectors)
+                foreach (var b in s.Bases)
+                {
+                    if (b.Team == 0)
+                        t0++;
+                    else if (b.Team == 1)
+                        t1++;
+                    else
+                        neu++;
+                }
+        int total = t0 + t1 + neu;
+
+        foreach (var c in _garrisonBar.GetChildren())
+            c.QueueFree();
+        AddBarSeg(t0, DesignTokens.Faction0);
+        AddBarSeg(neu, DesignTokens.Text2);
+        AddBarSeg(t1, DesignTokens.Faction1);
+        if (total == 0)
+            _garrisonBar.AddChild(new ColorRect { Color = DesignTokens.BorderLo, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore });
+
+        foreach (var c in _garrisonRows.GetChildren())
+            c.QueueFree();
+        _garrisonRows.AddChild(GarrisonRow(TeamName(0), t0, total, DesignTokens.Faction0));
+        _garrisonRows.AddChild(GarrisonRow("NEUTRAL / UNCLAIMED", neu, total, DesignTokens.Text2));
+        _garrisonRows.AddChild(GarrisonRow(TeamName(1), t1, total, DesignTokens.Faction1));
+    }
+
+    private void AddBarSeg(int count, Color color)
+    {
+        if (count <= 0)
+            return;
+        _garrisonBar.AddChild(new ColorRect
+        {
+            Color = color,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = count,
+            MouseFilter = MouseFilterEnum.Ignore,
+        });
+    }
+
+    private Control GarrisonRow(string label, int count, int total, Color color)
+    {
+        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var left = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        left.AddThemeConstantOverride("separation", 8);
+        left.AddChild(Diamond(color, false));
+        left.AddChild(Mono(label, DesignTokens.TextHi).With(l => l.AddThemeFontSizeOverride("font_size", 11)));
+        row.AddChild(left);
+        var cnt = Mono($"{count}/{total}", color, HorizontalAlignment.Right);
+        cnt.AddThemeFontSizeOverride("font_size", 11);
+        row.AddChild(cnt);
+        return row;
+    }
+
+    // One Sector Intel cell: caps caption over a value, on a recessed panel.
+    private Control StatCell(string caption, out Label value, Color valueColor)
+    {
+        var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var sb = new StyleBoxFlat { BgColor = DesignTokens.PanelDeep, AntiAliasing = false };
+        sb.SetCornerRadiusAll(0);
+        sb.ContentMarginLeft = sb.ContentMarginRight = 13;
+        sb.ContentMarginTop = sb.ContentMarginBottom = 11;
+        panel.AddThemeStyleboxOverride("panel", sb);
+        var c = new VBoxContainer();
+        c.AddThemeConstantOverride("separation", 4);
+        c.AddChild(Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 9)));
+        value = UiKit.MakeLabel("—", UiKit.TextStyle.Label, valueColor);
+        value.AddThemeFontSizeOverride("font_size", 14);
+        c.AddChild(value);
+        panel.AddChild(c);
+        return panel;
+    }
+
+    // ---- team-name inline editor -------------------------------------------
+
+    // Only a real side (0/1), and only when the local pilot is currently on it, may be renamed.
+    private bool CanEditTeam(int team) => (team == 0 || team == 1) && MyTeamNow() == team;
+
+    // Rebuild the roster header's name line: display ("{NAME} ✎") or the inline editor. Called from
+    // RebuildBody so it tracks tab selection, edit state, and streamed name changes.
+    private void BuildRosterNameRow()
+    {
+        // Preserve in-progress text across an incidental rebuild (e.g. a roster churn mid-edit).
+        string? prevDraft = _editingTeam == _selectedTeam && _nameEdit != null && GodotObject.IsInstanceValid(_nameEdit)
+            ? _nameEdit.Text : null;
+        foreach (var c in _rosterNameRow.GetChildren())
+            c.QueueFree();
+
+        bool editing = _editingTeam == _selectedTeam && _selectedTeam is 0 or 1;
+        if (editing)
+        {
+            _nameEdit = new LineEdit
+            {
+                MaxLength = 18,
+                Text = prevDraft ?? TeamName(_selectedTeam),
+                CustomMinimumSize = new Vector2(240, 0),
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            };
+            _rosterNameRow.AddChild(_nameEdit);
+            var ok = IconBtn("✓", SaveTeamName, ButtonVariant.Primary);
+            var cancel = IconBtn("✕", CancelEditTeam, ButtonVariant.Secondary);
+            _rosterNameRow.AddChild(ok);
+            _rosterNameRow.AddChild(cancel);
+            _nameEdit.GrabFocus();
+            if (prevDraft == null)
+                _nameEdit.SelectAll();
+        }
+        else
+        {
+            var name = UiKit.MakeLabel(TeamName(_selectedTeam), UiKit.TextStyle.Title, TeamColor(_selectedTeam));
+            name.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+            _rosterNameRow.AddChild(name);
+            if (CanEditTeam(_selectedTeam))
+                _rosterNameRow.AddChild(IconBtn("✎", () => { _editingTeam = _selectedTeam; _bodyDirty = true; }, ButtonVariant.Icon));
+        }
+    }
+
+    private static ChamferButton IconBtn(string text, Action onPressed, ButtonVariant variant)
+    {
+        var b = UiKit.MakeButton(text, onPressed, variant);
+        b.CustomMinimumSize = new Vector2(32, 32);
+        b.FocusMode = FocusModeEnum.None; // never steal keyboard focus from the name/chat inputs
+        b.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        return b;
+    }
+
+    private void SaveTeamName()
+    {
+        if (_editingTeam is not (0 or 1))
+            return;
+        string v = _nameEdit.Text.Trim().ToUpper();
+        if (v.Length > 18)
+            v = v[..18];
+        if (v.Length > 0)
+            _net.SetTeamName((byte)_editingTeam, v); // server re-validates + rebroadcasts to everyone
+        _editingTeam = -1;
+        _bodyDirty = true;
+    }
+
+    private void CancelEditTeam()
+    {
+        _editingTeam = -1;
+        _bodyDirty = true;
     }
 
     // Comms panel: channel tabs, scrolling log, and an input row scoped to the active channel.
@@ -422,9 +721,28 @@ public partial class Lobby : Control
     {
         if (!Visible)
             return;
-        if (@event is InputEventKey { Pressed: true, Echo: false } k
-            && (k.Keycode == Key.Enter || k.Keycode == Key.KpEnter)
-            && _commsInput.HasFocus())
+        if (@event is not InputEventKey { Pressed: true, Echo: false } k)
+            return;
+
+        // Team-name editor: Enter commits, Esc cancels — intercepted before the LineEdit's own
+        // handler runs (same reason as the comms box below).
+        if (_editingTeam >= 0 && _nameEdit != null && GodotObject.IsInstanceValid(_nameEdit) && _nameEdit.HasFocus())
+        {
+            if (k.Keycode is Key.Enter or Key.KpEnter)
+            {
+                SaveTeamName();
+                GetViewport().SetInputAsHandled();
+                return;
+            }
+            if (k.Keycode == Key.Escape)
+            {
+                CancelEditTeam();
+                GetViewport().SetInputAsHandled();
+                return;
+            }
+        }
+
+        if ((k.Keycode == Key.Enter || k.Keycode == Key.KpEnter) && _commsInput.HasFocus())
         {
             OnCommsSubmit(_commsInput.Text);
             GetViewport().SetInputAsHandled();
@@ -435,7 +753,8 @@ public partial class Lobby : Control
     // focused LineEdit, the chat box, the hangar, or the menus themselves — wins naturally.
     public override void _UnhandledKeyInput(InputEvent @event)
     {
-        if (!Visible || ShipLoadout.Active || EscapeMenu.Active || SettingsDialog.Active || Chat.Capturing)
+        if (!Visible || ShipLoadout.Active || EscapeMenu.Active || SettingsDialog.Active || MapPickerModal.Active
+            || Chat.Capturing || _editingTeam >= 0)
             return;
         if (@event is InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false })
         {
@@ -496,6 +815,7 @@ public partial class Lobby : Control
         // what transiently dropped focus. Suppressed while a higher overlay (hangar / sector map /
         // escape menu / settings) is up so it never fights (or types under) their controls.
         if (!ShipLoadout.Active && !SectorOverview.Active && !EscapeMenu.Active && !SettingsDialog.Active
+            && !MapPickerModal.Active && _editingTeam < 0
             && GetViewport().GuiGetFocusOwner() == null)
             _commsInput.GrabFocus();
     }
@@ -504,11 +824,13 @@ public partial class Lobby : Control
     {
         _online.Text = $"● {_net.LobbyPlayers.Count} ONLINE";
 
+        var cm = CurrentMap();
+        string mapTitle = cm?.Name ?? "SKIRMISH";
         switch (_world.Phase)
         {
             case MatchPhase.Active:
                 _phasePill.Configure("● LIVE", StatusPill.Kind.Danger, pulse: true);
-                _matchTitle.Text = "SKIRMISH";
+                _matchTitle.Text = mapTitle;
                 break;
             case MatchPhase.Ended:
                 byte w = _world.Winner ?? 0;
@@ -517,9 +839,16 @@ public partial class Lobby : Control
                 break;
             default:
                 _phasePill.Configure("LOBBY", StatusPill.Kind.Accent);
-                _matchTitle.Text = "SKIRMISH";
+                _matchTitle.Text = mapTitle;
                 break;
         }
+        _matchSub.Text = cm != null
+            ? $"{cm.Mode} · {cm.SectorLabel} · {cm.GarrisonCount} GARRISONS"
+            : "CONQUEST · UNCHARTED SECTOR";
+
+        // Team names can be renamed at runtime — keep the score-bar labels in sync.
+        _scoreName0.Text = TeamName(0);
+        _scoreName1.Text = TeamName(1);
 
         _clock.Text = Fmt(_clockSecs);
         _score0.Text = _world.TeamScore(0).ToString();
@@ -593,9 +922,8 @@ public partial class Lobby : Control
             c.QueueFree();
         _noatTabHost.AddChild(TeamTab(NoatTeam));
 
-        // Roster header.
-        _rosterTeamName.Text = TeamName(_selectedTeam);
-        _rosterTeamName.AddThemeColorOverride("font_color", TeamColor(_selectedTeam));
+        // Roster header (name + rename affordance / inline editor).
+        BuildRosterNameRow();
         int count = CountFor(_selectedTeam);
         _rosterTeamSub.Text = _selectedTeam == NoatTeam ? "Not on a team — spectators & unassigned" : $"{count} pilot{(count == 1 ? "" : "s")}";
         _rosterPoints.Text = _selectedTeam == NoatTeam ? "—" : _world.TeamScore((byte)_selectedTeam).ToString();
@@ -618,6 +946,9 @@ public partial class Lobby : Control
 
         // Keep the group comms channel labelled for your current side (TEAM ⇄ NOAT on join/leave).
         UpdateChannelButtons();
+
+        // Refresh the right-hand sector pane (map/host/garrison state).
+        UpdateSectorPane();
     }
 
     // A clickable team tab card (a Button with design styleboxes + non-interactive content on top).
@@ -712,16 +1043,11 @@ public partial class Lobby : Control
             nameCell.AddChild(Badge("YOU", team));
         row.AddChild(nameCell);
 
-        // SHIP + K/D/EJ/PTS — PLACEHOLDER columns (not carried by MsgLobbyState).
-        row.AddChild(Cell(Mono("—", DesignTokens.Text2), 1.1f));
+        // K/D/EJ/PTS — PLACEHOLDER columns (not carried by MsgLobbyState). PTS right-aligned.
         row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
         row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
         row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.7f));
-
-        // STATUS — real, derived from the roster (flying / ready / standby).
-        (string txt, Color col) = StatusOf(p);
-        row.AddChild(Cell(Mono(txt, col, HorizontalAlignment.Right), 1.1f));
+        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Right), 0.7f));
         return panel;
     }
 
@@ -739,12 +1065,10 @@ public partial class Lobby : Control
         panel.AddChild(row);
         row.AddChild(Lbl("", 20));
         row.AddChild(Cell(Lbl("CALLSIGN"), 1.6f));
-        row.AddChild(Cell(Lbl("SHIP"), 1.1f));
         row.AddChild(Cell(Lbl("K", align: HorizontalAlignment.Center), 0.5f));
         row.AddChild(Cell(Lbl("D", align: HorizontalAlignment.Center), 0.5f));
         row.AddChild(Cell(Lbl("EJ", align: HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Lbl("PTS", align: HorizontalAlignment.Center), 0.7f));
-        row.AddChild(Cell(Lbl("STATUS", align: HorizontalAlignment.Right), 1.1f));
+        row.AddChild(Cell(Lbl("PTS", align: HorizontalAlignment.Right), 0.7f));
         return panel;
     }
 
@@ -832,19 +1156,9 @@ public partial class Lobby : Control
         return n;
     }
 
-    private static (string, Color) StatusOf(LobbyPlayer p)
-    {
-        if (p.HasShip)
-            return ("ALIVE", DesignTokens.Ok);
-        if (IsNoat(p.Team))
-            return ("UNASSIGNED", DesignTokens.TextDim);
-        if (p.Ready)
-            return ("READY", DesignTokens.Ok);
-        return ("STANDBY", DesignTokens.TextDim);
-    }
-
-    // The one hook for future streamed team names (the wire carries only a team byte today).
-    private static string TeamName(int team) => team switch { 0 => "BLUE", 1 => "RED", _ => "NOAT" };
+    // Team names are now streamed (server-held, editable via the roster header). Reads live from the
+    // net client so a rename by any pilot shows everywhere; NOAT is the client-only pseudo-team.
+    private string TeamName(int team) => team switch { 0 => _net.Team0Name, 1 => _net.Team1Name, _ => "NOAT" };
 
     private static Color TeamColor(int team) => IsNoat(team) ? DesignTokens.Text2 : DesignTokens.Faction(team);
 
