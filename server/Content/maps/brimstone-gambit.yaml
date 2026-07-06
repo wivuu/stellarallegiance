@@ -1,0 +1,18 @@
+# Brimstone Gambit — the default stock map.
+#
+# Maps are STANDALONE files (not part of the faction/tech-tree content). Stock maps ship next to the
+# binary in content/maps/; operators add more by dropping .yaml files into the folder named by
+# SIM_MAPS_DIR / --maps-dir (e.g. a Docker volume). Select a map with SIM_MAP / --map "<name>"
+# (default: "Brimstone Gambit").
+#
+# A map MUST declare a name. `sectors` lists per-sector radius overrides: radius is nullable — omit
+# it (or set null) to fall back to that sector's built-in default radius × sector-scale. Optional
+# top-level `sector-scale` / `asteroid-density` override the content world defaults for this map.
+name: Brimstone Gambit
+sectors:
+  - id: 0        # home — an explicit larger arena
+    name: Delamere
+    radius: 4000
+  - id: 1        # verge — null → 700 × sector-scale
+    name: Verge
+    radius: null

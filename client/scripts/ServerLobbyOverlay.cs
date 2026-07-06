@@ -34,7 +34,7 @@ public partial class ServerLobbyOverlay : Control
 
     private sealed record MapGateDto(uint ToSector, float X, float Z);
 
-    private sealed record MapSectorDto(uint Id, float Radius, List<MapBaseDto>? Bases, List<MapGateDto>? Gates);
+    private sealed record MapSectorDto(uint Id, float Radius, List<MapBaseDto>? Bases, List<MapGateDto>? Gates, string? Name = null);
 
     private sealed record MapDto(List<MapSectorDto> Sectors);
 
@@ -46,6 +46,7 @@ public partial class ServerLobbyOverlay : Control
         int MaxPlayers,
         string? State,
         string? HostedBy,
+        string? MapName,
         MapDto? Map,
         List<RosterDto>? Roster
     );
@@ -649,9 +650,11 @@ public partial class ServerLobbyOverlay : Control
         };
         pill.Configure(pillText, pillKind, pulse: live);
 
-        // Mono subline: state · sectors · pilots · host attribution.
+        // Mono subline: state · map name · sectors · pilots · host attribution.
         int sectors = sel.Map?.Sectors?.Count ?? 0;
         var subParts = new List<string> { (sel.State ?? "lobby").ToUpperInvariant() };
+        if (!string.IsNullOrEmpty(sel.MapName))
+            subParts.Add(sel.MapName.ToUpperInvariant());
         if (sectors > 0)
             subParts.Add($"{sectors} SECTORS");
         subParts.Add($"{sel.Players}/{max} PILOTS");
@@ -749,7 +752,8 @@ public partial class ServerLobbyOverlay : Control
                 s.Id,
                 s.Radius,
                 s.Bases?.Select(b => new SectorMapPreview.BaseMark(b.Team, new Vector2(b.X, b.Z))).ToList() ?? new(),
-                s.Gates?.Select(g => new Vector2(g.X, g.Z)).ToList() ?? new()
+                s.Gates?.Select(g => new Vector2(g.X, g.Z)).ToList() ?? new(),
+                s.Name
             ))
             .ToList();
         return new SectorMapPreview.MapModel(sectors);

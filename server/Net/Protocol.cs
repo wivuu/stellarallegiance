@@ -67,6 +67,8 @@ public static class Protocol
     public const byte MsgSetReady = 6; // u8 ready (0/1) — toggle ready in the lobby
     public const byte MsgChat = 7; // u8 scope (0 all, 1 team), u16 len, utf8 text
     public const byte MsgBye = 8; // (no body) voluntary leave — free my ship NOW, don't hold it for reconnect
+    public const byte MsgSetTeamName = 9; // u8 team, u16 len, utf8 name — rename a team you're on (server validates membership)
+    public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -92,6 +94,7 @@ public static class Protocol
     // team can radar-detect; fog off = all): the client reconciles by omission. Gone is broadcast.
     public const byte MsgProbes = 18; // u8 count x ProbeRecord — minefield-style cadence (on change + coarse keepalive)
     public const byte MsgProbeGone = 19; // u64 id, u8 reason (0 expired, 1 cleanup, 2 destroyed), u16 sector, 3x i16 pos — mirrors MsgMissileGone
+    public const byte MsgMapList = 20; // u8 mapCount x MapCatalog entry — the server's available maps + thumbnail layout, sent once after Defs
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -416,6 +419,7 @@ public static class Protocol
     {
         w.Write(s.Id);
         w.Write(s.Radius);
+        w.Write(s.Name ?? ""); // length-prefixed UTF-8; client reads with ReadString()
     }
 
     // Welcome handshake. When fog is OFF the world block is byte-identical to before: every static
@@ -972,7 +976,11 @@ public static class Protocol
     public static byte[] BuildLobbyState(
         byte phase,
         byte winner,
-        System.Collections.Generic.IReadOnlyList<LobbyEntry> entries
+        System.Collections.Generic.IReadOnlyList<LobbyEntry> entries,
+        string team0Name,
+        string team1Name,
+        int hostId,
+        string selectedMap
     )
     {
         using var ms = new MemoryStream();
@@ -990,6 +998,51 @@ public static class Protocol
             w.Write((byte)(e.Ready ? 1 : 0));
             w.Write((byte)(e.HasShip ? 1 : 0));
             w.Write(e.ShipId); // controlled ship (0 = not flying); client maps it to the nameplate
+        }
+        // Session-global lobby state, appended LAST so the per-player prefix stays byte-stable.
+        WriteString(w, team0Name);
+        WriteString(w, team1Name);
+        w.Write(hostId); // i32 host client id; -1 when the server is empty
+        WriteString(w, selectedMap);
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // The server's available-maps catalog: name + metadata + a thumbnail sector/base layout per map.
+    // Static for the server's lifetime, so it's sent ONCE right after Defs (not on every lobby change).
+    // The client mirrors this reader in GameNetClient.ApplyMapList.
+    public static byte[] BuildMapList(
+        System.Collections.Generic.IReadOnlyList<SimServer.Content.MapCatalogEntry> maps
+    )
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgMapList);
+        w.Write((byte)Math.Min(maps.Count, 255));
+        for (int i = 0; i < maps.Count && i < 255; i++)
+        {
+            var m = maps[i];
+            WriteString(w, m.Name);
+            WriteString(w, m.Mode);
+            WriteString(w, m.SizeLabel);
+            WriteString(w, m.SectorLabel);
+            w.Write((byte)Math.Min(m.GarrisonCount, 255));
+            w.Write((byte)Math.Min(m.Sectors.Count, 255));
+            for (int s = 0; s < m.Sectors.Count && s < 255; s++)
+            {
+                var sec = m.Sectors[s];
+                w.Write(sec.Id);
+                w.Write(sec.Radius);
+                WriteString(w, sec.Name);
+                w.Write((byte)Math.Min(sec.Bases.Count, 255));
+                for (int b = 0; b < sec.Bases.Count && b < 255; b++)
+                {
+                    var bs = sec.Bases[b];
+                    w.Write(bs.Team); // 0/1; 0xFF reserved for a future neutral garrison
+                    w.Write(bs.X);
+                    w.Write(bs.Z);
+                }
+            }
         }
         w.Flush();
         return ms.ToArray();

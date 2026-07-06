@@ -23,6 +23,7 @@ public record RegisterRequest(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
+    string? MapName = null,
     MapLayout? Map = null,
     LobbyRosterEntry[]? Roster = null
 );
@@ -49,7 +50,7 @@ public record MapBase(int Team, float X, float Z);
 
 public record MapGate(uint ToSector, float X, float Z);
 
-public record MapSector(uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null);
+public record MapSector(uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null, string? Name = null);
 
 public record MapLayout(MapSector[] Sectors);
 
@@ -68,6 +69,7 @@ public record ServerEntry(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
+    string? MapName = null,
     MapLayout? Map = null,
     IReadOnlyList<LobbyRosterEntry>? Roster = null
 );

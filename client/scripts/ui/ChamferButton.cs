@@ -29,7 +29,31 @@ public partial class ChamferButton : Button
 
     private float _glow; // 0..1 hover glow, eased
 
+    private const float LabelPad = 14f; // horizontal inset of the drawn caption, both edges
+
+    // The caller-supplied minimum footprint (from CustomMinimumSize at _Ready), used as the width
+    // floor so short buttons keep a fixed size while long captions grow past it.
+    private Vector2 _floor;
+    private bool _sized;
+
     private Color Accent => AccentOverride ?? DesignTokens.TeamAccent;
+
+    // We suppress the stock Button's own label and draw it ourselves in SairaLabel (which bakes in
+    // per-glyph letter-spacing). Button.get_minimum_size() is native C++ and measures the *default
+    // theme font* — narrower than what we paint — and it bypasses a C# _GetMinimumSize override
+    // entirely, so a long caption ("JOIN {LONG TEAM NAME}") would clip. We instead drive the width
+    // through CustomMinimumSize (which the base does honour) whenever the caption changes, keeping
+    // the caller's footprint as the floor.
+    public new string Text
+    {
+        get => base.Text;
+        set
+        {
+            base.Text = value;
+            if (_sized)
+                FitToCaption();
+        }
+    }
 
     public override void _Ready()
     {
@@ -39,6 +63,24 @@ public partial class ChamferButton : Button
         foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color" })
             AddThemeColorOverride(c, Colors.Transparent);
         Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+        _floor = CustomMinimumSize;
+        _sized = true;
+        FitToCaption();
+    }
+
+    // Widen CustomMinimumSize to fit the drawn caption (SairaLabel + side padding), never below the
+    // caller's floor. Height is left at the floor.
+    private void FitToCaption()
+    {
+        float w = _floor.X;
+        if (!string.IsNullOrEmpty(base.Text))
+        {
+            UiFonts.EnsureLoaded();
+            int fs = DesignTokens.LabelSize + 1;
+            float caption = UiFonts.SairaLabel.GetStringSize(base.Text, HorizontalAlignment.Left, -1, fs).X;
+            w = Mathf.Max(_floor.X, caption + LabelPad * 2f);
+        }
+        CustomMinimumSize = new Vector2(w, _floor.Y);
     }
 
     public override void _Process(double delta)
@@ -133,11 +175,10 @@ public partial class ChamferButton : Button
         int fs = DesignTokens.LabelSize + 1;
         Vector2 size = f.GetStringSize(Text, HorizontalAlignment.Left, -1, fs);
         float baseline = (Size.Y - (f.GetAscent(fs) + f.GetDescent(fs))) * 0.5f + f.GetAscent(fs);
-        const float pad = 14f;
         float x = Alignment switch
         {
-            HorizontalAlignment.Left => pad,
-            HorizontalAlignment.Right => Size.X - size.X - pad,
+            HorizontalAlignment.Left => LabelPad,
+            HorizontalAlignment.Right => Size.X - size.X - LabelPad,
             _ => (Size.X - size.X) * 0.5f,
         };
         DrawString(f, new Vector2(Mathf.Round(x), Mathf.Round(baseline)), Text, HorizontalAlignment.Left, -1, fs, color);

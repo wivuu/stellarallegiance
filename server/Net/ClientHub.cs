@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Threading.Channels;
+using SimServer.Content;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
 
@@ -192,6 +193,16 @@ public sealed class ClientHub
     private readonly Lobby _lobby = new();
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
+
+    // Session-global lobby state, distinct from the per-player _lobby roster and streamed on the
+    // tail of MsgLobbyState. Touched by socket receive threads; reference/int field reads & writes
+    // are atomic in .NET, and races here are benign (last rename wins; host recomputed from a lobby
+    // snapshot), so no dedicated lock. Team-name defaults come from the design ("IRON COIL"/"ASH
+    // SYNDICATE"), overwritten as pilots rename their side.
+    private readonly string[] _teamNames = { "IRON COIL", "ASH SYNDICATE" };
+    private int _hostId = -1; // first pilot on the server; -1 when empty. TODO: allow explicit host transfer.
+    private string _selectedMap; // the current/"next" map name (advertised only — see MsgSetMap)
+    private readonly IReadOnlyList<MapCatalogEntry> _mapCatalog; // available maps, built once at boot
     private long _bytesSent;
 
     // LOD effectiveness counters: total ship records streamed and how many snapshots carried
@@ -236,13 +247,17 @@ public sealed class ClientHub
         Simulation sim,
         Backend.IAuthenticator auth,
         Backend.IPlayerDirectory players,
-        Backend.IMatchmaker matchmaker
+        Backend.IMatchmaker matchmaker,
+        string selectedMap,
+        IReadOnlyList<MapCatalogEntry> mapCatalog
     )
     {
         _sim = sim;
         _auth = auth;
         _players = players;
         _matchmaker = matchmaker;
+        _selectedMap = selectedMap;
+        _mapCatalog = mapCatalog;
 
         if (SnapshotWorkers > 0)
         {
@@ -304,7 +319,9 @@ public sealed class ClientHub
     // Build + fan out the current lobby roster (HasShip overlaid from the live sim).
     private void BroadcastLobby()
     {
-        var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner, _lobby.Snapshot(id => _sim.ShipIdOf(id)));
+        var frame = Protocol.BuildLobbyState(
+            _sim.Phase, _sim.Winner, _lobby.Snapshot(id => _sim.ShipIdOf(id)),
+            _teamNames[0], _teamNames[1], _hostId, _selectedMap);
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
@@ -384,9 +401,13 @@ public sealed class ClientHub
                 $"[Hub] client {client.Id} disconnected (bye={client.Leaving}, {(cleanLeave ? "clean leave" : "holding ship for reconnect grace")})"
             );
             _lobby.Remove(client.Id);
+            // Host left → transfer to the earliest remaining pilot (lowest id), or -1 if the server
+            // emptied. TODO: later allow explicit host selection rather than implicit earliest-joined.
+            if (_hostId == client.Id)
+                _hostId = _lobby.Snapshot().Select(e => e.Id).DefaultIfEmpty(-1).Min();
             _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
-            BroadcastLobby(); // roster shrank
+            BroadcastLobby(); // roster shrank (and possibly host/selected-map changed)
             try
             {
                 await sendTask;
@@ -459,6 +480,11 @@ public sealed class ClientHub
                     _lobby.Add(client.Id, _players.NameOf(client.Id));
                     _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
                     client.Team = _lobby.TeamOf(client.Id);
+                    // First pilot on the server becomes host (only they may change the map). Ids are
+                    // monotonic, so "unset -> this id" makes the earliest joiner host until they leave.
+                    // TODO: later allow explicit host selection/transfer instead of implicit first-pilot.
+                    if (_hostId < 0)
+                        _hostId = client.Id;
 
                     // The client downloads everything from the server: world statics, the content defs,
                     // then the lobby roster. Fog on: only the joining team's discovered statics, with
@@ -467,6 +493,9 @@ public sealed class ClientHub
                     // Fog off: byte-identical full-world Welcome as before.
                     SendWelcome(client);
                     client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
+                    // The available-maps catalog is static for the server's lifetime — send it once,
+                    // right after Defs, so the lobby's sector pane + map picker have data to render.
+                    client.Outbound.Writer.TryWrite(OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
                     BroadcastLobby();
 
                     // Reconnect: hand back a ship the sim is still holding for the presented token.
@@ -538,6 +567,49 @@ public sealed class ClientHub
                 {
                     _lobby.SetReady(client.Id, buffer[1] != 0);
                     BroadcastLobby();
+                    break;
+                }
+                case Protocol.MsgSetTeamName when count >= 4:
+                {
+                    // Rename a team. Server-authoritative gate: a real side (0/1), renamed only by
+                    // that side's LEADER — the earliest-joined pilot on it (the roster's top row).
+                    // Uppercased + capped to Wire.TeamNameMaxLength to match the client.
+                    byte team = buffer[1];
+                    int len = BitConverter.ToUInt16(buffer, 2);
+                    if ((team == 0 || team == 1) && _lobby.LeaderOf(team) == client.Id && count >= 4 + len)
+                    {
+                        string name = System.Text.Encoding.UTF8.GetString(buffer, 4, len).Trim().ToUpperInvariant();
+                        if (name.Length > Wire.TeamNameMaxLength)
+                            name = name[..Wire.TeamNameMaxLength];
+                        if (name.Length > 0)
+                        {
+                            _teamNames[team] = name;
+                            BroadcastLobby(); // new name reaches every client
+                        }
+                    }
+                    break;
+                }
+                case Protocol.MsgSetMap when count >= 3:
+                {
+                    // Host-only (enforced here, not just client-side). Cheap path: advertise the chosen
+                    // map as the selected/"next" map and rebroadcast; we do NOT rebuild the live World
+                    // mid-lobby (that needs a World regen + re-Welcome of every client — the arena is
+                    // built once at boot). TODO: wire an arena-rebuild seam to make this take effect.
+                    if (client.Id == _hostId)
+                    {
+                        int len = BitConverter.ToUInt16(buffer, 1);
+                        if (count >= 3 + len)
+                        {
+                            string want = System.Text.Encoding.UTF8.GetString(buffer, 3, len).Trim();
+                            var match = _mapCatalog.FirstOrDefault(
+                                m => string.Equals(m.Name, want, StringComparison.OrdinalIgnoreCase));
+                            if (match != null)
+                            {
+                                _selectedMap = match.Name;
+                                BroadcastLobby();
+                            }
+                        }
+                    }
                     break;
                 }
                 case Protocol.MsgBye:

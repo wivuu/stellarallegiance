@@ -13,7 +13,7 @@ public sealed partial class SectorMapPreview : Control
 {
     public sealed record BaseMark(int Team, Vector2 Pos);
 
-    public sealed record SectorModel(uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates);
+    public sealed record SectorModel(uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates, string? Name = null);
 
     public sealed record MapModel(List<SectorModel> Sectors);
 
@@ -98,7 +98,7 @@ public sealed partial class SectorMapPreview : Control
                 DrawArc(p, GateDot + 2f, 0, Mathf.Tau, 16, DesignTokens.Data with { A = 0.4f }, 1f, antialiased: true);
             }
 
-            string label = $"S{s.Id}";
+            string label = string.IsNullOrEmpty(s.Name) ? $"S{s.Id}" : s.Name;
             DrawString(mono, center + new Vector2(-6f, circleR + 12f), label, fontSize: 10, modulate: DesignTokens.TextDim);
         }
 

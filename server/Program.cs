@@ -61,6 +61,16 @@ bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is 
 // fails fast. Mirrors the --secret/SIM_SECRET pattern.
 string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
 string? contentOverride = Environment.GetEnvironmentVariable("CONTENT_PATH");
+
+// MAP selection (separate from the faction/tech-tree content). Stock maps ship at
+// content/maps/*.yaml next to the binary; SIM_MAPS_DIR / --maps-dir points at an additional folder
+// (e.g. a Docker volume) whose map files extend/override the stock set. SIM_MAP / --map picks the
+// active map BY NAME (default "Brimstone Gambit"); an unknown name fails fast at boot.
+string stockMapsDir = Path.Combine(AppContext.BaseDirectory, "content", "maps");
+string? extraMapsDir = Environment.GetEnvironmentVariable("SIM_MAPS_DIR");
+string selectedMap = (Environment.GetEnvironmentVariable("SIM_MAP") ?? "").Trim() is { Length: > 0 } m
+    ? m
+    : MapLoader.DefaultMapName;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--autostart")
@@ -75,6 +85,10 @@ for (int i = 0; i < args.Length; i++)
         secret = args[i + 1];
     if (args[i] == "--content")
         contentOverride = args[i + 1];
+    if (args[i] == "--map")
+        selectedMap = args[i + 1];
+    if (args[i] == "--maps-dir")
+        extraMapsDir = args[i + 1];
 }
 
 // Resolve content BEFORE the sim: load the YAML bundle, then validate. The client has no
@@ -121,11 +135,36 @@ IPlayerDirectory players = new InMemoryPlayerDirectory();
 IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
 IMatchResultSink results = new LoggingMatchResultSink();
 
+// MAP: load the available maps (stock + operator-supplied), resolve the selected one by name, and
+// overlay its sector layout onto the world config. Fail fast (like content) on a bad/nameless map
+// file or an unknown selection so the operator gets a clear boot error instead of a wrong arena.
+MapDef selectedMapDef;
+IReadOnlyList<MapCatalogEntry> mapCatalog;
+try
+{
+    var maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
+    selectedMapDef = MapLoader.Resolve(maps, selectedMap);
+    // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
+    // content.World for the live arena (Build clones per map, so this doesn't disturb it).
+    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start);
+    MapLoader.ApplyTo(selectedMapDef, content.World);
+    Console.WriteLine(
+        $"[SimServer] map: '{selectedMapDef.Name}' ({selectedMapDef.Sectors.Count} sector override(s))"
+            + (string.IsNullOrWhiteSpace(extraMapsDir) ? "." : $"; extra maps dir '{extraMapsDir}'.")
+    );
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[SimServer] FATAL: failed to load map '{selectedMap}': {ex.Message}");
+    return;
+}
+string mapName = selectedMapDef.Name!.Trim();
+
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
 var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
 var sim = new Simulation(world, content);
-var hub = new ClientHub(sim, auth, players, matchmaker);
+var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
 
 // Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when
 // it returns to the lobby so ready flags reset. Both run on the sim thread.
@@ -227,7 +266,7 @@ simThread.Start();
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
-var registrar = LobbyRegistrar.FromEnv(hub, port, world);
+var registrar = LobbyRegistrar.FromEnv(hub, port, world, mapName);
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 

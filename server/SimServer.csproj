@@ -32,6 +32,10 @@
          server loads content/factions/core.manifest.yaml at boot (content is YAML, never hardcoded);
          the content/CONTENT_PATH override points at a different bundle manifest. -->
     <Content Include="Content\factions\**\*.yaml" Link="content\factions\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Stock MAPS: standalone map files (separate from the faction/tech-tree bundle), shipped next
+         to the binary at content/maps/. Operators extend the set via SIM_MAPS_DIR (or the maps-dir
+         CLI flag). -->
+    <Content Include="Content\maps\**\*.yaml" Link="content\maps\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />

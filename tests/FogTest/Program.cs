@@ -90,7 +90,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
     int tl = br.ReadByte(); br.ReadBytes(tl);
     int ns = br.ReadUInt16();
-    for (int i = 0; i < ns; i++) { br.ReadUInt32(); br.ReadSingle(); }
+    for (int i = 0; i < ns; i++) { br.ReadUInt32(); br.ReadSingle(); br.ReadString(); } // id, radius, name
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
@@ -950,7 +950,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(18);
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(false));
+        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(false),
+        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
 
     var ft = new FakeHubTransport();
     var cts = new CancellationTokenSource();
@@ -1005,7 +1006,8 @@ Vec3 AtAngle(float dist, float angleDeg)
     var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content) { PigsEnabled = false, FogEnabled = true, VisionSynchronous = false };
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true));
+        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true),
+        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
     sim.ShouldStartMatch = hub.ShouldStartMatch;
     sim.OnReturnToLobby = hub.OnReturnToLobby;
 

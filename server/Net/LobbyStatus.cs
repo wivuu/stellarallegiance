@@ -12,7 +12,7 @@ public static class LobbyStatus
 
     public sealed record MapGateDto(uint ToSector, float X, float Z);
 
-    public sealed record MapSectorDto(uint Id, float Radius, MapBaseDto[] Bases, MapGateDto[] Gates);
+    public sealed record MapSectorDto(uint Id, float Radius, string? Name, MapBaseDto[] Bases, MapGateDto[] Gates);
 
     public sealed record MapLayoutDto(MapSectorDto[] Sectors);
 
@@ -27,6 +27,7 @@ public static class LobbyStatus
                 .Sectors.Select(s => new MapSectorDto(
                     s.Id,
                     MathF.Round(s.Radius),
+                    string.IsNullOrWhiteSpace(s.Name) ? null : s.Name,
                     world
                         .Bases.Where(b => b.SectorId == s.Id)
                         .Select(b => new MapBaseDto(b.Team, Round1(b.Pos.X), Round1(b.Pos.Z)))

@@ -67,6 +67,21 @@ public sealed class Lobby
             return _players.TryGetValue(clientId, out var r) ? r.Team : Protocol.NoTeam;
     }
 
+    // The team's leader: the earliest-joined (lowest-id) pilot currently on that side, or -1 if the
+    // side is empty. Client ids increment on join, so the lowest id is the first to have picked the
+    // team — the roster's top row. Only the leader may rename the team (see ClientHub MsgSetTeamName).
+    public int LeaderOf(byte team)
+    {
+        lock (_lock)
+        {
+            int leader = -1;
+            foreach (var kv in _players)
+                if (kv.Value.Team == team && (leader == -1 || kv.Key < leader))
+                    leader = kv.Key;
+            return leader;
+        }
+    }
+
     // Drop everyone's ready flag — called when a match ends and the server returns to lobby,
     // so the next match must be readied up afresh.
     public void ClearReady()
