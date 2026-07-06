@@ -612,9 +612,12 @@ public sealed partial class Simulation
     }
 
     // Classify a point (a ship or static target) against team `viewer` volumes, scaled by the target's
-    // signature `sig`. `excludeRock` is skipped in the cone occlusion scan (a rock never occludes
-    // itself). radar = any sphere / cone(LoS) / base-sphere hit; eyeball = any SHIP eyeball-sphere hit
-    // when radar is false (bases have no eyeball tier, cone has none). Runs on the worker thread —
+    // signature `sig`. `excludeRock` is skipped in the occlusion scan (a rock never occludes itself).
+    // EVERY tier is rock-occluded: an asteroid between viewer and target hides it on radar AND visually
+    // (a ship can truly hide behind a rock). radar = any sphere / cone(LoS) / base-sphere hit with clear
+    // LoS; eyeball = a SHIP eyeball-sphere hit with clear LoS when radar is false (mesh streams, no radar
+    // lock; bases have no eyeball tier, cone has none). One LoS scan per viewer, shared by all its
+    // volumes since they share the viewer→target segment. Runs on the worker —
     // reads only the value-copy snapshot + the immutable rock grid, with its own cell-walk buffer.
     private void ClassifyTarget(byte team, uint sector, Vec3 pos, float sig, ulong excludeRock, out bool radar, out bool eyeball)
     {
@@ -626,41 +629,49 @@ public sealed partial class Simulation
                 continue;
             float d2 = (pos - v.Pos).LengthSquared();
 
+            // Which volumes contain the target (cheap distance/angle tests first — no rock scan yet).
             float sr = v.SphereRadius * sig;
-            if (sr > 0f && d2 <= sr * sr)
-            {
-                radar = true;
-                return; // radar implies streamed — nothing more to learn
-            }
+            bool inSphere = sr > 0f && d2 <= sr * sr;
 
             float er = v.EyeballRadius * sig;
-            if (er > 0f && d2 <= er * er)
-                eyeball = true;
+            bool inEyeball = er > 0f && d2 <= er * er;
 
+            bool inCone = false;
             float cl = v.ConeLength * sig;
             if (cl > 0f && d2 <= cl * cl)
             {
                 float len = MathF.Sqrt(d2);
                 if (len > 1e-4f)
                 {
-                    Vec3 dir = pos - v.Pos;
-                    float cosang = Dot(v.Fwd, dir) / len;
-                    if (cosang >= v.ConeCos && !SegmentBlockedByRock(sector, v.Pos, pos, excludeRock, _workerCellBuf))
-                    {
-                        radar = true;
-                        return;
-                    }
+                    float cosang = Dot(v.Fwd, pos - v.Pos) / len;
+                    inCone = cosang >= v.ConeCos;
                 }
             }
+
+            if (!inSphere && !inEyeball && !inCone)
+                continue;
+
+            // A rock on the line of sight casts a shadow over EVERY tier (radar AND eyeball) — one scan
+            // per viewer, shared by all volumes since they share the viewer→target segment.
+            if (SegmentBlockedByRock(sector, v.Pos, pos, excludeRock, _workerCellBuf))
+                continue;
+
+            if (inSphere || inCone)
+            {
+                radar = true;
+                return; // radar implies streamed — nothing more to learn
+            }
+            eyeball = true; // inEyeball only, LoS clear: mesh streams, no radar lock
         }
 
-        // Base viewers: unoccluded sphere, radar tier only (no eyeball, no cone).
+        // Base viewers: rock-occluded sphere, radar tier only (no eyeball, no cone).
         foreach (var b in _inBaseViewers)
         {
             if (b.Team != team || b.Sector != sector)
                 continue;
             float br = b.SphereRadius * sig;
-            if (br > 0f && (pos - b.Pos).LengthSquared() <= br * br)
+            if (br > 0f && (pos - b.Pos).LengthSquared() <= br * br
+                && !SegmentBlockedByRock(sector, b.Pos, pos, excludeRock, _workerCellBuf))
             {
                 radar = true;
                 return;
@@ -934,7 +945,8 @@ public sealed partial class Simulation
             float d2 = (pos - s.State.Pos).LengthSquared();
 
             float sr = def.VisionSphereRadius;
-            if (sr > 0f && d2 <= sr * sr)
+            if (sr > 0f && d2 <= sr * sr
+                && !SegmentBlockedByRock(sector, s.State.Pos, pos, 0UL, _pointCellBuf))
                 return true;
 
             float cl = def.VisionConeLength;
@@ -953,7 +965,7 @@ public sealed partial class Simulation
             }
         }
 
-        // Recon probes: unoccluded sphere viewers of their owner team (sig 1.0), matching
+        // Recon probes: rock-occluded sphere viewers of their owner team (sig 1.0), matching
         // CaptureVisionInput's probe treatment — a point covered by a team's probe is visible to it (F6).
         foreach (var p in _probes)
         {
@@ -962,7 +974,8 @@ public sealed partial class Simulation
             if (!WeaponDefs.TryGetValue(p.WeaponId, out var pw))
                 continue;
             float pr = pw.ProbeSightRadius;
-            if (pr > 0f && (pos - p.Pos).LengthSquared() <= pr * pr)
+            if (pr > 0f && (pos - p.Pos).LengthSquared() <= pr * pr
+                && !SegmentBlockedByRock(sector, p.Pos, pos, 0UL, _pointCellBuf))
                 return true;
         }
 
@@ -974,7 +987,8 @@ public sealed partial class Simulation
                 if (World.BaseHealth[i] <= 0f)
                     continue;
                 var b = World.Bases[i];
-                if (b.Team == team && b.SectorId == sector && (pos - b.Pos).LengthSquared() <= baseR * baseR)
+                if (b.Team == team && b.SectorId == sector && (pos - b.Pos).LengthSquared() <= baseR * baseR
+                    && !SegmentBlockedByRock(sector, b.Pos, pos, 0UL, _pointCellBuf))
                     return true;
             }
         return false;
