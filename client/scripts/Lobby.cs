@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Godot;
 using StellarAllegiance.Net;
+using StellarAllegiance.Shared;
 using StellarAllegiance.Ui;
 
 // Game Lobby — the screen a pilot sees after joining a server and whenever they aren't flying
@@ -66,6 +67,9 @@ public partial class Lobby : Control
     // only ever the selected real-team tab, and only for a side the local pilot is on.
     private int _editingTeam = -1;
     private LineEdit _nameEdit = null!;
+
+    // Max team-name length; the server re-clamps to the same value (ClientHub MsgSetTeamName).
+    private const int TeamNameMax = Wire.TeamNameMaxLength;
 
     // Right-hand sector pane (map thumbnail + Sector Intel + Garrison Control).
     private SectorMapPreview _sectorMap = null!;
@@ -538,7 +542,7 @@ public partial class Lobby : Control
         {
             _nameEdit = new LineEdit
             {
-                MaxLength = 18,
+                MaxLength = TeamNameMax,
                 Text = prevDraft ?? TeamName(_selectedTeam),
                 CustomMinimumSize = new Vector2(240, 0),
                 SizeFlagsVertical = SizeFlags.ShrinkCenter,
@@ -576,8 +580,8 @@ public partial class Lobby : Control
         if (_editingTeam is not (0 or 1))
             return;
         string v = _nameEdit.Text.Trim().ToUpper();
-        if (v.Length > 18)
-            v = v[..18];
+        if (v.Length > TeamNameMax)
+            v = v[..TeamNameMax];
         if (v.Length > 0)
             _net.SetTeamName((byte)_editingTeam, v); // server re-validates + rebroadcasts to everyone
         _editingTeam = -1;

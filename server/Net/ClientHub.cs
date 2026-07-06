@@ -573,14 +573,14 @@ public sealed class ClientHub
                 {
                     // Rename a team. Server-authoritative gate: a real side (0/1), renamed only by
                     // that side's LEADER — the earliest-joined pilot on it (the roster's top row).
-                    // Uppercased + 18-char capped to match the client.
+                    // Uppercased + capped to Wire.TeamNameMaxLength to match the client.
                     byte team = buffer[1];
                     int len = BitConverter.ToUInt16(buffer, 2);
                     if ((team == 0 || team == 1) && _lobby.LeaderOf(team) == client.Id && count >= 4 + len)
                     {
                         string name = System.Text.Encoding.UTF8.GetString(buffer, 4, len).Trim().ToUpperInvariant();
-                        if (name.Length > 18)
-                            name = name[..18];
+                        if (name.Length > Wire.TeamNameMaxLength)
+                            name = name[..Wire.TeamNameMaxLength];
                         if (name.Length > 0)
                         {
                             _teamNames[team] = name;

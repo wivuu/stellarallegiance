@@ -12,4 +12,8 @@ public static class Wire
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.
     public const byte NoTeam = 0xFF;
+
+    // Max length of a team name (MsgSetTeamName). Enforced on the client's editor + send path and
+    // re-clamped server-side; kept here so both agree on where a rename gets truncated.
+    public const int TeamNameMaxLength = 20;
 }

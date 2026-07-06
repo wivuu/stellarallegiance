@@ -348,12 +348,12 @@ public partial class GameNetClient : Node
     }
 
     // Rename a team (0/1) you belong to. The server re-validates membership and uppercases/caps to
-    // 18; we cap here too so the wire and the UI agree on what got sent.
+    // Wire.TeamNameMaxLength; we cap here too so the wire and the UI agree on what got sent.
     public void SetTeamName(byte team, string name)
     {
         var n = (name ?? "").Trim();
-        if (n.Length > 18)
-            n = n[..18];
+        if (n.Length > Wire.TeamNameMaxLength)
+            n = n[..Wire.TeamNameMaxLength];
         var t = System.Text.Encoding.UTF8.GetBytes(n);
         var f = new byte[4 + t.Length];
         f[0] = 9; // MsgSetTeamName
