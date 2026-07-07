@@ -999,14 +999,7 @@ public partial class GameNetClient : Node
 
         ushort sectors = r.ReadUInt16();
         for (int i = 0; i < sectors; i++)
-            _world.NetAddSector(
-                new Sector
-                {
-                    SectorId = r.ReadUInt32(),
-                    Radius = r.ReadSingle(),
-                    Name = r.ReadString(),
-                }
-            );
+            _world.NetAddSector(ReadSectorStatic(r));
 
         ushort bases = r.ReadUInt16();
         for (int i = 0; i < bases; i++)
@@ -1025,6 +1018,109 @@ public partial class GameNetClient : Node
     // Shared per-record static decoders — mirror Protocol.WriteBaseStatic/WriteRockStatic/
     // WriteAlephStatic byte-for-byte. Used by BOTH ApplyWelcome and ApplyReveal so the two paths
     // can never drift (a fog reveal must decode a record identically to the initial world dump).
+    // One sector static (Welcome + MsgReveal): id | radius | name | environment. Mirrors the server's
+    // Protocol.WriteSectorStatic exactly; shared by both decode paths so they can never drift byte-wise.
+    private static Sector ReadSectorStatic(BinaryReader r)
+    {
+        var s = new Sector
+        {
+            SectorId = r.ReadUInt32(),
+            Radius = r.ReadSingle(),
+            Name = r.ReadString(),
+        };
+        // 2D map-diagram position (mirror of Protocol.WriteSectorStatic): presence byte then x,y.
+        if (r.ReadByte() != 0)
+        {
+            s.HasMapPos = true;
+            s.MapPosX = r.ReadSingle();
+            s.MapPosY = r.ReadSingle();
+        }
+        s.Env = ReadSectorEnv(r);
+        return s;
+    }
+
+    // Mirror of Protocol.WriteSectorEnv. The three presence bytes are ALWAYS written (0 when absent),
+    // so we always read them. Returns null when the sector carries no environment at all (legacy).
+    private static SectorEnv? ReadSectorEnv(BinaryReader r)
+    {
+        var env = new SectorEnv();
+        bool any = false;
+
+        if (r.ReadByte() != 0)
+        {
+            any = true;
+            env.HasSun = true;
+            env.GodRays = r.ReadSingle();
+            env.SunDirX = r.ReadSingle();
+            env.SunDirY = r.ReadSingle();
+            env.SunDirZ = r.ReadSingle();
+            float cr = r.ReadSingle(),
+                cg = r.ReadSingle(),
+                cb = r.ReadSingle();
+            env.HasSunColor = cr >= 0f;
+            env.SunColorR = cr;
+            env.SunColorG = cg;
+            env.SunColorB = cb;
+            env.SunEnergy = r.ReadSingle();
+            env.SunAmbient = r.ReadSingle();
+            env.SunSize = r.ReadSingle();
+        }
+
+        if (r.ReadByte() != 0)
+        {
+            any = true;
+            env.HasNebula = true;
+            float ar = r.ReadSingle(),
+                ag = r.ReadSingle(),
+                ab = r.ReadSingle();
+            env.HasNebulaColorA = ar >= 0f;
+            env.NebulaColorAR = ar;
+            env.NebulaColorAG = ag;
+            env.NebulaColorAB = ab;
+            float br = r.ReadSingle(),
+                bg = r.ReadSingle(),
+                bb = r.ReadSingle();
+            env.HasNebulaColorB = br >= 0f;
+            env.NebulaColorBR = br;
+            env.NebulaColorBG = bg;
+            env.NebulaColorBB = bb;
+            env.NebulaIntensity = r.ReadSingle();
+            if (r.ReadByte() != 0)
+            {
+                env.HasNebulaSeed = true;
+                env.NebulaSeed = r.ReadUInt32();
+            }
+        }
+
+        if (r.ReadByte() != 0)
+        {
+            any = true;
+            env.HasDust = true;
+            float dr = r.ReadSingle(),
+                dg = r.ReadSingle(),
+                db = r.ReadSingle();
+            env.HasDustColor = dr >= 0f;
+            env.DustColorR = dr;
+            env.DustColorG = dg;
+            env.DustColorB = db;
+            env.DustOpacity = r.ReadSingle();
+            ushort n = r.ReadUInt16();
+            var clouds = new DustCloud[n];
+            for (int i = 0; i < n; i++)
+                clouds[i] = new DustCloud
+                {
+                    PosX = r.ReadSingle(),
+                    PosY = r.ReadSingle(),
+                    PosZ = r.ReadSingle(),
+                    Radius = r.ReadSingle(),
+                    Density = r.ReadSingle(),
+                };
+            env.DustClouds = clouds;
+        }
+
+        return any ? env : null;
+    }
+
     private static Base ReadBaseStatic(BinaryReader r)
     {
         var row = new Base
@@ -1090,14 +1186,7 @@ public partial class GameNetClient : Node
         // aleph block. NetAddSector is an idempotent upsert, so re-revealing a known sector is safe.
         byte nSectors = r.ReadByte();
         for (int i = 0; i < nSectors; i++)
-            _world.NetAddSector(
-                new Sector
-                {
-                    SectorId = r.ReadUInt32(),
-                    Radius = r.ReadSingle(),
-                    Name = r.ReadString(),
-                }
-            );
+            _world.NetAddSector(ReadSectorStatic(r));
     }
 
     // MsgContacts (fog): the team's full last-known enemy ghost set + its radar-detected id list,
@@ -1338,6 +1427,16 @@ public partial class GameNetClient : Node
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
         _world.NetApplyPilotNames(list);
+        // Tell the renderer which side WE picked so the pre-launch home-sector view / F3 peek frames
+        // our garrison (a fresh joiner is NoTeam → null until they pick BLUE/RED).
+        byte? myTeam = null;
+        foreach (var p in list)
+            if (p.Id == LocalClientId && p.Team != NoTeam)
+            {
+                myTeam = p.Team;
+                break;
+            }
+        _world.NetSetLobbyTeam(myTeam);
         LobbyChanged?.Invoke();
     }
 
@@ -1362,6 +1461,15 @@ public partial class GameNetClient : Node
                 uint id = r.ReadUInt32();
                 float radius = r.ReadSingle();
                 string sname = ReadStr(r);
+                // 2D map-diagram position (mirror of Protocol.BuildMapList): presence byte then x,y.
+                bool hasPos = r.ReadByte() != 0;
+                float mapX = 0f,
+                    mapY = 0f;
+                if (hasPos)
+                {
+                    mapX = r.ReadSingle();
+                    mapY = r.ReadSingle();
+                }
                 byte baseCount = r.ReadByte();
                 var bases = new List<SectorMapPreview.BaseMark>(baseCount);
                 for (int b = 0; b < baseCount; b++)
@@ -1372,7 +1480,8 @@ public partial class GameNetClient : Node
                     bases.Add(new SectorMapPreview.BaseMark(team, new Vector2(x, z)));
                 }
                 sectors.Add(new SectorMapPreview.SectorModel(
-                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname));
+                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname,
+                    mapX, mapY, hasPos));
             }
             maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors)));
         }

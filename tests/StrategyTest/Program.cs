@@ -22,8 +22,9 @@ void Check(bool cond, string pass, string fail)
 }
 
 // The stock bundle manifest is copied next to the test binary (csproj Content).
-string manifest = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
-var content = ContentLoader.Load(manifest);
+string manifest = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
+var content = ContentLoader.Load(manifest, worldPath);
 
 // The chosen stock economy: start 1000, +100 per paycheck (every PaycheckTicks).
 Check(content.Start.StartingCredits == 1000, "stock faction seeds 1000 starting credits", $"starting credits wrong ({content.Start.StartingCredits})");
@@ -54,7 +55,7 @@ Check(!content.Start.BaseCapabilities.Contains(Capability.ShipyardAllowed) && !c
 // ---- 3. No accrual in the lobby: stepping across a paycheck boundary pays nothing. ----
 // Construction leaves the sim in PhaseLobby (ShouldStartMatch is null in a unit test), so stepping
 // past a PaycheckTicks boundary must NOT change credits.
-for (int i = 0; i < (int)Simulation.PaycheckTicks + 5; i++)
+for (int i = 0; i < (int)sim.PaycheckTicks + 5; i++)
     sim.Step();
 Check(world.TeamStates[0].Credits == 1000 && world.TeamStates[1].Credits == 1000,
     "no credits accrue while in the lobby (even across a paycheck boundary)", $"credits changed in lobby ({world.TeamStates[0].Credits})");
@@ -67,13 +68,13 @@ Check(world.TeamStates[0].Credits == 1000 && !world.TeamStates[0].OwnedCapabilit
 
 uint before = sim.Tick;
 int creditsBefore = world.TeamStates[0].Credits;
-int activeSteps = 2 * (int)Simulation.PaycheckTicks + 50; // span > 2 paycheck windows to prove cadence, not alignment
+int activeSteps = 2 * (int)sim.PaycheckTicks + 50; // span > 2 paycheck windows to prove cadence, not alignment
 for (int i = 0; i < activeSteps; i++)
     sim.Step();
 uint after = sim.Tick;
 
 // Expected paychecks = number of PaycheckTicks multiples in (before, after].
-int expectedPaychecks = (int)(after / Simulation.PaycheckTicks - before / Simulation.PaycheckTicks);
+int expectedPaychecks = (int)(after / sim.PaycheckTicks - before / sim.PaycheckTicks);
 int expectedCredits = creditsBefore + expectedPaychecks * content.Start.IncomePerPaycheck;
 Check(expectedPaychecks >= 2, "active stepping crossed at least two paycheck boundaries", $"only {expectedPaychecks} paychecks in window");
 Check(world.TeamStates[0].Credits == expectedCredits,

@@ -51,6 +51,21 @@ public sealed partial class Simulation
     // an eyeball glimpse re-stamps its clock. <= 0 disables the timeout (ghosts persist as before).
     private uint _ghostTimeoutTicks;
 
+    // Radar signatures of the static landmarks (world.yaml `aleph-radar-signature` /
+    // `rock-radar-signature`, cached in InitVision like _eyeballMult) — the peers of the
+    // per-def ship/base signatures.
+    private float _alephSig = 1.4f;
+    private float _rockSig = 2f;
+
+    // Dust-cloud radar/vision attenuation, cached once in InitVision from the immutable World geometry.
+    // _dustClouds groups the seeded clouds by sector (empty when a sector has none); _dustFloor is that
+    // sector's authored VisionMult (the range multiplier through FULLY dense dust; 1 = no attenuation).
+    // Both are immutable after InitVision → the off-thread vision worker reads them lock-free, exactly
+    // like the rock grid. _hasDust is the fast global short-circuit for the common no-dust map.
+    private readonly Dictionary<uint, List<World.DustCloud>> _dustClouds = new();
+    private readonly Dictionary<uint, float> _dustFloor = new();
+    private bool _hasDust;
+
     // Ships that left a team's STREAMED union (radar ∪ eyeball) this step, drained by the hub (WP3)
     // into MsgShipGone reason=2 (quiet fade). Cleared at the top of Step, populated only at an apply.
     public readonly List<(byte team, ulong shipId)> LostContactsThisStep = new();
@@ -273,6 +288,25 @@ public sealed partial class Simulation
         _fireSigBoost = Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f;
         _fireSigWindowTicks = (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate;
         _ghostTimeoutTicks = (uint)MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
+        _alephSig = Content.World.AlephRadarSignature;
+        _rockSig = Content.World.RockRadarSignature;
+
+        // Cache dust clouds grouped by sector + each sector's attenuation floor. World geometry is fixed
+        // for this Simulation's lifetime, so this runs once and is safe for the worker to read lock-free.
+        foreach (var c in World.DustClouds)
+        {
+            if (!_dustClouds.TryGetValue(c.SectorId, out var list))
+                _dustClouds[c.SectorId] = list = new List<World.DustCloud>();
+            list.Add(c);
+        }
+        foreach (var sec in World.Sectors)
+        {
+            float floor = sec.Env?.Dust is { } d ? World.DustVisionFloor(d.Amount, d.Opacity) : 1f;
+            _dustFloor[sec.Id] = floor;
+            if (_dustClouds.TryGetValue(sec.Id, out var list) && list.Count > 0 && floor < 1f)
+                _hasDust = true;
+        }
+
         foreach (var b in World.Bases)
             if (!_teamVisions.ContainsKey(b.Team))
                 _teamVisions[b.Team] = new TeamVision();
@@ -589,7 +623,7 @@ public sealed partial class Simulation
             {
                 if (tv.DiscoveredAlephs.Contains(a.Id))
                     continue;
-                ClassifyTarget(team, a.SectorId, a.Pos, 1.4f, 0UL, out bool alephRadar, out _);
+                ClassifyTarget(team, a.SectorId, a.Pos, _alephSig, 0UL, out bool alephRadar, out _);
                 if (alephRadar)
                     tr.NewAlephs.Add(a.Id);
             }
@@ -619,6 +653,60 @@ public sealed partial class Simulation
     // lock; bases have no eyeball tier, cone has none). One LoS scan per viewer, shared by all its
     // volumes since they share the viewer→target segment. Runs on the worker —
     // reads only the value-copy snapshot + the immutable rock grid, with its own cell-walk buffer.
+    // Effective radar/vision RANGE multiplier for the viewer→target sightline through this sector's
+    // dust. Accumulates optical depth τ = Σ density·(chord inside cloud)/(cloud diameter), clamps to
+    // [0,1], then lerps from 1 (clear) toward the sector's dust floor. Returns 1 when the sector has no
+    // attenuating dust (the fast path for every stock map). Only ever called on the fog path, so it
+    // cannot affect fog-off bytes. Reads the immutable _dustClouds cache → safe on the worker thread.
+    private float DustVisionMult(uint sector, Vec3 from, Vec3 to)
+    {
+        if (!_hasDust || !_dustClouds.TryGetValue(sector, out var clouds) || clouds.Count == 0)
+            return 1f;
+        float floor = _dustFloor.TryGetValue(sector, out var f) ? f : 1f;
+        if (floor >= 1f)
+            return 1f; // dust present but no attenuation authored for this sector
+
+        Vec3 d = to - from;
+        float segLen = MathF.Sqrt(d.LengthSquared());
+        if (segLen < 1e-4f)
+            return 1f;
+
+        float tau = 0f;
+        foreach (var c in clouds)
+        {
+            float chord = SegmentSphereChord(from, d, segLen, c.Pos, c.Radius);
+            if (chord > 0f && c.Radius > 0f)
+                tau += c.Density * (chord / (2f * c.Radius));
+        }
+        if (tau <= 0f)
+            return 1f;
+        if (tau > 1f)
+            tau = 1f;
+        return 1f - tau * (1f - floor);
+    }
+
+    // Length of the segment [from, from + d] (|d| = segLen) that lies inside the sphere (center, r).
+    // 0 when they don't intersect. Standard ray/sphere quadratic, clamped to the segment endpoints so a
+    // viewer or target sitting inside the cloud counts only the interior portion of the sightline.
+    private static float SegmentSphereChord(Vec3 from, Vec3 d, float segLen, Vec3 center, float r)
+    {
+        Vec3 dir = new Vec3(d.X / segLen, d.Y / segLen, d.Z / segLen);
+        Vec3 m = from - center;
+        float b = Dot(m, dir);
+        float cc = m.LengthSquared() - r * r;
+        float disc = b * b - cc;
+        if (disc <= 0f)
+            return 0f; // no real intersection (miss or tangent)
+        float sq = MathF.Sqrt(disc);
+        float t0 = -b - sq;
+        float t1 = -b + sq;
+        if (t0 < 0f)
+            t0 = 0f;
+        if (t1 > segLen)
+            t1 = segLen;
+        return t1 > t0 ? t1 - t0 : 0f;
+    }
+
     private void ClassifyTarget(byte team, uint sector, Vec3 pos, float sig, ulong excludeRock, out bool radar, out bool eyeball)
     {
         radar = false;
@@ -629,15 +717,27 @@ public sealed partial class Simulation
                 continue;
             float d2 = (pos - v.Pos).LengthSquared();
 
+            // Un-attenuated tier radii. Dust only SHRINKS range, so a target beyond the largest of these
+            // can never be pulled into view — skip the dust scan for it entirely (cheap common case).
+            float srMax = v.SphereRadius * sig;
+            float erMax = v.EyeballRadius * sig;
+            float clMax = v.ConeLength * sig;
+            float rMax = MathF.Max(srMax, MathF.Max(erMax, clMax));
+            if (rMax <= 0f || d2 > rMax * rMax)
+                continue;
+
+            // Dust between viewer and target contracts every tier by the same factor (1 when no dust).
+            float dust = DustVisionMult(sector, v.Pos, pos);
+
             // Which volumes contain the target (cheap distance/angle tests first — no rock scan yet).
-            float sr = v.SphereRadius * sig;
+            float sr = srMax * dust;
             bool inSphere = sr > 0f && d2 <= sr * sr;
 
-            float er = v.EyeballRadius * sig;
+            float er = erMax * dust;
             bool inEyeball = er > 0f && d2 <= er * er;
 
             bool inCone = false;
-            float cl = v.ConeLength * sig;
+            float cl = clMax * dust;
             if (cl > 0f && d2 <= cl * cl)
             {
                 float len = MathF.Sqrt(d2);
@@ -669,8 +769,14 @@ public sealed partial class Simulation
         {
             if (b.Team != team || b.Sector != sector)
                 continue;
-            float br = b.SphereRadius * sig;
-            if (br > 0f && (pos - b.Pos).LengthSquared() <= br * br
+            float brMax = b.SphereRadius * sig;
+            if (brMax <= 0f)
+                continue;
+            float d2b = (pos - b.Pos).LengthSquared();
+            if (d2b > brMax * brMax)
+                continue; // outside even the un-attenuated sphere
+            float br = brMax * DustVisionMult(sector, b.Pos, pos);
+            if (d2b <= br * br
                 && !SegmentBlockedByRock(sector, b.Pos, pos, excludeRock, _workerCellBuf))
             {
                 radar = true;
@@ -680,7 +786,8 @@ public sealed partial class Simulation
     }
 
     // Discover still-unknown rocks near any team viewer, using the per-sector rock grid so we never
-    // scan the full rock list. Rocks carry signature 2.0 and are excluded from their own occluder scan.
+    // scan the full rock list. Rocks carry the authored rock-radar-signature and are excluded from
+    // their own occluder scan.
     private void DiscoverRocks(byte team, TeamVision tv, TeamResult tr)
     {
         void ScanVolume(uint sector, Vec3 center, float range)
@@ -706,7 +813,7 @@ public sealed partial class Simulation
                         {
                             if (tv.DiscoveredRocks.Contains(r.Id) || tr.NewRocks.Contains(r.Id))
                                 continue;
-                            ClassifyTarget(team, r.SectorId, r.Pos, 2f, r.Id, out bool radar, out _);
+                            ClassifyTarget(team, r.SectorId, r.Pos, _rockSig, r.Id, out bool radar, out _);
                             if (radar)
                                 tr.NewRocks.Add(r.Id);
                         }
@@ -922,7 +1029,8 @@ public sealed partial class Simulation
         {
             if (!vw.Alive || vw.Team != team || vw.SectorId != s.SectorId)
                 continue;
-            float er = VisionDefFor(vw).VisionSphereRadius * _eyeballMult;
+            float er = VisionDefFor(vw).VisionSphereRadius * _eyeballMult
+                * DustVisionMult(s.SectorId, vw.State.Pos, s.State.Pos);
             if (er > 0f && (s.State.Pos - vw.State.Pos).LengthSquared() <= er * er)
                 return true;
         }
@@ -944,12 +1052,15 @@ public sealed partial class Simulation
             var def = VisionDefFor(s);
             float d2 = (pos - s.State.Pos).LengthSquared();
 
-            float sr = def.VisionSphereRadius;
+            // Dust between this viewer and the point contracts its sphere + cone (1 when no dust).
+            float dust = DustVisionMult(sector, s.State.Pos, pos);
+
+            float sr = def.VisionSphereRadius * dust;
             if (sr > 0f && d2 <= sr * sr
                 && !SegmentBlockedByRock(sector, s.State.Pos, pos, 0UL, _pointCellBuf))
                 return true;
 
-            float cl = def.VisionConeLength;
+            float cl = def.VisionConeLength * dust;
             if (cl > 0f && d2 <= cl * cl)
             {
                 float len = MathF.Sqrt(d2);
@@ -973,7 +1084,7 @@ public sealed partial class Simulation
                 continue;
             if (!WeaponDefs.TryGetValue(p.WeaponId, out var pw))
                 continue;
-            float pr = pw.ProbeSightRadius;
+            float pr = pw.ProbeSightRadius * DustVisionMult(sector, p.Pos, pos);
             if (pr > 0f && (pos - p.Pos).LengthSquared() <= pr * pr
                 && !SegmentBlockedByRock(sector, p.Pos, pos, 0UL, _pointCellBuf))
                 return true;
@@ -987,7 +1098,10 @@ public sealed partial class Simulation
                 if (World.BaseHealth[i] <= 0f)
                     continue;
                 var b = World.Bases[i];
-                if (b.Team == team && b.SectorId == sector && (pos - b.Pos).LengthSquared() <= baseR * baseR
+                if (b.Team != team || b.SectorId != sector)
+                    continue;
+                float br = baseR * DustVisionMult(sector, b.Pos, pos);
+                if ((pos - b.Pos).LengthSquared() <= br * br
                     && !SegmentBlockedByRock(sector, b.Pos, pos, 0UL, _pointCellBuf))
                     return true;
             }

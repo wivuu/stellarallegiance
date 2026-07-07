@@ -17,17 +17,20 @@ public sealed partial class Simulation
     public const uint TickHz = 20;
     private const int ShotRingSize = 64; // > max ProjectileLifeTicks
 
-    // Stage-2 economy: every team gets a flat credit paycheck this often (1200 ticks = 1 min at 20 Hz).
-    // The amount per paycheck is the faction's authored income (Content.Start.IncomePerPaycheck).
-    public const uint PaycheckTicks = TickHz * 60;
-
-    // ---- Escape pods + docking (ported from module Lib.cs) ----
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
-    private const float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
-    private const float LaunchSpeed = 80f; // u/s catapult out of the docking-exit hardpoint on spawn
-    private static readonly float RescueRadius = World.ShipRadius * 4f; // pickup distance (no need to directly intersect)
-    private const float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
-    private const float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
+
+    // ---- Mechanics tuning — authored in world.yaml (`mechanics:` / `combat:`), resolved
+    // once in the ctor from Content.World. Second-authored durations become ticks here. ----
+    // Stage-2 economy: every team gets a flat credit paycheck this often; the amount per paycheck
+    // is the faction's authored income (Content.Start.IncomePerPaycheck). Public for tests.
+    public readonly uint PaycheckTicks;
+    private readonly float DockRadiusFrac; // dock when within this fraction of your OWN base radius
+    private readonly float LaunchSpeed; // u/s catapult out of the docking-exit hardpoint on spawn
+    private readonly float RescueRadius; // pod pickup distance (no need to directly intersect)
+    private readonly float PodEjectSpeed; // u/s initial fling (decays to Pod.MaxSpeed)
+    private readonly float PodEjectSpin; // rad/s initial tumble (decays via angular drag)
+    private readonly WorldMechanicsTuning _mech; // gate/warp knobs read at their use sites
+    private readonly WorldCombatTuning _combat; // collision damage + boundary hazard
 
     // The resolved content this match runs on (GameContent defaults, optionally YAML-overlaid at
     // boot). ONE source of truth with the defs streamed to the client (Protocol.BuildDefs(Content)),
@@ -308,8 +311,9 @@ public sealed partial class Simulation
     private readonly object _qLock = new();
 
     // How long a disconnected player's ship is held in the sim before it's reaped — the window a
-    // reconnecting client has to reclaim it (5s @ 20Hz). The ship stays simulated and vulnerable.
-    private const uint GraceTicks = 5 * TickHz;
+    // reconnecting client has to reclaim it (world.yaml `reconnect-grace-seconds`, stock 5s).
+    // The ship stays simulated and vulnerable.
+    private readonly uint GraceTicks;
 
     // Ships held alive after an unexpected drop, keyed by the connection's reconnect token (hex).
     // Value is the still-bound OLD client id (the ship is still in _byClient[oldClientId]) plus
@@ -380,8 +384,9 @@ public sealed partial class Simulation
     // isolate raw damage from shield absorption. The shield mechanic itself is covered by ShieldTest.
     public bool ShieldsEnabled = true;
 
-    // How long the Ended result lingers before the server returns to the lobby for the next match.
-    private const uint EndedToLobbyTicks = 6 * TickHz;
+    // How long the Ended result lingers before the server returns to the lobby for the next match
+    // (world.yaml `ended-to-lobby-seconds`, stock 6s).
+    private readonly uint EndedToLobbyTicks;
     private uint _returnToLobbyAtTick;
 
     // Lobby integration hooks (set by Program/ClientHub; null in unit tests). ShouldStartMatch
@@ -425,6 +430,20 @@ public sealed partial class Simulation
     {
         World = world;
         Content = content;
+
+        // Resolve the authored server-side tuning blocks (world.yaml) once. Stock values
+        // come from the shared classes' initializers when a block/knob is unauthored.
+        _mech = content.World.Mechanics;
+        _combat = content.World.Combat;
+        PaycheckTicks = System.Math.Max(1u, (uint)MathF.Round(_mech.PaycheckSeconds * TickHz));
+        DockRadiusFrac = _mech.DockRadiusFrac;
+        LaunchSpeed = _mech.LaunchSpeed;
+        RescueRadius = World.ShipRadius * _mech.RescueRadiusMult;
+        PodEjectSpeed = _mech.PodEjectSpeed;
+        PodEjectSpin = _mech.PodEjectSpin;
+        GraceTicks = (uint)MathF.Round(_mech.ReconnectGraceSeconds * TickHz);
+        EndedToLobbyTicks = (uint)MathF.Round(_mech.EndedToLobbySeconds * TickHz);
+        InitPigTuning(content.World.Ai);
 
         // Resolve the per-match def lookups ONCE from the loaded content (defaults, or YAML-overlaid).
         WeaponDefs = content.Weapons.ToDictionary(w => w.WeaponId);
@@ -637,7 +656,7 @@ public sealed partial class Simulation
         {
             float over = s.State.Pos.Length() - World.SectorRadius(s.SectorId);
             if (over > 0f)
-                ApplyDamage(s, MathF.Min(World.BoundaryBaseDps + over * World.BoundaryRampDps, World.BoundaryMaxDps) * dt, tick);
+                ApplyDamage(s, MathF.Min(_combat.BoundaryBaseDps + over * _combat.BoundaryRampDps, _combat.BoundaryMaxDps) * dt, tick);
 
             ResolveAsteroidCollisions(s);
             ResolveDeployableCollisions(s, tick); // solid deployables (recon probes today)
@@ -1006,7 +1025,7 @@ public sealed partial class Simulation
     private void PlaceAtBase(ShipSim s, float clearance, uint tick)
     {
         Vec3 basePos = default;
-        uint sector = World.HomeSector;
+        uint sector = World.DefaultSector;
         foreach (var b in World.Bases)
             if (b.Team == s.Team)
             {
@@ -2138,7 +2157,7 @@ public sealed partial class Simulation
             float jimp = -(1f + World.CollisionRestitution) * relVn / invSum;
             a.State.Vel += n * (jimp * iA);
             b.State.Vel -= n * (jimp * iB);
-            float dmg = CollisionDamage(-relVn, (1f / invSum) * World.ShipShipDamageScale);
+            float dmg = CollisionDamage(-relVn, (1f / invSum) * _combat.ShipShipDamageScale);
             ApplyDamage(a, dmg, _tick);
             ApplyDamage(b, dmg, _tick);
         }
@@ -2231,7 +2250,7 @@ public sealed partial class Simulation
             && vn < 0f
         )
         {
-            float dmg = CollisionDamage(-vn, World.CollisionDamageScale);
+            float dmg = CollisionDamage(-vn, _combat.CollisionDamageScale);
             ApplyDamage(s, dmg, tick);
             return dmg;
         }
@@ -2255,7 +2274,7 @@ public sealed partial class Simulation
     {
         Collide.Bounce(ref s.State, worldNormal, worldPenetration, World.CollisionRestitution, out float vn);
         if (vn < 0f)
-            ApplyDamage(s, CollisionDamage(-vn, World.CollisionDamageScale), _tick);
+            ApplyDamage(s, CollisionDamage(-vn, _combat.CollisionDamageScale), _tick);
     }
 
     // Ray (mp + mv·t) first-entry time against a transformed hull, expanded by `margin`. Maps the
@@ -2290,15 +2309,15 @@ public sealed partial class Simulation
             Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
             && vn < 0f
         )
-            ApplyDamage(s, CollisionDamage(-vn, World.CollisionDamageScale), _tick);
+            ApplyDamage(s, CollisionDamage(-vn, _combat.CollisionDamageScale), _tick);
     }
 
     // Server-only collision damage from a closing normal speed (m/s, always positive). Below
-    // World.CollisionDamageMinSpeed it's a harmless kiss: 0 damage (the bounce still ran). Above it,
-    // scaled and capped at MaxCollisionDamage. Shared by ship-ship, hull, and sphere-fallback bounces.
-    private static float CollisionDamage(float closingSpeed, float scale) =>
-        closingSpeed > World.CollisionDamageMinSpeed
-            ? MathF.Min(closingSpeed * scale, World.MaxCollisionDamage)
+    // the authored collision-damage-min-speed it's a harmless kiss: 0 damage (the bounce still ran). Above it,
+    // scaled and capped at max-collision-damage. Shared by ship-ship, hull, and sphere-fallback bounces.
+    private float CollisionDamage(float closingSpeed, float scale) =>
+        closingSpeed > _combat.CollisionDamageMinSpeed
+            ? MathF.Min(closingSpeed * scale, _combat.MaxCollisionDamage)
             : 0f;
 
     // ---- Warp (module TryWarp): emerge out the partner mouth toward the dest sector
@@ -2312,7 +2331,7 @@ public sealed partial class Simulation
         {
             if (g.SectorId != s.SectorId)
                 continue;
-            float rr = World.AlephTriggerRadius + World.ShipRadius;
+            float rr = _mech.AlephTriggerRadius + World.ShipRadius;
             if ((s.State.Pos - g.Pos).LengthSquared() > rr * rr)
                 continue;
 
@@ -2321,17 +2340,17 @@ public sealed partial class Simulation
             float mlen = mouth.Length();
             Vec3 m = mlen > 0.001f ? mouth * (1f / mlen) : new Vec3(0f, 1f, 0f);
 
-            // Jitter around the mouth axis (per-axis ±WarpExitJitter), then renormalize so
+            // Jitter around the mouth axis (per-axis ±warp-exit-jitter), then renormalize so
             // ships emerging together spread into a cone rather than overlapping on one line.
             Vec3 e = new Vec3(
-                m.X + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter,
-                m.Y + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter,
-                m.Z + (float)(_rng.NextDouble() * 2.0 - 1.0) * World.WarpExitJitter
+                m.X + (float)(_rng.NextDouble() * 2.0 - 1.0) * _mech.WarpExitJitter,
+                m.Y + (float)(_rng.NextDouble() * 2.0 - 1.0) * _mech.WarpExitJitter,
+                m.Z + (float)(_rng.NextDouble() * 2.0 - 1.0) * _mech.WarpExitJitter
             );
             float elen = e.Length();
             e = elen > 1e-4f ? e * (1f / elen) : m;
 
-            float exit = World.AlephTriggerRadius + World.ShipRadius + World.WarpExitOffset;
+            float exit = _mech.AlephTriggerRadius + World.ShipRadius + _mech.WarpExitOffset;
             s.SectorId = g.DestSectorId;
             s.State.Pos = g.PartnerPos + e * exit;
             s.State.Vel = e * speed;

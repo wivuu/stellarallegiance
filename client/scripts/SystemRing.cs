@@ -16,9 +16,10 @@ using StellarAllegiance.Ui;
 // touches authoritative state. Created and wired up by the Hud, like the other combat overlays.
 public partial class SystemRing : Control
 {
-    // Muzzle constants mirrored from TargetMarkers / PredictionController so the ring centres
-    // on the SAME point as the aim reticle (the firing line, forward of the nose).
-    private const float NoseOffset = 3f;
+    // Must stay consistent with TargetMarkers.AimReticleScreenPoint so the ring centres on
+    // the SAME point as the aim reticle (the firing line, forward of the nose): the equipped
+    // bolt weapon's effective range (via DefRegistry.BoltAimRange), or this anchor for a
+    // pod/unarmed hull (or before defs stream in).
     private const float DefaultAimRange = 500f;
 
     private const float Radius = 82f; // arc radius (px) — frames the reticle/lead circle
@@ -31,16 +32,18 @@ public partial class SystemRing : Control
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
+    private DefRegistry _defs = null!; // resolves the local hull's bolt-weapon range for the reticle centre
 
     // Match TargetMarkers: project through the F3 overview camera while the sector map is
     // open, otherwise the flight chase camera. Resolved per-access so it follows the toggle.
     private Camera3D Cam => SectorOverview.ActiveCamera ?? _camera;
 
     // Wired up by the Hud (which already resolves these siblings).
-    public void Init(WorldRenderer world, Camera3D camera)
+    public void Init(WorldRenderer world, Camera3D camera, DefRegistry defs)
     {
         _world = world;
         _camera = camera;
+        _defs = defs;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // custom-draw node reads fonts directly, not via a Theme
@@ -65,7 +68,8 @@ public partial class SystemRing : Control
         Camera3D cam = Cam;
         Vector2 c;
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 reticle = local.GlobalPosition + fwd * (NoseOffset + DefaultAimRange);
+        float aimRange = _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
+        Vector3 reticle = local.GlobalPosition + fwd * aimRange;
         if (cam.IsPositionBehind(reticle))
             c = GetViewportRect().Size * 0.5f;
         else

@@ -783,7 +783,12 @@ public partial class Lobby : Control
         // you to the hangar, never back to the team picker mid-match. It reverts to the lobby when the
         // match ends (Hud clears DeployRequested on MatchPhase.Ended → post-match end screen).
         bool committed = _world.Phase == MatchPhase.Active && Hud.DeployRequested;
-        bool show = _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null && !committed;
+        // Let the pilot peek at the F3 sector map from the pre-launch lobby: this overlay is opaque
+        // and would otherwise occlude the overview camera. Hiding it (SectorOverview stays Active, so
+        // flight/lobby input stays neutralized) mirrors the spawn hangar's F3 peek; F3-close reveals
+        // the lobby again next frame. See SectorOverview / ShipLoadout.
+        bool show = _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null && !committed
+            && !SectorOverview.Active;
         if (!show)
         {
             _wasVisible = Visible;

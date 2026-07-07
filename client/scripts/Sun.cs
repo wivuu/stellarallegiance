@@ -13,7 +13,9 @@ public partial class Sun : MeshInstance3D
     // Far enough to sit well beyond any sector geometry but inside the camera's
     // far plane. The quad is sized to subtend a believable stylised disc.
     public const float Distance = 4500f;
-    private const float Size = 900f;
+    // Default visible-disc quad width. A sector with no `sun.size` override streams a -1 sentinel and
+    // SectorEnvironment falls back to this; maps set a larger/smaller disc via YAML (see SetDiscSize).
+    public const float DefaultSize = 900f;
 
     // World-space unit vector pointing toward the sun, shared so the screen-space
     // lens flare overlay (LensFlare) can anchor its bright core exactly on the disc.
@@ -30,9 +32,28 @@ public partial class Sun : MeshInstance3D
         _skyDir = light.GlobalTransform.Basis.Z.Normalized();
         SkyDirection = _skyDir;
 
-        Mesh = new QuadMesh { Size = new Vector2(Size, Size) };
+        Mesh = new QuadMesh { Size = new Vector2(DefaultSize, DefaultSize) };
         MaterialOverride = BuildMaterial();
         CastShadow = ShadowCastingSetting.Off;
+    }
+
+    // Resize the visible disc to a world-space quad width. SectorEnvironment calls this per-sector from
+    // the streamed `sun.size` (or DefaultSize when a sector omits it). The disc sits at a fixed Distance,
+    // so a larger width subtends a larger angular disc without moving the sun. No-op until _Ready builds
+    // the mesh; the caller re-applies on every sector change so a late _Ready still gets the right size.
+    public void SetDiscSize(float size)
+    {
+        if (size > 0f && Mesh is QuadMesh q)
+            q.Size = new Vector2(size, size);
+    }
+
+    // Re-read the light direction after the per-sector environment driver (SectorEnvironment) reorients
+    // the DirectionalLight3D, so the disc AND the LensFlare (both key off SkyDirection) follow the sun.
+    public void RefreshFromLight()
+    {
+        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+        _skyDir = light.GlobalTransform.Basis.Z.Normalized();
+        SkyDirection = _skyDir;
     }
 
     public override void _Process(double delta)

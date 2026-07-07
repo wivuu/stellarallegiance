@@ -169,6 +169,73 @@ namespace StellarAllegiance.Net
             CenterY,
             CenterZ;
         public float Radius;
+
+        // Authored 2D map-diagram position (minimap layout). Valid only when HasMapPos; otherwise the
+        // minimap falls back to its deterministic ring layout.
+        public bool HasMapPos;
+        public float MapPosX,
+            MapPosY;
+
+        // Per-sector environment (sun/god-rays, nebula override, dust clouds), decoded from the sector
+        // static. Null when the server sent no environment for this sector (legacy backdrop).
+        public SectorEnv? Env;
+    }
+
+    // Client mirror of the server's streamed per-sector environment (Protocol.WriteSectorEnv). Raw
+    // floats like the rest of these DTOs; the render driver (SectorEnvironment.cs) turns them into a
+    // sun light (+ screen-space god rays keyed off GodRays), 3D fractal dust-cloud billboards, and a
+    // nebula override (owned by Starscape). Sentinels from the wire: a zero sun direction = "keep the
+    // static sun"; any color component < 0 = "use the client default".
+    public sealed class SectorEnv
+    {
+        // Sun / god rays
+        public bool HasSun;
+        public float GodRays;
+        public float SunDirX,
+            SunDirY,
+            SunDirZ; // origin→sun; (0,0,0) → keep static
+        public bool HasSunColor;
+        public float SunColorR,
+            SunColorG,
+            SunColorB;
+        public float SunEnergy; // < 0 → default
+        public float SunAmbient; // sector ambient/fill light energy; < 0 → client default
+        public float SunSize; // visible disc world-space width; < 0 → client default (Sun.DefaultSize)
+
+        // Nebula override
+        public bool HasNebula;
+        public bool HasNebulaColorA;
+        public float NebulaColorAR,
+            NebulaColorAG,
+            NebulaColorAB;
+        public bool HasNebulaColorB;
+        public float NebulaColorBR,
+            NebulaColorBG,
+            NebulaColorBB;
+        public float NebulaIntensity; // < 0 → default
+        public bool HasNebulaSeed;
+        public uint NebulaSeed;
+
+        // Dust
+        public bool HasDust;
+        public bool HasDustColor;
+        public float DustColorR,
+            DustColorG,
+            DustColorB;
+        // 0..1 how opaque the dust renders (scales puff alpha); the server also uses it to scale radar
+        // attenuation. 1 = fully opaque for the authored amount (legacy look). Decoupled from cloud count.
+        public float DustOpacity = 1f;
+        public DustCloud[] DustClouds = System.Array.Empty<DustCloud>();
+    }
+
+    // One seeded dust cloud (server-authoritative position; the sim attenuates radar/vision through it).
+    public struct DustCloud
+    {
+        public float PosX,
+            PosY,
+            PosZ;
+        public float Radius;
+        public float Density;
     }
 
     // One lobby roster row, decoded from MsgLobbyState. Id is the server-assigned connection id

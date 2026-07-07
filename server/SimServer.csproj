@@ -24,18 +24,38 @@
          distribution — not Docker-only. Source of truth stays client/assets/ (the Godot client's
          copy); these are linked, not duplicated. The server resolves them via AppContext at run
          time (SimAssets) and bakes per-model convex hulls into a sibling sim-cache/ on first use. -->
-    <Content Include="..\client\assets\bases\*.glb" Link="assets\bases\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\client\assets\asteroids\*.glb" Link="assets\asteroids\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\client\assets\ships\*.glb" Link="assets\ships\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content
+      Include="..\client\assets\bases\*.glb"
+      Link="assets\bases\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+    <Content
+      Include="..\client\assets\asteroids\*.glb"
+      Link="assets\asteroids\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+    <Content
+      Include="..\client\assets\ships\*.glb"
+      Link="assets\ships\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
     <!-- Stage-1 content pipeline (canonical Allegiance.Factions format): ship the AUTHORITATIVE
-         content bundle next to the binary, preserving the manifest/catalog/factions layout. The
-         server loads content/factions/core.manifest.yaml at boot (content is YAML, never hardcoded);
+         content bundle next to the binary, preserving the manifest/catalog layout. The
+         server loads content/core/core.manifest.yaml at boot (content is YAML, never hardcoded);
          the content/CONTENT_PATH override points at a different bundle manifest. -->
-    <Content Include="Content\factions\**\*.yaml" Link="content\factions\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content
+      Include="Content\core\**\*.yaml"
+      Link="content\core\%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
     <!-- Stock MAPS: standalone map files (separate from the faction/tech-tree bundle), shipped next
          to the binary at content/maps/. Operators extend the set via SIM_MAPS_DIR (or the maps-dir
          CLI flag). -->
-    <Content Include="Content\maps\**\*.yaml" Link="content\maps\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content
+      Include="Content\maps\**\*.yaml"
+      Link="content\maps\%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../shared/Shared.csproj" />

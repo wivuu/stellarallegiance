@@ -14,8 +14,21 @@ public partial class DustField : Node3D
     // near enough to parallax noticeably; the lifetime cycles them as the ship moves.
     private const float BoxHalf = 90f;
 
+    // Motion-gated visibility: the dust exists to gauge MOVEMENT, so at rest it's just
+    // clutter hovering in the void. Below MinSpeed it fades fully out; by FullSpeed it's
+    // at full strength, ramping linearly between. Values are u/s (sim speed), picked low
+    // so gentle drift already shows some grit and only a true standstill hides it.
+    private const float MinSpeed = 2f;
+    private const float FullSpeed = 18f;
+
+    // Per-second lerp rate toward the speed-derived target, so the field eases in/out over
+    // a fraction of a second instead of snapping when the throttle crosses the threshold.
+    private const float FadeRate = 3.5f;
+
     private WorldRenderer _world = null!;
     private GpuParticles3D _particles = null!;
+    private StandardMaterial3D _drawMat = null!;
+    private float _fade; // current smoothed 0..1 strength, multiplies particle alpha
 
     public override void _Ready()
     {
@@ -42,7 +55,7 @@ public partial class DustField : Node3D
             LocalCoords = false, // motes hang in world space so the ship flies through them
             ProcessMaterial = proc,
             DrawPass1 = new QuadMesh { Size = new Vector2(1f, 1f) },
-            MaterialOverride = DustDrawMaterial(dot),
+            MaterialOverride = _drawMat = DustDrawMaterial(dot),
             Visible = false,
         };
         AddChild(_particles);
@@ -55,10 +68,25 @@ public partial class DustField : Node3D
         {
             // No local ship (pre-spawn overview): nothing to gauge motion against, so hide.
             _particles.Visible = false;
+            _fade = 0f;
             return;
         }
 
-        _particles.Visible = true;
+        // Ease the field's strength toward what the ship's speed calls for: hidden at rest,
+        // full once cruising. The temporal lerp keeps threshold crossings from popping.
+        float target = Mathf.Clamp((ship.Speed - MinSpeed) / (FullSpeed - MinSpeed), 0f, 1f);
+        _fade = Mathf.MoveToward(_fade, target, FadeRate * (float)delta);
+
+        _particles.Visible = _fade > 0.001f;
+        if (!_particles.Visible)
+            return;
+
+        // Multiply the per-particle alpha uniformly via the draw material's albedo alpha
+        // (VertexColorUseAsAlbedo makes final alpha = vertexAlpha × albedoAlpha), so the
+        // whole field dims together as it fades rather than culling individual motes.
+        var c = _drawMat.AlbedoColor;
+        _drawMat.AlbedoColor = new Color(c.R, c.G, c.B, _fade);
+
         // Recenter the emission box on the ship each frame, nudged forward along the ship's
         // FACING (which is where the chase camera looks) so dust always fills the view —
         // regardless of which way the ship is actually translating. Biasing along velocity

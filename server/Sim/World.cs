@@ -25,42 +25,35 @@ public sealed class World
     public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
-    public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
-    public const float ShipShipDamageScale = 1.2f;
-    public const float MaxCollisionDamage = 30f;
-    // Below this closing normal speed (m/s) a collision is a harmless kiss: it still bounces, no damage.
-    public const float CollisionDamageMinSpeed = 4f; // ponytail: tune knob; raise to make hulls more forgiving
-
-    public const float NoseOffset = 3f;
-    public const float BoundaryBaseDps = 8f;
-    public const float BoundaryRampDps = 0.12f;
-    public const float BoundaryMaxDps = 60f;
-    public const float AlephTriggerRadius = 18f;
-    public const float WarpExitOffset = 60f;
-    public const float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
-    public const uint HomeSector = 0;
-    public const uint VergeSector = 1;
-    public const float CoreRadius = 2100f;  // home sector default radius (before scale / per-sector override)
-    public const float VergeRadius = 700f;  // verge sector default radius (before scale / per-sector override)
+    // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
+    // world.yaml (`combat:` / `mechanics:`) and read by the sim from Content.World.
+    // The SINGLE default sector radius (before × SectorScale) for any sector whose YAML omits `radius`
+    // and whose map/world sets no `sector-radius`. Replaces the old per-sector-id CoreRadius/VergeRadius
+    // — no value is chosen by sector id anymore.
+    public const float DefaultSectorRadius = 700f;
     // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
-    // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
+    // WorldConfig passed to the ctor (authored in YAML), so a per-server world.yaml override changes
     // the generated map, not just what's streamed. No compile-in defaults live here.
-    public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
+    public const float GridCell = 160f; // broad-phase cell size (matches the module's AsteroidGridCell)
 
-    // Asteroid field/belt shape knobs. Rocks fill a SHALLOW DISC (core) or annular BELT (verge)
-    // that reaches outward toward the sector edge, and counts derive from the filled area so
-    // density (spacing) is invariant to sector size — a bigger sector just gets proportionally
-    // more rocks at the same spacing. RockAreaDensity/BeltAreaDensity are calibrated so the legacy
-    // stock map's rock spacing is preserved.
-    public const float FieldFillFrac = 0.9f;       // core disc radius as a fraction of sector radius
-    public const float FieldFlatten = 0.1f;        // core disc half-thickness as a fraction of its radius (shallow)
-    public const float RockAreaDensity = 4.5e-6f;  // core rocks per unit² of disc footprint (at density 1)
-    public const float BeltInnerFrac = 0.25f;      // verge belt inner radius / sector radius
-    public const float BeltOuterFrac = 0.95f;      // verge belt outer radius / sector radius
-    public const float BeltFlatten = 0.13f;        // verge belt half-thickness / sector radius (shallow)
-    public const float BeltAreaDensity = 2.4e-5f;  // verge belt rocks per unit² of annulus (at density 1)
+    // Asteroid shape + base-placement knobs — ONE shared default set per shape (field=disc,
+    // belt=ring), applied to any sector by its declared `asteroids` kind (no per-sector-id choice).
+    // Authored in world.yaml (`seeding:`); stock values live on WorldSeedingTuning's
+    // initializers. Counts derive from the filled area so density (spacing) is invariant to sector
+    // size — a bigger sector just gets proportionally more rocks at the same spacing.
+    private readonly WorldSeedingTuning _seed;
 
-    public readonly record struct Sector(uint Id, float Radius, string Name);
+    // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
+    // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
+    // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
+    public readonly record struct Sector(
+        uint Id, float Radius, string Name, SectorEnvironment? Env = null,
+        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
+
+    // One procedurally-seeded dust cloud: a soft volumetric sphere that hazes visuals AND attenuates
+    // radar/vision (Simulation.Vision). Immutable after the World ctor → the vision worker reads the
+    // list lock-free, exactly like the rock grid.
+    public readonly record struct DustCloud(uint SectorId, Vec3 Pos, float Radius, float Density);
 
     public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
 
@@ -84,8 +77,14 @@ public sealed class World
     public readonly List<BaseSite> Bases = new();
     public readonly float[] BaseHealth; // indexed like Bases
     public readonly List<Rock> Asteroids = new();
+    public readonly List<DustCloud> DustClouds = new();
     public readonly List<Gate> Alephs = new();
     public readonly ulong Seed;
+
+    // The default/fallback sector id — the first authored sector. Used where code needs *a* sector but
+    // has no better context (e.g. a spectator with no ship, or a team with no garrison). Not a "home"
+    // in the gameplay sense — a player's home is their team's garrison sector (scan Bases by team).
+    public uint DefaultSector => Sectors.Count > 0 ? Sectors[0].Id : 0;
 
     // Stage-2 strategy spine: per-team economy/owned state, keyed by team byte (parallel to the
     // per-team bases). Credits accrue in the sim step (Simulation.AccrueTeamCredits); OwnedTechs/
@@ -166,59 +165,123 @@ public sealed class World
     {
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
-        // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
+        _seed = cfg.Seeding;
+        // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
+        // ONE shared default radius for any sector that omits its own — no per-sector-id defaults.
+        float defaultRadius = (cfg.SectorRadius > 0f ? cfg.SectorRadius : DefaultSectorRadius) * sectorScale;
 
-        // Per-sector radius: an authored absolute override (world.sectors[id].radius) wins; otherwise
-        // fall back to the sector's built-in default × the global sector-scale. This is "the map":
-        // a different content bundle can resize each sector independently.
-        float ResolveRadius(uint id, float baseRadius)
+        // Effective sector config: the authored list, or — when a config declares no sectors at all
+        // (e.g. a bare test world) — a single shared DEFAULT arena. This is the "fallback to a single
+        // set of defaults": one uniform template applied to every sector, NOT a per-sector-id layout.
+        var secCfg = cfg.Sectors.Count > 0 ? cfg.Sectors : DefaultArena(sectorScale);
+
+        // ---- Sectors: geometry is entirely data-driven. Radius = explicit override, else the single
+        // shared default. Name/env/map-pos come straight from the authored per-sector config. ----
+        foreach (var sc in secCfg)
         {
-            foreach (var sc in cfg.Sectors)
-                if (sc.Id == id && sc.Radius.HasValue)
-                    return sc.Radius.Value;
-            return baseRadius * sectorScale;
+            float radius = sc.Radius ?? defaultRadius;
+            bool hasPos = sc.MapPosX.HasValue && sc.MapPosY.HasValue;
+            Sectors.Add(new Sector(
+                sc.Id, radius, sc.Name ?? "", sc.Env,
+                sc.MapPosX ?? 0f, sc.MapPosY ?? 0f, hasPos));
         }
-        // Optional per-sector display name from the map (empty when the map leaves it unset).
-        string ResolveName(uint id)
+        float RadiusOf(uint id)
         {
-            foreach (var sc in cfg.Sectors)
-                if (sc.Id == id && !string.IsNullOrWhiteSpace(sc.Name))
-                    return sc.Name!;
-            return "";
+            foreach (var s in Sectors)
+                if (s.Id == id)
+                    return s.Radius;
+            return defaultRadius;
         }
-        float coreR = ResolveRadius(HomeSector, CoreRadius);
-        float vergeR = ResolveRadius(VergeSector, VergeRadius);
 
-        Sectors.Add(new Sector(HomeSector, coreR, ResolveName(HomeSector)));
-        Sectors.Add(new Sector(VergeSector, vergeR, ResolveName(VergeSector)));
-
-        // Team 0 base in HomeSector, Team 1 base in VergeSector — semi-random positions
-        // derived from a dedicated RNG so the asteroid/aleph sequence is unaffected.
+        // ---- Garrisons → team bases. The SET of garrisons across the map defines the teams. Positions
+        // are drawn from a dedicated RNG (so the asteroid/aleph sequence is unaffected) and placed
+        // relative to each sector's radius. When a config declares sectors but NO garrison anywhere,
+        // fall back to one garrison per sector (team = index) for the first DefaultTeamCount sectors, so
+        // a bare arena is still playable — real maps declare garrisons explicitly. ----
+        bool anyGarrison = false;
+        foreach (var sc in secCfg)
+            if (sc.Garrison is not null)
+            {
+                anyGarrison = true;
+                break;
+            }
         var baseRng = new DetRng(seed ^ 0xB453_BA53_B453_BA53UL);
-        Vec3 homeBasePos = RandomBasePos(ref baseRng, 600f, 1200f);
-        Vec3 vergeBasePos = RandomBasePos(ref baseRng, 200f, 500f);
-        Bases.Add(new BaseSite(1, 0, HomeSector, homeBasePos));
-        Bases.Add(new BaseSite(2, 1, VergeSector, vergeBasePos));
+        ulong baseId = 1;
+        for (int i = 0; i < secCfg.Count; i++)
+        {
+            var sc = secCfg[i];
+            var garrison = sc.Garrison
+                ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
+            if (garrison is null)
+                continue;
+            float r = RadiusOf(sc.Id);
+            Vec3 pos = RandomBasePos(ref baseRng, r * _seed.BaseInnerFrac, r * _seed.BaseOuterFrac, _seed.BaseYJitter);
+            Bases.Add(new BaseSite(baseId++, garrison.Team, sc.Id, pos));
+        }
+        if (Bases.Count == 0)
+            throw new InvalidOperationException(
+                "map declares no garrisons — at least one team home base is required.");
+        // Fail fast: the map can DECLARE any number of garrisons, but the sim is currently 2-team
+        // (Simulation.Pig.NumTeams, the win condition, lobby team validation). A map that asks for more
+        // teams than the sim supports must error at boot rather than misbehave mid-match.
+        var teams = new HashSet<byte>();
+        byte maxTeam = 0;
+        foreach (var b in Bases)
+        {
+            teams.Add(b.Team);
+            if (b.Team > maxTeam)
+                maxTeam = b.Team;
+        }
+        if (teams.Count > MaxSupportedTeams || maxTeam >= MaxSupportedTeams)
+            throw new InvalidOperationException(
+                $"map declares {teams.Count} garrison team(s) (max id {maxTeam}) — the sim currently "
+                    + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
 
-        // One economy state per team (Stage-1 = both teams seed from the single stock faction).
+        // One economy state per team (Stage-1 = every team seeds from the single stock faction).
         foreach (var b in Bases)
             TeamStates[b.Team] = new TeamState();
         SeedEconomy(start);
 
+        // ---- Asteroids: each sector seeds by its declared shape from the shared shape constants. ----
         var rng = new DetRng(seed);
         ulong rockId = 1;
-        SeedAsteroidField(ref rng, HomeSector, coreR, density, ref rockId);
-        SeedAsteroidBelt(ref rng, VergeSector, vergeR, density, ref rockId);
+        foreach (var sc in secCfg)
+        {
+            float r = RadiusOf(sc.Id);
+            float d = density * (sc.AsteroidDensityMult ?? 1f);
+            switch (sc.Asteroids)
+            {
+                case AsteroidKind.Field:
+                    SeedAsteroidField(ref rng, sc.Id, r, d, ref rockId);
+                    break;
+                case AsteroidKind.Belt:
+                    SeedAsteroidBelt(ref rng, sc.Id, r, d, ref rockId);
+                    break;
+                case AsteroidKind.None:
+                    break;
+            }
+        }
 
-        // One linked aleph pair, placed toward the outer reaches of each sector.
-        var corePos = RandomOuterPos(ref rng, coreR);
-        var vergePos = RandomOuterPos(ref rng, vergeR);
-        Alephs.Add(new Gate(1, HomeSector, VergeSector, corePos, vergePos));
-        Alephs.Add(new Gate(2, VergeSector, HomeSector, vergePos, corePos));
+        // ---- Gates / alephs: one bidirectional pair per authored link (empty → ring by id), placed
+        // toward the outer reaches of each endpoint sector. ----
+        var links = cfg.Links.Count > 0 ? cfg.Links : DefaultRing(secCfg);
+        ulong gateId = 1;
+        foreach (var link in links)
+        {
+            Vec3 aPos = RandomOuterPos(ref rng, RadiusOf(link.A));
+            Vec3 bPos = RandomOuterPos(ref rng, RadiusOf(link.B));
+            Alephs.Add(new Gate(gateId++, link.A, link.B, aPos, bPos));
+            Alephs.Add(new Gate(gateId++, link.B, link.A, bPos, aPos));
+        }
+
+        // Dust clouds are seeded on their OWN rng (independent of `rng`), so authoring dust never
+        // shifts a single asteroid or aleph — a map with dust reads byte-identical rocks to one without.
+        foreach (var sc in secCfg)
+            SeedDustClouds(sc.Id, RadiusOf(sc.Id), sc.Env?.Dust);
 
         foreach (var r in Asteroids)
         {
@@ -379,14 +442,17 @@ public sealed class World
         return float.MaxValue;
     }
 
-    // Core pattern: a SHALLOW DISC filling outward to ~FieldFillFrac of the sector radius, at
+    // Core pattern: a SHALLOW DISC filling outward to ~field-fill-frac of the sector radius, at
     // constant areal density (count ∝ disc area) so a bigger sector gets proportionally more rocks
     // at the same spacing. sqrt-uniform radius = even density; the disc stays thin in Y (shallow).
     private void SeedAsteroidField(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
-        float maxR = sectorRadius * FieldFillFrac;
-        float hY = maxR * FieldFlatten;
-        int count = (int)MathF.Round(density * RockAreaDensity * MathF.PI * maxR * maxR);
+        float fillFrac = _seed.FieldFillFrac;
+        float flatten = _seed.FieldFlatten;
+        float areaDensity = _seed.FieldAreaDensity;
+        float maxR = sectorRadius * fillFrac;
+        float hY = maxR * flatten;
+        int count = (int)MathF.Round(density * areaDensity * MathF.PI * maxR * maxR);
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
@@ -394,22 +460,26 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = RockRadius(ref rng, 8.0, 55.0);
+            float radius = RockRadius(ref rng, _seed.FieldRockMin, _seed.FieldRockMax, _seed.RockSizeSkew);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
     }
 
-    // Verge pattern: a flattened ANNULAR BELT spanning BeltInnerFrac..BeltOuterFrac of the sector
-    // radius, reaching outward toward the edge. Count ∝ annulus area at constant density; sqrt-in-
-    // area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
+    // Verge pattern: a flattened ANNULAR BELT spanning belt-inner-frac..belt-outer-frac of the
+    // sector radius, reaching outward toward the edge. Count ∝ annulus area at constant density;
+    // sqrt-in-area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
     private void SeedAsteroidBelt(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
-        float rIn = sectorRadius * BeltInnerFrac;
-        float rOut = sectorRadius * BeltOuterFrac;
-        float hY = sectorRadius * BeltFlatten;
+        float innerFrac = _seed.BeltInnerFrac;
+        float outerFrac = _seed.BeltOuterFrac;
+        float flatten = _seed.BeltFlatten;
+        float areaDensity = _seed.BeltAreaDensity;
+        float rIn = sectorRadius * innerFrac;
+        float rOut = sectorRadius * outerFrac;
+        float hY = sectorRadius * flatten;
         float area = MathF.PI * (rOut * rOut - rIn * rIn);
-        int count = (int)MathF.Round(density * BeltAreaDensity * area);
+        int count = (int)MathF.Round(density * areaDensity * area);
         for (int i = 0; i < count; i++)
         {
             double ang = rng.NextDouble() * Math.PI * 2.0;
@@ -418,10 +488,108 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = RockRadius(ref rng, 6.0, 40.0);
+            float radius = RockRadius(ref rng, _seed.BeltRockMin, _seed.BeltRockMax, _seed.RockSizeSkew);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
+    }
+
+    // Dust distribution is derived ENTIRELY from the "amount" feel knob, RELATIVE to sector size — so
+    // an identical dust block reads identically in any-sized sector (the bug this whole change fixes).
+    // amount → cloud radius (a fraction of the sector radius), cloud count (enough to tile the covered
+    // disc at an amount-scaled overlap, clamped for fill-rate), and per-puff density. Own DetRng
+    // (authored seed, or world-seed ^ sector) keeps it independent of the asteroid/aleph draw.
+    private const int MaxDustClouds = 120;      // fill-rate cap; huge sectors use fewer, bigger clouds
+    private const float DustCoverageFrac = 0.9f; // clouds fill this fraction of the sector radius
+    private const float DustFlatten = 0.15f;     // shallow disc (Y half-thickness / coverage radius)
+
+    private void SeedDustClouds(uint sector, float sectorRadius, SectorDust? dust)
+    {
+        if (dust is null || dust.Amount <= 0f)
+            return;
+        float amount = Math.Clamp(dust.Amount, 0f, 1f);
+        ulong s = dust.Seed ?? (Seed ^ 0xD005_7D05_D005_7D05UL ^ ((ulong)sector * 0x9E37_79B9_7F4A_7C15UL));
+        var rng = new DetRng(s);
+
+        float coverageR = sectorRadius * DustCoverageFrac;
+        // Cloud radius scales with the sector (and grows with dustiness), so coverage is intrinsic.
+        float cloudR = sectorRadius * Lerp(0.15f, 0.5f, amount);
+        float density = Lerp(0.3f, 0.7f, amount); // per-puff opacity feel
+
+        // Tile the covered disc: (coverageR / cloudR)² single-cover clouds, times an amount-scaled
+        // overlap factor. Clamp to a perf cap — at the cap a very large sector just gets bigger clouds.
+        float overlap = Lerp(0.6f, 2.8f, amount);
+        int count = (int)MathF.Round(overlap * (coverageR * coverageR) / (cloudR * cloudR));
+        count = Math.Clamp(count, 1, MaxDustClouds);
+
+        float hY = coverageR * DustFlatten;
+        for (int i = 0; i < count; i++)
+        {
+            double ang = rng.NextDouble() * Math.PI * 2.0;
+            double rr = Math.Sqrt(rng.NextDouble()) * coverageR; // sqrt → uniform areal density
+            float px = (float)(Math.Cos(ang) * rr);
+            float pz = (float)(Math.Sin(ang) * rr);
+            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            float radius = cloudR * (float)(0.7 + 0.6 * rng.NextDouble()); // ±30% per-cloud jitter
+            DustClouds.Add(new DustCloud(sector, new Vec3(px, py, pz), radius, density));
+        }
+    }
+
+    // Radar/vision range multiplier through FULLY dense dust. `amount` sets the baseline shortening
+    // (1 = no attenuation at amount 0, 0.15 at amount 1); `opacity` (0..1, default 1) then scales that
+    // shortening toward "no impact" so an author can decouple radar impact from the VISUAL thickness —
+    // opacity 0 leaves radar untouched (floor 1) regardless of amount, opacity 1 is the legacy behaviour.
+    // Consumed by the vision sim (Simulation.Vision).
+    public static float DustVisionFloor(float amount, float opacity = 1f)
+    {
+        float baseFloor = Lerp(1f, 0.15f, Math.Clamp(amount, 0f, 1f));
+        return 1f - (1f - baseFloor) * Math.Clamp(opacity, 0f, 1f); // scale the deviation from clear
+    }
+
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
+    // Teams seeded by the default-arena fallback (below) when a config authors sectors but no garrison.
+    private const int DefaultTeamCount = 2;
+    // The number of teams the sim currently supports (Simulation.Pig.NumTeams / win condition / lobby).
+    // A map that declares more garrison teams than this fails fast at World construction.
+    public const int MaxSupportedTeams = 2;
+
+    // The legacy fallback arena, used ONLY when a config declares no sectors at all (a bare test/boot
+    // world). It reproduces the historical two-sector layout so bare-config callers behave exactly as
+    // before this became data-driven: a large field home for team 0 and a smaller belt for team 1,
+    // linked. Real maps author every sector explicitly and never touch this.
+    private const float LegacyHomeRadius = 2100f; // before × sector-scale
+    private const float LegacyVergeRadius = 700f;
+    private static List<WorldSectorConfig> DefaultArena(float sectorScale) =>
+        new()
+        {
+            new WorldSectorConfig
+            {
+                Id = 0, Radius = LegacyHomeRadius * sectorScale,
+                Asteroids = AsteroidKind.Field, Garrison = new SectorGarrison { Team = 0 },
+            },
+            new WorldSectorConfig
+            {
+                Id = 1, Radius = LegacyVergeRadius * sectorScale,
+                Asteroids = AsteroidKind.Belt, Garrison = new SectorGarrison { Team = 1 },
+            },
+        };
+
+    // Default gate topology when a map authors no `links`: connect sectors in a ring by id (a single
+    // edge for two sectors; the wrap-around edge for three or more). Empty for a lone sector.
+    private static List<SectorLink> DefaultRing(List<WorldSectorConfig> secs)
+    {
+        var links = new List<SectorLink>();
+        if (secs.Count < 2)
+            return links;
+        if (secs.Count == 2)
+        {
+            links.Add(new SectorLink(secs[0].Id, secs[1].Id));
+            return links;
+        }
+        for (int i = 0; i < secs.Count; i++)
+            links.Add(new SectorLink(secs[i].Id, secs[(i + 1) % secs.Count].Id));
+        return links;
     }
 
     // Mirror the module's NextAsteroidShape (Lib.cs): one variant index + three orientation
@@ -441,10 +609,9 @@ public sealed class World
     // (exponent > 1 biases toward the small end) so a field is mostly modest rocks with the
     // occasional large one — more visual variety than a flat uniform draw, still bounded to a
     // reasonable range. Consumes exactly one NextDouble so the asteroid RNG sequence is unchanged.
-    private static float RockRadius(ref DetRng rng, double minR, double maxR)
+    private static float RockRadius(ref DetRng rng, float minR, float maxR, float skew)
     {
-        const double Skew = 1.8;
-        double t = Math.Pow(rng.NextDouble(), Skew);
+        double t = Math.Pow(rng.NextDouble(), skew);
         return (float)(minR + t * (maxR - minR));
     }
 
@@ -457,11 +624,11 @@ public sealed class World
         return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 
-    private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR)
+    private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR, float yJitter)
     {
         double ang = rng.NextDouble() * Math.PI * 2.0;
         double r = minR + rng.NextDouble() * (maxR - minR);
-        float y = (float)((rng.NextDouble() - 0.5) * 80.0);
+        float y = (float)((rng.NextDouble() - 0.5) * yJitter);
         return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 }

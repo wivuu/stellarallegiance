@@ -2,7 +2,7 @@
 // repo's test idiom (mirrors MissileTest/MineTest): exits non-zero on any failure so CI / a manual
 // run can gate on it.
 //
-// Boots the real Simulation from the live content bundle (server/content/factions, copied next to
+// Boots the real Simulation from the live content bundle (server/content/core, copied next to
 // the test binary — same seam as MissileTest) with shields ENABLED (the default), and drives it
 // tick-by-tick. Covers: spawn capacity from the class def; the shield absorbs damage while it holds
 // (hull untouched); overflow spills into the hull when a hit pops the shield; the recharge delay +
@@ -30,12 +30,13 @@ void Check(bool cond, string pass, string fail)
 
 bool Near(float a, float b) => MathF.Abs(a - b) < 1e-3f;
 
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 const uint EmptySector = 999; // unregistered → boundless, asteroid-free (see MissileTest)
 
 Simulation BootSim(ulong seed)
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;

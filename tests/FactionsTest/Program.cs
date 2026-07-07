@@ -147,9 +147,9 @@ Check(
 // Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
 var mine = stock.Mines.Single(m => m.Id == "proximity-mine");
 Check(
-    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 200
+    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 60
         && mine.CloudRadius == 80 && mine.CloudCount == 64
-        && mine.ArmDelay == 0.5 && mine.Lifespan == 60 && mine.ModelName == "acs41",
+        && mine.ArmDelay == 1 && mine.Lifespan == 60 && mine.ModelName == "acs41",
     "stock proximity-mine carries field/blast/arming stats",
     $"proximity-mine wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay})"
 );
@@ -190,11 +190,8 @@ Check(
     "stock garrison carries base-type-id + radius/armor + hardpoints",
     $"stock garrison wrong (id {garrison.BaseTypeId}, r {garrison.Radius}, hp {garrison.MaxArmor}, hardpoints {garrison.Hardpoints.Count})"
 );
-Check(
-    stock.World is { Id: 0 } w && w.SectorScale == 2.25 && w.AsteroidDensity == 1.0,
-    "stock world config carries sector-scale + density",
-    $"stock world config wrong ({stock.World?.SectorScale}, {stock.World?.AsteroidDensity})"
-);
+// (World/sim tuning is no longer part of the factions bundle — it lives in the server's standalone
+// content/core/world.yaml, parsed by SimServer's WorldLoader and covered by tests/ContentTest.)
 
 Console.WriteLine(failures == 0 ? "\nALL FACTIONS TESTS PASSED" : $"\n{failures} FACTIONS TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

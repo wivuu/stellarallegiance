@@ -1,6 +1,6 @@
 ---
 name: tech-tree-content
-description: The tech-tree/content configuration pipeline — how ALL gameplay/balance values (hull stats, weapon stats, payload/cargo, prices, tech gating) are authored in YAML and streamed to clients. Use when adding/tuning any gameplay stat, hull, weapon, cargo/expendable, tech, or development; when touching server/Content/factions/*.yaml, shared/Defs.cs, Protocol.BuildDefs, GameNetClient.ApplyDefs, or DefRegistry; or when tempted to hardcode a balance number anywhere.
+description: The tech-tree/content configuration pipeline — how ALL gameplay/balance values (hull stats, weapon stats, payload/cargo, prices, tech gating) are authored in YAML and streamed to clients. Use when adding/tuning any gameplay stat, hull, weapon, cargo/expendable, tech, or development; when touching server/Content/core/*.yaml, shared/Defs.cs, Protocol.BuildDefs, GameNetClient.ApplyDefs, or DefRegistry; or when tempted to hardcode a balance number anywhere.
 ---
 
 # Tech-tree content pipeline
@@ -12,7 +12,7 @@ client-side, or invent a placeholder constant — stop and author it through thi
 ## The pipeline (source → client)
 
 ```
-server/Content/factions/*.yaml            authored bundle (manifest-driven, kebab-case keys)
+server/Content/core/*.yaml            authored bundle (manifest-driven, kebab-case keys)
   └─ CoreSerializer.Load                  factions/src/Allegiance.Factions/Serialization/CoreSerializer.cs
        └─ CoreValidator.Validate          factions/.../Validation/CoreValidator.cs  (boot gate #1 — throws)
             └─ FactionsContentProjection  server/Content/FactionsContentProjection.cs (Core → runtime defs)
@@ -28,7 +28,7 @@ server/Content/factions/*.yaml            authored bundle (manifest-driven, keba
   fields (wire ids, hardpoints, tick ballistics, payload) are optional "runtime extension"
   fields on the models — see `Model/RuntimeData.cs` header and the extension banners in
   `Hull.cs` / `Parts/Weapon.cs` / `Expendables/Expendable.cs`.
-- **Live bundle**: `server/Content/factions/` (manifest `core.manifest.yaml`). Shallow today —
+- **Live bundle**: `server/Content/core/` (manifest `core.manifest.yaml`). Shallow today —
   everything gated on the `base` capability. The **rich sample** with a real tech tree
   (tech.yaml, developments.yaml, per-faction gating) is `factions/sample-data/`.
 - **Runtime entry with a wire id = streamed def**: `class-id` (hull), `weapon-id` (weapon),
@@ -71,7 +71,7 @@ server/Content/factions/*.yaml            authored bundle (manifest-driven, keba
    (same position!), bump both protocol version constants.
 6. **Client store** — extend `DefRegistry.Load` + accessors if it's a new def kind. Sorted
    accessors (`All*` by id) keep UI order stable.
-7. **YAML** — author values in `server/Content/factions/*.yaml`; add new files to the
+7. **YAML** — author values in `server/Content/core/*.yaml`; add new files to the
    manifest `catalog:`; bump the manifest `version:`.
 8. **Tests** — spot-check in `tests/ContentTest` (projection + wire determinism) and
    `tests/FactionsTest` (raw YAML fields); validator cases in

@@ -69,7 +69,7 @@ public partial class WorldRenderer : Node3D
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
-    private readonly List<Vector3> _alephScratch = new();
+    private readonly List<(Vector3 Pos, uint Dest)> _alephScratch = new();
 
     // Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
     // once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
@@ -270,6 +270,9 @@ public partial class WorldRenderer : Node3D
     // _projectiles, so RefreshSectorVisibility and Reset() sweep them like bolts/missiles.
     private readonly Dictionary<ulong, ProbeView> _probes = new();
 
+    // Scratch reused by VisibleProbes() so the per-frame HUD marker pass allocates nothing.
+    private readonly List<(Vector3 Pos, byte Team)> _probeScratch = new();
+
     // Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
     // circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
     // TTL where the SERVER's analytic solve would have stopped it on a rock.
@@ -283,10 +286,36 @@ public partial class WorldRenderer : Node3D
     // tables); the client subscribes to everything but only SHOWS objects in the
     // player's current sector, toggled by node visibility (each node stashes its
     // sector id in metadata). _localSector follows the local ship as it warps; it
-    // defaults to the home/battlefield sector so the pre-spawn overview shows it.
-    private const uint HomeSector = 0;
-    private uint _localSector = HomeSector;
+    // defaults to the home sector (below) so the pre-spawn overview shows it.
+    private uint _localSector;
     private readonly Dictionary<uint, Sector> _sectors = new();
+
+    // The local player's home = the sector holding THEIR team's garrison (base). No hardcoded sector:
+    // before we know the team or have its base, fall back to the lowest known sector id (else 0). Used
+    // for the pre-spawn / post-death overview view + backdrop.
+    //
+    // _localTeam is only known once our ship spawns; pre-launch (the lobby / F3 peek) it's null, so we
+    // also honor _lobbyTeam — the side the pilot has picked in the roster (GameNetClient.ApplyLobbyState)
+    // — so the home-sector view frames THEIR garrison, not just the lowest sector id.
+    private uint HomeSector
+    {
+        get
+        {
+            if ((_localTeam ?? _lobbyTeam) is byte lt)
+                foreach (var (sector, team) in _baseTeams)
+                    if (team == lt)
+                        return sector;
+            uint lowest = 0;
+            bool any = false;
+            foreach (var s in _sectors.Values)
+                if (!any || s.SectorId < lowest)
+                {
+                    lowest = s.SectorId;
+                    any = true;
+                }
+            return lowest;
+        }
+    }
 
     // Local sector boundary, read by the HUD for the out-of-bounds warning. Radius 0
     // (sector not yet known) disables the warning.
@@ -326,8 +355,146 @@ public partial class WorldRenderer : Node3D
         if (_viewOverride == sector)
             return;
         _viewOverride = sector;
-        _starscape?.SetSector(ViewSector);
+        ApplySectorEnv(ViewSector);
         RefreshSectorVisibility();
+    }
+
+    // Central per-sector environment seam: repaint the nebula backdrop (Starscape) AND drive the sun +
+    // 3D dust clouds (SectorEnvironment) for `sector`. Every place the local or viewed sector changes
+    // routes through here so they stay in lockstep. When the sector carried no streamed environment
+    // (env == null) both drivers fall back to their legacy look.
+    private void ApplySectorEnv(uint sector)
+    {
+        _sectors.TryGetValue(sector, out var row);
+        _starscape?.SetSector(sector, row?.Env);
+        // Hand the dust driver the occluders NEAR the camera (rocks + bases) so it can extrude shape-accurate
+        // shadow VOLUMES downsun. The set is distance-based and refined per-frame by UpdateShadowOccluders as
+        // the camera moves; here we seed it for the new sector and anchor the move-throttle at the ref point.
+        Vector3 refPos = ShadowRefPos();
+        _lastOccluderCamPos = refPos;
+        _sectorEnv?.Apply(sector, row?.Env, GatherShadowOccluders(sector, refPos));
+    }
+
+    // Shadow-casting occluders are chosen by CAMERA DISTANCE, not a flat count: every base in the sector
+    // plus the rocks near the camera cast a spin-tracking shadow volume into the dust. The set is
+    // re-evaluated as the camera moves (throttled by OccluderRegatherStep). A big rock reaches from farther
+    // (its shadow is larger); a generous nearest-N backstop keeps a dense belt from building a thicket.
+    private const float ShadowOccluderRadius = 2500f; // base camera-distance cut for a rock to cast (world units)
+    private const float OccluderRegatherStep = 150f; // re-select the occluder set only after the camera moves this far
+    private const int MaxShadowOccluders = 64; // safety backstop: keep at most the NEAREST this many in range
+    private readonly List<(Node3D Node, float D)> _occluderScratch = new(); // D = distance² to camera (bases sort first)
+    private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
+    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts, built once
+    private Vector3 _lastOccluderCamPos = new(float.MaxValue, float.MaxValue, float.MaxValue);
+
+    // The shadow-casting occluders for `sector` given a camera/reference position: every base in the sector
+    // (few, always worth a shadow) plus the nearest rocks within ShadowOccluderRadius (extended by each
+    // rock's own radius so large rocks reach farther). Each is (its node, its LOCAL-frame hull vertices) for
+    // SectorEnvironment to bake a spin-tracking shadow volume parented to the node. Nearest-first, backstopped.
+    private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
+    {
+        _occluderScratch.Clear();
+        foreach (var (node, _, _) in _baseList)
+            if (InSector(node, sector))
+                _occluderScratch.Add((node, 0f)); // bases always cast: sort ahead of every rock
+        foreach (var n in _asteroidNodes.Values)
+            if (InSector(n, sector))
+            {
+                float reach = ShadowOccluderRadius + ShadowRadius(n); // big rocks cast from farther out
+                float d2 = n.GlobalPosition.DistanceSquaredTo(refPos);
+                if (d2 <= reach * reach)
+                    _occluderScratch.Add((n, d2));
+            }
+        _occluderScratch.Sort((a, b) => a.D.CompareTo(b.D)); // nearest first (bases at 0)
+
+        _sectorEnvOccluders.Clear();
+        int take = Mathf.Min(_occluderScratch.Count, MaxShadowOccluders);
+        for (int i = 0; i < take; i++)
+        {
+            var node = _occluderScratch[i].Node;
+            var verts = HullVertsFor(node);
+            if (verts.Length >= 4)
+                _sectorEnvOccluders.Add((node, verts));
+        }
+        return _sectorEnvOccluders;
+    }
+
+    // Camera-distance occluder re-scan, throttled to when the camera has actually moved a meaningful step.
+    // Sun + dust are static per sector, so this refreshes ONLY the shadow-volume set (SectorEnvironment
+    // builds/frees just the delta). Gated on the sector actually casting shadows so sunless sectors idle.
+    private void UpdateShadowOccluders()
+    {
+        if (_sectorEnv is not { CastsSectorShadows: true })
+            return;
+        Vector3 refPos = ShadowRefPos();
+        if (refPos.DistanceSquaredTo(_lastOccluderCamPos) < OccluderRegatherStep * OccluderRegatherStep)
+            return;
+        _lastOccluderCamPos = refPos;
+        _sectorEnv.UpdateOccluders(GatherShadowOccluders(ViewSector, refPos));
+    }
+
+    // The point the occluder distance-cut measures from: the active camera if there is one, else the local
+    // ship, else the origin — enough for the first build at spawn before a camera exists; the per-frame
+    // re-gather refines it once the camera is live.
+    private Vector3 ShadowRefPos()
+    {
+        var cam = GetViewport()?.GetCamera3D();
+        if (cam != null)
+            return cam.GlobalPosition;
+        return LocalShip is { } ship ? ship.GlobalPosition : Vector3.Zero;
+    }
+
+    // Cache the (static, LOCAL-frame) hull verts per node so the throttled re-gather doesn't re-walk a
+    // rock's meshes every time it re-selects the set. Cleared on world teardown (Reset).
+    private Vector3[] HullVertsFor(Node3D node)
+    {
+        if (_hullVertCache.TryGetValue(node, out var cached))
+            return cached;
+        var verts = CollectHullVerts(node);
+        _hullVertCache[node] = verts;
+        return verts;
+    }
+
+    private static bool InSector(Node3D n, uint sector) =>
+        n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
+
+    private static float ShadowRadius(Node3D n) =>
+        n.HasMeta("shadowRadius") ? (float)n.GetMeta("shadowRadius") : 0f;
+
+    // Collect an occluder's silhouette-relevant vertices in the occluder NODE's LOCAL frame, reduced to
+    // directional extremes. Local (not world) so the baked shadow volume can parent to the node and tumble
+    // with it — the shader re-derives the world silhouette each frame. Walks every MeshInstance3D under
+    // `node` (a rock IS one; a base is a small hierarchy) so both come from their actual meshes.
+    private static readonly List<Vector3> _hullVertScratch = new();
+
+    private static Vector3[] CollectHullVerts(Node3D node)
+    {
+        _hullVertScratch.Clear();
+        Transform3D rootInv = node.GlobalTransform.AffineInverse();
+        CollectMeshVerts(node, rootInv, _hullVertScratch);
+        return _hullVertScratch.Count >= 4
+            ? ShadowVolume.Extremes(_hullVertScratch, 48)
+            : System.Array.Empty<Vector3>();
+    }
+
+    private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
+    {
+        if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
+        {
+            // Vertex into the occluder-root's local frame: undo the root, apply the sub-mesh's own world
+            // placement. For a lone-mesh rock (mi is the root) this collapses to the raw mesh vertices.
+            Transform3D xform = rootInv * mi.GlobalTransform;
+            for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+            {
+                var arrays = mesh.SurfaceGetArrays(s);
+                if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
+                    continue;
+                foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+                    outVerts.Add(xform * v);
+            }
+        }
+        foreach (var child in node.GetChildren())
+            CollectMeshVerts(child, rootInv, outVerts);
     }
 
     private byte? _localTeam;
@@ -365,6 +532,7 @@ public partial class WorldRenderer : Node3D
 
     private ShipController? _ship; // sibling; lazily resolved for the live latency readout
     private Starscape? _starscape; // sibling; repaints the backdrop as the local sector changes
+    private SectorEnvironment? _sectorEnv; // sibling; drives per-sector sun + 3D dust clouds
     private DefRegistry _defs = null!; // sibling; runtime ship/weapon/base defs the local ship predicts from
 
     // Enemy-shot masking lead (see ProjectileView). -1 = auto (derive from measured
@@ -399,6 +567,44 @@ public partial class WorldRenderer : Node3D
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
+
+    // The side the pilot has picked in the lobby roster, pushed by GameNetClient.ApplyLobbyState
+    // each time the roster lands (null while unassigned/NOAT). It's what lets the pre-launch F3 peek
+    // frame the pilot's own garrison before a ship exists — see HomeSector.
+    private byte? _lobbyTeam;
+
+    // Record the pilot's picked side and, while pre-launch, retarget the cached local sector to their
+    // garrison. _localSector is only otherwise assigned on spawn/warp/reset, so without this the F3
+    // peek (which reads _localSector via ViewSector) keeps showing whatever sector was current at the
+    // last world rebuild — the lowest id, not the pilot's home. Recompute every roster frame: the team
+    // byte and the base roster that resolves it to a sector can each arrive first. Cheap no-op once
+    // homed (HomeSector only walks the handful of garrisons). Untouched while flying — there the ship
+    // owns _localSector and warps it between sectors.
+    public void NetSetLobbyTeam(byte? team)
+    {
+        _lobbyTeam = team;
+        RehomePreLaunch();
+    }
+
+    // Re-resolve the pre-launch local sector to the pilot's garrison. HomeSector depends on TWO
+    // independently-streamed inputs — the picked team (NetSetLobbyTeam) and the bases that map a team
+    // to a sector (InsertBase) — which can land in either order (and under fog the whole world is
+    // re-streamed on a team pick). So this is called from BOTH seams: whichever arrives last completes
+    // the home. Without it, _localSector (only otherwise set on spawn/warp/reset) keeps whatever sector
+    // was current at the last rebuild — often an id the fog-limited client doesn't even hold, so the F3
+    // peek reads radius 0 and silently refuses to open. No-op while flying (the ship owns _localSector
+    // and warps it) and a cheap no-op once homed (HomeSector only walks the handful of garrisons).
+    private void RehomePreLaunch()
+    {
+        if (LocalShip != null)
+            return;
+        uint home = HomeSector;
+        if (home == _localSector)
+            return;
+        _localSector = home;
+        ApplySectorEnv(home);
+        RefreshSectorVisibility();
+    }
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
@@ -556,17 +762,32 @@ public partial class WorldRenderer : Node3D
         return _baseHealthScratch;
     }
 
-    // Warp gates (alephs) in the currently-visible (local) sector, as world positions, for the
-    // HUD off-screen indicators. Mirrors VisibleBases()' sector filter via Node.Visible, so the
-    // markers only reflect gates in the sector you're flying. Returns a shared scratch list —
-    // read it immediately.
-    public IReadOnlyList<Vector3> VisibleAlephs()
+    // Warp gates (alephs) in the currently-visible (local) sector, as world position + the
+    // destination sector each gate warps to, for the HUD off-screen indicators / labels.
+    // Mirrors VisibleBases()' sector filter via Node.Visible, so the markers only reflect gates
+    // in the sector you're flying. Returns a shared scratch list — read it immediately.
+    public IReadOnlyList<(Vector3 Pos, uint Dest)> VisibleAlephs()
     {
         _alephScratch.Clear();
         foreach (var node in _alephNodes.Values)
             if (node.Visible)
-                _alephScratch.Add(node.GlobalPosition);
+                _alephScratch.Add((node.GlobalPosition, node is AlephView av ? av.DestSectorId : 0u));
         return _alephScratch;
+    }
+
+    // Live recon probes in the current view sector, for the HUD's probe markers. Mirrors
+    // VisibleAlephs()' sector filter via Node.Visible. The streamed probe set is already owner-team-
+    // only plus radar-detected enemy probes, so whatever's here is exactly "deployed by us or nearby
+    // and detected" — the marker pass draws it straight, tinted by each probe's owning team (and
+    // applies its own proximity rule for the off-screen edge marker). Returns a shared scratch list —
+    // read it immediately.
+    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleProbes()
+    {
+        _probeScratch.Clear();
+        foreach (var node in _probes.Values)
+            if (node.Visible)
+                _probeScratch.Add((node.GlobalPosition, node.Team));
+        return _probeScratch;
     }
 
     public override void _Ready()
@@ -622,6 +843,7 @@ public partial class WorldRenderer : Node3D
 
         _defs = GetNode<DefRegistry>("../DefRegistry");
         _starscape = GetNodeOrNull<Starscape>("../Starscape");
+        _sectorEnv = GetNodeOrNull<SectorEnvironment>("../SectorEnvironment");
 
         if (float.TryParse(OS.GetEnvironment("SHOT_MASK_MS"), out var ms) && ms >= 0f)
             _shotMaskMs = ms;
@@ -683,6 +905,104 @@ public partial class WorldRenderer : Node3D
             gi.Transparency = transparency;
         foreach (var child in node.GetChildren())
             DimNode(child, transparency);
+    }
+
+    // ---- Quick discover/warp fade (asteroids + bases) -------------------
+    // Static geometry used to POP the instant its sector became the view sector — on a fog reveal or
+    // an aleph warp the whole rock field / stations blinked into existence. Instead we ramp each
+    // node's per-instance transparency over FadeDur so it dissolves in (and out) quickly. `Curr` is a
+    // 0..1 "shown" factor; the applied transparency lerps from 1 (invisible) at Curr=0 to the node's
+    // RESTING transparency at Curr=1 (0 for a live rock/base, StaleBaseTransparency for a dead-but-
+    // remembered station — so a fade-in never un-dims a wreck). Node.Visible stays true for the whole
+    // fade and only drops to false once a fade-out completes, so the Visible-gated queries
+    // (VisibleBases/VisibleAlephs/collision) keep matching what's actually on screen.
+    private const float FadeDur = 0.2f; // seconds for a full in/out ramp — "quick", not a slow dissolve
+    private struct Fade { public float Curr; public float Target; }
+    private readonly Dictionary<Node3D, Fade> _fades = new();
+    private readonly List<Node3D> _fadeScratch = new();
+
+    // Resting (fully-shown) transparency for a world node: 0 = opaque, StaleBaseTransparency for a
+    // destroyed-but-remembered base so a re-scout fade settles at the ghostly dim rather than solid.
+    private float RestTransparencyFor(Node3D node)
+    {
+        foreach (var (bn, _, id) in _baseList)
+            if (bn == node)
+                return FogActive && _baseHealthFrac.TryGetValue(id, out float f) && f <= 0.001f
+                    ? StaleBaseTransparency
+                    : 0f;
+        return 0f; // asteroids (and live bases) rest opaque
+    }
+
+    // Begin (or reverse) a fade toward shown/hidden for one static node. A node not yet mid-fade only
+    // starts one if it actually needs to change — an already-shown node staying shown is a no-op, so
+    // steady frames cost nothing. A fade-in forces Visible=true up front (its transparency carries the
+    // reveal); a fade already running just retargets, so a warp-in-then-out mid-ramp reverses cleanly.
+    private void FadeNode(Node3D n, bool show)
+    {
+        float target = show ? 1f : 0f;
+        if (_fades.TryGetValue(n, out var f))
+        {
+            f.Target = target;
+            _fades[n] = f;
+        }
+        else if (show && !n.Visible)
+        {
+            DimNode(n, 1f); // start invisible so the ramp dissolves it in
+            n.Visible = true;
+            _fades[n] = new Fade { Curr = 0f, Target = 1f };
+        }
+        else if (!show && n.Visible)
+        {
+            _fades[n] = new Fade { Curr = 1f, Target = 0f };
+        }
+    }
+
+    // Assign a static node its sector and kick a fade-in if it lands in the current view (a fresh fog
+    // reveal or Welcome dump right in front of the player). Off-view nodes stay hidden with no fade —
+    // there's nothing to dissolve when it's another sector. Mirrors SetNodeSector's meta contract so
+    // RefreshSectorVisibility keeps driving it afterward.
+    private void SetNodeSectorFading(Node3D n, uint sector)
+    {
+        n.SetMeta("sector", (int)sector);
+        if (sector == ViewSector)
+        {
+            n.Visible = false; // fresh nodes default Visible=true; force the fade to start from hidden
+            FadeNode(n, true);
+        }
+        else
+        {
+            DimNode(n, RestTransparencyFor(n));
+            n.Visible = false;
+        }
+    }
+
+    // Advance every in-flight fade one frame, applying transparency and retiring finished ramps.
+    private void AdvanceFades(double delta)
+    {
+        if (_fades.Count == 0)
+            return;
+        float step = (float)delta / FadeDur;
+        _fadeScratch.Clear();
+        _fadeScratch.AddRange(_fades.Keys);
+        foreach (var n in _fadeScratch)
+        {
+            if (!IsInstanceValid(n))
+            {
+                _fades.Remove(n);
+                continue;
+            }
+            var f = _fades[n];
+            f.Curr = Mathf.MoveToward(f.Curr, f.Target, step);
+            DimNode(n, Mathf.Lerp(1f, RestTransparencyFor(n), f.Curr));
+            if (Mathf.IsEqualApprox(f.Curr, f.Target))
+            {
+                if (f.Target <= 0f)
+                    n.Visible = false; // fully faded out — drop out of the Visible-gated queries
+                _fades.Remove(n);
+            }
+            else
+                _fades[n] = f;
+        }
     }
 
     public void NetInsertShip(Ship row, bool local)
@@ -835,15 +1155,22 @@ public partial class WorldRenderer : Node3D
     // match/sector/team bookkeeping to its pre-connection defaults.
     public void Reset()
     {
+        // Shadow volumes parent to the rock nodes freed just below; drop the sector-env cache so the fresh
+        // Welcome rebuilds them (the same-sector dedup would otherwise skip the post-reconnect re-apply).
+        _sectorEnv?.Invalidate();
+
         foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             child.QueueFree();
 
+        _fades.Clear(); // keyed by the base/asteroid nodes freed just above
         _baseNodes.Clear();
         _baseList.Clear();
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
+        _hullVertCache.Clear(); // keyed by the rock nodes freed just above
+        _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
         _shipNodes.Clear();
         _shipShield.Clear();
         _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
@@ -865,16 +1192,19 @@ public partial class WorldRenderer : Node3D
         _pilotNames.Clear();
 
         LocalShip = null;
+        _localTeam = null;
+        // Keep _lobbyTeam: the roster (ApplyLobbyState) is a separate stream from this world rebuild,
+        // so clearing it here would blank the pre-launch home-sector view until the next roster frame.
+        // HomeSector reads it below, so resolve _localSector AFTER the team fields are settled.
         _localSector = HomeSector;
         _viewOverride = null;
-        _localTeam = null;
         ServerTick = 0;
         Phase = MatchPhase.Lobby;
         Winner = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
         _contactLostUntil = -1.0;
-        _starscape?.SetSector(HomeSector);
+        ApplySectorEnv(HomeSector);
     }
 
     // Static world from the Welcome frame, feeding the same bodies the STDB path uses.
@@ -903,7 +1233,15 @@ public partial class WorldRenderer : Node3D
     // called when the local ship warps, or when the overview retargets the view.
     private void RefreshSectorVisibility()
     {
-        foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
+        // Static geometry dissolves in/out on a warp instead of popping (see FadeNode); the transient
+        // groups (ships/bolts/alephs/effects) still toggle instantly — a warp cuts hard between the two
+        // sectors' live action, and fading brief effects would just smear them.
+        foreach (var group in new[] { _bases, _asteroids })
+        foreach (var child in group.GetChildren())
+            if (child is Node3D n && n.HasMeta("sector"))
+                FadeNode(n, (int)n.GetMeta("sector") == (int)ViewSector);
+
+        foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
                 n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
@@ -970,7 +1308,7 @@ public partial class WorldRenderer : Node3D
         if (_alephNodes.ContainsKey(row.AlephId))
             return;
         var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-        var av = new AlephView { Name = $"Aleph_{row.AlephId}", Position = pos };
+        var av = new AlephView { Name = $"Aleph_{row.AlephId}", Position = pos, DestSectorId = row.DestSectorId };
         _alephs.AddChild(av);
         _alephNodes[row.AlephId] = av;
         _alephLinks.Add((row.SectorId, row.DestSectorId));
@@ -1008,7 +1346,10 @@ public partial class WorldRenderer : Node3D
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
         _collisionWorld.AddBase(row);
         _baseTeams.Add((row.SectorId, row.Team));
-        SetNodeSector(node, row.SectorId);
+        SetNodeSectorFading(node, row.SectorId);
+        // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team
+        // was already known but its base hadn't arrived yet). Cheap no-op unless it changes the home.
+        RehomePreLaunch();
         GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
     }
 
@@ -1120,7 +1461,8 @@ public partial class WorldRenderer : Node3D
         _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
         _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
-        SetNodeSector(node, row.SectorId);
+        node.SetMeta("shadowRadius", row.Radius); // extends its shadow-caster reach (big rocks cast from farther)
+        SetNodeSectorFading(node, row.SectorId);
     }
 
 
@@ -1151,7 +1493,7 @@ public partial class WorldRenderer : Node3D
             _pendingHomeReset = false;
             // Follow the local ship's sector and re-show that sector's world.
             _localSector = row.SectorId;
-            _starscape?.SetSector(row.SectorId);
+            ApplySectorEnv(row.SectorId);
             _shipNodes[row.ShipId] = node;
             SetNodeSector(node, row.SectorId);
             RefreshSectorVisibility();
@@ -1203,7 +1545,7 @@ public partial class WorldRenderer : Node3D
                 if (warped)
                 {
                     _localSector = newRow.SectorId;
-                    _starscape?.SetSector(newRow.SectorId);
+                    ApplySectorEnv(newRow.SectorId);
                     RefreshSectorVisibility();
                 }
                 break;
@@ -1431,7 +1773,7 @@ public partial class WorldRenderer : Node3D
                 continue;
             ClipSphere(pos, vel, a.Pos, a.Radius, ref ttl);
         }
-        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         foreach (var b in _baseClip)
         {
             if (b.Sector != sector)
@@ -1458,7 +1800,7 @@ public partial class WorldRenderer : Node3D
             if (a.Sector == sector)
                 occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, a.Pos, a.Radius));
         }
-        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         foreach (var b in _baseClip)
         {
             if (b.Sector == sector)
@@ -1541,7 +1883,7 @@ public partial class WorldRenderer : Node3D
         if (_pendingHomeReset && LocalShip == null && !DeathCamActive)
         {
             _localSector = HomeSector;
-            _starscape?.SetSector(HomeSector);
+            ApplySectorEnv(HomeSector);
             RefreshSectorVisibility();
             _pendingHomeReset = false;
         }
@@ -1557,6 +1899,12 @@ public partial class WorldRenderer : Node3D
             foreach (var (node, baseQ, axis, speed) in _asteroidSpins.Values)
                 node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
         }
+
+        // Quick discover/warp fade for static geometry (asteroids + bases).
+        AdvanceFades(delta);
+
+        // Re-select the dust shadow-casters by camera distance (throttled to real camera movement).
+        UpdateShadowOccluders();
 
         // Cull bolts whose (obstruction-clipped) flight life has elapsed.
         for (int i = _bolts.Count - 1; i >= 0; i--)

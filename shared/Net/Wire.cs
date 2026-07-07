@@ -7,7 +7,14 @@ public static class Wire
 {
     // Wire-format version. Bump whenever a frame layout changes. The client checks this in the
     // Welcome handshake and refuses to play against a skewed server instead of misreading frames.
-    public const byte ProtocolVersion = 24;
+    // v25: per-sector environment appended to every sector static (Welcome + MsgReveal) —
+    // sun/god-rays, nebula override, and the seeded dust-cloud list. See Protocol.WriteSectorEnv.
+    // v27: dust block carries an `opacity` float (after the color) — scales both the rendered puff
+    // alpha and the radar/vision attenuation, decoupled from the visual `amount`.
+    // v28: sun block carries an `ambient` float (after energy) — the sector's ambient/fill light energy.
+    // v29: sun block carries a `size` float (after ambient) — the visible disc's world-space quad width
+    // (-1 sentinel = client default). See Protocol.WriteSectorEnv / Sun.SetDiscSize.
+    public const byte ProtocolVersion = 29;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

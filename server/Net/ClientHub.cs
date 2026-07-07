@@ -946,7 +946,16 @@ public sealed class ClientHub
             else
             {
                 client.AnchorPos = default;
-                client.AnchorSector = World.HomeSector;
+                // No live ship (spectator/dead): anchor on the client's team garrison sector if it has
+                // one, else the map's default sector. (No hardcoded "home" — home = your garrison.)
+                uint anchor = _sim.World.DefaultSector;
+                foreach (var b in _sim.World.Bases)
+                    if (b.Team == client.Team)
+                    {
+                        anchor = b.SectorId;
+                        break;
+                    }
+                client.AnchorSector = anchor;
             }
 
             if (goneFrames is not null)

@@ -32,6 +32,11 @@ public partial class TargetMarkers : Control
     private const float AimRadius = 8f; // aim-reticle gunsight radius (px)
     private const float GlyphSize = 8f; // class-glyph radius (px)
 
+    // Beyond this range from the local ship, a FRIENDLY probe drops its off-screen edge marker so
+    // your own distant probes don't crowd the screen edges — it still draws when you look right at
+    // it (on screen). Enemy (radar-detected) probes are never suppressed. Hardcoded; tweak to taste.
+    private const float ProbeEdgeMarkerRange = 500f;
+
     // Fog last-known ghost contact opacity — dim enough to read as memory, not a live marker.
     private const float GhostAlpha = 0.32f;
 
@@ -41,15 +46,11 @@ public partial class TargetMarkers : Control
     private const float BaseBarHeight = 6f;
     private const float BaseBarYOffset = 22f; // bar centre this many px above the base centre
 
-    // Mirror the server / PredictionController muzzle constants so the aim line and
-    // lead solution match the shots that actually get fired. ProjectileSpeed is the
-    // muzzle speed ADDED to ship velocity; NoseOffset is the muzzle's forward offset
-    // from ship center; MaxLeadTime is the projectile lifespan (ProjectileLifeTicks
-    // 50 × FlightModel.Dt 0.05 s), i.e. effective weapon range.
-    private const float ProjectileSpeed = 250f;
-    private const float NoseOffset = 3f;
-    private const float MaxLeadTime = 2.5f;
-    private const float DefaultAimRange = 500f; // where the aim reticle sits when no target is focused
+    // No hand-mirrored muzzle numbers here anymore: the aim line and lead solution read
+    // the SAME streamed WeaponDef row the server's TryFire fires from (via ResolveLocalGun
+    // below), so ProjectileSpeed / muzzle offset / effective range can never drift out of
+    // sync with the server. MaxLeadTime is derived per-gun as ProjectileLifeTicks × FlightModel.Dt.
+    private const float DefaultAimRange = 500f; // aim-reticle anchor when no gun (pod/unarmed, or defs not streamed yet)
 
     // Chrome pulls from the shared design tokens. Focus = the amber "selection" highlight
     // (Secondary); the lead indicator shares that amber so it reads as belonging to the
@@ -68,7 +69,7 @@ public partial class TargetMarkers : Control
     private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
 
     // The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
-    // world landmark (warp gate) rather than a ship/base.
+    // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon.
     private enum Kind
     {
         Base,
@@ -77,6 +78,7 @@ public partial class TargetMarkers : Control
         Bomber,
         Pod,
         Aleph,
+        Probe,
     }
 
     private WorldRenderer _world = null!;
@@ -165,7 +167,7 @@ public partial class TargetMarkers : Control
     private Vector2 AimReticleScreenPoint(PredictionController local)
     {
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 pt = local.GlobalPosition + fwd * (NoseOffset + DefaultAimRange);
+        Vector3 pt = local.GlobalPosition + fwd * LocalAimRange(local);
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(pt))
             return GetViewportRect().Size * 0.5f;
@@ -295,6 +297,28 @@ public partial class TargetMarkers : Control
     // picks the class's first Missile-kind hardpoint the same way the server does.
     private bool HasSiegeCapability(PredictionController local) =>
         !local.IsPod && _defs.MissileMount((byte)local.Class) is { CanDamageBase: true };
+
+    // The local ship's first Bolt-kind weapon mount (hardpoint + the WeaponDef it fires), or
+    // null if the hull carries none (a pod, an unarmed hull, or the defs haven't streamed yet
+    // — the server won't fire either way, so the aim line has nothing to solve). Mirrors
+    // PredictionController's own mount resolution (PredictionController.cs ~315-331): same
+    // pod-aware class-id lookup (ShipModelLoader.DefId's idiom) and same "first Bolt mount"
+    // pick, so the muzzle/lead solve reads the exact row the server fires from.
+    private (HardpointDef hp, WeaponDef gun)? ResolveLocalGun(PredictionController local)
+    {
+        byte classId = local.IsPod ? DefRegistry.PodClassId : (byte)local.Class;
+        foreach (var (hp, weapon) in _defs.WeaponMounts(classId))
+            if (weapon.Kind == WeaponKind.Bolt)
+                return (hp, weapon);
+        return null;
+    }
+
+    // Where the aim reticle sits along the firing line: the equipped bolt weapon's effective
+    // range (its shots die there) so the crosshair marks the edge of your gun's reach, falling
+    // back to the DefaultAimRange anchor for a pod/unarmed hull. Shared by the reticle draw, the
+    // Tab-target ranking point, and the SystemRing gauge centre so all three stay on one point.
+    private float LocalAimRange(PredictionController local) =>
+        _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
 
     // The enemy closest to the local ship, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
@@ -443,9 +467,28 @@ public partial class TargetMarkers : Control
         }
 
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
-        // edge arrow off-screen) so the way to the nearest aleph always reads.
-        foreach (var pos in _world.VisibleAlephs())
-            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true);
+        // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
+        // destination sector name so the gate reads as "goes to X" at a glance.
+        foreach (var (pos, dest) in _world.VisibleAlephs())
+            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true,
+                label: dest != 0 ? _world.SectorName(dest) : "");
+
+        // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
+        // (friendly: true = quiet glyph). The streamed set is already fog-filtered (own team +
+        // radar-detected enemy). In flight, a friendly probe beyond ProbeEdgeMarkerRange drops its
+        // off-screen edge marker so your own distant probes don't crowd the screen edges — but it
+        // still draws when it's actually on screen. Enemy probes are never suppressed. In the F3
+        // overview the edge-declutter is switched off entirely: the map should show every probe,
+        // matching how alephs/ghosts fully render there.
+        PredictionController? probeRef = _world.LocalShip;
+        foreach (var (pos, team) in _world.VisibleProbes())
+        {
+            bool friendlyProbe = probeRef != null && team == probeRef.Team;
+            bool beyondRange = probeRef != null
+                && pos.DistanceSquaredTo(probeRef.GlobalPosition) > ProbeEdgeMarkerRange * ProbeEdgeMarkerRange;
+            DrawEntity(view, pos, Kind.Probe, TeamColor(team), focused: false, friendly: true,
+                hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active);
+        }
 
         // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
         // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
@@ -488,42 +531,59 @@ public partial class TargetMarkers : Control
             // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
             // view axis — and the chase camera is offset above/behind the ship, so screen
             // center is NOT where shots go. Draw an aim reticle on the real firing line so the
-            // player has something to line up on the lead circle.
+            // player has something to line up on the lead circle. The gun is resolved once per
+            // frame from the SAME streamed WeaponDef row PredictionController fires from, so the
+            // muzzle position and lead solve always match the shots that actually get fired.
             Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-            Vector3 muzzle = local.GlobalPosition + fwd * NoseOffset;
-
-            // Lead indicator for the focused target: TryLead returns the world point to aim
-            // the nose at (the target's position led by the RELATIVE velocity, so the shot's
-            // inherited ship velocity carries it onto the target). The aim reticle is ranged to
-            // match (ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit;
-            // with no target it sits at a default range just to show the aim line.
-            float aimRange = DefaultAimRange;
-            if (
-                focusedShip != null
-                && TryLead(
-                    muzzle,
-                    local.Velocity,
-                    focusedShip.GlobalPosition,
-                    focusedShip.Velocity,
-                    out Vector3 aimPoint,
-                    out float t
-                )
-            )
+            var gunMount = ResolveLocalGun(local);
+            if (gunMount is { hp: var hp, gun: var gun })
             {
-                aimRange = ProjectileSpeed * t;
-                if (!Cam.IsPositionBehind(aimPoint))
-                {
-                    Vector2 lp = Cam.UnprojectPosition(aimPoint);
-                    Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
-                        ? null
-                        : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                    DrawLeadIndicator(targetSp, lp);
-                }
-            }
+                Vector3 muzzle = local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ) + local.GlobalPosition;
 
-            Vector3 reticlePoint = muzzle + fwd * aimRange;
-            if (!Cam.IsPositionBehind(reticlePoint))
-                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+                // Lead indicator for the focused target: TryLead returns the world point to aim
+                // the nose at (the target's position led by the RELATIVE velocity, so the shot's
+                // inherited ship velocity carries it onto the target). The aim reticle is ranged to
+                // match (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a
+                // hit; with no target it sits at the gun's effective range just to show the aim line.
+                float aimRange = LocalAimRange(local);
+                if (
+                    focusedShip != null
+                    && TryLead(
+                        muzzle,
+                        local.Velocity,
+                        focusedShip.GlobalPosition,
+                        focusedShip.Velocity,
+                        gun.ProjectileSpeed,
+                        gun.ProjectileLifeTicks * FlightModel.Dt,
+                        out Vector3 aimPoint,
+                        out float t
+                    )
+                )
+                {
+                    aimRange = gun.ProjectileSpeed * t;
+                    if (!Cam.IsPositionBehind(aimPoint))
+                    {
+                        Vector2 lp = Cam.UnprojectPosition(aimPoint);
+                        Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
+                            ? null
+                            : Cam.UnprojectPosition(focusedShip.GlobalPosition);
+                        DrawLeadIndicator(targetSp, lp);
+                    }
+                }
+
+                Vector3 reticlePoint = muzzle + fwd * aimRange;
+                if (!Cam.IsPositionBehind(reticlePoint))
+                    DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+            }
+            else
+            {
+                // No gun (a pod, an unarmed hull, or the def hasn't streamed yet): the server
+                // won't fire either, so there's no lead solution to draw — just a visual anchor
+                // reticle on the firing line at the default range.
+                Vector3 reticlePoint = local.GlobalPosition + fwd * DefaultAimRange;
+                if (!Cam.IsPositionBehind(reticlePoint))
+                    DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+            }
 
             // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
             // missile homing on us (drawn last so it sits over everything). State cached in _Process.
@@ -695,8 +755,10 @@ public partial class TargetMarkers : Control
 
     // Draw one entity marker. On screen: enemies get a corner bracket + class glyph (focus =
     // larger/brighter); friendlies/bases get a subtle, dimmer class glyph. Off screen or
-    // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn.
-    private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly, string glyph = "")
+    // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn — unless
+    // hideOffScreen is set, in which case an off-screen entity draws nothing (used to keep distant
+    // friendly probes from crowding the screen edges while still marking them when in view).
+    private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly, string glyph = "", string label = "", bool hideOffScreen = false)
     {
         Vector2 center = size * 0.5f;
 
@@ -718,6 +780,8 @@ public partial class TargetMarkers : Control
                 // Subtle teammate / base marker: dimmer and small so it never competes with
                 // the enemy reticles or clutters the view.
                 DrawClassGlyph(sp, kind, new Color(color, 0.55f), GlyphSize * 0.85f, glyph);
+                if (label.Length > 0)
+                    DrawEntityLabel(sp, GlyphSize * 0.85f, color, label);
             }
             else
             {
@@ -732,12 +796,28 @@ public partial class TargetMarkers : Control
             return;
         }
 
+        if (hideOffScreen)
+            return; // off screen and suppressed (e.g. a distant friendly probe) — no edge marker
+
         // Off screen: clamp the marker to the inset viewport edge along the ray from center,
         // draw the class glyph there and an arrow just outside it pointing outward.
         Vector2 edge = ClampToEdge(sp, size, out Vector2 dir);
         float glyphScale = focused ? GlyphSize * 1.15f : GlyphSize;
-        DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, color, glyphScale, glyph);
+        Vector2 glyphPos = edge - dir * (ArrowSize + 2f);
+        DrawClassGlyph(glyphPos, kind, color, glyphScale, glyph);
         DrawArrow(edge, dir, color);
+        if (label.Length > 0)
+            DrawEntityLabel(glyphPos, glyphScale, color, label);
+    }
+
+    // A small mono caption drawn just to the right of an entity glyph (e.g. the destination
+    // sector name beside a warp gate). Dimmer than the glyph so it annotates without competing.
+    private void DrawEntityLabel(Vector2 p, float r, Color color, string label)
+    {
+        Font font = UiFonts.Mono;
+        const int fs = 10;
+        var pos = new Vector2(p.X + r + 5f, p.Y + (font.GetAscent(fs) - font.GetDescent(fs)) * 0.5f);
+        DrawString(font, pos, label, HorizontalAlignment.Left, -1, fs, new Color(color, 0.8f));
     }
 
     // Screen-space damage bar over a base: project the base centre, then draw a fixed-size
@@ -916,6 +996,20 @@ public partial class TargetMarkers : Control
                 DrawArc(p, r, 0f, Mathf.Tau, 20, color, 1.6f, true);
                 DrawArc(p, r * 0.5f, 0f, Mathf.Tau, 16, color, 1.4f, true);
                 break;
+            case Kind.Probe:
+                // Recon probe: a hollow diamond (sensor beacon) with a bright center dot — distinct
+                // from the filled pod circle and the aleph's concentric rings. Drawn as four line
+                // segments off the reused _poly4 scratch so the glyph allocates nothing.
+                _poly4[0] = p + new Vector2(0f, -r);
+                _poly4[1] = p + new Vector2(r, 0f);
+                _poly4[2] = p + new Vector2(0f, r);
+                _poly4[3] = p + new Vector2(-r, 0f);
+                DrawLine(_poly4[0], _poly4[1], color, 1.5f, true);
+                DrawLine(_poly4[1], _poly4[2], color, 1.5f, true);
+                DrawLine(_poly4[2], _poly4[3], color, 1.5f, true);
+                DrawLine(_poly4[3], _poly4[0], color, 1.5f, true);
+                DrawCircle(p, r * 0.32f, color);
+                break;
         }
     }
 
@@ -1047,19 +1141,23 @@ public partial class TargetMarkers : Control
 
     // Solve the constant-velocity intercept in the SHOOTER's frame and return the world
     // point the player must aim the nose at to hit. Everything is relative to the
-    // shooter: the projectile leaves at ProjectileSpeed along the chosen aim AND inherits
-    // the shooter's velocity, so relative to the shooter it travels at ProjectileSpeed in
+    // shooter: the projectile leaves at projectileSpeed along the chosen aim AND inherits
+    // the shooter's velocity, so relative to the shooter it travels at projectileSpeed in
     // the aim direction while the target drifts at vrel = targetVel - shooterVel. Find the
-    // earliest t > 0 where a ProjectileSpeed·t sphere reaches the target's relative path,
+    // earliest t > 0 where a projectileSpeed·t sphere reaches the target's relative path,
     // then the aim point is targetPos + vrel·t. Note this is NOT the absolute meeting
     // point (targetPos + targetVel·t): because the shot carries the shooter's velocity,
     // you point the nose at the relative-lead point and the shot's inherited drift carries
-    // it onto the target. Returns false if there's no forward solution within range.
+    // it onto the target. projectileSpeed/maxLeadTime come from the local ship's resolved
+    // WeaponDef (the same row the server fires from), not a hand-mirrored constant. Returns
+    // false if there's no forward solution within range.
     private static bool TryLead(
         Vector3 shooterPos,
         Vector3 shooterVel,
         Vector3 targetPos,
         Vector3 targetVel,
+        float projectileSpeed,
+        float maxLeadTime,
         out Vector3 aimPoint,
         out float t
     )
@@ -1070,7 +1168,7 @@ public partial class TargetMarkers : Control
         Vector3 vrel = targetVel - shooterVel;
 
         // (s² - |vrel|²) t² - 2(d·vrel) t - |d|² = 0
-        float a = ProjectileSpeed * ProjectileSpeed - vrel.LengthSquared();
+        float a = projectileSpeed * projectileSpeed - vrel.LengthSquared();
         float b = 2f * d.Dot(vrel);
         float c = d.LengthSquared();
 
@@ -1093,7 +1191,7 @@ public partial class TargetMarkers : Control
             t = SmallestPositive(t1, t2);
         }
 
-        if (t <= 0f || t > MaxLeadTime)
+        if (t <= 0f || t > maxLeadTime)
             return false;
         aimPoint = targetPos + vrel * t;
         return true;

@@ -242,14 +242,99 @@ namespace StellarAllegiance.Shared
         public List<HardpointDef> Hardpoints = new();
     }
 
-    // One per-sector radius override carried on WorldConfig. Radius is nullable: null → the sim uses
-    // the sector's built-in default radius × WorldConfig.SectorScale. Server-consumed only (World map
-    // seeding); NOT streamed — the client learns each sector's radius from the per-sector statics.
+    // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;
+    // Belt = annular ring; None = no rocks. Replaces the old per-sector-id field/belt hardcoding.
+    public enum AsteroidKind { None, Field, Belt }
+
+    // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
+    // determines how many teams the map supports (one home per team).
+    public sealed class SectorGarrison
+    {
+        public byte Team;
+    }
+
+    // A gate (aleph) edge between two sector ids. Becomes a bidirectional aleph pair in the World ctor.
+    public readonly record struct SectorLink(uint A, uint B);
+
+    // One sector's authored config carried on WorldConfig, resolved from map YAML. All geometry is
+    // data-driven here: radius, garrison (→ team base), asteroid shape, 2D map-diagram position, and
+    // the visual environment. Radius nullable: null → WorldConfig.SectorRadius × SectorScale (ONE
+    // shared default for every sector — no per-sector-id special-casing). Server-consumed for World
+    // seeding; the client learns radius/name/env/map-pos from the per-sector statics, not this object.
     public sealed class WorldSectorConfig
     {
         public uint Id;
         public float? Radius;
         public string? Name; // optional display name for the sector (streamed per-sector static)
+
+        // Optional team garrison (home base) hosted in this sector. Null → no base here.
+        public SectorGarrison? Garrison;
+
+        // Asteroid distribution shape for this sector (default Field). Optional per-sector density
+        // multiplier on WorldConfig.AsteroidDensity (null → 1×) is the only granular rock knob left.
+        public AsteroidKind Asteroids = AsteroidKind.Field;
+        public float? AsteroidDensityMult;
+
+        // 2D LAYOUT coordinate for the map diagram (minimap + lobby preview), normalized ~[-1,1].
+        // Distinct from 3D geometry — purely where this sector's node is drawn. Both-null → the
+        // client falls back to its auto ring layout. STREAMED (per-sector static + lobby catalog).
+        public float? MapPosX;
+        public float? MapPosY;
+
+        // Optional per-sector environment authored in map YAML (`sectors[].environment`). Null → legacy
+        // behavior. The Sun/Nebula/Dust-VISUAL parts are streamed to the client per-sector static; the
+        // dust ATTENUATION is server-only (the vision sim). Consumed by the World ctor (which resolves
+        // these into World.Sector.Env + World.DustClouds); the config object is never written as-is.
+        public SectorEnvironment? Env;
+    }
+
+    // Per-sector visual + gameplay environment. Every field is optional so any omitted sub-block leaves
+    // that concern at its legacy default (procedural client nebula, static sun, no fog/dust, stock belt).
+    public sealed class SectorEnvironment
+    {
+        public SectorSun? Sun;
+        public SectorNebula? Nebula;
+        public SectorDust? Dust;
+    }
+
+    // Streamed. Drives the client's directional sun light + volumetric god-ray shafts.
+    public sealed class SectorSun
+    {
+        public float? Azimuth;   // degrees around +Y; null → client keeps its static light direction
+        public float? Elevation; // degrees above the sector plane
+        public Vec3? Color;      // linear rgb; null → client default warm tint
+        public float? Energy;    // directional-light energy; null → client default
+        public float? Ambient;   // ambient (fill) light energy for the whole sector; null → client default
+        public float? Size;      // visible sun disc's world-space quad width; null → client default (900)
+        public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
+    }
+
+    // Streamed. Optional override of the client's sector-id-seeded nebula backdrop.
+    public sealed class SectorNebula
+    {
+        public Vec3? ColorA;
+        public Vec3? ColorB;
+        public float? Intensity;
+        public uint? Seed; // null → client seeds nebula shape from the sector id (legacy look)
+
+        // True when any field is authored — the client uses these values instead of its procedural seed.
+        public bool HasOverride => ColorA.HasValue || ColorB.HasValue || Intensity.HasValue || Seed.HasValue;
+    }
+
+    // Dust — a high-level "feel" block, not granular knobs. The server seeds the actual clouds
+    // deterministically (World.SeedDustClouds) RELATIVE to sector size, so an identical block reads
+    // identically in any-sized sector. Amount drives cloud coverage/count/thickness AND the radar/
+    // vision attenuation (dustier = less sightline); the seeded cloud list + color stream to the
+    // client, and the attenuation is derived server-side.
+    public sealed class SectorDust
+    {
+        public float Amount = 0.6f; // 0..1 "how dusty" — coverage/count/thickness/vision, all relative
+        // 0..1 how heavily the dust attenuates RADAR/vision, decoupled from the visual `Amount`: it
+        // scales the sightline shortening (0 = dust you can see straight through, 1 = full attenuation
+        // for this Amount). Default 1 = the legacy behaviour where Amount alone drove radar impact.
+        public float Opacity = 1f;
+        public Vec3? Color;         // dust albedo; null → client default
+        public uint? Seed;          // optional; null → derived from world seed ^ sector id
     }
 
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale
@@ -260,10 +345,19 @@ namespace StellarAllegiance.Shared
         public float SectorScale; // multiplier on authored sector radii
         public float AsteroidDensity; // asteroids per unit of normalized sector volume
 
-        // Per-sector radius overrides resolved from the authored `world.sectors` YAML. Consumed by World
-        // map seeding (server) only; deliberately NOT written to the wire (Protocol.BuildDefs skips it —
-        // the client already learns radii from the per-sector statics).
+        // The SINGLE default sector radius (× SectorScale) for any sector whose YAML omits `radius`.
+        // Replaces the old per-sector-id CoreRadius/VergeRadius constants. A map may override it via
+        // its top-level `sector-radius`; <= 0 falls back to World.DefaultSectorRadius.
+        public float SectorRadius;
+
+        // Per-sector config resolved from the authored `world.sectors` / map YAML: radius, garrison,
+        // asteroid shape, map-pos, environment. Consumed by World map seeding (server) only; the parts
+        // the client needs ride the per-sector statics, not this object.
         public List<WorldSectorConfig> Sectors = new();
+
+        // Gate (aleph) topology as sector-id EDGES. Empty → the World ctor links sectors in a ring by
+        // id. Each entry becomes a bidirectional aleph pair. Authored at the map level (`links:`).
+        public List<SectorLink> Links = new();
         public bool DebugFreezeBrain; // skip the per-drone AI decision loop (benchmarking)
         public bool DebugNoFire; // force every ship's Firing input false (benchmarking)
 
@@ -291,6 +385,129 @@ namespace StellarAllegiance.Shared
         // Default 120s at projection (<= 0 -> stock). Server-side only — ghost lifetime is resolved
         // entirely in the sim's vision state; the client just renders whatever ghosts it's sent.
         public float FogGhostTimeout;
+
+        // Fog-of-war radar signatures of the static landmarks (peers of the ship/base signatures
+        // that live on their defs). Server-side only — never streamed.
+        public float AlephRadarSignature = 1.4f;
+        public float RockRadarSignature = 2f;
+
+        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
+        // `seeding:`). NONE of these ride the wire — Protocol.BuildDefs deliberately skips them
+        // (drones/damage/seeding are server-authoritative; the client only sees their results).
+        // The field initializers below ARE the stock values: projection only overrides the knobs
+        // an author actually wrote, so an omitted block or field always means "stock".
+        public WorldAiTuning Ai = new();
+        public WorldCombatTuning Combat = new();
+        public WorldMechanicsTuning Mechanics = new();
+        public WorldSeedingTuning Seeding = new();
+    }
+
+    // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
+    // drones. Initializers = the stock values ported verbatim from the module's PigAI; durations
+    // are seconds (the sim converts to ticks at its own TickHz).
+    public sealed class WorldAiTuning
+    {
+        public float BrainHz = 5f; // AI decisions per second (steering still re-runs every tick)
+        public int MaxPigsPerTeam = 5;
+        public float SquadDelaySeconds = 10f; // after a squad wipe before the next squad
+        public float AggroWindowSeconds = 3f; // aggression memory
+        public float SpawnStaggerSeconds = 1.5f; // gap between squad-mate launches
+        public float PatrolReachFrac = 0.7f; // patrol waypoints stay within this of the sector radius
+        public float PatrolArrive = 120f; // re-roll a patrol waypoint once within this distance
+        public float RadarRange = 1200f;
+        public float FireRange = 360f;
+        public float Standoff = 90f;
+        public float AimDeg = 6f; // half-angle aim cone inside which a pig opens fire
+        public float TurnGain = 3.2f;
+        public float AvoidLookahead = 160f;
+        public float AvoidMargin = 14f;
+
+        // Threat-scoring weights — the target-priority formula.
+        public float ThreatAimWeight = 1f;
+        public float ThreatCloseWeight = 0.7f;
+        public float ThreatDmgWeight = 0.4f;
+        public float ThreatSwitchMargin = 1.3f;
+        public float ThreatBaseWeight = 2.5f;
+        public float BaseThreatRadius = 700f;
+        public float ThreatBomberBonus = 2f; // extra threat score for Bomber-class enemies
+
+        public float WanderPeriodSeconds = 60f; // before a pig re-rolls its wander sector
+        public float BomberRespawnSeconds = 15f; // cooldown before a team's bomber relaunches
+
+        // Per-slot aiming skill spread: lead accuracy, turn snappiness, residual wobble.
+        public float TurnGainMin = 2.2f;
+        public float TurnGainMax = 4.4f;
+        public float LeadFracMin = 0.55f;
+        public float LeadFracMax = 1f;
+        public float AimWobbleMaxRad = 0.05f;
+        public float AimWobbleRate = 0.11f;
+
+        public float MissileHoldSeconds = 4f; // extra spacing between missile launches, on top of the rack
+
+        // Evasive side-thruster "juking".
+        public float JukeRange = 300f;
+        public float JukePeriodSeconds = 0.65f;
+        public float JukeAmpMin = 0.45f;
+        public float JukeAmpMax = 1f;
+    }
+
+    // Collision-damage + sector-boundary-hazard tuning (world.yaml `combat:`). Server-side
+    // only — collision KINEMATICS stay in the shared CollisionConfig (the client predicts bounces),
+    // but damage is applied by the server alone.
+    public sealed class WorldCombatTuning
+    {
+        public float CollisionDamageScale = 0.6f; // ship-vs-static damage scale
+        public float ShipShipDamageScale = 1.2f;
+        public float MaxCollisionDamage = 30f;
+        // Below this closing normal speed (m/s) a collision is a harmless kiss: bounce, no damage.
+        public float CollisionDamageMinSpeed = 4f;
+
+        // Outside-the-boundary erosion: base DPS + ramp per unit beyond the sector radius, capped.
+        public float BoundaryBaseDps = 8f;
+        public float BoundaryRampDps = 0.12f;
+        public float BoundaryMaxDps = 60f;
+    }
+
+    // Gate / docking / pod / economy / match-flow tuning (world.yaml `mechanics:`).
+    // Server-side only; durations are seconds.
+    public sealed class WorldMechanicsTuning
+    {
+        public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+        public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
+        public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
+        public float PaycheckSeconds = 60f; // between flat per-team credit paychecks
+        public float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
+        public float LaunchSpeed = 80f; // u/s catapult out of the docking-exit hardpoint on spawn
+        public float RescueRadiusMult = 4f; // pod pickup distance, × ship collision radius
+        public float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
+        public float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
+        public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
+        public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
+    }
+
+    // Map-seeding shape tuning (world.yaml `seeding:`): the ONE shared default set per
+    // asteroid shape (field = shallow disc, belt = flattened ring), applied to any sector by its
+    // declared `asteroids` kind, plus team-base placement. Consumed by World map seeding only.
+    public sealed class WorldSeedingTuning
+    {
+        public float FieldFillFrac = 0.9f; // disc radius as a fraction of sector radius
+        public float FieldFlatten = 0.1f; // disc half-thickness as a fraction of its radius
+        public float FieldAreaDensity = 4.5e-6f; // rocks per unit² of disc footprint (at density 1)
+        public float FieldRockMin = 8f;
+        public float FieldRockMax = 55f;
+        public float BeltInnerFrac = 0.25f; // belt inner radius / sector radius
+        public float BeltOuterFrac = 0.95f; // belt outer radius / sector radius
+        public float BeltFlatten = 0.13f; // belt half-thickness / sector radius
+        public float BeltAreaDensity = 2.4e-5f; // rocks per unit² of annulus (at density 1)
+        public float BeltRockMin = 6f;
+        public float BeltRockMax = 40f;
+        public float RockSizeSkew = 1.8f; // power-law size skew (> 1 biases toward small rocks)
+
+        // Team garrison (home base) placement: radial band as a fraction of the sector radius,
+        // plus total vertical jitter (position y is drawn in ±BaseYJitter/2).
+        public float BaseInnerFrac = 0.14f;
+        public float BaseOuterFrac = 0.3f;
+        public float BaseYJitter = 80f;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

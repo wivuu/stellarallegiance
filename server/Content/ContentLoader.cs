@@ -16,11 +16,16 @@ namespace SimServer.Content;
 //      (ShipClassDef/WeaponDef/BaseDef/WorldConfig), unchanged on the wire (Protocol.BuildDefs) and
 //      client. The caller (Program.cs) runs the shared ContentValidator on the projected defs as a
 //      SECOND gate (keeps the dangling-hardpoint / non-positive-hull / dup-id guarantees).
+//
+// The WORLD config is NOT part of the bundle manifest: it is a standalone server file
+// (content/core/world.yaml) loaded by WorldLoader and carried onto the ContentSet here — the
+// tech tree tunes buyable gameplay/balance, world.yaml tunes the server's world defaults + sim.
 public static class ContentLoader
 {
-    // Load a complete content bundle from its manifest path. Throws on a missing/malformed/invalid
-    // bundle so the caller fails fast at boot (FileNotFoundException / InvalidDataException).
-    public static ContentSet Load(string manifestPath)
+    // Load a complete content bundle from its manifest path plus the standalone world tuning file.
+    // Throws on a missing/malformed/invalid bundle or world file so the caller fails fast at boot
+    // (FileNotFoundException / InvalidDataException).
+    public static ContentSet Load(string manifestPath, string worldPath)
     {
         if (!File.Exists(manifestPath))
             throw new FileNotFoundException($"content manifest not found: {manifestPath}");
@@ -33,6 +38,6 @@ public static class ContentLoader
                 $"content bundle '{manifestPath}' failed validation ({vr.Errors.Count} error(s)):\n  - "
                 + string.Join("\n  - ", vr.Errors));
 
-        return FactionsContentProjection.Project(core);
+        return FactionsContentProjection.Project(core, WorldLoader.Load(worldPath));
     }
 }

@@ -28,8 +28,9 @@ void Check(bool cond, string pass, string fail)
 // The stock bundle manifest is copied next to the test binary (csproj Content), not the cwd
 // `dotnet run` uses. ContentLoader.Load runs the full pipeline (CoreSerializer.Load → CoreValidator
 // → FactionsContentProjection), returning the projected runtime ContentSet.
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
-var stock = ContentLoader.Load(stockPath);
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
+var stock = ContentLoader.Load(stockPath, worldPath);
 
 // 1. The shipped bundle is valid content.
 var errors = ContentValidator.Validate(stock.Ships, stock.Weapons, stock.Bases, stock.CargoItems);
@@ -75,7 +76,7 @@ Check(
 // explicit stealthy RadarSignature < 1.
 Check(
     scout.VisionConeLength == 2400f && scout.VisionConeAngleDeg == 30f
-        && scout.VisionSphereRadius == 900f && scout.RadarSignature == 0.5f,
+        && scout.VisionSphereRadius == 1080f && scout.RadarSignature == 0.5f,
     "loader projected scout vision fields",
     $"scout vision wrong (cone {scout.VisionConeLength}/{scout.VisionConeAngleDeg}, sphere {scout.VisionSphereRadius}, sig {scout.RadarSignature})"
 );
@@ -97,7 +98,7 @@ var sigLessCore = new Factions.Core
     Stations = { new Factions.Station { Id = "sigless-base", Name = "SigLessBase", BaseTypeId = 50 } },
     Factions = { new Factions.Faction { Id = "f", Name = "F", LifepodHullId = "sigless", InitialStationId = "sigless-base" } },
 };
-var sigLessSet = FactionsContentProjection.Project(sigLessCore);
+var sigLessSet = FactionsContentProjection.Project(sigLessCore, new WorldConfig());
 var sigLessShip = sigLessSet.Ships.First(s => s.ClassId == 50);
 var sigLessBase = sigLessSet.Bases.First(b => b.BaseTypeId == 50);
 Check(
@@ -140,8 +141,8 @@ Check(
 var mineW = stock.Weapons.First(w => w.WeaponId == 7);
 Check(
     mineW.Kind == WeaponKind.Mine
-        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 10
-        && mineW.MineCloudRadius == 80f && mineW.BlastPower == 200f
+        && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 20
+        && mineW.MineCloudRadius == 80f && mineW.BlastPower == 60f
         && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "acs41",
     "loader projected the mine-dispenser (mine-kind WeaponDef)",
     $"mine weapon wrong (kind {mineW.Kind}, cloudCount {mineW.MineCloudCount}, arm {mineW.MineArmTicks}, trigger {mineW.MineTriggerRadius}, cloudR {mineW.MineCloudRadius}, cargo {mineW.CargoId})"
@@ -150,8 +151,8 @@ Check(
 var probeW = stock.Weapons.First(w => w.WeaponId == 8);
 Check(
     probeW.Kind == WeaponKind.Probe
-        && probeW.ProbeSightRadius == 1200f && probeW.ProbeLifespanSec == 600f
-        && probeW.ProjectileLifeTicks == 12000 && probeW.CargoId == 4 && probeW.ModelName == "acs64",
+        && probeW.ProbeSightRadius == 4800f && probeW.ProbeLifespanSec == 1200f
+        && probeW.ProjectileLifeTicks == 24000 && probeW.CargoId == 4 && probeW.ModelName == "acs64",
     "loader projected the probe-dispenser (probe-kind WeaponDef)",
     $"probe weapon wrong (kind {probeW.Kind}, sight {probeW.ProbeSightRadius}, lifespan {probeW.ProbeLifespanSec}, life-ticks {probeW.ProjectileLifeTicks}, cargo {probeW.CargoId}, model {probeW.ModelName})"
 );
@@ -228,11 +229,42 @@ Check(
     "loader parsed world knobs (incl. fog-of-war)",
     $"world wrong (scale {stock.World.SectorScale}, density {stock.World.AsteroidDensity}, fog {stock.World.FogOfWar})"
 );
+// Server-side tuning blocks project through (authored world.yaml values == the stock initializers,
+// so a silently-dropped key would still pass here — the raw-YAML parse is asserted on the DTO
+// below; this guards the PROJECTION seam, one knob per block).
+Check(
+    stock.World.Ai.MaxPigsPerTeam == 5 && stock.World.Ai.JukePeriodSeconds == 0.65f
+        && stock.World.Combat.CollisionDamageMinSpeed == 4f
+        && stock.World.Mechanics.RescueRadiusMult == 4f
+        && stock.World.Seeding.BeltAreaDensity == 2.4e-5f
+        && stock.World.AlephRadarSignature == 1.4f,
+    "loader projected the world tuning blocks (ai/combat/mechanics/seeding)",
+    $"tuning wrong (pigs {stock.World.Ai.MaxPigsPerTeam}, juke {stock.World.Ai.JukePeriodSeconds}, "
+        + $"min-speed {stock.World.Combat.CollisionDamageMinSpeed}, rescue {stock.World.Mechanics.RescueRadiusMult}, "
+        + $"belt {stock.World.Seeding.BeltAreaDensity}, aleph-sig {stock.World.AlephRadarSignature})"
+);
+// The raw world.yaml parse: the tuning blocks parse from their kebab-case keys onto the NULLABLE
+// WorldDef fields (CoreSerializer ignores unmatched properties, so a key mismatch would SILENTLY
+// fall back to stock at projection — the authored values equal stock, making that invisible above).
+// Asserting the parsed nullables are non-null catches it; one tricky key per block.
+var worldDef = Allegiance.Factions.Serialization.CoreSerializer.Deserialize<WorldDef>(File.ReadAllText(worldPath));
+Check(
+    worldDef is { Id: 0, SectorScale: 2.25, AsteroidDensity: 1.0 }
+        && worldDef.Ai is { BrainHz: 5, MaxPigsPerTeam: 5, AimWobbleMaxRad: 0.05 }
+        && worldDef.Combat is { CollisionDamageScale: 0.6, BoundaryRampDps: 0.12 }
+        && worldDef.Mechanics is { PaycheckSeconds: 60, ReconnectGraceSeconds: 5 }
+        && worldDef.Seeding is { FieldAreaDensity: 4.5e-6, BaseYJitter: 80, BeltRockMax: 40 }
+        && worldDef.AlephRadarSignature == 1.4 && worldDef.RockRadarSignature == 2.0,
+    "world.yaml tuning blocks (ai/combat/mechanics/seeding) parse from kebab-case keys",
+    $"world.yaml parse wrong (brain-hz {worldDef.Ai?.BrainHz}, dmg-scale {worldDef.Combat?.CollisionDamageScale}, "
+        + $"paycheck {worldDef.Mechanics?.PaycheckSeconds}, field-density {worldDef.Seeding?.FieldAreaDensity}, "
+        + $"aleph-sig {worldDef.AlephRadarSignature})"
+);
 
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the
 //     client receives). Guards loader nondeterminism / iteration-order drift.
-var bytesA = Protocol.BuildDefs(ContentLoader.Load(stockPath));
-var bytesB = Protocol.BuildDefs(ContentLoader.Load(stockPath));
+var bytesA = Protocol.BuildDefs(ContentLoader.Load(stockPath, worldPath));
+var bytesB = Protocol.BuildDefs(ContentLoader.Load(stockPath, worldPath));
 Check(bytesA.SequenceEqual(bytesB), "loader is deterministic (byte-identical MsgDefs on reload)", $"defs differ across loads ({bytesA.Length} vs {bytesB.Length} bytes)");
 
 // 3a. The validator catches a dangling weapon hardpoint (the fail-fast the server relies on at boot).

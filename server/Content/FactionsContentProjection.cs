@@ -24,7 +24,9 @@ namespace SimServer.Content;
 // deterministically — so two loads project byte-identical defs (tests/ContentTest guards this).
 public static class FactionsContentProjection
 {
-    public static ContentSet Project(Factions.Core core)
+    // The world config is loaded separately (WorldLoader, content/core/world.yaml — not part of
+    // the bundle manifest) and carried through onto the ContentSet unchanged.
+    public static ContentSet Project(Factions.Core core, WorldConfig world)
     {
         var projectileById = core.Projectiles.ToDictionary(p => p.Id);
         var missileById = core.Missiles.ToDictionary(m => m.Id);
@@ -62,8 +64,6 @@ public static class FactionsContentProjection
             .Where(e => e.CargoId is not null)
             .Select(ProjectCargoItem)
             .ToList();
-
-        var world = ProjectWorld(core.World);
 
         var start = ProjectFactionStart(core);
 
@@ -332,32 +332,4 @@ public static class FactionsContentProjection
             WeaponId = h.WeaponId,
         };
 
-    private static WorldConfig ProjectWorld(Factions.WorldConfig? w) =>
-        w is null
-            ? new WorldConfig
-            {
-                FogOfWar = true,
-                FogEyeballMultiplier = 1.5f,
-                FireSignatureBoost = 2.5f,
-                FireSignatureWindow = 4f,
-                FogGhostTimeout = 120f,
-            }
-            : new WorldConfig
-            {
-                Id = w.Id,
-                SectorScale = (float)w.SectorScale,
-                AsteroidDensity = (float)w.AsteroidDensity,
-                DebugFreezeBrain = w.DebugFreezeBrain,
-                DebugNoFire = w.DebugNoFire,
-                // Fog-of-war: default ON. EyeballMultiplier is server-side only (never streamed —
-                // Protocol.BuildDefs deliberately skips it).
-                FogOfWar = w.FogOfWar ?? true,
-                FogEyeballMultiplier = w.FogEyeballMultiplier <= 0 ? 1.5f : (float)w.FogEyeballMultiplier,
-                // Fire-boost knobs are server-side only too (never streamed). 0/omitted resolve
-                // to the stock 2.5x over 4 s; author fire-signature-boost: 1.0 to disable.
-                FireSignatureBoost = w.FireSignatureBoost <= 0 ? 2.5f : (float)w.FireSignatureBoost,
-                FireSignatureWindow = w.FireSignatureWindow <= 0 ? 4f : (float)w.FireSignatureWindow,
-                // Ghost lifetime is server-side only too. 0/omitted -> stock 120 s.
-                FogGhostTimeout = w.FogGhostTimeout <= 0 ? 120f : (float)w.FogGhostTimeout,
-            };
 }

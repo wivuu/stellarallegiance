@@ -96,16 +96,28 @@ public partial class Minimap : Control
         var font = UiFonts.Mono;
         DrawString(font, panelPos + new Vector2(12, 20), "▶ SECTOR MAP", HorizontalAlignment.Left, -1, 11, HeaderColor);
 
-        // Deterministic ring layout (centered below the title). Index -> angle is fixed,
-        // so the nodes hold their places regardless of the random aleph geometry.
+        // Layout (centered below the title): authored map-pos → a real 2D shape (star/custom); else a
+        // deterministic ring (index → fixed angle, so nodes hold their places regardless of geometry).
         Vector2 center = panelPos + new Vector2(PanelW * 0.5f, PanelH * 0.5f + 12f);
         int n = sectors.Count;
         var pos = _nodePos; // populate the field so clicks can hit-test these centers
         pos.Clear();
+        bool useMapPos = sectors.Exists(s => s.HasMapPos);
+        // Normalize authored positions so the widest axis just fills the layout ring.
+        float maxAbs = 1f;
+        if (useMapPos)
+            foreach (var s in sectors)
+                if (s.HasMapPos)
+                    maxAbs = Mathf.Max(maxAbs, Mathf.Max(Mathf.Abs(s.MapPosX), Mathf.Abs(s.MapPosY)));
         for (int i = 0; i < n; i++)
         {
             Vector2 p = center;
-            if (n > 1)
+            if (useMapPos)
+            {
+                var m = sectors[i].HasMapPos ? new Vector2(sectors[i].MapPosX, sectors[i].MapPosY) : Vector2.Zero;
+                p = center + m * (LayoutRadius / maxAbs); // +Y down = screen down
+            }
+            else if (n > 1)
             {
                 float ang = Mathf.Pi + i * (Mathf.Tau / n); // first node on the left
                 p = center + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * LayoutRadius;

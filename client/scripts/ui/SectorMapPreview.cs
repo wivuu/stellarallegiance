@@ -4,16 +4,19 @@ using Godot;
 
 namespace StellarAllegiance.Ui;
 
-// Compact sector-graph preview for the server browser: one circle per sector (Core + Verge
-// today), team-colored base diamonds and gate dots placed by their world X/Z inside each
-// circle, over a faint grid with corner brackets. Fed by the lobby's advertised map layout —
-// no asteroids, no live entities. Renders a "NO MAP DATA" placeholder for servers that
-// predate the layout field.
+// Compact sector-graph preview for the server browser: one circle per sector, team-colored base
+// diamonds and gate dots placed by their world X/Z inside each circle, over a faint grid with corner
+// brackets. Fed by the lobby's advertised map layout — no asteroids, no live entities. Sectors are
+// laid out by their authored 2D map-pos (star/custom shapes); a map without map-pos falls back to
+// sqrt(radius)-weighted horizontal slots. Renders "NO MAP DATA" for servers that predate the layout.
 public sealed partial class SectorMapPreview : Control
 {
     public sealed record BaseMark(int Team, Vector2 Pos);
 
-    public sealed record SectorModel(uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates, string? Name = null);
+    // MapX/MapY (valid when HasMapPos) is the authored 2D diagram position, normalized ~[-1,1].
+    public sealed record SectorModel(
+        uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates, string? Name = null,
+        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
 
     public sealed record MapModel(List<SectorModel> Sectors);
 
@@ -65,24 +68,22 @@ public sealed partial class SectorMapPreview : Control
             return;
         }
 
-        // Sectors don't share a coordinate space, so each gets a horizontal slot sized by
-        // sqrt(radius) — keeps the small Verge legible beside the much larger Core.
         var sectors = _map.Sectors;
         float pad = 14f;
-        float totalWeight = 0f;
-        foreach (var s in sectors)
-            totalWeight += Mathf.Sqrt(Mathf.Max(s.Radius, 1f));
-
         float usableW = Size.X - pad * 2f;
         float usableH = Size.Y - pad * 2f - 14f; // leave room for the caption line
-        float cx = pad;
-        foreach (var s in sectors)
+
+        // Place each sector node (center + circle radius). Authored map-pos → a real 2D layout (star/
+        // custom); otherwise fall back to sqrt(radius)-weighted horizontal slots.
+        var centers = new Vector2[sectors.Count];
+        var radii = new float[sectors.Count];
+        LayoutSectors(sectors, pad, usableW, usableH, centers, radii);
+
+        for (int i = 0; i < sectors.Count; i++)
         {
-            float weight = Mathf.Sqrt(Mathf.Max(s.Radius, 1f)) / totalWeight;
-            float slotW = usableW * weight;
-            float circleR = Mathf.Min(slotW / 2f, usableH / 2f) - 4f;
-            var center = new Vector2(cx + slotW / 2f, pad + usableH / 2f);
-            cx += slotW;
+            var s = sectors[i];
+            var center = centers[i];
+            float circleR = radii[i];
             if (circleR <= 4f)
                 continue;
 
@@ -109,6 +110,70 @@ public sealed partial class SectorMapPreview : Control
             fontSize: 10,
             modulate: DesignTokens.TextDim
         );
+    }
+
+    // Compute each sector's node center + circle radius. If any sector carries an authored map-pos we
+    // lay the whole map out in that normalized 2D space (star/custom shapes); otherwise we fall back to
+    // sqrt(radius)-weighted horizontal slots (the legacy look for maps/servers without map-pos).
+    private void LayoutSectors(
+        List<SectorModel> sectors, float pad, float usableW, float usableH, Vector2[] centers, float[] radii)
+    {
+        bool useMapPos = sectors.Exists(s => s.HasMapPos);
+        if (useMapPos)
+        {
+            // Bounds of the authored positions (unit box fallback for any sector missing a map-pos,
+            // which sits at origin). Node circle radius scales with sqrt(radius) but is capped by the
+            // spacing so neighbours don't overlap.
+            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var s in sectors)
+            {
+                float px = s.HasMapPos ? s.MapX : 0f,
+                    py = s.HasMapPos ? s.MapY : 0f;
+                minX = Mathf.Min(minX, px);
+                maxX = Mathf.Max(maxX, px);
+                minY = Mathf.Min(minY, py);
+                maxY = Mathf.Max(maxY, py);
+            }
+            float spanX = Mathf.Max(maxX - minX, 0.001f);
+            float spanY = Mathf.Max(maxY - minY, 0.001f);
+            float maxRadius = 1f;
+            foreach (var s in sectors)
+                maxRadius = Mathf.Max(maxRadius, s.Radius);
+
+            // Node radius: a fraction of the smaller usable dimension, shrinking as the map gets busier.
+            float nodeR = Mathf.Min(usableW, usableH) * 0.5f / Mathf.Max(2f, Mathf.Sqrt(sectors.Count) + 1f);
+            float left = pad + nodeR,
+                right = Size.X - pad - nodeR,
+                top = pad + nodeR,
+                bottom = pad + usableH - nodeR;
+            for (int i = 0; i < sectors.Count; i++)
+            {
+                var s = sectors[i];
+                float px = s.HasMapPos ? s.MapX : 0f,
+                    py = s.HasMapPos ? s.MapY : 0f;
+                float u = (px - minX) / spanX,
+                    v = (py - minY) / spanY;
+                centers[i] = new Vector2(
+                    Mathf.Lerp(left, right, spanX < 0.01f ? 0.5f : u),
+                    Mathf.Lerp(top, bottom, spanY < 0.01f ? 0.5f : v)); // +Y down = screen down
+                radii[i] = nodeR * Mathf.Sqrt(Mathf.Max(s.Radius, 1f) / maxRadius);
+            }
+            return;
+        }
+
+        // Legacy: horizontal slots sized by sqrt(radius) so a small sector stays legible beside a big one.
+        float totalWeight = 0f;
+        foreach (var s in sectors)
+            totalWeight += Mathf.Sqrt(Mathf.Max(s.Radius, 1f));
+        float cx = pad;
+        for (int i = 0; i < sectors.Count; i++)
+        {
+            float weight = Mathf.Sqrt(Mathf.Max(sectors[i].Radius, 1f)) / totalWeight;
+            float slotW = usableW * weight;
+            centers[i] = new Vector2(cx + slotW / 2f, pad + usableH / 2f);
+            radii[i] = Mathf.Min(slotW / 2f, usableH / 2f) - 4f;
+            cx += slotW;
+        }
     }
 
     // World X/Z (sector-local, |pos| <= radius-ish) → pixel position inside the sector circle.

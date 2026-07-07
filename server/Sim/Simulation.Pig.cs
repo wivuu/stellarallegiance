@@ -13,10 +13,6 @@ namespace SimServer.Sim;
 // split is fine (the module ran the same split across PigBrainTick / PigExecute).
 public sealed partial class Simulation
 {
-    // ---- AI decision rate: re-decide every 4th sim tick (~200 ms), re-steer every tick ----
-    private const uint PigBrainHz = 5;
-    private const uint PigBrainEvery = TickHz / PigBrainHz; // 4
-
     // PigDecision.Kind — how PigExecute should fly a drone for the cached decision.
     private const byte PigKindNone = 0;
     private const byte PigKindChase = 1; // combat: lead + juke + fire on a target ship
@@ -25,49 +21,99 @@ public sealed partial class Simulation
     private const byte PigKindAttackPoint = 4; // shell a static target (enemy base) from standoff
     private const byte PigKindPatrol = 5; // sweep a ring around the cached sector center
 
-    // ---- PIG tuning (ported verbatim from the module) ----
-    private const byte NumTeams = 2;
-    private const int MaxPigsPerTeam = 5;
-    private const uint PigSquadDelayTicks = 10 * TickHz; // 10 s after a wipe before the next squad
-    private const uint PigAggroWindowTicks = 3 * TickHz; // ~3 s aggression memory
-    private const float PigPatrolReachFrac = 0.7f; // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
-    private const float PigPatrolArrive = 120f; // re-roll a patrol waypoint once within this distance of it
-    private const float PigRadarRange = 1200f;
-    private const float PigFireRange = 360f;
-    private const float PigStandoff = 90f;
-    private const float PigAimDeg = 6f;
-    private const float PigTurnGain = 3.2f;
-    private const float PigAvoidLookahead = 160f;
-    private const float PigAvoidMargin = 14f;
-    private const uint PigSpawnStaggerTicks = 30;
-    private const float PigThreatAimWeight = 1.0f;
-    private const float PigThreatCloseWeight = 0.7f;
-    private const float PigThreatDmgWeight = 0.4f;
-    private const float PigThreatSwitchMargin = 1.3f;
-    private const float PigThreatBaseWeight = 2.5f;
-    private const float PigBaseThreatRadius = 700f;
-    private const float PigThreatBomberBonus = 2.0f; // extra threat score for Bomber-class enemies
-    private const uint PigWanderPeriodTicks = 60 * TickHz; // 60 s window before a pig re-rolls its wander sector
-    private const uint PigBomberRespawnTicks = 15 * TickHz; // 15 s cooldown before a team's bomber relaunches
+    // The number of teams the sim drives drones for — an ENGINE capability limit (win condition,
+    // lobby validation, World's garrison fail-fast), not a tuning knob, so it stays compile-time.
+    private const byte NumTeams = (byte)World.MaxSupportedTeams;
+
+    // ---- PIG tuning — authored in world.yaml (`ai:`), resolved once in InitPigTuning ----
+    // Same names/semantics as the constants ported verbatim from the module; second-authored
+    // durations are converted to ticks here so the YAML stays TickHz-agnostic. Assigned once at
+    // construction (before any Step), never mutated after.
+    private uint PigBrainEvery; // AI re-decides every this-many sim ticks; re-steers every tick
+    private int MaxPigsPerTeam;
+    private uint PigSquadDelayTicks; // after a wipe before the next squad
+    private uint PigAggroWindowTicks; // aggression memory
+    private float PigPatrolReachFrac; // patrol waypoints stay within this of the sector radius (clear of the eroding boundary)
+    private float PigPatrolArrive; // re-roll a patrol waypoint once within this distance of it
+    private float PigRadarRange;
+    private float PigFireRange;
+    private float PigStandoff;
+    private float PigTurnGain;
+    private float PigAvoidLookahead;
+    private float PigAvoidMargin;
+    private uint PigSpawnStaggerTicks;
+    private float PigThreatAimWeight;
+    private float PigThreatCloseWeight;
+    private float PigThreatDmgWeight;
+    private float PigThreatSwitchMargin;
+    private float PigThreatBaseWeight;
+    private float PigBaseThreatRadius;
+    private float PigThreatBomberBonus; // extra threat score for Bomber-class enemies
+    private uint PigWanderPeriodTicks; // window before a pig re-rolls its wander sector
+    private uint PigBomberRespawnTicks; // cooldown before a team's bomber relaunches
 
     // Aiming skill (per-slot): lead accuracy, turn snappiness, residual wobble.
-    private const float PigTurnGainMin = 2.2f;
-    private const float PigTurnGainMax = 4.4f;
-    private const float PigLeadFracMin = 0.55f;
-    private const float PigLeadFracMax = 1.0f;
-    private const float PigAimWobbleMaxRad = 0.05f;
-    private const float PigAimWobbleRate = 0.11f;
+    private float PigTurnGainMin;
+    private float PigTurnGainMax;
+    private float PigLeadFracMin;
+    private float PigLeadFracMax;
+    private float PigAimWobbleMaxRad;
+    private float PigAimWobbleRate;
 
     // Extra spacing between a pig's missile launches, ON TOP of the rack's own fire-interval, so the
     // AI doesn't empty its magazine the instant it holds a lock. Reads as "less eager" and conserves
     // the rack. Enforced by gating Firing2 on ticks-since-LastMissileTick in ChaseThink.
-    private const uint PigMissileHoldTicks = 4 * TickHz; // ~4 s
+    private uint PigMissileHoldTicks;
 
     // Evasive side-thrusters ("juking").
-    private const float PigJukeRange = 300f;
-    private const float PigJukePeriodTicks = 13f;
-    private const float PigJukeAmpMin = 0.45f;
-    private const float PigJukeAmpMax = 1.0f;
+    private float PigJukeRange;
+    private float PigJukePeriodTicks;
+    private float PigJukeAmpMin;
+    private float PigJukeAmpMax;
+
+    private float PigAimSinDeg; // precomputed sin(aim half-angle); used in PigChaseInput + PigAttackPoint
+
+    private static uint SecondsToTicks(float seconds) =>
+        (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
+
+    // Resolve the authored world.yaml `ai:` block into the tick-domain fields above. Ctor-only.
+    private void InitPigTuning(WorldAiTuning t)
+    {
+        PigBrainEvery = System.Math.Clamp((uint)MathF.Round(TickHz / System.Math.Max(0.01f, t.BrainHz)), 1u, TickHz);
+        MaxPigsPerTeam = t.MaxPigsPerTeam;
+        PigSquadDelayTicks = SecondsToTicks(t.SquadDelaySeconds);
+        PigAggroWindowTicks = SecondsToTicks(t.AggroWindowSeconds);
+        PigSpawnStaggerTicks = SecondsToTicks(t.SpawnStaggerSeconds);
+        PigPatrolReachFrac = t.PatrolReachFrac;
+        PigPatrolArrive = t.PatrolArrive;
+        PigRadarRange = t.RadarRange;
+        PigFireRange = t.FireRange;
+        PigStandoff = t.Standoff;
+        PigTurnGain = t.TurnGain;
+        PigAvoidLookahead = t.AvoidLookahead;
+        PigAvoidMargin = t.AvoidMargin;
+        PigThreatAimWeight = t.ThreatAimWeight;
+        PigThreatCloseWeight = t.ThreatCloseWeight;
+        PigThreatDmgWeight = t.ThreatDmgWeight;
+        PigThreatSwitchMargin = t.ThreatSwitchMargin;
+        PigThreatBaseWeight = t.ThreatBaseWeight;
+        PigBaseThreatRadius = t.BaseThreatRadius;
+        PigThreatBomberBonus = t.ThreatBomberBonus;
+        PigWanderPeriodTicks = SecondsToTicks(t.WanderPeriodSeconds);
+        PigBomberRespawnTicks = SecondsToTicks(t.BomberRespawnSeconds);
+        PigTurnGainMin = t.TurnGainMin;
+        PigTurnGainMax = t.TurnGainMax;
+        PigLeadFracMin = t.LeadFracMin;
+        PigLeadFracMax = t.LeadFracMax;
+        PigAimWobbleMaxRad = t.AimWobbleMaxRad;
+        PigAimWobbleRate = t.AimWobbleRate;
+        PigMissileHoldTicks = SecondsToTicks(t.MissileHoldSeconds);
+        PigJukeRange = t.JukeRange;
+        PigJukePeriodTicks = t.JukePeriodSeconds * TickHz;
+        PigJukeAmpMin = t.JukeAmpMin;
+        PigJukeAmpMax = t.JukeAmpMax;
+        PigAimSinDeg = MathF.Sin(t.AimDeg * (MathF.PI / 180f));
+    }
 
     // Lead solving uses the drone's primary weapon (all server weapons share these). Instance
     // readonly (assigned in the Simulation ctor from the loaded WeaponDefs) since the content is now
@@ -76,9 +122,6 @@ public sealed partial class Simulation
     private readonly uint PigShotLifeTicks; // scout bolt lifespan in ticks, e.g. 16
     private readonly float PigShotSpeedSq;
     private readonly float PigMaxLead;
-
-    // Precomputed once; used in both PigChaseInput and PigAttackPoint.
-    private static readonly float PigAimSinDeg = MathF.Sin(PigAimDeg * (MathF.PI / 180f));
 
     private enum PigState : byte
     {
@@ -902,7 +945,7 @@ public sealed partial class Simulation
         };
     }
 
-    private static bool IsAggressive(ShipSim enemy, uint tick) =>
+    private bool IsAggressive(ShipSim enemy, uint tick) =>
         !enemy.IsPod && enemy.LastFireTick != 0 && tick - enemy.LastFireTick <= PigAggroWindowTicks;
 
     // PIG pod autopilot (IsPod && IsPig): auto-fly to the nearest friendly base (across the
@@ -1148,7 +1191,7 @@ public sealed partial class Simulation
 
     // A slowly-wandering aim error (constant angle, bigger for worse pilots), perpendicular
     // to the line of sight.
-    private static Vec3 PigAimWobble(Vec3 los, ulong pigId, uint tick, float skill)
+    private Vec3 PigAimWobble(Vec3 los, ulong pigId, uint tick, float skill)
     {
         float angle = PigAimWobbleMaxRad * (1f - skill);
         if (angle <= 0f)
