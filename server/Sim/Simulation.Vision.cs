@@ -51,6 +51,12 @@ public sealed partial class Simulation
     // an eyeball glimpse re-stamps its clock. <= 0 disables the timeout (ghosts persist as before).
     private uint _ghostTimeoutTicks;
 
+    // Radar signatures of the static landmarks (world.yaml `aleph-radar-signature` /
+    // `rock-radar-signature`, cached in InitVision like _eyeballMult) — the peers of the
+    // per-def ship/base signatures.
+    private float _alephSig = 1.4f;
+    private float _rockSig = 2f;
+
     // Dust-cloud radar/vision attenuation, cached once in InitVision from the immutable World geometry.
     // _dustClouds groups the seeded clouds by sector (empty when a sector has none); _dustFloor is that
     // sector's authored VisionMult (the range multiplier through FULLY dense dust; 1 = no attenuation).
@@ -282,6 +288,8 @@ public sealed partial class Simulation
         _fireSigBoost = Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f;
         _fireSigWindowTicks = (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate;
         _ghostTimeoutTicks = (uint)MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
+        _alephSig = Content.World.AlephRadarSignature;
+        _rockSig = Content.World.RockRadarSignature;
 
         // Cache dust clouds grouped by sector + each sector's attenuation floor. World geometry is fixed
         // for this Simulation's lifetime, so this runs once and is safe for the worker to read lock-free.
@@ -615,7 +623,7 @@ public sealed partial class Simulation
             {
                 if (tv.DiscoveredAlephs.Contains(a.Id))
                     continue;
-                ClassifyTarget(team, a.SectorId, a.Pos, 1.4f, 0UL, out bool alephRadar, out _);
+                ClassifyTarget(team, a.SectorId, a.Pos, _alephSig, 0UL, out bool alephRadar, out _);
                 if (alephRadar)
                     tr.NewAlephs.Add(a.Id);
             }
@@ -778,7 +786,8 @@ public sealed partial class Simulation
     }
 
     // Discover still-unknown rocks near any team viewer, using the per-sector rock grid so we never
-    // scan the full rock list. Rocks carry signature 2.0 and are excluded from their own occluder scan.
+    // scan the full rock list. Rocks carry the authored rock-radar-signature and are excluded from
+    // their own occluder scan.
     private void DiscoverRocks(byte team, TeamVision tv, TeamResult tr)
     {
         void ScanVolume(uint sector, Vec3 center, float range)
@@ -804,7 +813,7 @@ public sealed partial class Simulation
                         {
                             if (tv.DiscoveredRocks.Contains(r.Id) || tr.NewRocks.Contains(r.Id))
                                 continue;
-                            ClassifyTarget(team, r.SectorId, r.Pos, 2f, r.Id, out bool radar, out _);
+                            ClassifyTarget(team, r.SectorId, r.Pos, _rockSig, r.Id, out bool radar, out _);
                             if (radar)
                                 tr.NewRocks.Add(r.Id);
                         }

@@ -35,9 +35,10 @@ using StellarAllegiance.Shared;
 // =====================================================================
 public static class BaseModelLoader
 {
-    // The placeholder sphere radius used until a BaseDef arrives (mirror of the server's
-    // BaseRadiusFor fallback and the WorldRenderer constant it replaces).
-    public const float FallbackRadius = 90f;
+    // The placeholder sphere radius used until a BaseDef arrives. Single-sourced from the
+    // shared collision config (CollisionConfig.BaseRadius) rather than a hand-mirrored
+    // literal, so this can't drift from the server's own base-radius fallback.
+    public const float FallbackRadius = CollisionConfig.BaseRadius;
 
     // DEBUG: render a faint cone at each docking hardpoint so the dock geometry is visible against the
     // rendered hull. The server reads these same GLB nodes and treats each green cone's BASE DISC

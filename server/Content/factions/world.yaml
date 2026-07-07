@@ -6,6 +6,11 @@
 # fire-signature-boost multiplies a ship's radar signature the instant it fires (guns or missiles),
 # decaying linearly back to 1x over fire-signature-window seconds (server-side only — never
 # streamed); author 1.0 to disable.
+#
+# The ai/combat/mechanics/seeding blocks below are SERVER-SIDE sim tuning (never streamed): every
+# key is optional and an omitted key keeps its stock value (the values written here ARE stock —
+# they document the knobs and are safe to sweep without a client redeploy). Durations are seconds;
+# the sim converts to ticks at its own rate.
 world:
   id: 0
   sector-scale: 2.25
@@ -19,3 +24,91 @@ world:
   fog-eyeball-multiplier: 1.5
   fire-signature-boost: 5
   fire-signature-window: 3.0
+  # Fog radar signatures of the static landmarks (ships/bases author theirs on their own defs).
+  aleph-radar-signature: 1.4
+  rock-radar-signature: 2.0
+
+  # PIG drone AI tuning (ported verbatim from the module) — difficulty/behavior knobs.
+  ai:
+    brain-hz: 5              # AI decisions per second (steering still re-runs every sim tick)
+    max-pigs-per-team: 5
+    squad-delay-seconds: 10  # after a squad wipe before the next squad launches
+    aggro-window-seconds: 3  # aggression memory
+    spawn-stagger-seconds: 1.5 # gap between squad-mate launches
+    patrol-reach-frac: 0.7   # patrol waypoints stay within this fraction of the sector radius
+    patrol-arrive: 120       # re-roll a patrol waypoint once within this distance of it
+    radar-range: 1200
+    fire-range: 360
+    standoff: 90             # attack-point shelling distance
+    aim-deg: 6               # half-angle aim cone inside which a pig opens fire
+    turn-gain: 3.2
+    avoid-lookahead: 160
+    avoid-margin: 14
+    # Threat-scoring weights — the target-priority formula (first knobs to touch for difficulty).
+    threat-aim-weight: 1.0
+    threat-close-weight: 0.7
+    threat-dmg-weight: 0.4
+    threat-switch-margin: 1.3
+    threat-base-weight: 2.5
+    base-threat-radius: 700
+    threat-bomber-bonus: 2.0 # extra threat score for Bomber-class enemies
+    wander-period-seconds: 60   # before a pig re-rolls its wander sector
+    bomber-respawn-seconds: 15  # cooldown before a team's bomber relaunches
+    # Per-slot aiming skill spread: lead accuracy, turn snappiness, residual wobble.
+    turn-gain-min: 2.2
+    turn-gain-max: 4.4
+    lead-frac-min: 0.55
+    lead-frac-max: 1.0
+    aim-wobble-max-rad: 0.05
+    aim-wobble-rate: 0.11
+    missile-hold-seconds: 4  # extra spacing between missile launches, on top of the rack's interval
+    # Evasive side-thruster "juking".
+    juke-range: 300
+    juke-period-seconds: 0.65
+    juke-amp-min: 0.45
+    juke-amp-max: 1.0
+
+  # Collision damage + sector-boundary hazard (kinematics stay in the shared CollisionConfig —
+  # the client predicts bounces; damage is server-only).
+  combat:
+    collision-damage-scale: 0.6      # ship-vs-static damage scale
+    ship-ship-damage-scale: 1.2
+    max-collision-damage: 30
+    collision-damage-min-speed: 4    # below this closing speed a collision is a harmless kiss
+    boundary-base-dps: 8             # outside-the-sector erosion: base + ramp per unit beyond, capped
+    boundary-ramp-dps: 0.12
+    boundary-max-dps: 60
+
+  # Warp gates, docking, escape pods, economy cadence, match flow.
+  mechanics:
+    aleph-trigger-radius: 18   # distance from a gate mouth at which a ship warps
+    warp-exit-offset: 60       # how far beyond the destination mouth a warping ship exits
+    warp-exit-jitter: 0.12     # per-axis random spread on the exit cone
+    paycheck-seconds: 60       # between flat per-team credit paychecks (amount = faction income)
+    dock-radius-frac: 0.9      # dock when within this fraction of your OWN base radius
+    launch-speed: 80           # u/s catapult out of the docking-exit hardpoint on spawn
+    rescue-radius-mult: 4      # pod pickup distance, × ship collision radius
+    pod-eject-speed: 90        # u/s initial fling (decays to the pod's max speed)
+    pod-eject-spin: 5          # rad/s initial tumble (decays via angular drag)
+    reconnect-grace-seconds: 5 # dropped ship held (simulated, vulnerable) for reconnect reclaim
+    ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby
+
+  # Map-seeding shapes: ONE shared default set per asteroid shape (field = shallow disc,
+  # belt = flattened ring), applied to any sector by its declared `asteroids` kind, plus team-base
+  # placement. Counts derive from filled area, so density (spacing) is invariant to sector size.
+  seeding:
+    field-fill-frac: 0.9       # disc radius as a fraction of the sector radius
+    field-flatten: 0.1         # disc half-thickness as a fraction of its radius (shallow)
+    field-area-density: 4.5e-6 # field rocks per unit² of disc footprint (at asteroid-density 1)
+    field-rock-min: 8
+    field-rock-max: 55
+    belt-inner-frac: 0.25      # belt inner radius / sector radius
+    belt-outer-frac: 0.95      # belt outer radius / sector radius
+    belt-flatten: 0.13         # belt half-thickness / sector radius (shallow)
+    belt-area-density: 2.4e-5  # belt rocks per unit² of annulus (at asteroid-density 1)
+    belt-rock-min: 6
+    belt-rock-max: 40
+    rock-size-skew: 1.8        # power-law size skew (> 1 biases toward small rocks)
+    base-inner-frac: 0.14      # garrison radial band, as fractions of the sector radius
+    base-outer-frac: 0.30
+    base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)

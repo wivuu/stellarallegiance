@@ -228,6 +228,20 @@ Check(
     "loader parsed world knobs (incl. fog-of-war)",
     $"world wrong (scale {stock.World.SectorScale}, density {stock.World.AsteroidDensity}, fog {stock.World.FogOfWar})"
 );
+// Server-side tuning blocks project through (authored world.yaml values == the stock initializers,
+// so a silently-dropped key would still pass here — the raw-YAML parse is asserted in FactionsTest;
+// this guards the PROJECTION seam, one knob per block).
+Check(
+    stock.World.Ai.MaxPigsPerTeam == 5 && stock.World.Ai.JukePeriodSeconds == 0.65f
+        && stock.World.Combat.CollisionDamageMinSpeed == 4f
+        && stock.World.Mechanics.RescueRadiusMult == 4f
+        && stock.World.Seeding.BeltAreaDensity == 2.4e-5f
+        && stock.World.AlephRadarSignature == 1.4f,
+    "loader projected the world tuning blocks (ai/combat/mechanics/seeding)",
+    $"tuning wrong (pigs {stock.World.Ai.MaxPigsPerTeam}, juke {stock.World.Ai.JukePeriodSeconds}, "
+        + $"min-speed {stock.World.Combat.CollisionDamageMinSpeed}, rescue {stock.World.Mechanics.RescueRadiusMult}, "
+        + $"belt {stock.World.Seeding.BeltAreaDensity}, aleph-sig {stock.World.AlephRadarSignature})"
+);
 
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the
 //     client receives). Guards loader nondeterminism / iteration-order drift.

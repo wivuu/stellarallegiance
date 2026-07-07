@@ -1,5 +1,15 @@
 # Hardcoded debug/tuning settings → YAML migration audit
 
+> **STATUS (2026-07-07): migration order items 1–4 IMPLEMENTED.** Tier 0 fixed (45f/90f unified on
+> CollisionConfig.BaseRadius; TargetMarkers/SystemRing lead constants now derive from the streamed
+> WeaponDef mounts; ZoomView's 3f renamed to a camera knob; World.NoseOffset deleted as dead).
+> PIG AI (`ai:`), combat (`combat:`), gates/docking/pods/economy/match-flow (`mechanics:`),
+> asteroid shapes + base placement (`seeding:`), and the aleph/rock radar signatures are now
+> authored in server/Content/factions/world.yaml (server-only, never streamed — no protocol bump).
+> See GLOSSARY.md "World Tuning Blocks". Still open: Tier 2 net tunables (SIM_* env vars),
+> mine/chaff scalars → expendable defs, FlightModel torque curve → hull def (both need wire work),
+> Tier 3 dust-default duplication.
+
 Goal: find settings hardcoded for debug/playtest/tuning purposes that should eventually be
 authored in the YAML content pipeline (`world.yaml`, map env blocks, hull/weapon/expendable defs)
 instead of baked into code.

@@ -246,8 +246,20 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
   - `shared/ContentValidator.cs` — YAML→defs consistency checks
   - `server/Net/Protocol.cs` — Protocol.MsgDefs wire format
   - `client/scripts/DefRegistry.cs` — client-side def subscription and caching
-- **Related:** [[Def]], [[Protocol.MsgDefs]], [[Tech Tree]]
+- **Related:** [[Def]], [[Protocol.MsgDefs]], [[Tech Tree]], [[World Tuning Blocks]]
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
+
+### World Tuning Blocks
+Server-side sim tuning authored in `world.yaml` under `world:` — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), plus root `aleph-radar-signature`/`rock-radar-signature`. Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+- **Frequency:** Common (any sim-balance sweep)
+- **Key Files:**
+  - `server/Content/factions/world.yaml` — authored values (stock = documented defaults)
+  - `factions/src/Allegiance.Factions/Model/RuntimeData.cs` — AiTuning/CombatTuning/MechanicsTuning/SeedingTuning records (nullable = "unauthored")
+  - `shared/Defs.cs` — WorldAiTuning/WorldCombatTuning/WorldMechanicsTuning/WorldSeedingTuning (initializers = stock)
+  - `server/Content/FactionsContentProjection.cs` — ProjectWorld override-or-stock resolve
+  - `server/Sim/Simulation.Pig.cs` — InitPigTuning (seconds→ticks conversion)
+- **Related:** [[YAML Content Pipeline]], [[PigBrain]], [[WorldConfig]]
+- **Notes:** Durations authored in seconds, converted at TickHz; NumTeams stays compile-time (World.MaxSupportedTeams — engine limit, not a knob)
 
 ### Def (Definition)
 Compiled gameplay constant: hull stats, weapon stats, tech gating, prices, etc. Streamed from server to clients via MsgDefs.

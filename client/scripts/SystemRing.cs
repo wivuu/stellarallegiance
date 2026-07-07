@@ -16,9 +16,8 @@ using StellarAllegiance.Ui;
 // touches authoritative state. Created and wired up by the Hud, like the other combat overlays.
 public partial class SystemRing : Control
 {
-    // Muzzle constants mirrored from TargetMarkers / PredictionController so the ring centres
-    // on the SAME point as the aim reticle (the firing line, forward of the nose).
-    private const float NoseOffset = 3f;
+    // Must stay consistent with TargetMarkers.AimReticleScreenPoint so the ring centres on
+    // the SAME point as the aim reticle (the firing line, forward of the nose).
     private const float DefaultAimRange = 500f;
 
     private const float Radius = 82f; // arc radius (px) — frames the reticle/lead circle
@@ -65,7 +64,7 @@ public partial class SystemRing : Control
         Camera3D cam = Cam;
         Vector2 c;
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 reticle = local.GlobalPosition + fwd * (NoseOffset + DefaultAimRange);
+        Vector3 reticle = local.GlobalPosition + fwd * DefaultAimRange;
         if (cam.IsPositionBehind(reticle))
             c = GetViewportRect().Size * 0.5f;
         else

@@ -385,6 +385,129 @@ namespace StellarAllegiance.Shared
         // Default 120s at projection (<= 0 -> stock). Server-side only — ghost lifetime is resolved
         // entirely in the sim's vision state; the client just renders whatever ghosts it's sent.
         public float FogGhostTimeout;
+
+        // Fog-of-war radar signatures of the static landmarks (peers of the ship/base signatures
+        // that live on their defs). Server-side only — never streamed.
+        public float AlephRadarSignature = 1.4f;
+        public float RockRadarSignature = 2f;
+
+        // Server-side sim tuning blocks (world.yaml `world: ai:` / `combat:` / `mechanics:` /
+        // `seeding:`). NONE of these ride the wire — Protocol.BuildDefs deliberately skips them
+        // (drones/damage/seeding are server-authoritative; the client only sees their results).
+        // The field initializers below ARE the stock values: projection only overrides the knobs
+        // an author actually wrote, so an omitted block or field always means "stock".
+        public WorldAiTuning Ai = new();
+        public WorldCombatTuning Combat = new();
+        public WorldMechanicsTuning Mechanics = new();
+        public WorldSeedingTuning Seeding = new();
+    }
+
+    // PIG drone AI tuning (world.yaml `world: ai:`). Server-side only — clients never simulate
+    // drones. Initializers = the stock values ported verbatim from the module's PigAI; durations
+    // are seconds (the sim converts to ticks at its own TickHz).
+    public sealed class WorldAiTuning
+    {
+        public float BrainHz = 5f; // AI decisions per second (steering still re-runs every tick)
+        public int MaxPigsPerTeam = 5;
+        public float SquadDelaySeconds = 10f; // after a squad wipe before the next squad
+        public float AggroWindowSeconds = 3f; // aggression memory
+        public float SpawnStaggerSeconds = 1.5f; // gap between squad-mate launches
+        public float PatrolReachFrac = 0.7f; // patrol waypoints stay within this of the sector radius
+        public float PatrolArrive = 120f; // re-roll a patrol waypoint once within this distance
+        public float RadarRange = 1200f;
+        public float FireRange = 360f;
+        public float Standoff = 90f;
+        public float AimDeg = 6f; // half-angle aim cone inside which a pig opens fire
+        public float TurnGain = 3.2f;
+        public float AvoidLookahead = 160f;
+        public float AvoidMargin = 14f;
+
+        // Threat-scoring weights — the target-priority formula.
+        public float ThreatAimWeight = 1f;
+        public float ThreatCloseWeight = 0.7f;
+        public float ThreatDmgWeight = 0.4f;
+        public float ThreatSwitchMargin = 1.3f;
+        public float ThreatBaseWeight = 2.5f;
+        public float BaseThreatRadius = 700f;
+        public float ThreatBomberBonus = 2f; // extra threat score for Bomber-class enemies
+
+        public float WanderPeriodSeconds = 60f; // before a pig re-rolls its wander sector
+        public float BomberRespawnSeconds = 15f; // cooldown before a team's bomber relaunches
+
+        // Per-slot aiming skill spread: lead accuracy, turn snappiness, residual wobble.
+        public float TurnGainMin = 2.2f;
+        public float TurnGainMax = 4.4f;
+        public float LeadFracMin = 0.55f;
+        public float LeadFracMax = 1f;
+        public float AimWobbleMaxRad = 0.05f;
+        public float AimWobbleRate = 0.11f;
+
+        public float MissileHoldSeconds = 4f; // extra spacing between missile launches, on top of the rack
+
+        // Evasive side-thruster "juking".
+        public float JukeRange = 300f;
+        public float JukePeriodSeconds = 0.65f;
+        public float JukeAmpMin = 0.45f;
+        public float JukeAmpMax = 1f;
+    }
+
+    // Collision-damage + sector-boundary-hazard tuning (world.yaml `world: combat:`). Server-side
+    // only — collision KINEMATICS stay in the shared CollisionConfig (the client predicts bounces),
+    // but damage is applied by the server alone.
+    public sealed class WorldCombatTuning
+    {
+        public float CollisionDamageScale = 0.6f; // ship-vs-static damage scale
+        public float ShipShipDamageScale = 1.2f;
+        public float MaxCollisionDamage = 30f;
+        // Below this closing normal speed (m/s) a collision is a harmless kiss: bounce, no damage.
+        public float CollisionDamageMinSpeed = 4f;
+
+        // Outside-the-boundary erosion: base DPS + ramp per unit beyond the sector radius, capped.
+        public float BoundaryBaseDps = 8f;
+        public float BoundaryRampDps = 0.12f;
+        public float BoundaryMaxDps = 60f;
+    }
+
+    // Gate / docking / pod / economy / match-flow tuning (world.yaml `world: mechanics:`).
+    // Server-side only; durations are seconds.
+    public sealed class WorldMechanicsTuning
+    {
+        public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+        public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
+        public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
+        public float PaycheckSeconds = 60f; // between flat per-team credit paychecks
+        public float DockRadiusFrac = 0.9f; // dock when within this fraction of your OWN base radius
+        public float LaunchSpeed = 80f; // u/s catapult out of the docking-exit hardpoint on spawn
+        public float RescueRadiusMult = 4f; // pod pickup distance, × ship collision radius
+        public float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
+        public float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
+        public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
+        public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
+    }
+
+    // Map-seeding shape tuning (world.yaml `world: seeding:`): the ONE shared default set per
+    // asteroid shape (field = shallow disc, belt = flattened ring), applied to any sector by its
+    // declared `asteroids` kind, plus team-base placement. Consumed by World map seeding only.
+    public sealed class WorldSeedingTuning
+    {
+        public float FieldFillFrac = 0.9f; // disc radius as a fraction of sector radius
+        public float FieldFlatten = 0.1f; // disc half-thickness as a fraction of its radius
+        public float FieldAreaDensity = 4.5e-6f; // rocks per unit² of disc footprint (at density 1)
+        public float FieldRockMin = 8f;
+        public float FieldRockMax = 55f;
+        public float BeltInnerFrac = 0.25f; // belt inner radius / sector radius
+        public float BeltOuterFrac = 0.95f; // belt outer radius / sector radius
+        public float BeltFlatten = 0.13f; // belt half-thickness / sector radius
+        public float BeltAreaDensity = 2.4e-5f; // rocks per unit² of annulus (at density 1)
+        public float BeltRockMin = 6f;
+        public float BeltRockMax = 40f;
+        public float RockSizeSkew = 1.8f; // power-law size skew (> 1 biases toward small rocks)
+
+        // Team garrison (home base) placement: radial band as a fraction of the sector radius,
+        // plus total vertical jitter (position y is drawn in ±BaseYJitter/2).
+        public float BaseInnerFrac = 0.14f;
+        public float BaseOuterFrac = 0.3f;
+        public float BaseYJitter = 80f;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

@@ -195,6 +195,22 @@ Check(
     "stock world config carries sector-scale + density",
     $"stock world config wrong ({stock.World?.SectorScale}, {stock.World?.AsteroidDensity})"
 );
+// The server-side tuning blocks parse from their kebab-case keys (CoreSerializer ignores unmatched
+// properties, so a key mismatch would SILENTLY fall back to stock — this spot-checks one tricky key
+// per block: brain-hz, collision-damage-scale, paycheck-seconds, field-area-density, base-y-jitter,
+// aleph-radar-signature).
+Check(
+    stock.World is { } wt
+        && wt.Ai is { BrainHz: 5, MaxPigsPerTeam: 5, AimWobbleMaxRad: 0.05 }
+        && wt.Combat is { CollisionDamageScale: 0.6, BoundaryRampDps: 0.12 }
+        && wt.Mechanics is { PaycheckSeconds: 60, ReconnectGraceSeconds: 5 }
+        && wt.Seeding is { FieldAreaDensity: 4.5e-6, BaseYJitter: 80, BeltRockMax: 40 }
+        && wt.AlephRadarSignature == 1.4 && wt.RockRadarSignature == 2.0,
+    "stock world tuning blocks (ai/combat/mechanics/seeding) parse from kebab-case keys",
+    $"world tuning wrong (brain-hz {stock.World?.Ai?.BrainHz}, dmg-scale {stock.World?.Combat?.CollisionDamageScale}, "
+        + $"paycheck {stock.World?.Mechanics?.PaycheckSeconds}, field-density {stock.World?.Seeding?.FieldAreaDensity}, "
+        + $"aleph-sig {stock.World?.AlephRadarSignature})"
+);
 
 Console.WriteLine(failures == 0 ? "\nALL FACTIONS TESTS PASSED" : $"\n{failures} FACTIONS TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

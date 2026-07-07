@@ -1707,7 +1707,7 @@ public partial class WorldRenderer : Node3D
                 continue;
             ClipSphere(pos, vel, a.Pos, a.Radius, ref ttl);
         }
-        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         foreach (var b in _baseClip)
         {
             if (b.Sector != sector)
@@ -1734,7 +1734,7 @@ public partial class WorldRenderer : Node3D
             if (a.Sector == sector)
                 occ = Mathf.Max(occ, RayOcclusion(camPos, sunDir, a.Pos, a.Radius));
         }
-        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? 45f;
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         foreach (var b in _baseClip)
         {
             if (b.Sector == sector)

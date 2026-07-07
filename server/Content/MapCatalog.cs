@@ -105,5 +105,13 @@ public static class MapCatalog
         FireSignatureBoost = w.FireSignatureBoost,
         FireSignatureWindow = w.FireSignatureWindow,
         FogGhostTimeout = w.FogGhostTimeout,
+        AlephRadarSignature = w.AlephRadarSignature,
+        RockRadarSignature = w.RockRadarSignature,
+        // Tuning blocks are read-only after projection, so the clone shares the instances (maps
+        // never override them — MapLoader.ApplyTo touches sectors/links/scale/radius only).
+        Ai = w.Ai,
+        Combat = w.Combat,
+        Mechanics = w.Mechanics,
+        Seeding = w.Seeding,
     };
 }

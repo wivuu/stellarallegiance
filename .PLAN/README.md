@@ -29,6 +29,7 @@ Archives:
 - Bug: Leaving match and rejoining cannot re-launch
 - Configure sector connections and 2d layout in map YAML
 - Show probe icon on HUD when a probe is deployed or nearby
+- 'DefaultAimRange' should be based on equipped weapon's range
 ---
 
 ## Content philosophy (the through-line)

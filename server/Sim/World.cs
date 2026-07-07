@@ -25,43 +25,23 @@ public sealed class World
     public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
-    public const float CollisionDamageScale = 0.6f; // server-only (collision damage)
-    public const float ShipShipDamageScale = 1.2f;
-    public const float MaxCollisionDamage = 30f;
-    // Below this closing normal speed (m/s) a collision is a harmless kiss: it still bounces, no damage.
-    public const float CollisionDamageMinSpeed = 4f; // ponytail: tune knob; raise to make hulls more forgiving
-
-    public const float NoseOffset = 3f;
-    public const float BoundaryBaseDps = 8f;
-    public const float BoundaryRampDps = 0.12f;
-    public const float BoundaryMaxDps = 60f;
-    public const float AlephTriggerRadius = 18f;
-    public const float WarpExitOffset = 60f;
-    public const float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
+    // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
+    // world.yaml (`world: combat:` / `mechanics:`) and read by the sim from Content.World.
     // The SINGLE default sector radius (before × SectorScale) for any sector whose YAML omits `radius`
     // and whose map/world sets no `sector-radius`. Replaces the old per-sector-id CoreRadius/VergeRadius
     // — no value is chosen by sector id anymore.
     public const float DefaultSectorRadius = 700f;
-    // Team garrison (home base) placement as a fraction of its sector's radius, so a base sits a
-    // sensible distance from center in any-sized sector (replaces the old core/verge absolute ranges).
-    public const float BaseInnerFrac = 0.14f;
-    public const float BaseOuterFrac = 0.30f;
     // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
     // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
     // the generated map, not just what's streamed. No compile-in defaults live here.
-    public const float GridCell = 160f; // module AsteroidGridCell (= PigAvoidLookahead)
+    public const float GridCell = 160f; // broad-phase cell size (matches the module's AsteroidGridCell)
 
-    // Asteroid shape knobs — ONE shared default set per shape (field=disc, belt=ring), applied to any
-    // sector by its declared `asteroids` kind (no per-sector-id choice). Counts derive from the filled
-    // area so density (spacing) is invariant to sector size — a bigger sector just gets proportionally
-    // more rocks at the same spacing.
-    public const float FieldFillFrac = 0.9f;       // disc radius as a fraction of sector radius
-    public const float FieldFlatten = 0.1f;        // disc half-thickness as a fraction of its radius (shallow)
-    public const float RockAreaDensity = 4.5e-6f;  // field rocks per unit² of disc footprint (at density 1)
-    public const float BeltInnerFrac = 0.25f;      // belt inner radius / sector radius
-    public const float BeltOuterFrac = 0.95f;      // belt outer radius / sector radius
-    public const float BeltFlatten = 0.13f;        // belt half-thickness / sector radius (shallow)
-    public const float BeltAreaDensity = 2.4e-5f;  // belt rocks per unit² of annulus (at density 1)
+    // Asteroid shape + base-placement knobs — ONE shared default set per shape (field=disc,
+    // belt=ring), applied to any sector by its declared `asteroids` kind (no per-sector-id choice).
+    // Authored in world.yaml (`world: seeding:`); stock values live on WorldSeedingTuning's
+    // initializers. Counts derive from the filled area so density (spacing) is invariant to sector
+    // size — a bigger sector just gets proportionally more rocks at the same spacing.
+    private readonly WorldSeedingTuning _seed;
 
     // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
@@ -185,6 +165,7 @@ public sealed class World
     {
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
+        _seed = cfg.Seeding;
         // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
@@ -236,7 +217,7 @@ public sealed class World
             if (garrison is null)
                 continue;
             float r = RadiusOf(sc.Id);
-            Vec3 pos = RandomBasePos(ref baseRng, r * BaseInnerFrac, r * BaseOuterFrac);
+            Vec3 pos = RandomBasePos(ref baseRng, r * _seed.BaseInnerFrac, r * _seed.BaseOuterFrac, _seed.BaseYJitter);
             Bases.Add(new BaseSite(baseId++, garrison.Team, sc.Id, pos));
         }
         if (Bases.Count == 0)
@@ -461,14 +442,14 @@ public sealed class World
         return float.MaxValue;
     }
 
-    // Core pattern: a SHALLOW DISC filling outward to ~FieldFillFrac of the sector radius, at
+    // Core pattern: a SHALLOW DISC filling outward to ~field-fill-frac of the sector radius, at
     // constant areal density (count ∝ disc area) so a bigger sector gets proportionally more rocks
     // at the same spacing. sqrt-uniform radius = even density; the disc stays thin in Y (shallow).
     private void SeedAsteroidField(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
-        float fillFrac = FieldFillFrac;
-        float flatten = FieldFlatten;
-        float areaDensity = RockAreaDensity;
+        float fillFrac = _seed.FieldFillFrac;
+        float flatten = _seed.FieldFlatten;
+        float areaDensity = _seed.FieldAreaDensity;
         float maxR = sectorRadius * fillFrac;
         float hY = maxR * flatten;
         int count = (int)MathF.Round(density * areaDensity * MathF.PI * maxR * maxR);
@@ -479,21 +460,21 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = RockRadius(ref rng, 8.0, 55.0);
+            float radius = RockRadius(ref rng, _seed.FieldRockMin, _seed.FieldRockMax, _seed.RockSizeSkew);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
     }
 
-    // Verge pattern: a flattened ANNULAR BELT spanning BeltInnerFrac..BeltOuterFrac of the sector
-    // radius, reaching outward toward the edge. Count ∝ annulus area at constant density; sqrt-in-
-    // area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
+    // Verge pattern: a flattened ANNULAR BELT spanning belt-inner-frac..belt-outer-frac of the
+    // sector radius, reaching outward toward the edge. Count ∝ annulus area at constant density;
+    // sqrt-in-area radius draw keeps the ring evenly filled rather than bunched at the inner edge.
     private void SeedAsteroidBelt(ref DetRng rng, uint sector, float sectorRadius, float density, ref ulong id)
     {
-        float innerFrac = BeltInnerFrac;
-        float outerFrac = BeltOuterFrac;
-        float flatten = BeltFlatten;
-        float areaDensity = BeltAreaDensity;
+        float innerFrac = _seed.BeltInnerFrac;
+        float outerFrac = _seed.BeltOuterFrac;
+        float flatten = _seed.BeltFlatten;
+        float areaDensity = _seed.BeltAreaDensity;
         float rIn = sectorRadius * innerFrac;
         float rOut = sectorRadius * outerFrac;
         float hY = sectorRadius * flatten;
@@ -507,7 +488,7 @@ public sealed class World
             float px = (float)(Math.Cos(ang) * rr);
             float pz = (float)(Math.Sin(ang) * rr);
             float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
-            float radius = RockRadius(ref rng, 6.0, 40.0);
+            float radius = RockRadius(ref rng, _seed.BeltRockMin, _seed.BeltRockMax, _seed.RockSizeSkew);
             var (variant, rx, ry, rz) = NextShape(ref rng);
             Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
         }
@@ -628,10 +609,9 @@ public sealed class World
     // (exponent > 1 biases toward the small end) so a field is mostly modest rocks with the
     // occasional large one — more visual variety than a flat uniform draw, still bounded to a
     // reasonable range. Consumes exactly one NextDouble so the asteroid RNG sequence is unchanged.
-    private static float RockRadius(ref DetRng rng, double minR, double maxR)
+    private static float RockRadius(ref DetRng rng, float minR, float maxR, float skew)
     {
-        const double Skew = 1.8;
-        double t = Math.Pow(rng.NextDouble(), Skew);
+        double t = Math.Pow(rng.NextDouble(), skew);
         return (float)(minR + t * (maxR - minR));
     }
 
@@ -644,11 +624,11 @@ public sealed class World
         return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 
-    private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR)
+    private static Vec3 RandomBasePos(ref DetRng rng, float minR, float maxR, float yJitter)
     {
         double ang = rng.NextDouble() * Math.PI * 2.0;
         double r = minR + rng.NextDouble() * (maxR - minR);
-        float y = (float)((rng.NextDouble() - 0.5) * 80.0);
+        float y = (float)((rng.NextDouble() - 0.5) * yJitter);
         return new Vec3((float)(Math.Cos(ang) * r), y, (float)(Math.Sin(ang) * r));
     }
 }

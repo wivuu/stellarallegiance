@@ -17,7 +17,7 @@ using StellarAllegiance.Ui;
 // touching authoritative state. Created and wired up by the Hud like the other combat overlays.
 public partial class ZoomView : Control
 {
-    private const float NoseOffset = 3f; // sit forward of the nose so the own hull stays out of frame
+    private const float CamForwardOffset = 3f; // sit forward of the nose so the own hull stays out of frame
     private const float FlightFovDeg = 75f; // the flight FOV the magnification is measured against
     private const int ViewportSize = 768; // square PiP render target (matches the max on-screen diameter)
 
@@ -201,7 +201,7 @@ public partial class ZoomView : Control
         // where the guns point at any attitude. The FOV narrows with the magnification.
         Transform3D t = ship.GlobalTransform;
         Vector3 fwd = t.Basis.Z.Normalized();
-        _scopeCam.GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + fwd * NoseOffset);
+        _scopeCam.GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + fwd * CamForwardOffset);
         _scopeCam.Fov = Mathf.RadToDeg(2f * Mathf.Atan(Mathf.Tan(Mathf.DegToRad(FlightFovDeg) * 0.5f) / Magnification));
         QueueRedraw();
     }
