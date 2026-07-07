@@ -13,10 +13,14 @@
 #   asteroids     field (disc) | belt (ring) | none. Omit → field. `asteroid-density` scales the count.
 #   map-pos       [x, y] normalized ~[-1,1] — where the sector's node draws on the minimap / lobby
 #                 preview (star/custom layouts). Omit → the client auto-lays sectors on a ring.
-#   dust          a "feel" block: amount (0..1 how dusty) + color + optional seed. Coverage/count/
-#                 thickness AND radar-vision attenuation are derived RELATIVE to sector size, so the
-#                 same block reads identically in any-sized sector.
-#   sun / nebula  the sector's lighting + backdrop (already high-level; unchanged).
+#   dust          a "feel" block: amount (0..1 how dusty, VISUAL coverage/count/thickness) + optional
+#                 opacity (0..1 how heavily it cuts RADAR/vision, default 1 — decoupled from amount so a
+#                 big fluffy cloud can be radar-thin or a light haze radar-opaque) + color + optional
+#                 seed. All derived RELATIVE to sector size, so the same block reads identically in any-
+#                 sized sector. Omit the whole block → no dust AND no dust shadow-shafts in that sector.
+#   sun / nebula  the sector's lighting + backdrop. sun.ambient (optional) sets the sector's ambient/
+#                 fill light energy — the flat base illumination independent of the directional sun, so
+#                 a sector can read brighter or murkier overall; omit → the client default.
 #
 # `links` lists the gate (aleph) edges as sector-id pairs; omitted → the sim rings the sectors by id.
 name: Brimstone Gambit
@@ -40,14 +44,16 @@ sectors:
         elevation: 22
         color: [1.0, 0.86, 0.62]
         energy: 1.35
-        god-rays: 0.45
+        ambient: 0.6               # soft fill so the big home arena reads open and lit
+        god-rays: 1
       nebula:
         color-a: [0.42, 0.20, 0.55]
         color-b: [0.20, 0.34, 0.68]
         intensity: 0.08
-      dust:
-        amount: 0.15              # light, dusky haze in the big home arena
-        color: [0.26, 0.24, 0.3]  # dusky space dust
+      # dust:
+      #   amount: 0.15              # light, dusky haze in the big home arena
+      #   opacity: 0.2             # radar cut at full strength for this amount (sightlines badly reduced)
+      #   color: [0.26, 0.24, 0.3]  # dusky space dust
 
   - id: 1        # Verge — team 1's home; smaller, meaner, a dense rusty belt
     name: Verge
@@ -62,11 +68,13 @@ sectors:
         elevation: 22
         color: [1.0, 0.66, 0.48]  # low amber brimstone sun (warm key, not pure red)
         energy: 1.4
+        ambient: 0.28             # low fill — the brimstone belt sits in murkier shadow
         god-rays: 0.5
       nebula:
         color-a: [0.5, 0.22, 0.2]
         color-b: [0.26, 0.14, 0.32]
         intensity: 0.07
       dust:
-        amount: 0.85             # thick — sightlines through it are badly cut
+        amount: 0.85             # thick — visually dense rusty murk
+        opacity: 1.0             # radar cut at full strength for this amount (sightlines badly reduced)
         color: [0.22, 0.14, 0.12] # dark rusty brimstone dust

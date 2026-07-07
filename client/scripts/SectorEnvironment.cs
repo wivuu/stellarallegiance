@@ -33,14 +33,22 @@ public partial class SectorEnvironment : Node3D
     private Transform3D _defaultLightXform;
     private Color _defaultLightColor;
     private float _defaultLightEnergy;
+    private float _defaultAmbientEnergy; // WorldEnvironment ambient-light energy at boot (sun.ambient restores to this)
 
     private int _currentSector = -1;
     private bool _appliedEnv; // did the last apply for _currentSector carry a real (non-null) env?
     private SectorEnv? _currentEnv; // env last applied for _currentSector; SyncShafts reads its sun each pass
 
-    // True when the current sector's env casts dust shadows (it has a sun). WorldRenderer gates its
-    // per-frame camera-distance occluder re-scan on this so sunless sectors do no work.
-    public bool CastsSectorShadows => _currentEnv is { HasSun: true };
+    // True when the current sector's env casts dust shadows. A shadow volume only reads as a darkened
+    // SHAFT because it multiply-blends into dust — with no dust there is nothing to darken, so a sector
+    // that omits `dust:` casts NONE (needs both a sun for the downsun axis AND actual dust clouds).
+    // WorldRenderer gates its per-frame camera-distance occluder re-scan on this so a sunless or
+    // dustless sector does no work.
+    public bool CastsSectorShadows => _currentEnv is { HasSun: true } && HasSectorDust;
+
+    // True when the current sector actually has dust to darken: a streamed dust block with ≥1 seeded
+    // cloud (a `dust:` with amount 0 streams the block but zero clouds → still no shafts).
+    private bool HasSectorDust => _currentEnv is { HasDust: true } e && e.DustClouds.Length > 0;
 
     // The current sector's shadow occluders, handed in by WorldRenderer.ApplySectorEnv: the biggest few
     // rocks/bases NEAR the camera, each as (its scene Node3D, its LOCAL-frame hull vertices). SyncShafts
@@ -107,7 +115,10 @@ public partial class SectorEnvironment : Node3D
         // enabled, so nothing can wall/tint the sector.
         var e = _worldEnv.Environment;
         if (e != null)
+        {
             e.VolumetricFogEnabled = false;
+            _defaultAmbientEnergy = e.AmbientLightEnergy; // restore point for a sector with no ambient override
+        }
 
         _puffMesh = new QuadMesh { Size = new Vector2(1f, 1f) };
         _puffMat = BuildPuffMaterial();
@@ -243,16 +254,27 @@ public partial class SectorEnvironment : Node3D
                 ? new Color(env.SunColorR, env.SunColorG, env.SunColorB)
                 : _defaultLightColor;
             _light.LightEnergy = env.SunEnergy >= 0f ? env.SunEnergy : _defaultLightEnergy;
+            ApplyAmbient(env.SunAmbient >= 0f ? env.SunAmbient : _defaultAmbientEnergy);
         }
         else
         {
             _light.Transform = _defaultLightXform;
             _light.LightColor = _defaultLightColor;
             _light.LightEnergy = _defaultLightEnergy;
+            ApplyAmbient(_defaultAmbientEnergy);
         }
 
         // Keep the visible sun disc + lens flare (both read Sun.SkyDirection) aligned with the light.
         _sun?.RefreshFromLight();
+    }
+
+    // Set the sector's ambient (fill) light energy on the WorldEnvironment — the flat base illumination
+    // every surface gets regardless of the directional sun, so a sector can read brighter/darker overall.
+    private void ApplyAmbient(float energy)
+    {
+        var e = _worldEnv.Environment;
+        if (e != null)
+            e.AmbientLightEnergy = energy;
     }
 
     // Rebuild the current sector's dust: every streamed cloud (server-authoritative position/radius/
@@ -279,11 +301,16 @@ public partial class SectorEnvironment : Node3D
         Color cool = new Color(dustColor.R * 0.8f, dustColor.G * 0.95f, dustColor.B * 1.25f);
         Vector3 toSun = _light.GlobalTransform.Basis.Z.Normalized(); // +Z basis = toward the sun (Sun.cs)
 
+        // Opacity scales how opaque the dust RENDERS (per-puff alpha), matching the radar attenuation the
+        // server derives from the same knob — so low-opacity dust reads as a faint see-through haze and
+        // high-opacity as a solid veil, independent of the visual `amount` (cloud coverage/count).
+        float opacity = Mathf.Clamp(env.DustOpacity, 0f, 1f);
+
         foreach (var dc in env.DustClouds)
         {
             if (dc.Radius <= 0f)
                 continue;
-            _dustRoot.AddChild(BuildCloudBillboards(dc, warm, cool, toSun));
+            _dustRoot.AddChild(BuildCloudBillboards(dc, warm, cool, toSun, opacity));
         }
     }
 
@@ -297,7 +324,8 @@ public partial class SectorEnvironment : Node3D
     // axis is a shader uniform. Everything is cleared when a sector has no sun or no occluders.
     private void SyncShafts()
     {
-        if (_currentEnv is not { HasSun: true } || _occluders.Count == 0)
+        // No shafts without a sun (no downsun axis), without dust to darken, or without occluders.
+        if (_currentEnv is not { HasSun: true } || !HasSectorDust || _occluders.Count == 0)
         {
             ClearShafts();
             return;
@@ -370,7 +398,7 @@ public partial class SectorEnvironment : Node3D
     // fbm the nebula sky shader uses (Starscape.cs) — so the cloud clumps into wispy filaments/tendrils
     // instead of a round ball. Puff size + opacity track the local noise strength so the fractal
     // silhouette reads; a soft radial falloff still fades the whole cloud out at its rim.
-    private MultiMeshInstance3D BuildCloudBillboards(in DustCloud c, Color warm, Color cool, Vector3 toSun)
+    private MultiMeshInstance3D BuildCloudBillboards(in DustCloud c, Color warm, Color cool, Vector3 toSun, float opacity)
     {
         var center = new Vector3(c.PosX, c.PosY, c.PosZ);
         var rng = new RandomNumberGenerator { Seed = SeedForCloud(c) };
@@ -386,13 +414,22 @@ public partial class SectorEnvironment : Node3D
         var noiseOff = new Vector3(rng.RandfRange(-64f, 64f), rng.RandfRange(-64f, 64f), rng.RandfRange(-64f, 64f));
         const float thresh = 0.5f; // ridged-fbm level above which a filament exists
 
+        // Break the round-ball silhouette: give each cloud a random tilt + anisotropic (ellipsoidal)
+        // stretch so no two clouds share an outline, and below let filament-dense directions REACH
+        // further out than sparse ones so the rim frays into tendrils instead of a clean sphere.
+        var cloudBasis = new Basis(RandomUnitAxis(rng), rng.RandfRange(0f, Mathf.Tau));
+        var axisScale = new Vector3(
+            rng.RandfRange(0.6f, 1.45f),
+            rng.RandfRange(0.5f, 1.05f), // squash Y a touch — dust reads as a drifting sheet, not a ball
+            rng.RandfRange(0.6f, 1.45f));
+
         var xforms = new Transform3D[count];
         var colors = new Color[count];
         for (int i = 0; i < count; i++)
         {
             // Rejection-sample toward the fractal filaments: try a handful of points in the ball and keep
             // the one sitting in the densest noise, so puffs concentrate along the tendrils.
-            Vector3 bestLocal = Vector3.Zero;
+            Vector3 bestDir = Vector3.Zero;
             float bestN = -1f;
             for (int k = 0; k < 10; k++)
             {
@@ -401,28 +438,32 @@ public partial class SectorEnvironment : Node3D
                 {
                     dir = new Vector3(rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f));
                 } while (dir.LengthSquared() > 1f);
-                Vector3 local = dir * c.Radius; // uniform-ish in the ball
-                float n = RidgedFbm(local * freq + noiseOff);
+                float n = RidgedFbm(dir * (freq * c.Radius) + noiseOff); // freq*Radius = 4 → noise in a 4-unit ball
                 if (n > bestN)
                 {
                     bestN = n;
-                    bestLocal = local;
+                    bestDir = dir;
                 }
                 if (n > thresh)
                     break; // good enough — sits on a filament
             }
 
-            float rFrac = bestLocal.Length() / c.Radius; // 0 = centre, 1 = rim
             float strength = Mathf.Clamp((bestN - thresh) * 2.2f + 0.35f, 0.15f, 1f); // filament core → 1
-            Vector3 pos = center + bestLocal;
+            // Lobed boundary: dense filament directions push out past the nominal radius, sparse ones sit
+            // in tighter, so the cloud's edge is ragged. Then tilt + squash it into the per-cloud ellipsoid.
+            float reach = 0.5f + 0.85f * Mathf.Clamp(bestN - thresh + 0.4f, 0f, 1f);
+            Vector3 shaped = cloudBasis * ((bestDir * reach) * axisScale) * c.Radius;
+            float rFrac = Mathf.Min(shaped.Length() / c.Radius, 1.4f); // 0 = centre, ~1 = rim (clamped for the fade)
+            Vector3 pos = center + shaped;
 
             float size = c.Radius * PuffSizeFrac * (0.5f + 0.7f * strength) * rng.RandfRange(0.8f, 1.15f);
-            float alpha = Mathf.Min(c.Density * PuffAlphaGain * rng.RandfRange(0.75f, 1.2f), PuffAlphaMax)
-                * strength * (1f - 0.55f * rFrac); // fractal weight × rim fade
+            float alpha = Mathf.Max(0f,
+                Mathf.Min(c.Density * PuffAlphaGain * rng.RandfRange(0.75f, 1.2f), PuffAlphaMax)
+                * strength * (1f - 0.5f * rFrac) * opacity); // fractal weight × rim fade × opacity (see BuildDust)
 
             // Sun shading (baked): puffs on the sun-facing side of the cloud are brighter than the far
             // side. Two-tone colour blend + brightness jitter give the per-puff colour variation.
-            float sunDot = bestLocal.LengthSquared() > 1e-4f ? bestLocal.Normalized().Dot(toSun) : 0f;
+            float sunDot = shaped.LengthSquared() > 1e-4f ? shaped.Normalized().Dot(toSun) : 0f;
             float exposure = Mathf.Lerp(0.4f, 1.2f, sunDot * 0.5f + 0.5f);
             float bright = rng.RandfRange(0.8f, 1.25f) * exposure;
             Color baseC = warm.Lerp(cool, rng.Randf());
@@ -444,11 +485,11 @@ public partial class SectorEnvironment : Node3D
             mm.SetInstanceColor(i, colors[i]);
         }
 
-        // A real cloud-sized AABB (centre ± ~2×radius covers puff offsets up to Radius plus the ~0.8R
-        // half-size of a rim puff) so Godot frustum-culls clouds that are off-screen or behind the
-        // camera — instead of the old effectively-infinite box that forced every sector cloud to draw
-        // every frame. Still big enough that a soft cloud never pops when its centre quad leaves frame.
-        float ext = c.Radius * 2f;
+        // A real cloud-sized AABB so Godot frustum-culls clouds that are off-screen or behind the camera
+        // — instead of the old effectively-infinite box that forced every sector cloud to draw every
+        // frame. Sized for the WORST-CASE puff centre: a lobed rim reach (~1.35) × the max ellipsoid
+        // axis (~1.45) ≈ 1.9R, plus a rim puff's ~0.5R half-size — so ±2.6R never pops a soft cloud.
+        float ext = c.Radius * 2.6f;
         return new MultiMeshInstance3D
         {
             Name = "DustBillboards",
@@ -457,6 +498,20 @@ public partial class SectorEnvironment : Node3D
             CustomAabb = new Aabb(center - Vector3.One * ext, Vector3.One * (2f * ext)),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
+
+    // A uniformly-random unit vector (rejection-sampled in the ball), used as the tilt axis that gives
+    // each cloud its own ellipsoid orientation. Drawn from the per-cloud rng so it's deterministic.
+    private static Vector3 RandomUnitAxis(RandomNumberGenerator rng)
+    {
+        Vector3 v;
+        float l2;
+        do
+        {
+            v = new Vector3(rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f));
+            l2 = v.LengthSquared();
+        } while (l2 < 1e-4f || l2 > 1f);
+        return v / Mathf.Sqrt(l2);
     }
 
     // Stable per-cloud seed from its (server-streamed, identical-for-all-clients) position, so the puff

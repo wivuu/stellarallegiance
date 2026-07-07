@@ -554,10 +554,16 @@ public sealed class World
         }
     }
 
-    // Radar/vision range multiplier through FULLY dense dust, derived from the same "amount" knob:
-    // dustier ⇒ shorter sightlines (1 = no attenuation at amount 0, 0.15 at amount 1). Consumed by the
-    // vision sim (Simulation.Vision) so the single feel knob drives both look and gameplay.
-    public static float DustVisionFloor(float amount) => Lerp(1f, 0.15f, Math.Clamp(amount, 0f, 1f));
+    // Radar/vision range multiplier through FULLY dense dust. `amount` sets the baseline shortening
+    // (1 = no attenuation at amount 0, 0.15 at amount 1); `opacity` (0..1, default 1) then scales that
+    // shortening toward "no impact" so an author can decouple radar impact from the VISUAL thickness —
+    // opacity 0 leaves radar untouched (floor 1) regardless of amount, opacity 1 is the legacy behaviour.
+    // Consumed by the vision sim (Simulation.Vision).
+    public static float DustVisionFloor(float amount, float opacity = 1f)
+    {
+        float baseFloor = Lerp(1f, 0.15f, Math.Clamp(amount, 0f, 1f));
+        return 1f - (1f - baseFloor) * Math.Clamp(opacity, 0f, 1f); // scale the deviation from clear
+    }
 
     private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 

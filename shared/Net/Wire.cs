@@ -9,7 +9,10 @@ public static class Wire
     // Welcome handshake and refuses to play against a skewed server instead of misreading frames.
     // v25: per-sector environment appended to every sector static (Welcome + MsgReveal) —
     // sun/god-rays, nebula override, and the seeded dust-cloud list. See Protocol.WriteSectorEnv.
-    public const byte ProtocolVersion = 26;
+    // v27: dust block carries an `opacity` float (after the color) — scales both the rendered puff
+    // alpha and the radar/vision attenuation, decoupled from the visual `amount`.
+    // v28: sun block carries an `ambient` float (after energy) — the sector's ambient/fill light energy.
+    public const byte ProtocolVersion = 28;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

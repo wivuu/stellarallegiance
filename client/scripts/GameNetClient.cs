@@ -1062,6 +1062,7 @@ public partial class GameNetClient : Node
             env.SunColorG = cg;
             env.SunColorB = cb;
             env.SunEnergy = r.ReadSingle();
+            env.SunAmbient = r.ReadSingle();
         }
 
         if (r.ReadByte() != 0)
@@ -1101,6 +1102,7 @@ public partial class GameNetClient : Node
             env.DustColorR = dr;
             env.DustColorG = dg;
             env.DustColorB = db;
+            env.DustOpacity = r.ReadSingle();
             ushort n = r.ReadUInt16();
             var clouds = new DustCloud[n];
             for (int i = 0; i < n; i++)

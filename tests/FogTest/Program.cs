@@ -95,9 +95,9 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         br.ReadUInt32(); br.ReadSingle(); br.ReadString(); // id, radius, name
         if (br.ReadByte() != 0) br.ReadBytes(8); // map-pos: presence byte then x,y (2 floats)
         // Per-sector environment (mirror Protocol.WriteSectorEnv): 3 presence bytes always present.
-        if (br.ReadByte() != 0) br.ReadBytes(32); // sun: godRays + dir(3) + color(3) + energy
+        if (br.ReadByte() != 0) br.ReadBytes(36); // sun: godRays + dir(3) + color(3) + energy + ambient
         if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
-        if (br.ReadByte() != 0) { br.ReadBytes(12); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + clouds
+        if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
@@ -1173,6 +1173,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             + "        azimuth: 30\n"
             + "        elevation: 15\n"
             + "        color: [1.0, 0.8, 0.6]\n"
+            + "        ambient: 0.7\n"
             + "        god-rays: 0.5\n"
             + "      nebula:\n"
             + "        color-a: [0.4, 0.2, 0.6]\n"
@@ -1194,6 +1195,11 @@ Vec3 AtAngle(float dist, float angleDeg)
         s0.Env?.Sun is { GodRays: 0.5f, Azimuth: 30f },
         "map env: sun god-rays + azimuth round-trip through ApplyTo",
         "sun env did not round-trip"
+    );
+    Check(
+        s0.Env?.Sun is { Ambient: 0.7f },
+        "map env: sun ambient round-trips through ApplyTo",
+        "sun ambient did not round-trip"
     );
     Check(
         s0.Env?.Dust is { } d && MathF.Abs(d.Amount - 0.4f) < 1e-4f,
@@ -1306,7 +1312,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     // to sector size. Size sector 0 to baseR so its dust fills a ~0.9·baseR disc around the origin;
     // viewer & target then straddle that dusty center. amount 0 = clear air (no dust); high amount =
     // thick dust that should attenuate the sightline.
-    Simulation MkDustSim(float amount, out World w)
+    Simulation MkDustSim(float amount, float opacity, out World w)
     {
         var c = ContentLoader.Load(stockPath);
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
@@ -1319,7 +1325,9 @@ Vec3 AtAngle(float dist, float angleDeg)
             new()
             {
                 Id = 0,
-                Env = amount > 0f ? new SectorEnvironment { Dust = new SectorDust { Amount = amount } } : null,
+                Env = amount > 0f
+                    ? new SectorEnvironment { Dust = new SectorDust { Amount = amount, Opacity = opacity } }
+                    : null,
             },
             new() { Id = 1 },
         };
@@ -1332,9 +1340,9 @@ Vec3 AtAngle(float dist, float angleDeg)
         return s;
     }
 
-    bool RadarSeesAcrossDust(float amount)
+    bool RadarSeesAcrossDust(float amount, float opacity = 1f)
     {
-        var sim = MkDustSim(amount, out var w);
+        var sim = MkDustSim(amount, opacity, out var w);
         // Straddle the dusty sector center along +X (perpendicular to the viewer's +Z forward) so the
         // omnidirectional sphere — not the cone — is under test; the segment passes through the dust.
         var vpos = new Vec3(-cloudR, 0f, 0f);
@@ -1355,6 +1363,9 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     Check(RadarSeesAcrossDust(0f), "clear air: the enemy at 0.6× sphere range is on radar", "baseline radar detection failed (env-3 geometry is off)");
     Check(!RadarSeesAcrossDust(0.9f), "thick dust on the sightline drops the enemy off radar (range attenuated)", "dust did NOT attenuate radar — the enemy was still detected through the cloud");
+    // Opacity decouples radar impact from the VISUAL amount: the SAME thick dust with opacity 0 leaves
+    // radar untouched (floor forced back to 1), so the enemy stays detected through the visually-dense cloud.
+    Check(RadarSeesAcrossDust(0.9f, 0f), "thick dust with opacity 0 does NOT attenuate radar (radar impact decoupled from visual amount)", "opacity 0 still cut radar range — the opacity knob is not scaling the vision floor");
 }
 
 // (env-4) A Welcome built from a world with a FULL environment (sun + nebula + dust clouds) round-trips

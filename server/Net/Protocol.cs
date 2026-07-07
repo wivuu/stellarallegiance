@@ -452,6 +452,7 @@ public static class Protocol
             w.Write(dir.Z);
             WriteColor(w, sun.Color);
             w.Write(sun.Energy ?? -1f);
+            w.Write(sun.Ambient ?? -1f); // ambient/fill light energy; -1 sentinel = client default
         }
 
         // --- Nebula override ---
@@ -474,6 +475,7 @@ public static class Protocol
         if (dust != null)
         {
             WriteColor(w, dust.Color);
+            w.Write(dust.Opacity); // scales rendered puff alpha AND radar attenuation (decoupled from amount)
             // Concrete seeded clouds (server-authoritative positions the sim also attenuates through).
             ushort n = 0;
             foreach (var c in world.DustClouds)

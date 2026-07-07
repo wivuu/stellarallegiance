@@ -81,6 +81,7 @@ public sealed class SunDef
     public double? Elevation { get; set; }
     public double[]? Color { get; set; }
     public double? Energy { get; set; }
+    public double? Ambient { get; set; } // ambient/fill light energy for the sector; null → client default
     public double? GodRays { get; set; }
 }
 
@@ -97,7 +98,8 @@ public sealed class NebulaDef
 // any-sized sector.
 public sealed class DustDef
 {
-    public double? Amount { get; set; } // 0..1 "how dusty"
+    public double? Amount { get; set; } // 0..1 "how dusty" (visual coverage/count/thickness)
+    public double? Opacity { get; set; } // 0..1 how heavily it cuts radar/vision (default 1); see SectorDust
     public double[]? Color { get; set; }
     public uint? Seed { get; set; }
 }
@@ -233,6 +235,7 @@ public static class MapLoader
                 Elevation = F(e.Sun.Elevation),
                 Color = ToVec3(e.Sun.Color),
                 Energy = F(e.Sun.Energy),
+                Ambient = F(e.Sun.Ambient),
                 GodRays = F(e.Sun.GodRays) ?? 0f,
             },
             Nebula = e.Nebula is null ? null : new SectorNebula
@@ -245,6 +248,7 @@ public static class MapLoader
             Dust = e.Dust is null ? null : new SectorDust
             {
                 Amount = Math.Clamp(F(e.Dust.Amount) ?? 0.6f, 0f, 1f),
+                Opacity = Math.Clamp(F(e.Dust.Opacity) ?? 1f, 0f, 1f),
                 Color = ToVec3(e.Dust.Color),
                 Seed = e.Dust.Seed,
             },

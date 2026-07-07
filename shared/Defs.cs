@@ -304,6 +304,7 @@ namespace StellarAllegiance.Shared
         public float? Elevation; // degrees above the sector plane
         public Vec3? Color;      // linear rgb; null → client default warm tint
         public float? Energy;    // directional-light energy; null → client default
+        public float? Ambient;   // ambient (fill) light energy for the whole sector; null → client default
         public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
     }
 
@@ -327,6 +328,10 @@ namespace StellarAllegiance.Shared
     public sealed class SectorDust
     {
         public float Amount = 0.6f; // 0..1 "how dusty" — coverage/count/thickness/vision, all relative
+        // 0..1 how heavily the dust attenuates RADAR/vision, decoupled from the visual `Amount`: it
+        // scales the sightline shortening (0 = dust you can see straight through, 1 = full attenuation
+        // for this Amount). Default 1 = the legacy behaviour where Amount alone drove radar impact.
+        public float Opacity = 1f;
         public Vec3? Color;         // dust albedo; null → client default
         public uint? Seed;          // optional; null → derived from world seed ^ sector id
     }

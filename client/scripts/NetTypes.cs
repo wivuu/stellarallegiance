@@ -199,6 +199,7 @@ namespace StellarAllegiance.Net
             SunColorG,
             SunColorB;
         public float SunEnergy; // < 0 → default
+        public float SunAmbient; // sector ambient/fill light energy; < 0 → client default
 
         // Nebula override
         public bool HasNebula;
@@ -220,6 +221,9 @@ namespace StellarAllegiance.Net
         public float DustColorR,
             DustColorG,
             DustColorB;
+        // 0..1 how opaque the dust renders (scales puff alpha); the server also uses it to scale radar
+        // attenuation. 1 = fully opaque for the authored amount (legacy look). Decoupled from cloud count.
+        public float DustOpacity = 1f;
         public DustCloud[] DustClouds = System.Array.Empty<DustCloud>();
     }
 
