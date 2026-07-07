@@ -1427,6 +1427,16 @@ public partial class GameNetClient : Node
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
         _world.NetApplyPilotNames(list);
+        // Tell the renderer which side WE picked so the pre-launch home-sector view / F3 peek frames
+        // our garrison (a fresh joiner is NoTeam → null until they pick BLUE/RED).
+        byte? myTeam = null;
+        foreach (var p in list)
+            if (p.Id == LocalClientId && p.Team != NoTeam)
+            {
+                myTeam = p.Team;
+                break;
+            }
+        _world.NetSetLobbyTeam(myTeam);
         LobbyChanged?.Invoke();
     }
 

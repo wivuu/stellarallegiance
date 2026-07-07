@@ -290,11 +290,15 @@ public partial class WorldRenderer : Node3D
     // The local player's home = the sector holding THEIR team's garrison (base). No hardcoded sector:
     // before we know the team or have its base, fall back to the lowest known sector id (else 0). Used
     // for the pre-spawn / post-death overview view + backdrop.
+    //
+    // _localTeam is only known once our ship spawns; pre-launch (the lobby / F3 peek) it's null, so we
+    // also honor _lobbyTeam — the side the pilot has picked in the roster (GameNetClient.ApplyLobbyState)
+    // — so the home-sector view frames THEIR garrison, not just the lowest sector id.
     private uint HomeSector
     {
         get
         {
-            if (_localTeam is byte lt)
+            if ((_localTeam ?? _lobbyTeam) is byte lt)
                 foreach (var (sector, team) in _baseTeams)
                     if (team == lt)
                         return sector;
@@ -560,6 +564,44 @@ public partial class WorldRenderer : Node3D
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
+
+    // The side the pilot has picked in the lobby roster, pushed by GameNetClient.ApplyLobbyState
+    // each time the roster lands (null while unassigned/NOAT). It's what lets the pre-launch F3 peek
+    // frame the pilot's own garrison before a ship exists — see HomeSector.
+    private byte? _lobbyTeam;
+
+    // Record the pilot's picked side and, while pre-launch, retarget the cached local sector to their
+    // garrison. _localSector is only otherwise assigned on spawn/warp/reset, so without this the F3
+    // peek (which reads _localSector via ViewSector) keeps showing whatever sector was current at the
+    // last world rebuild — the lowest id, not the pilot's home. Recompute every roster frame: the team
+    // byte and the base roster that resolves it to a sector can each arrive first. Cheap no-op once
+    // homed (HomeSector only walks the handful of garrisons). Untouched while flying — there the ship
+    // owns _localSector and warps it between sectors.
+    public void NetSetLobbyTeam(byte? team)
+    {
+        _lobbyTeam = team;
+        RehomePreLaunch();
+    }
+
+    // Re-resolve the pre-launch local sector to the pilot's garrison. HomeSector depends on TWO
+    // independently-streamed inputs — the picked team (NetSetLobbyTeam) and the bases that map a team
+    // to a sector (InsertBase) — which can land in either order (and under fog the whole world is
+    // re-streamed on a team pick). So this is called from BOTH seams: whichever arrives last completes
+    // the home. Without it, _localSector (only otherwise set on spawn/warp/reset) keeps whatever sector
+    // was current at the last rebuild — often an id the fog-limited client doesn't even hold, so the F3
+    // peek reads radius 0 and silently refuses to open. No-op while flying (the ship owns _localSector
+    // and warps it) and a cheap no-op once homed (HomeSector only walks the handful of garrisons).
+    private void RehomePreLaunch()
+    {
+        if (LocalShip != null)
+            return;
+        uint home = HomeSector;
+        if (home == _localSector)
+            return;
+        _localSector = home;
+        ApplySectorEnv(home);
+        RefreshSectorVisibility();
+    }
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
@@ -1132,9 +1174,12 @@ public partial class WorldRenderer : Node3D
         _pilotNames.Clear();
 
         LocalShip = null;
+        _localTeam = null;
+        // Keep _lobbyTeam: the roster (ApplyLobbyState) is a separate stream from this world rebuild,
+        // so clearing it here would blank the pre-launch home-sector view until the next roster frame.
+        // HomeSector reads it below, so resolve _localSector AFTER the team fields are settled.
         _localSector = HomeSector;
         _viewOverride = null;
-        _localTeam = null;
         ServerTick = 0;
         Phase = MatchPhase.Lobby;
         Winner = null;
@@ -1284,6 +1329,9 @@ public partial class WorldRenderer : Node3D
         _collisionWorld.AddBase(row);
         _baseTeams.Add((row.SectorId, row.Team));
         SetNodeSectorFading(node, row.SectorId);
+        // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team
+        // was already known but its base hadn't arrived yet). Cheap no-op unless it changes the home.
+        RehomePreLaunch();
         GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
     }
 
