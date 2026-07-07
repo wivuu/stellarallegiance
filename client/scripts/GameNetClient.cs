@@ -1041,7 +1041,7 @@ public partial class GameNetClient : Node
 
     // Mirror of Protocol.WriteSectorEnv. The three presence bytes are ALWAYS written (0 when absent),
     // so we always read them. Returns null when the sector carries no environment at all (legacy).
-    private static SectorEnv ReadSectorEnv(BinaryReader r)
+    private static SectorEnv? ReadSectorEnv(BinaryReader r)
     {
         var env = new SectorEnv();
         bool any = false;
