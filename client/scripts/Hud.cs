@@ -258,6 +258,18 @@ public partial class Hud : CanvasLayer
         // reopens the hangar instead of dumping the pilot on the team picker.
         if (_world.Phase == MatchPhase.Ended)
             DeployRequested = false;
+        // …but intent is ALSO per-connection. Any state other than a live Connected session — a
+        // voluntary LEAVE MATCH (→ address screen), a drop mid auto-reconnect, or a give-up-and-
+        // rejoin — re-homes the pilot to the team lobby, where the server reset their lobby
+        // membership to NoTeam (a rejoin is a fresh join, not a ship reclaim). Without clearing it,
+        // the stale-true flag drops the rejoiner straight into the MANDATORY spawn hangar with no
+        // team, where the server silently refuses MsgSpawn ("Pick a team before launching", a chat
+        // line the hangar never observes) and the button hangs on "LAUNCHING…" forever. Clearing it
+        // here re-homes them to the team picker to re-earn deploy intent. Harmless mid-match (stays
+        // Connected while flying/dying) and on a reclaim reconnect (the reclaimed ship makes this
+        // moot — you're flying, hangar and lobby both hidden).
+        if (_cm.State != ConnectionManager.ConnState.Connected)
+            DeployRequested = false;
         // The hangar IS the ship-select screen. While in an active match with no ship and deploy
         // requested (first spawn, respawn after dock/death): open it if it isn't up, and promote a
         // hangar the player had open manually — either way it becomes the mandatory select

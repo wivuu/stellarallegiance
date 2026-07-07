@@ -25,7 +25,6 @@ Archives:
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
 - Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
-- Bug: Leaving match and rejoining cannot re-launch
 ---
 
 ## Content philosophy (the through-line)
