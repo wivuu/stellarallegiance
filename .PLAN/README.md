@@ -25,12 +25,10 @@ Archives:
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
 - Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
-- Add more size variability randomness for asteroids - within a reasonable range
 - Bug: Leaving match and rejoining cannot re-launch
-- Configure sector connections and 2d layout in map YAML
-- Show probe icon on HUD when a probe is deployed or nearby
+> Show probe icon on HUD when a probe is deployed or nearby
+> Display sector name next to alephs in HUD
 - 'DefaultAimRange' should be based on equipped weapon's range
-- Display sector name next to alephs in HUD
 ---
 
 ## Content philosophy (the through-line)

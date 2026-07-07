@@ -69,7 +69,7 @@ public partial class WorldRenderer : Node3D
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
-    private readonly List<Vector3> _alephScratch = new();
+    private readonly List<(Vector3 Pos, uint Dest)> _alephScratch = new();
 
     // Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
     // once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
@@ -269,6 +269,9 @@ public partial class WorldRenderer : Node3D
     // ProbeView never moves once spawned; it's aged out on its MsgProbeGone. Parented under
     // _projectiles, so RefreshSectorVisibility and Reset() sweep them like bolts/missiles.
     private readonly Dictionary<ulong, ProbeView> _probes = new();
+
+    // Scratch reused by VisibleProbes() so the per-frame HUD marker pass allocates nothing.
+    private readonly List<(Vector3 Pos, byte Team)> _probeScratch = new();
 
     // Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
     // circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
@@ -759,17 +762,32 @@ public partial class WorldRenderer : Node3D
         return _baseHealthScratch;
     }
 
-    // Warp gates (alephs) in the currently-visible (local) sector, as world positions, for the
-    // HUD off-screen indicators. Mirrors VisibleBases()' sector filter via Node.Visible, so the
-    // markers only reflect gates in the sector you're flying. Returns a shared scratch list —
-    // read it immediately.
-    public IReadOnlyList<Vector3> VisibleAlephs()
+    // Warp gates (alephs) in the currently-visible (local) sector, as world position + the
+    // destination sector each gate warps to, for the HUD off-screen indicators / labels.
+    // Mirrors VisibleBases()' sector filter via Node.Visible, so the markers only reflect gates
+    // in the sector you're flying. Returns a shared scratch list — read it immediately.
+    public IReadOnlyList<(Vector3 Pos, uint Dest)> VisibleAlephs()
     {
         _alephScratch.Clear();
         foreach (var node in _alephNodes.Values)
             if (node.Visible)
-                _alephScratch.Add(node.GlobalPosition);
+                _alephScratch.Add((node.GlobalPosition, node is AlephView av ? av.DestSectorId : 0u));
         return _alephScratch;
+    }
+
+    // Live recon probes in the current view sector, for the HUD's probe markers. Mirrors
+    // VisibleAlephs()' sector filter via Node.Visible. The streamed probe set is already owner-team-
+    // only plus radar-detected enemy probes, so whatever's here is exactly "deployed by us or nearby
+    // and detected" — the marker pass draws it straight, tinted by each probe's owning team (and
+    // applies its own proximity rule for the off-screen edge marker). Returns a shared scratch list —
+    // read it immediately.
+    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleProbes()
+    {
+        _probeScratch.Clear();
+        foreach (var node in _probes.Values)
+            if (node.Visible)
+                _probeScratch.Add((node.GlobalPosition, node.Team));
+        return _probeScratch;
     }
 
     public override void _Ready()
@@ -1290,7 +1308,7 @@ public partial class WorldRenderer : Node3D
         if (_alephNodes.ContainsKey(row.AlephId))
             return;
         var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-        var av = new AlephView { Name = $"Aleph_{row.AlephId}", Position = pos };
+        var av = new AlephView { Name = $"Aleph_{row.AlephId}", Position = pos, DestSectorId = row.DestSectorId };
         _alephs.AddChild(av);
         _alephNodes[row.AlephId] = av;
         _alephLinks.Add((row.SectorId, row.DestSectorId));

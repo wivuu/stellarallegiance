@@ -10,6 +10,10 @@ using Godot;
 // center.
 public partial class AlephView : Node3D
 {
+    // Sector this gate warps to (from the network Aleph row). Kept here so the HUD marker
+    // can label the gate with its destination sector name without a separate lookup table.
+    public uint DestSectorId;
+
     private const float MouthRadius = 16f;
     private const float ThroatRadius = 2.0f;
     private const float FunnelDepth = 28f;

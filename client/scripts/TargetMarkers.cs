@@ -32,6 +32,11 @@ public partial class TargetMarkers : Control
     private const float AimRadius = 8f; // aim-reticle gunsight radius (px)
     private const float GlyphSize = 8f; // class-glyph radius (px)
 
+    // Beyond this range from the local ship, a FRIENDLY probe drops its off-screen edge marker so
+    // your own distant probes don't crowd the screen edges — it still draws when you look right at
+    // it (on screen). Enemy (radar-detected) probes are never suppressed. Hardcoded; tweak to taste.
+    private const float ProbeEdgeMarkerRange = 500f;
+
     // Fog last-known ghost contact opacity — dim enough to read as memory, not a live marker.
     private const float GhostAlpha = 0.32f;
 
@@ -64,7 +69,7 @@ public partial class TargetMarkers : Control
     private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
 
     // The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
-    // world landmark (warp gate) rather than a ship/base.
+    // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon.
     private enum Kind
     {
         Base,
@@ -73,6 +78,7 @@ public partial class TargetMarkers : Control
         Bomber,
         Pod,
         Aleph,
+        Probe,
     }
 
     private WorldRenderer _world = null!;
@@ -454,9 +460,28 @@ public partial class TargetMarkers : Control
         }
 
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
-        // edge arrow off-screen) so the way to the nearest aleph always reads.
-        foreach (var pos in _world.VisibleAlephs())
-            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true);
+        // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
+        // destination sector name so the gate reads as "goes to X" at a glance.
+        foreach (var (pos, dest) in _world.VisibleAlephs())
+            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true,
+                label: dest != 0 ? _world.SectorName(dest) : "");
+
+        // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
+        // (friendly: true = quiet glyph). The streamed set is already fog-filtered (own team +
+        // radar-detected enemy). In flight, a friendly probe beyond ProbeEdgeMarkerRange drops its
+        // off-screen edge marker so your own distant probes don't crowd the screen edges — but it
+        // still draws when it's actually on screen. Enemy probes are never suppressed. In the F3
+        // overview the edge-declutter is switched off entirely: the map should show every probe,
+        // matching how alephs/ghosts fully render there.
+        PredictionController? probeRef = _world.LocalShip;
+        foreach (var (pos, team) in _world.VisibleProbes())
+        {
+            bool friendlyProbe = probeRef != null && team == probeRef.Team;
+            bool beyondRange = probeRef != null
+                && pos.DistanceSquaredTo(probeRef.GlobalPosition) > ProbeEdgeMarkerRange * ProbeEdgeMarkerRange;
+            DrawEntity(view, pos, Kind.Probe, TeamColor(team), focused: false, friendly: true,
+                hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active);
+        }
 
         // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
         // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
@@ -723,8 +748,10 @@ public partial class TargetMarkers : Control
 
     // Draw one entity marker. On screen: enemies get a corner bracket + class glyph (focus =
     // larger/brighter); friendlies/bases get a subtle, dimmer class glyph. Off screen or
-    // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn.
-    private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly, string glyph = "")
+    // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn — unless
+    // hideOffScreen is set, in which case an off-screen entity draws nothing (used to keep distant
+    // friendly probes from crowding the screen edges while still marking them when in view).
+    private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly, string glyph = "", string label = "", bool hideOffScreen = false)
     {
         Vector2 center = size * 0.5f;
 
@@ -746,6 +773,8 @@ public partial class TargetMarkers : Control
                 // Subtle teammate / base marker: dimmer and small so it never competes with
                 // the enemy reticles or clutters the view.
                 DrawClassGlyph(sp, kind, new Color(color, 0.55f), GlyphSize * 0.85f, glyph);
+                if (label.Length > 0)
+                    DrawEntityLabel(sp, GlyphSize * 0.85f, color, label);
             }
             else
             {
@@ -760,12 +789,28 @@ public partial class TargetMarkers : Control
             return;
         }
 
+        if (hideOffScreen)
+            return; // off screen and suppressed (e.g. a distant friendly probe) — no edge marker
+
         // Off screen: clamp the marker to the inset viewport edge along the ray from center,
         // draw the class glyph there and an arrow just outside it pointing outward.
         Vector2 edge = ClampToEdge(sp, size, out Vector2 dir);
         float glyphScale = focused ? GlyphSize * 1.15f : GlyphSize;
-        DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, color, glyphScale, glyph);
+        Vector2 glyphPos = edge - dir * (ArrowSize + 2f);
+        DrawClassGlyph(glyphPos, kind, color, glyphScale, glyph);
         DrawArrow(edge, dir, color);
+        if (label.Length > 0)
+            DrawEntityLabel(glyphPos, glyphScale, color, label);
+    }
+
+    // A small mono caption drawn just to the right of an entity glyph (e.g. the destination
+    // sector name beside a warp gate). Dimmer than the glyph so it annotates without competing.
+    private void DrawEntityLabel(Vector2 p, float r, Color color, string label)
+    {
+        Font font = UiFonts.Mono;
+        const int fs = 10;
+        var pos = new Vector2(p.X + r + 5f, p.Y + (font.GetAscent(fs) - font.GetDescent(fs)) * 0.5f);
+        DrawString(font, pos, label, HorizontalAlignment.Left, -1, fs, new Color(color, 0.8f));
     }
 
     // Screen-space damage bar over a base: project the base centre, then draw a fixed-size
@@ -943,6 +988,20 @@ public partial class TargetMarkers : Control
                 // solid pod circle and never team-colored.
                 DrawArc(p, r, 0f, Mathf.Tau, 20, color, 1.6f, true);
                 DrawArc(p, r * 0.5f, 0f, Mathf.Tau, 16, color, 1.4f, true);
+                break;
+            case Kind.Probe:
+                // Recon probe: a hollow diamond (sensor beacon) with a bright center dot — distinct
+                // from the filled pod circle and the aleph's concentric rings. Drawn as four line
+                // segments off the reused _poly4 scratch so the glyph allocates nothing.
+                _poly4[0] = p + new Vector2(0f, -r);
+                _poly4[1] = p + new Vector2(r, 0f);
+                _poly4[2] = p + new Vector2(0f, r);
+                _poly4[3] = p + new Vector2(-r, 0f);
+                DrawLine(_poly4[0], _poly4[1], color, 1.5f, true);
+                DrawLine(_poly4[1], _poly4[2], color, 1.5f, true);
+                DrawLine(_poly4[2], _poly4[3], color, 1.5f, true);
+                DrawLine(_poly4[3], _poly4[0], color, 1.5f, true);
+                DrawCircle(p, r * 0.32f, color);
                 break;
         }
     }
