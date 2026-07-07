@@ -300,12 +300,29 @@ public partial class SectorEnvironment : Node3D
             : new Color(0.22f, 0.2f, 0.26f);
 
         // Two tones around the authored colour give nebula-like colour variation; each puff blends
-        // between them and the shader adds fbm noise on top. The dust is SUN-SHADED: the sector sun is
-        // static, so we bake each puff's sun exposure (its offset-from-cloud-centre vs the sun direction)
-        // into its brightness — the sun-facing side of a cloud reads bright, the far side falls to shadow.
-        Color warm = new Color(dustColor.R * 1.25f, dustColor.G * 1.0f, dustColor.B * 0.8f);
-        Color cool = new Color(dustColor.R * 0.8f, dustColor.G * 0.95f, dustColor.B * 1.25f);
+        // between them and the shader adds fbm noise on top. The tones derive from the SECTOR'S SUN
+        // COLOUR (ApplySun ran first, so _light.LightColor is the resolved streamed-or-default sun): the
+        // warm tone leans into the sun's own hue (an amber sun ambers its dust) and the cool tone drifts
+        // only slightly cool — a strong blue drift would grey warm dust into pastel. The dust is
+        // SUN-SHADED: the sector sun is static, so we bake each puff's sun exposure (its
+        // offset-from-cloud-centre vs the sun direction) into its brightness — the sun-facing side of a
+        // cloud reads bright, the far side falls to shadow.
+        Color sunC = _light.LightColor;
+        Color warm = new Color(
+            dustColor.R * (0.6f + 0.8f * sunC.R),
+            dustColor.G * (0.55f + 0.7f * sunC.G),
+            dustColor.B * (0.5f + 0.6f * sunC.B));
+        Color cool = new Color(dustColor.R * 0.72f, dustColor.G * 0.78f, dustColor.B * 0.95f);
         Vector3 toSun = _light.GlobalTransform.Basis.Z.Normalized(); // +Z basis = toward the sun (Sun.cs)
+
+        // Forward-scatter uniforms: puffs IGNITE with the sun colour when the camera looks sunward
+        // through them (see PuffShaderCode), scaled by the authored god-ray strength so a rays-off
+        // sector keeps quiet dust; the floor keeps sunlit dust reading lit even at god-rays 0.
+        _puffMat.SetShaderParameter("sun_dir", toSun);
+        _puffMat.SetShaderParameter("sun_color", new Vector3(sunC.R, sunC.G, sunC.B));
+        _puffMat.SetShaderParameter(
+            "backlight",
+            env is { HasSun: true } ? 0.5f * env.GodRays + 0.15f : 0f);
 
         // Opacity scales how opaque the dust RENDERS (per-puff alpha), matching the radar attenuation the
         // server derives from the same knob — so low-opacity dust reads as a faint see-through haze and
@@ -590,9 +607,11 @@ public partial class SectorEnvironment : Node3D
     }
 
     // One shared custom billboard shader for every dust puff. It reliably reads the MultiMesh per-instance
-    // colour (a plain StandardMaterial silently dropped instance RGB), soft-falls-off to the rim, and
-    // adds per-puff fbm NOISE so the dust has cloudy internal texture. Unshaded because the sun shading is
-    // baked into the instance colour (BuildCloudBillboards) — the sector sun is static.
+    // colour (a plain StandardMaterial silently dropped instance RGB), soft-falls-off to the rim, adds
+    // per-puff fbm NOISE so the dust has cloudy internal texture, and adds a view-dependent
+    // FORWARD-SCATTER term (per-instance phase lobe) so dust ignites with the sun colour when the camera
+    // looks sunward through it. Unshaded because the static sun shading is baked into the instance colour
+    // (BuildCloudBillboards) — only the view-dependent scatter is live.
     private ShaderMaterial BuildPuffMaterial() =>
         new() { Shader = new Shader { Code = PuffShaderCode } };
 
@@ -626,13 +645,20 @@ shader_type spatial;
 render_mode blend_mix, unshaded, cull_disabled, depth_draw_never, shadows_disabled;
 
 uniform sampler2D noise_tex : filter_linear, repeat_enable; // baked fbm mottling (see BuildNoiseTexture)
+uniform vec3 sun_dir = vec3(0.0, 0.0, 1.0);   // world unit vector toward the sun
+uniform vec3 sun_color : source_color = vec3(1.0, 0.85, 0.6);
+uniform float backlight = 0.0;                 // forward-scatter gain (0.5*god-rays + floor; 0 = off)
 
 varying vec4 v_col;
 varying vec2 v_seed;
+varying float v_phase; // forward-scatter lobe: 1 when the camera looks straight sunward through the puff
 
 void vertex() {
 	v_col = COLOR; // MultiMesh per-instance colour (sun-shaded, colour-varied, + alpha)
 	v_seed = vec2(float(INSTANCE_ID) * 1.37, float(INSTANCE_ID) * 0.71);
+	// Per-instance is plenty: puffs are small against the camera-to-puff distances involved.
+	vec3 vd = normalize(MODEL_MATRIX[3].xyz - INV_VIEW_MATRIX[3].xyz);
+	v_phase = pow(clamp(dot(vd, sun_dir) * 0.5 + 0.5, 0.0, 1.0), 6.0);
 	// Camera-facing billboard that keeps the per-instance translation + scale (MultiMesh MODEL_MATRIX).
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
 		INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]) * mat4(
@@ -654,7 +680,9 @@ void fragment() {
 	float n = texture(noise_tex, nuv).r;           // per-puff cloudy mottling (baked, 1 fetch)
 	float a = v_col.a * fall * clamp(0.7 + 0.4 * n, 0.0, 1.1);
 	if (a < 0.003) discard;                        // skip near-transparent rim: kill fill-rate overdraw
-	ALBEDO = v_col.rgb * (0.85 + 0.28 * n);        // noise gently breaks up the flat colour
+	// Noise gently breaks up the flat colour; the additive forward-scatter glow keeps authored-dark
+	// dust dark off-sun and ignites it with the sun colour when backlit.
+	ALBEDO = v_col.rgb * (0.85 + 0.28 * n) + sun_color * (v_phase * backlight * fall * v_col.a);
 	ALPHA = a;
 }
 ";
