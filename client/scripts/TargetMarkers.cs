@@ -469,9 +469,12 @@ public partial class TargetMarkers : Control
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
         // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
         // destination sector name so the gate reads as "goes to X" at a glance.
+        // Label with the destination sector's name (SectorName returns "" for an unknown/nameless
+        // sector, which DrawEntity's label.Length gate then suppresses). Do NOT special-case dest==0:
+        // sector id 0 is a real sector (the stock map's home hub), not a "no destination" sentinel.
         foreach (var (pos, dest) in _world.VisibleAlephs())
             DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true,
-                label: dest != 0 ? _world.SectorName(dest) : "");
+                label: _world.SectorName(dest));
 
         // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
         // (friendly: true = quiet glyph). The streamed set is already fog-filtered (own team +

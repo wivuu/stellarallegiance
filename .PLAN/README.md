@@ -24,7 +24,6 @@ Archives:
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area. Asteroids should fill out be added outwards towards the edges
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
-- Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
 ---
 
 ## Content philosophy (the through-line)
