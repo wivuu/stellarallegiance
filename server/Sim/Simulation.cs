@@ -1006,7 +1006,7 @@ public sealed partial class Simulation
     private void PlaceAtBase(ShipSim s, float clearance, uint tick)
     {
         Vec3 basePos = default;
-        uint sector = World.HomeSector;
+        uint sector = World.DefaultSector;
         foreach (var b in World.Bases)
             if (b.Team == s.Team)
             {

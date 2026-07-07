@@ -2,25 +2,38 @@
 #
 # Maps are STANDALONE files (not part of the faction/tech-tree content). Stock maps ship next to the
 # binary in content/maps/; operators add more by dropping .yaml files into the folder named by
-# SIM_MAPS_DIR / --maps-dir (e.g. a Docker volume). Select a map with SIM_MAP / --map "<name>"
-# (default: "Brimstone Gambit").
+# SIM_MAPS_DIR / --maps-dir. Select a map with SIM_MAP / --map "<name>" (default: "Brimstone Gambit").
 #
-# A map MUST declare a name. `sectors` lists per-sector radius overrides: radius is nullable — omit
-# it (or set null) to fall back to that sector's built-in default radius × sector-scale. Optional
-# top-level `sector-scale` / `asteroid-density` override the content world defaults for this map.
+# A map MUST declare a name and at least one garrison (a team home base). ALL sector geometry is
+# data-driven here — there is no per-sector-id special-casing. Anything a sector omits falls back to
+# ONE shared default:
+#   radius        absolute world units; omit → `sector-radius` (below, or the world default) × scale.
+#   garrison      { team: N } → a home base for team N here. The SET of garrisons = the teams the map
+#                 supports (this stock map = 2 teams). Omit → no base in this sector.
+#   asteroids     field (disc) | belt (ring) | none. Omit → field. `asteroid-density` scales the count.
+#   map-pos       [x, y] normalized ~[-1,1] — where the sector's node draws on the minimap / lobby
+#                 preview (star/custom layouts). Omit → the client auto-lays sectors on a ring.
+#   dust          a "feel" block: amount (0..1 how dusty) + color + optional seed. Coverage/count/
+#                 thickness AND radar-vision attenuation are derived RELATIVE to sector size, so the
+#                 same block reads identically in any-sized sector.
+#   sun / nebula  the sector's lighting + backdrop (already high-level; unchanged).
 #
-# Each sector may also carry an optional `environment:` block (all fields optional; an omitted block
-# leaves the sector at its legacy look):
-#   sun:    azimuth/elevation (deg) + color [r,g,b] + energy + god-rays (0..1 screen-space light shafts)
-#   nebula: color-a/color-b [r,g,b] + intensity + seed (override the client's procedural backdrop)
-#   belt:   asteroid field/belt shape overrides (server-only; area-density/inner-frac/outer-frac/flatten/fill-frac)
-#   dust:   procedurally distributed dust clouds — cloud-count/radius-min/max/coverage-frac/flatten/
-#           density/color + vision-mult (radar/vision range through full dust)
+# `links` lists the gate (aleph) edges as sector-id pairs; omitted → the sim rings the sectors by id.
 name: Brimstone Gambit
+
+# Default radius (× world sector-scale) for any sector that omits `radius`.
+sector-radius: 700
+
+links:
+  - [0, 1]
+
 sectors:
-  - id: 0        # home — an explicit larger arena
+  - id: 0        # Delamere — team 0's home; an explicit larger arena
     name: Delamere
-    radius: 4000
+    radius: 4725
+    map-pos: [-1.0, 0.0]
+    garrison: { team: 0 }
+    asteroids: field
     environment:
       sun:
         azimuth: 40
@@ -33,36 +46,27 @@ sectors:
         color-b: [0.20, 0.34, 0.68]
         intensity: 0.08
       dust:
-        cloud-count: 8
-        radius-min: 350
-        radius-max: 850
-        coverage-frac: 0.85
-        density: 0.55
-        color: [0.26, 0.24, 0.3]    # dusky space dust; the shader sun-shades + noise-mottles it per puff
-        vision-mult: 0.7    # sightlines through dust see ~70% as far
-  - id: 1        # verge — null → 700 × sector-scale
+        amount: 0.35              # light, dusky haze in the big home arena
+        color: [0.26, 0.24, 0.3]  # dusky space dust
+
+  - id: 1        # Verge — team 1's home; smaller, meaner, a dense rusty belt
     name: Verge
-    radius: null
+    radius: null                 # → sector-radius (700) × scale
+    map-pos: [1.0, 0.0]
+    garrison: { team: 1 }
+    asteroids: belt
+    asteroid-density: 1.25       # a denser, meaner belt than stock
     environment:
       sun:
         azimuth: -25
         elevation: 22
-        color: [1.0, 0.66, 0.48]   # low amber brimstone sun (warm key, not pure red)
+        color: [1.0, 0.66, 0.48]  # low amber brimstone sun (warm key, not pure red)
         energy: 1.4
         god-rays: 0.5
       nebula:
         color-a: [0.5, 0.22, 0.2]
         color-b: [0.26, 0.14, 0.32]
         intensity: 0.07
-      belt:
-        area-density: 3.0e-5          # a denser, meaner belt than stock
-        inner-frac: 0.22
-        outer-frac: 0.97
       dust:
-        cloud-count: 8
-        radius-min: 300
-        radius-max: 1000
-        coverage-frac: 0.9
-        density: 0.5
-        color: [0.22, 0.14, 0.12]   # dark rusty brimstone dust
-        vision-mult: 0.15    # thick dust — radar/vision cut in half through a cloud
+        amount: 0.85             # thick — sightlines through it are badly cut
+        color: [0.22, 0.14, 0.12] # dark rusty brimstone dust

@@ -24,20 +24,46 @@ public sealed class MapDef
     public double? SectorScale { get; set; }
     public double? AsteroidDensity { get; set; }
 
-    // Per-sector radius overrides. Each entry is a sector id + a nullable absolute radius; a null/
-    // omitted radius falls back to that sector's built-in default × the (map or content) sector-scale.
+    // The single default sector radius (× sector-scale) for any sector that omits its own `radius`.
+    // Replaces the old per-sector-id defaults. Null → inherit the content world's `sector-radius`.
+    public double? SectorRadius { get; set; }
+
+    // Gate (aleph) topology as sector-id pairs, e.g. `[[0, 1], [1, 2]]`. Each pair becomes a
+    // bidirectional aleph. Omitted/empty → the sim links sectors in a ring by id.
+    public List<List<uint>>? Links { get; set; }
+
+    // The map's sectors. Each declares its geometry (radius, garrison, asteroid shape, map-pos) and
+    // environment; anything omitted falls back to one shared default (no per-sector-id special-casing).
     public List<MapSectorDef> Sectors { get; set; } = [];
 }
 
 public sealed class MapSectorDef
 {
     public byte Id { get; set; }
-    public double? Radius { get; set; } // absolute world units; null/omitted → built-in default × sector-scale
+    public double? Radius { get; set; } // absolute world units; null/omitted → map/world sector-radius × scale
     public string? Name { get; set; }   // optional display name (shown in the sector overview + lobby preview)
 
-    // Optional per-sector environment (sun/god-rays, nebula, belt tuning, dust clouds). Omitted → the
-    // sector keeps every legacy default. Projected into WorldSectorConfig.Env by ApplyTo.
+    // Optional team garrison (home base) in this sector. The set of garrisons across the map decides
+    // how many teams the map supports. Omitted → no base here.
+    public GarrisonDef? Garrison { get; set; }
+
+    // Asteroid distribution: "field" (disc) | "belt" (ring) | "none". Omitted → "field".
+    public string? Asteroids { get; set; }
+    public double? AsteroidDensity { get; set; } // optional per-sector multiplier on the world density
+
+    // 2D map-diagram layout coordinate `[x, y]`, normalized ~[-1,1]. Distinct from 3D geometry —
+    // where this sector's node draws on the minimap/lobby preview. Omitted → client auto ring layout.
+    public double[]? MapPos { get; set; }
+
+    // Optional per-sector environment (sun/god-rays, nebula, dust). Omitted → the sector keeps every
+    // legacy default. Projected into WorldSectorConfig.Env by ApplyTo.
     public SectorEnvDef? Environment { get; set; }
+}
+
+// A team's garrison (home base) declaration.
+public sealed class GarrisonDef
+{
+    public int? Team { get; set; }
 }
 
 // YAML shape of a sector's `environment:` block. Kebab-case keys (YamlDotNet via CoreSerializer, same
@@ -46,7 +72,6 @@ public sealed class SectorEnvDef
 {
     public SunDef? Sun { get; set; }
     public NebulaDef? Nebula { get; set; }
-    public BeltDef? Belt { get; set; }
     public DustDef? Dust { get; set; }
 }
 
@@ -67,25 +92,13 @@ public sealed class NebulaDef
     public uint? Seed { get; set; }
 }
 
-public sealed class BeltDef
-{
-    public double? AreaDensity { get; set; }
-    public double? InnerFrac { get; set; }
-    public double? OuterFrac { get; set; }
-    public double? Flatten { get; set; }
-    public double? FillFrac { get; set; }
-}
-
+// Dust "feel" block: how dusty + what color (+ optional seed). Coverage/count/thickness/vision are
+// all derived server-side RELATIVE to sector size (World.SeedDustClouds), so this reads the same in
+// any-sized sector.
 public sealed class DustDef
 {
-    public int? CloudCount { get; set; }
-    public double? RadiusMin { get; set; }
-    public double? RadiusMax { get; set; }
-    public double? CoverageFrac { get; set; }
-    public double? Flatten { get; set; }
-    public double? Density { get; set; }
+    public double? Amount { get; set; } // 0..1 "how dusty"
     public double[]? Color { get; set; }
-    public double? VisionMult { get; set; }
     public uint? Seed { get; set; }
 }
 
@@ -143,8 +156,8 @@ public static class MapLoader
     }
 
     // Overlay a map's geometry onto the runtime world config consumed by World generation: the
-    // per-sector radii always come from the map; sector-scale / asteroid-density override the content
-    // defaults only when the map specifies them.
+    // per-sector layout (radius/garrison/asteroids/map-pos/env) always comes from the map; sector-
+    // scale / asteroid-density / sector-radius / links override the content defaults when specified.
     public static void ApplyTo(MapDef map, WorldConfig world)
     {
         world.Sectors = map.Sectors
@@ -153,6 +166,11 @@ public static class MapLoader
                 Id = s.Id,
                 Radius = s.Radius.HasValue ? (float?)(float)s.Radius.Value : null,
                 Name = string.IsNullOrWhiteSpace(s.Name) ? null : s.Name!.Trim(),
+                Garrison = ProjectGarrison(s.Garrison, s.Id),
+                Asteroids = ParseAsteroidKind(s.Asteroids, s.Id),
+                AsteroidDensityMult = F(s.AsteroidDensity),
+                MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
+                MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,
                 Env = ProjectEnv(s.Environment),
             })
             .ToList();
@@ -160,7 +178,46 @@ public static class MapLoader
             world.SectorScale = (float)map.SectorScale.Value;
         if (map.AsteroidDensity.HasValue)
             world.AsteroidDensity = (float)map.AsteroidDensity.Value;
+        if (map.SectorRadius.HasValue)
+            world.SectorRadius = (float)map.SectorRadius.Value;
+
+        // Gate topology: each `[a, b]` pair → a SectorLink. Validate shape + that both endpoints are
+        // real sectors (fail-fast, like the rest of the map loader).
+        world.Links = new List<SectorLink>();
+        if (map.Links is not null)
+        {
+            var ids = map.Sectors.Select(s => (uint)s.Id).ToHashSet();
+            foreach (var pair in map.Links)
+            {
+                if (pair is not { Count: 2 })
+                    throw new InvalidDataException(
+                        $"map '{map.Name}': every `links` entry must be a pair [a, b]; got {pair?.Count ?? 0} ids.");
+                if (!ids.Contains(pair[0]) || !ids.Contains(pair[1]))
+                    throw new InvalidDataException(
+                        $"map '{map.Name}': link [{pair[0]}, {pair[1]}] references a sector id not in `sectors`.");
+                world.Links.Add(new SectorLink(pair[0], pair[1]));
+            }
+        }
     }
+
+    private static SectorGarrison? ProjectGarrison(GarrisonDef? g, byte sectorId)
+    {
+        if (g is null)
+            return null;
+        if (g.Team is not { } t || t < 0 || t > byte.MaxValue)
+            throw new InvalidDataException($"sector {sectorId}: `garrison` requires a valid `team` id.");
+        return new SectorGarrison { Team = (byte)t };
+    }
+
+    private static AsteroidKind ParseAsteroidKind(string? s, byte sectorId) =>
+        (s?.Trim().ToLowerInvariant()) switch
+        {
+            null or "" or "field" => AsteroidKind.Field,
+            "belt" => AsteroidKind.Belt,
+            "none" => AsteroidKind.None,
+            _ => throw new InvalidDataException(
+                $"sector {sectorId}: `asteroids` must be field|belt|none, got '{s}'."),
+        };
 
     // Project the authored YAML env DTOs onto the runtime SectorEnvironment (double→float, [r,g,b]→Vec3).
     // Null in → null out so an omitted `environment:` block leaves WorldSectorConfig.Env null (legacy).
@@ -185,24 +242,10 @@ public static class MapLoader
                 Intensity = F(e.Nebula.Intensity),
                 Seed = e.Nebula.Seed,
             },
-            Belt = e.Belt is null ? null : new SectorBelt
-            {
-                AreaDensity = F(e.Belt.AreaDensity),
-                InnerFrac = F(e.Belt.InnerFrac),
-                OuterFrac = F(e.Belt.OuterFrac),
-                Flatten = F(e.Belt.Flatten),
-                FillFrac = F(e.Belt.FillFrac),
-            },
             Dust = e.Dust is null ? null : new SectorDust
             {
-                CloudCount = e.Dust.CloudCount ?? 0,
-                RadiusMin = F(e.Dust.RadiusMin) ?? 300f,
-                RadiusMax = F(e.Dust.RadiusMax) ?? 900f,
-                CoverageFrac = F(e.Dust.CoverageFrac) ?? 0.85f,
-                Flatten = F(e.Dust.Flatten) ?? 0.15f,
-                Density = F(e.Dust.Density) ?? 0.7f,
+                Amount = Math.Clamp(F(e.Dust.Amount) ?? 0.6f, 0f, 1f),
                 Color = ToVec3(e.Dust.Color),
-                VisionMult = F(e.Dust.VisionMult) ?? 1f,
                 Seed = e.Dust.Seed,
             },
         };

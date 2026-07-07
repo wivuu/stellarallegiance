@@ -1028,6 +1028,13 @@ public partial class GameNetClient : Node
             Radius = r.ReadSingle(),
             Name = r.ReadString(),
         };
+        // 2D map-diagram position (mirror of Protocol.WriteSectorStatic): presence byte then x,y.
+        if (r.ReadByte() != 0)
+        {
+            s.HasMapPos = true;
+            s.MapPosX = r.ReadSingle();
+            s.MapPosY = r.ReadSingle();
+        }
         s.Env = ReadSectorEnv(r);
         return s;
     }
@@ -1441,6 +1448,15 @@ public partial class GameNetClient : Node
                 uint id = r.ReadUInt32();
                 float radius = r.ReadSingle();
                 string sname = ReadStr(r);
+                // 2D map-diagram position (mirror of Protocol.BuildMapList): presence byte then x,y.
+                bool hasPos = r.ReadByte() != 0;
+                float mapX = 0f,
+                    mapY = 0f;
+                if (hasPos)
+                {
+                    mapX = r.ReadSingle();
+                    mapY = r.ReadSingle();
+                }
                 byte baseCount = r.ReadByte();
                 var bases = new List<SectorMapPreview.BaseMark>(baseCount);
                 for (int b = 0; b < baseCount; b++)
@@ -1451,7 +1467,8 @@ public partial class GameNetClient : Node
                     bases.Add(new SectorMapPreview.BaseMark(team, new Vector2(x, z)));
                 }
                 sectors.Add(new SectorMapPreview.SectorModel(
-                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname));
+                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname,
+                    mapX, mapY, hasPos));
             }
             maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors)));
         }

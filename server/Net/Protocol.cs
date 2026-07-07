@@ -422,6 +422,13 @@ public static class Protocol
         w.Write(s.Id);
         w.Write(s.Radius);
         w.Write(s.Name ?? ""); // length-prefixed UTF-8; client reads with ReadString()
+        // 2D map-diagram position (minimap). Presence byte then x,y; absent → client auto-lays it out.
+        w.Write((byte)(s.HasMapPos ? 1 : 0));
+        if (s.HasMapPos)
+        {
+            w.Write(s.MapX);
+            w.Write(s.MapY);
+        }
         WriteSectorEnv(w, world, s);
     }
 
@@ -1127,6 +1134,13 @@ public static class Protocol
                 w.Write(sec.Id);
                 w.Write(sec.Radius);
                 WriteString(w, sec.Name);
+                // 2D map-diagram position for the lobby preview; presence byte then x,y.
+                w.Write((byte)(sec.HasMapPos ? 1 : 0));
+                if (sec.HasMapPos)
+                {
+                    w.Write(sec.MapX);
+                    w.Write(sec.MapY);
+                }
                 w.Write((byte)Math.Min(sec.Bases.Count, 255));
                 for (int b = 0; b < sec.Bases.Count && b < 255; b++)
                 {

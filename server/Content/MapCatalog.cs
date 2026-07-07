@@ -7,8 +7,11 @@ namespace SimServer.Content;
 // Team 0/1 today; 0xFF is reserved for a future neutral/unclaimed garrison (none exist yet).
 public sealed record MapCatalogBase(byte Team, float X, float Z);
 
-// One sector of a map thumbnail: its id, radius, display name, and the garrison markers in it.
-public sealed record MapCatalogSector(uint Id, float Radius, string Name, IReadOnlyList<MapCatalogBase> Bases);
+// One sector of a map thumbnail: its id, radius, display name, garrison markers, and optional 2D
+// map-diagram position (MapX/MapY valid when HasMapPos; else the client auto-lays it out).
+public sealed record MapCatalogSector(
+    uint Id, float Radius, string Name, IReadOnlyList<MapCatalogBase> Bases,
+    float MapX, float MapY, bool HasMapPos);
 
 // A playable map as advertised to clients for the in-game lobby's sector pane + map picker: the
 // human name, derived metadata (mode/size/home-sector label/garrison count), and a light
@@ -55,7 +58,8 @@ public static class MapCatalog
                     world.Bases
                         .Where(b => b.SectorId == s.Id)
                         .Select(b => new MapCatalogBase(b.Team, MathF.Round(b.Pos.X, 1), MathF.Round(b.Pos.Z, 1)))
-                        .ToList()))
+                        .ToList(),
+                    s.MapX, s.MapY, s.HasMapPos))
                 .ToList();
 
             float maxRadius = world.Sectors.Count == 0 ? 0f : world.Sectors.Max(s => s.Radius);
@@ -90,8 +94,10 @@ public static class MapCatalog
     {
         Id = w.Id,
         SectorScale = w.SectorScale,
+        SectorRadius = w.SectorRadius,
         AsteroidDensity = w.AsteroidDensity,
         Sectors = new List<WorldSectorConfig>(w.Sectors),
+        Links = new List<SectorLink>(w.Links),
         DebugFreezeBrain = w.DebugFreezeBrain,
         DebugNoFire = w.DebugNoFire,
         FogOfWar = w.FogOfWar,

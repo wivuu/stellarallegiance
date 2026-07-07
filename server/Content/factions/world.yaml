@@ -9,6 +9,9 @@
 world:
   id: 0
   sector-scale: 2.25
+  # The single default sector radius (× sector-scale) for any map sector that omits `radius`. One
+  # shared default for every sector — no per-sector-id defaults. A map may override via `sector-radius`.
+  sector-radius: 700
   asteroid-density: 1.0
   debug-freeze-brain: false
   debug-no-fire: false

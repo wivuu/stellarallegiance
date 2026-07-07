@@ -283,10 +283,32 @@ public partial class WorldRenderer : Node3D
     // tables); the client subscribes to everything but only SHOWS objects in the
     // player's current sector, toggled by node visibility (each node stashes its
     // sector id in metadata). _localSector follows the local ship as it warps; it
-    // defaults to the home/battlefield sector so the pre-spawn overview shows it.
-    private const uint HomeSector = 0;
-    private uint _localSector = HomeSector;
+    // defaults to the home sector (below) so the pre-spawn overview shows it.
+    private uint _localSector;
     private readonly Dictionary<uint, Sector> _sectors = new();
+
+    // The local player's home = the sector holding THEIR team's garrison (base). No hardcoded sector:
+    // before we know the team or have its base, fall back to the lowest known sector id (else 0). Used
+    // for the pre-spawn / post-death overview view + backdrop.
+    private uint HomeSector
+    {
+        get
+        {
+            if (_localTeam is byte lt)
+                foreach (var (sector, team) in _baseTeams)
+                    if (team == lt)
+                        return sector;
+            uint lowest = 0;
+            bool any = false;
+            foreach (var s in _sectors.Values)
+                if (!any || s.SectorId < lowest)
+                {
+                    lowest = s.SectorId;
+                    any = true;
+                }
+            return lowest;
+        }
+    }
 
     // Local sector boundary, read by the HUD for the out-of-bounds warning. Radius 0
     // (sector not yet known) disables the warning.

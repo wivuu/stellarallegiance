@@ -242,20 +242,49 @@ namespace StellarAllegiance.Shared
         public List<HardpointDef> Hardpoints = new();
     }
 
-    // One per-sector radius override carried on WorldConfig. Radius is nullable: null → the sim uses
-    // the sector's built-in default radius × WorldConfig.SectorScale. Server-consumed only (World map
-    // seeding); NOT streamed — the client learns each sector's radius from the per-sector statics.
+    // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;
+    // Belt = annular ring; None = no rocks. Replaces the old per-sector-id field/belt hardcoding.
+    public enum AsteroidKind { None, Field, Belt }
+
+    // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
+    // determines how many teams the map supports (one home per team).
+    public sealed class SectorGarrison
+    {
+        public byte Team;
+    }
+
+    // A gate (aleph) edge between two sector ids. Becomes a bidirectional aleph pair in the World ctor.
+    public readonly record struct SectorLink(uint A, uint B);
+
+    // One sector's authored config carried on WorldConfig, resolved from map YAML. All geometry is
+    // data-driven here: radius, garrison (→ team base), asteroid shape, 2D map-diagram position, and
+    // the visual environment. Radius nullable: null → WorldConfig.SectorRadius × SectorScale (ONE
+    // shared default for every sector — no per-sector-id special-casing). Server-consumed for World
+    // seeding; the client learns radius/name/env/map-pos from the per-sector statics, not this object.
     public sealed class WorldSectorConfig
     {
         public uint Id;
         public float? Radius;
         public string? Name; // optional display name for the sector (streamed per-sector static)
 
+        // Optional team garrison (home base) hosted in this sector. Null → no base here.
+        public SectorGarrison? Garrison;
+
+        // Asteroid distribution shape for this sector (default Field). Optional per-sector density
+        // multiplier on WorldConfig.AsteroidDensity (null → 1×) is the only granular rock knob left.
+        public AsteroidKind Asteroids = AsteroidKind.Field;
+        public float? AsteroidDensityMult;
+
+        // 2D LAYOUT coordinate for the map diagram (minimap + lobby preview), normalized ~[-1,1].
+        // Distinct from 3D geometry — purely where this sector's node is drawn. Both-null → the
+        // client falls back to its auto ring layout. STREAMED (per-sector static + lobby catalog).
+        public float? MapPosX;
+        public float? MapPosY;
+
         // Optional per-sector environment authored in map YAML (`sectors[].environment`). Null → legacy
-        // behavior. The Sun/Nebula/Dust-VISUAL parts are streamed to the client per-sector static; Belt
-        // and the dust ATTENUATION are server-only (World seeding + the vision sim). Consumed by the
-        // World ctor (which resolves these into World.Sector.Env + World.DustClouds); like Radius, the
-        // config object itself is projected server-side, never written to the wire as-is.
+        // behavior. The Sun/Nebula/Dust-VISUAL parts are streamed to the client per-sector static; the
+        // dust ATTENUATION is server-only (the vision sim). Consumed by the World ctor (which resolves
+        // these into World.Sector.Env + World.DustClouds); the config object is never written as-is.
         public SectorEnvironment? Env;
     }
 
@@ -265,7 +294,6 @@ namespace StellarAllegiance.Shared
     {
         public SectorSun? Sun;
         public SectorNebula? Nebula;
-        public SectorBelt? Belt; // server-only (asteroid field/belt shape)
         public SectorDust? Dust;
     }
 
@@ -291,31 +319,16 @@ namespace StellarAllegiance.Shared
         public bool HasOverride => ColorA.HasValue || ColorB.HasValue || Intensity.HasValue || Seed.HasValue;
     }
 
-    // Server-only. Overrides the compile-time asteroid field/belt shape constants (World.cs) per sector.
-    // Each null field falls back to the stock constant, so a partial belt block tweaks only what it sets.
-    public sealed class SectorBelt
-    {
-        public float? AreaDensity; // rocks per unit² of footprint (at density 1)
-        public float? InnerFrac;   // belt inner radius / sector radius (annular/verge sectors)
-        public float? OuterFrac;   // belt outer radius / sector radius
-        public float? Flatten;     // half-thickness / radius (shallow disc/belt)
-        public float? FillFrac;    // disc radius / sector radius (core/field sectors)
-    }
-
-    // Dust CLOUD distribution + characteristics. The server seeds the actual clouds deterministically
-    // (World.SeedDustClouds); the seeded cloud list + the visual knobs stream to the client, while
-    // VisionMult drives the sim's radar/vision attenuation (server-only).
+    // Dust — a high-level "feel" block, not granular knobs. The server seeds the actual clouds
+    // deterministically (World.SeedDustClouds) RELATIVE to sector size, so an identical block reads
+    // identically in any-sized sector. Amount drives cloud coverage/count/thickness AND the radar/
+    // vision attenuation (dustier = less sightline); the seeded cloud list + color stream to the
+    // client, and the attenuation is derived server-side.
     public sealed class SectorDust
     {
-        public int CloudCount;            // number of dust clouds distributed in the sector
-        public float RadiusMin = 300f;    // per-cloud radius draw range
-        public float RadiusMax = 900f;
-        public float CoverageFrac = 0.85f; // clouds distributed within this fraction of sector radius
-        public float Flatten = 0.15f;     // vertical squash (shallow, like belts)
-        public float Density = 0.7f;      // visual thickness + attenuation strength
-        public Vec3? Color;               // dust albedo; null → client default
-        public float VisionMult = 1f;     // effective radar/eyeball range multiplier through full dust (1 = none)
-        public uint? Seed;                // optional; null → derived from world seed + sector id
+        public float Amount = 0.6f; // 0..1 "how dusty" — coverage/count/thickness/vision, all relative
+        public Vec3? Color;         // dust albedo; null → client default
+        public uint? Seed;          // optional; null → derived from world seed ^ sector id
     }
 
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale
@@ -326,10 +339,19 @@ namespace StellarAllegiance.Shared
         public float SectorScale; // multiplier on authored sector radii
         public float AsteroidDensity; // asteroids per unit of normalized sector volume
 
-        // Per-sector radius overrides resolved from the authored `world.sectors` YAML. Consumed by World
-        // map seeding (server) only; deliberately NOT written to the wire (Protocol.BuildDefs skips it —
-        // the client already learns radii from the per-sector statics).
+        // The SINGLE default sector radius (× SectorScale) for any sector whose YAML omits `radius`.
+        // Replaces the old per-sector-id CoreRadius/VergeRadius constants. A map may override it via
+        // its top-level `sector-radius`; <= 0 falls back to World.DefaultSectorRadius.
+        public float SectorRadius;
+
+        // Per-sector config resolved from the authored `world.sectors` / map YAML: radius, garrison,
+        // asteroid shape, map-pos, environment. Consumed by World map seeding (server) only; the parts
+        // the client needs ride the per-sector statics, not this object.
         public List<WorldSectorConfig> Sectors = new();
+
+        // Gate (aleph) topology as sector-id EDGES. Empty → the World ctor links sectors in a ring by
+        // id. Each entry becomes a bidirectional aleph pair. Authored at the map level (`links:`).
+        public List<SectorLink> Links = new();
         public bool DebugFreezeBrain; // skip the per-drone AI decision loop (benchmarking)
         public bool DebugNoFire; // force every ship's Firing input false (benchmarking)
 

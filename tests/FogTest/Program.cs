@@ -93,6 +93,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     for (int i = 0; i < ns; i++)
     {
         br.ReadUInt32(); br.ReadSingle(); br.ReadString(); // id, radius, name
+        if (br.ReadByte() != 0) br.ReadBytes(8); // map-pos: presence byte then x,y (2 floats)
         // Per-sector environment (mirror Protocol.WriteSectorEnv): 3 presence bytes always present.
         if (br.ReadByte() != 0) br.ReadBytes(32); // sun: godRays + dir(3) + color(3) + energy
         if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
@@ -1164,6 +1165,9 @@ Vec3 AtAngle(float dist, float angleDeg)
             + "sectors:\n"
             + "  - id: 0\n"
             + "    radius: 3000\n"
+            + "    garrison: { team: 0 }\n"
+            + "    asteroids: belt\n"
+            + "    map-pos: [-1.0, 0.5]\n"
             + "    environment:\n"
             + "      sun:\n"
             + "        azimuth: 30\n"
@@ -1173,14 +1177,12 @@ Vec3 AtAngle(float dist, float angleDeg)
             + "      nebula:\n"
             + "        color-a: [0.4, 0.2, 0.6]\n"
             + "        intensity: 0.09\n"
-            + "      belt:\n"
-            + "        area-density: 3.0e-5\n"
             + "      dust:\n"
-            + "        cloud-count: 5\n"
-            + "        density: 0.7\n"
-            + "        vision-mult: 0.4\n"
+            + "        amount: 0.4\n"
+            + "        color: [0.3, 0.2, 0.1]\n"
             + "  - id: 1\n"
             + "    radius: null\n"
+            + "    garrison: { team: 1 }\n"
     );
     var maps = MapLoader.LoadAvailable(dir, null);
     var map = MapLoader.Resolve(maps, "EnvMap");
@@ -1194,14 +1196,24 @@ Vec3 AtAngle(float dist, float angleDeg)
         "sun env did not round-trip"
     );
     Check(
-        s0.Env?.Dust is { CloudCount: 5, VisionMult: 0.4f },
-        "map env: dust cloud-count + vision-mult round-trip",
-        "dust env did not round-trip"
+        s0.Env?.Dust is { } d && MathF.Abs(d.Amount - 0.4f) < 1e-4f,
+        "map env: dust amount round-trips through ApplyTo",
+        "dust amount did not round-trip"
     );
     Check(
-        s0.Env?.Belt?.AreaDensity is { } ad && MathF.Abs(ad - 3.0e-5f) < 1e-9f,
-        "map env: server-only belt area-density round-trip",
-        "belt env did not round-trip"
+        s0.Asteroids == AsteroidKind.Belt && s1.Asteroids == AsteroidKind.Field,
+        "map: asteroid kind (belt/field default) round-trips",
+        "asteroid kind did not round-trip"
+    );
+    Check(
+        s0.Garrison?.Team == 0 && s1.Garrison?.Team == 1,
+        "map: garrisons round-trip (team per sector)",
+        "garrison round-trip failed"
+    );
+    Check(
+        s0.MapPosX is { } mx && MathF.Abs(mx + 1.0f) < 1e-4f && s0.MapPosY.HasValue,
+        "map: map-pos round-trips through ApplyTo",
+        "map-pos did not round-trip"
     );
     Check(
         s0.Env?.Nebula?.ColorA is { } ca && MathF.Abs(ca.X - 0.4f) < 1e-4f,
@@ -1234,14 +1246,7 @@ Vec3 AtAngle(float dist, float angleDeg)
                     Id = 0,
                     Env = new SectorEnvironment
                     {
-                        Dust = new SectorDust
-                        {
-                            CloudCount = 6,
-                            RadiusMin = 200f,
-                            RadiusMax = 400f,
-                            Density = 0.8f,
-                            VisionMult = 0.5f,
-                        },
+                        Dust = new SectorDust { Amount = 0.6f },
                     },
                 },
                 new() { Id = 1 },
@@ -1297,10 +1302,16 @@ Vec3 AtAngle(float dist, float angleDeg)
     float baseR = fighter.VisionSphereRadius * fighter.RadarSignature; // effective clear-air sphere
     float cloudR = baseR * 0.3f; // viewer & target sit on opposite edges → D = 2·cloudR = 0.6·baseR
 
-    Simulation MkDustSim(float visionMult, out World w)
+    // Dust is a "feel" knob now: amount drives BOTH coverage and the radar/vision floor, all relative
+    // to sector size. Size sector 0 to baseR so its dust fills a ~0.9·baseR disc around the origin;
+    // viewer & target then straddle that dusty center. amount 0 = clear air (no dust); high amount =
+    // thick dust that should attenuate the sightline.
+    Simulation MkDustSim(float amount, out World w)
     {
         var c = ContentLoader.Load(stockPath);
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
+        c.World.SectorScale = 1f;
+        c.World.SectorRadius = baseR; // sector 0 (no explicit radius) → radius baseR, dust ~0.9·baseR
         foreach (var bd in c.Bases)
             bd.VisionSphereRadius = 0f; // silence the home base so only the ship viewer detects
         c.World.Sectors = new List<WorldSectorConfig>
@@ -1308,19 +1319,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             new()
             {
                 Id = 0,
-                Env = new SectorEnvironment
-                {
-                    Dust = new SectorDust
-                    {
-                        CloudCount = 1,
-                        RadiusMin = cloudR,
-                        RadiusMax = cloudR,
-                        CoverageFrac = 0.1f,
-                        Flatten = 0f,
-                        Density = 1.0f,
-                        VisionMult = visionMult,
-                    },
-                },
+                Env = amount > 0f ? new SectorEnvironment { Dust = new SectorDust { Amount = amount } } : null,
             },
             new() { Id = 1 },
         };
@@ -1333,14 +1332,13 @@ Vec3 AtAngle(float dist, float angleDeg)
         return s;
     }
 
-    bool RadarSeesAcrossDust(float visionMult)
+    bool RadarSeesAcrossDust(float amount)
     {
-        var sim = MkDustSim(visionMult, out var w);
-        var cloud = w.DustClouds[0];
-        // Along +X (perpendicular to the viewer's +Z forward) so the omnidirectional sphere — not the
-        // cone — is what's under test; the segment passes straight through the cloud's center.
-        var vpos = cloud.Pos + new Vec3(-cloudR, 0f, 0f);
-        var tpos = cloud.Pos + new Vec3(cloudR, 0f, 0f);
+        var sim = MkDustSim(amount, out var w);
+        // Straddle the dusty sector center along +X (perpendicular to the viewer's +Z forward) so the
+        // omnidirectional sphere — not the cone — is under test; the segment passes through the dust.
+        var vpos = new Vec3(-cloudR, 0f, 0f);
+        var tpos = new Vec3(cloudR, 0f, 0f);
         var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
         var target = Join(sim, 2, 1, FlightModel.ClassFighter);
         Run(
@@ -1355,8 +1353,8 @@ Vec3 AtAngle(float dist, float angleDeg)
         return Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId);
     }
 
-    Check(RadarSeesAcrossDust(1.0f), "clear air: the enemy at 0.6× sphere range is on radar", "baseline radar detection failed (env-3 geometry is off)");
-    Check(!RadarSeesAcrossDust(0.3f), "a dust cloud on the sightline drops the enemy off radar (range attenuated)", "dust did NOT attenuate radar — the enemy was still detected through the cloud");
+    Check(RadarSeesAcrossDust(0f), "clear air: the enemy at 0.6× sphere range is on radar", "baseline radar detection failed (env-3 geometry is off)");
+    Check(!RadarSeesAcrossDust(0.9f), "thick dust on the sightline drops the enemy off radar (range attenuated)", "dust did NOT attenuate radar — the enemy was still detected through the cloud");
 }
 
 // (env-4) A Welcome built from a world with a FULL environment (sun + nebula + dust clouds) round-trips
@@ -1377,7 +1375,7 @@ Vec3 AtAngle(float dist, float angleDeg)
                 {
                     Sun = new SectorSun { Azimuth = 30f, Elevation = 15f, Color = new Vec3(1f, 0.8f, 0.6f), Energy = 1.3f, GodRays = 0.5f },
                     Nebula = new SectorNebula { ColorA = new Vec3(0.4f, 0.2f, 0.6f), Intensity = 0.09f, Seed = 42u },
-                    Dust = new SectorDust { CloudCount = 4, RadiusMin = 200f, RadiusMax = 300f, Density = 0.7f, VisionMult = 0.5f, Color = new Vec3(0.4f, 0.4f, 0.5f) },
+                    Dust = new SectorDust { Amount = 0.6f, Color = new Vec3(0.4f, 0.4f, 0.5f) },
                 },
             },
             new() { Id = 1 },
@@ -1386,7 +1384,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     var w = new World(9, cfg, content.Bases[0].MaxHealth, content.Start);
     byte[] frame = Protocol.BuildWelcome(1, 0, w, 0, Array.Empty<byte>(), fog: false);
     var (ns, _, _, _) = WelcomeCounts(frame); // throws if the appended env desyncs the frame length
-    Check(ns == 2 && w.DustClouds.Count == 4, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
+    Check(ns == 2 && w.DustClouds.Count > 0, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");

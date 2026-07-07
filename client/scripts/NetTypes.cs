@@ -170,6 +170,12 @@ namespace StellarAllegiance.Net
             CenterZ;
         public float Radius;
 
+        // Authored 2D map-diagram position (minimap layout). Valid only when HasMapPos; otherwise the
+        // minimap falls back to its deterministic ring layout.
+        public bool HasMapPos;
+        public float MapPosX,
+            MapPosY;
+
         // Per-sector environment (sun/god-rays, nebula override, dust clouds), decoded from the sector
         // static. Null when the server sent no environment for this sector (legacy backdrop).
         public SectorEnv? Env;

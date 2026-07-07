@@ -87,6 +87,13 @@ public record WorldConfig
     /// <summary>Multiplier on authored per-sector radii.</summary>
     public double SectorScale { get; set; }
 
+    /// <summary>
+    /// The single default sector radius (× SectorScale) for any sector that omits its own radius.
+    /// One shared default for every sector (no per-sector-id defaults). 0/omitted -&gt; the sim's
+    /// World.DefaultSectorRadius fallback; a map may override via its top-level `sector-radius`.
+    /// </summary>
+    public double SectorRadius { get; set; }
+
     /// <summary>Asteroids per unit of normalized sector volume.</summary>
     public double AsteroidDensity { get; set; }
 

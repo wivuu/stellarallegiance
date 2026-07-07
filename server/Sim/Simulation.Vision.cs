@@ -293,7 +293,7 @@ public sealed partial class Simulation
         }
         foreach (var sec in World.Sectors)
         {
-            float floor = sec.Env?.Dust?.VisionMult ?? 1f;
+            float floor = sec.Env?.Dust is { } d ? World.DustVisionFloor(d.Amount) : 1f;
             _dustFloor[sec.Id] = floor;
             if (_dustClouds.TryGetValue(sec.Id, out var list) && list.Count > 0 && floor < 1f)
                 _hasDust = true;

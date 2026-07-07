@@ -508,7 +508,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
 // unguided (dumbfire) round launched dead straight already flies directly at the base.
 void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 200f)
 {
-    ship.SectorId = World.VergeSector;
+    ship.SectorId = 1u; // team 1's garrison sector (the belt), where World.Bases[1] lives
     ship.State.Pos = basePos - new Vec3(0f, 0f, standoff);
     ship.State.Vel = new Vec3(0f, 0f, 0f);
     ship.State.Rot = Quat.Identity;

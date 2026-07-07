@@ -9,7 +9,7 @@ public static class Wire
     // Welcome handshake and refuses to play against a skewed server instead of misreading frames.
     // v25: per-sector environment appended to every sector static (Welcome + MsgReveal) —
     // sun/god-rays, nebula override, and the seeded dust-cloud list. See Protocol.WriteSectorEnv.
-    public const byte ProtocolVersion = 25;
+    public const byte ProtocolVersion = 26;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -346,6 +346,9 @@ public static class FactionsContentProjection
             {
                 Id = w.Id,
                 SectorScale = (float)w.SectorScale,
+                // The single default sector radius (× scale) for sectors that omit `radius`. 0/omitted
+                // → World.DefaultSectorRadius fallback. A map may override via its `sector-radius`.
+                SectorRadius = (float)w.SectorRadius,
                 AsteroidDensity = (float)w.AsteroidDensity,
                 DebugFreezeBrain = w.DebugFreezeBrain,
                 DebugNoFire = w.DebugNoFire,
