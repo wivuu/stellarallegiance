@@ -30,6 +30,8 @@ sector-radius: 700
 
 links:
   - [0, 1]
+  - [1, 2]
+  - [0, 2]
 
 sectors:
   - id: 0        # Delamere — team 0's home; an explicit larger arena
@@ -43,8 +45,9 @@ sectors:
         azimuth: 40
         elevation: 22
         color: [1.0, 0.86, 0.62]
-        energy: 1.35
+        energy: 4.35
         ambient: 0.6               # soft fill so the big home arena reads open and lit
+        size: 2100                # visible sun-disc width in world units; omit → default 900
         god-rays: 1
       nebula:
         color-a: [0.42, 0.20, 0.55]
@@ -78,3 +81,7 @@ sectors:
         amount: 0.85             # thick — visually dense rusty murk
         opacity: 1.0             # radar cut at full strength for this amount (sightlines badly reduced)
         color: [0.22, 0.14, 0.12] # dark rusty brimstone dust
+
+  - id: 2        # Defaultio — all-defaults sector
+    name: Defaultio
+    map-pos: [0.0, 1.0]

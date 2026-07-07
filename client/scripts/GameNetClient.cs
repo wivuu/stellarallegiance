@@ -1063,6 +1063,7 @@ public partial class GameNetClient : Node
             env.SunColorB = cb;
             env.SunEnergy = r.ReadSingle();
             env.SunAmbient = r.ReadSingle();
+            env.SunSize = r.ReadSingle();
         }
 
         if (r.ReadByte() != 0)

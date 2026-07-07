@@ -82,6 +82,7 @@ public sealed class SunDef
     public double[]? Color { get; set; }
     public double? Energy { get; set; }
     public double? Ambient { get; set; } // ambient/fill light energy for the sector; null → client default
+    public double? Size { get; set; }    // visible sun disc world-space width; null → client default (900)
     public double? GodRays { get; set; }
 }
 
@@ -236,6 +237,7 @@ public static class MapLoader
                 Color = ToVec3(e.Sun.Color),
                 Energy = F(e.Sun.Energy),
                 Ambient = F(e.Sun.Ambient),
+                Size = F(e.Sun.Size),
                 GodRays = F(e.Sun.GodRays) ?? 0f,
             },
             Nebula = e.Nebula is null ? null : new SectorNebula

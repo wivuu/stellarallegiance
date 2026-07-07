@@ -200,6 +200,7 @@ namespace StellarAllegiance.Net
             SunColorB;
         public float SunEnergy; // < 0 → default
         public float SunAmbient; // sector ambient/fill light energy; < 0 → client default
+        public float SunSize; // visible disc world-space width; < 0 → client default (Sun.DefaultSize)
 
         // Nebula override
         public bool HasNebula;

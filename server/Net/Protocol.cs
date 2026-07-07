@@ -453,6 +453,7 @@ public static class Protocol
             WriteColor(w, sun.Color);
             w.Write(sun.Energy ?? -1f);
             w.Write(sun.Ambient ?? -1f); // ambient/fill light energy; -1 sentinel = client default
+            w.Write(sun.Size ?? -1f);    // visible disc world-space width; -1 sentinel = client default
         }
 
         // --- Nebula override ---

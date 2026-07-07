@@ -305,6 +305,7 @@ namespace StellarAllegiance.Shared
         public Vec3? Color;      // linear rgb; null → client default warm tint
         public float? Energy;    // directional-light energy; null → client default
         public float? Ambient;   // ambient (fill) light energy for the whole sector; null → client default
+        public float? Size;      // visible sun disc's world-space quad width; null → client default (900)
         public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
     }
 

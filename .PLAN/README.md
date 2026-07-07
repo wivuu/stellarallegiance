@@ -28,6 +28,7 @@ Archives:
 - Add more size variability randomness for asteroids - within a reasonable range
 - Bug: Leaving match and rejoining cannot re-launch
 - Configure sector connections and 2d layout in map YAML
+- Show probe icon on HUD when a probe is deployed or nearby
 ---
 
 ## Content philosophy (the through-line)

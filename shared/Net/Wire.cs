@@ -12,7 +12,9 @@ public static class Wire
     // v27: dust block carries an `opacity` float (after the color) — scales both the rendered puff
     // alpha and the radar/vision attenuation, decoupled from the visual `amount`.
     // v28: sun block carries an `ambient` float (after energy) — the sector's ambient/fill light energy.
-    public const byte ProtocolVersion = 28;
+    // v29: sun block carries a `size` float (after ambient) — the visible disc's world-space quad width
+    // (-1 sentinel = client default). See Protocol.WriteSectorEnv / Sun.SetDiscSize.
+    public const byte ProtocolVersion = 29;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

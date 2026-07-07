@@ -234,6 +234,10 @@ public partial class SectorEnvironment : Node3D
         Vector2 screen = cam.UnprojectPosition(cam.GlobalPosition + toSun * 4000f);
         Vector2 size = vp.GetVisibleRect().Size;
         _godRayMat.SetShaderParameter("sun_pos", size.X > 0f ? screen / size : new Vector2(0.5f, 0.5f));
+        // Aspect corrects the sun-proximity mask to a true circle in screen space (UVs are 0..1 on both
+        // axes, so a raw UV distance is stretched); the mask restricts the ray SOURCE to the sun disc/halo
+        // so bright engine glow elsewhere on screen doesn't seed its own shafts.
+        _godRayMat.SetShaderParameter("aspect", size.Y > 0f ? size.X / size.Y : 1.777f);
         _godRayMat.SetShaderParameter("present", Mathf.Clamp(facing, 0f, 1f) * _godRaysStrength);
     }
 
@@ -255,6 +259,7 @@ public partial class SectorEnvironment : Node3D
                 : _defaultLightColor;
             _light.LightEnergy = env.SunEnergy >= 0f ? env.SunEnergy : _defaultLightEnergy;
             ApplyAmbient(env.SunAmbient >= 0f ? env.SunAmbient : _defaultAmbientEnergy);
+            _sun?.SetDiscSize(env.SunSize >= 0f ? env.SunSize : Sun.DefaultSize);
         }
         else
         {
@@ -262,6 +267,7 @@ public partial class SectorEnvironment : Node3D
             _light.LightColor = _defaultLightColor;
             _light.LightEnergy = _defaultLightEnergy;
             ApplyAmbient(_defaultAmbientEnergy);
+            _sun?.SetDiscSize(Sun.DefaultSize);
         }
 
         // Keep the visible sun disc + lens flare (both read Sun.SkyDirection) aligned with the light.
@@ -697,6 +703,10 @@ void fragment() {
     // Screen-space crepuscular ""god rays"": march from each pixel toward the sun's screen position,
     // accumulating only the BRIGHT pixels along the way (the sun disc + sunlit dust) with distance decay,
     // and add the result. Dark geometry contributes nothing, so it never flat-tints the scene.
+    //
+    // The ray SOURCE is masked to a disc/halo around the sun (sun_pos + sun_mask_*): a sampled bright pixel
+    // only seeds shafts if it sits near the sun on screen, so engine glow (or any other bright emitter)
+    // elsewhere in the frame no longer casts its own crepuscular shafts — only the sun does.
     private const string GodRayShaderCode =
         @"
 shader_type canvas_item;
@@ -706,6 +716,9 @@ uniform vec2 sun_pos = vec2(0.5, 0.5);
 uniform float intensity = 0.9;
 uniform vec3 ray_color : source_color = vec3(1.0, 0.9, 0.7);
 uniform float present = 0.0;
+uniform float aspect = 1.777;      // viewport w/h, so the sun mask is a true circle in screen space
+uniform float sun_mask_core = 0.16; // UV radius (screen-height units) of full-strength ray source
+uniform float sun_mask_edge = 0.42; // UV radius at which the sun's ray source has faded to nothing
 
 const int SAMPLES = 48;
 const float DENSITY = 0.9;
@@ -723,7 +736,11 @@ void fragment() {
 			s -= delta;
 			vec3 smp = texture(screen_tex, s).rgb;
 			float lum = max(smp.r, max(smp.g, smp.b));
-			rays += smp * smoothstep(0.55, 1.1, lum) * illum; // only bright pixels shaft
+			// Distance from THIS sample to the sun on screen (aspect-corrected → circular). Only bright
+			// pixels within the sun's disc/halo seed shafts; a bright engine plume off to the side is masked.
+			vec2 d = (s - sun_pos) * vec2(aspect, 1.0);
+			float sun_mask = 1.0 - smoothstep(sun_mask_core, sun_mask_edge, length(d));
+			rays += smp * smoothstep(0.55, 1.1, lum) * illum * sun_mask; // bright AND near the sun shafts
 			illum *= DECAY;
 		}
 		rays = rays / float(SAMPLES) * intensity * present;
