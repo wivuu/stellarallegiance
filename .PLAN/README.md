@@ -26,9 +26,6 @@ Archives:
   - Mines should animate as they are deployed (rapidly expand spherically)
 - Ship signature can be increased/decreased by equipment, abilities, whether shields are loaded or not
 - Bug: Leaving match and rejoining cannot re-launch
-> Show probe icon on HUD when a probe is deployed or nearby
-> Display sector name next to alephs in HUD
-- 'DefaultAimRange' should be based on equipped weapon's range
 ---
 
 ## Content philosophy (the through-line)

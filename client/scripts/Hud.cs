@@ -86,7 +86,7 @@ public partial class Hud : CanvasLayer
         // so the top-left text/menu still draw over it. Reads the local ship's hull + boost ramp.
         var systemRing = new SystemRing { Name = "SystemRing" };
         AddChild(systemRing);
-        systemRing.Init(_world, GetNode<Camera3D>("../Camera3D"));
+        systemRing.Init(_world, GetNode<Camera3D>("../Camera3D"), _defs);
 
         // Always-on sector minimap, bottom-left.
         var minimap = new Minimap { Name = "Minimap" };

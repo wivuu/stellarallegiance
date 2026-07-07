@@ -109,6 +109,19 @@ public partial class DefRegistry : Node
         return mounts;
     }
 
+    // The effective reach of a class's primary bolt weapon: how far a bolt travels before it's
+    // culled (ProjectileSpeed × ProjectileLifeTicks × Dt), resolved from the SAME first Bolt mount
+    // ResolveLocalGun/TryFire fire from. The HUD sits the aim reticle here so the crosshair marks
+    // the edge of your gun's range. Returns `fallback` for a hull with no bolt gun (pod/unarmed) or
+    // before the defs stream in — there's no weapon range to read yet.
+    public float BoltAimRange(byte classId, float fallback)
+    {
+        foreach (var (_, weapon) in WeaponMounts(classId))
+            if (weapon.Kind == WeaponKind.Bolt)
+                return weapon.ProjectileSpeed * weapon.ProjectileLifeTicks * FlightModel.Dt;
+        return fallback;
+    }
+
     // The class's first missile-kind weapon mount's WeaponDef, or null if the hull carries no
     // launcher. The HUD keys the missile ammo counter off this (shown only when non-null), and it
     // mirrors the server's ClassMissileMounts pick (first Missile-kind mount in hardpoint order).

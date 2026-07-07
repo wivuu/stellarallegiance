@@ -50,7 +50,7 @@ public partial class TargetMarkers : Control
     // the SAME streamed WeaponDef row the server's TryFire fires from (via ResolveLocalGun
     // below), so ProjectileSpeed / muzzle offset / effective range can never drift out of
     // sync with the server. MaxLeadTime is derived per-gun as ProjectileLifeTicks × FlightModel.Dt.
-    private const float DefaultAimRange = 500f; // where the aim reticle sits when no gun/target (pod, or defs not streamed yet)
+    private const float DefaultAimRange = 500f; // aim-reticle anchor when no gun (pod/unarmed, or defs not streamed yet)
 
     // Chrome pulls from the shared design tokens. Focus = the amber "selection" highlight
     // (Secondary); the lead indicator shares that amber so it reads as belonging to the
@@ -167,7 +167,7 @@ public partial class TargetMarkers : Control
     private Vector2 AimReticleScreenPoint(PredictionController local)
     {
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 pt = local.GlobalPosition + fwd * DefaultAimRange;
+        Vector3 pt = local.GlobalPosition + fwd * LocalAimRange(local);
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(pt))
             return GetViewportRect().Size * 0.5f;
@@ -312,6 +312,13 @@ public partial class TargetMarkers : Control
                 return (hp, weapon);
         return null;
     }
+
+    // Where the aim reticle sits along the firing line: the equipped bolt weapon's effective
+    // range (its shots die there) so the crosshair marks the edge of your gun's reach, falling
+    // back to the DefaultAimRange anchor for a pod/unarmed hull. Shared by the reticle draw, the
+    // Tab-target ranking point, and the SystemRing gauge centre so all three stay on one point.
+    private float LocalAimRange(PredictionController local) =>
+        _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
 
     // The enemy closest to the local ship, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
@@ -537,8 +544,8 @@ public partial class TargetMarkers : Control
                 // the nose at (the target's position led by the RELATIVE velocity, so the shot's
                 // inherited ship velocity carries it onto the target). The aim reticle is ranged to
                 // match (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a
-                // hit; with no target it sits at a default range just to show the aim line.
-                float aimRange = DefaultAimRange;
+                // hit; with no target it sits at the gun's effective range just to show the aim line.
+                float aimRange = LocalAimRange(local);
                 if (
                     focusedShip != null
                     && TryLead(
