@@ -37,7 +37,7 @@ sectors:
   - id: 0        # Delamere — team 0's home; an explicit larger arena
     name: Delamere
     radius: 4725
-    map-pos: [-1.0, 0.0]
+    map-pos: [-0.866, -0.5]
     garrison: { team: 0 }
     asteroids: field
     environment:
@@ -61,7 +61,7 @@ sectors:
   - id: 1        # Verge — team 1's home; smaller, meaner, a dense rusty belt
     name: Verge
     radius: null                 # → sector-radius (700) × scale
-    map-pos: [1.0, 0.0]
+    map-pos: [0.866, -0.5]
     garrison: { team: 1 }
     asteroids: belt
     asteroid-density: 1.25       # a denser, meaner belt than stock
