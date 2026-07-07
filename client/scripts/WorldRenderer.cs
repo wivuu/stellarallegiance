@@ -360,41 +360,92 @@ public partial class WorldRenderer : Node3D
     {
         _sectors.TryGetValue(sector, out var row);
         _starscape?.SetSector(sector, row?.Env);
-        // Hand the sector's biggest occluders (rocks + bases) to the dust driver so it can extrude
-        // shape-accurate shadow VOLUMES downsun. Rebuilt only on a sector change, and the occluders are
-        // loaded before the spawn/warp that applies the env, so the set is complete by the time it runs.
-        _sectorEnv?.Apply(sector, row?.Env, GatherShadowOccluders(sector));
+        // Hand the dust driver the occluders NEAR the camera (rocks + bases) so it can extrude shape-accurate
+        // shadow VOLUMES downsun. The set is distance-based and refined per-frame by UpdateShadowOccluders as
+        // the camera moves; here we seed it for the new sector and anchor the move-throttle at the ref point.
+        Vector3 refPos = ShadowRefPos();
+        _lastOccluderCamPos = refPos;
+        _sectorEnv?.Apply(sector, row?.Env, GatherShadowOccluders(sector, refPos));
     }
 
-    // Cap the shadow-casting occluders so a dense belt doesn't build (or draw) a thicket of shadow volumes.
-    private const int MaxShadowOccluders = 40;
-    private readonly List<(Node3D Node, float R)> _occluderScratch = new();
+    // Shadow-casting occluders are chosen by CAMERA DISTANCE, not a flat count: every base in the sector
+    // plus the rocks near the camera cast a spin-tracking shadow volume into the dust. The set is
+    // re-evaluated as the camera moves (throttled by OccluderRegatherStep). A big rock reaches from farther
+    // (its shadow is larger); a generous nearest-N backstop keeps a dense belt from building a thicket.
+    private const float ShadowOccluderRadius = 2500f; // base camera-distance cut for a rock to cast (world units)
+    private const float OccluderRegatherStep = 150f; // re-select the occluder set only after the camera moves this far
+    private const int MaxShadowOccluders = 64; // safety backstop: keep at most the NEAREST this many in range
+    private readonly List<(Node3D Node, float D)> _occluderScratch = new(); // D = distance² to camera (bases sort first)
     private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
+    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts, built once
+    private Vector3 _lastOccluderCamPos = new(float.MaxValue, float.MaxValue, float.MaxValue);
 
-    // The biggest rocks + bases in `sector`, each as (its node, its LOCAL-frame hull vertices) for
-    // SectorEnvironment to bake a spin-tracking shadow volume that parents to the node. Bases carry a huge
-    // sentinel radius so they always make the cut.
-    private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector)
+    // The shadow-casting occluders for `sector` given a camera/reference position: every base in the sector
+    // (few, always worth a shadow) plus the nearest rocks within ShadowOccluderRadius (extended by each
+    // rock's own radius so large rocks reach farther). Each is (its node, its LOCAL-frame hull vertices) for
+    // SectorEnvironment to bake a spin-tracking shadow volume parented to the node. Nearest-first, backstopped.
+    private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
     {
         _occluderScratch.Clear();
-        foreach (var n in _asteroidNodes.Values)
-            if (InSector(n, sector))
-                _occluderScratch.Add((n, ShadowRadius(n)));
         foreach (var (node, _, _) in _baseList)
             if (InSector(node, sector))
-                _occluderScratch.Add((node, ShadowRadius(node)));
-        _occluderScratch.Sort((a, b) => b.R.CompareTo(a.R));
+                _occluderScratch.Add((node, 0f)); // bases always cast: sort ahead of every rock
+        foreach (var n in _asteroidNodes.Values)
+            if (InSector(n, sector))
+            {
+                float reach = ShadowOccluderRadius + ShadowRadius(n); // big rocks cast from farther out
+                float d2 = n.GlobalPosition.DistanceSquaredTo(refPos);
+                if (d2 <= reach * reach)
+                    _occluderScratch.Add((n, d2));
+            }
+        _occluderScratch.Sort((a, b) => a.D.CompareTo(b.D)); // nearest first (bases at 0)
 
         _sectorEnvOccluders.Clear();
         int take = Mathf.Min(_occluderScratch.Count, MaxShadowOccluders);
         for (int i = 0; i < take; i++)
         {
             var node = _occluderScratch[i].Node;
-            var verts = CollectHullVerts(node);
+            var verts = HullVertsFor(node);
             if (verts.Length >= 4)
                 _sectorEnvOccluders.Add((node, verts));
         }
         return _sectorEnvOccluders;
+    }
+
+    // Camera-distance occluder re-scan, throttled to when the camera has actually moved a meaningful step.
+    // Sun + dust are static per sector, so this refreshes ONLY the shadow-volume set (SectorEnvironment
+    // builds/frees just the delta). Gated on the sector actually casting shadows so sunless sectors idle.
+    private void UpdateShadowOccluders()
+    {
+        if (_sectorEnv is not { CastsSectorShadows: true })
+            return;
+        Vector3 refPos = ShadowRefPos();
+        if (refPos.DistanceSquaredTo(_lastOccluderCamPos) < OccluderRegatherStep * OccluderRegatherStep)
+            return;
+        _lastOccluderCamPos = refPos;
+        _sectorEnv.UpdateOccluders(GatherShadowOccluders(ViewSector, refPos));
+    }
+
+    // The point the occluder distance-cut measures from: the active camera if there is one, else the local
+    // ship, else the origin — enough for the first build at spawn before a camera exists; the per-frame
+    // re-gather refines it once the camera is live.
+    private Vector3 ShadowRefPos()
+    {
+        var cam = GetViewport()?.GetCamera3D();
+        if (cam != null)
+            return cam.GlobalPosition;
+        return LocalShip is { } ship ? ship.GlobalPosition : Vector3.Zero;
+    }
+
+    // Cache the (static, LOCAL-frame) hull verts per node so the throttled re-gather doesn't re-walk a
+    // rock's meshes every time it re-selects the set. Cleared on world teardown (Reset).
+    private Vector3[] HullVertsFor(Node3D node)
+    {
+        if (_hullVertCache.TryGetValue(node, out var cached))
+            return cached;
+        var verts = CollectHullVerts(node);
+        _hullVertCache[node] = verts;
+        return verts;
     }
 
     private static bool InSector(Node3D n, uint sector) =>
@@ -959,6 +1010,8 @@ public partial class WorldRenderer : Node3D
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
+        _hullVertCache.Clear(); // keyed by the rock nodes freed just above
+        _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
         _shipNodes.Clear();
         _shipShield.Clear();
         _missiles.Clear(); // nodes freed by the _projectiles QueueFree sweep above
@@ -1119,7 +1172,6 @@ public partial class WorldRenderer : Node3D
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
         _baseList.Add((node, row.Team, row.BaseId));
-        node.SetMeta("shadowRadius", 1.0e4f); // sentinel: bases always make the shadow-occluder cut
         NetUpdateBaseHealth(row.BaseId, row.Health);
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
         _collisionWorld.AddBase(row);
@@ -1236,7 +1288,7 @@ public partial class WorldRenderer : Node3D
         _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
         _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
-        node.SetMeta("shadowRadius", row.Radius); // rank among shadow occluders (biggest rocks win)
+        node.SetMeta("shadowRadius", row.Radius); // extends its shadow-caster reach (big rocks cast from farther)
         SetNodeSector(node, row.SectorId);
     }
 
@@ -1674,6 +1726,9 @@ public partial class WorldRenderer : Node3D
             foreach (var (node, baseQ, axis, speed) in _asteroidSpins.Values)
                 node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
         }
+
+        // Re-select the dust shadow-casters by camera distance (throttled to real camera movement).
+        UpdateShadowOccluders();
 
         // Cull bolts whose (obstruction-clipped) flight life has elapsed.
         for (int i = _bolts.Count - 1; i >= 0; i--)

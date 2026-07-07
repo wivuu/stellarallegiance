@@ -36,12 +36,17 @@ public partial class SectorEnvironment : Node3D
 
     private int _currentSector = -1;
     private bool _appliedEnv; // did the last apply for _currentSector carry a real (non-null) env?
+    private SectorEnv? _currentEnv; // env last applied for _currentSector; SyncShafts reads its sun each pass
+
+    // True when the current sector's env casts dust shadows (it has a sun). WorldRenderer gates its
+    // per-frame camera-distance occluder re-scan on this so sunless sectors do no work.
+    public bool CastsSectorShadows => _currentEnv is { HasSun: true };
 
     // The current sector's shadow occluders, handed in by WorldRenderer.ApplySectorEnv: the biggest few
-    // rocks/bases, each as (its scene Node3D, its LOCAL-frame hull vertices). BuildShafts bakes a
-    // shader-extrudable shadow-volume mesh per occluder and PARENTS it to the node so it tumbles with the
-    // rock; the vertex shader extrudes it downsun every frame (ShadowVolume + ShaftShaderCode). Empty =
-    // no shafts.
+    // rocks/bases NEAR the camera, each as (its scene Node3D, its LOCAL-frame hull vertices). SyncShafts
+    // bakes a shader-extrudable shadow-volume mesh per occluder and PARENTS it to the node so it tumbles
+    // with the rock; the vertex shader extrudes it downsun every frame (ShadowVolume + ShaftShaderCode).
+    // The set is distance-based and re-handed as the camera moves; empty = no shafts.
     private System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> _occluders =
         System.Array.Empty<(Node3D, Vector3[])>();
 
@@ -65,9 +70,14 @@ public partial class SectorEnvironment : Node3D
     // in the dust follows the rock's real (spinning) silhouette. The sun axis is static per sector, so
     // only the per-occluder MODEL transform (free, inherited) changes frame to frame.
     private ShaderMaterial _shaftMat = null!;
-    // The baked shadow-volume MeshInstance3Ds, parented onto their occluder nodes. Held only so a sector
-    // change (BuildShafts) can free the previous set even though they live under WorldRenderer's rocks.
-    private readonly System.Collections.Generic.List<MeshInstance3D> _shadowInstances = new();
+    // The live shadow-volume MeshInstance3Ds, KEYED by the occluder node each parents under. The occluder
+    // set is DISTANCE-BASED (the rocks near the camera; see WorldRenderer.GatherShadowOccluders) and
+    // re-evaluated as the camera moves, so SyncShafts only builds/frees the delta — a rock already casting
+    // keeps its baked volume. Held here so a sector change or teardown can free them even though they live
+    // under WorldRenderer's rocks.
+    private readonly System.Collections.Generic.Dictionary<Node3D, MeshInstance3D> _shadowByNode = new();
+    private readonly System.Collections.Generic.HashSet<Node3D> _shadowWantScratch = new();
+    private readonly System.Collections.Generic.List<Node3D> _shadowDropScratch = new();
     private const float ShaftLength = 3500f; // how far downsun a shaft reaches (multiply fades it in dust)
     private const float ShaftDarkness = 0.98f; // multiply factor at the shaft core — lower = starker/darker
     // Distance (m) downsun over which the shadow fades to nothing: full-dark at the rock, gone a few
@@ -142,12 +152,23 @@ public partial class SectorEnvironment : Node3D
             return;
         _currentSector = (int)sector;
         _appliedEnv = env != null;
+        _currentEnv = env;
         _occluders = occluders ?? System.Array.Empty<(Node3D, Vector3[])>();
 
         ApplySun(env);
         BuildDust(env);
-        BuildShafts(env);
+        SyncShafts();
         ApplyGodRays(env);
+    }
+
+    // Refresh ONLY the shadow-volume set for the CURRENT sector (sun + dust are static per sector). Called
+    // as the camera moves so the distance-based occluder selection tracks it: SyncShafts builds volumes for
+    // newly-near occluders and frees those that fell out of range, leaving unchanged ones untouched.
+    public void UpdateOccluders(
+        System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> occluders)
+    {
+        _occluders = occluders;
+        SyncShafts();
     }
 
     // Drop the sector-env cache so the NEXT Apply rebuilds even for the same sector id. Called on a world
@@ -158,6 +179,10 @@ public partial class SectorEnvironment : Node3D
     {
         _currentSector = -1;
         _appliedEnv = false;
+        _currentEnv = null;
+        // The volumes parent to rock nodes the teardown frees; drop our refs (freeing the parents frees them)
+        // so the next Apply rebuilds from an empty set instead of diffing against dead nodes.
+        _shadowByNode.Clear();
     }
 
     private void ApplyGodRays(SectorEnv? env)
@@ -262,34 +287,43 @@ public partial class SectorEnvironment : Node3D
         }
     }
 
-    // Rebuild the current sector's spin-tracking shadow volumes: each occluder gets a convex-hull mesh
-    // baked in its LOCAL frame (ShadowVolume.Build), parented to its scene node so it tumbles with the
-    // rock, and drawn with the shared shaft material whose vertex shader extrudes it downsun each frame —
-    // so the dark shaft in the dust follows the rock's real (spinning) silhouette. Only the static sun
-    // axis is passed in (as a shader uniform). Cleared when a sector has no sun or no occluders.
-    private void BuildShafts(SectorEnv? env)
+    // Sync the current sector's spin-tracking shadow volumes to the selected occluder set. Each occluder
+    // gets a convex-hull mesh baked in its LOCAL frame (ShadowVolume.Build), parented to its scene node so
+    // it tumbles with the rock, and drawn with the shared shaft material whose vertex shader extrudes it
+    // downsun each frame — so the dark shaft in the dust follows the rock's real (spinning) silhouette. The
+    // set is DISTANCE-BASED and re-evaluated as the camera moves (WorldRenderer.GatherShadowOccluders), so
+    // this builds ONLY the volumes for newly-present occluders and frees those that dropped out; a rock
+    // already casting keeps its baked volume (ShadowVolume.Build never re-runs for it). Only the static sun
+    // axis is a shader uniform. Everything is cleared when a sector has no sun or no occluders.
+    private void SyncShafts()
     {
-        foreach (var mi in _shadowInstances)
-            if (GodotObject.IsInstanceValid(mi))
-                mi.QueueFree();
-        _shadowInstances.Clear();
-
-        if (env is not { HasSun: true } || _occluders.Count == 0)
+        if (_currentEnv is not { HasSun: true } || _occluders.Count == 0)
+        {
+            ClearShafts();
             return;
+        }
 
         // Downsun = away from the sun (Sun.cs treats +Z basis as toward the sun), matching the direction
-        // real shadows fall. ApplySun already oriented _light for this sector before we run. The shader
-        // extrudes every occluder along this world-space axis; it's static per sector, so set it once.
+        // real shadows fall. ApplySun oriented _light for this sector; the axis is static per sector but may
+        // have changed with the sector, so refresh it here before extruding.
         Vector3 axis = _light.GlobalTransform.Basis.Z;
         if (axis.LengthSquared() < 1e-6f)
+        {
+            ClearShafts();
             return;
-        axis = -axis.Normalized();
-        _shaftMat.SetShaderParameter("downsun", axis);
+        }
+        _shaftMat.SetShaderParameter("downsun", -axis.Normalized());
 
+        // Build a volume for every wanted occluder that doesn't already have one; record the wanted set.
+        _shadowWantScratch.Clear();
         foreach (var (node, localVerts) in _occluders)
         {
             if (!GodotObject.IsInstanceValid(node))
                 continue;
+            _shadowWantScratch.Add(node);
+            if (_shadowByNode.ContainsKey(node))
+                continue; // already casting — leave its baked volume in place
+
             var mesh = ShadowVolume.Build(localVerts);
             if (mesh == null)
                 continue;
@@ -306,8 +340,29 @@ public partial class SectorEnvironment : Node3D
                 CustomAabb = new Aabb(Vector3.One * -1e5f, Vector3.One * 2e5f),
             };
             node.AddChild(mi); // inherits the rock's spin, position, and scale for free
-            _shadowInstances.Add(mi);
+            _shadowByNode[node] = mi;
         }
+
+        // Free volumes whose occluder fell out of the selected set (or was freed under us).
+        _shadowDropScratch.Clear();
+        foreach (var (node, _) in _shadowByNode)
+            if (!_shadowWantScratch.Contains(node) || !GodotObject.IsInstanceValid(node))
+                _shadowDropScratch.Add(node);
+        foreach (var node in _shadowDropScratch)
+        {
+            if (_shadowByNode.TryGetValue(node, out var mi) && GodotObject.IsInstanceValid(mi))
+                mi.QueueFree();
+            _shadowByNode.Remove(node);
+        }
+    }
+
+    // Free every live shadow volume and forget it (sunless sector, empty occluder set, or degenerate sun).
+    private void ClearShafts()
+    {
+        foreach (var mi in _shadowByNode.Values)
+            if (GodotObject.IsInstanceValid(mi))
+                mi.QueueFree();
+        _shadowByNode.Clear();
     }
 
     // Build one cloud's billboard cluster as a MultiMeshInstance3D. Rather than a uniform sphere of

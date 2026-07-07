@@ -46,7 +46,7 @@ sectors:
         color-b: [0.20, 0.34, 0.68]
         intensity: 0.08
       dust:
-        amount: 0.35              # light, dusky haze in the big home arena
+        amount: 0.15              # light, dusky haze in the big home arena
         color: [0.26, 0.24, 0.3]  # dusky space dust
 
   - id: 1        # Verge — team 1's home; smaller, meaner, a dense rusty belt
