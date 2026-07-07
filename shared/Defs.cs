@@ -109,6 +109,11 @@ namespace StellarAllegiance.Shared
         public float VisionConeAngleDeg;
         public float VisionSphereRadius;
         public float RadarSignature;
+        // Additive radar-signature bias projected from authored equipment (Hull.Signature + the
+        // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
+        // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
+        // client never reads signatures; FogEyeballMultiplier precedent).
+        public float SignatureBias;
 
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
@@ -378,6 +383,24 @@ namespace StellarAllegiance.Shared
         // precedent).
         public float FireSignatureBoost;
         public float FireSignatureWindow;
+
+        // Remaining terms of the composable per-tick signature pipeline (SignatureModel — the fire
+        // knobs above are the decaying fireMult term). All server-side only, never streamed, and
+        // NEUTRAL at 1.0 (the field initializers ARE the stock values, so an omitted knob keeps
+        // fog behavior byte-identical to fire-boost-only):
+        //  - BoostSignatureMult: full-afterburner loudness, ramped by AbPower (0..1).
+        //  - ShieldSignatureMult: applied while a hull has an EQUIPPED shield (ShieldCapacity > 0),
+        //    regardless of the current pool.
+        //  - DustSignatureMult: applied scaled by dust coverage at the ship's position (<1 = hiding
+        //    in a cloud makes you quieter; stacks with the DustVisionMult sightline attenuation).
+        public float BoostSignatureMult = 1f;
+        public float ShieldSignatureMult = 1f;
+        public float DustSignatureMult = 1f;
+        // Safety rails on the multiplicative stack: the effective signature is clamped to
+        // [(base+bias)×Min, (base+bias)×Max] so extreme knob stacking can't make a ship invisible
+        // or beacon-loud beyond tuning intent.
+        public float SignatureMinMult = 0.1f;
+        public float SignatureMaxMult = 8f;
 
         // Seconds a lost-contact ship GHOST lingers before it expires on its own (in addition to
         // being cleared early by re-scout or radar re-detection). Refreshed whenever contact is

@@ -12,6 +12,17 @@
 # decaying linearly back to 1x over fire-signature-window seconds (server-side only — never
 # streamed); author 1.0 to disable.
 #
+# The remaining signature-pipeline knobs compose with the fire boost into one effective per-tick
+# signature (SignatureModel): boost-signature-mult is the full-afterburner loudness (ramped by the
+# live afterburner power), shield-signature-mult applies while a hull has an EQUIPPED shield
+# (capacity > 0, regardless of the current pool), and dust-signature-mult applies scaled by the
+# dust density at the ship's position (< 1 = hiding inside a cloud makes you QUIETER — this stacks
+# with the sightline dust attenuation, so a ship in dust is doubly hard to see). signature-min/
+# max-mult are safety rails: the composed value is clamped to [(base+bias)×min, (base+bias)×max].
+# All server-side only (never streamed) and safe to sweep per-server — but they SHIFT fog
+# detection ranges, so retune with the fog tests in mind. Authoring every mult at 1.0 restores
+# the fire-boost-only behavior exactly.
+#
 # The ai/combat/mechanics/seeding blocks below are SERVER-SIDE sim tuning (never streamed): every
 # key is optional and an omitted key keeps its stock value (the values written here ARE stock —
 # they document the knobs and are safe to sweep without a client redeploy). Durations are seconds;
@@ -28,6 +39,11 @@ fog-of-war: true
 fog-eyeball-multiplier: 1.5
 fire-signature-boost: 5
 fire-signature-window: 3.0
+boost-signature-mult: 1.4   # full afterburner is ~40% louder (scaled by live boost power)
+shield-signature-mult: 1.15 # an equipped shield radiates — shielded hulls are seen slightly farther
+dust-signature-mult: 0.5    # buried in dust = half as loud (stacks with sightline attenuation)
+signature-min-mult: 0.1     # clamp rails on the composed signature, × (base + equipment bias)
+signature-max-mult: 8.0
 # Fog radar signatures of the static landmarks (ships/bases author theirs on their own defs).
 aleph-radar-signature: 1.4
 rock-radar-signature: 2.0

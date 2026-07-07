@@ -39,12 +39,11 @@ public sealed partial class Simulation
     // Outer "eyeball" tier multiplier on a ship's vision-sphere radius (mesh streams but no radar).
     private float _eyeballMult = 1.5f;
 
-    // Fire-signature boost (content world knobs, cached in InitVision like _eyeballMult): a ship
-    // that just fired (guns or missiles) has its radar signature multiplied by _fireSigBoost,
-    // decaying linearly back to 1x over _fireSigWindowTicks. Target-side only — never a vision
-    // SOURCE change, so IsPointVisibleToTeam is deliberately untouched.
-    private float _fireSigBoost = 2.5f;
-    private float _fireSigWindowTicks = 80f;
+    // Signature-pipeline knobs (content world knobs, cached in InitVision like _eyeballMult):
+    // fire boost + afterburner/shield/dust multipliers + clamp rails, consumed by
+    // SignatureModel.Compute at capture time. Target-side only — never a vision SOURCE change,
+    // so IsPointVisibleToTeam is deliberately untouched.
+    private SignatureKnobs _sigKnobs = new(2.5f, 80f, 1f, 1f, 1f, 0.1f, 8f);
 
     // Ticks a lost-contact ghost survives before self-expiring (FogGhostTimeout seconds × TickHz),
     // cached in InitVision like _eyeballMult. Re-scout / radar re-detection still clear it earlier;
@@ -285,8 +284,15 @@ public sealed partial class Simulation
     {
         FogEnabled = Content.World.FogOfWar;
         _eyeballMult = Content.World.FogEyeballMultiplier > 0f ? Content.World.FogEyeballMultiplier : 1.5f;
-        _fireSigBoost = Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f;
-        _fireSigWindowTicks = (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate;
+        _sigKnobs = new SignatureKnobs(
+            FireBoost: Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f,
+            FireWindowTicks: (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate,
+            BoostMult: Content.World.BoostSignatureMult,
+            ShieldMult: Content.World.ShieldSignatureMult,
+            DustMult: Content.World.DustSignatureMult,
+            MinMult: Content.World.SignatureMinMult,
+            MaxMult: Content.World.SignatureMaxMult
+        );
         _ghostTimeoutTicks = (uint)MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
         _alephSig = Content.World.AlephRadarSignature;
         _rockSig = Content.World.RockRadarSignature;
@@ -490,18 +496,24 @@ public sealed partial class Simulation
                     EyeballRadius = sphere * _eyeballMult,
                 }
             );
-            // Firing is loud: a shot (gun or missile) multiplies this ship's signature by
-            // _fireSigBoost, decaying linearly back to 1x over the window. Captured on the sim
-            // thread from the live ShipSim, so LastFireTick needs no extra plumbing; the boost
-            // reaches enemy radar at the next vision boundary (<= 500 ms, by design).
-            float sig = def.RadarSignature > 0f ? def.RadarSignature : 1f;
-            uint lastFire = Math.Max(s.LastFireTick, s.LastMissileTick); // 0 = never fired
-            if (lastFire != 0 && tick >= lastFire)
-            {
-                float age = tick - lastFire;
-                if (age < _fireSigWindowTicks)
-                    sig *= 1f + (_fireSigBoost - 1f) * (1f - age / _fireSigWindowTicks);
-            }
+            // Effective per-tick signature — the composable pipeline (SignatureModel): authored
+            // base + per-ship equipment bias, boosted by recent fire / afterburner / an equipped
+            // shield, quieted by dust cover. Captured on the sim thread from the live ShipSim, so
+            // none of the inputs need extra plumbing; a change reaches enemy radar at the next
+            // vision boundary (<= 500 ms, by design).
+            float sig = SignatureModel.Compute(
+                new SignatureInputs(
+                    def.RadarSignature,
+                    s.SigBias,
+                    tick,
+                    s.LastFireTick,
+                    s.LastMissileTick,
+                    s.State.AbPower,
+                    ShieldsEnabled && ShieldCapacityFor(s) > 0f,
+                    DustCoverageAt(s.SectorId, s.State.Pos)
+                ),
+                _sigKnobs
+            );
             _inTargets.Add(
                 new TargetSnap
                 {
@@ -572,7 +584,6 @@ public sealed partial class Simulation
     {
         var bdef = BaseDef0();
         float baseSig = (bdef != null && bdef.RadarSignature > 0f) ? bdef.RadarSignature : 1f;
-        float baseSphere = bdef?.VisionSphereRadius ?? 0f;
 
         var res = new VisionComputeResult();
         foreach (byte team in _inTeams)
@@ -645,14 +656,26 @@ public sealed partial class Simulation
         return res;
     }
 
-    // Classify a point (a ship or static target) against team `viewer` volumes, scaled by the target's
-    // signature `sig`. `excludeRock` is skipped in the occlusion scan (a rock never occludes itself).
-    // EVERY tier is rock-occluded: an asteroid between viewer and target hides it on radar AND visually
-    // (a ship can truly hide behind a rock). radar = any sphere / cone(LoS) / base-sphere hit with clear
-    // LoS; eyeball = a SHIP eyeball-sphere hit with clear LoS when radar is false (mesh streams, no radar
-    // lock; bases have no eyeball tier, cone has none). One LoS scan per viewer, shared by all its
-    // volumes since they share the viewer→target segment. Runs on the worker —
-    // reads only the value-copy snapshot + the immutable rock grid, with its own cell-walk buffer.
+    // Max dust density over the clouds containing `pos` — the "how buried in dust is this ship"
+    // input to the signature pipeline (SignatureModel.DustCoverage). Target-side: this quiets the
+    // ship itself, and deliberately STACKS with the viewer→target DustVisionMult sightline
+    // attenuation below (hiding inside a cloud beats merely being seen through one) — flag the
+    // stack when tuning dust-signature-mult. Mirrors DustVisionMult's radar-relevance gate: dust
+    // whose sector floor is 1 (e.g. opacity 0 = visual-only) is signature-neutral too. Sim-thread
+    // only (capture time), reading the same immutable _dustClouds cache.
+    private float DustCoverageAt(uint sector, Vec3 pos)
+    {
+        if (!_hasDust || !_dustClouds.TryGetValue(sector, out var clouds) || clouds.Count == 0)
+            return 0f;
+        if (_dustFloor.TryGetValue(sector, out var floor) && floor >= 1f)
+            return 0f; // dust present but radar-inert for this sector (opacity 0)
+        float cov = 0f;
+        foreach (var c in clouds)
+            if (c.Density > cov && (pos - c.Pos).LengthSquared() <= c.Radius * c.Radius)
+                cov = c.Density;
+        return cov > 1f ? 1f : cov;
+    }
+
     // Effective radar/vision RANGE multiplier for the viewer→target sightline through this sector's
     // dust. Accumulates optical depth τ = Σ density·(chord inside cloud)/(cloud diameter), clamps to
     // [0,1], then lerps from 1 (clear) toward the sector's dust floor. Returns 1 when the sector has no
@@ -707,6 +730,14 @@ public sealed partial class Simulation
         return t1 > t0 ? t1 - t0 : 0f;
     }
 
+    // Classify a point (a ship or static target) against team `viewer` volumes, scaled by the target's
+    // signature `sig`. `excludeRock` is skipped in the occlusion scan (a rock never occludes itself).
+    // EVERY tier is rock-occluded: an asteroid between viewer and target hides it on radar AND visually
+    // (a ship can truly hide behind a rock). radar = any sphere / cone(LoS) / base-sphere hit with clear
+    // LoS; eyeball = a SHIP eyeball-sphere hit with clear LoS when radar is false (mesh streams, no radar
+    // lock; bases have no eyeball tier, cone has none). One LoS scan per viewer, shared by all its
+    // volumes since they share the viewer→target segment. Runs on the worker —
+    // reads only the value-copy snapshot + the immutable rock grid, with its own cell-walk buffer.
     private void ClassifyTarget(byte team, uint sector, Vec3 pos, float sig, ulong excludeRock, out bool radar, out bool eyeball)
     {
         radar = false;

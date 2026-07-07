@@ -400,6 +400,7 @@ public sealed partial class Simulation
         s.State.Pos += new Vec3(0f, fan, 0f);
         s.State.Mass = StatsFor(slot.Class, false).Mass;
         s.Health = HullFor(slot.Class);
+        s.SigBias = ShieldDefFor(s).SignatureBias; // drones carry the same projected loadout bias
         if (MissileMountFor(slot.Class) is (_, WeaponDef mw)) // missile-armed pigs spawn with a full rack
             s.MissileAmmo = mw.MagazineSize;
 

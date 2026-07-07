@@ -16,6 +16,11 @@
 #   convention meaning "dock-only": the tank never refills in flight, only on relaunch (spawn-time
 #   init refuels — see Simulation.SpawnCombatShip). Scout/Bomber/Pod have no afterburner and
 #   author none of these keys (max-fuel <= 0 = unmodeled, i.e. legacy unlimited boost).
+#   Signature (optional): radar-signature scales every viewer's fog detection range against this
+#   hull; signature is an ADDITIVE per-hull bias on top of it (radar-signature units, default 0),
+#   summed at projection with the preferred-parts loadout's per-part signature values into the
+#   hull's equipment bias (ShipClassDef.SignatureBias). No stock hull authors it — author it to
+#   make a hull read louder/quieter than its class baseline without retuning radar-signature.
 hulls:
   # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
   - id: scout

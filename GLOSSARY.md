@@ -110,8 +110,29 @@ view persist as last-known "ghost" contacts (HUD/radar only) until re-scouted or
   - `server/Net/Protocol.cs` — `MsgReveal=16` (newly-scouted statics), `MsgContacts=17` (ghosts + radar-id list)
   - `client/scripts/WorldRenderer.cs` — `GhostContacts`, `NetSetContacts`; `TargetMarkers.cs` — dim ghost glyphs
   - `server/Sim/Simulation.Pig.cs` / missile lock gating — PIGs and lock acquisition respect team vision
-- **Related:** [[Recon Probe]], [[Threat Lock (being-locked warning)]]
+- **Related:** [[Recon Probe]], [[Threat Lock (being-locked warning)]], [[Radar Signature (dynamic pipeline)]]
 - **Notes:** Per-server world-YAML knob `fog-of-war` (default on); off ⇒ behavior/bytes identical to pre-fog
+
+### Radar Signature (dynamic pipeline)
+A ship's effective radar signature — what scales every viewer's fog detection range against it — is a
+composable per-tick value, not the hull constant: `clamp((RadarSignature + SigBias) × fireMult ×
+boostMult × shieldMult × dustMult, rails)`. Firing (guns/missiles, decaying window) and the
+afterburner (ramped by live `AbPower`) make a ship louder; an EQUIPPED shield (capacity > 0,
+regardless of pool) radiates; sitting inside a dust cloud quiets it (stacking with the sightline dust
+attenuation — hiding in dust beats being seen through it). `ShipSim.SigBias` is the per-ship additive
+equipment/ability seam (seeded at spawn from the projected `ShipClassDef.SignatureBias` = authored
+`Hull.Signature` + preferred-parts `Part.Signature` sum; a future loadout/cloak system mutates it
+live). Computed on the sim thread at vision capture (`SignatureModel.Compute`); server-only — never
+streamed, no protocol impact. All world knobs default neutral (1.0) ⇒ byte-identical to
+fire-boost-only fog.
+- **Frequency:** Core (fog-only; stock world.yaml authors boost 1.4 / shield 1.15 / dust 0.5)
+- **Key Files:**
+  - `server/Sim/SignatureModel.cs` — the pure pipeline (`SignatureKnobs`/`SignatureInputs`/`Compute`)
+  - `server/Sim/Simulation.Vision.cs` — capture-time call, `DustCoverageAt`, `_sigKnobs` cache
+  - `server/Content/core/world.yaml` — `boost/shield/dust-signature-mult`, `signature-min/max-mult` rails
+  - `server/Content/FactionsContentProjection.cs` — `SignatureBias` projection
+- **Related:** [[Fog of War (Team Vision)]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
+- **Notes:** tests/FogTest section 0 (unit) + 21 (live-sim boost/shield/dust/bias) guard the pipeline
 
 ### Per-Sector Environment (God Rays / Nebula / Dust Clouds)
 Optional `environment:` block on each sector in a map YAML, driving that sector's look AND — for dust —

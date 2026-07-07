@@ -177,6 +177,10 @@ public sealed partial class Simulation
         // 0 capacity (per the class def) = no shield. Set full at spawn; recharged in the Step sweep.
         public float Shield;
         public uint ShieldDamageTick;
+        // Additive radar-signature bias (SignatureModel.Bias) — the per-ship equipment/loadout/
+        // ability seam a future fitting or cloak system mutates live. Seeded at spawn from the
+        // class def's projected SignatureBias (hull + default-loadout sum); 0 = neutral.
+        public float SigBias;
         public uint LastInputTick;
         public uint LastFireTick;
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
@@ -937,6 +941,8 @@ public sealed partial class Simulation
         s.Health = HullFor(cls);
         s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
         s.ShieldDamageTick = 0;
+        s.SigBias = ShieldDefFor(s).SignatureBias; // projected default-loadout signature bias
+
         if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
             s.MissileAmmo = mw.MagazineSize;
         // D7: remember what the team paid for this hull (TryReserveSpawn just deducted it) so a
@@ -1178,6 +1184,7 @@ public sealed partial class Simulation
             Alive = true,
             Health = HullFor(GameContent.PodClassId),
             Shield = ShieldDefFor(GameContent.PodClassId).ShieldCapacity, // 0 unless a pod hull authors a shield
+            SigBias = ShieldDefFor(GameContent.PodClassId).SignatureBias, // pods fly the Pod def's bias
             LastInputTick = tick,
             State = new ShipState
             {

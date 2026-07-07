@@ -50,6 +50,31 @@ Simulation BootSim(ulong seed, bool sync = true)
 
 ShipClassDef Def(Simulation sim, byte cls) => sim.Content.Ships.First(d => d.ClassId == cls);
 
+// The loaded world's signature-pipeline knobs (SignatureModel), for defs-derived boundaries.
+SignatureKnobs Knobs(ContentSet c) =>
+    new(
+        c.World.FireSignatureBoost,
+        c.World.FireSignatureWindow * FlightModel.TickRate,
+        c.World.BoostSignatureMult,
+        c.World.ShieldSignatureMult,
+        c.World.DustSignatureMult,
+        c.World.SignatureMinMult,
+        c.World.SignatureMaxMult
+    );
+
+// Effective AT-REST radar signature of a hull under the loaded knobs — the composed pipeline with
+// the dynamic terms quiet (no fire, no afterburner, no dust): (base + bias) × shield-mult, clamped.
+// Detection-range assertions scale by THIS rather than raw RadarSignature, so retuning the YAML —
+// including the signature knobs — never breaks them (the file's standing idiom).
+float EffSig(ContentSet c, byte cls)
+{
+    var d = c.Ships.First(x => x.ClassId == cls);
+    return SignatureModel.Compute(
+        new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, d.ShieldCapacity > 0f, 0f),
+        Knobs(c)
+    );
+}
+
 Simulation.ShipSim Join(Simulation sim, int clientId, byte team, byte cls)
 {
     sim.EnqueueJoin(clientId, team, cls);
@@ -115,6 +140,47 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // ================================================================================================
+// 0. SignatureModel unit tests — the pure signature pipeline, no sim. Neutral knobs must reproduce
+//    the fire-boost-only behavior byte-identically; each term applies exactly its multiplier; the
+//    clamp rails bound extreme stacking.
+// ================================================================================================
+{
+    bool Close(float a, float b) => MathF.Abs(a - b) < 1e-4f;
+    var neutral = new SignatureKnobs(FireBoost: 2.5f, FireWindowTicks: 80f, BoostMult: 1f, ShieldMult: 1f, DustMult: 1f, MinMult: 0.1f, MaxMult: 8f);
+    SignatureInputs At(float bias = 0f, uint fire = 0, uint missile = 0, float ab = 0f, bool shield = false, float dust = 0f) =>
+        new(BaseSig: 2f, Bias: bias, Tick: 1000, LastFireTick: fire, LastMissileTick: missile, AbPower: ab, HasShield: shield, DustCoverage: dust);
+
+    Check(Close(SignatureModel.Compute(At(), neutral), 2f),
+        "all-neutral knobs + bias 0 == base (the byte-identical guard)", "neutral pipeline did not return the base signature");
+    Check(Close(SignatureModel.Compute(At(bias: 0.5f), neutral), 2.5f),
+        "SigBias adds to the base signature", "SigBias was not additive");
+
+    // Fire term: full boost at age 0, linear decay inside the window, expired at the window end;
+    // a missile launch boosts exactly like a gun shot (max of the two stamps).
+    float fired = SignatureModel.Compute(At(fire: 1000), neutral);
+    float mid = SignatureModel.Compute(At(fire: 960), neutral); // age 40 of 80 → half-decayed
+    Check(Close(fired, 2f * 2.5f), "a just-fired ship reads base × FireBoost", "fire boost at age 0 wrong");
+    Check(Close(mid, 2f * 1.75f), "the fire boost decays linearly inside the window", "mid-window fire decay wrong");
+    Check(Close(SignatureModel.Compute(At(fire: 920), neutral), 2f), "at the window end the signature is back to base", "fire boost outlived its window");
+    Check(Close(SignatureModel.Compute(At(missile: 1000), neutral), fired), "a missile launch boosts like a gun shot", "missile stamp did not boost");
+
+    // The new terms, each isolated under live-style knobs.
+    var live = new SignatureKnobs(FireBoost: 2.5f, FireWindowTicks: 80f, BoostMult: 1.4f, ShieldMult: 1.15f, DustMult: 0.5f, MinMult: 0.1f, MaxMult: 8f);
+    Check(Close(SignatureModel.Compute(At(ab: 1f), live), 2f * 1.4f), "AbPower 1 applies the full BoostMult", "full-afterburner term wrong");
+    Check(Close(SignatureModel.Compute(At(ab: 0.5f), live), 2f * 1.2f), "the boost term ramps linearly with AbPower", "half-afterburner term wrong");
+    Check(Close(SignatureModel.Compute(At(shield: true), live), 2f * 1.15f), "an equipped shield applies ShieldMult", "shield term wrong");
+    Check(Close(SignatureModel.Compute(At(dust: 1f), live), 2f * 0.5f), "full dust coverage applies DustMult (quieter than base)", "dust term wrong");
+    Check(Close(SignatureModel.Compute(At(dust: 0.5f), live), 2f * 0.75f), "the dust term ramps linearly with coverage", "half-coverage dust term wrong");
+
+    // Clamp rails: extreme loud stacking caps at base × MaxMult; extreme quieting floors at × MinMult.
+    var rails = new SignatureKnobs(FireBoost: 10f, FireWindowTicks: 80f, BoostMult: 3f, ShieldMult: 2f, DustMult: 0.02f, MinMult: 0.5f, MaxMult: 4f);
+    Check(Close(SignatureModel.Compute(At(fire: 1000, ab: 1f, shield: true), rails), 2f * 4f),
+        "extreme loud stacking clamps at base × MaxMult", "the max clamp rail did not hold");
+    Check(Close(SignatureModel.Compute(At(dust: 1f), rails), 2f * 0.5f),
+        "extreme quieting clamps at base × MinMult", "the min clamp rail did not hold");
+}
+
+// ================================================================================================
 // 1. Cone — length + angle edges (scout viewer facing +Z; fighter target, sig 1.0, beyond the
 //    sphere so ONLY the cone can detect it).
 // ================================================================================================
@@ -127,8 +193,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     var viewer = Join(sim, 1, 0, FlightModel.ClassScout);
     var target = Join(sim, 2, 1, FlightModel.ClassFighter);
-    float sig = Def(sim, FlightModel.ClassFighter).RadarSignature; // 1.0
-    float beyondSphere = sphere / sig + 200f; // outside the omni sphere so the cone is the only sensor
+    float sig = EffSig(sim.Content, FlightModel.ClassFighter); // at-rest effective signature
+    float beyondSphere = sphere * sig + 200f; // outside the omni sphere so the cone is the only sensor
 
     bool InCone(float dist, float ang)
     {
@@ -153,7 +219,6 @@ Vec3 AtAngle(float dist, float angleDeg)
     var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
     var target = Join(sim, 2, 1, FlightModel.ClassFighter);
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
-    float sig = Def(sim, FlightModel.ClassFighter).RadarSignature;        // 1.0
 
     // Behind the viewer (−Z), well inside the sphere, clear LoS → omnidirectional detection.
     Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, new Vec3(0, 0, -sphere * 0.4f)); }, Settle);
@@ -187,9 +252,9 @@ Vec3 AtAngle(float dist, float angleDeg)
         var probe = BootSim(3);
         coneLen = Def(probe, FlightModel.ClassScout).VisionConeLength;
         sphere = Def(probe, FlightModel.ClassScout).VisionSphereRadius;
-        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        sig = EffSig(probe.Content, FlightModel.ClassFighter);
     }
-    float targetDist = sphere / sig + 600f; // outside the sphere, inside the cone
+    float targetDist = sphere * sig + 600f; // outside the sphere, inside the cone
 
     bool DetectedWithRock(Vec3 rockPos)
     {
@@ -213,8 +278,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(4);
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
-    float bomberSig = Def(sim, FlightModel.ClassBomber).RadarSignature;   // 1.75
-    float scoutSig = Def(sim, FlightModel.ClassScout).RadarSignature;     // 0.5
+    float bomberSig = EffSig(sim.Content, FlightModel.ClassBomber);       // 1.75 × shield-mult
+    float scoutSig = EffSig(sim.Content, FlightModel.ClassScout);         // 0.5 × shield-mult
 
     var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
 
@@ -246,7 +311,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         var probe = BootSim(5);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
-        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        sig = EffSig(probe.Content, FlightModel.ClassFighter);
         eyeMult = probe.Content.World.FogEyeballMultiplier;
     }
     float bandDist = (sphere * sig + sphere * eyeMult * sig) * 0.5f; // mid eyeball band, +X (out of cone)
@@ -324,7 +389,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     var sim = BootSim(6);
     var baseSite = sim.World.Bases[0];      // team 0 base in sector 0
     float baseSphere = sim.Content.Bases[0].VisionSphereRadius; // 1500
-    float sig = Def(sim, FlightModel.ClassFighter).RadarSignature;
+    float sig = EffSig(sim.Content, FlightModel.ClassFighter);
 
     // Enemy (team 1) parked near the team-0 base, well inside baseSphere×sig. No team-0 ship exists.
     var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
@@ -394,7 +459,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         var probe = BootSim(9);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
-        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        sig = EffSig(probe.Content, FlightModel.ClassFighter);
     }
     float radarDist = sphere * sig * 0.5f;
     Vec3 origin = new Vec3(0, 0, 0);
@@ -467,7 +532,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         var probe = BootSim(96);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
-        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        sig = EffSig(probe.Content, FlightModel.ClassFighter);
         eyeMult = probe.Content.World.FogEyeballMultiplier;
     }
     float radarDist = sphere * sig * 0.5f;            // well inside the radar sphere
@@ -509,7 +574,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         var probe = BootSim(97);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
-        sig = Def(probe, FlightModel.ClassFighter).RadarSignature;
+        sig = EffSig(probe.Content, FlightModel.ClassFighter);
     }
     float radarDist = sphere * sig * 0.5f;
     Vec3 origin = new Vec3(0, 0, 0);
@@ -564,7 +629,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
         float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius;
-        float sig = Def(sim, FlightModel.ClassFighter).RadarSignature;
+        float sig = EffSig(sim.Content, FlightModel.ClassFighter);
         var samples = new List<string>();
         Vec3 spot = new Vec3(sphere * sig * 0.5f, 0, 0);
 
@@ -626,7 +691,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(11);
     var probeW = sim.Content.Weapons.First(w => w.WeaponId == 8); // probe-dispenser
-    float sig = Def(sim, FlightModel.ClassFighter).RadarSignature; // 1.0
+    float sig = EffSig(sim.Content, FlightModel.ClassFighter);
 
     var layer = Join(sim, 1, 0, FlightModel.ClassFighter);
     var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
@@ -1306,7 +1371,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var probe = ContentLoader.Load(stockPath, worldPath);
     var fighter = probe.Ships.First(d => d.ClassId == FlightModel.ClassFighter);
-    float baseR = fighter.VisionSphereRadius * fighter.RadarSignature; // effective clear-air sphere
+    float baseR = fighter.VisionSphereRadius * EffSig(probe, FlightModel.ClassFighter); // effective clear-air sphere
     float cloudR = baseR * 0.3f; // viewer & target sit on opposite edges → D = 2·cloudR = 0.6·baseR
 
     // Dust is a "feel" knob now: amount drives BOTH coverage and the radar/vision floor, all relative
@@ -1397,6 +1462,162 @@ Vec3 AtAngle(float dist, float angleDeg)
     byte[] frame = Protocol.BuildWelcome(1, 0, w, 0, Array.Empty<byte>(), fog: false);
     var (ns, _, _, _) = WelcomeCounts(frame); // throws if the appended env desyncs the frame length
     Check(ns == 2 && w.DustClouds.Count > 0, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
+}
+
+// ================================================================================================
+// 21. Signature pipeline in the LIVE sim (dynamic-signature WP): afterburner makes a ship visible
+//     farther, an equipped shield does too, hiding inside a dust cloud makes it quieter (asymmetric
+//     — the hidden ship still sees OUT), and the per-ship SigBias seam shifts detection live. Each
+//     case guards on its knob actually being authored non-neutral (retuning to 1.0 skips, not fails).
+// ================================================================================================
+
+// (21a) Afterburner: a fighter parked between its coasting reach and its full-boost reach is off
+// radar while coasting and becomes a contact under a held afterburner.
+{
+    var sim = BootSim(210);
+    float boostMult = sim.Content.World.BoostSignatureMult;
+    if (boostMult <= 1.05f)
+        Console.WriteLine("SKIP: boost-signature-mult is neutral — afterburner signature test skipped");
+    else
+    {
+        var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
+        var target = Join(sim, 2, 1, FlightModel.ClassFighter);
+        float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius;
+        float eff = EffSig(sim.Content, FlightModel.ClassFighter);
+        // Mid between the at-rest radar reach and the full-afterburner reach, placed +X
+        // (perpendicular to forward) so the cone never applies. Radar tier only — the eyeball
+        // band may stream the mesh either way, VisibleEnemyShips is what's asserted.
+        float dist = sphere * eff * (1f + boostMult) / 2f;
+        Vec3 spot = new Vec3(dist, 0, 0);
+
+        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
+        Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+            "a COASTING ship beyond its at-rest reach is not a radar contact", "the coasting ship was already detected (boost geometry is off)");
+
+        // Hold the afterburner: AbPower ramps to 1 (fuel is full from spawn), the capture reads it
+        // live, and the boosted signature lands at the next applies.
+        target.HeldInput = new ShipInputState { Boost = true };
+        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
+        Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+            "the SAME ship under full afterburner is picked up farther (boost-signature-mult)", "a boosting ship was not detected inside its boosted reach");
+        target.HeldInput = new ShipInputState();
+    }
+}
+
+// (21b) Equipped shield: at a range between the bare-hull reach and the shielded reach, the stock
+// (shield-fitted) fighter is detected; stripping the shield from the loaded def (capacity 0 =
+// nothing equipped) drops the same geometry off radar. Pool level is irrelevant by design.
+{
+    float shieldMult, sphere, effShielded, effBare;
+    {
+        var probe = BootSim(211);
+        shieldMult = probe.Content.World.ShieldSignatureMult;
+        sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
+        effShielded = EffSig(probe.Content, FlightModel.ClassFighter);
+        var d = Def(probe, FlightModel.ClassFighter);
+        effBare = SignatureModel.Compute(
+            new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, false, 0f), Knobs(probe.Content));
+    }
+    if (shieldMult <= 1.02f)
+        Console.WriteLine("SKIP: shield-signature-mult is neutral — shield signature test skipped");
+    else
+    {
+        float dist = sphere * (effBare + effShielded) / 2f;
+        bool DetectedAt(bool stripShield)
+        {
+            var sim = BootSim(211);
+            if (stripShield)
+            {
+                // Simulation.ShipDefs shares these def instances, so zeroing capacity BEFORE any
+                // spawn makes the hull genuinely shieldless (equipment AND pool).
+                var fd = sim.Content.Ships.First(x => x.ClassId == FlightModel.ClassFighter);
+                fd.ShieldCapacity = 0f;
+                fd.ShieldRecharge = 0f;
+            }
+            var v = Join(sim, 1, 0, FlightModel.ClassFighter);
+            var t = Join(sim, 2, 1, FlightModel.ClassFighter);
+            Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(dist, 0, 0)); }, Settle);
+            return Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId);
+        }
+
+        Check(DetectedAt(stripShield: false),
+            "a shield-EQUIPPED hull is detected between the bare and shielded reaches (shield-signature-mult)", "the shielded fighter was not detected inside its shielded reach");
+        Check(!DetectedAt(stripShield: true),
+            "the identical hull with the shield stripped is NOT detected at the same range", "the bare fighter was still detected — the shield term leaked");
+    }
+}
+
+// (21c) Dust cover is asymmetric: one hand-placed cloud (the seeded ones are cleared for exact
+// geometry), one ship parked at its center, one in clear space. The sightline — hence the dust
+// RANGE attenuation — is identical both ways, so at a range between the two reaches the buried
+// ship sees OUT while remaining unseen itself: dust-signature-mult quiets targets, not viewers.
+{
+    var c = ContentLoader.Load(stockPath, worldPath);
+    float dustMult = c.World.DustSignatureMult;
+    if (dustMult >= 0.95f)
+        Console.WriteLine("SKIP: dust-signature-mult is neutral — dust signature test skipped");
+    else
+    {
+        const float amount = 0.9f, opacity = 1f;
+        c.World.AsteroidDensity = 0f; // no rocks — isolate dust from occlusion (env-3 idiom)
+        c.World.SectorScale = 1f;
+        foreach (var bd in c.Bases)
+            bd.VisionSphereRadius = 0f; // silence base vision so only the two ships classify
+        c.World.Sectors = new List<WorldSectorConfig>
+        {
+            new() { Id = 0, Env = new SectorEnvironment { Dust = new SectorDust { Amount = amount, Opacity = opacity } } },
+            new() { Id = 1 },
+        };
+        var w = new World(2100, c.World, c.Bases[0].MaxHealth, c.Start);
+        const float cloudR = 150f;
+        w.DustClouds.Clear(); // replace the procedural clouds with ONE exactly-known cloud
+        w.DustClouds.Add(new World.DustCloud(0, new Vec3(0, 0, 0), cloudR, 1f)); // full density
+        var sim = new Simulation(w, c);
+        sim.PigsEnabled = false;
+        sim.FogEnabled = true;
+        sim.VisionSynchronous = true;
+        sim.StartMatch();
+
+        var buried = Join(sim, 1, 0, FlightModel.ClassFighter); // parks at the cloud center
+        var clear = Join(sim, 2, 1, FlightModel.ClassFighter); // parks in clear space at `dist`
+        float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius;
+        float eff = EffSig(sim.Content, FlightModel.ClassFighter);
+        // Sightline attenuation is symmetric: the center→outside segment crosses half the cloud
+        // (chord = cloudR), so τ = density·cloudR/(2·cloudR) = 0.5 and the range multiplier is
+        // s = 1 − τ·(1 − floor) for the sector's authored floor. Seeing OUT reaches sphere·eff·s;
+        // seeing IN reaches only sphere·eff·s·dustMult (the buried target is also quieter).
+        float floor = World.DustVisionFloor(amount, opacity);
+        float s = 1f - 0.5f * (1f - floor);
+        float dist = sphere * eff * s * (dustMult + 1f) / 2f; // between the two reaches, outside the cloud
+        Check(dist > cloudR, "the test range clears the cloud (geometry pre-condition)", $"dist {dist:F0} inside the cloud — retune the test geometry");
+
+        Run(sim, () => { Park(buried, 0, new Vec3(0, 0, 0)); Park(clear, 0, new Vec3(dist, 0, 0)); }, Settle);
+        Check(Vision(sim, 0).VisibleEnemyShips.Contains(clear.ShipId),
+            "the ship buried in the cloud still sees OUT to the clear-space ship", "the buried ship failed to see out of the cloud");
+        Check(!Vision(sim, 1).VisibleEnemyShips.Contains(buried.ShipId),
+            "at the SAME range along the SAME sightline, the ship buried in dust stays hidden (dust-signature-mult)", "the buried ship was detected — the dust signature term is not applying");
+    }
+}
+
+// (21d) SigBias is the live equipment/ability seam: a ship parked just outside its at-rest radar
+// reach becomes a contact when its per-ship bias is raised at runtime (no def or respawn involved).
+{
+    var sim = BootSim(213);
+    var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
+    var target = Join(sim, 2, 1, FlightModel.ClassFighter);
+    float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius;
+    float eff = EffSig(sim.Content, FlightModel.ClassFighter);
+    float dist = sphere * eff * 1.2f; // outside the at-rest radar reach, +X (out of cone)
+    Vec3 spot = new Vec3(dist, 0, 0);
+
+    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
+    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "at stock bias the ship outside its at-rest reach is not a contact", "the pre-bias ship was already detected");
+
+    target.SigBias += Def(sim, FlightModel.ClassFighter).RadarSignature; // double the effective base, live
+    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
+    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "raising the ship's SigBias at runtime pulls it onto radar (the live loadout/ability seam)", "the biased ship was not detected — SigBias is not reaching the capture");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");

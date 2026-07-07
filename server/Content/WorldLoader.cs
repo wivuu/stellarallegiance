@@ -63,6 +63,33 @@ public sealed class WorldDef
     public double FireSignatureWindow { get; set; }
 
     /// <summary>
+    /// Radar-signature multiplier at full afterburner, ramped by the ship's live AbPower (0..1).
+    /// Null/omitted -&gt; 1.0 (neutral). Server-side only — does NOT ride the wire.
+    /// </summary>
+    public double? BoostSignatureMult { get; set; }
+
+    /// <summary>
+    /// Radar-signature multiplier while a hull has an EQUIPPED shield (ShieldCapacity &gt; 0),
+    /// regardless of the current pool. Null/omitted -&gt; 1.0 (neutral). Server-side only.
+    /// </summary>
+    public double? ShieldSignatureMult { get; set; }
+
+    /// <summary>
+    /// Radar-signature multiplier inside a dust cloud, scaled by local density (&lt;1 = hiding in
+    /// dust makes a ship quieter; stacks with the sightline attenuation). Null/omitted -&gt; 1.0
+    /// (neutral). Server-side only.
+    /// </summary>
+    public double? DustSignatureMult { get; set; }
+
+    /// <summary>
+    /// Clamp rails on the composed signature: the effective value never leaves
+    /// [(base+bias)×min, (base+bias)×max]. Null/omitted -&gt; 0.1 / 8.0. Server-side only.
+    /// </summary>
+    public double? SignatureMinMult { get; set; }
+
+    public double? SignatureMaxMult { get; set; }
+
+    /// <summary>
     /// Seconds a lost-contact ship ghost lingers before expiring on its own (re-scout / radar
     /// re-detection still clear it earlier; an eyeball glimpse re-stamps it). 0/omitted -&gt; 120 at
     /// projection. Server-side only — does NOT ride the wire.
@@ -322,9 +349,16 @@ public static class WorldLoader
             FogGhostTimeout = w.FogGhostTimeout <= 0 ? 120f : (float)w.FogGhostTimeout,
         };
 
-        // Server-side tuning blocks (none of these ride the wire).
+        // Server-side tuning blocks (none of these ride the wire). The signature-pipeline knobs
+        // resolve like the other nullable knobs: an authored value wins, an omitted one keeps the
+        // WorldConfig initializer (the neutral/stock value).
         cfg.AlephRadarSignature = F(w.AlephRadarSignature, cfg.AlephRadarSignature);
         cfg.RockRadarSignature = F(w.RockRadarSignature, cfg.RockRadarSignature);
+        cfg.BoostSignatureMult = F(w.BoostSignatureMult, cfg.BoostSignatureMult);
+        cfg.ShieldSignatureMult = F(w.ShieldSignatureMult, cfg.ShieldSignatureMult);
+        cfg.DustSignatureMult = F(w.DustSignatureMult, cfg.DustSignatureMult);
+        cfg.SignatureMinMult = F(w.SignatureMinMult, cfg.SignatureMinMult);
+        cfg.SignatureMaxMult = F(w.SignatureMaxMult, cfg.SignatureMaxMult);
         if (w.Ai is { } ai)
         {
             var t = cfg.Ai;

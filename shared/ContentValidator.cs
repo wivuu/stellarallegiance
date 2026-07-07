@@ -264,6 +264,10 @@ namespace StellarAllegiance.Shared
                 errors.Add($"{ctx} has VisionConeLength > 0 but VisionConeAngleDeg <= 0 — cone sees nothing");
             if (ship.RadarSignature <= 0f)
                 errors.Add($"{ctx} has non-positive RadarSignature {ship.RadarSignature}");
+            // The additive equipment bias must leave the effective base positive — a base+bias of 0
+            // would make the hull undetectable at any range (the signature clamp rails scale off it).
+            if (ship.RadarSignature + ship.SignatureBias <= 0f)
+                errors.Add($"{ctx} has RadarSignature + SignatureBias <= 0 ({ship.RadarSignature} + {ship.SignatureBias}) — hull would be undetectable");
         }
 
         // Same sphere/signature checks as ships, minus the directional cone (bases are omnidirectional-only).

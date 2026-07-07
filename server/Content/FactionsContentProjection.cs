@@ -37,10 +37,13 @@ public static class FactionsContentProjection
         var cargoIdByExpendable = core.AllExpendables()
             .Where(e => e.CargoId is not null)
             .ToDictionary(e => e.Id, e => e.CargoId!.Value);
+        // part id -> authored Signature, for a hull's projected SignatureBias (default-loadout sum).
+        // Iterates every mountable part collection; CoreValidator already proves ids are unique.
+        var partSigById = core.AllParts().ToDictionary(p => p.Id, p => p.Signature);
 
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
-            .Select(h => ProjectShip(h, cargoIdByExpendable))
+            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById))
             .ToList();
 
         // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
@@ -86,7 +89,11 @@ public static class FactionsContentProjection
         );
     }
 
-    private static ShipClassDef ProjectShip(Factions.Hull h, IReadOnlyDictionary<string, uint> cargoIdByExpendable) =>
+    private static ShipClassDef ProjectShip(
+        Factions.Hull h,
+        IReadOnlyDictionary<string, uint> cargoIdByExpendable,
+        IReadOnlyDictionary<string, double> partSigById
+    ) =>
         new()
         {
             ClassId = h.ClassId!.Value,
@@ -118,6 +125,12 @@ public static class FactionsContentProjection
             VisionConeAngleDeg = (float)h.VisionConeAngleDeg,
             VisionSphereRadius = (float)h.VisionSphereRadius,
             RadarSignature = h.RadarSignature <= 0 ? 1f : (float)h.RadarSignature,
+            // Authored equipment bias: the hull's own Signature plus its default loadout's
+            // (PreferredParts) part Signature sum. Stock core hulls author neither ⇒ 0 ⇒ no
+            // behavior change; a faction that authors loadout signatures gets it for free. An
+            // unresolved preferred-part id contributes 0 (PreferredParts is a suggestion list,
+            // not validated as a runtime loadout).
+            SignatureBias = (float)(h.Signature + h.PreferredParts.Sum(id => partSigById.GetValueOrDefault(id))),
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
             PayloadCapacity = (float)h.PayloadCapacity,
