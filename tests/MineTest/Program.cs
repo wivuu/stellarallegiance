@@ -1,7 +1,7 @@
 // Minefield sim tests (plan Track B / tests/MineTest). Console PASS/FAIL in the repo's test idiom
 // (mirrors MissileTest/ContentTest): exits non-zero on any failure so CI / a manual run can gate.
 //
-// Boots the real Simulation from the live content bundle (server/content/factions, copied next to
+// Boots the real Simulation from the live content bundle (server/content/core, copied next to
 // the test binary — same seam as MissileTest) and drives it tick-by-tick with Step(), with PIGs
 // forced off so nothing but the ships under test ever moves. All ships park in the sentinel empty
 // sector (999) so the mine cloud + flight paths stay deterministic and rock-free. Deployer ammo is
@@ -44,14 +44,15 @@ void Check(bool cond, string pass, string fail)
     }
 }
 
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 
 // An unregistered sector id: a clean, boundless, asteroid-free patch of space (see MissileTest).
 const uint EmptySector = 999;
 
 Simulation BootSim(ulong seed)
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;

@@ -24,7 +24,9 @@ namespace SimServer.Content;
 // deterministically — so two loads project byte-identical defs (tests/ContentTest guards this).
 public static class FactionsContentProjection
 {
-    public static ContentSet Project(Factions.Core core)
+    // The world config is loaded separately (WorldLoader, content/core/world.yaml — not part of
+    // the bundle manifest) and carried through onto the ContentSet unchanged.
+    public static ContentSet Project(Factions.Core core, WorldConfig world)
     {
         var projectileById = core.Projectiles.ToDictionary(p => p.Id);
         var missileById = core.Missiles.ToDictionary(m => m.Id);
@@ -62,8 +64,6 @@ public static class FactionsContentProjection
             .Where(e => e.CargoId is not null)
             .Select(ProjectCargoItem)
             .ToList();
-
-        var world = ProjectWorld(core.World);
 
         var start = ProjectFactionStart(core);
 
@@ -332,131 +332,4 @@ public static class FactionsContentProjection
             WeaponId = h.WeaponId,
         };
 
-    private static WorldConfig ProjectWorld(Factions.WorldConfig? w)
-    {
-        if (w is null)
-            return new WorldConfig
-            {
-                FogOfWar = true,
-                FogEyeballMultiplier = 1.5f,
-                FireSignatureBoost = 2.5f,
-                FireSignatureWindow = 4f,
-                FogGhostTimeout = 120f,
-            };
-        var cfg = new WorldConfig
-        {
-            Id = w.Id,
-            SectorScale = (float)w.SectorScale,
-            // The single default sector radius (× scale) for sectors that omit `radius`. 0/omitted
-            // → World.DefaultSectorRadius fallback. A map may override via its `sector-radius`.
-            SectorRadius = (float)w.SectorRadius,
-            AsteroidDensity = (float)w.AsteroidDensity,
-            DebugFreezeBrain = w.DebugFreezeBrain,
-            DebugNoFire = w.DebugNoFire,
-            // Fog-of-war: default ON. EyeballMultiplier is server-side only (never streamed —
-            // Protocol.BuildDefs deliberately skips it).
-            FogOfWar = w.FogOfWar ?? true,
-            FogEyeballMultiplier = w.FogEyeballMultiplier <= 0 ? 1.5f : (float)w.FogEyeballMultiplier,
-            // Fire-boost knobs are server-side only too (never streamed). 0/omitted resolve
-            // to the stock 2.5x over 4 s; author fire-signature-boost: 1.0 to disable.
-            FireSignatureBoost = w.FireSignatureBoost <= 0 ? 2.5f : (float)w.FireSignatureBoost,
-            FireSignatureWindow = w.FireSignatureWindow <= 0 ? 4f : (float)w.FireSignatureWindow,
-            // Ghost lifetime is server-side only too. 0/omitted -> stock 120 s.
-            FogGhostTimeout = w.FogGhostTimeout <= 0 ? 120f : (float)w.FogGhostTimeout,
-        };
-
-        // Server-side tuning blocks: the shared classes' field initializers ARE the stock values;
-        // only knobs the author actually wrote (non-null on the library record) override them, so
-        // authoring 0 is meaningful (e.g. collision-damage-min-speed: 0) and an omitted block or
-        // field always means "stock". None of these ride the wire.
-        cfg.AlephRadarSignature = F(w.AlephRadarSignature, cfg.AlephRadarSignature);
-        cfg.RockRadarSignature = F(w.RockRadarSignature, cfg.RockRadarSignature);
-        if (w.Ai is { } ai)
-        {
-            var t = cfg.Ai;
-            t.BrainHz = F(ai.BrainHz, t.BrainHz);
-            t.MaxPigsPerTeam = ai.MaxPigsPerTeam ?? t.MaxPigsPerTeam;
-            t.SquadDelaySeconds = F(ai.SquadDelaySeconds, t.SquadDelaySeconds);
-            t.AggroWindowSeconds = F(ai.AggroWindowSeconds, t.AggroWindowSeconds);
-            t.SpawnStaggerSeconds = F(ai.SpawnStaggerSeconds, t.SpawnStaggerSeconds);
-            t.PatrolReachFrac = F(ai.PatrolReachFrac, t.PatrolReachFrac);
-            t.PatrolArrive = F(ai.PatrolArrive, t.PatrolArrive);
-            t.RadarRange = F(ai.RadarRange, t.RadarRange);
-            t.FireRange = F(ai.FireRange, t.FireRange);
-            t.Standoff = F(ai.Standoff, t.Standoff);
-            t.AimDeg = F(ai.AimDeg, t.AimDeg);
-            t.TurnGain = F(ai.TurnGain, t.TurnGain);
-            t.AvoidLookahead = F(ai.AvoidLookahead, t.AvoidLookahead);
-            t.AvoidMargin = F(ai.AvoidMargin, t.AvoidMargin);
-            t.ThreatAimWeight = F(ai.ThreatAimWeight, t.ThreatAimWeight);
-            t.ThreatCloseWeight = F(ai.ThreatCloseWeight, t.ThreatCloseWeight);
-            t.ThreatDmgWeight = F(ai.ThreatDmgWeight, t.ThreatDmgWeight);
-            t.ThreatSwitchMargin = F(ai.ThreatSwitchMargin, t.ThreatSwitchMargin);
-            t.ThreatBaseWeight = F(ai.ThreatBaseWeight, t.ThreatBaseWeight);
-            t.BaseThreatRadius = F(ai.BaseThreatRadius, t.BaseThreatRadius);
-            t.ThreatBomberBonus = F(ai.ThreatBomberBonus, t.ThreatBomberBonus);
-            t.WanderPeriodSeconds = F(ai.WanderPeriodSeconds, t.WanderPeriodSeconds);
-            t.BomberRespawnSeconds = F(ai.BomberRespawnSeconds, t.BomberRespawnSeconds);
-            t.TurnGainMin = F(ai.TurnGainMin, t.TurnGainMin);
-            t.TurnGainMax = F(ai.TurnGainMax, t.TurnGainMax);
-            t.LeadFracMin = F(ai.LeadFracMin, t.LeadFracMin);
-            t.LeadFracMax = F(ai.LeadFracMax, t.LeadFracMax);
-            t.AimWobbleMaxRad = F(ai.AimWobbleMaxRad, t.AimWobbleMaxRad);
-            t.AimWobbleRate = F(ai.AimWobbleRate, t.AimWobbleRate);
-            t.MissileHoldSeconds = F(ai.MissileHoldSeconds, t.MissileHoldSeconds);
-            t.JukeRange = F(ai.JukeRange, t.JukeRange);
-            t.JukePeriodSeconds = F(ai.JukePeriodSeconds, t.JukePeriodSeconds);
-            t.JukeAmpMin = F(ai.JukeAmpMin, t.JukeAmpMin);
-            t.JukeAmpMax = F(ai.JukeAmpMax, t.JukeAmpMax);
-        }
-        if (w.Combat is { } co)
-        {
-            var t = cfg.Combat;
-            t.CollisionDamageScale = F(co.CollisionDamageScale, t.CollisionDamageScale);
-            t.ShipShipDamageScale = F(co.ShipShipDamageScale, t.ShipShipDamageScale);
-            t.MaxCollisionDamage = F(co.MaxCollisionDamage, t.MaxCollisionDamage);
-            t.CollisionDamageMinSpeed = F(co.CollisionDamageMinSpeed, t.CollisionDamageMinSpeed);
-            t.BoundaryBaseDps = F(co.BoundaryBaseDps, t.BoundaryBaseDps);
-            t.BoundaryRampDps = F(co.BoundaryRampDps, t.BoundaryRampDps);
-            t.BoundaryMaxDps = F(co.BoundaryMaxDps, t.BoundaryMaxDps);
-        }
-        if (w.Mechanics is { } me)
-        {
-            var t = cfg.Mechanics;
-            t.AlephTriggerRadius = F(me.AlephTriggerRadius, t.AlephTriggerRadius);
-            t.WarpExitOffset = F(me.WarpExitOffset, t.WarpExitOffset);
-            t.WarpExitJitter = F(me.WarpExitJitter, t.WarpExitJitter);
-            t.PaycheckSeconds = F(me.PaycheckSeconds, t.PaycheckSeconds);
-            t.DockRadiusFrac = F(me.DockRadiusFrac, t.DockRadiusFrac);
-            t.LaunchSpeed = F(me.LaunchSpeed, t.LaunchSpeed);
-            t.RescueRadiusMult = F(me.RescueRadiusMult, t.RescueRadiusMult);
-            t.PodEjectSpeed = F(me.PodEjectSpeed, t.PodEjectSpeed);
-            t.PodEjectSpin = F(me.PodEjectSpin, t.PodEjectSpin);
-            t.ReconnectGraceSeconds = F(me.ReconnectGraceSeconds, t.ReconnectGraceSeconds);
-            t.EndedToLobbySeconds = F(me.EndedToLobbySeconds, t.EndedToLobbySeconds);
-        }
-        if (w.Seeding is { } se)
-        {
-            var t = cfg.Seeding;
-            t.FieldFillFrac = F(se.FieldFillFrac, t.FieldFillFrac);
-            t.FieldFlatten = F(se.FieldFlatten, t.FieldFlatten);
-            t.FieldAreaDensity = F(se.FieldAreaDensity, t.FieldAreaDensity);
-            t.FieldRockMin = F(se.FieldRockMin, t.FieldRockMin);
-            t.FieldRockMax = F(se.FieldRockMax, t.FieldRockMax);
-            t.BeltInnerFrac = F(se.BeltInnerFrac, t.BeltInnerFrac);
-            t.BeltOuterFrac = F(se.BeltOuterFrac, t.BeltOuterFrac);
-            t.BeltFlatten = F(se.BeltFlatten, t.BeltFlatten);
-            t.BeltAreaDensity = F(se.BeltAreaDensity, t.BeltAreaDensity);
-            t.BeltRockMin = F(se.BeltRockMin, t.BeltRockMin);
-            t.BeltRockMax = F(se.BeltRockMax, t.BeltRockMax);
-            t.RockSizeSkew = F(se.RockSizeSkew, t.RockSizeSkew);
-            t.BaseInnerFrac = F(se.BaseInnerFrac, t.BaseInnerFrac);
-            t.BaseOuterFrac = F(se.BaseOuterFrac, t.BaseOuterFrac);
-            t.BaseYJitter = F(se.BaseYJitter, t.BaseYJitter);
-        }
-        return cfg;
-    }
-
-    // Authored-override resolve: a knob the author wrote wins; null keeps the stock default.
-    private static float F(double? authored, float stock) => authored is { } v ? (float)v : stock;
 }

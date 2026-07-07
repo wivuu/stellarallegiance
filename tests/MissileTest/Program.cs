@@ -2,7 +2,7 @@
 // PASS/FAIL in the repo's test idiom (mirrors FlightModelTest/ContentTest): exits non-zero on any
 // failure so CI / a manual run can gate on it.
 //
-// Boots the real Simulation from the live content bundle (server/content/factions, copied next to
+// Boots the real Simulation from the live content bundle (server/content/core, copied next to
 // the test binary — same seam as ContentTest) and drives it tick-by-tick with Step(), exactly the
 // way SimServer's Program.cs boots it (World -> Simulation -> StartMatch), but with no network hub
 // and PIGs forced off so nothing but the two ships under test ever moves.
@@ -45,7 +45,8 @@ void Check(bool cond, string pass, string fail)
 
 // The stock bundle manifest is copied next to the test binary (csproj Content), not the cwd
 // `dotnet run` uses (same seam as ContentTest).
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 
 // An unregistered sector id: World.RockGrid(sector) falls back to an empty grid and
 // World.SectorRadius(sector) falls back to float.MaxValue for any id not in World.Sectors — i.e. a
@@ -59,7 +60,7 @@ const uint EmptySector = 999;
 // SIM_PIGS env var must not be able to spawn a drone into the test).
 Simulation BootSim(ulong seed)
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;

@@ -15,6 +15,6 @@
 
   <ItemGroup>
     <!-- The stock bundle under test, copied next to the binary so CoreSerializer.Load resolves it. -->
-    <Content Include="../../server/content/factions/**/*.yaml" Link="content/factions/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../server/content/core/**/*.yaml" Link="content/core/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

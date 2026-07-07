@@ -30,6 +30,7 @@ Archives:
 - Configure sector connections and 2d layout in map YAML
 - Show probe icon on HUD when a probe is deployed or nearby
 - 'DefaultAimRange' should be based on equipped weapon's range
+- Display sector name next to alephs in HUD
 ---
 
 ## Content philosophy (the through-line)
@@ -144,7 +145,7 @@ Make all content editable data the server loads, not C# — the substrate for ev
   wire path — in-game ships/weapons/base are byte-identical to pre-pivot and the **client is
   untouched**. Concretely:
   - ✅ **Author content as a factions `Core` bundle** — the single `stock.yaml` is replaced by a
-    manifest split under `server/content/factions/` (shared catalog fragments + `factions/stock.yaml`)
+    manifest split under `server/content/core/` (shared catalog fragments + `factions/stock.yaml`)
     with the library's checked-in **JSON schemas** for editor validation/autocomplete. The schemas are
     regenerated from the model via the library CLI.
   - ✅ **Load + validate with the library's own machinery** — `ContentLoader` now calls

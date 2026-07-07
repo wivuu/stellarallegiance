@@ -240,7 +240,7 @@ Server message reporting ballistic projectile hits: target ship ID, impact posit
 Server-driven content authoring: gameplay/balance values (hulls, weapons, techs, factions) live in YAML files, compiled to binary defs, streamed to clients at runtime.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Content/factions/` — all content YAML (*.yaml)
+  - `server/Content/core/` — all content YAML (*.yaml)
   - `factions/src/Allegiance.Factions/` — content model classes and serialization
   - `server/Content/ContentLoader.cs` — boot-time loading
   - `shared/ContentValidator.cs` — YAML→defs consistency checks
@@ -250,13 +250,13 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in `world.yaml` under `world:` — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), plus root `aleph-radar-signature`/`rock-radar-signature`. Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), plus root `aleph-radar-signature`/`rock-radar-signature`. Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
-  - `server/Content/factions/world.yaml` — authored values (stock = documented defaults)
+  - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment
   - `factions/src/Allegiance.Factions/Model/RuntimeData.cs` — AiTuning/CombatTuning/MechanicsTuning/SeedingTuning records (nullable = "unauthored")
   - `shared/Defs.cs` — WorldAiTuning/WorldCombatTuning/WorldMechanicsTuning/WorldSeedingTuning (initializers = stock)
-  - `server/Content/FactionsContentProjection.cs` — ProjectWorld override-or-stock resolve
+  - `server/Content/WorldLoader.cs` — WorldDef DTOs + Load/Project override-or-stock resolve
   - `server/Sim/Simulation.Pig.cs` — InitPigTuning (seconds→ticks conversion)
 - **Related:** [[YAML Content Pipeline]], [[PigBrain]], [[WorldConfig]]
 - **Notes:** Durations authored in seconds, converted at TickHz; NumTeams stays compile-time (World.MaxSupportedTeams — engine limit, not a knob)
@@ -276,7 +276,7 @@ Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints f
 - **Frequency:** Very common
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Hulls/Hull.cs` — hull data model
-  - `server/Content/factions/*.yaml` — hull definitions per faction
+  - `server/Content/core/*.yaml` — hull definitions per faction
   - `client/scripts/ShipController.cs` — hull selection UI
   - `tools/ship-gen/` — modular hull generation from YAML parts
 - **Related:** [[Weapon]], [[Payload]], [[Docking]]
@@ -287,7 +287,7 @@ Armament with barrel, fire-rate, projectile type, and damage tuning.
 - **Frequency:** Very common
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Parts/Weapon.cs` — weapon model
-  - `server/Content/factions/*.yaml` — weapon definitions
+  - `server/Content/core/*.yaml` — weapon definitions
   - `client/scripts/WeaponController.cs` — firing logic
   - `shared/FlightModel.cs` — barrel velocity and spread calculations
 - **Related:** [[Hull]], [[Projectile]], [[Blast Radius]]
@@ -298,7 +298,7 @@ Cargo, expendables, or equipment slot on a hull (e.g., missiles, chaff, fuel pod
 - **Frequency:** Common
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Parts/Payload.cs` — payload model
-  - `server/Content/factions/*.yaml` — payload definitions
+  - `server/Content/core/*.yaml` — payload definitions
   - `client/scripts/LoadoutController.cs` — loadout UI
 - **Related:** [[Hull]], [[Missile]], [[Chaff]], [[Expendables]]
 - **Notes:** Consumable slots track ammo; non-consumable payloads are always active
@@ -316,7 +316,7 @@ Single-use consumables (missiles, chaff, fuel boost) with limited ammo count.
 Unlock progression system: techs gate hull/weapon/payload availability; advancing development lines unlocks tiers.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Content/factions/*.yaml` — tech tree structure
+  - `server/Content/core/*.yaml` — tech tree structure
   - `factions/src/Allegiance.Factions/Resolution/TechResolver.cs` — tech unlock logic
   - `shared/Defs.cs` — tech table registry
 - **Related:** [[YAML Content Pipeline]], [[Def]], [[Hull]], [[Weapon]]
@@ -551,7 +551,7 @@ The chase camera's two-mode state machine: THIRD PERSON (the behind-the-ship cha
   - `client/scripts/EngineGlow.cs` — `Suppressed` flag folded into the per-frame `Visible` recompute
   - `client/scripts/ViewModeIndicator.cs` — transient "VIEW FPV/3RD" chip flashed on a toggle
   - `client/scripts/UserPrefs.cs` — `FirstPersonView` persisted pref
-  - `server/Content/factions/hulls.yaml` — the `kind: cockpit` hardpoint (eye point) on each hull
+  - `server/Content/core/hulls.yaml` — the `kind: cockpit` hardpoint (eye point) on each hull
 - **Related:** [[Zoom Mode (Telescopic Scope)]], [[Hardpoint]], [[UserPrefs]]
 - **Notes:** `Cockpit` = `HardpointKind` byte 8 (append-only, client-only — no wire/sim change); marker `HP_Cockpit_0` resolved to ship-local space, fallback `(0, 0.5, 1)`; F3 sector overview un-hides the own ship
 
@@ -583,7 +583,7 @@ Player faction assignment: team 0 (Faction0, blue) or team 1 (Faction1, red).
 Gameplay variant: faction-specific hulls, weapons, techs. Loaded from YAML at server boot.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Content/factions/*.yaml` — all faction content
+  - `server/Content/core/*.yaml` — all faction content
   - `server/Content/FactionStart.cs` — faction startup
   - `factions/src/Allegiance.Factions/Model/Factions/Faction.cs` — faction model
 - **Related:** [[YAML Content Pipeline]], [[Tech Tree]], [[Hull]]
@@ -680,7 +680,7 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
 - **Frequency:** Common
 - **Key Files:**
   - `tools/ship-gen/` — generation logic
-  - `server/Content/factions/*.yaml` — hull part definitions
+  - `server/Content/core/*.yaml` — hull part definitions
 - **Related:** [[GLB]], [[Hull]], [[SimModel]]
 - **Notes:** Canonical scout/fighter/bomber/pod wired into ShipModelLoader; output embeds textures
 
@@ -734,5 +734,5 @@ Godot 4.6 requires explicit import of .glb files or silently falls back to engin
 
 - **[CLAUDE.md](CLAUDE.md)** — project-specific architecture notes and gotchas
 - **[DESIGN.md](DESIGN.md)** — UI component library and design-system reference
-- **[server/Content/factions/](server/Content/factions/)** — YAML content definitions (gameplay values)
+- **[server/Content/core/](server/Content/core/)** — YAML content definitions (gameplay values)
 - **[tests/](tests/)** — determinism and integration tests

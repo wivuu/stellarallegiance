@@ -36,7 +36,7 @@ if (args.Contains("--selftest"))
 // accumulator and fans out AOI snapshots after each step. The server is the SINGLE authority
 // and also hosts the lobby (team/ready) — clients connect directly by ip:port, download all
 // content from the server, and never talk to any database.
-//   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart] [--content content.yaml]
+//   Usage: dotnet run [--port 8090] [--seed N] [--secret PW] [--autostart] [--content manifest.yaml] [--world world.yaml]
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SIM_PORT (compose/self-host), else the 8090 default. A --port flag below overrides all of these.
 int port =
@@ -54,13 +54,20 @@ bool autoStart = (Environment.GetEnvironmentVariable("SIM_AUTOSTART") ?? "") is 
 
 // Per-server content (Stage-1 content pipeline, canonical Allegiance.Factions format). Content is
 // authored ENTIRELY in YAML — there is no compile-in content. By DEFAULT the server loads the bundle
-// shipped next to the binary (content/factions/core.manifest.yaml in the output folder, resolved
+// shipped next to the binary (content/core/core.manifest.yaml in the output folder, resolved
 // relative to the assembly — never an absolute hardcoded path). --content/CONTENT_PATH overrides that
 // LOCATION with a different complete bundle MANIFEST. The bundle must exist + load + validate (the
 // YAML is the single source of truth, so there is no fallback); a missing/malformed/invalid bundle
 // fails fast. Mirrors the --secret/SIM_SECRET pattern.
-string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string defaultContentPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
 string? contentOverride = Environment.GetEnvironmentVariable("CONTENT_PATH");
+
+// WORLD/SIM tuning (separate from the faction/tech-tree bundle manifest): the standalone
+// content/core/world.yaml next to the binary carries the world defaults (sector scale/radius,
+// asteroid density, fog) + server-side ai/combat/mechanics/seeding tuning. SIM_WORLD / --world
+// points at a replacement file; a missing/malformed world file fails fast at boot.
+string defaultWorldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
+string? worldOverride = Environment.GetEnvironmentVariable("SIM_WORLD");
 
 // MAP selection (separate from the faction/tech-tree content). Stock maps ship at
 // content/maps/*.yaml next to the binary; SIM_MAPS_DIR / --maps-dir points at an additional folder
@@ -85,6 +92,8 @@ for (int i = 0; i < args.Length; i++)
         secret = args[i + 1];
     if (args[i] == "--content")
         contentOverride = args[i + 1];
+    if (args[i] == "--world")
+        worldOverride = args[i + 1];
     if (args[i] == "--map")
         selectedMap = args[i + 1];
     if (args[i] == "--maps-dir")
@@ -96,14 +105,16 @@ for (int i = 0; i < args.Length; i++)
 // start) rather than surfacing mid-match as a server KeyNotFound or a client desync.
 bool explicitContent = !string.IsNullOrWhiteSpace(contentOverride);
 string contentPath = explicitContent ? contentOverride! : defaultContentPath;
+bool explicitWorld = !string.IsNullOrWhiteSpace(worldOverride);
+string worldPath = explicitWorld ? worldOverride! : defaultWorldPath;
 ContentSet content;
 try
 {
-    content = ContentLoader.Load(contentPath);
+    content = ContentLoader.Load(contentPath, worldPath);
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}': {ex.Message}");
+    Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}");
     return;
 }
 var contentErrors = ContentValidator.Validate(content.Ships, content.Weapons, content.Bases, content.CargoItems);
@@ -118,6 +129,11 @@ Console.WriteLine(
     explicitContent
         ? $"[SimServer] content: loaded '{contentPath}' (overrides default location)."
         : $"[SimServer] content: loaded default '{contentPath}'."
+);
+Console.WriteLine(
+    explicitWorld
+        ? $"[SimServer] world: loaded '{worldPath}' (overrides default location)."
+        : $"[SimServer] world: loaded default '{worldPath}'."
 );
 
 // Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /

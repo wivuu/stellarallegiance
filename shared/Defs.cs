@@ -391,7 +391,7 @@ namespace StellarAllegiance.Shared
         public float AlephRadarSignature = 1.4f;
         public float RockRadarSignature = 2f;
 
-        // Server-side sim tuning blocks (world.yaml `world: ai:` / `combat:` / `mechanics:` /
+        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
         // `seeding:`). NONE of these ride the wire — Protocol.BuildDefs deliberately skips them
         // (drones/damage/seeding are server-authoritative; the client only sees their results).
         // The field initializers below ARE the stock values: projection only overrides the knobs
@@ -402,7 +402,7 @@ namespace StellarAllegiance.Shared
         public WorldSeedingTuning Seeding = new();
     }
 
-    // PIG drone AI tuning (world.yaml `world: ai:`). Server-side only — clients never simulate
+    // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
     // drones. Initializers = the stock values ported verbatim from the module's PigAI; durations
     // are seconds (the sim converts to ticks at its own TickHz).
     public sealed class WorldAiTuning
@@ -451,7 +451,7 @@ namespace StellarAllegiance.Shared
         public float JukeAmpMax = 1f;
     }
 
-    // Collision-damage + sector-boundary-hazard tuning (world.yaml `world: combat:`). Server-side
+    // Collision-damage + sector-boundary-hazard tuning (world.yaml `combat:`). Server-side
     // only — collision KINEMATICS stay in the shared CollisionConfig (the client predicts bounces),
     // but damage is applied by the server alone.
     public sealed class WorldCombatTuning
@@ -468,7 +468,7 @@ namespace StellarAllegiance.Shared
         public float BoundaryMaxDps = 60f;
     }
 
-    // Gate / docking / pod / economy / match-flow tuning (world.yaml `world: mechanics:`).
+    // Gate / docking / pod / economy / match-flow tuning (world.yaml `mechanics:`).
     // Server-side only; durations are seconds.
     public sealed class WorldMechanicsTuning
     {
@@ -485,7 +485,7 @@ namespace StellarAllegiance.Shared
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
     }
 
-    // Map-seeding shape tuning (world.yaml `world: seeding:`): the ONE shared default set per
+    // Map-seeding shape tuning (world.yaml `seeding:`): the ONE shared default set per
     // asteroid shape (field = shallow disc, belt = flattened ring), applied to any sector by its
     // declared `asteroids` kind, plus team-base placement. Consumed by World map seeding only.
     public sealed class WorldSeedingTuning

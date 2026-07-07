@@ -1,7 +1,7 @@
 // Fog-of-war vision tests (plan WP2 / tests/FogTest). Console PASS/FAIL in the repo's test idiom
 // (mirrors MineTest/MissileTest): exits non-zero on any failure so CI / a manual run can gate.
 //
-// Boots the real Simulation from the live content bundle (server/content/factions, copied next to the
+// Boots the real Simulation from the live content bundle (server/content/core, copied next to the
 // test binary — same seam as MineTest) with PIGs off and drives it tick-by-tick with Step(). Fog is
 // forced ON and VisionSynchronous=true so the 2 Hz vision pass computes inline at each boundary and
 // the applied timeline is fully deterministic. All ships park in the sentinel empty sector 999 (no
@@ -31,13 +31,14 @@ void Check(bool cond, string pass, string fail)
     }
 }
 
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 const uint EmptySector = 999;
 const int Settle = 30; // ticks to hold a configuration so the 2 Hz apply reflects it (>2 boundaries)
 
 Simulation BootSim(ulong seed, bool sync = true)
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
@@ -95,7 +96,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         br.ReadUInt32(); br.ReadSingle(); br.ReadString(); // id, radius, name
         if (br.ReadByte() != 0) br.ReadBytes(8); // map-pos: presence byte then x,y (2 floats)
         // Per-sector environment (mirror Protocol.WriteSectorEnv): 3 presence bytes always present.
-        if (br.ReadByte() != 0) br.ReadBytes(36); // sun: godRays + dir(3) + color(3) + energy + ambient
+        if (br.ReadByte() != 0) br.ReadBytes(40); // sun: godRays + dir(3) + color(3) + energy + ambient + size
         if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
         if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
@@ -1043,7 +1044,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 //     client actually received its ship (YouAre) and streaming snapshots.
 // ================================================================================================
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start);
     var sim = new Simulation(world, content) { PigsEnabled = false, FogEnabled = true, VisionSynchronous = false };
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
@@ -1237,7 +1238,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // (env-2) Dust clouds are deterministic for a fixed world seed, AND authoring dust leaves the asteroid
 // field byte-identical (dust runs on its own RNG stream — it must never perturb rock/aleph placement).
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     float mh = content.Bases[0].MaxHealth;
 
     WorldConfig DustCfg() =>
@@ -1303,7 +1304,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // sphere radius drops OFF radar once a full-density cloud sits between viewer and target. Geometry is
 // sized from the defs so it holds regardless of tuning; base vision + rocks are removed to isolate dust.
 {
-    var probe = ContentLoader.Load(stockPath);
+    var probe = ContentLoader.Load(stockPath, worldPath);
     var fighter = probe.Ships.First(d => d.ClassId == FlightModel.ClassFighter);
     float baseR = fighter.VisionSphereRadius * fighter.RadarSignature; // effective clear-air sphere
     float cloudR = baseR * 0.3f; // viewer & target sit on opposite edges → D = 2·cloudR = 0.6·baseR
@@ -1314,7 +1315,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     // thick dust that should attenuate the sightline.
     Simulation MkDustSim(float amount, float opacity, out World w)
     {
-        var c = ContentLoader.Load(stockPath);
+        var c = ContentLoader.Load(stockPath, worldPath);
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
         c.World.SectorScale = 1f;
         c.World.SectorRadius = baseR; // sector 0 (no explicit radius) → radius baseR, dust ~0.9·baseR
@@ -1372,7 +1373,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // byte-exact through the env-aware WelcomeCounts parser — exercising every non-zero presence branch of
 // Protocol.WriteSectorEnv and proving the appended payload keeps the frame self-consistent.
 {
-    var content = ContentLoader.Load(stockPath);
+    var content = ContentLoader.Load(stockPath, worldPath);
     var cfg = new WorldConfig
     {
         SectorScale = 1f,

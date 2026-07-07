@@ -54,7 +54,9 @@ public static class SelfTest
             Console.WriteLine("  [skip] assets dir not found — cannot exercise World GLB models");
             return;
         }
-        var content = ContentLoader.Load(Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml"));
+        var content = ContentLoader.Load(
+            Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml"),
+            Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml"));
         var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start);
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });

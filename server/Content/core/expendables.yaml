@@ -102,7 +102,7 @@ mines:
   # instances per visual mine (assets/mines/<name>.glb).
   - id: proximity-mine
     name: Proximity Mine
-    description: Dropped behind the ship; arms after 2s.
+    description: Dropped behind the ship; arms after 1s.
     cargo-id: 2
     mass: 1             # payload cost per PACK (one hangar count = one pack)
     charges-per-pack: 1 # fields deployable from one loaded pack (one field per press)

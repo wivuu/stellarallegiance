@@ -18,6 +18,6 @@
          manifest/catalog/factions layout) so CoreSerializer.Load resolves it by filename. -->
     <Content Include="../../factions/sample-data/**/*.yaml" Link="sample-data/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The authored stock bundle under test (the canonical-format reproduction of stock.yaml). -->
-    <Content Include="../../server/content/factions/**/*.yaml" Link="stock-bundle/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../server/content/core/**/*.yaml" Link="stock-bundle/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

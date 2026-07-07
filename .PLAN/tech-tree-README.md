@@ -16,7 +16,7 @@ cross-file references) with a per-faction `analysis:` that pre-resolves the rela
 
 - `tech-tree-sample.yaml` — the library's rich multi-faction sample (`factions/sample-data/`), with a
   real research tree (developments + techs). Best for understanding the model's full shape.
-- `tech-tree-stock.yaml` — the live game bundle (`server/content/factions/`). Currently shallow:
+- `tech-tree-stock.yaml` — the live game bundle (`server/content/core/`). Currently shallow:
   everything is gated only on the `base` capability (Stage-2 economy; the tech tree proper is Stage 4).
 
 ## Regenerate
@@ -25,7 +25,7 @@ cross-file references) with a per-faction `analysis:` that pre-resolves the rela
 dotnet run --project factions/src/Allegiance.Factions.Cli -- dump <manifest.yaml> --output <out.yaml>
 # e.g.
 dotnet run --project factions/src/Allegiance.Factions.Cli -- dump factions/sample-data/core.manifest.yaml --output .PLAN/tech-tree-sample.yaml
-dotnet run --project factions/src/Allegiance.Factions.Cli -- dump server/content/factions/core.manifest.yaml --output .PLAN/tech-tree-stock.yaml
+dotnet run --project factions/src/Allegiance.Factions.Cli -- dump server/content/core/core.manifest.yaml --output .PLAN/tech-tree-stock.yaml
 ```
 
 The `dump` command lives in `factions/src/Allegiance.Factions.Cli`; the analysis is built by

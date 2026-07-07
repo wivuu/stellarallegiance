@@ -25,7 +25,7 @@ public sealed partial class Simulation
     // lobby validation, World's garrison fail-fast), not a tuning knob, so it stays compile-time.
     private const byte NumTeams = (byte)World.MaxSupportedTeams;
 
-    // ---- PIG tuning — authored in world.yaml (`world: ai:`), resolved once in InitPigTuning ----
+    // ---- PIG tuning — authored in world.yaml (`ai:`), resolved once in InitPigTuning ----
     // Same names/semantics as the constants ported verbatim from the module; second-authored
     // durations are converted to ticks here so the YAML stays TickHz-agnostic. Assigned once at
     // construction (before any Step), never mutated after.
@@ -76,7 +76,7 @@ public sealed partial class Simulation
     private static uint SecondsToTicks(float seconds) =>
         (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
 
-    // Resolve the authored `world: ai:` block into the tick-domain fields above. Ctor-only.
+    // Resolve the authored world.yaml `ai:` block into the tick-domain fields above. Ctor-only.
     private void InitPigTuning(WorldAiTuning t)
     {
         PigBrainEvery = System.Math.Clamp((uint)MathF.Round(TickHz / System.Math.Max(0.01f, t.BrainHz)), 1u, TickHz);

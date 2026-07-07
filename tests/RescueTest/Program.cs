@@ -24,7 +24,8 @@ void Check(bool cond, string pass, string fail)
     }
 }
 
-string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
+string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 
 // An unregistered sector id: a clean, boundless, asteroid- and base-free patch of space (see MineTest)
 // so parked ships never wander into a base's docking cone and dock on their own.
@@ -39,7 +40,7 @@ void ParkAt(Simulation.ShipSim s, Vec3 pos)
     s.State.AngVel = new Vec3(0f, 0f, 0f);
 }
 
-var content = ContentLoader.Load(stockPath);
+var content = ContentLoader.Load(stockPath, worldPath);
 var world = new World(1u, content.World, content.Bases[0].MaxHealth, content.Start);
 var sim = new Simulation(world, content);
 sim.PigsEnabled = false;

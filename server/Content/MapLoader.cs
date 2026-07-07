@@ -20,7 +20,7 @@ public sealed class MapDef
     public string? Mode { get; set; }
 
     // Optional map-level overrides of the content world knobs. Null/omitted → inherit the value from
-    // the loaded content bundle's `world:` block.
+    // the loaded content/core/world.yaml.
     public double? SectorScale { get; set; }
     public double? AsteroidDensity { get; set; }
 

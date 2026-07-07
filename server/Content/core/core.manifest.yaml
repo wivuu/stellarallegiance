@@ -3,7 +3,7 @@
 #  authored in the canonical Allegiance.Factions format (Stage-1 PIVOT).
 #
 #  The server loads this bundle at boot (it ships next to the binary as
-#  content/factions/core.manifest.yaml), validates it (Allegiance.Factions CoreValidator +
+#  content/core/core.manifest.yaml), validates it (Allegiance.Factions CoreValidator +
 #  the shared ContentValidator on the projected runtime defs), then PROJECTS the Core into the
 #  same shared ShipClassDef/WeaponDef/BaseDef/WorldConfig the sim runs on and the wire streams —
 #  so the client and wire are unchanged. To customize a server, edit these files, or copy the
@@ -12,9 +12,12 @@
 #      CONTENT_PATH=path/to/your/core.manifest.yaml dotnet SimServer.dll
 #
 #  This bundle reproduces the legacy server/Content/stock.yaml numbers EXACTLY (Scout/Fighter/
-#  Bomber/Pod + Garrison + world). Keys and enum values are kebab-case. Runtime-only fields
-#  (class-id, weapon-id, base-type-id, tick ballistics, hardpoints, world) are explicit extensions
+#  Bomber/Pod + Garrison). Keys and enum values are kebab-case. Runtime-only fields
+#  (class-id, weapon-id, base-type-id, tick ballistics, hardpoints) are explicit extensions
 #  on the model (see factions/src/.../Model/RuntimeData.cs); everything else derives from Core.
+#
+#  World/sim tuning is NOT part of this bundle manifest: it lives in the sibling world.yaml,
+#  loaded separately at boot (SIM_WORLD / --world overrides it).
 # =====================================================================
 
 version: "2026.07.07-world-tuning-blocks"
@@ -26,7 +29,6 @@ catalog:
   - expendables.yaml
   - launchers.yaml
   - stations.yaml
-  - world.yaml
 
 factions:
   - factions/stock.yaml

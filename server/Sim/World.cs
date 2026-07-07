@@ -26,19 +26,19 @@ public sealed class World
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
     // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
-    // world.yaml (`world: combat:` / `mechanics:`) and read by the sim from Content.World.
+    // world.yaml (`combat:` / `mechanics:`) and read by the sim from Content.World.
     // The SINGLE default sector radius (before × SectorScale) for any sector whose YAML omits `radius`
     // and whose map/world sets no `sector-radius`. Replaces the old per-sector-id CoreRadius/VergeRadius
     // — no value is chosen by sector id anymore.
     public const float DefaultSectorRadius = 700f;
     // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
-    // WorldConfig passed to the ctor (authored in YAML), so a per-server `world:` override changes
+    // WorldConfig passed to the ctor (authored in YAML), so a per-server world.yaml override changes
     // the generated map, not just what's streamed. No compile-in defaults live here.
     public const float GridCell = 160f; // broad-phase cell size (matches the module's AsteroidGridCell)
 
     // Asteroid shape + base-placement knobs — ONE shared default set per shape (field=disc,
     // belt=ring), applied to any sector by its declared `asteroids` kind (no per-sector-id choice).
-    // Authored in world.yaml (`world: seeding:`); stock values live on WorldSeedingTuning's
+    // Authored in world.yaml (`seeding:`); stock values live on WorldSeedingTuning's
     // initializers. Counts derive from the filled area so density (spacing) is invariant to sector
     // size — a bigger sector just gets proportionally more rocks at the same spacing.
     private readonly WorldSeedingTuning _seed;
@@ -166,7 +166,7 @@ public sealed class World
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
-        // Live world-scale knobs from the loaded content (the authored YAML `world:` block).
+        // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
         // ONE shared default radius for any sector that omits its own — no per-sector-id defaults.

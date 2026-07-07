@@ -22,8 +22,9 @@ void Check(bool cond, string pass, string fail)
 }
 
 // The stock bundle manifest is copied next to the test binary (csproj Content).
-string manifest = Path.Combine(AppContext.BaseDirectory, "content", "factions", "core.manifest.yaml");
-var content = ContentLoader.Load(manifest);
+string manifest = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
+string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
+var content = ContentLoader.Load(manifest, worldPath);
 
 // The chosen stock economy: start 1000, +100 per paycheck (every PaycheckTicks).
 Check(content.Start.StartingCredits == 1000, "stock faction seeds 1000 starting credits", $"starting credits wrong ({content.Start.StartingCredits})");

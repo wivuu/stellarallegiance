@@ -19,7 +19,7 @@ public sealed partial class Simulation
 
     public const byte PodClass = 255; // reserved "class" selecting the Pod flight profile
 
-    // ---- Mechanics tuning — authored in world.yaml (`world: mechanics:` / `combat:`), resolved
+    // ---- Mechanics tuning — authored in world.yaml (`mechanics:` / `combat:`), resolved
     // once in the ctor from Content.World. Second-authored durations become ticks here. ----
     // Stage-2 economy: every team gets a flat credit paycheck this often; the amount per paycheck
     // is the faction's authored income (Content.Start.IncomePerPaycheck). Public for tests.
@@ -431,7 +431,7 @@ public sealed partial class Simulation
         World = world;
         Content = content;
 
-        // Resolve the authored server-side tuning blocks (world.yaml `world:`) once. Stock values
+        // Resolve the authored server-side tuning blocks (world.yaml) once. Stock values
         // come from the shared classes' initializers when a block/knob is unauthored.
         _mech = content.World.Mechanics;
         _combat = content.World.Combat;
