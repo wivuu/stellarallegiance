@@ -37,6 +37,14 @@ public partial class SectorEnvironment : Node3D
     private int _currentSector = -1;
     private bool _appliedEnv; // did the last apply for _currentSector carry a real (non-null) env?
 
+    // The current sector's shadow occluders, handed in by WorldRenderer.ApplySectorEnv: the biggest few
+    // rocks/bases, each as (its scene Node3D, its LOCAL-frame hull vertices). BuildShafts bakes a
+    // shader-extrudable shadow-volume mesh per occluder and PARENTS it to the node so it tumbles with the
+    // rock; the vertex shader extrudes it downsun every frame (ShadowVolume + ShaftShaderCode). Empty =
+    // no shafts.
+    private System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> _occluders =
+        System.Array.Empty<(Node3D, Vector3[])>();
+
     // Shared billboard look. One QuadMesh + one custom shader back EVERY puff in EVERY cloud; each puff's
     // (varied) colour + opacity ride the MultiMesh per-instance colour, and the shader adds fbm noise
     // mottling so the dust has internal texture instead of smooth discs.
@@ -50,6 +58,21 @@ public partial class SectorEnvironment : Node3D
     private ShaderMaterial _godRayMat = null!;
     private float _godRaysStrength;
     private bool _godRaysOn;
+
+    // Asteroid / base shadow shafts as SPIN-TRACKING shadow VOLUMES: each occluder's convex hull is baked
+    // once in its LOCAL frame (ShadowVolume.Build) and parented to the occluder node, so it tumbles with
+    // the rock; the vertex shader extrudes the away-from-sun faces downsun every frame, so the dark shaft
+    // in the dust follows the rock's real (spinning) silhouette. The sun axis is static per sector, so
+    // only the per-occluder MODEL transform (free, inherited) changes frame to frame.
+    private ShaderMaterial _shaftMat = null!;
+    // The baked shadow-volume MeshInstance3Ds, parented onto their occluder nodes. Held only so a sector
+    // change (BuildShafts) can free the previous set even though they live under WorldRenderer's rocks.
+    private readonly System.Collections.Generic.List<MeshInstance3D> _shadowInstances = new();
+    private const float ShaftLength = 3500f; // how far downsun a shaft reaches (multiply fades it in dust)
+    private const float ShaftDarkness = 0.98f; // multiply factor at the shaft core — lower = starker/darker
+    // Distance (m) downsun over which the shadow fades to nothing: full-dark at the rock, gone a few
+    // hundred metres out, so a rock only shades the dust close to it rather than casting a 3.5 km streak.
+    private const float ShaftFadeDistance = 750f;
 
     // density → per-puff billboard alpha. MANY densely-packed, low-alpha puffs fuse into a continuous
     // medium (rather than reading as a pile of discrete discs), so each puff stays very translucent and
@@ -86,6 +109,14 @@ public partial class SectorEnvironment : Node3D
         _dustRoot = new Node3D { Name = "DustClouds" };
         AddChild(_dustRoot);
 
+        _shaftMat = new ShaderMaterial { Shader = new Shader { Code = ShaftShaderCode } };
+        _shaftMat.SetShaderParameter("dark", ShaftDarkness);
+        _shaftMat.SetShaderParameter("shaft_len", ShaftLength);
+        _shaftMat.SetShaderParameter("fade_dist", ShaftFadeDistance);
+        // Draw the shafts AFTER the (default-priority) dust puffs so the multiply lands on top of the
+        // already-drawn dust and actually darkens it, rather than being covered by later puffs.
+        _shaftMat.RenderPriority = 2;
+
         _godRayMat = new ShaderMaterial { Shader = new Shader { Code = GodRayShaderCode } };
         _godRayMat.SetShaderParameter("intensity", 0.9f);
         var rayRect = new ColorRect { Material = _godRayMat, Color = Colors.White };
@@ -98,7 +129,10 @@ public partial class SectorEnvironment : Node3D
 
     // Apply (or restore) the environment for `sector`. Env is static per sector, so this is a no-op
     // until the player actually moves to (or overviews) a different sector.
-    public void Apply(uint sector, SectorEnv? env)
+    public void Apply(
+        uint sector,
+        SectorEnv? env,
+        System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)>? occluders = null)
     {
         // Re-apply when the sector changes OR when a previous same-sector call had NO env and now one
         // arrived. The fog-gated pre-team Welcome can call us with a null env for the home sector before
@@ -108,10 +142,22 @@ public partial class SectorEnvironment : Node3D
             return;
         _currentSector = (int)sector;
         _appliedEnv = env != null;
+        _occluders = occluders ?? System.Array.Empty<(Node3D, Vector3[])>();
 
         ApplySun(env);
         BuildDust(env);
+        BuildShafts(env);
         ApplyGodRays(env);
+    }
+
+    // Drop the sector-env cache so the NEXT Apply rebuilds even for the same sector id. Called on a world
+    // teardown (WorldRenderer.Reset): the shadow volumes now PARENT to rock nodes that Reset frees, so the
+    // fresh Welcome must rebuild them once it re-adds the rocks — the same-sector dedup would otherwise
+    // skip that re-apply and leave the reconnected sector with no shafts.
+    public void Invalidate()
+    {
+        _currentSector = -1;
+        _appliedEnv = false;
     }
 
     private void ApplyGodRays(SectorEnv? env)
@@ -213,6 +259,54 @@ public partial class SectorEnvironment : Node3D
             if (dc.Radius <= 0f)
                 continue;
             _dustRoot.AddChild(BuildCloudBillboards(dc, warm, cool, toSun));
+        }
+    }
+
+    // Rebuild the current sector's spin-tracking shadow volumes: each occluder gets a convex-hull mesh
+    // baked in its LOCAL frame (ShadowVolume.Build), parented to its scene node so it tumbles with the
+    // rock, and drawn with the shared shaft material whose vertex shader extrudes it downsun each frame —
+    // so the dark shaft in the dust follows the rock's real (spinning) silhouette. Only the static sun
+    // axis is passed in (as a shader uniform). Cleared when a sector has no sun or no occluders.
+    private void BuildShafts(SectorEnv? env)
+    {
+        foreach (var mi in _shadowInstances)
+            if (GodotObject.IsInstanceValid(mi))
+                mi.QueueFree();
+        _shadowInstances.Clear();
+
+        if (env is not { HasSun: true } || _occluders.Count == 0)
+            return;
+
+        // Downsun = away from the sun (Sun.cs treats +Z basis as toward the sun), matching the direction
+        // real shadows fall. ApplySun already oriented _light for this sector before we run. The shader
+        // extrudes every occluder along this world-space axis; it's static per sector, so set it once.
+        Vector3 axis = _light.GlobalTransform.Basis.Z;
+        if (axis.LengthSquared() < 1e-6f)
+            return;
+        axis = -axis.Normalized();
+        _shaftMat.SetShaderParameter("downsun", axis);
+
+        foreach (var (node, localVerts) in _occluders)
+        {
+            if (!GodotObject.IsInstanceValid(node))
+                continue;
+            var mesh = ShadowVolume.Build(localVerts);
+            if (mesh == null)
+                continue;
+
+            var mi = new MeshInstance3D
+            {
+                Name = "ShadowVolume",
+                Mesh = mesh,
+                MaterialOverride = _shaftMat,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                // The shader extrudes verts far downsun, well outside the mesh's own (hull-hugging) AABB;
+                // a loose CustomAabb keeps the shaft submitted instead of being frustum-culled when the
+                // rock itself is off-screen.
+                CustomAabb = new Aabb(Vector3.One * -1e5f, Vector3.One * 2e5f),
+            };
+            node.AddChild(mi); // inherits the rock's spin, position, and scale for free
+            _shadowInstances.Add(mi);
         }
     }
 
@@ -442,10 +536,51 @@ void fragment() {
 	float sa = sin(v_seed.x);
 	vec2 nuv = mat2(vec2(ca, -sa), vec2(sa, ca)) * (UV - vec2(0.5)) * 1.7 + v_seed;
 	float n = texture(noise_tex, nuv).r;           // per-puff cloudy mottling (baked, 1 fetch)
-	float a = v_col.a * fall * clamp(0.45 + 0.85 * n, 0.0, 1.1);
+	float a = v_col.a * fall * clamp(0.7 + 0.4 * n, 0.0, 1.1);
 	if (a < 0.003) discard;                        // skip near-transparent rim: kill fill-rate overdraw
-	ALBEDO = v_col.rgb * (0.7 + 0.6 * n);          // noise breaks up the flat colour
+	ALBEDO = v_col.rgb * (0.85 + 0.28 * n);        // noise gently breaks up the flat colour
 	ALPHA = a;
+}
+";
+
+    // Spin-tracking shadow-VOLUME shader. The mesh is the occluder's convex hull baked in LOCAL space
+    // (ShadowVolume.Build) and parented to the rock, so MODEL_MATRIX carries the rock's current spin. Per
+    // vertex we transform to world, then push it the full shaft length along the world-space `downsun`
+    // axis IFF its (world) face normal turns away from the sun — sunward faces stay as the near cap,
+    // anti-sun faces translate to the far tip, and the silhouette fins stretch between them. The result is
+    // the hull swept downsun = a closed convex volume, so cull_back keeps the camera-facing shell only and
+    // the multiply lands exactly ONCE. `dark` is the multiply factor at the shaft core (1.0 = no change);
+    // the length fade (0 at the rock, 1 at the tip) softens the shaft out into the dust.
+    private const string ShaftShaderCode =
+        @"
+shader_type spatial;
+render_mode blend_mul, unshaded, cull_back, depth_draw_never, shadows_disabled;
+
+uniform float dark = 0.88;
+uniform vec3 downsun = vec3(0.0, -1.0, 0.0); // world-space unit axis, away from the sun
+uniform float shaft_len = 3500.0;
+uniform float fade_dist = 450.0; // metres downsun over which the shadow fades to nothing
+
+varying float v_t; // 0 at the near (occluder) cap, 1 at the far (downsun) tip
+
+void vertex() {
+	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz); // rock's CURRENT world face normal
+	float ext = step(0.0, dot(wn, downsun));                    // 1 = faces away from sun → extrude
+	world += downsun * (shaft_len * ext);
+	v_t = ext;
+	MODELVIEW_MATRIX = VIEW_MATRIX; // treat `world` as already world-space (extrusion done above)
+	VERTEX = world;
+}
+
+void fragment() {
+	// Fade by ACTUAL world distance downsun (v_t*shaft_len metres), not by a fraction of the shaft, so the
+	// shadow is full-dark at the rock and gone within `fade_dist` metres regardless of shaft length.
+	float dist = v_t * shaft_len;
+	float len_fade = 1.0 - smoothstep(0.0, fade_dist, dist); // 1 at the rock → 0 a few hundred metres out
+	if (len_fade < 0.004) discard;                           // past the fade → skip the multiply entirely
+	ALBEDO = mix(vec3(1.0), vec3(dark), len_fade);
+	ALPHA = 1.0;
 }
 ";
 

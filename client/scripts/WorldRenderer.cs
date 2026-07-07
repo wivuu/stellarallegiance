@@ -338,7 +338,83 @@ public partial class WorldRenderer : Node3D
     {
         _sectors.TryGetValue(sector, out var row);
         _starscape?.SetSector(sector, row?.Env);
-        _sectorEnv?.Apply(sector, row?.Env);
+        // Hand the sector's biggest occluders (rocks + bases) to the dust driver so it can extrude
+        // shape-accurate shadow VOLUMES downsun. Rebuilt only on a sector change, and the occluders are
+        // loaded before the spawn/warp that applies the env, so the set is complete by the time it runs.
+        _sectorEnv?.Apply(sector, row?.Env, GatherShadowOccluders(sector));
+    }
+
+    // Cap the shadow-casting occluders so a dense belt doesn't build (or draw) a thicket of shadow volumes.
+    private const int MaxShadowOccluders = 40;
+    private readonly List<(Node3D Node, float R)> _occluderScratch = new();
+    private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
+
+    // The biggest rocks + bases in `sector`, each as (its node, its LOCAL-frame hull vertices) for
+    // SectorEnvironment to bake a spin-tracking shadow volume that parents to the node. Bases carry a huge
+    // sentinel radius so they always make the cut.
+    private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector)
+    {
+        _occluderScratch.Clear();
+        foreach (var n in _asteroidNodes.Values)
+            if (InSector(n, sector))
+                _occluderScratch.Add((n, ShadowRadius(n)));
+        foreach (var (node, _, _) in _baseList)
+            if (InSector(node, sector))
+                _occluderScratch.Add((node, ShadowRadius(node)));
+        _occluderScratch.Sort((a, b) => b.R.CompareTo(a.R));
+
+        _sectorEnvOccluders.Clear();
+        int take = Mathf.Min(_occluderScratch.Count, MaxShadowOccluders);
+        for (int i = 0; i < take; i++)
+        {
+            var node = _occluderScratch[i].Node;
+            var verts = CollectHullVerts(node);
+            if (verts.Length >= 4)
+                _sectorEnvOccluders.Add((node, verts));
+        }
+        return _sectorEnvOccluders;
+    }
+
+    private static bool InSector(Node3D n, uint sector) =>
+        n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
+
+    private static float ShadowRadius(Node3D n) =>
+        n.HasMeta("shadowRadius") ? (float)n.GetMeta("shadowRadius") : 0f;
+
+    // Collect an occluder's silhouette-relevant vertices in the occluder NODE's LOCAL frame, reduced to
+    // directional extremes. Local (not world) so the baked shadow volume can parent to the node and tumble
+    // with it — the shader re-derives the world silhouette each frame. Walks every MeshInstance3D under
+    // `node` (a rock IS one; a base is a small hierarchy) so both come from their actual meshes.
+    private static readonly List<Vector3> _hullVertScratch = new();
+
+    private static Vector3[] CollectHullVerts(Node3D node)
+    {
+        _hullVertScratch.Clear();
+        Transform3D rootInv = node.GlobalTransform.AffineInverse();
+        CollectMeshVerts(node, rootInv, _hullVertScratch);
+        return _hullVertScratch.Count >= 4
+            ? ShadowVolume.Extremes(_hullVertScratch, 48)
+            : System.Array.Empty<Vector3>();
+    }
+
+    private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
+    {
+        if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
+        {
+            // Vertex into the occluder-root's local frame: undo the root, apply the sub-mesh's own world
+            // placement. For a lone-mesh rock (mi is the root) this collapses to the raw mesh vertices.
+            Transform3D xform = rootInv * mi.GlobalTransform;
+            for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+            {
+                var arrays = mesh.SurfaceGetArrays(s);
+                if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
+                    continue;
+                foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+                    outVerts.Add(xform * v);
+            }
+        }
+        foreach (var child in node.GetChildren())
+            CollectMeshVerts(child, rootInv, outVerts);
     }
 
     private byte? _localTeam;
@@ -848,6 +924,10 @@ public partial class WorldRenderer : Node3D
     // match/sector/team bookkeeping to its pre-connection defaults.
     public void Reset()
     {
+        // Shadow volumes parent to the rock nodes freed just below; drop the sector-env cache so the fresh
+        // Welcome rebuilds them (the same-sector dedup would otherwise skip the post-reconnect re-apply).
+        _sectorEnv?.Invalidate();
+
         foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             child.QueueFree();
@@ -1017,6 +1097,7 @@ public partial class WorldRenderer : Node3D
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
         _baseList.Add((node, row.Team, row.BaseId));
+        node.SetMeta("shadowRadius", 1.0e4f); // sentinel: bases always make the shadow-occluder cut
         NetUpdateBaseHealth(row.BaseId, row.Health);
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
         _collisionWorld.AddBase(row);
@@ -1133,6 +1214,7 @@ public partial class WorldRenderer : Node3D
         _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
         _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
+        node.SetMeta("shadowRadius", row.Radius); // rank among shadow occluders (biggest rocks win)
         SetNodeSector(node, row.SectorId);
     }
 
