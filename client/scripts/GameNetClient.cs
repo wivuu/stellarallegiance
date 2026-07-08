@@ -1470,20 +1470,27 @@ public partial class GameNetClient : Node
                     mapX = r.ReadSingle();
                     mapY = r.ReadSingle();
                 }
+                // Garrison markers carry only the owning team (mirror of Protocol.BuildMapList);
+                // the sector-local position is deliberately not on the wire.
                 byte baseCount = r.ReadByte();
                 var bases = new List<SectorMapPreview.BaseMark>(baseCount);
                 for (int b = 0; b < baseCount; b++)
-                {
-                    byte team = r.ReadByte();
-                    float x = r.ReadSingle();
-                    float z = r.ReadSingle();
-                    bases.Add(new SectorMapPreview.BaseMark(team, new Vector2(x, z)));
-                }
+                    bases.Add(new SectorMapPreview.BaseMark(r.ReadByte()));
                 sectors.Add(new SectorMapPreview.SectorModel(
                     id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname,
                     mapX, mapY, hasPos));
             }
-            maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors)));
+            // Aleph gate topology (mirror of Protocol.BuildMapList): sector-id pairs the preview
+            // draws as lines between sector nodes.
+            byte linkCount = r.ReadByte();
+            var links = new List<(uint A, uint B)>(linkCount);
+            for (int l = 0; l < linkCount; l++)
+            {
+                uint la = r.ReadUInt32();
+                uint lb = r.ReadUInt32();
+                links.Add((la, lb));
+            }
+            maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors, links)));
         }
         Maps = maps;
         MapListChanged?.Invoke();

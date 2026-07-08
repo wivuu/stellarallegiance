@@ -30,11 +30,13 @@ public partial class ServerLobbyOverlay : Control
     // that predate them keep rendering with graceful fallbacks).
     private sealed record RosterDto(string Name, int Team, bool Ready, bool Flying);
 
-    private sealed record MapBaseDto(int Team, float X, float Z);
+    private sealed record MapBaseDto(int Team);
 
     private sealed record MapGateDto(uint ToSector, float X, float Z);
 
-    private sealed record MapSectorDto(uint Id, float Radius, List<MapBaseDto>? Bases, List<MapGateDto>? Gates, string? Name = null);
+    private sealed record MapSectorDto(
+        uint Id, float Radius, List<MapBaseDto>? Bases, List<MapGateDto>? Gates, string? Name = null,
+        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
 
     private sealed record MapDto(List<MapSectorDto> Sectors);
 
@@ -751,12 +753,31 @@ public partial class ServerLobbyOverlay : Control
             .Sectors.Select(s => new SectorMapPreview.SectorModel(
                 s.Id,
                 s.Radius,
-                s.Bases?.Select(b => new SectorMapPreview.BaseMark(b.Team, new Vector2(b.X, b.Z))).ToList() ?? new(),
+                s.Bases?.Select(b => new SectorMapPreview.BaseMark(b.Team)).ToList() ?? new(),
                 s.Gates?.Select(g => new Vector2(g.X, g.Z)).ToList() ?? new(),
-                s.Name
+                s.Name,
+                s.MapX,
+                s.MapY,
+                s.HasMapPos
             ))
             .ToList();
-        return new SectorMapPreview.MapModel(sectors);
+
+        // Derive sector-to-sector links from each gate's destination (bidirectional; de-duped
+        // to a single edge per pair) so the preview can draw connecting lines between sectors.
+        var links = new List<(uint A, uint B)>();
+        var seen = new HashSet<(uint, uint)>();
+        foreach (var s in map.Sectors)
+        {
+            if (s.Gates is null)
+                continue;
+            foreach (var g in s.Gates)
+            {
+                var edge = s.Id < g.ToSector ? (s.Id, g.ToSector) : (g.ToSector, s.Id);
+                if (seen.Add(edge))
+                    links.Add(edge);
+            }
+        }
+        return new SectorMapPreview.MapModel(sectors, links);
     }
 
     // ---- Joining -------------------------------------------------------------

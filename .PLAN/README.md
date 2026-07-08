@@ -24,7 +24,11 @@ Archives:
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area. Asteroids should fill out be added outwards towards the edges
 - Mine changes
   - Mines should animate as they are deployed (rapidly expand spherically)
-- Make game's map selector functional
+- Maps
+  - Make server lobby right side menu 20% smaller
+  - Make game's map selector functional
+  - Make map selctor UI modal taller (show 50% of the next row of maps)
+  - Make map selector UI modal slightly less wide (it shows white space after the 2nd map on each row)
 ---
 
 ## Content philosophy (the through-line)

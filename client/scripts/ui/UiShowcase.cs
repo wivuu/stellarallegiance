@@ -352,16 +352,17 @@ public partial class UiShowcase : Control
                     new SectorMapPreview.SectorModel(
                         0,
                         2100f,
-                        new() { new SectorMapPreview.BaseMark(0, new Vector2(-812f, 402f)) },
+                        new() { new SectorMapPreview.BaseMark(0) },
                         new() { new Vector2(1500f, -901f) }
                     ),
                     new SectorMapPreview.SectorModel(
                         1,
                         700f,
-                        new() { new SectorMapPreview.BaseMark(1, new Vector2(210f, -95f)) },
+                        new() { new SectorMapPreview.BaseMark(1) },
                         new() { new Vector2(-520f, 310f) }
                     ),
-                }
+                },
+                new() { (0u, 1u) }
             )
         );
         mapRow.AddChild(sectorMap);

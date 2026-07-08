@@ -8,11 +8,13 @@ namespace SimServer.Net;
 // so these records serialize with default (PascalCase) options just fine.
 public static class LobbyStatus
 {
-    public sealed record MapBaseDto(int Team, float X, float Z);
+    public sealed record MapBaseDto(int Team);
 
     public sealed record MapGateDto(uint ToSector, float X, float Z);
 
-    public sealed record MapSectorDto(uint Id, float Radius, string? Name, MapBaseDto[] Bases, MapGateDto[] Gates);
+    public sealed record MapSectorDto(
+        uint Id, float Radius, string? Name, MapBaseDto[] Bases, MapGateDto[] Gates,
+        float MapX, float MapY, bool HasMapPos);
 
     public sealed record MapLayoutDto(MapSectorDto[] Sectors);
 
@@ -30,12 +32,15 @@ public static class LobbyStatus
                     string.IsNullOrWhiteSpace(s.Name) ? null : s.Name,
                     world
                         .Bases.Where(b => b.SectorId == s.Id)
-                        .Select(b => new MapBaseDto(b.Team, Round1(b.Pos.X), Round1(b.Pos.Z)))
+                        .Select(b => new MapBaseDto(b.Team))
                         .ToArray(),
                     world
                         .Alephs.Where(g => g.SectorId == s.Id)
                         .Select(g => new MapGateDto(g.DestSectorId, Round1(g.Pos.X), Round1(g.Pos.Z)))
-                        .ToArray()
+                        .ToArray(),
+                    s.MapX,
+                    s.MapY,
+                    s.HasMapPos
                 ))
                 .ToArray()
         );

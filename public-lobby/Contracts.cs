@@ -46,11 +46,18 @@ public record LobbyRosterEntry(string Name, int Team, bool Ready = false, bool F
 // Compact sector-graph layout of a server's map — enough for the browser's sector-map preview
 // (sector circles, team base positions, aleph gates), deliberately excluding asteroids or any
 // other bulk geometry. Coordinates are world X/Z within the owning sector.
-public record MapBase(int Team, float X, float Z);
+// Only the owning team of a sector's garrison — the sector-local position is intentionally not
+// carried (randomized per match, secret; the browser highlights the whole sector by team).
+public record MapBase(int Team);
 
 public record MapGate(uint ToSector, float X, float Z);
 
-public record MapSector(uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null, string? Name = null);
+// MapX/MapY (valid when HasMapPos) is the authored 2D diagram position — same field the game
+// lobby carries — so the browser preview lays sectors out by their star/custom silhouette rather
+// than the horizontal-row fallback. Optional/defaulted: servers predating it still deserialize.
+public record MapSector(
+    uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null, string? Name = null,
+    float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
 
 public record MapLayout(MapSector[] Sectors);
 

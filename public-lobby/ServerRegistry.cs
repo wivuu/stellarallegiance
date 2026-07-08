@@ -183,7 +183,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
                     Radius = MathF.Round(radius),
                     Bases = s
                         .Bases?.Take(8)
-                        .Select(b => b with { Team = Math.Clamp(b.Team, 0, 1), X = ClampCoord(b.X, radius), Z = ClampCoord(b.Z, radius) })
+                        .Select(b => b with { Team = Math.Clamp(b.Team, 0, 1) })
                         .ToArray(),
                     Gates = s
                         .Gates?.Take(8)
