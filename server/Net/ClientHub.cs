@@ -870,7 +870,12 @@ public sealed class ClientHub
             mineVisByTeam = new();
             for (byte t = 0; t <= 1; t++)
             {
-                HashSet<ulong>? vis = null;
+                // Radar detections (VisibleEnemyMines, swapped whole at the vision apply — quiescent
+                // here) seed the set; direct LOS then unions in. Radar gives at-range discovery of an
+                // armed field without line of sight; LOS still reveals immediately through a window.
+                var tv = _sim.VisionFor(t);
+                HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
+                    ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
                 for (int i = 0; i < fields.Count; i++)
                     if (fields[i].Team != t && _sim.IsPointVisibleToTeam(t, fields[i].SectorId, fields[i].Center))
                         (vis ??= new()).Add(fields[i].FieldId);

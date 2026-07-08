@@ -790,6 +790,10 @@ public partial class WorldRenderer : Node3D
         return _probeScratch;
     }
 
+    // Pass-through to the minefield feed for the HUD mine glyph (mirrors VisibleProbes above).
+    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields()
+        => _minefieldViews.VisibleMinefields();
+
     public override void _Ready()
     {
         _bases = new Node3D { Name = "Bases" };

@@ -93,9 +93,13 @@ for a `BlastPower`/`BlastRadius` splash; the field depletes mine-by-mine.
   - `shared/MinefieldLayout.cs` — splitmix64 seed→cloud offsets, shared by sim/client/tests
   - `server/Sim/Simulation.Mines.cs` — MineFieldSim + TryDeployMine/StepMines (Track B fills)
   - `server/Net/Protocol.cs` — `MsgMinefields=13` (41-B seed records, per anchor sector) + `MsgMineGone=14`
-  - `client/scripts/MinefieldViews.cs` — client sprite clouds (Track B fills)
-- **Related:** [[Chaff]], [[Blast Radius]], [[Expendables]]
-- **Notes:** Proto v18: seed-based wire (client regenerates offsets); `aliveMask` (CloudCount ≤ 64) self-heals a resync
+  - `client/scripts/MinefieldViews.cs` — client sprite clouds (Track B fills) + deploy expand animation
+  - `server/Sim/Simulation.Vision.cs` — armed fields as radar targets (`VisibleEnemyMines`, per-def `MineSignature`)
+- **Related:** [[Chaff]], [[Blast Radius]], [[Expendables]], [[Fog of War (Team Vision)]]
+- **Notes:** Proto v18: seed-based wire (client regenerates offsets); `aliveMask` (CloudCount ≤ 64) self-heals a resync.
+  Fog on: own fields always stream; an enemy field streams once ARMED and radar-detected (signature-scaled,
+  probe-style — arming window is radar-silent) OR its center is in direct LOS; a freshly-laid field's cloud
+  expands from center (~0.35 s) and a team-colored hazard-burst HUD glyph marks any visible field while on-screen
 
 ### Fog of War (Team Vision)
 Server-authoritative per-team vision: undiscovered map data never reaches the client. Ships/bases/

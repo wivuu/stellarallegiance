@@ -79,6 +79,7 @@ public partial class TargetMarkers : Control
         Pod,
         Aleph,
         Probe,
+        Mine,
     }
 
     private WorldRenderer _world = null!;
@@ -492,6 +493,14 @@ public partial class TargetMarkers : Control
             DrawEntity(view, pos, Kind.Probe, TeamColor(team), focused: false, friendly: true,
                 hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active);
         }
+
+        // Deployed minefields: a hazard-burst glyph over any visible field (own always; enemy once
+        // radar/LOS-revealed — the feed is already fog-filtered). In-view only: hideOffScreen draws
+        // the glyph solely when the field projects on-screen and suppresses the off-screen edge
+        // arrow, so a field off to the side or behind never clutters. friendly: true = quiet glyph.
+        foreach (var (pos, team) in _world.VisibleMinefields())
+            DrawEntity(view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true,
+                hideOffScreen: true);
 
         // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
         // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
@@ -1012,6 +1021,18 @@ public partial class TargetMarkers : Control
                 DrawLine(_poly4[2], _poly4[3], color, 1.5f, true);
                 DrawLine(_poly4[3], _poly4[0], color, 1.5f, true);
                 DrawCircle(p, r * 0.32f, color);
+                break;
+            case Kind.Mine:
+                // Deployed ordnance: a spiked hazard burst — a filled core with six radiating
+                // spikes off the reused _poly6 scratch. Distinct from the pod's plain circle, the
+                // probe's diamond, and the aleph's concentric rings.
+                for (int i = 0; i < 6; i++)
+                {
+                    float a = i * Mathf.Tau / 6f;
+                    _poly6[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+                    DrawLine(p, _poly6[i], color, 1.5f, true);
+                }
+                DrawCircle(p, r * 0.45f, color);
                 break;
         }
     }

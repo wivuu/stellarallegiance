@@ -248,6 +248,8 @@ public static class FactionsContentProjection
                 MineCloudRadius = (float)mn.CloudRadius, // scatter radius AND lethal sphere radius
                 MineCloudCount = (byte)mn.CloudCount, // cosmetic mesh count
                 MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
+                // Radar signature of the deployed field; authored 0/omitted -> 1.0 (probe rule).
+                MineSignature = mn.Signature <= 0 ? 1f : (float)mn.Signature,
                 CargoId = mn.CargoId ?? 0,
                 ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
                 ModelName = mn.ModelName ?? "",

@@ -28,6 +28,12 @@ public partial class MinefieldViews : Node3D
     // reads as an object clearly smaller than a ship (scout ≈ 4.5u long).
     private const float MineSize = 1.5f;
 
+    // Deploy expansion: a freshly-laid field's cloud grows from clustered-at-center out to the
+    // seed layout over DeployDuration with an ease-out cubic (rapid then settle). StartFactor is
+    // the initial fraction of each instance's final offset (near-zero = emerge from the center).
+    private const float DeployDuration = 0.35f;
+    private const float StartFactor = 0.03f;
+
     // The mine mesh (extracted from the GLB once) + the uniform scale that normalizes it to MineSize,
     // cached per res:// path so every field shares one Mesh resource.
     private static readonly Dictionary<string, (Mesh Mesh, float Scale)> _meshCache = new();
@@ -37,9 +43,18 @@ public partial class MinefieldViews : Node3D
         public MultiMeshInstance3D Node = null!;
         public byte Team;
         public float SecondsLeft; // TTL to self-free at ExpireAtTick (refreshed on each Upsert)
+
+        // Per-instance final transforms (origin + rotation×scale basis), retained so _Process can
+        // re-drive the origins during the deploy animation and converge to the exact seed layout.
+        public Vector3[] FinalOrigins = null!;
+        public Basis[] Bases = null!;
+        public float DeployElapsed = -1f; // seconds into the expand; < 0 = not animating / done
     }
 
     private readonly Dictionary<ulong, FieldView> _fields = new();
+
+    // Scratch reused by VisibleMinefields() so the per-frame HUD marker pass allocates nothing.
+    private readonly List<(Vector3 Pos, byte Team)> _visibleScratch = new();
 
     // Reconcile/insert a field's mesh cloud from its seed + aliveMask.
     public void Upsert(Minefield row, WeaponDef? def, uint serverTick)
@@ -60,7 +75,7 @@ public partial class MinefieldViews : Node3D
         int n = HighBitCount(row.AliveMask);
         bool armed = serverTick >= row.ArmAtTick;
 
-        var node = BuildCloud(row, def, n);
+        var node = BuildCloud(row, def, n, out var finalOrigins, out var bases);
         node.Position = new Vector3(row.CenterX, row.CenterY, row.CenterZ);
         AddChild(node);
 
@@ -69,8 +84,19 @@ public partial class MinefieldViews : Node3D
             Node = node,
             Team = row.Team,
             SecondsLeft = row.ExpireAtTick > serverTick ? (row.ExpireAtTick - serverTick) * FlightModel.Dt : 0f,
+            FinalOrigins = finalOrigins,
+            Bases = bases,
+            DeployElapsed = armed ? -1f : 0f, // only a freshly-laid (un-armed) field animates open
         };
         _fields[row.FieldId] = fv;
+
+        // Freshly laid: collapse every instance to the center so _Process expands it out to the layout.
+        if (!armed)
+        {
+            var mm = node.Multimesh;
+            for (int i = 0; i < finalOrigins.Length; i++)
+                mm.SetInstanceTransform(i, new Transform3D(bases[i], finalOrigins[i] * StartFactor));
+        }
 
         // Deploy cue: a field first seen while still arming was just laid (fields discovered mid-life —
         // sector entry, reconnect — stay silent). The layer has no HUD row focus, so this is the
@@ -82,7 +108,7 @@ public partial class MinefieldViews : Node3D
     // Build the field's MultiMeshInstance3D: n mine meshes at their seed-regenerated local offsets,
     // each normalized to MineSize and given a deterministic per-instance rotation. Falls back to a
     // small box marker mesh if the mine GLB is unavailable (never-invisible guarantee).
-    private static MultiMeshInstance3D BuildCloud(Minefield row, WeaponDef def, int n)
+    private static MultiMeshInstance3D BuildCloud(Minefield row, WeaponDef def, int n, out Vector3[] finalOrigins, out Basis[] bases)
     {
         var (mesh, scale) = LoadMineMesh(def.ModelName);
 
@@ -95,6 +121,8 @@ public partial class MinefieldViews : Node3D
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
             InstanceCount = n,
         };
+        finalOrigins = new Vector3[n];
+        bases = new Basis[n];
         for (int i = 0; i < n; i++)
         {
             // Deterministic per-instance tumble from (seed, index) so orientation never pops on a
@@ -104,6 +132,8 @@ public partial class MinefieldViews : Node3D
             float rz = MinefieldLayout.Hash01(row.Seed, (ulong)(i * 3 + 3)) * Mathf.Tau;
             var basis = Basis.FromEuler(new Vector3(rx, ry, rz)) * Basis.FromScale(Vector3.One * scale);
             var origin = new Vector3(offsets[i].X, offsets[i].Y, offsets[i].Z);
+            finalOrigins[i] = origin;
+            bases[i] = basis;
             mm.SetInstanceTransform(i, new Transform3D(basis, origin));
         }
 
@@ -130,6 +160,22 @@ public partial class MinefieldViews : Node3D
 
     public override void _Process(double delta)
     {
+        // Deploy expansion: grow each animating field's cloud from center out to the seed layout.
+        foreach (var fv in _fields.Values)
+        {
+            if (fv.DeployElapsed < 0f)
+                continue;
+            fv.DeployElapsed += (float)delta;
+            float t = Mathf.Min(fv.DeployElapsed / DeployDuration, 1f);
+            float u = 1f - t;
+            float k = 1f - u * u * u; // ease-out cubic
+            var mm = fv.Node.Multimesh;
+            for (int i = 0; i < fv.FinalOrigins.Length; i++)
+                mm.SetInstanceTransform(i, new Transform3D(fv.Bases[i], fv.FinalOrigins[i] * k));
+            if (k >= 1f)
+                fv.DeployElapsed = -1f; // settled at finals (k==1 wrote them above)
+        }
+
         // Iterate over a snapshot so a self-free during expiry doesn't mutate mid-enumeration.
         List<ulong>? expired = null;
         foreach (var (id, fv) in _fields)
@@ -142,6 +188,17 @@ public partial class MinefieldViews : Node3D
             foreach (var id in expired)
                 if (_fields.TryGetValue(id, out var fv2))
                     FreeField(id, fv2);
+    }
+
+    // Feed for the HUD mine glyph: center + owning team of every live field. Mirrors
+    // WorldRenderer.VisibleProbes(). The set is already fog-filtered upstream (own team +
+    // radar/LOS-revealed enemy). Returns a shared scratch list — read it immediately.
+    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields()
+    {
+        _visibleScratch.Clear();
+        foreach (var fv in _fields.Values)
+            _visibleScratch.Add((fv.Node.Position, fv.Team));
+        return _visibleScratch;
     }
 
     // Free every field (WorldRenderer Reset / phase→Lobby).
