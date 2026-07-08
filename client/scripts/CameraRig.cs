@@ -64,6 +64,11 @@ public partial class CameraRig : Camera3D
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         Far = 6000f;
 
+        // Track this listener's own velocity so positional loops (the asteroid hum) pitch-bend into a
+        // near-miss woosh as the ship streaks past. The emitter side sets the matching flag; both are
+        // required for Godot to compute the doppler shift.
+        DopplerTracking = DopplerTrackingEnum.IdleStep;
+
         // Default = first person, restoring the last mode the player toggled to.
         _fpDesired = UserPrefs.FirstPersonView;
         ViewIsFirstPerson = _fpDesired;

@@ -229,8 +229,9 @@ public partial class EngineGlow : Node3D
     }
 
     // Map an eased 0..1 drive level onto a playable VolumeDb, fading to silence at 0.
+    // Endpoints toned down ~1.4 dB (a 15% quieter linear amplitude) from the original -26/-2.
     private static float DriveToDb(float level) =>
-        level <= 0.001f ? -80f : Mathf.Lerp(-26f, -2f, Mathf.Clamp(level, 0f, 1f));
+        level <= 0.001f ? -80f : Mathf.Lerp(-27.4f, -3.4f, Mathf.Clamp(level, 0f, 1f));
 
     private void BuildNozzle(Vector3 pos, Texture2D dot, Texture2D smoke)
     {
