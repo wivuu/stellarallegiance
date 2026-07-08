@@ -274,6 +274,9 @@ public partial class WorldRenderer : Node3D
     // Scratch reused by VisibleProbes() so the per-frame HUD marker pass allocates nothing.
     private readonly List<(Vector3 Pos, byte Team)> _probeScratch = new();
 
+    // Proximity-audio driver: latched asteroid hum/woosh + probe pings, fed each frame from _Process.
+    private AsteroidAmbience _ambience = null!;
+
     // Mirror of the module's AsteroidCollisionScale (Lib.cs): the fraction of a rock's
     // circumscribing radius the sim treats as solid. Keep in sync — used to clip a bolt's
     // TTL where the SERVER's analytic solve would have stopped it on a rock.
@@ -823,6 +826,7 @@ public partial class WorldRenderer : Node3D
         _effects = new Node3D { Name = "Effects" };
         _chaffFx = new ChaffFx { Name = "ChaffFx" };
         _minefieldViews = new MinefieldViews { Name = "MinefieldViews" };
+        _ambience = new AsteroidAmbience { Name = "AsteroidAmbience" };
         AddChild(_bases);
         AddChild(_asteroids);
         AddChild(_ships);
@@ -831,6 +835,7 @@ public partial class WorldRenderer : Node3D
         AddChild(_effects);
         AddChild(_chaffFx);
         AddChild(_minefieldViews);
+        AddChild(_ambience);
 
         _asteroidMat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.42f, 0.38f) };
         _team0Mat = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.5f, 0.95f) };
@@ -1999,6 +2004,11 @@ public partial class WorldRenderer : Node3D
 
         // Re-select the dust shadow-casters by camera distance (throttled to real camera movement).
         UpdateShadowOccluders();
+
+        // Proximity audio: hum the nearest rocks (near-miss woosh) and ping probes the ship is close to.
+        // Gated to the local ship's sector — sectors share world coordinates, so an untagged sector would
+        // let a neighbouring sector's rocks/probes leak in. Listener = camera (else ship), same as shadows.
+        _ambience.Tick((float)delta, ShadowRefPos(), _localSector, _asteroidNodes, _probes);
 
         // Cull bolts whose (obstruction-clipped) flight life has elapsed.
         for (int i = _bolts.Count - 1; i >= 0; i--)
