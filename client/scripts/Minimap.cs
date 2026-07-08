@@ -33,6 +33,7 @@ public partial class Minimap : Control
     private static readonly Color Disputed = DesignTokens.Warn; // held by both teams (contested)
     private static readonly Color Neutral = DesignTokens.TextDim;
     private static readonly Color HaloColor = DesignTokens.TeamAccent; // current-sector ring (chrome)
+    private static readonly Color HoverColor = DesignTokens.Secondary; // hovered-sector ring (warm, distinct from current)
     private static readonly Color NodeEdge = DesignTokens.Void; // dark diamond outline
     private static readonly Color HeaderColor = DesignTokens.Data; // mono header
     private static readonly Color TextColor = DesignTokens.TextHi;
@@ -125,6 +126,9 @@ public partial class Minimap : Control
             pos[sectors[i].SectorId] = p;
         }
 
+        // Hover: which sector node is under the mouse this frame (same proximity hit-test as clicks).
+        uint? hovered = TryClickSector(GetLocalMousePosition(), out var hoverId) ? hoverId : null;
+
         // Which team(s) hold a base in each sector — computed first so contested sectors can
         // tint the aleph links that touch them (the design's front-line cue).
         _teams.Clear();
@@ -172,10 +176,13 @@ public partial class Minimap : Control
             bool stale = !neutral && !(tp.t0 && tp.t1) && _world.SectorTeamStale(s.SectorId, tp.t0 ? (byte)0 : (byte)1);
 
             bool current = s.SectorId == localSector;
+            bool hover = hovered == s.SectorId;
             if (current)
                 DrawArc(p, HaloRadius, 0f, Mathf.Tau, 28, HaloColor, 1.5f, true); // current-sector ring
+            if (hover)
+                DrawArc(p, HaloRadius + 2f, 0f, Mathf.Tau, 28, HoverColor, 1.5f, true); // hovered-sector ring
 
-            DiamondPoints(p, current ? NodeRadius + 2f : NodeRadius, _diamond);
+            DiamondPoints(p, current || hover ? NodeRadius + 2f : NodeRadius, _diamond);
             bool hollow = neutral || stale;
             if (neutral)
                 DrawPolyline(ClosedDiamond(), Neutral, 1.5f, true); // hollow outline
@@ -192,8 +199,10 @@ public partial class Minimap : Control
             DrawString(font, p + new Vector2(-ts.X * 0.5f, ts.Y * 0.30f), lbl, HorizontalAlignment.Left, -1, 11, hollow ? TextColor : NodeEdge);
         }
 
-        // Current-sector name along the panel's bottom edge.
-        string name = _world.SectorName(localSector);
+        // Sector name along the panel's bottom edge: the hovered sector while pointing at a node,
+        // otherwise the player's current sector.
+        uint labelSector = hovered ?? localSector;
+        string name = _world.SectorName(labelSector);
         if (!string.IsNullOrEmpty(name))
             DrawString(
                 font,
@@ -202,7 +211,7 @@ public partial class Minimap : Control
                 HorizontalAlignment.Left,
                 PanelW - 24,
                 11,
-                HaloColor
+                hovered.HasValue ? HoverColor : HaloColor
             );
     }
 
