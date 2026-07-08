@@ -182,6 +182,10 @@ namespace StellarAllegiance.Shared
         public byte MineCloudCount; // mine: mines scattered per deploy (<= 64, seed-based aliveMask)
         public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
+        // Radar signature of the deployed field (0 authored -> 1.0 at projection). SERVER-ONLY —
+        // BuildDefs skips it (detection is server-authoritative; the client never reads signatures;
+        // FogEyeballMultiplier / ProbeSignature precedent).
+        public float MineSignature; // mine: radar signature of the deployed field (0 authored -> 1.0 at projection)
         public uint CargoId; // dispenser: the cargo item (Chaff/Mine/Probe expendable) this launcher consumes
 
         // --- Probe dispenser fields (all zero for other weapon kinds); streamed after the

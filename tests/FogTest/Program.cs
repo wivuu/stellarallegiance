@@ -843,6 +843,69 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // ================================================================================================
+// 13d. Minefield radar discoverability — an ARMED enemy field is a radar target (VisibleEnemyMines,
+//      signature-scaled ×MineSignature, mirroring probes 13b): silent while still arming, detected
+//      in sensor range once armed, fogged out again when the enemy leaves range, and rock-occluded.
+// ================================================================================================
+{
+    var sim = BootSim(663);
+    var mineW = sim.Content.Weapons.First(w => w.WeaponId == 7); // mine-dispenser
+    var layer = Join(sim, 1, 0, FlightModel.ClassBomber);
+    layer.MineAmmo = 1;
+    layer.MineWeaponId = mineW.WeaponId;
+    Park(layer, EmptySector, new Vec3(0, 0, 0));
+    layer.HeldInput = new ShipInputState { DropMine = true };
+    sim.Step();
+    layer.HeldInput = new ShipInputState();
+    var field = sim.Minefields[^1];
+    Park(layer, EmptySector, new Vec3(90000f, 0, 0)); // deployer far away — only the enemy's own sensors matter
+
+    var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
+    float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
+    float mineSig = mineW.MineSignature;
+    // In radar range of the center but well outside the lethal cloud sphere (parked = ~0 damage anyway).
+    Vec3 nearField = field.Center + new Vec3(sphere * mineSig * 0.6f, 0, 0);
+
+    // Still arming: every capture inside the arm window skips the field, and an apply lags its capture
+    // by a boundary — so with a margin before ArmAtTick no applied result can contain it yet.
+    int preArm = (int)(field.ArmAtTick - sim.Tick) - 5;
+    if (preArm > 0)
+    {
+        Run(sim, () => Park(enemy, EmptySector, nearField), preArm);
+        Check(!Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+            "a still-arming field is radar-silent (armed-only capture)", "the enemy radar-detected a field before it armed");
+    }
+
+    Run(sim, () => Park(enemy, EmptySector, nearField), Settle);
+    Check(Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+        $"an enemy within sphere×MineSignature ({sphere:F0}×{mineSig}) radar-detects an armed field without direct LOS gating",
+        "an enemy in sensor range did not detect the armed field");
+
+    Run(sim, () => Park(enemy, EmptySector, field.Center + new Vec3(90000f, 0, 0)), Settle);
+    Check(!Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+        "the field fogs back out of the enemy's radar once out of sensor range", "the field stayed visible to a far enemy");
+
+    // Rock occlusion: identical armed-and-in-range geometry, but a rock straddles the enemy→center
+    // sightline — the field's radar return is shadowed (ClassifyTarget's shared occlusion scan).
+    var sim2 = BootSim(664);
+    var layer2 = Join(sim2, 1, 0, FlightModel.ClassBomber);
+    layer2.MineAmmo = 1;
+    layer2.MineWeaponId = mineW.WeaponId;
+    Park(layer2, EmptySector, new Vec3(0, 0, 0));
+    layer2.HeldInput = new ShipInputState { DropMine = true };
+    sim2.Step();
+    layer2.HeldInput = new ShipInputState();
+    var field2 = sim2.Minefields[^1];
+    Park(layer2, EmptySector, new Vec3(90000f, 0, 0));
+    Vec3 near2 = field2.Center + new Vec3(sphere * mineSig * 0.6f, 0, 0);
+    sim2.World.AddRockForTest(EmptySector, (field2.Center + near2) * 0.5f, 120f); // midpoint of the sightline
+    var enemy2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
+    Run(sim2, () => Park(enemy2, EmptySector, near2), Settle);
+    Check(!Vision(sim2, 1).VisibleEnemyMines.Contains(field2.FieldId),
+        "a rock between the enemy and the armed field's center occludes its radar return", "the field was detected through a rock");
+}
+
+// ================================================================================================
 // 14. F8 — warp discovery: a ship warping through an aleph immediately scouts the rocks around its
 //     arrival point (reveal log THIS tick; persisted to DiscoveredRocks by the next vision boundary).
 // ================================================================================================

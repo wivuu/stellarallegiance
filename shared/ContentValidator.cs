@@ -87,6 +87,9 @@ namespace StellarAllegiance.Shared
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — never lives");
                     if (w.MineArmTicks >= w.ProjectileLifeTicks)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms");
+                    // Radar signature must resolve positive (projection maps 0 -> 1).
+                    if (w.MineSignature <= 0f)
+                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}");
                     if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }

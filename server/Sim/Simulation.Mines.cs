@@ -105,6 +105,16 @@ public sealed partial class Simulation
         MinefieldsChangedThisStep = true;
     }
 
+    // Whether a field id is still live — used by the vision apply to prune a stale enemy-visibility
+    // id whose field expired during the compute window (mirrors ProbeExists).
+    private bool MinefieldExists(ulong id)
+    {
+        for (int i = 0; i < _minefields.Count; i++)
+            if (_minefields[i].FieldId == id)
+                return true;
+        return false;
+    }
+
     // Expire fields + damage every enemy inside an armed field's volume. Fixed grid-cube iteration
     // order keeps this bit-identical across a replay (mirrors ApplyBlast's cube walk). Removal-safe
     // index loop: an expired field is dropped and the clients prune it from the next (possibly empty)

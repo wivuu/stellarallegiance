@@ -143,6 +143,11 @@ public sealed partial class Simulation
         // VisibleEnemyShips). The hub streams these to the team so it can render + shoot them.
         public HashSet<ulong> VisibleEnemyProbes = new();
 
+        // Enemy minefields this team can currently radar-detect (swapped whole each apply, like
+        // VisibleEnemyProbes). The hub UNIONS these with the direct-LOS gate when building
+        // MsgMinefields, so an armed field is discoverable at sensor range without line of sight.
+        public HashSet<ulong> VisibleEnemyMines = new();
+
         // Last-known contacts, keyed by ship id — HUD/radar glyph only.
         public readonly Dictionary<ulong, GhostContact> Ghosts = new();
 
@@ -186,6 +191,7 @@ public sealed partial class Simulation
     private readonly List<BaseTargetSnap> _inBaseTargets = new(); // ALL bases (+ captured health) — discovery/refresh targets
     private readonly List<TargetSnap> _inTargets = new();
     private readonly List<ProbeTargetSnap> _inProbeTargets = new(); // ALL live probes — enemy-visibility targets
+    private readonly List<MineTargetSnap> _inMineTargets = new(); // ARMED minefields — enemy-visibility targets
     private readonly List<byte> _inTeams = new();
 
     // Warp-discovery staging (F8): rocks a ship revealed synchronously at a gate exit this interval,
@@ -255,6 +261,17 @@ public sealed partial class Simulation
         public float Sig; // probe radar signature (WeaponDef.ProbeSignature)
     }
 
+    // An ARMED minefield as an ENEMY-VISIBILITY target — captured (armed fields only, so the arming
+    // window stays stealthy) so the worker can classify which teams radar-detect its center.
+    private struct MineTargetSnap
+    {
+        public ulong Id;
+        public byte Team; // owner (only NON-owning teams classify against it)
+        public uint Sector;
+        public Vec3 Pos;
+        public float Sig; // mine radar signature (WeaponDef.MineSignature)
+    }
+
     // The worker's output: per-team recomputed sets + newly-discovered statics + base-health refresh.
     private sealed class VisionComputeResult
     {
@@ -274,6 +291,9 @@ public sealed partial class Simulation
         // shows or it doesn't; no eyeball glimpse, no ghost). Drives the enemy MsgProbes stream so a
         // team can see (and shoot) an enemy probe within sensor range.
         public readonly HashSet<ulong> VisibleEnemyProbes = [];
+        // Enemy ARMED minefields this team can radar-detect this compute (radar tier only, like
+        // probes). Unioned with the direct-LOS gate in the hub's MsgMinefields build.
+        public readonly HashSet<ulong> VisibleEnemyMines = [];
     }
 
     // ---- Init / reset ---------------------------------------------------------------------------
@@ -351,6 +371,7 @@ public sealed partial class Simulation
             tv.VisibleEnemyShips.Clear();
             tv.EyeballShips.Clear();
             tv.VisibleEnemyProbes.Clear();
+            tv.VisibleEnemyMines.Clear();
             tv.Ghosts.Clear();
             lock (tv.DiscoverLock)
             {
@@ -472,6 +493,7 @@ public sealed partial class Simulation
         _inBaseTargets.Clear();
         _inTargets.Clear();
         _inProbeTargets.Clear();
+        _inMineTargets.Clear();
         _inTeams.Clear();
         foreach (var t in _teamVisions.Keys)
             _inTeams.Add(t);
@@ -577,6 +599,27 @@ public sealed partial class Simulation
                 }
             );
         }
+
+        // Minefields: ARMED fields only — the enemy never receives the un-armed record, so the
+        // arming window stays stealthy and the client's deploy animation/sound (gated on !armed at
+        // first sight) can only ever fire owner-side. Signature is the flat per-def MineSignature
+        // (resolved > 0 at projection) — a static field has none of SignatureModel's dynamic ship
+        // contributors, same as ProbeSignature/baseSig/_rockSig.
+        foreach (var f in _minefields)
+        {
+            if (tick < f.ArmAtTick)
+                continue;
+            _inMineTargets.Add(
+                new MineTargetSnap
+                {
+                    Id = f.FieldId,
+                    Team = f.Team,
+                    Sector = f.SectorId,
+                    Pos = f.Center,
+                    Sig = WeaponDefs.TryGetValue(f.WeaponId, out var mw) && mw.MineSignature > 0f ? mw.MineSignature : 1f,
+                }
+            );
+        }
     }
 
     // ---- Compute (worker thread OR inline; reads snapshot + immutable rock grid + quiescent sets) --
@@ -648,6 +691,17 @@ public sealed partial class Simulation
                 ClassifyTarget(team, pt.Sector, pt.Pos, pt.Sig, 0UL, out bool probeRadar, out _);
                 if (probeRadar)
                     tr.VisibleEnemyProbes.Add(pt.Id);
+            }
+
+            // Enemy armed minefields: radar tier only, like probes (a field either shows or it
+            // doesn't). Rock occlusion + dust attenuation of the field center come via ClassifyTarget.
+            foreach (var mt in _inMineTargets)
+            {
+                if (mt.Team == team)
+                    continue; // your own fields always stream (unconditional, hub side)
+                ClassifyTarget(team, mt.Sector, mt.Pos, mt.Sig, 0UL, out bool mineRadar, out _);
+                if (mineRadar)
+                    tr.VisibleEnemyMines.Add(mt.Id);
             }
 
             // Rocks: only near-viewer, still-undiscovered rocks, gathered via the sector rock grid.
@@ -934,6 +988,17 @@ public sealed partial class Simulation
             if (!newProbes.SetEquals(tv.VisibleEnemyProbes))
                 ProbesChangedThisStep = true;
             tv.VisibleEnemyProbes = newProbes;
+
+            // Enemy-minefield visibility: same shape as probes — keep only ids whose field still
+            // exists, swap, and on a set change flag a prompt minefield resend so a field radaring
+            // in/out reaches the client at the next hub tick instead of the coarse keepalive.
+            var newMines = new HashSet<ulong>();
+            foreach (var id in r.VisibleEnemyMines)
+                if (MinefieldExists(id))
+                    newMines.Add(id);
+            if (!newMines.SetEquals(tv.VisibleEnemyMines))
+                MinefieldsChangedThisStep = true;
+            tv.VisibleEnemyMines = newMines;
 
             // Ghost invalidation: a ghost whose frozen point is now inside this team's vision (sig 1.0)
             // and whose id is not currently radar-visible is stale memory the team just re-scouted empty.

@@ -113,6 +113,7 @@ mines:
     cloud-radius: 80     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
     cloud-count: 64      # mine meshes scattered per deploy — cosmetic density (<= 64)
     arm-delay: 1         # seconds before the field arms
+    signature: 1.0       # radar signature enemies detect the ARMED field at (arming fields are silent)
 
 chaffs:
   - id: sensor-decoy
