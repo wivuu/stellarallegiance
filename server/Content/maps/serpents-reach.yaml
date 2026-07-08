@@ -1,0 +1,118 @@
+# Serpent's Reach — a five-sector SERPENTINE. The sectors zig-zag in an S across the diagram
+# and link only end-to-end as a single chain, so it plays as a long corridor: the two homes sit
+# at opposite tails and every fight is a chokepoint push down the spine. See brimstone-gambit.yaml
+# for the full field-reference on every key.
+name: Serpent's Reach
+
+sector-radius: 800
+
+# Pure chain — no branches, no chords. One way through, sector by sector.
+links:
+  - [0, 1]
+  - [1, 2]
+  - [2, 3]
+  - [3, 4]
+
+sectors:
+  - id: 0        # Fangmouth — team 0's home; the lower-left tail of the serpent
+    name: Fangmouth
+    radius: 3600
+    map-pos: [-1.0, -0.7]
+    garrison: { team: 0 }
+    asteroids: field
+    environment:
+      sun:
+        azimuth: 45
+        elevation: 22
+        color: [0.80, 0.88, 0.98]
+        energy: 4.0
+        ambient: 0.55
+        size: 1900
+        god-rays: 1
+      nebula:
+        color-a: [0.22, 0.36, 0.62]
+        color-b: [0.32, 0.28, 0.58]
+        intensity: 0.08
+
+  - id: 1        # Coilrun — first bend up; a dense field chokepoint
+    name: Coilrun
+    radius: 1400
+    map-pos: [-0.4, 0.4]
+    asteroids: field
+    asteroid-density: 1.5
+    environment:
+      sun:
+        azimuth: 0
+        elevation: 30
+        color: [0.84, 0.86, 0.90]
+        energy: 2.6
+        ambient: 0.36
+      nebula:
+        color-a: [0.28, 0.34, 0.52]
+        color-b: [0.20, 0.26, 0.44]
+        intensity: 0.07
+      dust:
+        amount: 0.5
+        opacity: 0.65
+        color: [0.20, 0.22, 0.28]
+
+  - id: 2        # The Gullet — the central bend; a bare open span, the map's crossing point
+    name: The Gullet
+    radius: 2000
+    map-pos: [0.0, 0.0]
+    asteroids: none
+    environment:
+      sun:
+        azimuth: 90
+        elevation: 58
+        color: [1.0, 0.97, 0.92]
+        energy: 4.8
+        ambient: 0.7
+        size: 1400
+        god-rays: 0.5
+      nebula:
+        color-a: [0.32, 0.32, 0.42]
+        color-b: [0.26, 0.28, 0.40]
+        intensity: 0.05
+
+  - id: 3        # Rattlespur — bend back down; a rusty belt chokepoint mirroring Coilrun
+    name: Rattlespur
+    radius: 1400
+    map-pos: [0.4, -0.4]
+    asteroids: belt
+    asteroid-density: 1.4
+    environment:
+      sun:
+        azimuth: 180
+        elevation: 30
+        color: [0.94, 0.68, 0.54]
+        energy: 2.6
+        ambient: 0.32
+      nebula:
+        color-a: [0.46, 0.24, 0.24]
+        color-b: [0.30, 0.16, 0.22]
+        intensity: 0.07
+      dust:
+        amount: 0.55
+        opacity: 0.7
+        color: [0.24, 0.16, 0.14]
+
+  - id: 4        # Venomcrest — team 1's home; the upper-right tail, mirror of Fangmouth
+    name: Venomcrest
+    radius: 3600
+    map-pos: [1.0, 0.7]
+    garrison: { team: 1 }
+    asteroids: field
+    environment:
+      sun:
+        azimuth: -135
+        elevation: 22
+        color: [1.0, 0.80, 0.66]
+        energy: 4.0
+        ambient: 0.55
+        size: 1900
+        god-rays: 1
+      nebula:
+        color-a: [0.58, 0.30, 0.26]
+        color-b: [0.42, 0.22, 0.36]
+        intensity: 0.08

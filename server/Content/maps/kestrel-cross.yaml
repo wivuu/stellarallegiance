@@ -1,0 +1,117 @@
+# Kestrel Cross — a five-sector CRUCIFORM map. A central contested waypoint with four arms
+# radiating N/E/S/W; the two teams garrison opposite arms (West vs. East) and must push
+# through the shared middle. See brimstone-gambit.yaml for the full field-reference on every key.
+name: Kestrel Cross
+
+sector-radius: 700
+
+# Cross topology: every arm meets only through the hub (2). No arm-to-arm shortcut.
+links:
+  - [0, 2]   # West  ↔ Hub
+  - [1, 2]   # East  ↔ Hub
+  - [3, 2]   # North ↔ Hub
+  - [4, 2]   # South ↔ Hub
+
+sectors:
+  - id: 0        # Talonmoor — team 0's home; the west arm
+    name: Talonmoor
+    radius: 3800
+    map-pos: [-1.0, 0.0]
+    garrison: { team: 0 }
+    asteroids: field
+    environment:
+      sun:
+        azimuth: 55
+        elevation: 20
+        color: [0.78, 0.86, 1.0]     # cool blue-white key over the western home
+        energy: 4.0
+        ambient: 0.55
+        size: 1900
+        god-rays: 1
+      nebula:
+        color-a: [0.20, 0.32, 0.60]
+        color-b: [0.30, 0.44, 0.72]
+        intensity: 0.08
+
+  - id: 1        # Emberhold — team 1's home; the east arm, mirror of Talonmoor
+    name: Emberhold
+    radius: 3800
+    map-pos: [1.0, 0.0]
+    garrison: { team: 1 }
+    asteroids: field
+    environment:
+      sun:
+        azimuth: -55
+        elevation: 20
+        color: [1.0, 0.80, 0.60]     # warm amber key, mirroring the cool west
+        energy: 4.0
+        ambient: 0.55
+        size: 1900
+        god-rays: 1
+      nebula:
+        color-a: [0.58, 0.28, 0.24]
+        color-b: [0.42, 0.20, 0.36]
+        intensity: 0.08
+
+  - id: 2        # The Crossing — the central contested hub; open, bright, no cover
+    name: The Crossing
+    radius: 2600
+    map-pos: [0.0, 0.0]
+    asteroids: none
+    environment:
+      sun:
+        azimuth: 90
+        elevation: 62
+        color: [1.0, 0.98, 0.94]     # near-overhead white; a stark, exposed killbox
+        energy: 5.0
+        ambient: 0.75
+        size: 1400
+        god-rays: 0.6
+      nebula:
+        color-a: [0.30, 0.34, 0.44]
+        color-b: [0.24, 0.28, 0.40]
+        intensity: 0.05
+
+  - id: 3        # Aerie Spur — the north arm; a dense field flank, murky and dusty
+    name: Aerie Spur
+    radius: 1500
+    map-pos: [0.0, 1.0]
+    asteroids: field
+    asteroid-density: 1.4
+    environment:
+      sun:
+        azimuth: 20
+        elevation: 30
+        color: [0.70, 0.74, 0.86]
+        energy: 2.2
+        ambient: 0.32
+      nebula:
+        color-a: [0.24, 0.26, 0.40]
+        color-b: [0.16, 0.20, 0.34]
+        intensity: 0.07
+      dust:
+        amount: 0.6
+        opacity: 0.7
+        color: [0.20, 0.22, 0.28]
+
+  - id: 4        # Cinder Spur — the south arm; a tight rusty belt, mirror flank of Aerie
+    name: Cinder Spur
+    radius: 1500
+    map-pos: [0.0, -1.0]
+    asteroids: belt
+    asteroid-density: 1.2
+    environment:
+      sun:
+        azimuth: -20
+        elevation: 30
+        color: [0.94, 0.66, 0.50]
+        energy: 2.2
+        ambient: 0.30
+      nebula:
+        color-a: [0.46, 0.24, 0.22]
+        color-b: [0.28, 0.16, 0.20]
+        intensity: 0.07
+      dust:
+        amount: 0.55
+        opacity: 0.75
+        color: [0.24, 0.16, 0.14]
