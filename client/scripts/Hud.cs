@@ -66,6 +66,13 @@ public partial class Hud : CanvasLayer
         _net = GetNode<GameNetClient>("../GameNetClient");
         _defs = GetNode<DefRegistry>("../DefRegistry");
 
+        // Full-screen "jump" flash that masks the rock-field swap on an aleph warp (see WarpFlash).
+        // Its own high CanvasLayer, driven by the local ship's sector change via WorldRenderer.Warped.
+        var warpFlash = new WarpFlash { Name = "WarpFlash" };
+        AddChild(warpFlash);
+        _world.Warped += warpFlash.Play;        // raise + hold on warp
+        _world.WarpSettled += warpFlash.Release; // clear once the destination sector has loaded
+
         // Sun lens flare (added first so it sits UNDER every HUD element while still drawing over
         // the 3D viewport — it's a light effect on the sky, not a readout).
         var flare = new LensFlare { Name = "LensFlare" };

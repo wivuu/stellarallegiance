@@ -23,6 +23,7 @@ Archives:
 - Password-protection for game servers: and allow clients to enter password on-join
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area. Asteroids should fill out be added outwards towards the edges
 - For large sectors, flash of asteroids being destroyed/spawned when leaving a sector and entering another - instead show a smooth transition; either a brief loading animation or a fade effect
+- Hover over sector map in-game with mouse should show the sector name (and somewhat highlight the sector indicating hover over)
 ---
 
 ## Content philosophy (the through-line)
