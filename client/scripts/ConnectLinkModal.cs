@@ -36,6 +36,10 @@ public partial class ConnectLinkModal : Control
     private ChamferButton _abandon = null!;
     private ChamferButton _retry = null!;
 
+    // Cache key for the failed-state error copy / retry-button role, so the AlertBox is only rebuilt
+    // when the failure kind changes (auth-rejected vs generic drop) rather than every frame.
+    private string _failSig = "";
+
     // One stage-log row; restyled in place as its record advances.
     private sealed class StageRow
     {
@@ -196,9 +200,25 @@ public partial class ConnectLinkModal : Control
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 44),
         };
-        _retry.Pressed += () => _cm.RetryLast();
+        _retry.Pressed += OnRetryPressed;
         actions.AddChild(_retry);
         col.AddChild(actions);
+    }
+
+    // RETRY on a failed link. A shared-secret rejection re-prompts for the password (seeding it and
+    // re-dialing the same server); any other failure just re-dials as before.
+    private void OnRetryPressed()
+    {
+        if (_cm.AuthRejected)
+        {
+            ServerPasswordModal.Open(this, _cm.ServerDisplayName, pw =>
+            {
+                _cm.SetJoinSecret(pw);
+                _cm.RetryLast();
+            }, error: true);
+            return;
+        }
+        _cm.RetryLast();
     }
 
     private void OnCancelPressed()
@@ -314,13 +334,39 @@ public partial class ConnectLinkModal : Control
             _abandon.Visible = reconnecting;
             _retry.Visible = failed;
             _error.Visible = failed;
-            if (failed)
+        }
+
+        // Failed-state error copy + retry-button role. Evaluated every frame (NOT only on the Failed
+        // transition) and cached: a "bad secret" reason that lands a frame after the state flip — or
+        // arrives via a different failure path — still flips RETRY LINK → ENTER PASSWORD.
+        if (failed)
+        {
+            string sig = _cm.AuthRejected ? "auth" : "drop:" + _cm.FailReason;
+            if (sig != _failSig)
             {
-                string detail = $"Link dropped during {_cm.FailedStageLabel()}. The host may be full or offline. Check the address and retry.";
-                if (!string.IsNullOrEmpty(_cm.FailReason))
-                    detail += $"\n{_cm.FailReason}";
-                _error.Configure("⚠ LINK DROPPED", detail, StatusPill.Kind.Danger);
+                _failSig = sig;
+                if (_cm.AuthRejected)
+                {
+                    // The server refused our shared secret — steer the pilot to re-enter the password.
+                    _retry.Text = "ENTER PASSWORD";
+                    _error.Configure(
+                        "⚠ ACCESS DENIED",
+                        "Incorrect or missing password. Re-enter the server passphrase to join.",
+                        StatusPill.Kind.Danger);
+                }
+                else
+                {
+                    _retry.Text = "◆ RETRY LINK";
+                    string detail = $"Link dropped during {_cm.FailedStageLabel()}. The host may be full or offline. Check the address and retry.";
+                    if (!string.IsNullOrEmpty(_cm.FailReason))
+                        detail += $"\n{_cm.FailReason}";
+                    _error.Configure("⚠ LINK DROPPED", detail, StatusPill.Kind.Danger);
+                }
             }
+        }
+        else
+        {
+            _failSig = "";
         }
 
         // The server well + context line track live values every frame (cheap label sets).

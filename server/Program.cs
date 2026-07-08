@@ -327,7 +327,7 @@ simThread.Start();
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
-var registrar = LobbyRegistrar.FromEnv(hub, port);
+var registrar = LobbyRegistrar.FromEnv(hub, port, secret.Length > 0);
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 

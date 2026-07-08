@@ -38,7 +38,8 @@ public partial class ServerLobbyOverlay : Control
         int MaxPlayers,
         string? State,
         string? HostedBy,
-        List<RosterDto>? Roster
+        List<RosterDto>? Roster,
+        bool Protected = false
     );
 
     private ConnectionManager _cm = null!;
@@ -632,6 +633,12 @@ public partial class ServerLobbyOverlay : Control
         name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         titleRow.AddChild(name);
+        if (sel.Protected)
+        {
+            var lockPill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            titleRow.AddChild(lockPill);
+            lockPill.Configure("⚿ PROTECTED", StatusPill.Kind.Warn);
+        }
         var pill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         titleRow.AddChild(pill);
         (string pillText, StatusPill.Kind pillKind) = sel.State switch
@@ -731,8 +738,26 @@ public partial class ServerLobbyOverlay : Control
     private void Join(ServerDto s)
     {
         CommitName();
+        // A password-protected server prompts for the passphrase first; the modal seeds the secret and
+        // then dials via the same transport branch below. Open servers dial straight through.
+        if (s.Protected)
+        {
+            ServerPasswordModal.Open(this, s.Name, pw =>
+            {
+                _cm.SetJoinSecret(pw);
+                Dial(s);
+            });
+            return;
+        }
+        Dial(s);
+    }
+
+    // Direct WebSocket to an advertised endpoint, else WebRTC through the lobby. The lobby name is kept
+    // for the connecting modal's server well.
+    private void Dial(ServerDto s)
+    {
         if (!string.IsNullOrEmpty(s.PublicEndpoint))
-            _cm.ConnectTo(s.PublicEndpoint, s.Name); // keep the lobby name for the connect modal
+            _cm.ConnectTo(s.PublicEndpoint, s.Name);
         else
             _cm.ConnectToLobby(s.SessionId, s.Name);
     }
@@ -773,6 +798,7 @@ public partial class ServerLobbyOverlay : Control
         private string _pilots = "";
         private bool _full;
         private bool _live;
+        private bool _protected;
         private bool _selected;
         private float _pulse; // 0..2π phase for the live-dot fade
 
@@ -794,6 +820,7 @@ public partial class ServerLobbyOverlay : Control
             _pilots = $"{s.Players}/{max}";
             _full = s.Players >= max;
             _live = s.State == "in-progress";
+            _protected = s.Protected;
             _selected = selected;
             QueueRedraw();
         }
@@ -845,14 +872,22 @@ public partial class ServerLobbyOverlay : Control
             );
 
             float textX = 34;
-            float maxW = Size.X - textX - countSize.X - 28;
+            float lockW = _protected ? 18f : 0f;
+            float maxW = Size.X - textX - countSize.X - 28 - lockW;
+            string shownName = Truncate(UiFonts.SairaSemi, _name, DesignTokens.BodySize, maxW);
             DrawString(
                 UiFonts.SairaSemi,
                 new Vector2(textX, 20),
-                Truncate(UiFonts.SairaSemi, _name, DesignTokens.BodySize, maxW),
+                shownName,
                 fontSize: DesignTokens.BodySize,
                 modulate: DesignTokens.TextHi
             );
+            // Amber padlock right after the name marks a password-protected server.
+            if (_protected)
+            {
+                float nameW = UiFonts.SairaSemi.GetStringSize(shownName, HorizontalAlignment.Left, -1, DesignTokens.BodySize).X;
+                DrawPadlock(new Vector2(textX + nameW + 7f, 12f));
+            }
             if (_tag.Length > 0)
                 DrawString(
                     mono,
@@ -861,6 +896,18 @@ public partial class ServerLobbyOverlay : Control
                     fontSize: 11,
                     modulate: DesignTokens.TextDim
                 );
+        }
+
+        // Small padlock (amber body + shackle arc), drawn as shapes so it renders regardless of the
+        // UI font's glyph coverage. `at` is the top-left of the icon box.
+        private void DrawPadlock(Vector2 at)
+        {
+            var c = DesignTokens.Warn;
+            float w = 9f;
+            float h = 7f;
+            float bodyTop = at.Y + 4f;
+            DrawArc(new Vector2(at.X + w / 2f, bodyTop), w * 0.32f, Mathf.Pi, Mathf.Tau, 12, c, 1.4f, antialiased: true);
+            DrawRect(new Rect2(at.X, bodyTop, w, h), c, filled: true);
         }
 
         private static string Truncate(Font f, string text, int fontSize, float maxW)

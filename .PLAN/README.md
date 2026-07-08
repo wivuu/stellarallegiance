@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Password-protection for game servers: and allow clients to enter password on-join
 ---
 
 ## Content philosophy (the through-line)
@@ -222,6 +221,8 @@ Stage-2 economy, no rework.
   toggle lets the missile/mine damage tests isolate raw damage.
 - ✅ **Boost recharge & ship-class feel** — boost limit + recharge; some classes recharge, some
   don't. (FX done; the recharge *mechanic* is not.)
+- ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
+  `STDB_LEAD` (legacy name) remains as a manual override.
 - ◐ **[S]** **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
   shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
   HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
@@ -316,8 +317,6 @@ wanted. **The discovery + hosting core is done; the social/persistence layer is 
   reachability probing, WebRTC/STUN fallback (no TURN), Railway deploy.
 - ✅ **Server lifecycle** — empty-server idle reset + match recycling; protocol versioning;
   client-update release checks that ban out-of-date servers/clients.
-- ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
-  `STDB_LEAD` (legacy name) remains as a manual override.
 - ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
 - ☐ **[M]** **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point

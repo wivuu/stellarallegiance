@@ -95,6 +95,7 @@ public static class Protocol
     public const byte MsgProbes = 18; // u8 count x ProbeRecord — minefield-style cadence (on change + coarse keepalive)
     public const byte MsgProbeGone = 19; // u64 id, u8 reason (0 expired, 1 cleanup, 2 destroyed), u16 sector, 3x i16 pos — mirrors MsgMissileGone
     public const byte MsgMapList = 20; // u8 mapCount x MapCatalog entry — the server's available maps + thumbnail layout, sent once after Defs
+    public const byte MsgReject = 21; // u8 code (1 = bad secret) — join refused; sent right before the transport closes so the client learns WHY across BOTH transports (a WebRTC DataChannel close carries no reason)
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;

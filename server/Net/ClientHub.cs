@@ -483,6 +483,20 @@ public sealed class ClientHub
                     if (!_auth.Authenticate(secret))
                     {
                         Console.WriteLine($"[Hub] rejected join (bad secret) from client {client.Id}");
+                        // Tell the client WHY before closing. The WS close frame also carries "bad
+                        // secret", but a WebRTC DataChannel close does not — this app-level frame is
+                        // the only signal that survives both transports, so the client can re-prompt
+                        // for the password instead of showing a generic "link dropped".
+                        try
+                        {
+                            await client.Transport.SendAsync(new byte[] { Protocol.MsgReject, 1 }, ct);
+                            // Let the frame actually transmit before we tear the channel down: the WebRTC
+                            // transport's CloseAsync does an immediate pc.close() that would abort the
+                            // SCTP association out from under the just-queued chunk. Cheap on this rare
+                            // (rejected-join) path; harmless for WS.
+                            await Task.Delay(150, CancellationToken.None);
+                        }
+                        catch { /* best-effort — closing anyway */ }
                         await client.Transport.CloseAsync("bad secret", ct);
                         return;
                     }

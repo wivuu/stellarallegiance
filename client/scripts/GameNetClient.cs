@@ -114,6 +114,11 @@ public partial class GameNetClient : Node
     // Disconnect, where we explicitly give the ship up.
     private string _reconnectToken = "";
 
+    // Server-sent join-rejection reason (MsgReject), captured on the receive thread before the
+    // transport close fires. This is the ONLY auth-failure signal that survives WebRTC (a DataChannel
+    // close carries no reason); OnSocketClosed falls back to it when the transport gives no reason.
+    private volatile string _rejectReason = "";
+
     // True once a Welcome has populated the rendered world. A later Welcome arriving while this is
     // set is a reconnect, so ApplyWelcome rebuilds the world from server authority (see there).
     private bool _worldLoaded;
@@ -175,6 +180,7 @@ public partial class GameNetClient : Node
         _missileRows.Clear();
         _minefieldRows.Clear();
         _probeRows.Clear();
+        _rejectReason = "";
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         GD.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
@@ -410,6 +416,7 @@ public partial class GameNetClient : Node
     private async Task RunWebSocket(string uri, int seq, CancellationToken ct)
     {
         bool opened = false;
+        string closeReason = "";
         try
         {
             _ws = new ClientWebSocket();
@@ -417,13 +424,18 @@ public partial class GameNetClient : Node
             opened = true;
             CallDeferred(nameof(OnSocketOpen), seq);
 
+            // The send loop gets its own linked token so we can stop it the instant the socket closes.
+            // Pre-Welcome (e.g. a "bad secret" rejection) nothing is queued after the Hello, so the loop
+            // would otherwise block forever on ReadAllAsync — and awaiting it below would stall the close
+            // notification, leaving the connect stuck on AUTHENTICATE.
+            using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var send = Task.Run(
                 async () =>
                 {
-                    await foreach (var frame in _tx.Reader.ReadAllAsync(ct))
-                        await _ws.SendAsync(frame, WebSocketMessageType.Binary, true, ct);
+                    await foreach (var frame in _tx.Reader.ReadAllAsync(sendCts.Token))
+                        await _ws.SendAsync(frame, WebSocketMessageType.Binary, true, sendCts.Token);
                 },
-                ct
+                sendCts.Token
             );
 
             var buf = new byte[512 * 1024];
@@ -437,11 +449,28 @@ public partial class GameNetClient : Node
                     len += r.Count;
                 } while (!r.EndOfMessage && len < buf.Length);
                 if (r.MessageType == WebSocketMessageType.Close)
+                {
+                    // The server's close reason (e.g. "bad secret" from an auth rejection) rides the
+                    // Close frame — carry it so a refused join can prompt for the password instead of
+                    // showing a generic "link dropped".
+                    closeReason = r.CloseStatusDescription ?? "";
                     break;
+                }
+                // MsgReject (21): a join refusal that rides just ahead of the close. Capture the reason
+                // here (receive thread) so it's set before OnSocketClosed, and don't enqueue it as a
+                // game frame. The WS close frame also carries "bad secret", but this keeps WS and WebRTC
+                // on one code path.
+                if (len >= 1 && buf[0] == 21)
+                {
+                    _rejectReason = len >= 2 && buf[1] == 1 ? "bad secret" : "rejected";
+                    continue;
+                }
                 _rx.Enqueue(buf.AsSpan(0, len).ToArray());
             }
+            // Unblock the send loop (it may be parked on ReadAllAsync) so the drain returns promptly.
+            sendCts.Cancel();
             await send.ContinueWith(_ => { });
-            CallDeferred(nameof(OnSocketClosed));
+            CallDeferred(nameof(OnSocketClosed), closeReason);
         }
         catch (OperationCanceledException) { }
         catch (Exception e)
@@ -450,7 +479,7 @@ public partial class GameNetClient : Node
             // Never-opened socket = the connect itself failed (carry the reason); a post-open
             // drop keeps flowing through NotifyDisconnected so auto-reconnect can kick in.
             if (opened)
-                CallDeferred(nameof(OnSocketClosed));
+                CallDeferred(nameof(OnSocketClosed), closeReason);
             else
                 CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
@@ -485,8 +514,19 @@ public partial class GameNetClient : Node
                 CallDeferred(nameof(OnSocketOpen), seq);
                 dcOpen.TrySetResult();
             };
-            dc.onmessage += (_, _, data) => _rx.Enqueue(data);
-            dc.onclose += () => CallDeferred(nameof(OnSocketClosed));
+            dc.onmessage += (_, _, data) =>
+            {
+                // MsgReject (21): the DataChannel close carries no reason, so this frame is the only way
+                // the client learns a WebRTC join was refused for a bad secret. Capture it here (before
+                // dc.onclose fires) and don't enqueue it as a game frame.
+                if (data.Length >= 1 && data[0] == 21)
+                {
+                    _rejectReason = data.Length >= 2 && data[1] == 1 ? "bad secret" : "rejected";
+                    return;
+                }
+                _rx.Enqueue(data);
+            };
+            dc.onclose += () => CallDeferred(nameof(OnSocketClosed), "");
             pc.onconnectionstatechange += s =>
             {
                 if (
@@ -555,7 +595,7 @@ public partial class GameNetClient : Node
         {
             GD.PrintErr($"[GameNet] webrtc error: {e.Message}");
             if (opened)
-                CallDeferred(nameof(OnSocketClosed));
+                CallDeferred(nameof(OnSocketClosed), "");
             else
                 CallDeferred(nameof(DeliverConnectError), seq, e.Message);
         }
@@ -606,7 +646,12 @@ public partial class GameNetClient : Node
         SendHello();
     }
 
-    private void OnSocketClosed() => _cm.NotifyDisconnected();
+    // reason carries the server's WebSocket close description when present ("bad secret" on an auth
+    // rejection); empty for silent drops and the WebRTC path (a DataChannel close has no reason). When
+    // the transport gave no reason, fall back to a MsgReject captured on the receive thread — that's
+    // how a WebRTC auth rejection reaches the failure UI.
+    private void OnSocketClosed(string reason = "") =>
+        _cm.NotifyDisconnected(string.IsNullOrEmpty(reason) ? _rejectReason : reason);
 
     // ---- Frame application (main thread) -----------------------------------
 
