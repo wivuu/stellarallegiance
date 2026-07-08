@@ -8,9 +8,16 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public abstract record Expendable
 {
+    /// <summary>Stable, unique id used for references (kebab-case by convention, e.g. "seeker-missile").</summary>
     public string Id { get; set; } = "";
+
+    /// <summary>Human-readable display name.</summary>
     public string Name { get; set; } = "";
+
+    /// <summary>Art asset id for the HUD/cargo-list icon.</summary>
     public string? IconName { get; set; }
+
+    /// <summary>Flavor/UI text shown for the expendable.</summary>
     public string? Description { get; set; }
 
     /// <summary>Payload units one carried unit occupies in a hull's hold (see <see cref="Hull.PayloadCapacity"/>).</summary>
@@ -22,11 +29,16 @@ public abstract record Expendable
     /// <summary>How long it lives once released, in seconds.</summary>
     public double Lifespan { get; set; }
 
+    /// <summary>Radar signature the expendable presents to enemy detection while active.</summary>
     public double Signature { get; set; }
+
+    /// <summary>Hit points before the expendable is destroyed; 0 = invulnerable.</summary>
     public double HitPoints { get; set; }
 
+    /// <summary>Damage-type category this expendable counts as when it deals or absorbs damage.</summary>
     public string? DefenseType { get; set; }
 
+    /// <summary>Special capability flags granted to this expendable.</summary>
     public List<ExpendableAbility> Abilities { get; set; } = new();
 
     // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------

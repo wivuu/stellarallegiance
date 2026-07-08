@@ -11,58 +11,59 @@ namespace SimServer.Content;
 // declare a name; the default map is "Brimstone Gambit".
 public sealed class MapDef
 {
-    // Required. The human-facing map name (also the selection key, case-insensitive).
+    /// <summary>Required human-facing map name (also the selection key, case-insensitive).</summary>
     public string? Name { get; set; }
 
-    // Optional game-mode label shown in the lobby's Sector Intel / map picker (e.g. "Conquest",
-    // "Skirmish"). Purely descriptive today — the sim doesn't branch on it. Defaults to "CONQUEST"
-    // in the client catalog when omitted.
+    /// <summary>Optional game-mode label shown in the lobby's map picker (e.g. "Conquest"); purely descriptive, defaults to "CONQUEST" when omitted.</summary>
     public string? Mode { get; set; }
 
-    // Optional map-level overrides of the content world knobs. Null/omitted → inherit the value from
-    // the loaded content/core/world.yaml.
+    /// <summary>Optional map-level override of the world's sector-scale multiplier; omitted inherits the loaded world.yaml value.</summary>
     public double? SectorScale { get; set; }
+
+    /// <summary>Optional map-level override of the world's asteroid density; omitted inherits the loaded world.yaml value.</summary>
     public double? AsteroidDensity { get; set; }
 
-    // The single default sector radius (× sector-scale) for any sector that omits its own `radius`.
-    // Replaces the old per-sector-id defaults. Null → inherit the content world's `sector-radius`.
+    /// <summary>Default sector radius (× sector-scale) for any sector that omits its own radius; omitted inherits the world's sector-radius.</summary>
     public double? SectorRadius { get; set; }
 
-    // Gate (aleph) topology as sector-id pairs, e.g. `[[0, 1], [1, 2]]`. Each pair becomes a
-    // bidirectional aleph. Omitted/empty → the sim links sectors in a ring by id.
+    /// <summary>Gate (aleph) topology as bidirectional sector-id pairs, e.g. <c>[[0, 1], [1, 2]]</c>; omitted links sectors in a ring by id.</summary>
     public List<List<uint>>? Links { get; set; }
 
-    // The map's sectors. Each declares its geometry (radius, garrison, asteroid shape, map-pos) and
-    // environment; anything omitted falls back to one shared default (no per-sector-id special-casing).
+    /// <summary>The map's sectors, each declaring its geometry (radius, garrison, asteroids, map-pos) and environment; anything omitted falls back to one shared default.</summary>
     public List<MapSectorDef> Sectors { get; set; } = [];
 }
 
 public sealed class MapSectorDef
 {
+    /// <summary>This sector's numeric id, referenced by garrison and links.</summary>
     public byte Id { get; set; }
-    public double? Radius { get; set; } // absolute world units; null/omitted → map/world sector-radius × scale
-    public string? Name { get; set; }   // optional display name (shown in the sector overview + lobby preview)
 
-    // Optional team garrison (home base) in this sector. The set of garrisons across the map decides
-    // how many teams the map supports. Omitted → no base here.
+    /// <summary>Absolute radius in world units; omitted falls back to the map or world sector-radius × scale.</summary>
+    public double? Radius { get; set; }
+
+    /// <summary>Optional display name shown in the sector overview and lobby preview.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Optional team garrison (home base) in this sector; the set of garrisons across the map decides how many teams it supports.</summary>
     public GarrisonDef? Garrison { get; set; }
 
-    // Asteroid distribution: "field" (disc) | "belt" (ring) | "none". Omitted → "field".
+    /// <summary>Asteroid distribution shape: "field" (disc), "belt" (ring), or "none"; omitted defaults to "field".</summary>
     public string? Asteroids { get; set; }
-    public double? AsteroidDensity { get; set; } // optional per-sector multiplier on the world density
 
-    // 2D map-diagram layout coordinate `[x, y]`, normalized ~[-1,1]. Distinct from 3D geometry —
-    // where this sector's node draws on the minimap/lobby preview. Omitted → client auto ring layout.
+    /// <summary>Optional per-sector multiplier on the world asteroid density.</summary>
+    public double? AsteroidDensity { get; set; }
+
+    /// <summary>2D map-diagram position [x, y], normalized roughly -1..1, where this sector's node draws on the minimap/lobby preview; omitted auto-lays out in a ring.</summary>
     public double[]? MapPos { get; set; }
 
-    // Optional per-sector environment (sun/god-rays, nebula, dust). Omitted → the sector keeps every
-    // legacy default. Projected into WorldSectorConfig.Env by ApplyTo.
+    /// <summary>Optional per-sector environment (sun, nebula, dust); omitted keeps the sector's legacy default look.</summary>
     public SectorEnvDef? Environment { get; set; }
 }
 
 // A team's garrison (home base) declaration.
 public sealed class GarrisonDef
 {
+    /// <summary>The team id (0-based) that owns this garrison / home base.</summary>
     public int? Team { get; set; }
 }
 
@@ -70,27 +71,52 @@ public sealed class GarrisonDef
 // as the rest of the map/content bundle). Doubles/arrays here are downcast to float/Vec3 in ApplyTo.
 public sealed class SectorEnvDef
 {
+    /// <summary>Directional sunlight settings for this sector.</summary>
     public SunDef? Sun { get; set; }
+
+    /// <summary>Background nebula backdrop settings for this sector.</summary>
     public NebulaDef? Nebula { get; set; }
+
+    /// <summary>Dust-cloud "feel" settings for this sector.</summary>
     public DustDef? Dust { get; set; }
 }
 
 public sealed class SunDef
 {
+    /// <summary>Sun direction azimuth, degrees.</summary>
     public double? Azimuth { get; set; }
+
+    /// <summary>Sun direction elevation above the horizon, degrees.</summary>
     public double? Elevation { get; set; }
+
+    /// <summary>Sun light color as [r, g, b].</summary>
     public double[]? Color { get; set; }
+
+    /// <summary>Sun directional-light intensity/energy.</summary>
     public double? Energy { get; set; }
-    public double? Ambient { get; set; } // ambient/fill light energy for the sector; null → client default
-    public double? Size { get; set; }    // visible sun disc world-space width; null → client default (900)
+
+    /// <summary>Ambient/fill light energy for the sector; omitted uses the client default.</summary>
+    public double? Ambient { get; set; }
+
+    /// <summary>Visible sun-disc width in world units; omitted defaults to 900.</summary>
+    public double? Size { get; set; }
+
+    /// <summary>God-ray (volumetric light shaft) intensity from the sun.</summary>
     public double? GodRays { get; set; }
 }
 
 public sealed class NebulaDef
 {
+    /// <summary>First nebula gradient color as [r, g, b].</summary>
     public double[]? ColorA { get; set; }
+
+    /// <summary>Second nebula gradient color as [r, g, b].</summary>
     public double[]? ColorB { get; set; }
+
+    /// <summary>Nebula backdrop brightness/intensity.</summary>
     public double? Intensity { get; set; }
+
+    /// <summary>Optional random seed for the nebula's procedural pattern.</summary>
     public uint? Seed { get; set; }
 }
 
@@ -99,9 +125,16 @@ public sealed class NebulaDef
 // any-sized sector.
 public sealed class DustDef
 {
-    public double? Amount { get; set; } // 0..1 "how dusty" (visual coverage/count/thickness)
-    public double? Opacity { get; set; } // 0..1 how heavily it cuts radar/vision (default 1); see SectorDust
+    /// <summary>0..1 how dusty the cloud looks (visual coverage/count/thickness).</summary>
+    public double? Amount { get; set; }
+
+    /// <summary>0..1 how heavily the dust cuts radar/vision sightlines; omitted defaults to 1.</summary>
+    public double? Opacity { get; set; }
+
+    /// <summary>Dust particle color as [r, g, b].</summary>
     public double[]? Color { get; set; }
+
+    /// <summary>Optional random seed for the dust cloud's procedural pattern.</summary>
     public uint? Seed { get; set; }
 }
 

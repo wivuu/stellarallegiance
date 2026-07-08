@@ -31,6 +31,33 @@ if (args.Contains("--pregen-assets"))
 if (args.Contains("--selftest"))
     Environment.Exit(SelfTest.Run());
 
+// Emit JSON schemas (draft 2020-12) for every YAML content root — the factions Core/Faction/Manifest
+// plus the server-only WorldDef/MapDef — via System.Text.Json's JsonSchemaExporter (GetJsonSchemaAsNode).
+// Kebab-case keys match CoreSerializer's YAML so the VS Code YAML extension validates the authored
+// content. Usage: dotnet SimServer.dll --gen-schemas [<outdir>]   (default outdir: schemas/)
+if (args.Contains("--gen-schemas"))
+{
+    int gi = Array.IndexOf(args, "--gen-schemas");
+    string outDir = gi + 1 < args.Length && !args[gi + 1].StartsWith("--") ? args[gi + 1] : "schemas";
+    Directory.CreateDirectory(outDir);
+
+    (string file, Type type)[] roots =
+    [
+        ("allegiance-core.schema.json", typeof(Allegiance.Factions.Model.Core)),
+        ("allegiance-faction.schema.json", typeof(Allegiance.Factions.Model.Faction)),
+        ("allegiance-manifest.schema.json", typeof(Allegiance.Factions.Serialization.Manifest)),
+        ("world.schema.json", typeof(WorldDef)),
+        ("map.schema.json", typeof(MapDef)),
+    ];
+    foreach (var (file, type) in roots)
+    {
+        string path = Path.Combine(outDir, file);
+        File.WriteAllText(path, Allegiance.Factions.Schema.YamlJsonSchema.Generate(type));
+        Console.WriteLine($"[SimServer] gen-schemas: wrote {path}");
+    }
+    return;
+}
+
 // Standalone sim server entry point: Kestrel hosts one WebSocket endpoint (/game); a
 // dedicated thread runs the fixed-dt 20 Hz authoritative simulation with a wall-clock
 // accumulator and fans out AOI snapshots after each step. The server is the SINGLE authority
@@ -156,9 +183,13 @@ IMatchResultSink results = new LoggingMatchResultSink();
 // file or an unknown selection so the operator gets a clear boot error instead of a wrong arena.
 MapDef selectedMapDef;
 IReadOnlyList<MapCatalogEntry> mapCatalog;
+IReadOnlyDictionary<string, MapDef> maps;
+// Pristine (pre-ApplyTo) world config, kept so a runtime map switch can clone + re-apply a different
+// map's overrides onto a clean base (ApplyTo mutates sectors/scale/radius in place).
+WorldConfig pristineWorldCfg = MapCatalog.Clone(content.World);
 try
 {
-    var maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
+    maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
     selectedMapDef = MapLoader.Resolve(maps, selectedMap);
     // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
     // content.World for the live arena (Build clones per map, so this doesn't disturb it).
@@ -186,6 +217,20 @@ var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
 // it returns to the lobby so ready flags reset. Both run on the sim thread.
 sim.ShouldStartMatch = hub.ShouldStartMatch;
 sim.OnReturnToLobby = hub.OnReturnToLobby;
+
+// Map switch: build the arena from the lobby-selected map at match start (not the boot default).
+// Clone the pristine config, overlay the picked map, and construct a fresh World — same recipe as
+// MapCatalog.Build. Runs on the sim thread inside StartMatch; the hub then re-Welcomes every client.
+World? BuildWorldForMap(string name)
+{
+    if (!maps.TryGetValue(name, out var def))
+        return null;
+    var cfg = MapCatalog.Clone(pristineWorldCfg);
+    MapLoader.ApplyTo(def, cfg);
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start);
+}
+sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
+sim.OnMatchStart = hub.OnMatchStart;
 
 var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -282,7 +327,7 @@ simThread.Start();
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
-var registrar = LobbyRegistrar.FromEnv(hub, port, world, mapName);
+var registrar = LobbyRegistrar.FromEnv(hub, port);
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 

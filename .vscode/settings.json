@@ -13,8 +13,27 @@
     //   macOS:   "/Applications/Godot_mono.app/Contents/MacOS/Godot"
     //   Windows: "C:/Program Files/Godot_mono/Godot_v4.7.stable_mono_win64.exe"
     //   on PATH: "godot-mono"
-    "godot.executablePath": ""
+    "godot.executablePath": "",
 
     // The godot-tools extension also needs your Godot path for editor/debug integration; set
     // "godotTools.editorPath.godot4" in your User settings too (it wants the .app/.exe path).
+
+    // JSON-schema validation for the authored YAML content (needs the Red Hat "YAML" extension).
+    // The schemas in ./schemas are GENERATED from the Allegiance.Factions POCOs (+ the server's
+    // WorldDef/MapDef) via System.Text.Json's JsonSchemaExporter. Regenerate after changing a model:
+    //   dotnet run --project server/SimServer.csproj -- --gen-schemas "$(pwd)/schemas"
+    "yaml.schemas": {
+        "./schemas/allegiance-core.schema.json": [
+            "server/Content/core/hulls.yaml",
+            "server/Content/core/weapons.yaml",
+            "server/Content/core/projectiles.yaml",
+            "server/Content/core/launchers.yaml",
+            "server/Content/core/expendables.yaml",
+            "server/Content/core/stations.yaml"
+        ],
+        "./schemas/allegiance-faction.schema.json": ["server/Content/core/factions/*.yaml"],
+        "./schemas/allegiance-manifest.schema.json": ["server/Content/core/core.manifest.yaml"],
+        "./schemas/world.schema.json": ["server/Content/core/world.yaml"],
+        "./schemas/map.schema.json": ["server/Content/maps/*.yaml"]
+    }
 }

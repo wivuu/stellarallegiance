@@ -4,24 +4,30 @@ using Godot;
 
 namespace StellarAllegiance.Ui;
 
-// Compact sector-graph preview for the server browser: one circle per sector, team-colored base
-// diamonds and gate dots placed by their world X/Z inside each circle, over a faint grid with corner
-// brackets. Fed by the lobby's advertised map layout — no asteroids, no live entities. Sectors are
+// Compact sector-graph preview for the server browser: one circle per sector — tinted in its owning
+// team's color when garrisoned — with gate dots placed by their world X/Z and links drawn as lines
+// between sector centers, over a faint grid with corner brackets. Garrison positions WITHIN a sector
+// are deliberately not shown (they're randomized per match and secret); only the sector's ownership
+// is revealed. Fed by the lobby's advertised map layout — no asteroids, no live entities. Sectors are
 // laid out by their authored 2D map-pos (star/custom shapes); a map without map-pos falls back to
 // sqrt(radius)-weighted horizontal slots. Renders "NO MAP DATA" for servers that predate the layout.
 public sealed partial class SectorMapPreview : Control
 {
-    public sealed record BaseMark(int Team, Vector2 Pos);
+    // Only which team garrisons the sector — never where inside it. The base's position is
+    // randomized per match and is deliberately kept off the wire so it can't be read by a client.
+    public sealed record BaseMark(int Team);
 
     // MapX/MapY (valid when HasMapPos) is the authored 2D diagram position, normalized ~[-1,1].
     public sealed record SectorModel(
         uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates, string? Name = null,
         float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
 
-    public sealed record MapModel(List<SectorModel> Sectors);
+    // Links are bidirectional sector-id pairs (aleph gate topology) drawn as lines between sector
+    // node centers. Both feeds populate them: the game lobby from the advertised link list, the
+    // server browser derived from each gate's destination sector (see the two MapModel call sites).
+    public sealed record MapModel(List<SectorModel> Sectors, List<(uint A, uint B)>? Links = null);
 
     private const float GridStep = 30f; // px, matches the design's background grid
-    private const float BaseDiamond = 5f; // half-diagonal of a base marker
     private const float GateDot = 3f;
 
     private MapModel? _map;
@@ -79,6 +85,22 @@ public sealed partial class SectorMapPreview : Control
         var radii = new float[sectors.Count];
         LayoutSectors(sectors, pad, usableW, usableH, centers, radii);
 
+        // Gate links first, so the faint connecting lines sit *under* the sector nodes.
+        if (_map.Links is { Count: > 0 })
+        {
+            var indexById = new Dictionary<uint, int>(sectors.Count);
+            for (int i = 0; i < sectors.Count; i++)
+                indexById[sectors[i].Id] = i;
+
+            var linkColor = DesignTokens.Data with { A = 0.35f };
+            foreach (var (a, b) in _map.Links)
+            {
+                if (indexById.TryGetValue(a, out int ia) && indexById.TryGetValue(b, out int ib)
+                    && radii[ia] > 4f && radii[ib] > 4f)
+                    DrawLine(centers[ia], centers[ib], linkColor, 1f, antialiased: true);
+            }
+        }
+
         for (int i = 0; i < sectors.Count; i++)
         {
             var s = sectors[i];
@@ -87,10 +109,15 @@ public sealed partial class SectorMapPreview : Control
             if (circleR <= 4f)
                 continue;
 
-            DrawArc(center, circleR, 0, Mathf.Tau, 48, DesignTokens.BorderHi, 1f, antialiased: true);
-
-            foreach (var b in s.Bases)
-                DrawDiamond(MapPoint(center, circleR, b.Pos, s.Radius), BaseDiamond, DesignTokens.Faction(b.Team));
+            // A garrisoned sector is highlighted in its owning team's color — a tinted ring plus a
+            // faint wash — but we deliberately do NOT plot where inside the sector the base sits:
+            // that position is randomized per match and is meant to stay secret. Contested/ungarrisoned
+            // sectors keep the neutral ring.
+            int? team = SectorTeam(s.Bases);
+            Color ring = team is int t ? DesignTokens.Faction(t) : DesignTokens.BorderHi;
+            if (team is not null)
+                DrawCircle(center, circleR, ring with { A = 0.07f });
+            DrawArc(center, circleR, 0, Mathf.Tau, 48, ring, team is null ? 1f : 1.5f, antialiased: true);
 
             foreach (var g in s.Gates)
             {
@@ -189,15 +216,17 @@ public sealed partial class SectorMapPreview : Control
         return center + p;
     }
 
-    private void DrawDiamond(Vector2 c, float half, Color color)
+    // The team a sector belongs to for highlighting: its garrisons' team when they all agree, else
+    // null (ungarrisoned, or contested by both teams → neutral ring). We only need ownership here,
+    // never the individual base positions.
+    private static int? SectorTeam(List<BaseMark> bases)
     {
-        var pts = new[]
-        {
-            c + new Vector2(0, -half),
-            c + new Vector2(half, 0),
-            c + new Vector2(0, half),
-            c + new Vector2(-half, 0),
-        };
-        DrawColoredPolygon(pts, color);
+        if (bases.Count == 0)
+            return null;
+        int t = bases[0].Team;
+        foreach (var b in bases)
+            if (b.Team != t)
+                return null;
+        return t;
     }
 }

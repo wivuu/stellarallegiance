@@ -22,13 +22,9 @@ public partial class Starscape : Node3D
         var shader = new Shader { Code = ShaderCode };
         _mat = new ShaderMaterial { Shader = shader };
 
-        // Feed the sky shader the sun's sky direction so it can wash out the dim
-        // backdrop near the disc. The DirectionalLight3D emits along -Z, so the light
-        // SOURCE (the visible sun) lies along +Z of its basis — same vector Sun.cs uses.
-        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
-        _mat.SetShaderParameter("sun_dir", light.GlobalTransform.Basis.Z.Normalized());
-        // Warm haze tint, matching the sun disc's emission colour.
-        _mat.SetShaderParameter("sun_glow_color", new Color(0.5f, 0.4f, 0.28f));
+        // Feed the sky shader the boot sun's direction + glow tint; SectorEnvironment
+        // calls RefreshSun again whenever it reorients/recolours the light per sector.
+        RefreshSun();
 
         var sky = new Sky { SkyMaterial = _mat };
 
@@ -45,6 +41,22 @@ public partial class Starscape : Node3D
         _env.AmbientLightSkyContribution = 0f;
 
         SetSector(HomeSector);
+    }
+
+    // Re-aim the sky's sun glare (the wide wash-out cone + the tight halo hugging the disc) at the
+    // DirectionalLight3D and retint it to the light's colour. SectorEnvironment.ApplySun calls this
+    // after reorienting/recolouring the light — the glare is a SHADER uniform, not scene geometry, so
+    // without the re-feed it would keep pointing at the boot sun while the visible disc moved: a big
+    // glow in one part of the sky and the sun in another. The DirectionalLight3D emits along -Z, so
+    // the light SOURCE (the visible sun) lies along +Z of its basis — same vector Sun.cs uses. The
+    // glow tint derives from the same hue as the disc's emission (Sun.EmissionColorFor), at half
+    // strength to stay a haze (the old fixed (0.5, 0.4, 0.28) was the old fixed disc emission halved).
+    public void RefreshSun()
+    {
+        var light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
+        _mat.SetShaderParameter("sun_dir", light.GlobalTransform.Basis.Z.Normalized());
+        var glow = Sun.EmissionColorFor(light.LightColor);
+        _mat.SetShaderParameter("sun_glow_color", new Color(glow.R * 0.5f, glow.G * 0.5f, glow.B * 0.5f));
     }
 
     // Repaint the backdrop for a sector. Deterministic in the sector id alone (so the same sector

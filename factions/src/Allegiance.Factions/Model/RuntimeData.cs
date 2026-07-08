@@ -27,17 +27,28 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public record Hardpoint
 {
+    /// <summary>What this hardpoint attaches (weapon muzzle, engine nozzle, light, docking marker, etc.).</summary>
     public RuntimeHardpointKind Kind { get; set; }
 
     /// <summary>Disambiguates multiples of one kind (e.g. two boosters).</summary>
     public byte Index { get; set; }
 
+    /// <summary>Local-space X offset from the hull origin.</summary>
     public double OffX { get; set; }
+
+    /// <summary>Local-space Y offset from the hull origin.</summary>
     public double OffY { get; set; }
+
+    /// <summary>Local-space Z offset from the hull origin.</summary>
     public double OffZ { get; set; }
 
+    /// <summary>Local-space X component of the hardpoint's facing direction.</summary>
     public double DirX { get; set; }
+
+    /// <summary>Local-space Y component of the hardpoint's facing direction.</summary>
     public double DirY { get; set; }
+
+    /// <summary>Local-space Z component of the hardpoint's facing direction.</summary>
     public double DirZ { get; set; }
 
     /// <summary>Meaningful only for <see cref="RuntimeHardpointKind.Weapon"/>; references a runtime weapon id.</summary>
@@ -51,14 +62,31 @@ public record Hardpoint
 /// </summary>
 public enum RuntimeHardpointKind : byte
 {
+    /// <summary>A weapon muzzle.</summary>
     Weapon,
+
+    /// <summary>The main engine exhaust.</summary>
     MainEngine,
+
+    /// <summary>An afterburner/booster exhaust.</summary>
     Booster,
+
+    /// <summary>A maneuvering thruster.</summary>
     Thruster,
+
+    /// <summary>A rotating turret mount.</summary>
     Turret,
+
+    /// <summary>A cosmetic light.</summary>
     Light,
+
+    /// <summary>Where docking ships enter.</summary>
     DockingEntrance,
+
+    /// <summary>Where docking ships exit.</summary>
     DockingExit,
+
+    /// <summary>The pilot's cockpit/camera position.</summary>
     Cockpit,
 }
 
@@ -70,8 +98,15 @@ public enum RuntimeHardpointKind : byte
 /// </summary>
 public enum RuntimeWeaponKind : byte
 {
+    /// <summary>An analytic ray-cast gun shot.</summary>
     Bolt,
+
+    /// <summary>A guided missile.</summary>
     Missile,
+
+    /// <summary>A deployed proximity mine.</summary>
     Mine,
+
+    /// <summary>A deployed decoy/chaff.</summary>
     Chaff,
 }

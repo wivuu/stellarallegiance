@@ -27,6 +27,7 @@ public partial class SectorEnvironment : Node3D
     private DirectionalLight3D _light = null!;
     private WorldEnvironment _worldEnv = null!;
     private Sun? _sun;
+    private Starscape? _starscape; // sky-shader sun glare must re-aim whenever ApplySun moves the light
     private Node3D _dustRoot = null!; // parents the current sector's dust MultiMeshes
 
     // Captured from Main.tscn at boot so a sector with no sun override restores the authored look.
@@ -106,6 +107,7 @@ public partial class SectorEnvironment : Node3D
         _light = GetNode<DirectionalLight3D>("../DirectionalLight3D");
         _worldEnv = GetNode<WorldEnvironment>("../WorldEnvironment");
         _sun = GetNodeOrNull<Sun>("../Sun");
+        _starscape = GetNodeOrNull<Starscape>("../Starscape");
 
         _defaultLightXform = _light.Transform;
         _defaultLightColor = _light.LightColor;
@@ -270,8 +272,11 @@ public partial class SectorEnvironment : Node3D
             _sun?.SetDiscSize(Sun.DefaultSize);
         }
 
-        // Keep the visible sun disc + lens flare (both read Sun.SkyDirection) aligned with the light.
+        // Keep the visible sun disc + lens flare (both read Sun.SkyDirection) aligned with the light,
+        // and re-aim the sky shader's sun-glare halo (a uniform, not geometry) at the same spot — a
+        // stale halo leaves a big glow in one part of the sky with the disc somewhere else entirely.
         _sun?.RefreshFromLight();
+        _starscape?.RefreshSun();
     }
 
     // Set the sector's ambient (fill) light energy on the WorldEnvironment — the flat base illumination

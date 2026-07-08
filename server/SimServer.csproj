@@ -17,6 +17,11 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
+    <!-- Emit the .xml doc file so the gen-schemas command can surface WorldDef/MapDef summary
+         comments as schema description fields. CS1591 (missing XML comment for a public member)
+         is silenced so undocumented members don't spam warnings. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <!-- Ship the art GLBs the sim reads for collision hulls + docking hardpoints NEXT TO the

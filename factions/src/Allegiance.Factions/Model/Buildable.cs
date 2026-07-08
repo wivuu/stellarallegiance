@@ -14,13 +14,16 @@ public abstract record Buildable
     /// <summary>Human-readable display name.</summary>
     public string Name { get; set; } = "";
 
+    /// <summary>Flavor/blurb text shown for this item in the build UI.</summary>
     public string? Description { get; set; }
 
     /// <summary>Art asset id for the 3D model (see GLB-AND-HARDPOINT-FORMAT.md).</summary>
     public string? ModelName { get; set; }
 
+    /// <summary>Art asset id for the build-UI/HUD icon.</summary>
     public string? IconName { get; set; }
 
+    /// <summary>Cost in team money to build/buy this item.</summary>
     public int Price { get; set; }
 
     /// <summary>Time to build/complete, in seconds.</summary>
@@ -45,7 +48,10 @@ public abstract record Buildable
 /// <summary>Yaw/pitch/roll triple. Replaces the C++ <c>float[3]</c> turn-rate arrays.</summary>
 public record TurnRates
 {
+    /// <summary>Rotation about the vertical axis (nose left/right), in degrees/second.</summary>
     public double Yaw { get; set; }
+    /// <summary>Rotation about the lateral axis (nose up/down), in degrees/second.</summary>
     public double Pitch { get; set; }
+    /// <summary>Rotation about the longitudinal axis (barrel roll), in degrees/second.</summary>
     public double Roll { get; set; }
 }

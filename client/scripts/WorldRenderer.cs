@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
@@ -344,6 +345,24 @@ public partial class WorldRenderer : Node3D
     // follow the local sector, which is the normal case.
     private uint? _viewOverride;
     public uint ViewSector => _viewOverride ?? _localSector;
+
+    // Raised when the LOCAL ship warps to a different sector (aleph gate). The Hud subscribes to raise a
+    // full-screen WarpFlash that HOLDS over the hard field swap + any first-reveal load. NOT raised for
+    // first spawn/respawn (InsertShip) or F3 overview view changes (SetViewSector) — those aren't warps.
+    public event Action? Warped;
+
+    // Raised once the warped-into sector has finished loading (its rock inserts have quiesced, or a
+    // safety cap elapsed). The Hud clears the WarpFlash on this so the destination is revealed only when
+    // it's actually populated, never mid-load. Warp/settle timing is driven in _Process (TickWarpSettle).
+    public event Action? WarpSettled;
+
+    // Warp-settle timing (seconds), all off the real-time clock (Time.GetTicksMsec):
+    private bool _warpSettling;
+    private double _warpStartSec;    // when the current warp began
+    private double _warpLastRockSec; // last time a rock for _localSector was inserted (loaded → stays stale)
+    private const double WarpMinHold = 0.2;      // flash covers the swap for at least this long
+    private const double WarpQuietDebounce = 0.25; // settle this long after the last rock arrives
+    private const double WarpMaxHold = 2.0;      // safety cap so the flash never sticks
     public float ViewSectorRadius => _sectors.TryGetValue(ViewSector, out var s) ? s.Radius : 0f;
     public Vector3 ViewSectorCenter =>
         _sectors.TryGetValue(ViewSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
@@ -920,7 +939,11 @@ public partial class WorldRenderer : Node3D
     // remembered station — so a fade-in never un-dims a wreck). Node.Visible stays true for the whole
     // fade and only drops to false once a fade-out completes, so the Visible-gated queries
     // (VisibleBases/VisibleAlephs/collision) keep matching what's actually on screen.
-    private const float FadeDur = 0.2f; // seconds for a full in/out ramp — "quick", not a slow dissolve
+    // Gentle in-flight reveal: a rock scouted (fog) in the sector you're ALREADY in dissolves in over
+    // this ramp rather than popping. A sector WARP no longer uses this — it swaps hard under the
+    // WarpFlash overlay (RefreshSectorVisibility(instant: true)) — so this only covers fog reveals in
+    // the current sector and the F3 overview view change.
+    private const float FadeDur = 0.55f; // seconds for a full in/out ramp
     private struct Fade { public float Curr; public float Target; }
     private readonly Dictionary<Node3D, Fade> _fades = new();
     private readonly List<Node3D> _fadeScratch = new();
@@ -980,6 +1003,9 @@ public partial class WorldRenderer : Node3D
         }
     }
 
+    // Smoothstep: eases a 0..1 linear progress into a gentle in/out curve (no hard start/stop).
+    private static float Ease(float t) => t * t * (3f - 2f * t);
+
     // Advance every in-flight fade one frame, applying transparency and retiring finished ramps.
     private void AdvanceFades(double delta)
     {
@@ -997,7 +1023,9 @@ public partial class WorldRenderer : Node3D
             }
             var f = _fades[n];
             f.Curr = Mathf.MoveToward(f.Curr, f.Target, step);
-            DimNode(n, Mathf.Lerp(1f, RestTransparencyFor(n), f.Curr));
+            // f.Curr is the LINEAR progress (drives MoveToward + the retire check below unchanged);
+            // only the applied transparency is smoothstep-eased so the dissolve has no hard start/stop.
+            DimNode(n, Mathf.Lerp(1f, RestTransparencyFor(n), Ease(f.Curr)));
             if (Mathf.IsEqualApprox(f.Curr, f.Target))
             {
                 if (f.Target <= 0f)
@@ -1233,22 +1261,68 @@ public partial class WorldRenderer : Node3D
         n.Visible = sector == ViewSector;
     }
 
-    // Re-evaluate every world node's visibility against the current view sector —
-    // called when the local ship warps, or when the overview retargets the view.
-    private void RefreshSectorVisibility()
+    // Re-evaluate every world node's visibility against the current view sector — called when the local
+    // ship warps, or when the overview retargets the view. `instant` swaps static geometry HARD (no
+    // FadeNode): a warp cuts under the WarpFlash overlay, so the old field is gone and the new one is
+    // present the moment the flash is up — nothing to dissolve. Non-instant (F3 overview) keeps the fade.
+    private void RefreshSectorVisibility(bool instant = false)
     {
-        // Static geometry dissolves in/out on a warp instead of popping (see FadeNode); the transient
-        // groups (ships/bolts/alephs/effects) still toggle instantly — a warp cuts hard between the two
-        // sectors' live action, and fading brief effects would just smear them.
         foreach (var group in new[] { _bases, _asteroids })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
-                FadeNode(n, (int)n.GetMeta("sector") == (int)ViewSector);
+            {
+                bool show = (int)n.GetMeta("sector") == (int)ViewSector;
+                if (instant)
+                    ShowNodeInstant(n, show);
+                else
+                    FadeNode(n, show);
+            }
 
+        // Transient groups (ships/bolts/alephs/effects) always toggle instantly — a warp cuts hard
+        // between the two sectors' live action, and fading brief effects would just smear them.
         foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
                 n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
+    }
+
+    // Hard show/hide a static node with no ramp: cancel any in-flight fade, snap to the resting
+    // transparency (opaque, or the ghost-dim for a dead base) when shown, and set Visible directly.
+    private void ShowNodeInstant(Node3D n, bool show)
+    {
+        _fades.Remove(n);
+        if (show)
+            DimNode(n, RestTransparencyFor(n));
+        n.Visible = show;
+    }
+
+    // Arm the warp-settle window. The flash is up (held); TickWarpSettle clears it once the destination
+    // sector's rock inserts have quiesced. For an already-resident sector no inserts arrive, so it
+    // settles at WarpMinHold (a brief cover); a first-visit sector streams rocks in and holds until they
+    // stop. Seeded so a sector with no rocks (or already loaded) doesn't wait on a phantom insert.
+    private void BeginWarpSettle()
+    {
+        double now = Time.GetTicksMsec() / 1000.0;
+        _warpStartSec = now;
+        _warpLastRockSec = now; // treat "no rock yet" as just-loaded; a real incoming rock pushes it out
+        _warpSettling = true;
+    }
+
+    // Advance the warp-settle window each frame; fire WarpSettled (clears the flash) when the destination
+    // is loaded. Loaded == held at least WarpMinHold AND no rock for the local sector for WarpQuietDebounce,
+    // or WarpMaxHold as a hard safety cap so the flash can never stick.
+    private void TickWarpSettle()
+    {
+        if (!_warpSettling)
+            return;
+        double now = Time.GetTicksMsec() / 1000.0;
+        double held = now - _warpStartSec;
+        bool quiet = held >= WarpMinHold && (now - _warpLastRockSec) >= WarpQuietDebounce;
+        if (quiet || held >= WarpMaxHold)
+        {
+            _warpSettling = false;
+            WarpSettled?.Invoke();
+        }
     }
 
     // Drop a transient, self-freeing effect into the world at a sector-local position. Tagged
@@ -1466,7 +1540,19 @@ public partial class WorldRenderer : Node3D
         _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
         node.SetMeta("shadowRadius", row.Radius); // extends its shadow-caster reach (big rocks cast from farther)
-        SetNodeSectorFading(node, row.SectorId);
+
+        // A rock landing in the sector we just warped into arrives UNDER the held WarpFlash: snap it in
+        // (no fade) and push the settle window out so the flash holds until the field stops streaming.
+        if (_warpSettling && row.SectorId == _localSector)
+        {
+            _warpLastRockSec = Time.GetTicksMsec() / 1000.0;
+            node.SetMeta("sector", (int)row.SectorId);
+            ShowNodeInstant(node, row.SectorId == ViewSector);
+        }
+        else
+        {
+            SetNodeSectorFading(node, row.SectorId);
+        }
     }
 
 
@@ -1550,7 +1636,9 @@ public partial class WorldRenderer : Node3D
                 {
                     _localSector = newRow.SectorId;
                     ApplySectorEnv(newRow.SectorId);
-                    RefreshSectorVisibility();
+                    RefreshSectorVisibility(instant: true); // hard swap — the flash covers it
+                    BeginWarpSettle();
+                    Warped?.Invoke(); // raise (and HOLD) the flash; released once the sector loads
                 }
                 break;
             case RemoteShip rs:
@@ -1904,8 +1992,10 @@ public partial class WorldRenderer : Node3D
                 node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
         }
 
-        // Quick discover/warp fade for static geometry (asteroids + bases).
+        // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that
+        // holds the WarpFlash until the warped-into sector's rocks have finished streaming in.
         AdvanceFades(delta);
+        TickWarpSettle();
 
         // Re-select the dust shadow-casters by camera distance (throttled to real camera movement).
         UpdateShadowOccluders();

@@ -3,15 +3,20 @@ using StellarAllegiance.Shared;
 
 namespace SimServer.Content;
 
-// One garrison (base) marker on a map thumbnail: which team owns it and its sector-local x/z.
-// Team 0/1 today; 0xFF is reserved for a future neutral/unclaimed garrison (none exist yet).
-public sealed record MapCatalogBase(byte Team, float X, float Z);
+// One garrison (base) marker on a map thumbnail: only which team owns it — the sector-local
+// position is intentionally omitted (randomized per match, kept secret; the preview highlights the
+// whole sector by team). Team 0/1 today; 0xFF is reserved for a future neutral garrison (none yet).
+public sealed record MapCatalogBase(byte Team);
 
 // One sector of a map thumbnail: its id, radius, display name, garrison markers, and optional 2D
 // map-diagram position (MapX/MapY valid when HasMapPos; else the client auto-lays it out).
 public sealed record MapCatalogSector(
     uint Id, float Radius, string Name, IReadOnlyList<MapCatalogBase> Bases,
     float MapX, float MapY, bool HasMapPos);
+
+// One aleph gate link on a map thumbnail: a bidirectional sector-id pair, drawn as a connecting
+// line between the two sector nodes in the lobby preview.
+public sealed record MapCatalogLink(uint A, uint B);
 
 // A playable map as advertised to clients for the in-game lobby's sector pane + map picker: the
 // human name, derived metadata (mode/size/home-sector label/garrison count), and a light
@@ -23,7 +28,8 @@ public sealed record MapCatalogEntry(
     string SizeLabel,
     string SectorLabel,
     int GarrisonCount,
-    IReadOnlyList<MapCatalogSector> Sectors);
+    IReadOnlyList<MapCatalogSector> Sectors,
+    IReadOnlyList<MapCatalogLink> Links);
 
 // Projects the server's available maps into the client-facing catalog. Most map metadata isn't
 // authored in the map YAML (only name + sector radii), so mode is read from an optional MapDef.Mode
@@ -57,7 +63,7 @@ public static class MapCatalog
                     string.IsNullOrWhiteSpace(s.Name) ? $"SECTOR {s.Id:00}" : s.Name,
                     world.Bases
                         .Where(b => b.SectorId == s.Id)
-                        .Select(b => new MapCatalogBase(b.Team, MathF.Round(b.Pos.X, 1), MathF.Round(b.Pos.Z, 1)))
+                        .Select(b => new MapCatalogBase(b.Team))
                         .ToList(),
                     s.MapX, s.MapY, s.HasMapPos))
                 .ToList();
@@ -66,13 +72,25 @@ public static class MapCatalog
             string mode = string.IsNullOrWhiteSpace(map.Mode) ? "CONQUEST" : map.Mode!.Trim().ToUpperInvariant();
             string sectorLabel = (sectors.Count > 0 ? sectors[0].Name : "—").ToUpperInvariant();
 
+            // Derive links from the resolved aleph gates (same source the public-lobby feed uses),
+            // deduped to one edge per sector pair — this covers authored links and the default ring.
+            var links = new List<MapCatalogLink>();
+            var seenLinks = new HashSet<(uint, uint)>();
+            foreach (var g in world.Alephs)
+            {
+                var edge = g.SectorId < g.DestSectorId ? (g.SectorId, g.DestSectorId) : (g.DestSectorId, g.SectorId);
+                if (seenLinks.Add(edge))
+                    links.Add(new MapCatalogLink(edge.Item1, edge.Item2));
+            }
+
             list.Add(new MapCatalogEntry(
                 map.Name!.Trim(),
                 mode,
                 SizeLabel(maxRadius),
                 sectorLabel,
                 world.Bases.Count,
-                sectors));
+                sectors,
+                links));
         }
         return list;
     }
@@ -89,8 +107,9 @@ public static class MapCatalog
 
     // Shallow clone of the world config. ApplyTo reassigns Sectors to a new list, so a fresh list
     // copy is enough; every other field is a value type carried straight across. Keep in sync if
-    // WorldConfig gains fields that World construction reads.
-    private static WorldConfig Clone(WorldConfig w) => new()
+    // WorldConfig gains fields that World construction reads. Public so the runtime map-switch path
+    // (Program's buildWorld closure) can clone the pristine config before ApplyTo, same as Build does.
+    public static WorldConfig Clone(WorldConfig w) => new()
     {
         Id = w.Id,
         SectorScale = w.SectorScale,

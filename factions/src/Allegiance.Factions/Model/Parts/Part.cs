@@ -7,7 +7,10 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public abstract record Part : Buildable
 {
+    /// <summary>Mass this part adds when mounted, counted against the hull's payload capacity.</summary>
     public double Mass { get; set; }
+
+    /// <summary>Detectability this part adds to the mounting hull/station.</summary>
     public double Signature { get; set; }
 
     /// <summary>Which hull slot this part occupies.</summary>

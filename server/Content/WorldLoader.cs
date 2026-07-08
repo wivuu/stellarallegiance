@@ -87,6 +87,10 @@ public sealed class WorldDef
     /// </summary>
     public double? SignatureMinMult { get; set; }
 
+    /// <summary>
+    /// Clamp rails on the composed signature: the effective value never leaves
+    /// [(base+bias)×min, (base+bias)×max]. Null/omitted -&gt; 0.1 / 8.0. Server-side only.
+    /// </summary>
     public double? SignatureMaxMult { get; set; }
 
     /// <summary>
@@ -132,6 +136,7 @@ public sealed class WorldAiDef
     /// <summary>AI decisions per second (steering still re-runs every sim tick).</summary>
     public double? BrainHz { get; set; }
 
+    /// <summary>Maximum number of PIG drones alive per team at once.</summary>
     public int? MaxPigsPerTeam { get; set; }
 
     /// <summary>Seconds after a squad wipe before the next squad launches.</summary>
@@ -149,24 +154,47 @@ public sealed class WorldAiDef
     /// <summary>Re-roll a patrol waypoint once within this distance of it.</summary>
     public double? PatrolArrive { get; set; }
 
+    /// <summary>Detection range at which a pig acquires targets, world units.</summary>
     public double? RadarRange { get; set; }
+
+    /// <summary>Maximum distance at which a pig opens fire, world units.</summary>
     public double? FireRange { get; set; }
+
+    /// <summary>Preferred stand-off distance from a bombing target, world units.</summary>
     public double? Standoff { get; set; }
 
     /// <summary>Half-angle aim cone (degrees) inside which a pig opens fire.</summary>
     public double? AimDeg { get; set; }
 
+    /// <summary>Baseline steering turn-rate gain, before the per-slot aiming-skill spread.</summary>
     public double? TurnGain { get; set; }
+
+    /// <summary>Lookahead distance used by obstacle-avoidance steering, world units.</summary>
     public double? AvoidLookahead { get; set; }
+
+    /// <summary>Extra clearance margin kept around obstacles during avoidance, world units.</summary>
     public double? AvoidMargin { get; set; }
 
     // Threat-scoring weights (target priority).
+    /// <summary>Weight on aim-cone alignment in the target-priority threat score.</summary>
     public double? ThreatAimWeight { get; set; }
+
+    /// <summary>Weight on proximity in the target-priority threat score.</summary>
     public double? ThreatCloseWeight { get; set; }
+
+    /// <summary>Weight on incoming damage dealt in the target-priority threat score.</summary>
     public double? ThreatDmgWeight { get; set; }
+
+    /// <summary>Score margin a new target must beat the current one by before a pig switches.</summary>
     public double? ThreatSwitchMargin { get; set; }
+
+    /// <summary>Weight on threat to the home base in the target-priority threat score.</summary>
     public double? ThreatBaseWeight { get; set; }
+
+    /// <summary>Radius around the base within which an enemy counts as threatening it, world units.</summary>
     public double? BaseThreatRadius { get; set; }
+
+    /// <summary>Extra threat score added for Bomber-class enemies.</summary>
     public double? ThreatBomberBonus { get; set; }
 
     /// <summary>Seconds before a pig re-rolls its wander sector.</summary>
@@ -176,20 +204,38 @@ public sealed class WorldAiDef
     public double? BomberRespawnSeconds { get; set; }
 
     // Per-slot aiming skill spread: lead accuracy, turn snappiness, residual wobble.
+    /// <summary>Minimum per-pig turn-rate gain in the aiming-skill spread.</summary>
     public double? TurnGainMin { get; set; }
+
+    /// <summary>Maximum per-pig turn-rate gain in the aiming-skill spread.</summary>
     public double? TurnGainMax { get; set; }
+
+    /// <summary>Minimum fraction of full firing-solution lead a pig applies, in the aiming-skill spread.</summary>
     public double? LeadFracMin { get; set; }
+
+    /// <summary>Maximum fraction of full firing-solution lead a pig applies, in the aiming-skill spread.</summary>
     public double? LeadFracMax { get; set; }
+
+    /// <summary>Maximum random aim-wobble amplitude, radians.</summary>
     public double? AimWobbleMaxRad { get; set; }
+
+    /// <summary>Rate at which the aim-wobble oscillates.</summary>
     public double? AimWobbleRate { get; set; }
 
     /// <summary>Extra spacing between a pig's missile launches (on top of the rack), seconds.</summary>
     public double? MissileHoldSeconds { get; set; }
 
     // Evasive side-thruster "juking".
+    /// <summary>Enemy distance within which a pig starts evasive juking, world units.</summary>
     public double? JukeRange { get; set; }
+
+    /// <summary>Seconds between juke direction changes.</summary>
     public double? JukePeriodSeconds { get; set; }
+
+    /// <summary>Minimum juke side-thrust amplitude fraction.</summary>
     public double? JukeAmpMin { get; set; }
+
+    /// <summary>Maximum juke side-thrust amplitude fraction.</summary>
     public double? JukeAmpMax { get; set; }
 }
 
@@ -199,16 +245,26 @@ public sealed class WorldAiDef
 /// </summary>
 public sealed class WorldCombatDef
 {
+    /// <summary>Damage scale for ship collisions with static geometry (asteroids, bases).</summary>
     public double? CollisionDamageScale { get; set; }
+
+    /// <summary>Damage scale for ship-vs-ship collisions.</summary>
     public double? ShipShipDamageScale { get; set; }
+
+    /// <summary>Maximum damage a single collision can deal, capped regardless of closing speed.</summary>
     public double? MaxCollisionDamage { get; set; }
 
     /// <summary>Below this closing speed a collision is a harmless kiss (bounce, no damage).</summary>
     public double? CollisionDamageMinSpeed { get; set; }
 
     // Outside-the-sector-boundary erosion damage: base DPS + ramp per unit beyond, capped.
+    /// <summary>Base damage-per-second applied to a ship outside the sector boundary.</summary>
     public double? BoundaryBaseDps { get; set; }
+
+    /// <summary>Additional damage-per-second added per world unit beyond the sector boundary.</summary>
     public double? BoundaryRampDps { get; set; }
+
+    /// <summary>Maximum damage-per-second the boundary erosion can ever deal.</summary>
     public double? BoundaryMaxDps { get; set; }
 }
 
@@ -270,7 +326,10 @@ public sealed class WorldSeedingDef
     /// <summary>Field rocks per unit² of disc footprint (at asteroid-density 1).</summary>
     public double? FieldAreaDensity { get; set; }
 
+    /// <summary>Minimum size of a field asteroid, world units.</summary>
     public double? FieldRockMin { get; set; }
+
+    /// <summary>Maximum size of a field asteroid, world units.</summary>
     public double? FieldRockMax { get; set; }
 
     /// <summary>Belt inner radius / sector radius.</summary>
@@ -285,15 +344,23 @@ public sealed class WorldSeedingDef
     /// <summary>Belt rocks per unit² of annulus (at asteroid-density 1).</summary>
     public double? BeltAreaDensity { get; set; }
 
+    /// <summary>Minimum size of a belt asteroid, world units.</summary>
     public double? BeltRockMin { get; set; }
+
+    /// <summary>Maximum size of a belt asteroid, world units.</summary>
     public double? BeltRockMax { get; set; }
 
     /// <summary>Rock size power-law skew (&gt; 1 biases toward the small end).</summary>
     public double? RockSizeSkew { get; set; }
 
     // Team garrison (home base) placement as a fraction of its sector's radius, + vertical jitter.
+    /// <summary>Inner radius of the garrison placement band, as a fraction of the sector radius.</summary>
     public double? BaseInnerFrac { get; set; }
+
+    /// <summary>Outer radius of the garrison placement band, as a fraction of the sector radius.</summary>
     public double? BaseOuterFrac { get; set; }
+
+    /// <summary>Vertical (Y-axis) random jitter applied to garrison placement, world units.</summary>
     public double? BaseYJitter { get; set; }
 }
 

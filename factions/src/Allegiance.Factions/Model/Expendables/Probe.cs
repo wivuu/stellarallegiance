@@ -3,11 +3,19 @@ namespace Allegiance.Factions.Model;
 /// <summary>A deployable sensor / turret probe. Mirrors the C++ <c>DataProbeTypeIGC</c> (igc.h:2003).</summary>
 public record Probe : Expendable
 {
+    /// <summary>Detection range of the probe's onboard scanner, in u.</summary>
     public double ScannerRange { get; set; }
 
+    /// <summary>Duration of an armed probe's firing burst, in seconds.</summary>
     public double BurstTime { get; set; }
+
+    /// <summary>Aim randomization applied to the probe's fired shots.</summary>
     public double Dispersion { get; set; }
+
+    /// <summary>Hit-chance/aim precision of the probe's turret fire.</summary>
     public double Accuracy { get; set; }
+
+    /// <summary>Number of shots the armed probe's turret carries.</summary>
     public int Ammo { get; set; }
 
     /// <summary>Projectile fired by an armed probe; references a projectile id.</summary>

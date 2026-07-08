@@ -9,8 +9,13 @@ public record Weapon : Part
     /// <summary>Duration of a burst, in seconds (<c>dtimeBurst</c>).</summary>
     public double BurstTime { get; set; }
 
+    /// <summary>Energy consumed by the ship each time this weapon fires.</summary>
     public double EnergyPerShot { get; set; }
+
+    /// <summary>Random aiming spread applied to each shot, in radians.</summary>
     public double Dispersion { get; set; }
+
+    /// <summary>Rounds of ammo consumed per shot.</summary>
     public int AmmoPerShot { get; set; }
 
     /// <summary>The projectile this weapon fires; references a projectile id.</summary>
@@ -29,6 +34,8 @@ public record Weapon : Part
 
     /// <summary>Tick-domain ballistics, authored directly to avoid seconds→tick rounding drift.</summary>
     public uint FireIntervalTicks { get; set; }
+
+    /// <summary>How many ticks a fired projectile survives before expiring.</summary>
     public uint ProjectileLifeTicks { get; set; }
 
     /// <summary>True if this weapon's shots/warheads apply damage to bases (station siege ordnance).</summary>

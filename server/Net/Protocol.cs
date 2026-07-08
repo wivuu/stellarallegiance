@@ -1144,14 +1144,19 @@ public static class Protocol
                     w.Write(sec.MapX);
                     w.Write(sec.MapY);
                 }
+                // Only the owning team per garrison — the sector-local position is intentionally
+                // not transmitted (secret; the preview highlights the whole sector by team).
                 w.Write((byte)Math.Min(sec.Bases.Count, 255));
                 for (int b = 0; b < sec.Bases.Count && b < 255; b++)
-                {
-                    var bs = sec.Bases[b];
-                    w.Write(bs.Team); // 0/1; 0xFF reserved for a future neutral garrison
-                    w.Write(bs.X);
-                    w.Write(bs.Z);
-                }
+                    w.Write(sec.Bases[b].Team); // 0/1; 0xFF reserved for a future neutral garrison
+            }
+            // Aleph gate topology as bidirectional sector-id pairs; the client draws these as the
+            // lines connecting sector nodes in the lobby preview (GameNetClient.ApplyMapList).
+            w.Write((byte)Math.Min(m.Links.Count, 255));
+            for (int l = 0; l < m.Links.Count && l < 255; l++)
+            {
+                w.Write(m.Links[l].A);
+                w.Write(m.Links[l].B);
             }
         }
         w.Flush();
