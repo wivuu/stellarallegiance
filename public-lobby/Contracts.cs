@@ -23,7 +23,11 @@ public record RegisterRequest(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
-    LobbyRosterEntry[]? Roster = null
+    LobbyRosterEntry[]? Roster = null,
+    // True when the server enforces a shared-secret password (--secret/SIM_SECRET). Advertised so the
+    // browser can flag locked servers and prompt for the passphrase BEFORE dialing. Not the secret
+    // itself — just whether one is required.
+    bool Protected = false
 );
 
 // Periodic liveness ping. Carries the current player count, capacity, and game state so the
@@ -56,7 +60,10 @@ public record ServerEntry(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
-    IReadOnlyList<LobbyRosterEntry>? Roster = null
+    IReadOnlyList<LobbyRosterEntry>? Roster = null,
+    // Mirrors RegisterRequest.Protected: whether this server requires a shared-secret password.
+    // Serialized to SSE / GET /servers so the browser can render a lock and gate the join.
+    bool Protected = false
 );
 
 // A single ICE server entry, mirroring the WebRTC RTCIceServer shape. Urls is one or more

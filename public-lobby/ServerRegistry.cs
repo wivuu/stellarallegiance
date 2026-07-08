@@ -80,7 +80,8 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             State: NormalizeState(req.State),
             ProtocolVersion: Math.Max(0, req.ProtocolVersion),
             HostedBy: NormalizeHostedBy(req.HostedBy),
-            Roster: SanitizeRoster(req.Roster, req.MaxPlayers)
+            Roster: SanitizeRoster(req.Roster, req.MaxPlayers),
+            Protected: req.Protected
         );
 
         // 256-bit capability secret handed back only in the registration response (never broadcast).

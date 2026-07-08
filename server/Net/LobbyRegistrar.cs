@@ -46,6 +46,7 @@ public sealed class LobbyRegistrar
     private readonly string? _publicEndpoint;
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
     private readonly string? _hostedBy; // optional operator label ("hosted by …")
+    private readonly bool _protected; // true when a shared-secret password gates joins
 
     private string? _sessionId;
     private string? _secret; // per-session capability minted by the lobby at registration
@@ -61,7 +62,8 @@ public sealed class LobbyRegistrar
         int port,
         string? publicEndpoint,
         int maxPlayers,
-        string? hostedBy
+        string? hostedBy,
+        bool @protected
     )
     {
         _hub = hub;
@@ -71,11 +73,12 @@ public sealed class LobbyRegistrar
         _publicEndpoint = publicEndpoint;
         _maxPlayers = maxPlayers;
         _hostedBy = hostedBy;
+        _protected = @protected;
     }
 
     // Builds a registrar from the environment, or returns null when no public name is set
     // (the server stays private). Logs the decision either way.
-    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort)
+    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort, bool @protected)
     {
         var name = (Environment.GetEnvironmentVariable("SIM_PUBLIC_NAME") ?? "").Trim();
         if (name.Length == 0)
@@ -123,7 +126,8 @@ public sealed class LobbyRegistrar
             port,
             endpoint.Length == 0 ? null : endpoint,
             maxPlayers,
-            hostedBy.Length == 0 ? null : hostedBy
+            hostedBy.Length == 0 ? null : hostedBy,
+            @protected
         );
     }
 
@@ -202,6 +206,7 @@ public sealed class LobbyRegistrar
                     protocolVersion = (int)Protocol.Version,
                     hostedBy = _hostedBy,
                     roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
+                    @protected = _protected,
                 },
                 ct
             );

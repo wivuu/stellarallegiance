@@ -62,6 +62,10 @@ public partial class ConnectionManager : Node
 	// Human-readable failure detail from the last NotifyFailed (empty for silent drops).
 	public string FailReason { get; private set; } = "";
 
+	// True when the last failure was the server refusing our shared secret ("bad secret"). The failed
+	// connecting modal reads this to offer a password re-prompt instead of a generic retry.
+	public bool AuthRejected { get; private set; }
+
 	// What the connecting modal shows in the server well: a friendly name (lobby entry
 	// name, else the bare host) plus the technical address line.
 	public string ServerDisplayName { get; private set; } = "";
@@ -282,6 +286,7 @@ public partial class ConnectionManager : Node
 		Add(ConnectStage.Auth, "AUTHENTICATE");
 		Add(ConnectStage.Sync, "SYNC WORLD");
 		FailReason = "";
+		AuthRejected = false;
 		_stages[0].State = StageState.Active;
 		_stages[0].StartMs = Time.GetTicksMsec();
 		CurrentStage = ConnectStage.Locate;
@@ -355,6 +360,7 @@ public partial class ConnectionManager : Node
 	public void NotifyFailed(string reason)
 	{
 		FailReason = reason;
+		AuthRejected = reason == "bad secret";
 		GD.PrintErr($"[ConnectionManager] connect failed: {reason}");
 		// A failed redial while auto-reconnecting settles the attempt and lets the _Process
 		// driver pace the next one — same as NotifyDisconnected's Reconnecting branch.
@@ -368,7 +374,7 @@ public partial class ConnectionManager : Node
 		FailCurrentStage();
 	}
 
-	public void NotifyDisconnected()
+	public void NotifyDisconnected(string reason = "")
 	{
 		// An intentional Leave() already returned us to the address screen and tore the socket
 		// down; the resulting (deferred) socket-closed callback must NOT flip us to a "Server
@@ -396,6 +402,12 @@ public partial class ConnectionManager : Node
 			GD.Print("[ConnectionManager] connection lost — auto-reconnecting");
 			return;
 		}
+		// A pre-Welcome close (never reached Connected): a real connect failure. Carry the server's
+		// close reason so the failed modal can tailor its message — notably "bad secret", which lets
+		// it re-prompt for the password rather than showing a generic drop.
+		if (!string.IsNullOrEmpty(reason))
+			FailReason = reason;
+		AuthRejected = reason == "bad secret";
 		State = ConnState.Failed;
 		FailCurrentStage();
 	}

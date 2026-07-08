@@ -81,6 +81,10 @@ public partial class UiShowcase : Control
                 SettingsDialog.Open(this);
             else if (openModal == "escape")
                 EscapeMenu.Open(this, EscapeMenu.Context.Browser);
+            else if (openModal == "password")
+                ServerPasswordModal.Open(this, "IRON VEIL BASTION", _ => { });
+            else if (openModal == "password-error")
+                ServerPasswordModal.Open(this, "IRON VEIL BASTION", _ => { }, error: true);
             var shotTimer = GetTree().CreateTimer(0.2);
             shotTimer.Timeout += () =>
             {
