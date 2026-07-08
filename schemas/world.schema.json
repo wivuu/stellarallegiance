@@ -1,0 +1,615 @@
+{
+  "type": [
+    "object",
+    "null"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Always 0 (singleton)."
+    },
+    "sector-scale": {
+      "type": "number",
+      "description": "Multiplier on authored per-sector radii."
+    },
+    "sector-radius": {
+      "type": "number",
+      "description": "The single default sector radius (\u00D7 SectorScale) for any sector that omits its own radius. One shared default for every sector (no per-sector-id defaults). 0/omitted -\u003E the sim\u0027s World.DefaultSectorRadius fallback; a map may override via its top-level \u0060sector-radius\u0060."
+    },
+    "asteroid-density": {
+      "type": "number",
+      "description": "Asteroids per unit of normalized sector volume."
+    },
+    "debug-freeze-brain": {
+      "type": "boolean",
+      "description": "Skip the per-drone AI decision loop (benchmarking)."
+    },
+    "debug-no-fire": {
+      "type": "boolean",
+      "description": "Force every ship\u0027s firing input false (benchmarking)."
+    },
+    "fog-of-war": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Per-server fog-of-war toggle. Null/omitted -\u003E on at projection (default true); when off, behavior/bytes are identical to no-fog. Rides the wire (WorldConfig.FogOfWar)."
+    },
+    "fog-eyeball-multiplier": {
+      "type": "number",
+      "description": "Outer \u0022eyeball\u0022 tier multiplier on a ship\u0027s vision-sphere radius (mesh streams but isn\u0027t radar-detected). 0/omitted -\u003E 1.5 at projection. Server-side only \u2014 does NOT ride the wire."
+    },
+    "fire-signature-boost": {
+      "type": "number",
+      "description": "Radar-signature multiplier applied to a ship the instant it fires (guns or missiles), decaying linearly back to 1x over FireSignatureWindow. 0/omitted -\u003E 2.5 at projection; author 1.0 to disable. Server-side only \u2014 does NOT ride the wire."
+    },
+    "fire-signature-window": {
+      "type": "number",
+      "description": "Seconds after the last shot over which FireSignatureBoost decays back to 1x. 0/omitted -\u003E 4.0 at projection. Server-side only \u2014 does NOT ride the wire."
+    },
+    "boost-signature-mult": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Radar-signature multiplier at full afterburner, ramped by the ship\u0027s live AbPower (0..1). Null/omitted -\u003E 1.0 (neutral). Server-side only \u2014 does NOT ride the wire."
+    },
+    "shield-signature-mult": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Radar-signature multiplier while a hull has an EQUIPPED shield (ShieldCapacity \u003E 0), regardless of the current pool. Null/omitted -\u003E 1.0 (neutral). Server-side only."
+    },
+    "dust-signature-mult": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Radar-signature multiplier inside a dust cloud, scaled by local density (\u003C1 = hiding in dust makes a ship quieter; stacks with the sightline attenuation). Null/omitted -\u003E 1.0 (neutral). Server-side only."
+    },
+    "signature-min-mult": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Clamp rails on the composed signature: the effective value never leaves [(base\u002Bbias)\u00D7min, (base\u002Bbias)\u00D7max]. Null/omitted -\u003E 0.1 / 8.0. Server-side only."
+    },
+    "signature-max-mult": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Clamp rails on the composed signature: the effective value never leaves [(base\u002Bbias)\u00D7min, (base\u002Bbias)\u00D7max]. Null/omitted -\u003E 0.1 / 8.0. Server-side only."
+    },
+    "fog-ghost-timeout": {
+      "type": "number",
+      "description": "Seconds a lost-contact ship ghost lingers before expiring on its own (re-scout / radar re-detection still clear it earlier; an eyeball glimpse re-stamps it). 0/omitted -\u003E 120 at projection. Server-side only \u2014 does NOT ride the wire."
+    },
+    "aleph-radar-signature": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Radar signature of a warp gate (aleph) for fog-of-war discovery. Null/omitted -\u003E 1.4 at projection. Server-side only \u2014 never streamed."
+    },
+    "rock-radar-signature": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Radar signature of an asteroid for fog-of-war discovery. Null/omitted -\u003E 2.0 at projection. Server-side only \u2014 never streamed."
+    },
+    "ai": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "brain-hz": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "AI decisions per second (steering still re-runs every sim tick)."
+        },
+        "max-pigs-per-team": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Maximum number of PIG drones alive per team at once."
+        },
+        "squad-delay-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds after a squad wipe before the next squad launches."
+        },
+        "aggro-window-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Aggression memory, seconds."
+        },
+        "spawn-stagger-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Gap between squad-mate launches, seconds."
+        },
+        "patrol-reach-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Patrol waypoints stay within this fraction of the sector radius."
+        },
+        "patrol-arrive": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Re-roll a patrol waypoint once within this distance of it."
+        },
+        "radar-range": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Detection range at which a pig acquires targets, world units."
+        },
+        "fire-range": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum distance at which a pig opens fire, world units."
+        },
+        "standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Preferred stand-off distance from a bombing target, world units."
+        },
+        "aim-deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Half-angle aim cone (degrees) inside which a pig opens fire."
+        },
+        "turn-gain": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Baseline steering turn-rate gain, before the per-slot aiming-skill spread."
+        },
+        "avoid-lookahead": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Lookahead distance used by obstacle-avoidance steering, world units."
+        },
+        "avoid-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra clearance margin kept around obstacles during avoidance, world units."
+        },
+        "threat-aim-weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Weight on aim-cone alignment in the target-priority threat score."
+        },
+        "threat-close-weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Weight on proximity in the target-priority threat score."
+        },
+        "threat-dmg-weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Weight on incoming damage dealt in the target-priority threat score."
+        },
+        "threat-switch-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Score margin a new target must beat the current one by before a pig switches."
+        },
+        "threat-base-weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Weight on threat to the home base in the target-priority threat score."
+        },
+        "base-threat-radius": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Radius around the base within which an enemy counts as threatening it, world units."
+        },
+        "threat-bomber-bonus": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra threat score added for Bomber-class enemies."
+        },
+        "wander-period-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds before a pig re-rolls its wander sector."
+        },
+        "bomber-respawn-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Cooldown before a team\u0027s bomber relaunches, seconds."
+        },
+        "turn-gain-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum per-pig turn-rate gain in the aiming-skill spread."
+        },
+        "turn-gain-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum per-pig turn-rate gain in the aiming-skill spread."
+        },
+        "lead-frac-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum fraction of full firing-solution lead a pig applies, in the aiming-skill spread."
+        },
+        "lead-frac-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum fraction of full firing-solution lead a pig applies, in the aiming-skill spread."
+        },
+        "aim-wobble-max-rad": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum random aim-wobble amplitude, radians."
+        },
+        "aim-wobble-rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Rate at which the aim-wobble oscillates."
+        },
+        "missile-hold-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra spacing between a pig\u0027s missile launches (on top of the rack), seconds."
+        },
+        "juke-range": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Enemy distance within which a pig starts evasive juking, world units."
+        },
+        "juke-period-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds between juke direction changes."
+        },
+        "juke-amp-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum juke side-thrust amplitude fraction."
+        },
+        "juke-amp-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum juke side-thrust amplitude fraction."
+        }
+      },
+      "description": "PIG drone AI tuning (server-side only \u2014 never streamed). Null -\u003E stock values.",
+      "additionalProperties": false
+    },
+    "combat": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "collision-damage-scale": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Damage scale for ship collisions with static geometry (asteroids, bases)."
+        },
+        "ship-ship-damage-scale": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Damage scale for ship-vs-ship collisions."
+        },
+        "max-collision-damage": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum damage a single collision can deal, capped regardless of closing speed."
+        },
+        "collision-damage-min-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Below this closing speed a collision is a harmless kiss (bounce, no damage)."
+        },
+        "boundary-base-dps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Base damage-per-second applied to a ship outside the sector boundary."
+        },
+        "boundary-ramp-dps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Additional damage-per-second added per world unit beyond the sector boundary."
+        },
+        "boundary-max-dps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum damage-per-second the boundary erosion can ever deal."
+        }
+      },
+      "description": "Collision-damage / boundary-hazard tuning (server-side only). Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "mechanics": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "aleph-trigger-radius": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Distance from a gate mouth at which a ship warps."
+        },
+        "warp-exit-offset": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How far beyond the destination mouth a warping ship exits."
+        },
+        "warp-exit-jitter": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Per-axis random spread on the warp-exit cone."
+        },
+        "paycheck-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds between flat per-team credit paychecks."
+        },
+        "dock-radius-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Dock when within this fraction of your OWN base radius."
+        },
+        "launch-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Catapult speed out of the docking-exit hardpoint on spawn, u/s."
+        },
+        "rescue-radius-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Pod pickup distance as a multiple of the ship collision radius."
+        },
+        "pod-eject-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Escape-pod initial fling speed, u/s."
+        },
+        "pod-eject-spin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Escape-pod initial tumble, rad/s."
+        },
+        "reconnect-grace-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds a dropped client\u0027s ship is held for reconnect reclaim."
+        },
+        "ended-to-lobby-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds after match end before the server returns to the lobby."
+        }
+      },
+      "description": "Gate/docking/pod/economy/match-flow tuning (server-side only). Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "seeding": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "field-fill-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Field disc radius as a fraction of the sector radius."
+        },
+        "field-flatten": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Field disc half-thickness as a fraction of its radius (shallow)."
+        },
+        "field-area-density": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Field rocks per unit\u00B2 of disc footprint (at asteroid-density 1)."
+        },
+        "field-rock-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum size of a field asteroid, world units."
+        },
+        "field-rock-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum size of a field asteroid, world units."
+        },
+        "belt-inner-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Belt inner radius / sector radius."
+        },
+        "belt-outer-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Belt outer radius / sector radius."
+        },
+        "belt-flatten": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Belt half-thickness / sector radius (shallow)."
+        },
+        "belt-area-density": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Belt rocks per unit\u00B2 of annulus (at asteroid-density 1)."
+        },
+        "belt-rock-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum size of a belt asteroid, world units."
+        },
+        "belt-rock-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum size of a belt asteroid, world units."
+        },
+        "rock-size-skew": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Rock size power-law skew (\u003E 1 biases toward the small end)."
+        },
+        "base-inner-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Inner radius of the garrison placement band, as a fraction of the sector radius."
+        },
+        "base-outer-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Outer radius of the garrison placement band, as a fraction of the sector radius."
+        },
+        "base-y-jitter": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Vertical (Y-axis) random jitter applied to garrison placement, world units."
+        }
+      },
+      "description": "Map-seeding shape tuning: asteroid fields/belts \u002B base placement. Null -\u003E stock.",
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

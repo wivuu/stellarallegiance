@@ -1,6 +1,6 @@
-using Allegiance.Factions.Cli;
 using Allegiance.Factions.Model;
 using Allegiance.Factions.Resolution;
+using Allegiance.Factions.Schema;
 using Allegiance.Factions.Serialization;
 using Allegiance.Factions.Validation;
 
@@ -186,7 +186,7 @@ static int Schema(string[] args)
     // schemas rather than a fragment reference into the core schema.
     if (output is null)
     {
-        Console.WriteLine(JsonSchemaGenerator.Generate(typeof(Core)));
+        Console.WriteLine(YamlJsonSchema.Generate(typeof(Core)));
         return 0;
     }
 
@@ -198,9 +198,9 @@ static int Schema(string[] args)
     var factionPath = Path.Combine(siblingDir, "allegiance-faction.schema.json");
     var manifestPath = Path.Combine(siblingDir, "allegiance-manifest.schema.json");
 
-    WriteSchema(output, JsonSchemaGenerator.Generate(typeof(Core)));
-    WriteSchema(factionPath, JsonSchemaGenerator.Generate(typeof(Faction)));
-    WriteSchema(manifestPath, JsonSchemaGenerator.Generate(typeof(Manifest)));
+    WriteSchema(output, YamlJsonSchema.Generate(typeof(Core)));
+    WriteSchema(factionPath, YamlJsonSchema.Generate(typeof(Faction)));
+    WriteSchema(manifestPath, YamlJsonSchema.Generate(typeof(Manifest)));
     return 0;
 
     static void WriteSchema(string path, string json)

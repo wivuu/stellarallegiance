@@ -7,6 +7,7 @@ namespace Allegiance.Factions.Serialization;
 /// </summary>
 public record Manifest
 {
+    /// <summary>Content bundle version string (freeform, e.g. a date-stamped tag).</summary>
     public string? Version { get; set; }
 
     /// <summary>Shared-catalog files (tech, hulls, parts, stations, developments, drones, expendables).</summary>

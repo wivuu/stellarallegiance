@@ -1,0 +1,290 @@
+{
+  "type": [
+    "object",
+    "null"
+  ],
+  "properties": {
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Required human-facing map name (also the selection key, case-insensitive)."
+    },
+    "mode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional game-mode label shown in the lobby\u0027s map picker (e.g. \u0022Conquest\u0022); purely descriptive, defaults to \u0022CONQUEST\u0022 when omitted."
+    },
+    "sector-scale": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional map-level override of the world\u0027s sector-scale multiplier; omitted inherits the loaded world.yaml value."
+    },
+    "asteroid-density": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional map-level override of the world\u0027s asteroid density; omitted inherits the loaded world.yaml value."
+    },
+    "sector-radius": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Default sector radius (\u00D7 sector-scale) for any sector that omits its own radius; omitted inherits the world\u0027s sector-radius."
+    },
+    "links": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "integer"
+        }
+      },
+      "description": "Gate (aleph) topology as bidirectional sector-id pairs, e.g. [[0, 1], [1, 2]]; omitted links sectors in a ring by id."
+    },
+    "sectors": {
+      "type": "array",
+      "items": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "This sector\u0027s numeric id, referenced by garrison and links."
+          },
+          "radius": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Absolute radius in world units; omitted falls back to the map or world sector-radius \u00D7 scale."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional display name shown in the sector overview and lobby preview."
+          },
+          "garrison": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "team": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "The team id (0-based) that owns this garrison / home base."
+              }
+            },
+            "description": "Optional team garrison (home base) in this sector; the set of garrisons across the map decides how many teams it supports.",
+            "additionalProperties": false
+          },
+          "asteroids": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Asteroid distribution shape: \u0022field\u0022 (disc), \u0022belt\u0022 (ring), or \u0022none\u0022; omitted defaults to \u0022field\u0022."
+          },
+          "asteroid-density": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector multiplier on the world asteroid density."
+          },
+          "map-pos": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "description": "2D map-diagram position [x, y], normalized roughly -1..1, where this sector\u0027s node draws on the minimap/lobby preview; omitted auto-lays out in a ring."
+          },
+          "environment": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "sun": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "azimuth": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Sun direction azimuth, degrees."
+                  },
+                  "elevation": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Sun direction elevation above the horizon, degrees."
+                  },
+                  "color": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Sun light color as [r, g, b]."
+                  },
+                  "energy": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Sun directional-light intensity/energy."
+                  },
+                  "ambient": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Ambient/fill light energy for the sector; omitted uses the client default."
+                  },
+                  "size": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Visible sun-disc width in world units; omitted defaults to 900."
+                  },
+                  "god-rays": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "God-ray (volumetric light shaft) intensity from the sun."
+                  }
+                },
+                "description": "Directional sunlight settings for this sector.",
+                "additionalProperties": false
+              },
+              "nebula": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "color-a": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "First nebula gradient color as [r, g, b]."
+                  },
+                  "color-b": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Second nebula gradient color as [r, g, b]."
+                  },
+                  "intensity": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Nebula backdrop brightness/intensity."
+                  },
+                  "seed": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "Optional random seed for the nebula\u0027s procedural pattern."
+                  }
+                },
+                "description": "Background nebula backdrop settings for this sector.",
+                "additionalProperties": false
+              },
+              "dust": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "0..1 how dusty the cloud looks (visual coverage/count/thickness)."
+                  },
+                  "opacity": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "0..1 how heavily the dust cuts radar/vision sightlines; omitted defaults to 1."
+                  },
+                  "color": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Dust particle color as [r, g, b]."
+                  },
+                  "seed": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "Optional random seed for the dust cloud\u0027s procedural pattern."
+                  }
+                },
+                "description": "Dust-cloud \u0022feel\u0022 settings for this sector.",
+                "additionalProperties": false
+              }
+            },
+            "description": "Optional per-sector environment (sun, nebula, dust); omitted keeps the sector\u0027s legacy default look.",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "The map\u0027s sectors, each declaring its geometry (radius, garrison, asteroids, map-pos) and environment; anything omitted falls back to one shared default."
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

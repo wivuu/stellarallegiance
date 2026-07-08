@@ -3,6 +3,7 @@ namespace Allegiance.Factions.Model;
 /// <summary>A cloaking device. Mirrors the C++ <c>DataCloakTypeIGC</c> (igc.h:1855).</summary>
 public record Cloak : Part
 {
+    /// <summary>Energy drained per second while the cloak is engaged.</summary>
     public double EnergyConsumption { get; set; }
 
     /// <summary>Maximum cloaking strength (0..1 fraction of signature hidden).</summary>

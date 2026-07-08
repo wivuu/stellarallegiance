@@ -7,9 +7,13 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public record Faction
 {
+    /// <summary>Stable, unique id used for references (kebab-case by convention, e.g. "ucn").</summary>
     public string Id { get; set; } = "";
+
+    /// <summary>Human-readable display name.</summary>
     public string Name { get; set; } = "";
 
+    /// <summary>Art asset id for the faction's icon/crest shown in faction-select UI.</summary>
     public string? IconName { get; set; }
 
     /// <summary>HUD theme/skin id for this faction.</summary>
@@ -33,9 +37,9 @@ public record Faction
     /// <summary>Baseline team-wide stat multipliers before any research.</summary>
     public AttributeModifiers BaseAttributes { get; set; } = new();
 
-    /// <summary>The hull a pilot ejects into; references a <see cref="Hull.Id"/>.</summary>
+    /// <summary>The hull a pilot ejects into; references a hull <c>id</c>.</summary>
     public string LifepodHullId { get; set; } = "";
 
-    /// <summary>The faction's starting base; references a <see cref="Station.Id"/>.</summary>
+    /// <summary>The faction's starting base; references a station <c>id</c>.</summary>
     public string InitialStationId { get; set; } = "";
 }

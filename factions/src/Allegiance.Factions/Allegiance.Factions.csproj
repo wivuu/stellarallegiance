@@ -5,6 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Allegiance.Factions</RootNamespace>
+    <!-- Emit the .xml doc file so YamlJsonSchema can surface <summary> comments as schema
+         `description` fields. CS1591 = "missing XML comment for public member" — silenced so
+         undocumented helpers don't spam warnings. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

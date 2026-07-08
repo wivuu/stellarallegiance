@@ -7,30 +7,48 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public record Core
 {
+    /// <summary>Free-form schema/content version tag for this dataset.</summary>
     public string? Version { get; set; }
 
+    /// <summary>The tech-tree node catalog.</summary>
     public List<Tech> Techs { get; set; } = [];
 
+    /// <summary>The ship chassis catalog.</summary>
     public List<Hull> Hulls { get; set; } = [];
 
+    /// <summary>The mountable weapon (gun) catalog.</summary>
     public List<Weapon> Weapons { get; set; } = [];
+    /// <summary>The mountable shield generator catalog.</summary>
     public List<Shield> Shields { get; set; } = [];
+    /// <summary>The mountable cloaking device catalog.</summary>
     public List<Cloak> Cloaks { get; set; } = [];
+    /// <summary>The mountable afterburner catalog.</summary>
     public List<Afterburner> Afterburners { get; set; } = [];
+    /// <summary>The mountable ammo pack (magazine) catalog.</summary>
     public List<AmmoPack> AmmoPacks { get; set; } = [];
+    /// <summary>The mountable expendable-launcher catalog.</summary>
     public List<Launcher> Launchers { get; set; } = [];
 
+    /// <summary>The buildable station/building catalog.</summary>
     public List<Station> Stations { get; set; } = [];
+    /// <summary>The research/tech-purchase catalog.</summary>
     public List<Development> Developments { get; set; } = [];
+    /// <summary>The AI-piloted drone type catalog.</summary>
     public List<Drone> Drones { get; set; } = [];
 
+    /// <summary>The missile expendable catalog.</summary>
     public List<Missile> Missiles { get; set; } = [];
+    /// <summary>The mine expendable catalog.</summary>
     public List<Mine> Mines { get; set; } = [];
+    /// <summary>The chaff/decoy expendable catalog.</summary>
     public List<Chaff> Chaffs { get; set; } = [];
+    /// <summary>The probe expendable catalog.</summary>
     public List<Probe> Probes { get; set; } = [];
 
+    /// <summary>The weapon-bolt/projectile definition catalog.</summary>
     public List<Projectile> Projectiles { get; set; } = [];
 
+    /// <summary>The playable faction template catalog.</summary>
     public List<Faction> Factions { get; set; } = [];
 
     /// <summary>Every mountable part across all part collections.</summary>
