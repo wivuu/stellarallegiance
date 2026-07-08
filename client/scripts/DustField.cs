@@ -135,7 +135,7 @@ public partial class DustField : Node3D
     // Shapes the speed→intensity/pitch CURVE: the speed factor is _fade^SpeedExp. 1 = linear
     // (straight ramp). >1 = slow start / steep near top speed (stays quiet longer, then rushes
     // in). <1 = fast start / early plateau (grit comes up quickly off a standstill).
-    private const float SpeedExp = 1.5f;
+    private const float SpeedExp = 1.7f;
     // How far around the ship grains are scattered (world units) — wide enough to feel all-around
     // yet inside the visual mote box (BoxHalf) so what you hear sits with what you see.
     private const float GrainSpread = 13f;
