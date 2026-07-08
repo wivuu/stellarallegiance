@@ -293,7 +293,9 @@ public sealed partial class Simulation
 
     private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0);
 
-    public readonly World World;
+    // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
+    // sim thread). Reads across the sim keep working — it's a reference field, reassignment is atomic.
+    public World World { get; private set; }
     private readonly Dictionary<ulong, ShipSim> _ships = new();
     private readonly List<ShipSim> _order = new(); // stable iteration order
     private ulong _nextShipId = 1;
@@ -399,6 +401,13 @@ public sealed partial class Simulation
     // on the sim thread. OnReturnToLobby lets the hub clear ready flags for the next match.
     public Func<bool>? ShouldStartMatch;
     public Action? OnReturnToLobby;
+
+    // Map switch: BuildMatchWorld yields a fresh World for the lobby-selected map (null = keep the
+    // current arena); StartMatch swaps it in so the arena the players play is built from the picked
+    // map, not the boot default. OnMatchStart lets the hub re-Welcome every client onto the new world
+    // and drop its world-derived caches. Both fire on the sim thread inside StartMatch.
+    public Func<World?>? BuildMatchWorld;
+    public Action? OnMatchStart;
 
     // True only on the single step the match ends — Program.cs reads it to fire the
     // one-shot result writeback (IMatchResultSink).
@@ -846,6 +855,11 @@ public sealed partial class Simulation
     {
         if (Phase == PhaseActive)
             return;
+        // Build the arena from the lobby-selected map. A fresh World brings its own sectors/bases/
+        // asteroids/rock grid and full BaseHealth, so the resets below all operate on the new world.
+        var nextWorld = BuildMatchWorld?.Invoke();
+        if (nextWorld != null)
+            World = nextWorld;
         Array.Fill(World.BaseHealth, World.BaseMaxHealth);
         BasesChangedThisStep = true;
         Phase = PhaseActive;
@@ -859,6 +873,10 @@ public sealed partial class Simulation
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Console.WriteLine("[Sim] match started");
+        // World may have just been swapped to a new map — let the hub re-Welcome every client onto it
+        // and invalidate its world-derived caches. Runs on the sim thread; Welcome frames are queued
+        // before AfterStep streams the first Active snapshot, so clients rebuild geometry in order.
+        OnMatchStart?.Invoke();
     }
 
     // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,

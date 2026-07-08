@@ -316,6 +316,21 @@ public sealed class ClientHub
         BroadcastLobby();
     }
 
+    // The lobby-selected map name — read by Simulation.BuildMatchWorld (via Program's closure) at
+    // match start to build the arena from the map the host picked.
+    public string SelectedMap => _selectedMap;
+
+    // Wired to Simulation.OnMatchStart — the sim just swapped in the selected map's world at match
+    // start. Drop the world-derived rock index and re-Welcome every connected client so they rebuild
+    // their arena to the new geometry (same world-rebuild path a reconnect Welcome uses). Runs on the
+    // sim thread inside StartMatch, before AfterStep streams the first Active snapshot.
+    public void OnMatchStart()
+    {
+        _rockIndexById = null;
+        foreach (var c in _clients.Values)
+            SendWelcome(c);
+    }
+
     // Build + fan out the current lobby roster (HasShip overlaid from the live sim).
     private void BroadcastLobby()
     {

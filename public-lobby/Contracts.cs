@@ -23,8 +23,6 @@ public record RegisterRequest(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
-    string? MapName = null,
-    MapLayout? Map = null,
     LobbyRosterEntry[]? Roster = null
 );
 
@@ -43,24 +41,6 @@ public record HeartbeatRequest(
 // side index (0/1); Flying means the player has an active ship (vs waiting in the lobby).
 public record LobbyRosterEntry(string Name, int Team, bool Ready = false, bool Flying = false);
 
-// Compact sector-graph layout of a server's map — enough for the browser's sector-map preview
-// (sector circles, team base positions, aleph gates), deliberately excluding asteroids or any
-// other bulk geometry. Coordinates are world X/Z within the owning sector.
-// Only the owning team of a sector's garrison — the sector-local position is intentionally not
-// carried (randomized per match, secret; the browser highlights the whole sector by team).
-public record MapBase(int Team);
-
-public record MapGate(uint ToSector, float X, float Z);
-
-// MapX/MapY (valid when HasMapPos) is the authored 2D diagram position — same field the game
-// lobby carries — so the browser preview lays sectors out by their star/custom silhouette rather
-// than the horizontal-row fallback. Optional/defaulted: servers predating it still deserialize.
-public record MapSector(
-    uint Id, float Radius, MapBase[]? Bases = null, MapGate[]? Gates = null, string? Name = null,
-    float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
-
-public record MapLayout(MapSector[] Sectors);
-
 // What the registry stores and hands back. IceServers is the STUN/TURN config this box owns
 // (from its env) so every client + game server gets one consistent ICE configuration to dial.
 // Players/MaxPlayers/State are the live status the browser renders as "(players/max) · state".
@@ -76,8 +56,6 @@ public record ServerEntry(
     string? State = null,
     int ProtocolVersion = 0,
     string? HostedBy = null,
-    string? MapName = null,
-    MapLayout? Map = null,
     IReadOnlyList<LobbyRosterEntry>? Roster = null
 );
 

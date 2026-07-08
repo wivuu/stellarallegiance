@@ -183,9 +183,13 @@ IMatchResultSink results = new LoggingMatchResultSink();
 // file or an unknown selection so the operator gets a clear boot error instead of a wrong arena.
 MapDef selectedMapDef;
 IReadOnlyList<MapCatalogEntry> mapCatalog;
+IReadOnlyDictionary<string, MapDef> maps;
+// Pristine (pre-ApplyTo) world config, kept so a runtime map switch can clone + re-apply a different
+// map's overrides onto a clean base (ApplyTo mutates sectors/scale/radius in place).
+WorldConfig pristineWorldCfg = MapCatalog.Clone(content.World);
 try
 {
-    var maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
+    maps = MapLoader.LoadAvailable(stockMapsDir, extraMapsDir);
     selectedMapDef = MapLoader.Resolve(maps, selectedMap);
     // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
     // content.World for the live arena (Build clones per map, so this doesn't disturb it).
@@ -213,6 +217,20 @@ var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
 // it returns to the lobby so ready flags reset. Both run on the sim thread.
 sim.ShouldStartMatch = hub.ShouldStartMatch;
 sim.OnReturnToLobby = hub.OnReturnToLobby;
+
+// Map switch: build the arena from the lobby-selected map at match start (not the boot default).
+// Clone the pristine config, overlay the picked map, and construct a fresh World — same recipe as
+// MapCatalog.Build. Runs on the sim thread inside StartMatch; the hub then re-Welcomes every client.
+World? BuildWorldForMap(string name)
+{
+    if (!maps.TryGetValue(name, out var def))
+        return null;
+    var cfg = MapCatalog.Clone(pristineWorldCfg);
+    MapLoader.ApplyTo(def, cfg);
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start);
+}
+sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
+sim.OnMatchStart = hub.OnMatchStart;
 
 var builder = WebApplication.CreateBuilder();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -309,7 +327,7 @@ simThread.Start();
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
-var registrar = LobbyRegistrar.FromEnv(hub, port, world, mapName);
+var registrar = LobbyRegistrar.FromEnv(hub, port);
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 

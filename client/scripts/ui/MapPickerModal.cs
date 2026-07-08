@@ -73,7 +73,7 @@ public partial class MapPickerModal : Control
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(center);
 
-        var panel = new BracketPanel { FillOverride = DesignTokens.PanelDeep, CustomMinimumSize = new Vector2(760, 0) };
+        var panel = new BracketPanel { FillOverride = DesignTokens.PanelDeep, CustomMinimumSize = new Vector2(660, 0) };
         center.AddChild(panel);
 
         var col = new VBoxContainer();
@@ -86,7 +86,7 @@ public partial class MapPickerModal : Control
 
         var scroll = new ScrollContainer
         {
-            CustomMinimumSize = new Vector2(0, 360),
+            CustomMinimumSize = new Vector2(0, 470),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -160,7 +160,9 @@ public partial class MapPickerModal : Control
         bool current = string.Equals(m.Name, _net.SelectedMap, StringComparison.OrdinalIgnoreCase);
         bool selected = string.Equals(m.Name, _pending, StringComparison.OrdinalIgnoreCase);
 
-        var panel = new PanelContainer { MouseFilter = MouseFilterEnum.Stop };
+        // ExpandFill so the two grid columns stretch to fill the panel width evenly — without it the
+        // columns collapse to the card's min width and leave dead space after the 2nd card per row.
+        var panel = new PanelContainer { MouseFilter = MouseFilterEnum.Stop, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         var sb = new StyleBoxFlat
         {
             BgColor = selected ? new Color(DesignTokens.TeamAccent, 0.06f) : DesignTokens.PanelFill,

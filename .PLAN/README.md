@@ -22,13 +22,7 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Password-protection for game servers: and allow clients to enter password on-join
 - Increase sector scale (make the playable area larger), add more asteroids at the same density as they are today but spread out to fill the larger area. Asteroids should fill out be added outwards towards the edges
-- Mine changes
-  - Mines should animate as they are deployed (rapidly expand spherically)
-- Maps
-  - Make server lobby right side menu 20% smaller
-  - Make game's map selector functional
-  - Make map selctor UI modal taller (show 50% of the next row of maps)
-  - Make map selector UI modal slightly less wide (it shows white space after the 2nd map on each row)
+- For large sectors, flash of asteroids being destroyed/spawned when leaving a sector and entering another - instead show a smooth transition; either a brief loading animation or a fade effect
 ---
 
 ## Content philosophy (the through-line)

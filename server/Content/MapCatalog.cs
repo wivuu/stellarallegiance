@@ -107,8 +107,9 @@ public static class MapCatalog
 
     // Shallow clone of the world config. ApplyTo reassigns Sectors to a new list, so a fresh list
     // copy is enough; every other field is a value type carried straight across. Keep in sync if
-    // WorldConfig gains fields that World construction reads.
-    private static WorldConfig Clone(WorldConfig w) => new()
+    // WorldConfig gains fields that World construction reads. Public so the runtime map-switch path
+    // (Program's buildWorld closure) can clone the pristine config before ApplyTo, same as Build does.
+    public static WorldConfig Clone(WorldConfig w) => new()
     {
         Id = w.Id,
         SectorScale = w.SectorScale,

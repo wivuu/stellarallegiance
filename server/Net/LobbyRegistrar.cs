@@ -46,8 +46,6 @@ public sealed class LobbyRegistrar
     private readonly string? _publicEndpoint;
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
     private readonly string? _hostedBy; // optional operator label ("hosted by …")
-    private readonly LobbyStatus.MapLayoutDto _map; // built once — the world never mutates
-    private readonly string _mapName;
 
     private string? _sessionId;
     private string? _secret; // per-session capability minted by the lobby at registration
@@ -63,9 +61,7 @@ public sealed class LobbyRegistrar
         int port,
         string? publicEndpoint,
         int maxPlayers,
-        string? hostedBy,
-        LobbyStatus.MapLayoutDto map,
-        string mapName
+        string? hostedBy
     )
     {
         _hub = hub;
@@ -75,13 +71,11 @@ public sealed class LobbyRegistrar
         _publicEndpoint = publicEndpoint;
         _maxPlayers = maxPlayers;
         _hostedBy = hostedBy;
-        _map = map;
-        _mapName = mapName;
     }
 
     // Builds a registrar from the environment, or returns null when no public name is set
     // (the server stays private). Logs the decision either way.
-    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort, Sim.World world, string mapName)
+    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort)
     {
         var name = (Environment.GetEnvironmentVariable("SIM_PUBLIC_NAME") ?? "").Trim();
         if (name.Length == 0)
@@ -129,9 +123,7 @@ public sealed class LobbyRegistrar
             port,
             endpoint.Length == 0 ? null : endpoint,
             maxPlayers,
-            hostedBy.Length == 0 ? null : hostedBy,
-            LobbyStatus.BuildMap(world),
-            mapName
+            hostedBy.Length == 0 ? null : hostedBy
         );
     }
 
@@ -209,8 +201,6 @@ public sealed class LobbyRegistrar
                     state = _hub.GameState,
                     protocolVersion = (int)Protocol.Version,
                     hostedBy = _hostedBy,
-                    map = _map,
-                    mapName = _mapName,
                     roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
                 },
                 ct

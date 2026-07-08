@@ -80,8 +80,6 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             State: NormalizeState(req.State),
             ProtocolVersion: Math.Max(0, req.ProtocolVersion),
             HostedBy: NormalizeHostedBy(req.HostedBy),
-            MapName: req.MapName,
-            Map: SanitizeMap(req.Map),
             Roster: SanitizeRoster(req.Roster, req.MaxPlayers)
         );
 
@@ -166,37 +164,6 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             .Take(cap)
             .ToArray();
     }
-
-    // Map layout caps: a handful of sectors with a handful of markers each, radii/coords clamped
-    // and rounded — bounds the public list payload no matter what a registrant sends.
-    static MapLayout? SanitizeMap(MapLayout? map)
-    {
-        if (map?.Sectors is null or { Length: 0 })
-            return null;
-        var sectors = map
-            .Sectors.Take(8)
-            .Select(s =>
-            {
-                var radius = float.IsFinite(s.Radius) ? Math.Clamp(s.Radius, 1f, 100_000f) : 1f;
-                return s with
-                {
-                    Radius = MathF.Round(radius),
-                    Bases = s
-                        .Bases?.Take(8)
-                        .Select(b => b with { Team = Math.Clamp(b.Team, 0, 1) })
-                        .ToArray(),
-                    Gates = s
-                        .Gates?.Take(8)
-                        .Select(g => g with { X = ClampCoord(g.X, radius), Z = ClampCoord(g.Z, radius) })
-                        .ToArray(),
-                };
-            })
-            .ToArray();
-        return new MapLayout(sectors);
-    }
-
-    static float ClampCoord(float v, float radius) =>
-        MathF.Round(float.IsFinite(v) ? Math.Clamp(v, -radius, radius) : 0f, 1);
 
     // Value-compare two rosters (order matters; the registrant sends them pre-sorted).
     static bool RosterEquals(IReadOnlyList<LobbyRosterEntry>? a, IReadOnlyList<LobbyRosterEntry>? b)

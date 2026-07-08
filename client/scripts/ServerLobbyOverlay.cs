@@ -16,7 +16,7 @@ using HttpClient = System.Net.Http.HttpClient;
 // The "Server Lobby" — the first screen a player sees when the client is launched WITHOUT
 // --host. A two-column server browser fed live by the public lobby's SSE stream:
 //   left  — the game list (status dot, name, "hosted by" tag, pilot count)
-//   right — detail for the selected server: sector-map preview + per-team pilot rosters
+//   right — detail for the selected server: status line + per-team pilot rosters
 // Joining goes through the CONNECT TO SERVER action (or the direct-connect modal for a typed
 // ip:port). Either hands off to ConnectionManager, which opens the single native connection:
 // public-lobby servers join over WebRTC (NAT-friendly, keyed by SessionId) unless they
@@ -30,16 +30,6 @@ public partial class ServerLobbyOverlay : Control
     // that predate them keep rendering with graceful fallbacks).
     private sealed record RosterDto(string Name, int Team, bool Ready, bool Flying);
 
-    private sealed record MapBaseDto(int Team);
-
-    private sealed record MapGateDto(uint ToSector, float X, float Z);
-
-    private sealed record MapSectorDto(
-        uint Id, float Radius, List<MapBaseDto>? Bases, List<MapGateDto>? Gates, string? Name = null,
-        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
-
-    private sealed record MapDto(List<MapSectorDto> Sectors);
-
     private sealed record ServerDto(
         string SessionId,
         string Name,
@@ -48,8 +38,6 @@ public partial class ServerLobbyOverlay : Control
         int MaxPlayers,
         string? State,
         string? HostedBy,
-        string? MapName,
-        MapDto? Map,
         List<RosterDto>? Roster
     );
 
@@ -300,7 +288,9 @@ public partial class ServerLobbyOverlay : Control
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1f,
+            // 0.706 vs the list's 1.5 ratio = 0.706/2.206 ≈ 32% of the body, 20% narrower than the
+            // prior 1.0 ratio (40%). The knob is this ratio, not a fixed width.
+            SizeFlagsStretchRatio = 0.706f,
         };
         body.AddChild(panel);
 
@@ -652,24 +642,15 @@ public partial class ServerLobbyOverlay : Control
         };
         pill.Configure(pillText, pillKind, pulse: live);
 
-        // Mono subline: state · map name · sectors · pilots · host attribution.
-        int sectors = sel.Map?.Sectors?.Count ?? 0;
+        // Mono subline: state · pilots · host attribution. Map name/sectors and the 2D
+        // sector preview were removed from the server lobby — map info lives in the game lobby.
         var subParts = new List<string> { (sel.State ?? "lobby").ToUpperInvariant() };
-        if (!string.IsNullOrEmpty(sel.MapName))
-            subParts.Add(sel.MapName.ToUpperInvariant());
-        if (sectors > 0)
-            subParts.Add($"{sectors} SECTORS");
         subParts.Add($"{sel.Players}/{max} PILOTS");
         if (!string.IsNullOrEmpty(sel.HostedBy))
             subParts.Add($"HOSTED BY {sel.HostedBy.ToUpperInvariant()}");
         var sub = UiKit.MakeLabel(string.Join(" · ", subParts), UiKit.TextStyle.Data, DesignTokens.Text2);
         sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _detailBox.AddChild(sub);
-
-        // Sector-map preview.
-        var map = new SectorMapPreview { CustomMinimumSize = new Vector2(0, 150) };
-        map.SetMap(ToMapModel(sel.Map));
-        _detailBox.AddChild(map);
 
         // Team rosters — no join buttons here by design; joining picks a team in-game.
         var teams = new HBoxContainer();
@@ -743,41 +724,6 @@ public partial class ServerLobbyOverlay : Control
             col.AddChild(UiKit.MakeLabel($"+{open - 3} more slots", UiKit.TextStyle.Data, DesignTokens.TextDim));
 
         return panel;
-    }
-
-    private static SectorMapPreview.MapModel? ToMapModel(MapDto? map)
-    {
-        if (map?.Sectors is null or { Count: 0 })
-            return null;
-        var sectors = map
-            .Sectors.Select(s => new SectorMapPreview.SectorModel(
-                s.Id,
-                s.Radius,
-                s.Bases?.Select(b => new SectorMapPreview.BaseMark(b.Team)).ToList() ?? new(),
-                s.Gates?.Select(g => new Vector2(g.X, g.Z)).ToList() ?? new(),
-                s.Name,
-                s.MapX,
-                s.MapY,
-                s.HasMapPos
-            ))
-            .ToList();
-
-        // Derive sector-to-sector links from each gate's destination (bidirectional; de-duped
-        // to a single edge per pair) so the preview can draw connecting lines between sectors.
-        var links = new List<(uint A, uint B)>();
-        var seen = new HashSet<(uint, uint)>();
-        foreach (var s in map.Sectors)
-        {
-            if (s.Gates is null)
-                continue;
-            foreach (var g in s.Gates)
-            {
-                var edge = s.Id < g.ToSector ? (s.Id, g.ToSector) : (g.ToSector, s.Id);
-                if (seen.Add(edge))
-                    links.Add(edge);
-            }
-        }
-        return new SectorMapPreview.MapModel(sectors, links);
     }
 
     // ---- Joining -------------------------------------------------------------
