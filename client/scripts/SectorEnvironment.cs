@@ -198,6 +198,31 @@ public partial class SectorEnvironment : Node3D
         _shadowByNode.Clear();
     }
 
+    // "How buried in dust is this world-space point" for the dust-ambient audio (DustField):
+    // the max over the current sector's clouds of density × a soft radial falloff (1 at a
+    // cloud's centre → 0 at its rim). Mirrors the server's DustCoverageAt (Simulation.Vision.cs)
+    // but with a smooth edge, so the audio swells toward a cloud's core rather than switching on
+    // at the boundary. Cloud centres are placed in world space (BuildCloudBillboards), matching
+    // the ship's GlobalPosition. 0 when the current sector streamed no dust. Clamped to [0,1].
+    public float DustDensityAt(Vector3 worldPos)
+    {
+        if (_currentEnv is not { HasDust: true } env || env.DustClouds.Length == 0)
+            return 0f;
+        float best = 0f;
+        foreach (var c in env.DustClouds)
+        {
+            if (c.Radius <= 0f)
+                continue;
+            float d = worldPos.DistanceTo(new Vector3(c.PosX, c.PosY, c.PosZ));
+            if (d >= c.Radius)
+                continue;
+            float cov = c.Density * (1f - d / c.Radius);
+            if (cov > best)
+                best = cov;
+        }
+        return Mathf.Min(best, 1f);
+    }
+
     private void ApplyGodRays(SectorEnv? env)
     {
         _godRaysStrength = env is { HasSun: true } ? env.GodRays : 0f;

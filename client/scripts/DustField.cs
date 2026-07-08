@@ -30,6 +30,17 @@ public partial class DustField : Node3D
     private StandardMaterial3D _drawMat = null!;
     private float _fade; // current smoothed 0..1 strength, multiplies particle alpha
 
+    // Audio counterpart to the visual grit. NOT a single loop (that read as an obvious,
+    // static drone); instead the dust clip is fired as many short one-shot GRAINS at
+    // randomised points scattered around the ship, so it sounds like grit rushing past from
+    // all sides. Overlapping grains at jittered pitch/level never repeat audibly. Two things
+    // drive it: proximity to a real dust CLOUD's core (SectorEnvironment owns those, streamed
+    // per sector) makes it louder AND more frequent, and ship SPEED raises the grain rate and
+    // pitch — so faster through denser dust = a thicker, higher rush. Grains go through
+    // SfxManager's pooled positional one-shot path (PlayAt), same as weapon/impact SFX.
+    private SectorEnvironment? _sectorEnv;
+    private double _grainTimer; // counts down to the next grain; 1/rate is added on each emit
+
     public override void _Ready()
     {
         _world = GetNode<WorldRenderer>("../WorldRenderer");
@@ -59,6 +70,10 @@ public partial class DustField : Node3D
             Visible = false,
         };
         AddChild(_particles);
+
+        // Sibling that owns the streamed dust CLOUDS; we query it each frame for how buried in
+        // dust the ship is (drives grain loudness/rate). Null-safe — no clouds ⇒ no dust audio.
+        _sectorEnv = GetNodeOrNull<SectorEnvironment>("../SectorEnvironment");
     }
 
     public override void _Process(double delta)
@@ -77,6 +92,8 @@ public partial class DustField : Node3D
         float target = Mathf.Clamp((ship.Speed - MinSpeed) / (FullSpeed - MinSpeed), 0f, 1f);
         _fade = Mathf.MoveToward(_fade, target, FadeRate * (float)delta);
 
+        UpdateDustAudio(ship, delta);
+
         _particles.Visible = _fade > 0.001f;
         if (!_particles.Visible)
             return;
@@ -94,6 +111,80 @@ public partial class DustField : Node3D
         // Existing motes stay put (world coords), so ANY movement parallaxes through them.
         Vector3 fwd = ship.GlobalTransform.Basis * Vector3.Back; // ship-local +Z forward
         _particles.GlobalPosition = ship.GlobalPosition + fwd * (BoxHalf * 0.4f);
+    }
+
+    // --- Dust-grain audio tuning -------------------------------------------------------------
+    // Per-cloud Density is authored ~0.3..0.7 (server World.BuildDust), so we normalise the
+    // ship's cloud coverage against this reference to reach full intensity near a dense core.
+    private const float DensityRef = 0.7f;
+    // Dust present in "open" space even away from a named cloud (the visual motes are everywhere):
+    // a small baseline ADDED to cloud coverage so flying through clear space still gives faint grit.
+    // The whole effect is gated by SPEED below, so this only sounds while actually moving.
+    private const float OpenGrit = 0.01f;
+    // Below this combined intensity we emit nothing (parked in clear space = silent).
+    private const float EmitGate = 0.04f;
+    // Grains per second: sparse at the faint edge, a dense rush deep in a cloud at speed.
+    private const float MinRate = 1f;
+    private const float MaxRate = 12f;
+    // Per-grain level: quiet at the fringe up to clearly-present (but not blaring) at a core.
+    private const float QuietDb = -45f;
+    private const float LoudDb = -1f;
+    // Playback rate rides ship speed: a low rumble at a crawl, a brighter hiss at full tilt.
+    private const float SlowPitch = 0.18f;
+    private const float FastPitch = 4.35f;
+    // Shapes the speed→intensity/pitch CURVE: the speed factor is _fade^SpeedExp. 1 = linear
+    // (straight ramp). >1 = slow start / steep near top speed (stays quiet longer, then rushes
+    // in). <1 = fast start / early plateau (grit comes up quickly off a standstill).
+    private const float SpeedExp = 1.5f;
+    // How far around the ship grains are scattered (world units) — wide enough to feel all-around
+    // yet inside the visual mote box (BoxHalf) so what you hear sits with what you see.
+    private const float GrainSpread = 13f;
+
+    // Fire dust grains around the ship at a rate/level set by how buried in dust it is, and a
+    // pitch set by its speed. Coverage comes from the streamed clouds (SectorEnvironment); the
+    // motion floor keeps a faint rush alive in open space. No cloud data / no motion ⇒ silent.
+    private void UpdateDustAudio(PredictionController ship, double delta)
+    {
+        Vector3 shipPos = ship.GlobalPosition;
+        float coverage = (_sectorEnv?.DustDensityAt(shipPos) ?? 0f) / DensityRef;
+        // The sound is grit RUSHING PAST, so it's fundamentally about motion: multiply the dust
+        // present here (cloud coverage + a faint open-space baseline) by a speed factor. At a
+        // standstill the factor→0, so intensity→0 and we fall silent no matter how thick the dust
+        // — slowing down fades it out. SpeedExp shapes how that ramp feels (see const above).
+        float speedCurve = Mathf.Pow(_fade, SpeedExp);
+        float dustHere = Mathf.Clamp(coverage + OpenGrit, 0f, 1f);
+        float intensity = speedCurve * dustHere;
+
+        if (intensity < EmitGate)
+        {
+            _grainTimer = 0.0; // reset so re-entering dust fires promptly, not after a stale debt
+            return;
+        }
+
+        // More dust AND more speed ⇒ more grains per second (intensity already folds in speed).
+        float rate = Mathf.Lerp(MinRate, MaxRate, intensity);
+        _grainTimer -= delta;
+        // Cap catch-up so a long frame (or returning from a pause) can't dump a burst of grains.
+        int budget = 3;
+        while (_grainTimer <= 0.0 && budget-- > 0)
+        {
+            EmitGrain(shipPos, intensity, speedCurve);
+            _grainTimer += 1.0 / rate;
+        }
+    }
+
+    // One positional grain: the dust clip at a random point in a sphere around the ship, its
+    // level set by dust intensity and its pitch by the (curved) speed, both jittered so no two
+    // grains match.
+    private void EmitGrain(Vector3 shipPos, float intensity, float speedCurve)
+    {
+        var sfx = SfxManager.Instance;
+        if (sfx == null)
+            return;
+        Vector3 offset = new Vector3(GD.Randf() - 0.5f, GD.Randf() - 0.5f, GD.Randf() - 0.5f) * (2f * GrainSpread);
+        float volumeDb = Mathf.Lerp(QuietDb, LoudDb, intensity) + (GD.Randf() - 0.5f) * 3f;
+        float pitch = Mathf.Lerp(SlowPitch, FastPitch, speedCurve) * (0.92f + GD.Randf() * 0.16f);
+        sfx.PlayAt(SfxManager.SfxId.DustAmbient, shipPos + offset, pitch, volumeDb);
     }
 
     // Discrete round mote: a small opaque core with a near-vertical edge, so it reads as a
