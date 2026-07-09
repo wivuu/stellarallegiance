@@ -19,7 +19,7 @@ using Godot;
 //
 //   2. Probe proximity ping. A periodic one-shot (SfxId.ProbePing) fired at any
 //      deployed probe's position while the local ship sits inside its ping radius,
-//      throttled per-probe; the cadence tightens as you close for a sonar feel.
+//      throttled per-probe at a steady rate regardless of distance.
 //
 //  Owned + built by WorldRenderer (like EngineGlow's per-ship loops); it holds no
 //  world state of its own beyond the emitter pool and the per-probe ping clocks.
@@ -39,8 +39,7 @@ public partial class AsteroidAmbience : Node
 
     // ---- Probe ping -----------------------------------------------------
     private const float ProbePingRadius = 400f;  // ship must be within this of a probe to hear it
-    private const float PingIntervalFar = 1.5f;  // seconds between pings at the edge of range...
-    private const float PingIntervalNear = 0.55f;// ...tightening to this right on top of the probe
+    private const float PingInterval = 2.0f;     // steady seconds between pings anywhere in range
 
     private sealed class Emitter
     {
@@ -202,9 +201,7 @@ public partial class AsteroidAmbience : Node
             if (cd <= 0.0)
             {
                 sfx.PlayAt(SfxManager.SfxId.ProbePing, probe.GlobalPosition);
-                // Closer = faster pinging (sonar closing in); linear from Far at the edge to Near on top.
-                float t = Mathf.Clamp(dist / ProbePingRadius, 0f, 1f);
-                cd = Mathf.Lerp(PingIntervalNear, PingIntervalFar, t);
+                cd = PingInterval; // steady rate regardless of distance
             }
             _probeCooldown[id] = cd;
         }
