@@ -57,6 +57,15 @@ public partial class CameraRig : Camera3D
     private Node? _ship;
     private Vector3 _cockpitOffset = CockpitFallback;
 
+    // Afterburner rumble: a subtle high-frequency rattle layered onto the framing while the burn is
+    // lit, scaled by the ship's afterburner ramp (AbPower 0..1) so it fades in/out with the burn
+    // rather than snapping. FIRST PERSON ONLY — you feel the shudder at the pilot's eye point, not on
+    // the detached chase cam — so the amplitude scales with the FP blend and is zero in third person.
+    // `_shakeTime` free-runs only while shaking so the layered sines stay smooth (no phase jump).
+    private const float ShakePosAmp = 0.11f; // metres of positional jitter at full burn
+    private const float ShakeRotAmp = 0.006f; // radians of angular shudder at full burn
+    private float _shakeTime;
+
     private WorldRenderer _world = null!;
 
     public override void _Ready()
@@ -192,7 +201,28 @@ public partial class CameraRig : Camera3D
         float e = _blend * _blend * (3f - 2f * _blend); // smoothstep ease
         Vector3 offset = (ChaseOffset * _zoom).Lerp(_cockpitOffset, e);
         Transform3D t = ship.GlobalTransform;
-        GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis * offset);
+        Basis basis = t.Basis * FaceForward;
+
+        // Afterburner rumble (first person only). Fade the rattle in with the burn ramp AND the FP
+        // blend (e), so third person (e≈0) stays rock-steady and the shudder grows as you dolly into
+        // the cockpit. Layered incommensurate sines give a smooth, non-repeating jitter per axis —
+        // jitters the ship-local framing offset for translation and tacks a faint roll/pitch onto the
+        // shared basis for a felt "shudder".
+        float amp = ship.AbPower * e;
+        if (amp > 0.001f)
+        {
+            _shakeTime += (float)delta;
+            float f1 = _shakeTime * 37f, f2 = _shakeTime * 53f, f3 = _shakeTime * 71f;
+            offset += new Vector3(
+                Mathf.Sin(f1) + 0.5f * Mathf.Sin(f2 * 1.7f),
+                Mathf.Sin(f2 + 1.3f) + 0.5f * Mathf.Sin(f3 * 1.3f),
+                Mathf.Sin(f3 + 2.1f) + 0.5f * Mathf.Sin(f1 * 1.9f)) * (ShakePosAmp * amp / 1.5f);
+            float pitch = Mathf.Sin(f1 * 1.1f + 1.9f) * ShakeRotAmp * amp;
+            float roll = Mathf.Sin(f2 * 0.9f + 0.7f) * ShakeRotAmp * amp;
+            basis = basis * new Basis(Vector3.Right, pitch) * new Basis(Vector3.Forward, roll);
+        }
+
+        GlobalTransform = new Transform3D(basis, t.Origin + t.Basis * offset);
 
         if (_demoDir != null)
             RunDemo(delta);
