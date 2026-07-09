@@ -101,7 +101,7 @@ combat:
 
 # Warp gates, docking, escape pods, economy cadence, match flow.
 mechanics:
-  aleph-trigger-radius: 18   # distance from a gate mouth at which a ship warps
+  aleph-trigger-radius: 18   # gate mouth: ship warps AND bolts/missiles are absorbed within this radius
   warp-exit-offset: 60       # how far beyond the destination mouth a warping ship exits
   warp-exit-jitter: 0.12     # per-axis random spread on the exit cone
   paycheck-seconds: 60       # between flat per-team credit paychecks (amount = faction income)

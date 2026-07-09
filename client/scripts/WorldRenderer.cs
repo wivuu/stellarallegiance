@@ -2029,7 +2029,7 @@ public partial class WorldRenderer : Node3D
     // avoids cross-sector hits.
     private void CheckBoltImpacts(double delta)
     {
-        if (_bolts.Count == 0 || (_shipNodes.Count == 0 && _probes.Count == 0))
+        if (_bolts.Count == 0 || (_shipNodes.Count == 0 && _probes.Count == 0 && _alephNodes.Count == 0))
             return;
 
         for (int i = _bolts.Count - 1; i >= 0; i--)
@@ -2087,6 +2087,26 @@ public partial class WorldRenderer : Node3D
                 {
                     SpawnEffect(new HitFlash(), hit, _localSector);
                     SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
+                    pv.QueueFree();
+                    _bolts.RemoveAt(i);
+                    consumed = true;
+                    break;
+                }
+            }
+            if (consumed)
+                continue;
+
+            // An aleph is a solid barrier: the server already stopped the shot with no damage
+            // (Simulation.FireBolt), so mirror that visually by absorbing the tracer at the gate mouth
+            // — no spark, it just vanishes into the vortex. Team-agnostic like ships/probes.
+            foreach (var node in _alephNodes.Values)
+            {
+                if (!node.Visible)
+                    continue;
+                Vector3 c = node.GlobalPosition;
+                Vector3 hit = ClosestPointOnSegment(a, b, c);
+                if (c.DistanceSquaredTo(hit) <= AlephView.BlockRadius * AlephView.BlockRadius)
+                {
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
                     break;

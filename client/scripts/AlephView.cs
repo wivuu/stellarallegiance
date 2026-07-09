@@ -15,6 +15,11 @@ public partial class AlephView : Node3D
     public uint DestSectorId;
 
     private const float MouthRadius = 16f;
+
+    // Radius within which the gate absorbs a passing weapon bolt (client visual only — the server
+    // is authoritative on damage; see Simulation.FireBolt). Matches the funnel mouth so a tracer
+    // vanishes right at the visible opening rather than punching out the far side.
+    public const float BlockRadius = MouthRadius;
     private const float ThroatRadius = 2.0f;
     private const float FunnelDepth = 28f;
     private const int Rings = 40; // vertical subdivisions

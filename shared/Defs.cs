@@ -500,6 +500,7 @@ namespace StellarAllegiance.Shared
     public sealed class WorldMechanicsTuning
     {
         public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+        // (also the radius of the solid gate-mouth sphere that absorbs bolts/missiles — see FireBolt)
         public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
         public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
         public float PaycheckSeconds = 60f; // between flat per-team credit paychecks

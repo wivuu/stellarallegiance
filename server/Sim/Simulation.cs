@@ -1496,6 +1496,26 @@ public sealed partial class Simulation
             }
         }
 
+        // Alephs are solid barriers to weapon fire: a gate mouth absorbs a bolt with no damage target.
+        // The mouth's known extent is its warp-trigger radius (a ship warps at that distance, so it
+        // never reaches the barrier — only projectiles are stopped). Few gates per sector, not in any
+        // grid → a linear scan (like the probe scan below) is cheap and replay-deterministic in list
+        // order. A closer aleph hit wins and clears any target.
+        float alephR = _mech.AlephTriggerRadius + World.ProjectileRadius;
+        for (int i = 0; i < World.Alephs.Count; i++)
+        {
+            var g = World.Alephs[i];
+            if (g.SectorId != ship.SectorId)
+                continue;
+            if (FirstEntryTime(mp, mv, g.Pos, default, alephR, bestT, out float at) && at < bestT)
+            {
+                bestT = at;
+                targetShip = 0;
+                targetBase = -1;
+                targetProbe = 0; // stopped by an aleph
+            }
+        }
+
         // Deployed enemy probes are destructible: a stationary hit-sphere scan (probes are few and
         // not in the ship grid, so a linear scan is cheap and stays replay-deterministic in list
         // order). A closer probe hit wins and clears any ship/base target.
@@ -1808,6 +1828,24 @@ public sealed partial class Simulation
                             detonate = true;
                         }
                     }
+                }
+            }
+
+            // Alephs are solid barriers: a gate mouth (sized by its warp-trigger radius) on the
+            // segment stops the missile, which detonates on the barrier (blast splash still applies)
+            // with no direct-hit target.
+            float alephR = _mech.AlephTriggerRadius + w.ProjectileRadius;
+            for (int i = 0; i < World.Alephs.Count; i++)
+            {
+                var g = World.Alephs[i];
+                if (g.SectorId != mis.SectorId)
+                    continue;
+                if (FirstEntryTime(mp, vel, g.Pos, default, alephR, bestT, out float at) && at < bestT)
+                {
+                    bestT = at;
+                    hitShip = 0;
+                    hitBase = -1;
+                    detonate = true; // an aleph stops the missile
                 }
             }
 

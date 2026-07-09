@@ -223,7 +223,7 @@ Stage-2 economy, no rework.
   don't. (FX done; the recharge *mechanic* is not.)
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
-- ☐ **[M]** **Alephs block shots**  - from weapons and missiles
+- ✅ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
 - ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,

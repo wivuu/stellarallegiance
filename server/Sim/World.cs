@@ -434,6 +434,20 @@ public sealed class World
         return rock;
     }
 
+    // TEST SEAM: hand-place a gate (aleph) mouth into a sector so the sentinel empty sector 999 can
+    // exercise the projectile-barrier path. Only the mouth Pos/SectorId matter for blocking; the
+    // partner endpoint is irrelevant here. Must only be called from tests before ticking.
+    public Gate AddAlephForTest(uint sector, Vec3 pos)
+    {
+        ulong id = 1;
+        foreach (var g in Alephs)
+            if (g.Id >= id)
+                id = g.Id + 1;
+        var gate = new Gate(id, sector, sector, pos, pos);
+        Alephs.Add(gate);
+        return gate;
+    }
+
     public float SectorRadius(uint sector)
     {
         foreach (var s in Sectors)
