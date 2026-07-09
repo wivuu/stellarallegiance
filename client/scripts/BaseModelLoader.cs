@@ -50,6 +50,17 @@ public static class BaseModelLoader
     private const float DebugConeRadius = 9f;
     private const float DebugConeHeight = 34f;
 
+    // --- Nav-light palette + base-beacon sizing (shared source; ShipModelLoader references these) ---
+    // Universal position-light colours — not team-tinted, so a green/red light reads the same on any
+    // hull the way real aircraft/runway lights do (friend/foe still reads from the hull HUD tint).
+    // Bases colour a light by its nearest dock feature; ships colour by wing side.
+    public static readonly Color NavGreen = new(0.15f, 1f, 0.35f); // starboard / docking entrance
+    public static readonly Color NavRed = new(1f, 0.18f, 0.18f); // port / docking exit
+    public static readonly Color NavWhite = new(1f, 0.96f, 0.9f); // everything else (slightly warm)
+    // Base beacon size (world units). Ships scale their own down off the hull length.
+    public const float BeaconMoteSize = 0.9f; // billboard mote diameter
+    public const float BeaconRange = 4.5f; // OmniLight reach when lit
+
     // Build the base's model node: the authored `base.glb` hull if one is present (else a
     // procedural sphere sized to the type's def), plus a HP_ marker per hardpoint and a blinking
     // beacon at each Light. `team` tints both the hull and the beacons so friend/foe still reads;
@@ -79,19 +90,36 @@ public static class BaseModelLoader
         // placeholder pair) and fall back to the def-seeded Lights only when the hull carries none
         // (e.g. the procedural sphere). The GLB node lives inside the uniform-scaled hull, so
         // hull.Transform maps its local offset into the unscaled BaseModel root the beacons sit on.
+        // Each light is coloured by the docking feature it marks: green next to a DockingEntrance,
+        // red next to a DockingExit, white otherwise (generalises to any base layout — no
+        // per-model hardcoding). "Nearest" is measured in the horizontal footprint (X/Z, ignoring
+        // the +Y up-axis that HP_DockingExit points along), because a base stacks each dock's
+        // lights in a vertical column sharing that dock's X/Z channel — full-3D distance would let
+        // a low entrance node bleed into a taller exit column. Cutoff keeps stray hull lights white.
+        float dockCutoff = radius * 0.5f;
         var glbLights = GlbLoader.FindHardpoints(hull, $"HP_{HardpointKind.Light}_");
         if (glbLights.Count > 0)
         {
+            var entrances = DockPositions(hull, HardpointKind.DockingEntrance);
+            var exits = DockPositions(hull, HardpointKind.DockingExit);
             int i = 0;
             foreach ((string _, Transform3D local) in glbLights)
-                root.AddChild(MakeBeacon((hull.Transform * local).Origin, team, i++));
+            {
+                Vector3 pos = (hull.Transform * local).Origin;
+                root.AddChild(MakeBeacon(pos, DockLightColor(pos, entrances, exits, dockCutoff), i++));
+            }
         }
         else if (def?.Hardpoints != null)
         {
+            var entrances = DefDockPositions(def.Hardpoints, HardpointKind.DockingEntrance);
+            var exits = DefDockPositions(def.Hardpoints, HardpointKind.DockingExit);
             int i = 0;
             foreach (HardpointDef hp in def.Hardpoints)
                 if (hp.Kind == HardpointKind.Light)
-                    root.AddChild(MakeBeacon(new Vector3(hp.OffX, hp.OffY, hp.OffZ), team, i++));
+                {
+                    var pos = new Vector3(hp.OffX, hp.OffY, hp.OffZ);
+                    root.AddChild(MakeBeacon(pos, DockLightColor(pos, entrances, exits, dockCutoff), i++));
+                }
         }
 
         // // DEBUG visualization of the docking hardpoints (entry = green, exit = magenta). Read from
@@ -192,15 +220,72 @@ public static class BaseModelLoader
         return node;
     }
 
-    // A blinking nav beacon parked at a Light hardpoint's local position, tinted toward the base's
-    // team hue. The node owns its blink phase so multiple lights pulse out of lockstep.
-    private static BaseBeacon MakeBeacon(Vector3 pos, byte team, int index) =>
+    // A blinking nav beacon parked at a Light hardpoint's local position, in the given nav colour.
+    // The node owns its blink phase so multiple lights pulse out of lockstep.
+    private static BaseBeacon MakeBeacon(Vector3 pos, Color color, int index) =>
         new BaseBeacon
         {
             Name = $"Beacon_{index}",
             Position = pos,
-            Color = team == 0 ? new Color(0.45f, 0.7f, 1f) : new Color(1f, 0.55f, 0.35f),
+            Color = color,
         };
+
+    // GLB dock-hardpoint positions in the unscaled BaseModel root frame (same mapping the beacons
+    // use: hull.Transform maps a scaled GLB-local node into the root the beacons sit on).
+    private static System.Collections.Generic.List<Vector3> DockPositions(Node3D hull, HardpointKind kind)
+    {
+        var list = new System.Collections.Generic.List<Vector3>();
+        foreach ((string _, Transform3D local) in GlbLoader.FindHardpoints(hull, $"HP_{kind}_"))
+            list.Add((hull.Transform * local).Origin);
+        return list;
+    }
+
+    // Def-seeded dock positions (procedural-sphere fallback path, where there is no GLB tree).
+    private static System.Collections.Generic.List<Vector3> DefDockPositions(
+        System.Collections.Generic.IEnumerable<HardpointDef> hardpoints,
+        HardpointKind kind
+    )
+    {
+        var list = new System.Collections.Generic.List<Vector3>();
+        foreach (HardpointDef hp in hardpoints)
+            if (hp.Kind == kind)
+                list.Add(new Vector3(hp.OffX, hp.OffY, hp.OffZ));
+        return list;
+    }
+
+    // Colour a light by the dock feature it marks: NavGreen next to an entrance, NavRed next to an
+    // exit, NavWhite when no dock is within `cutoff`. Distance is the horizontal-footprint (X/Z)
+    // distance — see the beacon block's comment for why the +Y vertical component is dropped.
+    private static Color DockLightColor(
+        Vector3 pos,
+        System.Collections.Generic.List<Vector3> entrances,
+        System.Collections.Generic.List<Vector3> exits,
+        float cutoff
+    )
+    {
+        float dEntrance = NearestFootprint(pos, entrances);
+        float dExit = NearestFootprint(pos, exits);
+        float nearest = Mathf.Min(dEntrance, dExit);
+        if (nearest > cutoff)
+            return NavWhite;
+        return dEntrance <= dExit ? NavGreen : NavRed;
+    }
+
+    // Smallest horizontal-footprint (X/Z, ignoring Y) distance from `pos` to any point in `pts`,
+    // or +inf when the list is empty.
+    private static float NearestFootprint(Vector3 pos, System.Collections.Generic.List<Vector3> pts)
+    {
+        float best = float.PositiveInfinity;
+        foreach (Vector3 p in pts)
+        {
+            float dx = pos.X - p.X,
+                dz = pos.Z - p.Z;
+            float d = Mathf.Sqrt(dx * dx + dz * dz);
+            if (d < best)
+                best = d;
+        }
+        return best;
+    }
 
     // Orthonormal basis whose local +Z points along `forward` (game-forward). Falls back to
     // identity for a near-zero direction, and swaps the up reference when forward is nearly
@@ -224,14 +309,14 @@ public static class BaseModelLoader
 // sync. Purely cosmetic — the blink is wall-clock, not the sim clock.
 public partial class BaseBeacon : Node3D
 {
-    // Team-tinted beacon colour, set by the loader before AddChild.
+    // Beacon colour, set by the loader before AddChild. (Nav palette lives on BaseModelLoader.)
     public Color Color = new(0.45f, 0.7f, 1f);
 
     // Cosmetic sizing knobs, promoted to public fields so callers can scale a beacon to a
     // ship-scale hull (ShipModelLoader) while the base loader's own beacons keep these exact
     // defaults — base visuals are unchanged unless a caller opts in by setting them.
-    public float MoteSize = 2.4f; // billboard mote diameter (world units)
-    public float Range = 12f; // OmniLight reach when lit
+    public float MoteSize = BaseModelLoader.BeaconMoteSize; // billboard mote diameter (world units)
+    public float Range = BaseModelLoader.BeaconRange; // OmniLight reach when lit
     // Multiplies both the mote's emission energy and the OmniLight's lit energy — a single
     // brightness knob for callers that want a dimmer/brighter blink than the base default.
     public float Intensity = 1f;

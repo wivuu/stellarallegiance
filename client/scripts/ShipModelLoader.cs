@@ -35,6 +35,16 @@ using StellarAllegiance.Shared;
 // =====================================================================
 public static class ShipModelLoader
 {
+    // --- Nav-light tuning (position lights on each Light hardpoint; palette lives on BaseModelLoader) ---
+    // A Light counts as a "wing" light when its lateral |X| offset is at least this fraction of the
+    // widest light's — nose/tail/centreline lights fall below it and stay white.
+    private const float WingLightFrac = 0.45f;
+    // Ship beacons are sized off the hull silhouette length (so a Scout's aren't as big as a
+    // Bomber's) and kept well under the base-beacon defaults.
+    private const float BeaconMoteFactor = 0.03375f; // mote diameter = silhouette length * this
+    private const float BeaconRangeFactor = 0.225f; // OmniLight reach = silhouette length * this
+    private const float BeaconIntensity = 0.4f;
+
     // Build the ship's model node: the authored `<class>.glb` hull if one is present (else the
     // procedural placeholder for `cls`) plus a HP_ marker for every hardpoint on the class's
     // def. `mat` is the team/pig material the caller resolved. A pod ignores `cls` for its
@@ -83,7 +93,7 @@ public static class ShipModelLoader
     private const float DefaultModelLength = 4.5f;
 
     // Longest local axis (world units) a loaded hull is uniform-scaled to — authored per hull on the
-    // def (ShipClassDef.ModelLength), so the fixed def muzzle (+Z≈3) and engine nozzles (−Z≈2.25–3.4)
+    // def (ShipClassDef.ModelLength), so the fixed def muzzle (+Z≈3) and engine nozzles (−Z≈2.25-3.4)
     // keep landing on the hull's nose/tail whatever scale the art was authored at. Also sizes the
     // engine glow and the loadout preview camera (LoadoutPreview reads the same field).
     private static float TargetLength(DefRegistry defs, ShipClass cls, bool isPod) =>
@@ -176,24 +186,40 @@ public static class ShipModelLoader
         // the same friend/foe hue. Sized off the hull's own silhouette length so a Scout's lights
         // aren't as big as a Bomber's; each BaseBeacon self-phases (GD.Randf() in _Ready), so
         // instances never blink in lockstep even though they share one Color/size here.
+        // Aircraft-style position lights: the outboard wing light on the starboard side glows
+        // green, the port side red, all other lights (nose/tail/centreline) white. "Wing" = a
+        // Light whose lateral offset is a large fraction of the widest light's — so nose/tail
+        // lights near the centreline stay white. Starboard is −X (game-forward is +Z, up is +Y,
+        // so right = forward × up = Z × Y = −X); a mirrored GLB export would flip this.
         if (hardpoints != null)
         {
-            Color beaconColor = team == 0 ? new Color(0.45f, 0.7f, 1f) : new Color(1f, 0.55f, 0.35f);
+            float maxAbsX = 0f;
+            foreach (HardpointDef hp in hardpoints)
+                if (hp.Kind == HardpointKind.Light)
+                    maxAbsX = Mathf.Max(maxAbsX, Mathf.Abs(hp.OffX));
+
+            float wingThreshold = maxAbsX * WingLightFrac;
+
             float len = TargetLength(defs, cls, isPod);
             int beaconIndex = 0;
             foreach (HardpointDef hp in hardpoints)
                 if (hp.Kind == HardpointKind.Light)
+                {
+                    Color color = BaseModelLoader.NavWhite;
+                    if (maxAbsX > 0.1f && Mathf.Abs(hp.OffX) >= wingThreshold)
+                        color = hp.OffX < 0f ? BaseModelLoader.NavGreen : BaseModelLoader.NavRed;
                     shipNode.AddChild(
                         new BaseBeacon
                         {
                             Name = $"Beacon_{beaconIndex++}",
                             Position = new Vector3(hp.OffX, hp.OffY, hp.OffZ),
-                            Color = beaconColor,
-                            MoteSize = len * 0.09f,
-                            Range = len * 0.6f,
-                            Intensity = 0.4f,
+                            Color = color,
+                            MoteSize = len * BeaconMoteFactor,
+                            Range = len * BeaconRangeFactor,
+                            Intensity = BeaconIntensity,
                         }
                     );
+                }
         }
     }
 
