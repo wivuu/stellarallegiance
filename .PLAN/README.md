@@ -270,13 +270,12 @@ Stage-1 YAML pipeline.
   incoming-warning leak), vision-cone HUD rendering, eyeball-tier occlusion (unoccluded in v1).*
 - ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
-- ☐ **[M]** **Mutinee** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
+- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a strategic overlay across all sectors exists; allow the commander to select units in F3 view and issue them orders. Allow other players to issue orders as well, but AI will only follow the commander's orders.
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a 2D strategic overlay across all sectors;
-  commander issues waypoints and investment orders. Reuse minimap/sector data.
 - ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
