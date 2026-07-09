@@ -97,13 +97,17 @@ public partial class CameraRig : Camera3D
         if (!inputFree || _world.LocalShip == null)
             return;
 
+        // toggle_view flips modes WITHOUT touching _zoom, so toggling round-trips to the prior
+        // framing. Rebindable via the InputMap (InputBindings), so it accepts a key or a pad button.
+        if (@event.IsActionPressed("toggle_view"))
+        {
+            SetDesiredMode(!_fpDesired);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         switch (@event)
         {
-            case InputEventKey { Pressed: true, Echo: false, Keycode: Key.V }:
-                // V flips modes WITHOUT touching _zoom, so toggling round-trips to the prior framing.
-                SetDesiredMode(!_fpDesired);
-                GetViewport().SetInputAsHandled();
-                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
                 HandleWheel(down: true);
                 break;

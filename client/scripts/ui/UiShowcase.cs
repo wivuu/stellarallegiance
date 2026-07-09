@@ -79,6 +79,8 @@ public partial class UiShowcase : Control
                 _scroll.ScrollVertical = scrollTo;
             if (openModal == "settings")
                 SettingsDialog.Open(this);
+            else if (openModal == "controls")
+                SettingsDialog.Open(this, 1); // CONTROLS tab — for verifying the rebind list
             else if (openModal == "escape")
                 EscapeMenu.Open(this, EscapeMenu.Context.Browser);
             else if (openModal == "password")
@@ -223,6 +225,18 @@ public partial class UiShowcase : Control
         row.AddChild(c3);
 
         s.AddChild(row);
+
+        // KeybindRow — the rebindable-control row used on the settings CONTROLS tab (one idle, one
+        // showing the "PRESS…" armed state). Live rebinding lives inside SettingsDialog.
+        var keys = new HairlinePanel { Title = "KEY BINDING", CustomMinimumSize = new Vector2(360, 0) };
+        var kcol = new VBoxContainer();
+        kcol.AddThemeConstantOverride("separation", 6);
+        kcol.AddChild(new KeybindRow { ActionId = "fire_primary", Display = "Fire Primary" });
+        var armed = new KeybindRow { ActionId = "afterburner", Display = "Afterburner" };
+        kcol.AddChild(armed);
+        keys.AddChild(kcol);
+        s.AddChild(keys);
+        armed.SetCapturing(true); // render the listening state for the gallery
     }
 
     private static void DataAndFeedback(VBoxContainer parent)

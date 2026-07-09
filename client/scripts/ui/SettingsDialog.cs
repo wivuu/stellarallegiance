@@ -20,12 +20,15 @@ public partial class SettingsDialog : Control
 {
     public static bool Active { get; private set; }
 
-    public static void Open(Node context)
+    public static void Open(Node context, int startTab = 0)
     {
         if (Active)
             return;
-        ModalHost.Ensure(context).AddChild(new SettingsDialog());
+        ModalHost.Ensure(context).AddChild(new SettingsDialog { _startTab = startTab });
     }
+
+    // Which tab (0 AUDIO / 1 CONTROLS / 2 PILOT) to show on open; set by Open before _Ready.
+    private int _startTab;
 
     // Snapshot taken on open — what CANCEL reverts to.
     private readonly Dictionary<string, float> _busSnapshot = new();
@@ -44,6 +47,12 @@ public partial class SettingsDialog : Control
     private readonly List<Control> _pages = new();
     private bool _closing;
 
+    // Keybinding rows on the CONTROLS tab + the open-time override snapshot CANCEL reverts to, plus
+    // the row currently listening for a new binding (null = not capturing).
+    private readonly List<KeybindRow> _bindRows = new();
+    private Dictionary<string, string[]> _bindSnapshot = new();
+    private KeybindRow? _capturingRow;
+
     public override void _EnterTree() => Active = true;
 
     public override void _ExitTree() => Active = false;
@@ -55,6 +64,7 @@ public partial class SettingsDialog : Control
         _sensSnapshot = UserPrefs.MouseSensMultiplier;
         _invertSnapshot = UserPrefs.MouseInvertY;
         _nameSnapshot = UserPrefs.PilotName;
+        _bindSnapshot = InputBindings.SnapshotOverrides();
 
         BuildUi();
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
@@ -62,11 +72,48 @@ public partial class SettingsDialog : Control
 
     public override void _Input(InputEvent @event)
     {
+        // While a keybind row is listening, the next input event IS the new binding — swallow
+        // everything else. Esc cancels the capture (not the dialog).
+        if (_capturingRow != null)
+        {
+            if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            {
+                _capturingRow.SetCapturing(false);
+                _capturingRow = null;
+                GetViewport().SetInputAsHandled();
+                return;
+            }
+            InputEvent? bind = InputBindings.NormalizeCaptured(@event);
+            if (bind != null)
+            {
+                string? conflict = InputBindings.Rebind(_capturingRow.ActionId, bind);
+                _capturingRow.SetCapturing(false);
+                _capturingRow = null;
+                foreach (var r in _bindRows)
+                    r.Refresh(); // a conflict may have cleared another action's binding
+                GetViewport().SetInputAsHandled();
+                _ = conflict;
+            }
+            else if (@event is InputEventKey or InputEventMouseButton or InputEventJoypadButton)
+            {
+                // A press we can't bind (e.g. a mouse wheel) — consume so it doesn't leak, but keep listening.
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
+
         if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
             Cancel();
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    private void BeginCapture(KeybindRow row)
+    {
+        _capturingRow?.SetCapturing(false);
+        _capturingRow = row;
+        row.SetCapturing(true);
     }
 
     // ---- Layout ------------------------------------------------------------
@@ -90,7 +137,7 @@ public partial class SettingsDialog : Control
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(center);
 
-        var panel = new BracketPanel { FillOverride = DesignTokens.PanelDeep, CustomMinimumSize = new Vector2(720, 560) };
+        var panel = new BracketPanel { FillOverride = DesignTokens.PanelDeep, CustomMinimumSize = new Vector2(1080, 840) };
         center.AddChild(panel);
 
         var col = new VBoxContainer();
@@ -101,7 +148,7 @@ public partial class SettingsDialog : Control
         BuildBody(col);
         BuildFooter(col);
 
-        SelectTab(0);
+        SelectTab(Mathf.Clamp(_startTab, 0, _tabs.Count - 1));
     }
 
     private void BuildHeader(VBoxContainer col)
@@ -246,7 +293,34 @@ public partial class SettingsDialog : Control
         row.AddChild(_invert);
         page.AddChild(row);
 
+        // Key bindings — one KeybindRow per rebindable InputMap action, grouped by category. Click a
+        // row's button to rebind; RESTORE DEFAULTS / CANCEL cover these alongside the mouse controls.
+        page.AddChild(new DiamondDivider());
+        page.AddChild(UiKit.MakeLabel("KEY BINDINGS", UiKit.TextStyle.Label, DesignTokens.TextDim));
+        page.AddChild(UiKit.MakeLabel("Click a control to rebind it — key, mouse button, or gamepad.", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        AddBindGroup(page, "FLIGHT", InputBindings.Category.Flight);
+        AddBindGroup(page, "COMBAT", InputBindings.Category.Combat);
+        AddBindGroup(page, "VIEW", InputBindings.Category.View);
+
         return page;
+    }
+
+    private void AddBindGroup(Control page, string title, InputBindings.Category cat)
+    {
+        var panel = new HairlinePanel { Title = title };
+        var v = new VBoxContainer();
+        v.AddThemeConstantOverride("separation", 6);
+        foreach (InputBindings.Action a in InputBindings.All)
+        {
+            if (a.Cat != cat)
+                continue;
+            var r = new KeybindRow { ActionId = a.Id, Display = a.Display };
+            r.CaptureRequested += BeginCapture;
+            _bindRows.Add(r);
+            v.AddChild(r);
+        }
+        panel.AddChild(v);
+        page.AddChild(panel);
     }
 
     private Control BuildPilotPage()
@@ -315,11 +389,14 @@ public partial class SettingsDialog : Control
     {
         if (_closing)
             return;
+        _capturingRow?.SetCapturing(false);
+        _capturingRow = null;
         foreach (var (bus, v) in _busSnapshot)
             UserPrefs.SetBusVolume(bus, v);
         UserPrefs.SetMouseSensMultiplier(_sensSnapshot);
         UserPrefs.SetMouseInvertY(_invertSnapshot);
         UserPrefs.SetPilotName(_nameSnapshot);
+        InputBindings.RestoreOverrides(_bindSnapshot);
         Close();
     }
 
@@ -332,6 +409,9 @@ public partial class SettingsDialog : Control
             _busSliders[bus].Value = UserPrefs.DefaultBusVolume(bus);
         _sensSlider.Value = UserPrefs.DefaultMouseSensMultiplier;
         _invert.ButtonPressed = UserPrefs.DefaultMouseInvertY; // assigning emits Toggled on change
+        InputBindings.ResetAll();
+        foreach (var r in _bindRows)
+            r.Refresh();
     }
 
     private void CommitCallsign()

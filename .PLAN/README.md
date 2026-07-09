@@ -20,6 +20,7 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Replace console.writelines with .net high perf logging, and a configurable console log/log levels, with timestamps
 ---
 
 ## Content philosophy (the through-line)
@@ -226,8 +227,13 @@ Stage-2 economy, no rework.
 - ✅ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
-- ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,
-  and control schemes for the game from the settings -> controls menu.
+- ✅ **[M]** **Control settings and mappings** — shipped (2026-07-09): flight/combat/scope controls
+  migrated onto Godot InputMap actions (`client/scripts/InputBindings.cs` — defaults single-sourced
+  in C#, registered at boot in `SfxManager._Ready`, overrides persisted in `UserPrefs` `[bindings]`).
+  Rebindable from Settings → Controls (grouped `KeybindRow` list, click-to-capture key/mouse/**gamepad**,
+  RESTORE DEFAULTS + revert), with analog joystick support via `Input.GetAxis`. Menu/system keys
+  (Esc, F3/F4/F9, base-select/spawn digits, chat) stay hardcoded to protect the modal input-gating.
+  *Deferred: named preset schemes (Default/Southpaw), rebinding the menu/system keys.*
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.

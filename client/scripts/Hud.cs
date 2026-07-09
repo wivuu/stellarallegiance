@@ -320,7 +320,7 @@ public partial class Hud : CanvasLayer
         bool firing2 =
             inputFree
             && (
-                Input.IsPhysicalKeyPressed(Key.F)
+                Input.IsActionPressed("fire_secondary")
                 || (Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsMouseButtonPressed(MouseButton.Right))
             );
         if (firing2 && !_firing2Held && missileMount != null && _net.LocalMissileAmmo == 0 && _emptyClickCd <= 0)
@@ -334,21 +334,21 @@ public partial class Hud : CanvasLayer
         // absent) dispenser otherwise swallows the press silently — the drop itself is
         // server-authoritative, so this client-side edge detect is cosmetic feedback only.
         bool dispensersLive = flying && !ship!.IsPod;
-        bool chaffKey = inputFree && Input.IsPhysicalKeyPressed(Key.C);
+        bool chaffKey = inputFree && Input.IsActionPressed("drop_chaff");
         if (chaffKey && !_chaffHeld && dispensersLive && _net.LocalChaffAmmo == 0 && _emptyClickCd <= 0)
         {
             SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
             _emptyClickCd = 0.5;
         }
         _chaffHeld = chaffKey;
-        bool mineKey = inputFree && Input.IsPhysicalKeyPressed(Key.B);
+        bool mineKey = inputFree && Input.IsActionPressed("drop_mine");
         if (mineKey && !_mineHeld && dispensersLive && _net.LocalMineAmmo == 0 && _emptyClickCd <= 0)
         {
             SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
             _emptyClickCd = 0.5;
         }
         _mineHeld = mineKey;
-        bool probeKey = inputFree && Input.IsPhysicalKeyPressed(Key.G);
+        bool probeKey = inputFree && Input.IsActionPressed("drop_probe");
         if (probeKey && !_probeHeld && dispensersLive && _net.LocalProbeAmmo == 0 && _emptyClickCd <= 0)
         {
             SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);

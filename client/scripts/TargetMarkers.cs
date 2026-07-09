@@ -191,7 +191,7 @@ public partial class TargetMarkers : Control
             return;
         }
 
-        bool tab = Input.IsPhysicalKeyPressed(Key.Tab);
+        bool tab = Input.IsActionPressed("cycle_target");
         bool pressed = tab && !_tabHeld;
         _tabHeld = tab;
 

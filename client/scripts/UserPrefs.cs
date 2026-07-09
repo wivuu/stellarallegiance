@@ -16,6 +16,7 @@ public static class UserPrefs
     private const string InvertYKey = "invert_y";
     private const string ViewSection = "view";
     private const string FirstPersonKey = "first_person";
+    private const string BindingsSection = "bindings";
 
     // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
     // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
@@ -186,5 +187,53 @@ public static class UserPrefs
         if (err != Error.Ok)
             GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
         Changed?.Invoke();
+    }
+
+    // ---- Control bindings ----------------------------------------------------
+    // Per-action keybinding overrides for the InputMap actions, stored as a list of compact
+    // event strings (encoding owned by InputBindings, which is the only caller). A row exists
+    // only for an action the player has changed away from its default — the InputMap itself is
+    // the live source of truth, this is just the persistence layer (no Changed event needed:
+    // InputBindings applies edits to the InputMap directly).
+
+    // The saved override for an action, or an empty array if the action uses its default.
+    public static string[] GetBinding(string action)
+    {
+        Variant v = Cfg.GetValue(BindingsSection, action, new Godot.Collections.Array());
+        if (v.VariantType != Variant.Type.Array)
+            return System.Array.Empty<string>();
+        var arr = v.AsGodotArray();
+        var res = new string[arr.Count];
+        for (int i = 0; i < arr.Count; i++)
+            res[i] = arr[i].AsString();
+        return res;
+    }
+
+    public static bool HasBinding(string action) => Cfg.HasSectionKey(BindingsSection, action);
+
+    // Persist an action's override event list. Writes through immediately like the other setters.
+    public static void SetBinding(string action, string[] encoded)
+    {
+        var arr = new Godot.Collections.Array();
+        foreach (string s in encoded)
+            arr.Add(s);
+        Cfg.SetValue(BindingsSection, action, arr);
+        SaveBindings();
+    }
+
+    // Drop an action's override (it reverts to the compiled-in default). No-op if none stored.
+    public static void ClearBinding(string action)
+    {
+        if (!Cfg.HasSectionKey(BindingsSection, action))
+            return;
+        Cfg.EraseSectionKey(BindingsSection, action);
+        SaveBindings();
+    }
+
+    private static void SaveBindings()
+    {
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
     }
 }

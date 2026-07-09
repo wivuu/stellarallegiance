@@ -138,36 +138,36 @@ public partial class ZoomView : Control
 
     public override void _Input(InputEvent @event)
     {
-        if (@event is not InputEventKey { Pressed: true, Echo: false } key)
-            return;
         // Same inputFree idiom the rest of the client gates keys on, plus a live local ship.
         bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
         if (!inputFree || _world.LocalShip == null)
             return;
 
-        switch (key.Keycode)
+        // scope_zoom_in / scope_zoom_out are rebindable InputMap actions (InputBindings), so accept
+        // any bound event type, not just the default '='/'−' keys.
+        if (@event.IsActionPressed("scope_zoom_in"))
         {
-            case Key.Equal:
-            case Key.KpAdd:
-                if (!Active)
-                    Open();
-                else
-                    StepUp();
-                GetViewport().SetInputAsHandled();
-                break;
-            case Key.Minus:
-            case Key.KpSubtract:
-                if (!Active)
-                    return; // '−' does nothing while the scope is closed
-                StepDown();
-                GetViewport().SetInputAsHandled();
-                break;
-            case Key.Escape:
-                if (!Active)
-                    return; // let ShipController's two-step Esc run when the scope is closed
-                Close();
-                GetViewport().SetInputAsHandled();
-                break;
+            if (!Active)
+                Open();
+            else
+                StepUp();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (@event.IsActionPressed("scope_zoom_out"))
+        {
+            if (!Active)
+                return; // zoom-out does nothing while the scope is closed
+            StepDown();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        {
+            if (!Active)
+                return; // let ShipController's two-step Esc run when the scope is closed
+            Close();
+            GetViewport().SetInputAsHandled();
         }
     }
 
