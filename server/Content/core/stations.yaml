@@ -1,11 +1,18 @@
-# Stations — the team base. radius→BaseDef.radius, max-armor→BaseDef.max-health. base-type-id and
-# hardpoints (docking entrance/exit + nav lights) are explicit runtime extensions. The faction's
-# initial station MUST carry the 'restart' ability (CoreValidator). Reproduces stock.yaml's Garrison.
+# Stations — the team base. radius→BaseDef.radius, max-armor→BaseDef.max-health. base-type-id is an
+# explicit runtime extension. The faction's initial station MUST carry the 'restart' ability
+# (CoreValidator). Reproduces stock.yaml's Garrison.
+#
+# Hardpoints are GLB-authoritative (HardpointGeometryMerge): model-name binds base.glb, whose
+# HP_DockingEntrance_* / HP_DockingExit_0 / HP_Light_* nodes supply the docking discs + nav lights
+# in the exact frame World.LoadBase already uses for the server dock geometry — so the streamed
+# client markers and the server dock discs come from one source. No YAML hardpoints authored: every
+# mesh node appends (by kind byte, then index) → 12 lights, 5 docking entrances, 1 docking exit = 18.
 stations:
   - id: garrison
     name: Garrison
     base-type-id: 0
     class: garrison
+    model-name: base    # res://assets/bases/<model-name>.glb — supplies all hardpoints via merge
     radius: 90
     max-armor: 2000
     # Fog-of-war vision: an unoccluded sphere the garrison contributes to its team from tick 0.
@@ -13,8 +20,3 @@ stations:
     radar-signature: 2.5   # a base is seen from far away
     abilities: [start, restart]
     required-capabilities: [base]
-    hardpoints:
-      - { kind: docking-entrance, off-z: 90, dir-z: 1 }
-      - { kind: docking-exit, off-z: 90, dir-z: 1 }
-      - { kind: light, index: 0, off-y: 90, dir-y: 1 }
-      - { kind: light, index: 1, off-y: -90, dir-y: -1 }

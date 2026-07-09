@@ -304,8 +304,20 @@ Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints f
   - `server/Content/core/*.yaml` — hull definitions per faction
   - `client/scripts/ShipController.cs` — hull selection UI
   - `tools/ship-gen/` — modular hull generation from YAML parts
-- **Related:** [[Weapon]], [[Payload]], [[Docking]]
+- **Related:** [[Weapon]], [[Payload]], [[Docking]], [[Hardpoint]]
 - **Notes:** Immutable after game start; each hull has unique GLB 3D model and collision shape
+
+### Hardpoint
+Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. Unbound mesh Weapon nodes stream as empty assignable mounts (`HardpointDef.NoWeapon`).
+- **Frequency:** Very common
+- **Key Files:**
+  - `server/Content/HardpointGeometryMerge.cs` — the mesh→def merge pass (in ContentLoader.Load)
+  - `shared/Collision/GlbReader.cs` — HP_ node extraction (pos + world +Z forward)
+  - `shared/Defs.cs` — `HardpointDef` / `HardpointKind` / `NoWeapon` sentinel
+  - `docs/GLB-AND-HARDPOINT-FORMAT.md` — the full contract
+  - `.claude/skills/hardpoints/` — inspection tool (dumps a GLB's HP_ nodes, authored + world units)
+- **Related:** [[Hull]], [[Weapon]], [[Def (Definition)]], [[Docking]]
+- **Notes:** World scale = model-length / mesh longest axis (bases: radius*2); YAML weapon order stays at the list head so barrel spread-seed indices are stable; `HP_Cockpit` exists in no mesh — always YAML-authored
 
 ### Weapon
 Armament with barrel, fire-rate, projectile type, and damage tuning.

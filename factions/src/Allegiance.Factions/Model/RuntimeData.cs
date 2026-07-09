@@ -33,23 +33,29 @@ public record Hardpoint
     /// <summary>Disambiguates multiples of one kind (e.g. two boosters).</summary>
     public byte Index { get; set; }
 
-    /// <summary>Local-space X offset from the hull origin.</summary>
-    public double OffX { get; set; }
+    // Geometry is NULLABLE so the GLB-authoritative merge (server/Content/HardpointGeometryMerge)
+    // can tell an authored override from an unauthored field: a YAML entry that omits off-*/dir-*
+    // inherits the mesh HP_<Kind>_<Index> node's position/direction; an entry that authors any
+    // component overrides the mesh. CoreSerializer omits nulls, so an omitted key stays null.
+    // Post-merge every field is populated; projection reads them via (float)(x ?? 0).
 
-    /// <summary>Local-space Y offset from the hull origin.</summary>
-    public double OffY { get; set; }
+    /// <summary>Local-space X offset from the hull origin. Null = inherit the mesh node's position.</summary>
+    public double? OffX { get; set; }
 
-    /// <summary>Local-space Z offset from the hull origin.</summary>
-    public double OffZ { get; set; }
+    /// <summary>Local-space Y offset from the hull origin. Null = inherit the mesh node's position.</summary>
+    public double? OffY { get; set; }
 
-    /// <summary>Local-space X component of the hardpoint's facing direction.</summary>
-    public double DirX { get; set; }
+    /// <summary>Local-space Z offset from the hull origin. Null = inherit the mesh node's position.</summary>
+    public double? OffZ { get; set; }
 
-    /// <summary>Local-space Y component of the hardpoint's facing direction.</summary>
-    public double DirY { get; set; }
+    /// <summary>Local-space X component of the hardpoint's facing direction. Null = inherit the mesh node's forward.</summary>
+    public double? DirX { get; set; }
 
-    /// <summary>Local-space Z component of the hardpoint's facing direction.</summary>
-    public double DirZ { get; set; }
+    /// <summary>Local-space Y component of the hardpoint's facing direction. Null = inherit the mesh node's forward.</summary>
+    public double? DirY { get; set; }
+
+    /// <summary>Local-space Z component of the hardpoint's facing direction. Null = inherit the mesh node's forward.</summary>
+    public double? DirZ { get; set; }
 
     /// <summary>Meaningful only for <see cref="RuntimeHardpointKind.Weapon"/>; references a runtime weapon id.</summary>
     public uint WeaponId { get; set; }

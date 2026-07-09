@@ -55,11 +55,14 @@ hulls:
     price: 100
     payload-capacity: 8 # cannon 2 -> 6 free for cargo
     required-capabilities: [base]
+    # GLB is authoritative for the hardpoint inventory + geometry (HardpointGeometryMerge). A YAML
+    # entry BINDS a weapon-id to a mesh HP_<Kind>_<Index> node and inherits its position/direction
+    # unless it authors off-*/dir-* to override. Unclaimed mesh nodes append at the end (by kind,
+    # index): scout gains its empty HP_Weapon_1 mount, Booster_0/1 nozzles, Thruster_0 + Light_0..2.
     hardpoints:
-      - { kind: weapon, off-z: 3, dir-z: 1, weapon-id: 0 }
-      - { kind: main-engine, off-z: -2.25, dir-z: -1 }
-      # Cockpit eye point for the first-person camera (client-only; slightly above the centreline,
-      # forward of centre). Kept LAST so the positional weapon/engine indices above stay stable.
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (cannon; geometry from mesh)
+      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
+      # stays FULLY authored here (slightly above the centreline, forward of centre).
       - { kind: cockpit, off-y: 0.35, off-z: 0.9, dir-z: 1 }
     # Default hold: cannon 2 + proximity-mine (3) + sensor-decoy (1) + recon-probe (2) = 8 == capacity.
     # Probe mass is authored low (2, not a "realistic" 20) so a single pack fits exactly alongside
@@ -103,16 +106,18 @@ hulls:
     price: 200
     payload-capacity: 20 # twin cannons 2x5 + seeker rack 4 = 14 -> 6 free for cargo
     required-capabilities: [base]
-    # Missile rack sits AFTER the two gun hardpoints (weapon-index 2) so the barrel spread-seed
-    # indices of the guns (0/1) stay aligned on both server and client.
+    # GLB-authoritative geometry (HardpointGeometryMerge): each weapon/booster entry BINDS its mesh
+    # HP_<Kind>_<Index> node and inherits its position/direction. The seeker rack keeps weapon-index 2
+    # (AFTER the two guns 0/1) so the barrel spread-seed indices stay aligned on server + client.
+    # Unclaimed mesh nodes append at the end (by kind, index): Thruster_0 + Light_0..4.
     hardpoints:
-      - { kind: weapon, index: 0, off-x: -0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
-      - { kind: weapon, index: 1, off-x: 0.9, off-z: 3, dir-z: 1, weapon-id: 1 }
-      - { kind: weapon, index: 2, off-y: -0.6, off-z: 2, dir-z: 1, weapon-id: 3 }
-      - { kind: booster, index: 0, off-x: -1.1, off-z: -2.75, dir-z: -1 }
-      - { kind: booster, index: 1, off-x: 1.1, off-z: -2.75, dir-z: -1 }
-      # Cockpit eye point for the first-person camera (client-only). LAST so the weapon/booster
-      # positional indices above stay stable.
+      - { kind: weapon, index: 0, weapon-id: 1 }   # binds mesh HP_Weapon_0 (left cannon)
+      - { kind: weapon, index: 1, weapon-id: 1 }   # binds mesh HP_Weapon_1 (right cannon)
+      - { kind: weapon, index: 2, weapon-id: 3 }   # binds mesh HP_Weapon_2 (seeker rack)
+      - { kind: booster, index: 0 }                # binds mesh HP_Booster_0
+      - { kind: booster, index: 1 }                # binds mesh HP_Booster_1
+      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
+      # stays FULLY authored here.
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     # Default hold: twin cannons 2x5 + seeker rack 4 = 14, + 2x sensor-decoy (3) = 20 == capacity.
     default-cargo:
@@ -130,7 +135,7 @@ hulls:
   #   ab-fuel-drain: 4.0
   #   ab-fuel-recharge: 0 # dock-only: no in-flight regen, full tank only on relaunch
 
-  # Bomber (class-id 2): the heavy hull — twin main engines; one slow, hard cannon.
+  # Bomber (class-id 2): the heavy hull — twin main engines; twin main cannons + a missile rack.
   - id: bomber
     name: Bomber
     glyph: "⬢"
@@ -159,18 +164,23 @@ hulls:
     vision-sphere-radius: 400
     radar-signature: 1.75  # big and loud — seen from much further away than a scout
     price: 350
-    payload-capacity: 26 # cannon 11 + torpedo rack 4 = 15 -> 11 free; the payload hull carries the most
+    payload-capacity: 37 # twin cannons 2x11 + missile rack 4 = 26 -> 11 free for cargo; the payload hull carries the most
     required-capabilities: [base]
-    # Torpedo rack sits AFTER the gun (weapon-index 1) to keep the gun's spread-seed index (0) aligned.
+    # GLB-authoritative geometry (HardpointGeometryMerge). Twin main cannons BIND mesh HP_Weapon_0
+    # (right barrel) and HP_Weapon_1 (left barrel), inheriting mesh position/direction as-is — a
+    # symmetric forward gun pair, no authored override. The missile rack keeps weapon-index 2 (AFTER
+    # the guns) so the guns' spread-seed indices (0/1) stay aligned, binding mesh HP_Weapon_2.
+    # Unclaimed mesh nodes append at the end (by kind, index): Booster_0/1, Thruster_0, Turret_0, Light_0..4.
+    # The rack on HP_Weapon_2 carries the anti-base torpedo (weapon-id 5) — the ONLY can-damage-base
+    # weapon in the game; the bomber is the only hull that mounts it, so it stays the match-ender.
     hardpoints:
-      - { kind: weapon, index: 0, off-z: 3, dir-z: 1, weapon-id: 2 }
-      - { kind: weapon, index: 1, off-y: -0.8, off-z: 2, dir-z: 1, weapon-id: 5 }
-      - { kind: main-engine, index: 0, off-x: -1.4, off-z: -3.4, dir-z: -1 }
-      - { kind: main-engine, index: 1, off-x: 1.4, off-z: -3.4, dir-z: -1 }
-      # Cockpit eye point for the first-person camera (client-only). LAST so the weapon index-1
-      # torpedo rack (asserted positionally in FactionsTest) stays put.
+      - { kind: weapon, index: 0, weapon-id: 2 }   # binds mesh HP_Weapon_0 (right cannon barrel)
+      - { kind: weapon, index: 1, weapon-id: 2 }   # binds mesh HP_Weapon_1 (left cannon barrel) — 2nd main cannon
+      - { kind: weapon, index: 2, weapon-id: 5 }   # binds mesh HP_Weapon_2 (missile/torpedo rack)
+      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
+      # stays FULLY authored here.
       - { kind: cockpit, off-y: 0.7, off-z: 1.8, dir-z: 1 }
-    # Default hold: cannon 11 + torpedo rack 4 = 15, + 8x proximity-mine (8) + sensor-decoy (3) = 26 <= 26.
+    # Default hold: twin cannons 2x11 + torpedo rack 4 = 26, + 8x proximity-mine (8) + sensor-decoy (3) = 37 <= 37.
     # 8 mines = one full cloud-count deploy; mine mass 1 keeps the whole field affordable.
     default-cargo:
       - { item: proximity-mine, count: 8 }

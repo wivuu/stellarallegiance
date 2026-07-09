@@ -227,10 +227,17 @@ public partial class BaseBeacon : Node3D
     // Team-tinted beacon colour, set by the loader before AddChild.
     public Color Color = new(0.45f, 0.7f, 1f);
 
+    // Cosmetic sizing knobs, promoted to public fields so callers can scale a beacon to a
+    // ship-scale hull (ShipModelLoader) while the base loader's own beacons keep these exact
+    // defaults — base visuals are unchanged unless a caller opts in by setting them.
+    public float MoteSize = 2.4f; // billboard mote diameter (world units)
+    public float Range = 12f; // OmniLight reach when lit
+    // Multiplies both the mote's emission energy and the OmniLight's lit energy — a single
+    // brightness knob for callers that want a dimmer/brighter blink than the base default.
+    public float Intensity = 1f;
+
     private const float Period = 1.6f; // full blink cycle (s)
     private const float OnFraction = 0.25f; // share of the cycle the light is lit
-    private const float Range = 12f; // OmniLight reach when lit
-    private const float MoteSize = 2.4f; // billboard mote diameter (world units)
 
     private OmniLight3D _light = null!;
     private StandardMaterial3D _moteMat = null!;
@@ -287,9 +294,9 @@ public partial class BaseBeacon : Node3D
 
     private void ApplyBlink(float lit)
     {
-        _moteMat.EmissionEnergyMultiplier = 1f + 6f * lit;
+        _moteMat.EmissionEnergyMultiplier = (1f + 6f * lit) * Intensity;
         _moteMat.AlbedoColor = new Color(Color.R, Color.G, Color.B, lit);
-        _light.LightEnergy = 3f * lit;
+        _light.LightEnergy = 3f * lit * Intensity;
     }
 
     // Soft round mote: hot centre fading to transparent — drives bloom via emission energy.

@@ -7,20 +7,23 @@ project.
 There are two things that the words "hardpoint" and "GLB" touch, and they meet at one
 naming convention:
 
-1. **The hardpoint data contract** — the authoritative list of mount points lives in
-   `shared/Defs.cs`, is sent **server → client over the wire** (`Protocol.MsgDefs`), and
-   is rendered by the client. This is live today.
+1. **The hardpoint data contract** — the runtime list of mount points is a `HardpointDef`
+   list on each `ShipClassDef`/`BaseDef` (`shared/Defs.cs`), sent **server → client over the
+   wire** (`Protocol.MsgDefs`) and rendered by the client. This is live today.
 2. **The GLB mesh convention** — a ship/base mesh is a `.glb` that carries its hardpoints
-   *in the mesh itself* as empty nodes named `HP_<Kind>_<Index>`. The client currently
-   renders **procedural placeholder** silhouettes and reads hardpoints from the def data;
-   the GLB path is the planned drop-in replacement, and the node-naming contract is chosen
-   so it slots in with **no change** to the FX/weapon code.
+   *in the mesh itself* as empty nodes named `HP_<Kind>_<Index>`. **The GLB is now the
+   authoritative source for the hardpoint inventory AND geometry**: at content load the
+   server reads the mesh nodes and folds them into each hull/station's hardpoint list
+   (`server/Content/HardpointGeometryMerge.cs`). The YAML content bundle
+   (`server/Content/core/hulls.yaml` / `stations.yaml`) is a **binding/override layer** — it
+   binds weapon-ids to mounts and may override a mount's position/direction, but it no longer
+   declares *how many* mounts a hull has or where they sit. See §4.
 
 The single rule that ties them together:
 
 > **A hardpoint is a local-space node named `HP_<Kind>_<Index>` whose local +Z axis is the
-> hardpoint's forward.** Both the def-seeded markers and any future GLB node obey this, so a
-> `.glb` can override the procedural markers transparently.
+> hardpoint's forward.** The GLB nodes, the streamed `HardpointDef`s, and the client markers
+> all obey this, so the mesh geometry, the sim muzzles, and the client FX share one frame.
 
 ---
 
@@ -71,6 +74,13 @@ it is **append-only** — never reorder or remove members, only add to the end.
 `Booster`s are `Booster_0` and `Booster_1`). `WeaponId` is meaningful only for `Weapon`
 hardpoints (0 otherwise) and references a `WeaponDef.WeaponId`.
 
+**Empty weapon mounts** — a `Weapon` hardpoint whose `WeaponId == HardpointDef.NoWeapon`
+(`uint.MaxValue`) is an **empty mount**: it exists on the hull and streams to the client, but
+fires nothing and is assignable via the loadout UI. It never resolves in `WeaponDefs`, so
+every `TryGetValue`-guarded consumer (sim muzzles, client `DefRegistry.WeaponMounts`, payload
+mass) skips it. `0` cannot mean "empty" — `weapon-id 0` is a real weapon (the scout cannon).
+A GLB `HP_Weapon_N` node with no YAML entry binding it becomes exactly such an empty mount.
+
 ### How each kind is used by the client
 
 - **Weapon** — `DefRegistry.TryGetWeapon` finds the first `Weapon` hardpoint and its
@@ -105,7 +115,7 @@ public sealed class HardpointDef
     public byte  Index;            // disambiguates multiples of one kind
     public float OffX, OffY, OffZ; // local offset from hull origin
     public float DirX, DirY, DirZ; // local forward (+Z muzzle / −Z nozzle)
-    public uint  WeaponId;         // Weapon hardpoints only; 0 otherwise
+    public uint  WeaponId;         // Weapon hardpoints only; NoWeapon = empty mount; 0 otherwise
 }
 ```
 
@@ -115,27 +125,34 @@ Hardpoints hang off the content defs that own them:
   data-only additions; the pod uses reserved `ClassId = 255`).
 - `BaseDef.Hardpoints` (one def per base type; also carries `Radius` and `MaxHealth`).
 
-These are **authored in `GameContent`** (`Defs.cs`), the compile-in defaults. The client
+The values are **authored in YAML** (`server/Content/core/hulls.yaml` / `stations.yaml`) and
+merged with the GLB mesh nodes at load (§4); there is **no compile-in content**. The client
 keeps **no compile-time tuning fallback** — until the `MsgDefs` frame arrives it guards
 (holds authority) rather than rendering baked numbers.
 
-### Seeded content (current defaults)
+### How the stock hulls resolve (post-merge)
 
-| Hull / base | Hardpoints |
+The merged hardpoint list is **YAML-declared entries first (in YAML order), then the
+unclaimed GLB nodes appended by kind byte, then index**. For the stock content:
+
+| Hull / base | Merged hardpoints (armed weapons **bold**) |
 |-------------|-----------|
-| **Scout** (class 0) | `Weapon_0` @ (0,0,3) +Z; `MainEngine_0` @ (0,0,−2.25) −Z |
-| **Fighter** (class 1) | `Weapon_0` @ (0,0,3) +Z; `Booster_0` @ (−1.1,0,−2.75) −Z; `Booster_1` @ (1.1,0,−2.75) −Z |
-| **Bomber** (class 2) | `Weapon_0` @ (0,0,3) +Z; `MainEngine_0` @ (−1.4,0,−3.4) −Z; `MainEngine_1` @ (1.4,0,−3.4) −Z |
-| **Pod** (class 255) | `MainEngine_0` @ (0,0,−2.25) −Z (unarmed) |
-| **Garrison base** (type 0) | `DockingEntrance_0` & `DockingExit_0` @ (0,0,R) +Z; `Light_0` @ (0,R,0); `Light_1` @ (0,−R,0) (R = base radius, 90) |
+| **Scout** (class 0) | **Weapon_0** (id 0, YAML-bound to mesh); Cockpit_0 (YAML); *appended:* Weapon_1 (empty/`NoWeapon`), Booster_0/1, Thruster_0, Light_0..2 → 9 total |
+| **Fighter** (class 1) | **Weapon_0**/**Weapon_1** (id 1), **Weapon_2** (id 3 seeker) (all YAML-bound to mesh); Booster_0/1 (YAML); Cockpit_0 (YAML); *appended:* Thruster_0, Light_0..4 → 12 total |
+| **Bomber** (class 2) | **Weapon_0** (id 2, mesh right barrel); **Weapon_1** (id 5 torpedo, YAML-**overridden** to the belly (0,−0.8,2)); Cockpit_0 (YAML); *appended:* Weapon_2 (empty/`NoWeapon`), Booster_0/1, Thruster_0, Turret_0, Light_0..4 → 13 total |
+| **Pod** (class 255) | MainEngine_0 (YAML, fully authored — no mesh node); Cockpit_0 (YAML); *appended:* Thruster_0, Light_0..5 → 9 total (unarmed) |
+| **Garrison base** (type 0) | *no YAML entries;* base.glb supplies all: Light_0..11, DockingEntrance_0..4, DockingExit_0 → 18 total |
 
-`NoseOffset = 3` is the muzzle distance ahead of center; `BaseRadius = 90` matches the
-client's render radius.
+Geometry is world-scaled at merge time by `ws = ModelLength / LongestAxis` (ships) or
+`Radius*2 / LongestAxis` (stations) — the same scale `World.LoadShipHull` / `World.LoadBase`
+bake for the sim hull, so muzzles/markers land on the visible mesh feature.
 
 ### Wire format (`Protocol.MsgDefs`)
 
 Sent once, right after `Welcome`, full-float (not a hot per-tick frame). Hardpoints are
-encoded by `Protocol.WriteHardpoints` (`server/Net/Protocol.cs:197`):
+encoded by `Protocol.WriteHardpoints` (`server/Net/Protocol.cs`). `WeaponId` is a full `u32`,
+so the `NoWeapon` (`uint.MaxValue`) empty-mount sentinel round-trips to the client
+(`GameNetClient.ReadHardpoints` reads `r.ReadUInt32()`):
 
 ```
 count : u8
@@ -196,20 +213,41 @@ Examples: `HP_Weapon_0`, `HP_Booster_0`, `HP_Booster_1`, `HP_MainEngine_0`,
   authored GLB should expect its material to be tinted or overridden per team.
 - **Normal maps are OpenGL-style** (green = +Y), Godot's default — no flip.
 
-### Planned loader behaviour (not yet wired)
+### Server-side GLB → hardpoint merge (live)
 
-Today `ShipModelLoader.Build` / `BaseModelLoader.Build` always build the procedural
-placeholder (`BuildPlaceholderMesh` / the sphere) and add an `HP_` `Marker3D` per def
-hardpoint. The documented future path (see the header comments in both files):
+At content load the server folds the GLB mesh nodes into each hull/station's hardpoint list —
+`server/Content/HardpointGeometryMerge.cs`, run inside `ContentLoader.Load` **between**
+`CoreValidator.Validate` and `FactionsContentProjection.Project`, mutating the core model's
+`Hull.Hardpoints` / `Station.Hardpoints` in place (the projection stays a dumb field cast).
+The merge is generic — **no per-hull special cases in code**:
 
-1. If a `<class>.glb` / base `.glb` exists, load it **in place of** the placeholder mesh.
-2. Read the GLB's `HP_<Kind>_<Index>` nodes; they **override** the procedurally-placed
-   markers (the GLB author has placed them in-mesh).
-3. `AttachEngineGlow`, the weapon/muzzle spawn, the beacons, etc. keep working unchanged —
-   they only ever look up nodes/offsets by the `HP_` contract.
+For each hull/station with a `model-name`, it loads `ships/<model>.glb` /
+`bases/<model>.glb` via `SimAssets.TryLoad`, world-scales each `HP_<Kind>_<Index>` node's
+position by `ws` (see above), then:
 
-The def data remains the **authority** for gameplay (weapon offset used by prediction lives
-in `DefRegistry`); the GLB nodes are the *visual* placement. Author them consistently.
+1. **YAML entries bind and override, keyed by `(kind, index)`.** A YAML hardpoint supplies
+   `weapon-id` and, when it authors any `off-*`/`dir-*`, **overrides** the mesh node's
+   position/direction; unauthored geometry falls back to the matching mesh node. A YAML entry
+   with **neither** authored geometry **nor** a matching mesh node is a **boot error** (naming
+   id + kind + index). Fully-authored YAML entries may add mounts the mesh lacks (the cockpit
+   — no GLB carries `HP_Cockpit` — and the pod's `HP_MainEngine`).
+2. **Every mesh node not claimed by a YAML entry is appended**, in deterministic order (kind
+   byte, then index). An appended `Weapon` node becomes an **empty mount** (`WeaponId =
+   NoWeapon`); every other kind gets `0`. Appended empty weapon mounts land at the end and are
+   skipped by every armed-weapon consumer, so the barrel spread-seed indices of the bound guns
+   (server `Simulation`, client `DefRegistry.WeaponMounts`) are unchanged.
+3. **No model / missing GLB ⇒ nodes is empty**, so every YAML entry must be fully authored
+   (else boot error) and nothing is appended. Boot therefore requires the assets dir for stock
+   content (the published layout and the test dirs both resolve it via `SimAssets.Resolve`).
+
+Boot-time validation (merge + shared `ContentValidator`): a hardpoint with no position
+source, no direction source, a zero-length authored/mesh direction, a duplicate `(kind,index)`
+(in YAML or GLB), or a `ModelLength`/`Radius ≤ 0` alongside a `model-name` all fail fast. A
+bound weapon-id that doesn't resolve is still an error; `NoWeapon` is accepted.
+
+Downstream everything reads the merged, streamed defs: `AttachEngineGlow`, the weapon/muzzle
+spawn, the beacons, `CameraRig` cockpit, `TargetMarkers` — they only ever look up
+nodes/offsets by the `HP_` contract, so the merge needs no client change to the wire.
 
 > **One committed file per asset:** the `.glb` is the *only* file checked in per asset (it
 > embeds its own PNG textures). Godot still imports it the normal way — `GlbLoader` loads the
@@ -300,13 +338,20 @@ The `hardpoints:` block maps **one-to-one** onto `HardpointDef` (`kind`→`Kind`
 `HP_<Kind>_<Index>` nodes (forward → local +Z), so the GLB satisfies the §4 convention by
 construction.
 
-### Keeping YAML and `Defs.cs` in sync
+### The GLB is the authority; content YAML binds
 
-The GLB's hardpoints are **visual placement**; `GameContent` in `shared/Defs.cs` is the
-**gameplay authority** (it's what's sent over the wire and what prediction/FX read). When
-authoring a hull, keep the YAML hardpoints and the corresponding `ShipClassDef`/`BaseDef`
-hardpoints **aligned** (same kinds, indices, offsets, forwards). Mismatches show up as FX or
-muzzles that don't sit on the mesh feature they belong to.
+The GLB's `HP_<Kind>_<Index>` nodes are now the **authoritative inventory and geometry** — the
+server-side merge (§4) reads them at load and streams the result. When authoring a hull:
+
+- Put every mount **in the mesh** (`ship-gen` `hardpoints:` block below, or by hand). The
+  count and placement of `Weapon`/`Booster`/`Thruster`/`Turret`/`Light`/`Docking*` mounts come
+  from the GLB — you do **not** list them in `hulls.yaml`.
+- In `hulls.yaml` / `stations.yaml`, author **only** what the mesh can't carry: `weapon-id`
+  bindings for the mounts you want armed (an unbound `HP_Weapon_N` streams as an empty mount),
+  a `Cockpit` (no GLB carries one), and any deliberate position/direction **override** (e.g.
+  the bomber's belly torpedo, whose authored `off/dir` win over the mesh `HP_Weapon_1`).
+- A `weapon-id` bound to a mount whose mesh node is absent is a boot error — bind only mounts
+  the mesh actually has (or author full `off/dir` to add a mesh-less mount).
 
 ---
 
@@ -328,7 +373,11 @@ muzzles that don't sit on the mesh feature they belong to.
 
 | File | Role |
 |------|------|
-| `shared/Defs.cs` | `HardpointKind`, `HardpointDef`, `ShipClassDef`, `BaseDef`, seeded `GameContent` |
+| `shared/Defs.cs` | `HardpointKind`, `HardpointDef` (incl. `NoWeapon` sentinel), `ShipClassDef`, `BaseDef` |
+| `server/Content/core/hulls.yaml` / `stations.yaml` | authored hull/station content: weapon-id bindings, cockpit, geometry overrides |
+| `server/Content/HardpointGeometryMerge.cs` | folds GLB `HP_` nodes into the hardpoint lists (inventory + geometry authority) at load |
+| `server/Content/ContentLoader.cs` | runs the merge between `CoreValidator` and the projection |
+| `shared/ContentValidator.cs` | boot-time hardpoint checks (unique `(kind,index)`, non-zero dir, weapon-id resolves or `NoWeapon`) |
 | `server/Net/Protocol.cs` | `WriteHardpoints` / `BuildDefs` — the `MsgDefs` wire encoding |
 | `client/scripts/DefRegistry.cs` | client-side def store; `GetHardpoints`, `TryGetWeapon` |
 | `client/scripts/ShipModelLoader.cs` | ship placeholder mesh + `HP_` markers + engine glow/trail |

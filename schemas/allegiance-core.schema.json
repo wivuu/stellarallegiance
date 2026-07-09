@@ -347,28 +347,46 @@
                   "description": "Disambiguates multiples of one kind (e.g. two boosters)."
                 },
                 "off-x": {
-                  "type": "number",
-                  "description": "Local-space X offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space X offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "off-y": {
-                  "type": "number",
-                  "description": "Local-space Y offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Y offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "off-z": {
-                  "type": "number",
-                  "description": "Local-space Z offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Z offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "dir-x": {
-                  "type": "number",
-                  "description": "Local-space X component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space X component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "dir-y": {
-                  "type": "number",
-                  "description": "Local-space Y component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Y component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "dir-z": {
-                  "type": "number",
-                  "description": "Local-space Z component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Z component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "weapon-id": {
                   "type": "integer",

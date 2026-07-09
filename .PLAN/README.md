@@ -20,6 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Make base hardpoint 'entrance' lights green and exit lights red
+- Add camera shake to afterburner
 ---
 
 ## Content philosophy (the through-line)

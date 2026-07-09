@@ -30,7 +30,7 @@ var content = ContentLoader.Load(manifest, worldPath);
 Check(content.Start.StartingCredits == 1000, "stock faction seeds 1000 starting credits", $"starting credits wrong ({content.Start.StartingCredits})");
 Check(content.Start.IncomePerPaycheck == 100, "stock faction income is 100 per paycheck", $"income wrong ({content.Start.IncomePerPaycheck})");
 
-var world = new World(12345, content.World, content.Bases[0].MaxHealth, content.Start);
+var world = new World(12345, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
 var sim = new Simulation(world, content);
 
 // ---- 1. Seeding: both teams exist and start from the faction snapshot. ----

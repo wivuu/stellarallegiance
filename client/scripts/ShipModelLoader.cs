@@ -102,12 +102,15 @@ public static class ShipModelLoader
         Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
 
         // Collect engine nozzle offsets from the engine-class hardpoints (a Scout's single
-        // MainEngine, a Fighter's twin Boosters, a Bomber's twin MainEngines, RCS Thrusters).
+        // MainEngine, a Fighter's twin Boosters, a Bomber's twin MainEngines). Thruster (RCS
+        // maneuvering ports) is deliberately excluded — those stream on every hull now (GLB
+        // merge), and an RCS port is not an engine nozzle; including it would sprout a
+        // constant engine plume from every ship's attitude thrusters.
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
         var nozzles = new List<Vector3>();
         if (hardpoints != null)
             foreach (HardpointDef hp in hardpoints)
-                if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster or HardpointKind.Thruster)
+                if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster)
                     nozzles.Add(new Vector3(hp.OffX, hp.OffY, hp.OffZ));
 
         // A pod is a powered-down lifeboat — no engine glow even though its def carries an
@@ -164,6 +167,34 @@ public static class ShipModelLoader
                     : 0.4f,
             }
         );
+
+        // A team-tinted blinking nav beacon at every Light hardpoint (GLB-derived nav lights on
+        // the fighter/scout/bomber/pod meshes). Runs unconditionally — a pod skips the engine
+        // flame above but still carries its own Lights and gets beacons too — and is a no-op for
+        // a def with zero Light hardpoints (pre-merge defs, placeholder hulls with no model).
+        // Team tint matches BaseModelLoader.MakeBeacon's palette so ship and base nav lights read
+        // the same friend/foe hue. Sized off the hull's own silhouette length so a Scout's lights
+        // aren't as big as a Bomber's; each BaseBeacon self-phases (GD.Randf() in _Ready), so
+        // instances never blink in lockstep even though they share one Color/size here.
+        if (hardpoints != null)
+        {
+            Color beaconColor = team == 0 ? new Color(0.45f, 0.7f, 1f) : new Color(1f, 0.55f, 0.35f);
+            float len = TargetLength(defs, cls, isPod);
+            int beaconIndex = 0;
+            foreach (HardpointDef hp in hardpoints)
+                if (hp.Kind == HardpointKind.Light)
+                    shipNode.AddChild(
+                        new BaseBeacon
+                        {
+                            Name = $"Beacon_{beaconIndex++}",
+                            Position = new Vector3(hp.OffX, hp.OffY, hp.OffZ),
+                            Color = beaconColor,
+                            MoteSize = len * 0.09f,
+                            Range = len * 0.6f,
+                            Intensity = 0.4f,
+                        }
+                    );
+        }
     }
 
     // The def-table id a class/pod resolves to (pods sit at the reserved PodClassId).

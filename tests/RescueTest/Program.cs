@@ -41,7 +41,7 @@ void ParkAt(Simulation.ShipSim s, Vec3 pos)
 }
 
 var content = ContentLoader.Load(stockPath, worldPath);
-var world = new World(1u, content.World, content.Bases[0].MaxHealth, content.Start);
+var world = new World(1u, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
 var sim = new Simulation(world, content);
 sim.PigsEnabled = false;
 sim.ShieldsEnabled = false;

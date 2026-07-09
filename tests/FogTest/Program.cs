@@ -39,7 +39,7 @@ const int Settle = 30; // ticks to hold a configuration so the 2 Hz apply reflec
 Simulation BootSim(ulong seed, bool sync = true)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
+    var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.FogEnabled = true;
@@ -1173,7 +1173,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start);
+    var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content) { PigsEnabled = false, FogEnabled = true, VisionSynchronous = false };
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
         new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true),
@@ -1388,8 +1388,8 @@ Vec3 AtAngle(float dist, float angleDeg)
             },
         };
 
-    var wA = new World(12345, DustCfg(), mh, content.Start);
-    var wB = new World(12345, DustCfg(), mh, content.Start);
+    var wA = new World(12345, DustCfg(), mh, content.Start, content.Ships);
+    var wB = new World(12345, DustCfg(), mh, content.Start, content.Ships);
     bool cloudsMatch =
         wA.DustClouds.Count == wB.DustClouds.Count
         && wA.DustClouds.Count > 0
@@ -1412,7 +1412,8 @@ Vec3 AtAngle(float dist, float angleDeg)
             Sectors = new List<WorldSectorConfig> { new() { Id = 0 }, new() { Id = 1 } },
         },
         mh,
-        content.Start
+        content.Start,
+        content.Ships
     );
     bool rocksUnchanged =
         wA.Asteroids.Count == noDust.Asteroids.Count
@@ -1460,7 +1461,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             },
             new() { Id = 1 },
         };
-        w = new World(77, c.World, c.Bases[0].MaxHealth, c.Start);
+        w = new World(77, c.World, c.Bases[0].MaxHealth, c.Start, c.Ships);
         var s = new Simulation(w, c);
         s.PigsEnabled = false;
         s.FogEnabled = true;
@@ -1521,7 +1522,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             new() { Id = 1 },
         },
     };
-    var w = new World(9, cfg, content.Bases[0].MaxHealth, content.Start);
+    var w = new World(9, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
     byte[] frame = Protocol.BuildWelcome(1, 0, w, 0, Array.Empty<byte>(), fog: false);
     var (ns, _, _, _) = WelcomeCounts(frame); // throws if the appended env desyncs the frame length
     Check(ns == 2 && w.DustClouds.Count > 0, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
@@ -1631,7 +1632,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             new() { Id = 0, Env = new SectorEnvironment { Dust = new SectorDust { Amount = amount, Opacity = opacity } } },
             new() { Id = 1 },
         };
-        var w = new World(2100, c.World, c.Bases[0].MaxHealth, c.Start);
+        var w = new World(2100, c.World, c.Bases[0].MaxHealth, c.Start, c.Ships);
         const float cloudR = 150f;
         w.DustClouds.Clear(); // replace the procedural clouds with ONE exactly-known cloud
         w.DustClouds.Add(new World.DustCloud(0, new Vec3(0, 0, 0), cloudR, 1f)); // full density

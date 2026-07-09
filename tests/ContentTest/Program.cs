@@ -50,15 +50,42 @@ Check(
     "loader projected hull build cost (Buildable.Price -> ShipClassDef.Cost)",
     $"hull cost wrong (scout {scout.Cost}, bomber {bomber.Cost})"
 );
+// GLB-authoritative merge: the scout's YAML now binds only the cannon (HP_Weapon_0) + cockpit;
+// every unclaimed mesh node appends (by kind byte, then index) — the empty HP_Weapon_1 mount,
+// Booster_0/1, Thruster_0, Light_0..2. YAML-declared entries keep their order at the head.
 Check(
-    scout.Hardpoints.Count == 3
+    scout.Hardpoints.Count == 9
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon
         && scout.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId
-        && scout.Hardpoints[1].Kind == HardpointKind.MainEngine
-        && scout.Hardpoints[2].Kind == HardpointKind.Cockpit,
-    "loader parsed scout hardpoints (kinds + weapon-id)",
-    "scout hardpoints wrong"
+        && scout.Hardpoints[1].Kind == HardpointKind.Cockpit
+        && scout.Hardpoints[2].Kind == HardpointKind.Weapon
+        && scout.Hardpoints[2].WeaponId == HardpointDef.NoWeapon
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Thruster) == 1
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 3
+        // Exactly ONE armed weapon (the bound cannon); the appended HP_Weapon_1 is an empty mount.
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 1
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 2,
+    "merged scout hardpoints (bound cannon + cockpit, appended empty weapon/boosters/thruster/lights; one armed weapon)",
+    $"scout merged hardpoints wrong (count {scout.Hardpoints.Count}, kinds {string.Join(",", scout.Hardpoints.Select(h => h.Kind))})"
 );
+// The GLB is authoritative for geometry: the bound scout cannon inherits its mesh node's position
+// (world-scaled by ModelLength/LongestAxis) rather than the old hand-authored (0,0,3).
+var scoutModel = SimServer.Assets.SimAssets.TryLoad("ships/scout.glb");
+Check(scoutModel is not null, "scout GLB resolves for the geometry-merge assertions", "scout GLB not found — assets dir unresolved");
+if (scoutModel is not null)
+{
+    var w0 = scoutModel.Hardpoints.First(h => h.Name == "HP_Weapon_0");
+    float sws = scout.ModelLength / scoutModel.LongestAxis;
+    var hp0 = scout.Hardpoints[0];
+    Check(
+        Math.Abs(hp0.OffX - w0.Pos.X * sws) < 1e-4f
+            && Math.Abs(hp0.OffY - w0.Pos.Y * sws) < 1e-4f
+            && Math.Abs(hp0.OffZ - w0.Pos.Z * sws) < 1e-4f,
+        "merged scout cannon inherits its GLB HP_Weapon_0 position (world-scaled)",
+        $"scout cannon geometry wrong (def {hp0.OffX},{hp0.OffY},{hp0.OffZ} vs mesh*ws {w0.Pos.X * sws},{w0.Pos.Y * sws},{w0.Pos.Z * sws})"
+    );
+}
 var scoutW = stock.Weapons.First(w => w.WeaponId == GameContent.ScoutWeaponId);
 Check(
     scoutW.Damage == 4f && scoutW.FireIntervalTicks == 4 && scoutW.ProjectileSpeed == 200f && scoutW.SpreadRad == 0.006f,
@@ -68,7 +95,7 @@ Check(
 // Payload: hull capacity + weapon mass are authored (hulls/weapons.yaml), cargo items project
 // from expendables carrying a cargo-id (expendables.yaml).
 Check(
-    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 26f && scoutW.Mass == 2f,
+    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 37f && scoutW.Mass == 2f,
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
@@ -89,6 +116,33 @@ Check(
     "loader projected fighter vision fields (explicit baseline signature)",
     $"fighter vision wrong (cone {fighterVis.VisionConeLength}/{fighterVis.VisionConeAngleDeg}, sphere {fighterVis.VisionSphereRadius}, sig {fighterVis.RadarSignature})"
 );
+// Fighter: three bound guns (HP_Weapon_0/1 = id 1, HP_Weapon_2 = id 3 seeker), two boosters, the
+// authored cockpit, then appended Thruster_0 + Light_0..4. All three weapon mounts are armed (no
+// empty weapon mount on the fighter). hardpoint[0] inherits the GLB HP_Weapon_0 pos × (5.5/LongestAxis).
+Check(
+    fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 3
+        && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 3
+        && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
+        && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 5
+        && fighterVis.Hardpoints[0].Kind == HardpointKind.Weapon && fighterVis.Hardpoints[0].WeaponId == GameContent.FighterWeaponId,
+    "merged fighter hardpoints (3 armed guns, 2 boosters, appended thruster + 5 lights)",
+    $"fighter merged hardpoints wrong (count {fighterVis.Hardpoints.Count}, weapons {fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)})"
+);
+var fighterModel = SimServer.Assets.SimAssets.TryLoad("ships/fighter.glb");
+Check(fighterModel is not null, "fighter GLB resolves for the geometry-merge assertion", "fighter GLB not found — assets dir unresolved");
+if (fighterModel is not null)
+{
+    var fw0 = fighterModel.Hardpoints.First(h => h.Name == "HP_Weapon_0");
+    float fws = fighterVis.ModelLength / fighterModel.LongestAxis;
+    var fhp0 = fighterVis.Hardpoints[0];
+    Check(
+        Math.Abs(fhp0.OffX - fw0.Pos.X * fws) < 1e-4f
+            && Math.Abs(fhp0.OffY - fw0.Pos.Y * fws) < 1e-4f
+            && Math.Abs(fhp0.OffZ - fw0.Pos.Z * fws) < 1e-4f,
+        "merged fighter def hardpoint[0] == HP_Weapon_0 pos x (5.5/LongestAxis) within 1e-4",
+        $"fighter hardpoint[0] geometry wrong (def {fhp0.OffX},{fhp0.OffY},{fhp0.OffZ} vs mesh*ws {fw0.Pos.X * fws},{fw0.Pos.Y * fws},{fw0.Pos.Z * fws})"
+    );
+}
 // A hull/base that OMITS radar-signature (0 authored) must resolve to 1.0 at projection — never
 // streamed as 0 (which would make it undetectable at any range). Built as a synthetic minimal
 // bundle since every real stock hull/base authors an explicit signature.
@@ -217,8 +271,32 @@ Check(
     "loader projected scout as fuel-unmodeled (no afterburner)",
     $"scout fuel wrong (max {scout.MaxFuel}, drain {scout.AbFuelDrain}, recharge {scout.AbFuelRecharge})"
 );
+// Bomber: twin main cannons bind HP_Weapon_0 (right barrel) and HP_Weapon_1 (left barrel), the
+// missile rack binds HP_Weapon_2 → 3 weapon mounts, all 3 armed. hardpoint[1] inherits the mesh
+// left-barrel geometry as-is (negative X, no authored override) — honoring the GLB node.
+Check(
+    bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 3
+        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 3
+        && bomber.Hardpoints[0].WeaponId == 2 && bomber.Hardpoints[1].WeaponId == 2
+        && bomber.Hardpoints[2].Kind == HardpointKind.Weapon && bomber.Hardpoints[2].WeaponId == 5
+        && bomber.Hardpoints[1].OffX < 0f
+        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 1,
+    "merged bomber hardpoints (3 armed weapon mounts: twin cannons 0/1 + missile rack 2; HP_Weapon_1 mesh geometry honored)",
+    $"bomber merged hardpoints wrong (weapons {bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)}, hp[1] wid {bomber.Hardpoints[1].WeaponId} offX {bomber.Hardpoints[1].OffX}, hp[2] wid {bomber.Hardpoints[2].WeaponId})"
+);
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
+// Garrison hardpoints are entirely GLB-sourced (no YAML entries): base.glb supplies 12 lights, 5
+// docking entrances, 1 docking exit = 18, appended by kind byte (Light 5 < DockingEntrance 6 <
+// DockingExit 7), then index.
+Check(
+    garrison.Hardpoints.Count == 18
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 12
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingEntrance) == 5
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingExit) == 1,
+    "merged garrison hardpoints (18: 12 lights + 5 docking entrances + 1 docking exit, all from base.glb)",
+    $"garrison merged hardpoints wrong (count {garrison.Hardpoints.Count}, kinds {string.Join(",", garrison.Hardpoints.Select(h => h.Kind))})"
+);
 Check(
     garrison.VisionSphereRadius == 1500f && garrison.RadarSignature == 2.5f,
     "loader projected garrison vision fields",
@@ -360,7 +438,8 @@ Check(
 // weapon, but this fixture's ship carries no weapons at all — mount a minimal siege weapon so this
 // otherwise-unrelated fuel-authoring check isn't tripped by the new rule.
 var goodFuelShip = FuelShip(26, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f);
-goodFuelShip.Hardpoints.Add(new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 50 });
+// DirZ=1 keeps this hand-built hardpoint valid under the new non-zero-direction check.
+goodFuelShip.Hardpoints.Add(new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 50, DirZ = 1f });
 var siegeWeapon = new WeaponDef { WeaponId = 50, Name = "Siege", CanDamageBase = true };
 var goodFuelErrors = ContentValidator.Validate(new[] { goodFuelShip }, new[] { siegeWeapon }, new[] { okBase });
 Check(
@@ -435,6 +514,59 @@ Check(
     deadConeErrors.Any(e => e.Contains("VisionConeLength > 0")),
     "validator flags a vision cone with reach but no angle",
     "validator missed a vision cone with reach but no angle"
+);
+
+// 3g. GLB-merge hardpoint rules (ValidateWeaponHardpoints): an empty weapon mount (NoWeapon) is
+// accepted; a bound-but-unknown weapon-id, a duplicate (kind,index), and a zero-length direction
+// are all flagged.
+var oneWeapon = new WeaponDef { WeaponId = 70, Name = "Gun", CanDamageBase = true };
+var emptyMountShip = new ShipClassDef
+{
+    ClassId = 70,
+    Name = "EmptyMount",
+    MaxHull = 50f,
+    PayloadCapacity = 10f,
+    Hardpoints = new()
+    {
+        new HardpointDef { Kind = HardpointKind.Weapon, Index = 0, WeaponId = 70, DirZ = 1f },
+        new HardpointDef { Kind = HardpointKind.Weapon, Index = 1, WeaponId = HardpointDef.NoWeapon, DirZ = 1f },
+    },
+};
+var emptyMountErrors = ContentValidator.Validate(new[] { emptyMountShip }, new[] { oneWeapon }, new[] { okBase });
+Check(
+    !emptyMountErrors.Any(e => e.Contains("NoWeapon") || e.Contains(HardpointDef.NoWeapon.ToString())),
+    "validator accepts an empty weapon mount (NoWeapon sentinel)",
+    $"validator wrongly flagged an empty (NoWeapon) mount: {string.Join("; ", emptyMountErrors)}"
+);
+var dupHpShip = new ShipClassDef
+{
+    ClassId = 71,
+    Name = "DupHp",
+    MaxHull = 50f,
+    Hardpoints = new()
+    {
+        new HardpointDef { Kind = HardpointKind.Booster, Index = 0, DirZ = 1f },
+        new HardpointDef { Kind = HardpointKind.Booster, Index = 0, DirZ = 1f },
+    },
+};
+var dupHpErrors = ContentValidator.Validate(new[] { dupHpShip }, new[] { oneWeapon }, new[] { okBase });
+Check(
+    dupHpErrors.Any(e => e.Contains("duplicate hardpoint")),
+    "validator flags a duplicate (kind,index) hardpoint",
+    "validator missed a duplicate hardpoint"
+);
+var zeroDirShip = new ShipClassDef
+{
+    ClassId = 72,
+    Name = "ZeroDir",
+    MaxHull = 50f,
+    Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Light, Index = 0 } },
+};
+var zeroDirErrors = ContentValidator.Validate(new[] { zeroDirShip }, new[] { oneWeapon }, new[] { okBase });
+Check(
+    zeroDirErrors.Any(e => e.Contains("zero-length direction")),
+    "validator flags a zero-length hardpoint direction",
+    "validator missed a zero-length hardpoint direction"
 );
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");

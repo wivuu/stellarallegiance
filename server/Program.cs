@@ -193,7 +193,7 @@ try
     selectedMapDef = MapLoader.Resolve(maps, selectedMap);
     // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
     // content.World for the live arena (Build clones per map, so this doesn't disturb it).
-    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start);
+    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start, content.Ships);
     MapLoader.ApplyTo(selectedMapDef, content.World);
     Console.WriteLine(
         $"[SimServer] map: '{selectedMapDef.Name}' ({selectedMapDef.Sectors.Count} sector override(s))"
@@ -209,7 +209,7 @@ string mapName = selectedMapDef.Name!.Trim();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
+var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
 var sim = new Simulation(world, content);
 var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
 
@@ -227,7 +227,7 @@ World? BuildWorldForMap(string name)
         return null;
     var cfg = MapCatalog.Clone(pristineWorldCfg);
     MapLoader.ApplyTo(def, cfg);
-    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start);
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
 }
 sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
 sim.OnMatchStart = hub.OnMatchStart;

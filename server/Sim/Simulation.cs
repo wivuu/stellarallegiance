@@ -1343,11 +1343,13 @@ public sealed partial class Simulation
         // Primary fire is the GUNS: one cadence per ship, gated off the first Bolt muzzle's weapon
         // (missile racks have their own cadence in TryFireMissile). A hull with no gun (only racks)
         // has nothing to fire here. Per-weapon cadence arrives with mixed loadouts (Stage 2).
+        // TryGetValue skips an empty/unbound mount (WeaponId == HardpointDef.NoWeapon never
+        // resolves) — same guard every other muzzle consumer uses (PrimaryWeapon, ClassMissileMounts).
         WeaponDef? primary = null;
         foreach (var mz in muzzles)
-            if (WeaponDefs[mz.WeaponId].Kind == WeaponKind.Bolt)
+            if (WeaponDefs.TryGetValue(mz.WeaponId, out var pwd) && pwd.Kind == WeaponKind.Bolt)
             {
-                primary = WeaponDefs[mz.WeaponId];
+                primary = pwd;
                 break;
             }
         if (primary is null)
@@ -1363,7 +1365,8 @@ public sealed partial class Simulation
         // gun barrel seeds stay aligned on both sides regardless of where racks sit in the array.
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
-            var w = WeaponDefs[muzzles[barrel].WeaponId];
+            if (!WeaponDefs.TryGetValue(muzzles[barrel].WeaponId, out var w))
+                continue; // empty/unbound mount (NoWeapon) — assignable slot, nothing to fire
             switch (w.Kind)
             {
                 case WeaponKind.Bolt:

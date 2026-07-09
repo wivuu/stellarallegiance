@@ -138,22 +138,12 @@ public sealed class World
     // falls back to the ShipRadius sphere for that class (like asteroids/bases do without a model).
     public readonly record struct ShipBody(ConvexHull Hull, float BoundingRadius);
 
-    private readonly ShipBody?[] _shipHulls; // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
+    private readonly Dictionary<byte, ShipBody> _shipHulls = new(); // keyed by ShipClassDef.ClassId
     private readonly ShipBody? _podHull;
-
-    // Client ShipModelLoader.TargetLength, mirrored here so the server collision hull is scaled to
-    // the exact visual silhouette length the client uniform-scales each GLB to. Keep in sync.
-    private static readonly (string Name, float TargetLen)[] ShipClassAssets =
-    {
-        ("scout", 4.5f),
-        ("fighter", 5.5f),
-        ("bomber", 7.2f),
-    };
-    private const float PodTargetLength = 2.8f;
 
     // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
     // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
-    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
+    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (_shipHulls.TryGetValue(cls, out var b) ? b : null);
 
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
@@ -161,7 +151,7 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships)
     {
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
@@ -296,7 +286,7 @@ public sealed class World
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
         (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
-        (_shipHulls, _podHull) = LoadShipBodies();
+        (_shipHulls, _podHull) = LoadShipBodies(ships);
     }
 
     // (Re)seed every team's economy from the faction snapshot: reset Credits to the starting grant,
@@ -314,15 +304,29 @@ public sealed class World
         }
     }
 
-    // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the
-    // client's silhouette length (longestAxis → TargetLen), so the world-frame hull matches the
-    // rendered ship. A missing/degenerate GLB leaves that class on the sphere fallback.
-    private static (ShipBody?[], ShipBody?) LoadShipBodies()
+    // Per-class ship hulls: load each ship def's GLB and pre-scale its hull to the def's authored
+    // ModelLength (the same silhouette length the client uniform-scales the GLB to), so the
+    // world-frame collision hull matches the rendered ship and can never diverge from content. A
+    // def with no ModelName (no GLB) is skipped — that class falls back to the ShipRadius sphere,
+    // same as a missing/degenerate GLB. The escape pod is identified by its reserved ClassId
+    // (GameContent.PodClassId), not by name.
+    private static (Dictionary<byte, ShipBody>, ShipBody?) LoadShipBodies(IReadOnlyList<ShipClassDef> ships)
     {
-        var classes = new ShipBody?[ShipClassAssets.Length];
-        for (int i = 0; i < ShipClassAssets.Length; i++)
-            classes[i] = LoadShipHull($"ships/{ShipClassAssets[i].Name}.glb", ShipClassAssets[i].TargetLen);
-        return (classes, LoadShipHull("ships/pod.glb", PodTargetLength));
+        var classes = new Dictionary<byte, ShipBody>();
+        ShipBody? pod = null;
+        foreach (var def in ships)
+        {
+            if (string.IsNullOrEmpty(def.ModelName))
+                continue;
+            var body = LoadShipHull($"ships/{def.ModelName}.glb", def.ModelLength);
+            if (body is null)
+                continue;
+            if (def.ClassId == GameContent.PodClassId)
+                pod = body;
+            else
+                classes[def.ClassId] = body.Value;
+        }
+        return (classes, pod);
     }
 
     private static ShipBody? LoadShipHull(string relPath, float targetLen)

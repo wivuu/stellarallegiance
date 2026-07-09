@@ -62,13 +62,16 @@ Check(
     "stock scout carries derived + extend flight fields",
     $"stock scout fields wrong (class {scout.ClassId}, mass {scout.Mass}, speed {scout.Speed}, drift {scout.DriftYawDeg})"
 );
+// RAW (pre-merge) YAML shape: the GLB-authoritative merge runs server-side (SimServer's
+// ContentLoader), NOT in CoreSerializer.Load, so here the scout carries only its two AUTHORED
+// entries — the bound cannon (weapon-id 0, geometry inherited from the mesh at merge time) and the
+// fully-authored cockpit. Boosters/thruster/lights/empty-mount are appended later by the merge.
 Check(
-    scout.Hardpoints.Count == 3
+    scout.Hardpoints.Count == 2
         && scout.Hardpoints[0].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[0].WeaponId == 0
-        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.MainEngine
-        && scout.Hardpoints[2].Kind == RuntimeHardpointKind.Cockpit,
-    "stock scout carries hardpoints (kinds + weapon-id)",
-    "stock scout hardpoints wrong"
+        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.Cockpit,
+    "stock scout carries authored hardpoints (bound cannon + cockpit)",
+    $"stock scout hardpoints wrong (count {scout.Hardpoints.Count})"
 );
 var pod = stock.Hulls.Single(h => h.Id == "pod");
 Check(pod.ClassId == 255, "stock pod is class-id 255 (lifepod)", $"stock pod class-id wrong ({pod.ClassId})");
@@ -186,9 +189,12 @@ Check(
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");
 Check(
-    garrison.BaseTypeId == 0 && garrison.Radius == 90 && garrison.MaxArmor == 2000 && garrison.Hardpoints.Count == 4,
-    "stock garrison carries base-type-id + radius/armor + hardpoints",
-    $"stock garrison wrong (id {garrison.BaseTypeId}, r {garrison.Radius}, hp {garrison.MaxArmor}, hardpoints {garrison.Hardpoints.Count})"
+    // RAW (pre-merge): the garrison authors NO hardpoints — base.glb supplies all 18 (docking
+    // entrances/exit + nav lights) via the server-side merge. It binds the GLB by model-name.
+    garrison.BaseTypeId == 0 && garrison.Radius == 90 && garrison.MaxArmor == 2000
+        && garrison.ModelName == "base" && garrison.Hardpoints.Count == 0,
+    "stock garrison carries base-type-id + radius/armor + model-name (hardpoints come from the GLB)",
+    $"stock garrison wrong (id {garrison.BaseTypeId}, r {garrison.Radius}, hp {garrison.MaxArmor}, model {garrison.ModelName}, hardpoints {garrison.Hardpoints.Count})"
 );
 // (World/sim tuning is no longer part of the factions bundle — it lives in the server's standalone
 // content/core/world.yaml, parsed by SimServer's WorldLoader and covered by tests/ContentTest.)
