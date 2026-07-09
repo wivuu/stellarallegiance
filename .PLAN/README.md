@@ -223,15 +223,11 @@ Stage-2 economy, no rework.
   don't. (FX done; the recharge *mechanic* is not.)
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
-- ◐ **[S]** **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
-  shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
-  HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
-  scores/ranks are Stage 5.
-- ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,
-  and control schemes for the game from the settings -> controls menu.
 - ☐ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
+- ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,
+  and control schemes for the game from the settings -> controls menu.
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
