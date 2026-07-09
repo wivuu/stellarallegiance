@@ -53,20 +53,21 @@ hulls:
     vision-sphere-radius: 1080  # 900 x1.2 — scout's omnidirectional radar bubble
     radar-signature: 0.5   # small + quiet — must be approached closer before being seen
     price: 100
-    payload-capacity: 8 # cannon 2 -> 6 free for cargo
+    payload-capacity: 12 # cannon 2 + missile rack 4 = 6 -> 6 free for cargo
     required-capabilities: [base]
     # GLB is authoritative for the hardpoint inventory + geometry (HardpointGeometryMerge). A YAML
     # entry BINDS a weapon-id to a mesh HP_<Kind>_<Index> node and inherits its position/direction
     # unless it authors off-*/dir-* to override. Unclaimed mesh nodes append at the end (by kind,
-    # index): scout gains its empty HP_Weapon_1 mount, Booster_0/1 nozzles, Thruster_0 + Light_0..2.
+    # index): Booster_0/1 nozzles, Thruster_0 + Light_0..2.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (cannon; geometry from mesh)
+      - { kind: weapon, index: 1, weapon-id: 3 }   # binds mesh HP_Weapon_1 (missile rack) — P2
       # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
       # stays FULLY authored here (slightly above the centreline, forward of centre).
       - { kind: cockpit, off-y: 0.35, off-z: 0.9, dir-z: 1 }
-    # Default hold: cannon 2 + proximity-mine (3) + sensor-decoy (1) + recon-probe (2) = 8 == capacity.
-    # Probe mass is authored low (2, not a "realistic" 20) so a single pack fits exactly alongside
-    # the scout's existing loadout rather than raising payload-capacity for every hull.
+    # Default hold: cannon 2 + missile rack 4 + proximity-mine (3) + sensor-decoy (1) + recon-probe (2) = 12 == capacity.
+    # Probe mass is authored low (2, not a "realistic" 20) so a single pack fits alongside the
+    # scout's loadout without ballooning payload-capacity for every hull.
     default-cargo:
       - { item: proximity-mine, count: 3 }
       - { item: sensor-decoy, count: 1 }

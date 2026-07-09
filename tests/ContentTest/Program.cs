@@ -50,23 +50,23 @@ Check(
     "loader projected hull build cost (Buildable.Price -> ShipClassDef.Cost)",
     $"hull cost wrong (scout {scout.Cost}, bomber {bomber.Cost})"
 );
-// GLB-authoritative merge: the scout's YAML now binds only the cannon (HP_Weapon_0) + cockpit;
-// every unclaimed mesh node appends (by kind byte, then index) — the empty HP_Weapon_1 mount,
+// GLB-authoritative merge: the scout's YAML binds the cannon (HP_Weapon_0) + missile rack
+// (HP_Weapon_1, P2) + cockpit; every unclaimed mesh node appends (by kind byte, then index) —
 // Booster_0/1, Thruster_0, Light_0..2. YAML-declared entries keep their order at the head.
 Check(
     scout.Hardpoints.Count == 9
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon
         && scout.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId
-        && scout.Hardpoints[1].Kind == HardpointKind.Cockpit
-        && scout.Hardpoints[2].Kind == HardpointKind.Weapon
-        && scout.Hardpoints[2].WeaponId == HardpointDef.NoWeapon
+        && scout.Hardpoints[1].Kind == HardpointKind.Weapon
+        && scout.Hardpoints[1].WeaponId == 3
+        && scout.Hardpoints[2].Kind == HardpointKind.Cockpit
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Thruster) == 1
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 3
-        // Exactly ONE armed weapon (the bound cannon); the appended HP_Weapon_1 is an empty mount.
-        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 1
+        // Both weapon mounts armed now (cannon on P1 + missile rack on P2).
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 2
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 2,
-    "merged scout hardpoints (bound cannon + cockpit, appended empty weapon/boosters/thruster/lights; one armed weapon)",
+    "merged scout hardpoints (bound cannon + missile rack + cockpit, appended boosters/thruster/lights; both weapons armed)",
     $"scout merged hardpoints wrong (count {scout.Hardpoints.Count}, kinds {string.Join(",", scout.Hardpoints.Select(h => h.Kind))})"
 );
 // The GLB is authoritative for geometry: the bound scout cannon inherits its mesh node's position
@@ -95,7 +95,7 @@ Check(
 // Payload: hull capacity + weapon mass are authored (hulls/weapons.yaml), cargo items project
 // from expendables carrying a cargo-id (expendables.yaml).
 Check(
-    scout.PayloadCapacity == 8f && bomber.PayloadCapacity == 37f && scoutW.Mass == 2f,
+    scout.PayloadCapacity == 12f && bomber.PayloadCapacity == 37f && scoutW.Mass == 2f,
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
