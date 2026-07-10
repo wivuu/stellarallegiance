@@ -1,4 +1,5 @@
-
+> HISTORICAL — describes the old `tools/base-col` YAML-driven workflow, since superseded by the
+> args-driven `tools/collision-hull` (see the `collision-hull-generator` skill).
 
 Generic (works on any GLB today):
 - bake.py takes --glb PATH --yaml PATH --out PATH — nothing is hardcoded to this station beyond defaults.

@@ -1,7 +1,7 @@
 [project]
-name = "base-col"
+name = "collision-hull"
 version = "0.1.0"
-description = "Author + bake convex collision-proxy parts (COL_* nodes) into base.glb"
+description = "Generate + bake convex collision-proxy parts (COL_* nodes) into any mesh GLB"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",

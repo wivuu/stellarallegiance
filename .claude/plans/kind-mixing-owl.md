@@ -1,5 +1,8 @@
 # Base bolt impacts + compound base hulls (two phases)
 
+> HISTORICAL — `tools/base-col` referenced below has since been renamed/generalized to
+> `tools/collision-hull` (args-driven, no YAML).
+
 ## Execution strategy (per user)
 
 Implementation is **delegated to Opus subagents**, one per work package below, with hard

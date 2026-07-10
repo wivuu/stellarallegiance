@@ -43,7 +43,7 @@ public static class GlbLoader
     }
 
     // Hide every COL_* MeshInstance3D in a freshly instantiated GLB. Those are the authored
-    // convex COLLISION-PROXY parts baked into the .glb by tools/base-col (COL_<Name> nodes): the
+    // convex COLLISION-PROXY parts baked into the .glb by tools/collision-hull (COL_<Name> nodes): the
     // shared/server + client hull pipeline consumes their geometry to build one convex hull per
     // part, but they must NEVER render. Hiding them here (rather than per-loader) covers bases and
     // ships alike — any future COL_-baked mesh is invisible by construction. Godot's importer

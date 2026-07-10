@@ -23,15 +23,8 @@ Archives:
 - Ship launch animation -- camera shows ship launching from front (4x from ship length, 2x from ship width to the right (camera's right)), points at ship nose and follows for 1.5 seconds, then tweens to the ship's camera (either 3rd or first person depending on the player's last choice)
   - Ensure the ship launches from an exit hardpoint on the base
   - Ensure the entry point is aligned with the docking hardpoint on the base, currently docking is too forgiving - the ship should intersect with the face of the docking hardpoint
-- Settings modal(s) needs more padding from scrollbar
-- Generalize `./tools/base-col` to work with any base mesh - or potentially any mesh;
-  - Use args to pass in the GLB path
-  - pass in parameters as args rather than YAML
-  - pass arg to specify whether base or asteroid or ship etc
-  - pass args to specify how many convex hull points (i.e. 256 for a base) put into the 'point cloud'
-  - pass args for other tuning; margin etc.
-  - Create a 'collision-hull-generator' skill to use the new functionality
-  - Update `base-collision` skill to use the new collision-hull-generator functionality
+- Content in settings modal(s) needs more padding from scrollbar
+- Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 
 ## Content philosophy (the through-line)

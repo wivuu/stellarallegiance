@@ -27,7 +27,7 @@ public sealed class GlbModel
     public readonly List<(string Name, Vec3 Pos, Vec3 Forward)> Hardpoints = new();
 
     // Authored COMPOUND-COLLISION parts: one entry per top-level "COL_"-named node (a convex proxy
-    // baked into the GLB by tools/base-col), holding that node's (and its subtree's) mesh vertices
+    // baked into the GLB by tools/collision-hull), holding that node's (and its subtree's) mesh vertices
     // in world space. Empty for every ship/asteroid/un-baked GLB (⇒ single-hull, zero behaviour
     // change). Order is the GLB scene-graph WALK order (roots in array order, children in array
     // order) — a deterministic input order is the float-parity contract: the client and server

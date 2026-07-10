@@ -165,7 +165,7 @@ bool sHit = Collide.SphereVsBody(new Vec3(1.4f, 0, 0), shipR, single, out var nS
 Check("single-hull via SphereVsBody === SphereVsHull", sHit && Near(nS.X, nRef.X) && Near(nS.Y, nRef.Y) && Near(nS.Z, nRef.Z) && Near(pS, pRef));
 
 // ---------------------------------------------------------------------------------------------
-// REAL BAKED base.glb: SimModel.FromGlb must expose the generated sub-hulls (tools/base-col --auto:
+// REAL BAKED base.glb: SimModel.FromGlb must expose the generated sub-hulls (tools/collision-hull --kind base:
 // a voxel solid-fill greedy-merged into ~90 boxes) with the merged metrics UNCHANGED — the boxes are
 // each strictly interior to the visual convex hull, so they never enlarge the merged hull.
 // Locate the repo GLB by probing up from the test binary (mirrors server/Assets/SimAssets.cs).

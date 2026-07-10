@@ -61,8 +61,8 @@ public static class SelfTest
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });
 
-        // Compound superstructure: the baked base.glb carries the generated COL_ parts (tools/base-col
-        // `--auto`: a voxel solid-fill of the visual mesh greedy-merged into ~90 axis-aligned boxes that
+        // Compound superstructure: the baked base.glb carries the generated COL_ parts (tools/collision-hull
+        // `--kind base`: a voxel solid-fill of the visual mesh greedy-merged into ~90 axis-aligned boxes that
         // SEAL the interior). This is the DEPLOY GUARD — if the bake is missing (or reverted to a single
         // welded mesh) BaseSubHulls collapses to 1 and this fails loudly, so ships would silently bounce
         // off (and fly through) the merged shrink-wrap again. The window is a sane cap, not the exact
