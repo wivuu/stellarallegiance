@@ -102,12 +102,28 @@ ship — the exact derivation the sim/client apply. The tool prints `longestAxis
 ## Visualizer (works with --check)
 
 ```sh
-uv run bake.py --kind base --check --preview /tmp/base-col.png   # ONE combined figure (ortho triptych + 3D)
+uv run bake.py --kind base --check --show                       # OPEN the combined figure in a window (rotate/zoom 3D)
+uv run bake.py --kind base --check --preview /tmp/base-col.png   # WRITE ONE combined figure (ortho triptych + 3D)
 uv run bake.py --kind base --check --preview-dir /tmp/col        # <stem>-col-ortho.png + <stem>-col-3d.png pair
 ```
 
 Grey = visual cloud, coloured wireframes = generated COL_ parts; red stars mark dock HPs when
-present (a no-op for ships/asteroids). A plain bake with neither flag defaults to `./preview`.
+present (a no-op for ships/asteroids). A plain bake with none of the flags defaults to `./preview`.
+
+**Which mode — `--show` vs `--preview`.** All three sinks render the SAME figure (one shared builder)
+and all compose with `--check` and with each other; pick by who is looking and where it runs:
+
+- **`--show`** — the user says "show me / let me see / look at / inspect the collision hulls
+  interactively", or is at a desktop (darwin/GUI) session and wants to rotate/zoom the 3D view. Opens
+  an interactive matplotlib window (macOS `macosx` backend under `uv run`) and BLOCKS until the human
+  closes it, then exits normally. Usually pair with `--check` (eyeball without baking). **Headless/CI
+  soft-fails** with a "use --preview instead" hint and does NOT flip the exit code (validation result
+  still drives it), so it never crashes a bake.
+- **`--preview out.png`** — the user wants a saved artifact, is on a headless/CI box, or **Claude
+  itself needs to look at the result** (write the PNG, then Read it). This is the only mode Claude can
+  actually see.
+
+Compose freely, e.g. `--show --preview out.png` shows the window AND writes the file in one run.
 
 ## Determinism & provenance
 

@@ -25,6 +25,9 @@ uv run bake.py --kind base                      # bake COL_ parts into client/as
 tools/godot-import.sh --force                   # ALWAYS after a rebake (client res:// import)
 ```
 
+To eyeball a rebake, add `--show` (interactive window, rotate/zoom the 3D view) or `--preview out.png`
+(saved figure) — both compose with `--check`; details + when-to-pick in the `collision-hull-generator` skill.
+
 Then verify (all must pass):
 
 ```sh

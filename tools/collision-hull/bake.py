@@ -360,15 +360,23 @@ def bake_glb(gltf, blob: bytes, parts: list[tuple[str, np.ndarray, np.ndarray]])
 # ---------------------------------------------------------------------------
 
 def render_preview(verts, hps, parts, stem: str, kind: str,
-                   preview_dir: Path | None = None, preview_path: Path | None = None):
+                   preview_dir: Path | None = None, preview_path: Path | None = None,
+                   show: bool = False):
     """Render the visual cloud (grey) + generated COL_ parts (coloured wireframes) for ANY mesh/kind.
     Title + output filenames come from `stem` + `kind`; dock-HP star markers are drawn only when the
-    mesh has any (a no-op for ships/asteroids). Two output modes, either or both:
+    mesh has any (a no-op for ships/asteroids). Any combination of three sinks:
       * preview_dir → the ortho-triptych PNG + the 3D PNG as <stem>-col-ortho.png / <stem>-col-3d.png
       * preview_path → ONE combined figure (ortho triptych + 3D, 2x2 grid) written to that exact path
-    Works with --check (visualize without baking). Returns the list of written paths."""
+      * show=True → the SAME combined figure opened interactively (plt.show(); blocks until closed)
+    The combined figure is built by ONE shared builder (`build_combined`) for both file + window.
+    Works with --check (visualize without baking). Returns the list of written paths (files only).
+    Never perturbs the bake path; a headless/non-interactive backend soft-fails `show` with a hint."""
     import matplotlib
-    matplotlib.use("Agg")
+    # Only pin the non-interactive Agg backend when we are NOT opening a window. Agg can render to a
+    # file but cannot show one; when `show` is requested we keep matplotlib's default GUI backend
+    # (macosx under `uv run` on darwin). savefig() works on either backend, so file sinks compose.
+    if not show:
+        matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
@@ -408,6 +416,18 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
         ax.view_init(elev=18, azim=-60)
         ax.set_title(f"{kind} COL_ parts vs visual cloud (3D)")
 
+    def build_combined():
+        """The ONE combined 2x2 figure (ortho triptych + 3D) shared by the --preview file sink and the
+        interactive --show window. Returns the Figure; caller saves and/or shows it."""
+        fig = plt.figure(figsize=(20, 14))
+        for i, (a, b, la, lb, pt) in enumerate(planes):
+            ax = fig.add_subplot(2, 2, i + 1)
+            draw_ortho(ax, a, b, la, lb, pt)
+        ax3 = fig.add_subplot(2, 2, 4, projection="3d")
+        draw_3d(ax3)
+        fig.suptitle(title, fontsize=15); fig.tight_layout()
+        return fig
+
     written = []
 
     if preview_dir is not None:  # the reviewer pair, per-stem names
@@ -431,15 +451,31 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
         preview_path = Path(preview_path)
         if preview_path.parent != Path(""):
             preview_path.parent.mkdir(parents=True, exist_ok=True)
-        fig = plt.figure(figsize=(20, 14))
-        for i, (a, b, la, lb, pt) in enumerate(planes):
-            ax = fig.add_subplot(2, 2, i + 1)
-            draw_ortho(ax, a, b, la, lb, pt)
-        ax3 = fig.add_subplot(2, 2, 4, projection="3d")
-        draw_3d(ax3)
-        fig.suptitle(title, fontsize=15); fig.tight_layout()
+        fig = build_combined()
         fig.savefig(preview_path, dpi=95); plt.close(fig)
         written.append(preview_path)
+
+    if show:  # open the SAME combined figure in an interactive window (blocks until closed)
+        backend = matplotlib.get_backend()
+        try:
+            from matplotlib.rcsetup import interactive_bk
+            interactive = backend.lower() in {b.lower() for b in interactive_bk}
+        except Exception:
+            interactive = backend.lower() not in {
+                "agg", "pdf", "svg", "ps", "template", "cairo", "pgf"}
+        if not interactive:
+            print(f"--show: matplotlib backend '{backend}' is non-interactive (headless / no display "
+                  f"available) — cannot open a window. Use --preview PATH.png to write a file you can "
+                  f"open instead.", file=sys.stderr)
+        else:
+            fig = build_combined()
+            try:
+                plt.show()  # blocks until the human closes the window
+            except Exception as e:  # GUI backend present but display unusable — soft-fail, never crash
+                print(f"--show: interactive display failed ({e}); use --preview PATH.png instead.",
+                      file=sys.stderr)
+            finally:
+                plt.close(fig)
 
     return written
 
@@ -1375,6 +1411,9 @@ def main(argv=None):
                     help="render ONE combined figure (ortho triptych + 3D) to this exact PNG path")
     ap.add_argument("--preview-dir", type=Path, default=None,
                     help="render the ortho + 3D reviewer PNGs into DIR as <stem>-col-ortho/-3d.png")
+    ap.add_argument("--show", action="store_true",
+                    help="open the combined figure in an interactive window (rotate/zoom the 3D view); "
+                         "blocks until closed. Composes with --check/--preview; soft-fails if headless")
     # --- scale basis (authored mesh units -> world units) ---
     ap.add_argument("--world-diameter", type=float, default=180.0,
                     help="base scale basis (CollisionConfig.BaseRadius*2); ws = world_diameter/LongestAxis")
@@ -1578,10 +1617,11 @@ def main(argv=None):
     pdir = args.preview_dir
     if pdir is None and args.preview is None and not args.check:
         pdir = HERE / "preview"
-    if pdir is not None or args.preview is not None:
+    if pdir is not None or args.preview is not None or args.show:
         pngs = render_preview(verts, hps, parts, stem, args.kind,
-                              preview_dir=pdir, preview_path=args.preview)
-        print("preview:", *[str(x) for x in pngs])
+                              preview_dir=pdir, preview_path=args.preview, show=args.show)
+        if pngs:
+            print("preview:", *[str(x) for x in pngs])
 
     if args.check:
         print("--check: not writing.")
