@@ -363,8 +363,9 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
                    preview_dir: Path | None = None, preview_path: Path | None = None,
                    show: bool = False):
     """Render the visual cloud (grey) + generated COL_ parts (coloured wireframes) for ANY mesh/kind.
-    Title + output filenames come from `stem` + `kind`; dock-HP star markers are drawn only when the
-    mesh has any (a no-op for ships/asteroids). Any combination of three sinks:
+    Title + output filenames come from `stem` + `kind`. Every HP_<Kind> hardpoint is drawn with a
+    kind-coloured marker + a forward quiver and a legend of the kinds present, but only when the mesh
+    has any (a no-op for HP-less meshes like asteroids). Any combination of three sinks:
       * preview_dir → the ortho-triptych PNG + the 3D PNG as <stem>-col-ortho.png / <stem>-col-3d.png
       * preview_path → ONE combined figure (ortho triptych + 3D, 2x2 grid) written to that exact path
       * show=True → the SAME combined figure opened interactively (plt.show(); blocks until closed)
@@ -381,9 +382,39 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
     from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
     colors = plt.cm.tab10(np.linspace(0, 1, max(10, len(parts))))
-    ent = np.array([p for n, p, f in hps if "Entrance" in n or "Exit" in n])
     title = f"{stem}.glb visual cloud (grey) + {kind} COL_ parts"
     planes = [(2, 1, "Z", "Y", "side"), (0, 1, "X", "Y", "front"), (2, 0, "Z", "X", "top")]
+
+    # Hardpoints: one kind-coloured marker + a short local-+Z forward quiver per HP, drawn in EVERY
+    # sink but only when the mesh defines any (a silent no-op for asteroids / HP-less meshes). Name is
+    # HP_<Kind>_<Index>; all Docking* fold into one "Dock" style so the bay keeps its legacy red star.
+    # Arrow length tracks the model extent so it reads at any authored scale. hps = (name, pos, fwd),
+    # fwd already unit-normalised by read_visual_vertices.
+    def _hp_kind(name):
+        p = name.split("_")
+        k = p[1] if len(p) >= 2 else "HP"
+        return "Dock" if k.startswith("Docking") else k
+
+    _HP_KNOWN = {  # kind -> (colour, marker); Dock keeps the legacy red star
+        "Dock": ("#ff2d2d", "*"), "Muzzle": ("#ff7f0e", "^"),
+        "Nozzle": ("#17d9c8", "v"), "Light": ("#ffd21e", "o"),
+    }
+    hp_kinds = []
+    for n, p, f in hps:
+        k = _hp_kind(n)
+        if k not in hp_kinds:
+            hp_kinds.append(k)
+    _hp_extra = [k for k in hp_kinds if k not in _HP_KNOWN]
+    _hp_pal = plt.cm.Set2(np.linspace(0, 1, max(1, len(_hp_extra))))
+    _hp_mk = ["s", "D", "P", "X", "h", ">", "<", "p", "d", "8"]
+    hp_style = dict(_HP_KNOWN)
+    for i, k in enumerate(_hp_extra):
+        hp_style[k] = (_hp_pal[i % len(_hp_pal)], _hp_mk[i % len(_hp_mk)])
+    hp_arrow = 0.12 * float(np.ptp(verts, axis=0).max()) if len(verts) else 1.0
+    hp_pos = {k: np.array([p for n, p, f in hps if _hp_kind(n) == k]) for k in hp_kinds}
+    hp_dir = {k: np.array([f for n, p, f in hps if _hp_kind(n) == k]) for k in hp_kinds}
+    hp_names = {k: [n for n, p, f in hps if _hp_kind(n) == k] for k in hp_kinds}
+    hp_label = len(hps) <= 12  # annotate names only when few enough to stay legible in 3D
 
     def edges_of(hv, faces):
         segs = set()
@@ -399,8 +430,13 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
                 s = np.array(seg)
                 ax.plot(s[:, a], s[:, b], c=colors[k], lw=1.0, alpha=0.9)
             ax.text(hv[:, a].mean(), hv[:, b].mean(), name, color=colors[k], fontsize=7, ha="center")
-        if len(ent):
-            ax.plot(ent[:, a], ent[:, b], "r*", ms=13, label="dock HP")
+        for kd in hp_kinds:
+            col, mk = hp_style[kd]
+            P, D = hp_pos[kd], hp_dir[kd]
+            ax.scatter(P[:, a], P[:, b], c=[col], marker=mk, s=70, edgecolors="k",
+                       linewidths=0.4, zorder=5, label=kd)
+            ax.quiver(P[:, a], P[:, b], D[:, a] * hp_arrow, D[:, b] * hp_arrow,
+                      angles="xy", scale_units="xy", scale=1, color=col, width=0.004, zorder=4)
         ax.set_xlabel(la); ax.set_ylabel(lb); ax.set_title(ptitle); ax.set_aspect("equal")
 
     def draw_3d(ax):
@@ -408,8 +444,18 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
         ax.scatter(samp[:, 0], samp[:, 1], samp[:, 2], s=1, alpha=0.08, c="0.5", linewidths=0)
         for k, (name, hv, faces) in enumerate(parts):
             ax.add_collection3d(Line3DCollection(edges_of(hv, faces), colors=[colors[k]], lw=0.9))
-        if len(ent):
-            ax.scatter(ent[:, 0], ent[:, 1], ent[:, 2], c="r", marker="*", s=90)
+        for kd in hp_kinds:
+            col, mk = hp_style[kd]
+            P, D = hp_pos[kd], hp_dir[kd]
+            ax.scatter(P[:, 0], P[:, 1], P[:, 2], c=[col], marker=mk, s=60,
+                       edgecolors="k", linewidths=0.4, depthshade=False, label=kd)
+            ax.quiver(P[:, 0], P[:, 1], P[:, 2], D[:, 0], D[:, 1], D[:, 2],
+                      length=hp_arrow, normalize=False, color=col, linewidth=1.0)
+            if hp_label:
+                for name, pos in zip(hp_names[kd], P):
+                    ax.text(pos[0], pos[1], pos[2], name, color=col, fontsize=6)
+        if hp_kinds:
+            ax.legend(loc="upper left", fontsize=8)
         ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
         span = np.ptp(verts, axis=0)
         ax.set_box_aspect((span[0], span[1], span[2]))
@@ -435,7 +481,8 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
         fig, axs = plt.subplots(1, 3, figsize=(21, 7))
         for ax, (a, b, la, lb, pt) in zip(axs, planes):
             draw_ortho(ax, a, b, la, lb, pt)
-        axs[0].legend(loc="upper right", fontsize=8)
+        if hp_kinds:
+            axs[0].legend(loc="upper right", fontsize=8)
         fig.suptitle(title, fontsize=13); fig.tight_layout()
         p1 = preview_dir / f"{stem}-col-ortho.png"
         fig.savefig(p1, dpi=95); plt.close(fig)

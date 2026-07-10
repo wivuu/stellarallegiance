@@ -107,8 +107,10 @@ uv run bake.py --kind base --check --preview /tmp/base-col.png   # WRITE ONE com
 uv run bake.py --kind base --check --preview-dir /tmp/col        # <stem>-col-ortho.png + <stem>-col-3d.png pair
 ```
 
-Grey = visual cloud, coloured wireframes = generated COL_ parts; red stars mark dock HPs when
-present (a no-op for ships/asteroids). A plain bake with none of the flags defaults to `./preview`.
+Grey = visual cloud, coloured wireframes = generated COL_ parts; every `HP_<Kind>` hardpoint is
+rendered when present (kind-coloured markers + forward arrows, legended by kind; docking HPs keep
+their red star), a no-op for HP-less meshes. A plain bake with none of the flags defaults to
+`./preview`.
 
 **Which mode — `--show` vs `--preview`.** All three sinks render the SAME figure (one shared builder)
 and all compose with `--check` and with each other; pick by who is looking and where it runs:
