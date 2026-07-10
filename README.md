@@ -14,9 +14,9 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 (world, content defs, live state) from it — there is no database to stand up.
 
 ```
-client/        Godot 4.7 (C#/.NET 8) — rendering, input, client-side prediction
-server/        .NET 8 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-public-lobby/  .NET 8 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+client/        Godot 4.7 (C#/.NET 10) — rendering, input, client-side prediction
+server/        .NET 10 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
+public-lobby/  .NET 10 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
 tests/         FlightModelTest (determinism/golden), CryptoTest
@@ -28,7 +28,7 @@ by both sides so their physics and content stay bit-identical.
 
 ## Prerequisites
 
-- **.NET 8 SDK** (`dotnet --version` ≥ 8) — newer SDKs work too.
+- **.NET 10 SDK** (`dotnet --version` ≥ 10) — newer SDKs work too.
 **Godot 4.7 — Mono/.NET build**, to run the client. The scripts auto-detect it from your
   PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; point at a non-standard
   install with the `GODOT` env var or the `godot.executablePath` VS Code setting (see
