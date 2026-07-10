@@ -47,6 +47,16 @@ Distance-based visibility culling: server only streams entities within fixed dis
 - **Related:** [[Snapshot]], [[Spatial Grid]]
 - **Notes:** Fixed nearest-60 replaced by distance tiers + environment knobs (SIM_NEAR_RADIUS, SIM_FAR_RADIUS, SIM_FAR_EVERY)
 
+### Compound Base Hull (COL_ parts)
+Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into `base.glb` each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill + greedy box merge) by `tools/base-col/bake.py --auto` — never hand-placed.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `tools/base-col/` — bake tool (`--auto` generation, hull-containment / dock-corridor / reachability validations), `base-col.yaml` config
+  - `shared/Collision/GlbReader.cs` (`CollisionParts`), `SimModel.cs` (`Hulls`), `Collide.cs` (`SphereVsBody` deepest-contact)
+  - `server/Sim/World.cs` — `BaseSubHulls`; `server/Assets/SelfTest.cs` + `tests/CollisionTest` — deploy-guard assertions
+- **Related:** [[Hull]], [[Dock Refund]]
+- **Notes:** Merged-hull metrics stay bit-exact (LongestAxis 32.243610 / BoundingRadius 16.543488 / 172 planes) because every part is clamped strictly inside the visual convex hull. Deterministic bake (same GLB+config = same SHA). See the `base-collision` skill.
+
 ---
 
 ## Weapons & Combat

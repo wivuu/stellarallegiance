@@ -70,13 +70,20 @@ public static class BaseModelLoader
     // the visual hull is a child that may be independently scaled, while the markers and beacons
     // stay on the container at the def's true world-unit offsets (the Light beacons sit on the
     // sphere/hull surface at ±radius).
-    public static Node3D Build(DefRegistry defs, byte baseTypeId, byte team, Material mat)
+    //
+    // `glbHull` reports the authored GLB hull node when one loaded, or null when only the
+    // procedural sphere placeholder was built — the caller uses it to build a visible-mesh bolt
+    // ray-caster (MeshRaycaster) against the real surface, falling back to coarser tests when the
+    // GLB isn't imported. It's the same signal LoadHull returns (null = no asset), propagated out
+    // rather than re-derived by sniffing node names.
+    public static Node3D Build(DefRegistry defs, byte baseTypeId, byte team, Material mat, out Node3D? glbHull)
     {
         BaseDef? def = defs.GetBaseDef(baseTypeId);
         float radius = def?.Radius ?? FallbackRadius;
 
         var root = new Node3D { Name = "BaseModel" };
-        Node3D hull = LoadHull(radius) ?? BuildPlaceholderSphere(radius, mat);
+        glbHull = LoadHull(radius);
+        Node3D hull = glbHull ?? BuildPlaceholderSphere(radius, mat);
         root.AddChild(hull);
 
         if (def?.Hardpoints != null)

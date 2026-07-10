@@ -115,6 +115,14 @@ public sealed class World
     // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
     public readonly SimModel? BaseModel;
     public readonly ConvexHull? BaseHull; // base hull in WORLD units (base is identity-oriented)
+
+    // Authored compound sub-hulls (one per baked COL_ part), world-scaled in the base's identity
+    // frame — the SOLID a ship actually bounces off / a bolt ray-clips against, so collision matches
+    // the visible concave superstructure instead of the merged shrink-wrap. Empty when no base model
+    // loads (sphere fallback). When the GLB carries NO COL_ parts, model.Hulls aliases the merged
+    // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
+    // behave bit-identically to the pre-compound single-hull path.
+    public readonly ConvexHull[] BaseSubHulls;
     public readonly Vec3 BaseExitDir; // radial launch axis out of the docking bay (cone base → tip)
     public readonly Vec3 BaseExitPos; // exit cone's base disc (the DockingExit hardpoint), base-local world units
     public readonly Vec3 BaseEntryAxis; // mean entrance direction (from DockingEntrance), for AI aim
@@ -288,7 +296,7 @@ public sealed class World
         }
 
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
+        (BaseModel, BaseHull, BaseSubHulls, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies(ships);
     }
@@ -344,13 +352,19 @@ public sealed class World
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
     // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
-    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
+    private static (SimModel?, ConvexHull?, ConvexHull[], Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
     {
         var model = SimAssets.TryLoad("bases/base.glb");
         if (model is null)
-            return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
+            return (null, null, Array.Empty<ConvexHull>(), default, default, default, default, Array.Empty<(Vec3, Vec3)>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
+        // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒
+        // just uniform scale). Partless models: model.Hulls aliases the merged hull ⇒ one entry whose
+        // geometry equals `hull` (built independently but from the identical planes ⇒ same result).
+        var subHulls = new ConvexHull[model.Hulls.Count];
+        for (int i = 0; i < model.Hulls.Count; i++)
+            subHulls[i] = model.Hulls[i].Scaled(ws);
         // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
         // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
         Vec3 exitDir,
@@ -382,7 +396,7 @@ public sealed class World
         var discs = new (Vec3, Vec3)[entrances.Count];
         for (int i = 0; i < entrances.Count; i++)
             discs[i] = (entrances[i], Normalize(entrances[i]));
-        return (model, hull, exitDir, exitPos, entryAxis, doorCenter, discs);
+        return (model, hull, subHulls, exitDir, exitPos, entryAxis, doorCenter, discs);
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's

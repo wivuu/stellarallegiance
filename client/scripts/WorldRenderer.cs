@@ -75,7 +75,10 @@ public partial class WorldRenderer : Node3D
     // Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
     // once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
     private readonly List<(Vector3 Pos, float Radius, uint Sector)> _asteroidClip = new();
-    private readonly List<(Vector3 Pos, uint Sector)> _baseClip = new();
+    // Each base also carries a MeshRaycaster against its VISIBLE hull (null when only the
+    // procedural sphere placeholder rendered), so a bolt's TTL clips — and its impact spark lands —
+    // on the real superstructure surface, not the coarse BaseDef sphere out in front of it.
+    private readonly List<(Vector3 Pos, uint Sector, MeshRaycaster? Ray)> _baseClip = new();
 
     // The same convex hulls the server collides against, built locally from the GLBs, so the local
     // ship's prediction resolves collisions identically (no penetrate-then-snap). Populated from the
@@ -1419,14 +1422,24 @@ public partial class WorldRenderer : Node3D
 
         // Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
         // from the subscribed BaseDef (M5). Every base is BaseTypeId 0 this phase.
-        var node = BaseModelLoader.Build(_defs, DefaultBaseTypeId, row.Team, row.Team == 0 ? _team0Mat : _team1Mat);
+        var node = BaseModelLoader.Build(
+            _defs,
+            DefaultBaseTypeId,
+            row.Team,
+            row.Team == 0 ? _team0Mat : _team1Mat,
+            out Node3D? glbHull
+        );
         node.Name = $"Base_{row.BaseId}";
         node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
         _baseList.Add((node, row.Team, row.BaseId));
         NetUpdateBaseHealth(row.BaseId, row.Health);
-        _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId));
+        // Bake a visible-mesh ray-caster from the authored GLB hull child (null when the base fell
+        // back to the procedural sphere). node.Transform is already the base's world placement, so
+        // the raycaster composes correct world transforms without waiting for the tree.
+        MeshRaycaster? ray = glbHull != null ? new MeshRaycaster(glbHull, node.Transform) : null;
+        _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId, ray));
         _collisionWorld.AddBase(row);
         _baseTeams.Add((row.SectorId, row.Team));
         SetNodeSectorFading(node, row.SectorId);
@@ -1837,7 +1850,12 @@ public partial class WorldRenderer : Node3D
         var pv = new ProjectileView { Name = "Bolt" };
         _projectiles.AddChild(pv);
         pv.AddChild(NewProjectileMesh(boltRadius, boltLength));
-        pv.Initialize(pos, vel, aimDir, ClipBoltTtl(sector, pos, vel, lifeSec), ownerShipId, leadSec);
+        float ttl = ClipBoltTtl(sector, pos, vel, lifeSec, out Vector3 impact, out bool impactAtExpiry);
+        pv.Initialize(pos, vel, aimDir, ttl, ownerShipId, leadSec);
+        // Carry the static-surface impact (if any) so the TTL-expiry cull sparks it (see _Process).
+        pv.ImpactPoint = impact;
+        pv.ImpactAtExpiry = impactAtExpiry;
+        pv.Sector = sector;
         SetNodeSector(pv, sector);
         _bolts.Add(pv);
         // Single chokepoint for every shot (local + remote), so the muzzle report
@@ -1862,22 +1880,119 @@ public partial class WorldRenderer : Node3D
     // base) along its line, so the visual stops at a rock the way the server's analytic
     // solve does. Static geometry is fully replicated, so this is a spawn-time pass over
     // the local caches — ships stay dynamic and are handled by the per-frame spark sweep.
-    private float ClipBoltTtl(uint sector, Vector3 pos, Vector3 vel, float ttl)
+    //
+    // `impact`/`impactAtExpiry` report where — and whether — the bolt terminates on a base's
+    // VISIBLE surface: the TTL-expiry cull drops a HitFlash + impact sound at that point, so a
+    // shot no longer vanishes in the empty space between the coarse BaseDef sphere and the real
+    // superstructure. COSMETIC ONLY, and a deliberately looser fit than the server: the server
+    // kills real bolts / applies damage at CONVEX-HULL entry, so this visual may fly slightly
+    // farther (to the actual mesh face) or slip through a concave gap the hull shrink-wraps over.
+    // Accepted for Phase A; Phase B's authored compound hulls close that gap.
+    private float ClipBoltTtl(uint sector, Vector3 pos, Vector3 vel, float ttl, out Vector3 impact, out bool impactAtExpiry)
     {
+        impact = Vector3.Zero;
+        impactAtExpiry = false;
+
+        // Asteroids first (unchanged, silent): whatever they clip to bounds the base ray below, so
+        // a rock nearer than the base ends the segment before it reaches the base and no base spark
+        // registers — the asteroid clip naturally "wins" without any explicit flag bookkeeping.
+        // (Asteroid impact sparks are a later follow-up; today the tracer just stops at the rock.)
         foreach (var a in _asteroidClip)
         {
             if (a.Sector != sector)
                 continue;
             ClipSphere(pos, vel, a.Pos, a.Radius, ref ttl);
         }
+
         float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         foreach (var b in _baseClip)
         {
             if (b.Sector != sector)
                 continue;
-            ClipSphere(pos, vel, b.Pos, baseR, ref ttl);
+            // Cheap broadphase: reject bolts whose (already asteroid-clipped) segment can't come
+            // near the base at all. A touch fatter than the sphere so a near-graze still gets the
+            // precise test. Never mutates ttl — that's the tiered narrow-phase's job.
+            if (!SegmentNearSphere(pos, vel, b.Pos, baseR * 1.1f, ttl))
+                continue;
+
+            if (b.Ray != null)
+            {
+                // Tier 1: the real visible mesh. A hit past the muzzle terminates the bolt on the
+                // rendered surface (spark there); a hit at/behind the muzzle (t ≤ eps) means the
+                // gun is inside/against the hull — kill the bolt silently, mirroring ClipSphere's
+                // c ≤ 0 path and the server killing at t ≈ 0 (no self-spark on your own hull).
+                if (b.Ray.IntersectSegment(pos, pos + vel * ttl, out Vector3 hitW, out _))
+                {
+                    float tHit = SegmentTime(pos, vel, hitW);
+                    if (tHit > ImpactEps)
+                    {
+                        ttl = tHit;
+                        impact = hitW;
+                        impactAtExpiry = true;
+                    }
+                    else
+                    {
+                        ttl = 0f;
+                        impactAtExpiry = false;
+                    }
+                }
+            }
+            else if (_collisionWorld.BaseRayEntry(sector, new Vec3(pos.X, pos.Y, pos.Z), new Vec3(vel.X, vel.Y, vel.Z), ttl, out float tHull))
+            {
+                // Tier 2: procedural placeholder rendered, but the server-parity convex hull is
+                // loaded — still far tighter than the sphere. Spark at the hull-entry point, unless
+                // the muzzle is already inside (t ≤ eps), which is silent like tier 1.
+                if (tHull > ImpactEps)
+                {
+                    ttl = tHull;
+                    impact = pos + vel * tHull;
+                    impactAtExpiry = true;
+                }
+                else
+                {
+                    ttl = 0f;
+                    impactAtExpiry = false;
+                }
+            }
+            else
+            {
+                // Tier 3: no hull either (sphere-collision fallback) — the coarse sphere is too far
+                // from the real surface to decorate, so clip silently, exactly as before.
+                ClipSphere(pos, vel, b.Pos, baseR, ref ttl);
+            }
         }
         return ttl;
+    }
+
+    // Smallest impact time we treat as "past the muzzle": a hit inside this window is the gun
+    // firing from within/against the hull, and is killed silently rather than sparked on itself.
+    private const float ImpactEps = 1e-3f;
+
+    // Parameter t along pos + vel·t of a point known to lie on that line (the mesh/hull hit).
+    private static float SegmentTime(Vector3 pos, Vector3 vel, Vector3 point)
+    {
+        float a = vel.LengthSquared();
+        return a < 1e-6f ? 0f : (point - pos).Dot(vel) / a;
+    }
+
+    // Does the segment pos + vel·[0, ttl] come within `radius` of `center`? A pure boolean
+    // broadphase (mirrors ClipSphere's quadratic) that never touches ttl — used to skip the
+    // precise base ray-cast for bolts that clearly miss the base entirely.
+    private static bool SegmentNearSphere(Vector3 pos, Vector3 vel, Vector3 center, float radius, float ttl)
+    {
+        Vector3 d = center - pos;
+        float a = vel.LengthSquared();
+        if (a < 1e-6f)
+            return d.LengthSquared() <= radius * radius;
+        float c = d.LengthSquared() - radius * radius;
+        if (c <= 0f)
+            return true; // muzzle already inside the broadphase sphere
+        float b = -2f * d.Dot(vel);
+        float disc = b * b - 4f * a * c;
+        if (disc < 0f)
+            return false;
+        float t = (-b - Mathf.Sqrt(disc)) / (2f * a);
+        return t > 0f && t < ttl;
     }
 
     // How much of the cosmetic Sun's line-of-sight is clear (1 = fully visible, 0 = fully
@@ -2010,12 +2125,22 @@ public partial class WorldRenderer : Node3D
         // let a neighbouring sector's rocks/probes leak in. Listener = camera (else ship), same as shadows.
         _ambience.Tick((float)delta, ShadowRefPos(), _localSector, _asteroidNodes, _probes);
 
-        // Cull bolts whose (obstruction-clipped) flight life has elapsed.
+        // Cull bolts whose (obstruction-clipped) flight life has elapsed. A bolt whose TTL was
+        // clipped against a base's visible surface sparks + sounds there before it frees — the same
+        // client-side interception CheckBoltImpacts does for ships, at the stored impact point in
+        // the bolt's own sector (not necessarily the local one). Bolts that simply outran their
+        // flight in open space (ImpactAtExpiry false) expire silently, as before.
         for (int i = _bolts.Count - 1; i >= 0; i--)
         {
-            if (_bolts[i].Expired)
+            var pv = _bolts[i];
+            if (pv.Expired)
             {
-                _bolts[i].QueueFree();
+                if (pv.ImpactAtExpiry)
+                {
+                    SpawnEffect(new HitFlash(), pv.ImpactPoint, pv.Sector);
+                    SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, pv.ImpactPoint, pitch: 0.92f + GD.Randf() * 0.16f);
+                }
+                pv.QueueFree();
                 _bolts.RemoveAt(i);
             }
         }

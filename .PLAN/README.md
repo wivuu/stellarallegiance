@@ -20,6 +20,9 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Ship launch animation -- camera shows ship launching from front (4x from ship length, 2x from ship width to the right (camera's right)), points at ship nose and follows for 1.5 seconds, then tweens to the ship's camera (either 3rd or first person depending on the player's last choice)
+  - Ensure the ship launches from an exit hardpoint on the base
+- Settings modal(s) needs more padding from scrollbar
 ---
 
 ## Content philosophy (the through-line)

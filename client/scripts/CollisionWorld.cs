@@ -115,6 +115,15 @@ public sealed class CollisionWorld
         // World scale: the client renders the base via NormalizeLongestAxis(radius*2); bake the same.
         float ws = CollisionConfig.BaseRadius * 2f / model.LongestAxis;
         ConvexHull hull = model.Hull.Scaled(ws);
+        // Authored compound sub-hulls, world-scaled exactly like the server's World.LoadBase (same GLB
+        // bytes → same ConvexHull.Build per part → bit-identical hulls). Partless bases: model.Hulls
+        // aliases the merged hull ⇒ a 1-element array. We ALWAYS build the compound StaticBody (same as
+        // the server, which always resolves through Collide.SphereVsBody over BaseSubHulls), so the
+        // client and server take the identical contact-selection path — 1-element compound and the old
+        // single-hull form are numerically the same anyway (SphereVsBody's loop resolves the one hull).
+        var subs = new ConvexHull[model.Hulls.Count];
+        for (int i = 0; i < model.Hulls.Count; i++)
+            subs[i] = model.Hulls[i].Scaled(ws);
         // Docking discs: one per HP_DockingEntrance, in base-local world units (authored * ws),
         // normal radially outward — the own-base carve-out the player docks through.
         var entrances = new List<(Vec3 Pos, Vec3 Normal)>();
@@ -124,7 +133,41 @@ public sealed class CollisionWorld
                 Vec3 p = hp.Pos * ws;
                 entrances.Add((p, Normalize(hp.Pos)));
             }
-        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, center, row.Team, entrances.ToArray()), default, 0f));
+        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, entrances.ToArray()), default, 0f));
+    }
+
+    // First-entry time t of the ray (pos + vel·t) into any BASE hull in the sector, within [0, maxT].
+    // WorldRenderer's tier-2 bolt clip uses this when a base rendered its procedural placeholder (no
+    // MeshRaycaster): the server-parity hull is far tighter than the coarse BaseDef sphere, so the
+    // tracer stops much closer to the real silhouette. With authored COL_ parts we min-t across the
+    // compound SUB-HULLS (the real superstructure — a shot threading a gap passes through), falling
+    // back to the merged Hull for a partless base. Base bodies are pre-scaled to world with identity
+    // rotation and unit scale, so local == world − center; sphere-fallback bases (Hull == null) are
+    // simply skipped. Margin 0 — this is cosmetic.
+    public bool BaseRayEntry(uint sector, Vec3 pos, Vec3 vel, float maxT, out float t)
+    {
+        t = maxT;
+        bool hit = false;
+        foreach (var b in BodiesIn(sector, 0f))
+        {
+            if (b.BaseTeam < 0 || b.Hull is null)
+                continue;
+            if (b.SubHulls is ConvexHull[] subs)
+            {
+                foreach (var hull in subs)
+                    if (hull.RayEntry(pos - b.Center, vel, t, 0f, out float th) && th < t)
+                    {
+                        t = th;
+                        hit = true;
+                    }
+            }
+            else if (b.Hull.RayEntry(pos - b.Center, vel, t, 0f, out float th) && th < t)
+            {
+                t = th;
+                hit = true;
+            }
+        }
+        return hit;
     }
 
     private List<Entry> BodyList(uint sector)

@@ -60,6 +60,19 @@ public static class SelfTest
         var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });
+
+        // Compound superstructure: the baked base.glb carries the generated COL_ parts (tools/base-col
+        // `--auto`: a voxel solid-fill of the visual mesh greedy-merged into ~90 axis-aligned boxes that
+        // SEAL the interior). This is the DEPLOY GUARD — if the bake is missing (or reverted to a single
+        // welded mesh) BaseSubHulls collapses to 1 and this fails loudly, so ships would silently bounce
+        // off (and fly through) the merged shrink-wrap again. The window is a sane cap, not the exact
+        // count, so a re-bake at a different box_res stays green while a missing bake still fails.
+        Check($"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..128)", world.BaseSubHulls.Length is >= 8 and <= 128);
+        bool allSubHullsSolid = true;
+        foreach (var sub in world.BaseSubHulls)
+            if (sub.Planes.Length <= 3)
+                allSubHullsSolid = false; // a real 3-D convex part is a tetrahedron (4) or more
+        Check("world: every base sub-hull has >3 planes", allSubHullsSolid);
         Approx("world: ExitDir is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
         Approx("world: EntryAxis is unit", world.BaseEntryAxis.Length(), 1f, 1e-3f);
         Check("world: rock bodies built", world.RockBodies.Count > 0);
@@ -85,11 +98,36 @@ public static class SelfTest
         Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
         Check("world: exit cone base near hull surface (sphere just grazes)", world.BaseExitPos.LengthSquared() > 1f); // a real hardpoint, not the (0,0,0) fallback
         Vec3 spawn = world.BaseExitPos + world.BaseExitDir * World.ShipRadius;
-        world.BaseHull!.ResolveSphere(spawn, World.ShipRadius, out _, out float spawnPen);
+        // Clearance against the COMPOUND superstructure (the real bounce geometry), not the merged
+        // shrink-wrap: the deepest contact across the authored sub-hulls is what BounceShip would push
+        // out, so that's the penetration that must stay below ShipRadius for a damage-free launch pop.
+        float spawnPen = 0f;
+        foreach (var sub in world.BaseSubHulls)
+            if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float pen) && pen > spawnPen)
+                spawnPen = pen;
         Check(
-            $"world: spawn point clears the bay mouth (penetration {spawnPen:0.##} < ShipRadius)",
+            $"world: spawn point clears the bay mouth (deepest sub-hull penetration {spawnPen:0.##} < ShipRadius)",
             spawnPen < World.ShipRadius
         );
+
+        // Dock CORRIDOR: fire a ray from well outside straight at each entrance disc along its inward
+        // normal. A clear corridor means the ray REACHES the disc (t ≈ probe distance) without entering
+        // any sub-hull first — i.e. no authored part caps the docking mouth. (Past the disc the ray
+        // will enter the core; we only test the segment up to the disc.) This mirrors B1's bake-time
+        // corridor validation and guards the dock/spawn-regression risk called out in the plan.
+        bool corridorsClear = true;
+        foreach (var (discPos, discNormal) in world.BaseDockDiscs)
+        {
+            float probe = World.BaseRadius * 2f; // start outside the whole hull, aim inward at the disc
+            Vec3 origin = discPos + discNormal * probe;
+            Vec3 dir = discNormal * -1f;
+            foreach (var sub in world.BaseSubHulls)
+                // The disc sits at t == probe; a sub-hull entered at t < probe (with a small margin)
+                // blocks the corridor. Base sub-hulls are identity-frame, world-scaled ⇒ ray in local.
+                if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - 0.5f)
+                    corridorsClear = false;
+        }
+        Check("world: every dock corridor reaches its disc without hitting a sub-hull", corridorsClear);
 
         TestShipHulls(world);
     }

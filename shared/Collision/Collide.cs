@@ -131,7 +131,23 @@ public static class Collide
         public readonly int BaseTeam; // -1 for an asteroid; the team id for a base (dock carve-out + ownership)
         public readonly (Vec3 Pos, Vec3 Normal)[]? DockDiscs; // own-base docking discs (base-local); null otherwise
 
-        private StaticBody(ConvexHull? hull, Vec3 center, Quat rot, float scale, float sphereRadius, int baseTeam, (Vec3, Vec3)[]? discs)
+        // Authored compound collision parts (one per baked COL_ node), in this body's SAME local frame
+        // as `Hull` (bases: already world-scaled ⇒ identity rot / scale 1). null ⇒ single-hull
+        // semantics via `Hull` — every asteroid/ship/un-baked base keeps exactly today's behaviour.
+        // `Hull` remains the merged shrink-wrap (used for nothing kinematic once SubHulls is set, but
+        // kept non-null so the existing `b.Hull != null` broadphase guards read the same).
+        public readonly ConvexHull[]? SubHulls;
+
+        private StaticBody(
+            ConvexHull? hull,
+            Vec3 center,
+            Quat rot,
+            float scale,
+            float sphereRadius,
+            int baseTeam,
+            (Vec3, Vec3)[]? discs,
+            ConvexHull[]? subHulls
+        )
         {
             Hull = hull;
             Center = center;
@@ -140,25 +156,60 @@ public static class Collide
             SphereRadius = sphereRadius;
             BaseTeam = baseTeam;
             DockDiscs = discs;
+            SubHulls = subHulls;
         }
 
         public static StaticBody AsteroidHull(ConvexHull hull, Vec3 center, Quat rot, float scale) =>
-            new(hull, center, rot, scale, 0f, -1, null);
+            new(hull, center, rot, scale, 0f, -1, null, null);
 
         public static StaticBody AsteroidSphere(Vec3 center, float radius) =>
-            new(null, center, Quat.Identity, 1f, radius, -1, null);
+            new(null, center, Quat.Identity, 1f, radius, -1, null, null);
 
         // A base hull (already world-scaled, so identity rot + scale 1, local frame == world).
         public static StaticBody BaseHull(ConvexHull hull, Vec3 center, int team, (Vec3, Vec3)[] discs) =>
-            new(hull, center, Quat.Identity, 1f, 0f, team, discs);
+            new(hull, center, Quat.Identity, 1f, 0f, team, discs, null);
+
+        // A COMPOUND base: `merged` is the shrink-wrap hull (broadphase/metrics parity with the
+        // single-hull form); `subHulls` are the authored convex parts a ship actually bounces off,
+        // in the same already-world-scaled local frame. The dock discs still gate on the merged
+        // envelope. B3 migrates the base-insert callers onto this overload; the 4-arg one stays.
+        public static StaticBody BaseHull(ConvexHull merged, ConvexHull[] subHulls, Vec3 center, int team, (Vec3, Vec3)[] entrances) =>
+            new(merged, center, Quat.Identity, 1f, 0f, team, entrances, subHulls);
 
         public static StaticBody BaseSphere(Vec3 center, float radius, int team) =>
-            new(null, center, Quat.Identity, 1f, radius, team, null);
+            new(null, center, Quat.Identity, 1f, radius, team, null, null);
 
         // A deployed recon probe: a plain solid sphere, team-agnostic (no ownership carve-out — you
         // bounce off your own probes too), matching the server's ResolveProbeCollisions footprint.
         public static StaticBody ProbeSphere(Vec3 center, float radius) =>
-            new(null, center, Quat.Identity, 1f, radius, -1, null);
+            new(null, center, Quat.Identity, 1f, radius, -1, null, null);
+    }
+
+    // Sphere vs a static body's SOLID: the single merged hull when SubHulls is null (byte-identical
+    // to calling SphereVsHull directly — the regression-safe path every asteroid/ship/un-baked base
+    // takes), else the DEEPEST-penetration contact across the authored sub-hulls. One deepest contact
+    // = one bounce this tick; any residual overlap with a shallower part resolves next tick, exactly
+    // as the single-hull resolver has always relied on. Reuses SphereVsHull per sub-hull so the
+    // local-frame mapping (center/rot/scale) is identical for bases (identity/1) and would carry over
+    // to any rotated compound body too — no duplicated sphere-vs-hull math.
+    public static bool SphereVsBody(Vec3 pos, float radius, in StaticBody b, out Vec3 normal, out float penetration)
+    {
+        if (b.SubHulls is null)
+            return SphereVsHull(pos, radius, b.Hull!, b.Center, b.Rot, b.Scale, out normal, out penetration);
+
+        normal = default;
+        penetration = 0f;
+        bool any = false;
+        for (int i = 0; i < b.SubHulls.Length; i++)
+        {
+            if (SphereVsHull(pos, radius, b.SubHulls[i], b.Center, b.Rot, b.Scale, out Vec3 n, out float pen) && (!any || pen > penetration))
+            {
+                normal = n;
+                penetration = pen;
+                any = true;
+            }
+        }
+        return any;
     }
 
     // Resolve a ship (a shipRadius sphere) against a sector's static bodies, mutating its state the
@@ -185,7 +236,7 @@ public static class Collide
                 continue; // your dock opening — let the ship through (server handles docking)
             if (b.Hull != null)
             {
-                if (SphereVsHull(s.Pos, shipRadius, b.Hull, b.Center, b.Rot, b.Scale, out Vec3 n, out float pen))
+                if (SphereVsBody(s.Pos, shipRadius, b, out Vec3 n, out float pen))
                 {
                     Bounce(ref s, n, pen, restitution, out _);
                     hit = true;
@@ -219,7 +270,7 @@ public static class Collide
                 continue;
             if (b.Hull != null)
             {
-                if (SphereVsHull(pos, shipRadius, b.Hull, b.Center, b.Rot, b.Scale, out _, out _))
+                if (SphereVsBody(pos, shipRadius, b, out _, out _))
                     return true;
             }
             else

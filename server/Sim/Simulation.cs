@@ -695,7 +695,7 @@ public sealed partial class Simulation
                 // base disc (the green debug cones) — the rest of the base is a solid hull that bounces
                 // you. Without a model, fall back to the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
-                if (World.BaseHull is ConvexHull baseHull)
+                if (World.BaseHull is not null)
                 {
                     if (Collide.IntersectsDockDisc(d, World.BaseDockDiscs, World.DockDiscRadius, World.ShipRadius))
                     {
@@ -703,9 +703,12 @@ public sealed partial class Simulation
                         docked = true;
                         break;
                     }
-                    // Base is identity-oriented at scale 1, so its local frame == world (offset by center).
-                    if (baseHull.ResolveSphere(d, World.ShipRadius, out Vec3 bn, out float bpen, out _))
-                        BounceShip(s, bn, bpen); // solid shell everywhere else
+                    // Solid shell everywhere else: the DEEPEST contact across the authored compound
+                    // sub-hulls, resolved through the shared Collide.SphereVsBody kernel so the client
+                    // predicts the identical bounce (same contact-selection rule — deepest wins). A
+                    // partless base collapses to the single merged hull, matching the old behaviour.
+                    if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos), out Vec3 bn, out float bpen))
+                        BounceShip(s, bn, bpen);
                 }
                 else
                 {
@@ -1406,8 +1409,8 @@ public sealed partial class Simulation
                 var b = World.Bases[i];
                 if (b.SectorId != ship.SectorId || b.Team == ship.Team)
                     continue;
-                bool hit = World.BaseHull is ConvexHull bh
-                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, mv, World.ProjectileRadius, bestT, out float t)
+                bool hit = World.BaseHull is not null
+                    ? BaseHullsRayEntry(b.Pos, mp, mv, World.ProjectileRadius, bestT, out float t)
                     : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
                 if (hit && t < bestT)
                 {
@@ -1763,8 +1766,8 @@ public sealed partial class Simulation
                 var b = World.Bases[bi];
                 if (b.SectorId != mis.SectorId || b.Team == mis.Team)
                     continue; // friendly bases are non-colliding, matching bolts
-                bool bhit = World.BaseHull is ConvexHull bh
-                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, vel, 0f, bestT, out float bt)
+                bool bhit = World.BaseHull is not null
+                    ? BaseHullsRayEntry(b.Pos, mp, vel, 0f, bestT, out float bt)
                     : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadius, bestT, out bt);
                 if (bhit && bt < bestT)
                 {
@@ -2268,13 +2271,44 @@ public sealed partial class Simulation
         }
     }
 
-    // Bounce a ship off a base: the loaded world hull if present, else the legacy radius sphere.
+    // Bounce a ship off a base: the loaded compound world hull if present, else the legacy radius
+    // sphere. Runs through the shared Collide.SphereVsBody kernel over the authored sub-hulls (deepest
+    // contact = one BounceShip), so an enemy base bounces exactly as the client predicts it.
     private void ResolveBaseCollision(ShipSim s, Vec3 center)
     {
-        if (World.BaseHull is ConvexHull hull)
-            ResolveHullCollision(s, hull, center, Quat.Identity, 1f);
+        if (World.BaseHull is not null)
+        {
+            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center), out Vec3 n, out float pen))
+                BounceShip(s, n, pen);
+        }
         else
             ResolveStaticCollision(s, center, World.BaseRadius);
+    }
+
+    // The base as a shared compound StaticBody at `center`: `BaseHull` is the merged shrink-wrap (kept
+    // non-null for the struct + broadphase parity), `BaseSubHulls` are the authored parts the kinematic
+    // kernel actually resolves against. Team/discs are irrelevant to SphereVsBody (it never gates on
+    // them — dock carve-out is handled by the caller), so a fixed team/the discs are passed for shape.
+    // Callers guard World.BaseHull is not null first.
+    private Collide.StaticBody BaseBody(Vec3 center) =>
+        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockDiscs);
+
+    // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity
+    // frame), the ray analogue of SphereVsBody: the CLOSEST sub-hull surface stops the bolt/missile, so
+    // a shot threading a gap between parts passes through exactly as the client renders it. Reuses
+    // HullRayEntry per part; the caller's `bestT` plumbing still picks the closest target overall.
+    private bool BaseHullsRayEntry(Vec3 center, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    {
+        t = maxT;
+        bool hit = false;
+        var subs = World.BaseSubHulls;
+        for (int i = 0; i < subs.Length; i++)
+            if (HullRayEntry(subs[i], center, Quat.Identity, 1f, mp, mv, margin, t, out float th) && th < t)
+            {
+                t = th;
+                hit = true;
+            }
+        return hit;
     }
 
     // Resolve a ship against every DEPLOYABLE solid body in its sector. A deployable is a small,
