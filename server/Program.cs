@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
+using SimServer;
 using SimServer.Assets;
 using SimServer.Backend;
 using SimServer.Content;
@@ -127,6 +128,22 @@ for (int i = 0; i < args.Length; i++)
         extraMapsDir = args[i + 1];
 }
 
+// ---- Host + logging ----
+// Build the ASP.NET host early so the console logger (appsettings.json: timestamps + per-category
+// levels, overridable at runtime via Logging__LogLevel__*) is live before content/map load and the
+// sim objects. Building the host does NOT start Kestrel — only app.Run() (bottom) does — so this is
+// safe to do up front. Runtime diagnostics now go through ILogger; the one-shot CLI subcommands
+// above and the FATAL boot-abort messages below stay on Console (command results, not logging).
+var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
+var app = builder.Build();
+var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+var log = loggerFactory.CreateLogger("SimServer");
+// The static asset/content helpers have no instance to inject into — hand them the boot logger now,
+// before ContentLoader.Load (which merges GLB hardpoints and loads sim models) runs below.
+SimAssets.Logger = loggerFactory.CreateLogger("SimServer.Assets");
+HardpointGeometryMerge.Logger = loggerFactory.CreateLogger("SimServer.Content");
+
 // Resolve content BEFORE the sim: load the YAML bundle, then validate. The client has no
 // compile-time fallback, so a malformed/incomplete def set must fail HERE (clear error, refuse to
 // start) rather than surfacing mid-match as a server KeyNotFound or a client desync.
@@ -152,31 +169,23 @@ if (contentErrors.Count > 0)
         Console.Error.WriteLine($"  - {e}");
     return;
 }
-Console.WriteLine(
-    explicitContent
-        ? $"[SimServer] content: loaded '{contentPath}' (overrides default location)."
-        : $"[SimServer] content: loaded default '{contentPath}'."
-);
-Console.WriteLine(
-    explicitWorld
-        ? $"[SimServer] world: loaded '{worldPath}' (overrides default location)."
-        : $"[SimServer] world: loaded default '{worldPath}'."
-);
+Log.ContentLoaded(log, contentPath, explicitContent ? " (overrides default location)." : " (default).");
+Log.WorldLoaded(log, worldPath, explicitWorld ? " (overrides default location)." : " (default).");
 
 // Auth posture: with no secret the server is OPEN (anyone may join) — fine for LAN / dev /
 // benchmarking, but set --secret/SIM_SECRET before exposing it to untrusted networks.
 if (secret.Length == 0)
-    Console.WriteLine("[SimServer] open server (no --secret/SIM_SECRET) — do not expose to untrusted networks.");
+    Log.OpenServer(log);
 else
-    Console.WriteLine("[SimServer] auth enabled (shared-secret password required).");
+    Log.AuthEnabled(log);
 if (autoStart)
-    Console.WriteLine("[SimServer] autostart on — perpetual match, lobby ready-up bypassed.");
+    Log.AutostartOn(log);
 
 // Pluggable backends (server/Backend) — in-process defaults today, swap-in seams later.
 IAuthenticator auth = secret.Length == 0 ? new OpenAuthenticator() : new SharedSecretAuthenticator(secret);
 IPlayerDirectory players = new InMemoryPlayerDirectory();
 IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
-IMatchResultSink results = new LoggingMatchResultSink();
+IMatchResultSink results = new LoggingMatchResultSink(loggerFactory.CreateLogger<LoggingMatchResultSink>());
 
 // MAP: load the available maps (stock + operator-supplied), resolve the selected one by name, and
 // overlay its sector layout onto the world config. Fail fast (like content) on a bad/nameless map
@@ -193,11 +202,13 @@ try
     selectedMapDef = MapLoader.Resolve(maps, selectedMap);
     // Build the client-facing map catalog from the PRISTINE world config, before ApplyTo mutates
     // content.World for the live arena (Build clones per map, so this doesn't disturb it).
-    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start);
+    mapCatalog = MapCatalog.Build(maps, content.World, seed, content.Bases[0].MaxHealth, content.Start, content.Ships);
     MapLoader.ApplyTo(selectedMapDef, content.World);
-    Console.WriteLine(
-        $"[SimServer] map: '{selectedMapDef.Name}' ({selectedMapDef.Sectors.Count} sector override(s))"
-            + (string.IsNullOrWhiteSpace(extraMapsDir) ? "." : $"; extra maps dir '{extraMapsDir}'.")
+    Log.MapLoaded(
+        log,
+        selectedMapDef.Name!,
+        selectedMapDef.Sectors.Count,
+        string.IsNullOrWhiteSpace(extraMapsDir) ? "." : $"; extra maps dir '{extraMapsDir}'."
     );
 }
 catch (Exception ex)
@@ -209,9 +220,9 @@ string mapName = selectedMapDef.Name!.Trim();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start);
-var sim = new Simulation(world, content);
-var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog);
+var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
+var sim = new Simulation(world, content, loggerFactory.CreateLogger<Simulation>());
+var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog, loggerFactory.CreateLogger<ClientHub>());
 
 // Lobby integration: the sim polls the matchmaker to leave the lobby, and tells the hub when
 // it returns to the lobby so ready flags reset. Both run on the sim thread.
@@ -227,15 +238,10 @@ World? BuildWorldForMap(string name)
         return null;
     var cfg = MapCatalog.Clone(pristineWorldCfg);
     MapLoader.ApplyTo(def, cfg);
-    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start);
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
 }
 sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
 sim.OnMatchStart = hub.OnMatchStart;
-
-var builder = WebApplication.CreateBuilder();
-builder.Logging.SetMinimumLevel(LogLevel.Warning);
-builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
-var app = builder.Build();
 
 // Behind the hosting layer's TLS-terminating proxy (wss:// -> ws://:8090): honour the
 // X-Forwarded-* headers so the request scheme/remote IP reflect the real client. Clear the
@@ -327,10 +333,10 @@ simThread.Start();
 // if reachable, else WebRTC joins relayed through the lobby. No name = private (direct ws:// only).
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
-var registrar = LobbyRegistrar.FromEnv(hub, port, secret.Length > 0);
+var registrar = LobbyRegistrar.FromEnv(hub, port, secret.Length > 0, loggerFactory);
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 
-Console.WriteLine($"[SimServer] ws://localhost:{port}/game  seed={seed}  asteroids={world.Asteroids.Count}  20 Hz");
+Log.ServerListening(log, port, seed, world.Asteroids.Count);
 app.Run();
 cts.Cancel();

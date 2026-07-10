@@ -34,12 +34,17 @@ public sealed class LoadoutState
     private readonly Dictionary<byte, Dictionary<uint, int>> _cargo = new();
 
     // The weapon currently shown in a slot: the player's override if one exists, else the
-    // hull's authored weapon.
+    // hull's authored weapon. An authored default of HardpointDef.NoWeapon (the GLB-merge
+    // sentinel for a mesh weapon mount YAML never bound) reads as null here too — it's an
+    // empty, assignable slot from the moment the def arrives, same as a slot the player
+    // deliberately emptied. Every consumer (slot list, marker fill, arsenal "leave empty"
+    // affordance, payload accounting) reads through this one seam, so treating NoWeapon as
+    // empty here is enough to make the whole screen show it as an empty mount.
     public uint? AssignedWeapon(byte classId, HardpointDef hp)
     {
         if (_weaponOverrides.TryGetValue(classId, out var slots) && slots.TryGetValue(hp.Index, out uint? w))
             return w;
-        return hp.WeaponId;
+        return hp.WeaponId == HardpointDef.NoWeapon ? null : hp.WeaponId;
     }
 
     public void Assign(byte classId, byte hpIndex, uint? weaponId)

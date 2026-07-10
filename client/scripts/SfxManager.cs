@@ -106,6 +106,10 @@ public partial class SfxManager : Node
         // Apply persisted volume settings before any sound plays (the ambient bed starts below).
         UserPrefs.ApplyAudioPrefs();
 
+        // Register the rebindable InputMap actions (defaults + saved overrides) before the first
+        // frame reads input. This _Ready runs during the boot _Ready pass, ahead of any _Process.
+        InputBindings.Apply();
+
         for (int i = 0; i < Pool3DSize; i++)
         {
             var p = new AudioStreamPlayer3D
@@ -154,7 +158,7 @@ public partial class SfxManager : Node
             var stream = ResourceLoader.Load<AudioStream>(AssetDir + file);
             if (stream == null)
             {
-                GD.PushWarning($"[SfxManager] missing audio asset: {file}");
+                Log.Warn($"[SfxManager] missing audio asset: {file}");
                 continue;
             }
             // .ogg imports as AudioStreamOggVorbis; flip loopers to loop here so we

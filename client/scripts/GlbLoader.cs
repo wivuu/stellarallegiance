@@ -32,11 +32,31 @@ public static class GlbLoader
             && GD.Load<PackedScene>(resPath) is PackedScene scene
             && scene.Instantiate() is Node3D root
         )
+        {
+            HideCollisionProxies(root);
             return root;
+        }
 
         _missing.Add(resPath);
-        GD.PushWarning($"[GlbLoader] '{resPath}' unavailable — using procedural placeholder");
+        Log.Warn($"[GlbLoader] '{resPath}' unavailable — using procedural placeholder");
         return null;
+    }
+
+    // Hide every COL_* MeshInstance3D in a freshly instantiated GLB. Those are the authored
+    // convex COLLISION-PROXY parts baked into the .glb by tools/collision-hull (COL_<Name> nodes): the
+    // shared/server + client hull pipeline consumes their geometry to build one convex hull per
+    // part, but they must NEVER render. Hiding them here (rather than per-loader) covers bases and
+    // ships alike — any future COL_-baked mesh is invisible by construction. Godot's importer
+    // preserves node names, and only a `-col`/`-colonly` SUFFIX is an import hint, so the COL_
+    // PREFIX is a safe, render-only marker. MeshAabb still walks these (visibility-agnostic), so
+    // NormalizeLongestAxis is unaffected — the baked parts are validated to stay inside the visual
+    // AABB, keeping the scale contract intact.
+    private static void HideCollisionProxies(Node node)
+    {
+        if (node is MeshInstance3D mi && mi.Name.ToString().StartsWith("COL_", System.StringComparison.Ordinal))
+            mi.Visible = false;
+        foreach (Node child in node.GetChildren())
+            HideCollisionProxies(child);
     }
 
     // Uniform-scale `root` so its longest local axis equals `target` world units. Re-used
@@ -84,6 +104,11 @@ public static class GlbLoader
         Recurse(hull, Transform3D.Identity);
         return found;
     }
+
+    // Local-space mesh extents (X/Y/Z) of the subtree — length/width/height for camera framing and
+    // sizing. Same walk as MeshAabb, so root's own transform is excluded (measure a container whose
+    // child hull carries the scale/rotation, not the hull alone; see ShipModelLoader.Build).
+    public static Vector3 MeshWorldSize(Node3D root) => MeshAabb(root).Size;
 
     // Combined AABB of every mesh in the subtree, in `root`'s local space (root's own transform
     // is ignored — it's the freshly-instantiated, not-yet-scaled hull node). Walks the tree

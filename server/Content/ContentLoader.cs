@@ -12,6 +12,9 @@ namespace SimServer.Content;
 //   2. CoreValidator.Validate         — referential-integrity gate on the Core (unique ids, resolvable
 //      cross-refs, start-station ability). The client has no fallback, so an invalid bundle throws
 //      here and the server refuses to start;
+//   2b. HardpointGeometryMerge.Apply  — fold each hull/station's GLB HP_<Kind>_<Index> nodes into the
+//      Core's hardpoint lists (mesh = authoritative inventory + geometry; YAML binds weapon-ids +
+//      overrides). Boots-errors on an unresolvable/duplicate/zero-dir hardpoint;
 //   3. FactionsContentProjection      — project the Core into the existing runtime ContentSet
 //      (ShipClassDef/WeaponDef/BaseDef/WorldConfig), unchanged on the wire (Protocol.BuildDefs) and
 //      client. The caller (Program.cs) runs the shared ContentValidator on the projected defs as a
@@ -37,6 +40,11 @@ public static class ContentLoader
             throw new InvalidDataException(
                 $"content bundle '{manifestPath}' failed validation ({vr.Errors.Count} error(s)):\n  - "
                 + string.Join("\n  - ", vr.Errors));
+
+        // GLB-authoritative hardpoint inventory + geometry: the mesh HP_ nodes supply how many
+        // mounts a hull/station has and where they sit; YAML binds weapon-ids + overrides geometry.
+        // Mutates the core's Hull/Station hardpoint lists before the (dumb) projection reads them.
+        HardpointGeometryMerge.Apply(core);
 
         return FactionsContentProjection.Project(core, WorldLoader.Load(worldPath));
     }

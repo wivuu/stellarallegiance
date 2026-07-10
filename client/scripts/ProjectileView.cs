@@ -39,6 +39,18 @@ public partial class ProjectileView : Node3D
     public Vector3 Velocity => _vel;
     public ulong OwnerShipId { get; private set; }
 
+    // Where this bolt's flight ends on a STATIC surface, and whether that end is a real impact
+    // worth decorating. Set once at spawn by WorldRenderer.AddBolt from ClipBoltTtl: when the
+    // bolt's TTL was clipped against a base's visible mesh (or convex hull), ImpactAtExpiry is
+    // true and ImpactPoint is the surface point, so the TTL-expiry cull can drop a HitFlash +
+    // impact sound there — the same client-side interception CheckBoltImpacts does for ships.
+    // Sector tags where that spark belongs (bolts are sector-local, like every world node). A
+    // bolt that simply outlived its flight in open space leaves ImpactAtExpiry false and expires
+    // silently, exactly as today.
+    public Vector3 ImpactPoint { get; set; }
+    public bool ImpactAtExpiry { get; set; }
+    public uint Sector { get; set; }
+
     public void Initialize(
         Vector3 pos,
         Vector3 vel,

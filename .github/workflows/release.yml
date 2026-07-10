@@ -92,6 +92,18 @@ jobs:
           echo "build-solutions exit: $ec"
           if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
 
+      # .glb.import sidecars are gitignored, so a fresh checkout has NO imported assets. Without an
+      # explicit import pass the export packs un-imported GLBs and every model silently falls back
+      # to its procedural placeholder (spheres for bases) at runtime. Same shutdown-segfault
+      # tolerance as build-solutions; the sidecar check below is the real gate.
+      - name: Import assets
+        run: |
+          ec=0
+          godot --headless --path client --import || ec=$?
+          echo "import exit: $ec"
+          if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
+          test -f client/assets/bases/base.glb.import || { echo "::error::GLB import produced no sidecars — exported client would ship placeholder meshes"; exit 1; }
+
       - name: Create export directory
         run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"
 
@@ -209,7 +221,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          generate_release_notes: true
+          generate_release_notes: false
           # Keep any existing release body (e.g. a hand-written changelog on a
           # pre-created release) and append the download/self-hosting boilerplate
           # below instead of overwriting it.

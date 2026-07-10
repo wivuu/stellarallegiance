@@ -340,7 +340,7 @@ public partial class ShipController : Node
         // ShipInput so the server integrates the same boost the client predicted (no
         // reconcile storm), and still drives the engine glow. Autofly pins it on so
         // headless runs exercise the boost + exhaust path.
-        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsPhysicalKeyPressed(Key.Shift));
+        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
         _input.Boost = boost;
         pc.SetAfterburner(boost ? 1f : 0f);
 
@@ -510,16 +510,6 @@ public partial class ShipController : Node
             Input.MouseMode = Input.MouseModeEnum.Visible; // free cursor for the menu
     }
 
-    private static float Axis(Key pos, Key neg)
-    {
-        float v = 0f;
-        if (Input.IsPhysicalKeyPressed(pos))
-            v += 1f;
-        if (Input.IsPhysicalKeyPressed(neg))
-            v -= 1f;
-        return v;
-    }
-
     private ShipInputState ReadInput(double delta)
     {
         // Fold this frame's captured-cursor motion into the self-centering virtual stick.
@@ -551,23 +541,25 @@ public partial class ShipController : Node
         {
             // Thrust is now a THROTTLE: W = full forward throttle (commands MaxSpeed),
             // S = weak reverse. Yaw/Pitch/Roll are commanded turn-RATE fractions.
-            Thrust = Axis(Key.W, Key.S), // forward throttle / reverse
-            StrafeX = Axis(Key.A, Key.D), // strafe right / left
-            StrafeY = Axis(Key.X, Key.Z), // strafe up / down
-            Yaw = Mathf.Clamp(Axis(Key.Left, Key.Right) + _stickYaw, -1f, 1f),
-            Pitch = Mathf.Clamp(Axis(Key.Up, Key.Down) + _stickPitch, -1f, 1f),
-            Roll = Axis(Key.E, Key.Q), // roll right / left
-            Firing = Input.IsPhysicalKeyPressed(Key.Space) || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
-            // Secondary (missile) fire: F, or RMB while mouse-look owns the cursor — the same
-            // capture gate the LMB primary uses so a right-click on a menu never launches. The
-            // lock target is whatever TargetMarkers has Tab-focused (0 = none; server needs a lock).
-            Firing2 = Input.IsPhysicalKeyPressed(Key.F) || (look && Input.IsMouseButtonPressed(MouseButton.Right)),
-            // Dispensers: C ejects chaff, B lays a mine field, G deploys a recon probe. Held-input
-            // replay re-fires the flag, so the SERVER's cadence gate is the debounce — we do NOT
-            // client-edge-detect (that would desync from the authoritative cadence).
-            DropChaff = Input.IsPhysicalKeyPressed(Key.C),
-            DropMine = Input.IsPhysicalKeyPressed(Key.B),
-            DropProbe = Input.IsPhysicalKeyPressed(Key.G),
+            // Rebindable via the InputMap (InputBindings). GetAxis(negative, positive) reproduces
+            // the old Axis(pos, neg) signs; analog gamepad axes feed through for free.
+            Thrust = Input.GetAxis("thrust_back", "thrust_forward"), // forward throttle / reverse
+            StrafeX = Input.GetAxis("strafe_left", "strafe_right"), // strafe right / left
+            StrafeY = Input.GetAxis("strafe_down", "strafe_up"), // strafe up / down
+            Yaw = Mathf.Clamp(Input.GetAxis("yaw_right", "yaw_left") + _stickYaw, -1f, 1f),
+            Pitch = Mathf.Clamp(Input.GetAxis("pitch_down", "pitch_up") + _stickPitch, -1f, 1f),
+            Roll = Input.GetAxis("roll_left", "roll_right"), // roll right / left
+            Firing = Input.IsActionPressed("fire_primary") || (look && Input.IsMouseButtonPressed(MouseButton.Left)),
+            // Secondary (missile) fire: the fire_secondary action, or RMB while mouse-look owns the
+            // cursor — the same capture gate the LMB primary uses so a right-click on a menu never
+            // launches. The lock target is whatever TargetMarkers has focused (0 = none).
+            Firing2 = Input.IsActionPressed("fire_secondary") || (look && Input.IsMouseButtonPressed(MouseButton.Right)),
+            // Dispensers: chaff / mine field / recon probe. Held-input replay re-fires the flag, so
+            // the SERVER's cadence gate is the debounce — we do NOT client-edge-detect (that would
+            // desync from the authoritative cadence).
+            DropChaff = Input.IsActionPressed("drop_chaff"),
+            DropMine = Input.IsActionPressed("drop_mine"),
+            DropProbe = Input.IsActionPressed("drop_probe"),
             LockTargetId = TargetMarkers.FocusedId,
         };
     }

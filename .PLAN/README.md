@@ -20,6 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Content in settings modal(s) needs more padding from scrollbar
+- Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 
 ## Content philosophy (the through-line)
@@ -223,15 +225,16 @@ Stage-2 economy, no rework.
   don't. (FX done; the recharge *mechanic* is not.)
 - ✅ **Adaptive prediction lead** — lead derived from measured RTT + jitter (`UpdateAdaptiveLead`);
   `STDB_LEAD` (legacy name) remains as a manual override.
-- ◐ **[S]** **In-match HUD polish** — velocity indicator, radar/targeting, base health bar, minimap
-  shipped. Still want player-facing **health/shield bars** and **in-match team scores** as proper
-  HUD elements (needs Stage-2 per-team/player state; see QUICKNOTES). Durable per-player
-  scores/ranks are Stage 5.
-- ☐ **[M]** **Control settings and mappings** — allow players to configure keybindings, input devices,
-  and control schemes for the game from the settings -> controls menu.
-- ☐ **[M]** **Alephs block shots**  - from weapons and missiles
+- ✅ **[M]** **Alephs block shots**  - from weapons and missiles
   - Alephs should act as physical barriers that prevent projectiles from passing through them, requiring
     players to navigate around or otherwise account for their presence in combat scenarios.
+- ✅ **[M]** **Control settings and mappings** — shipped (2026-07-09): flight/combat/scope controls
+  migrated onto Godot InputMap actions (`client/scripts/InputBindings.cs` — defaults single-sourced
+  in C#, registered at boot in `SfxManager._Ready`, overrides persisted in `UserPrefs` `[bindings]`).
+  Rebindable from Settings → Controls (grouped `KeybindRow` list, click-to-capture key/mouse/**gamepad**,
+  RESTORE DEFAULTS + revert), with analog joystick support via `Input.GetAxis`. Menu/system keys
+  (Esc, F3/F4/F9, base-select/spawn digits, chat) stay hardcoded to protect the modal input-gating.
+  *Deferred: named preset schemes (Default/Southpaw), rebinding the menu/system keys.*
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
@@ -268,12 +271,12 @@ Stage-1 YAML pipeline.
   incoming-warning leak), vision-cone HUD rendering, eyeball-tier occlusion (unoccluded in v1).*
 - ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
   to join a team (or promoted). **No accounts required.**
+- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a strategic overlay across all sectors exists; allow the commander to select units in F3 view and issue them orders. Allow other players to issue orders as well, but AI will only follow the commander's orders.
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a 2D strategic overlay across all sectors;
-  commander issues waypoints and investment orders. Reuse minimap/sector data.
 - ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,

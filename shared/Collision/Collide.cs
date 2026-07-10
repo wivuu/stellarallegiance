@@ -129,9 +129,25 @@ public static class Collide
         public readonly float Scale;
         public readonly float SphereRadius; // used when Hull is null
         public readonly int BaseTeam; // -1 for an asteroid; the team id for a base (dock carve-out + ownership)
-        public readonly (Vec3 Pos, Vec3 Normal)[]? DockDiscs; // own-base docking discs (base-local); null otherwise
+        public readonly DockFace[]? DockFaces; // own-base rectangular docking doors (base-local); null otherwise
 
-        private StaticBody(ConvexHull? hull, Vec3 center, Quat rot, float scale, float sphereRadius, int baseTeam, (Vec3, Vec3)[]? discs)
+        // Authored compound collision parts (one per baked COL_ node), in this body's SAME local frame
+        // as `Hull` (bases: already world-scaled ⇒ identity rot / scale 1). null ⇒ single-hull
+        // semantics via `Hull` — every asteroid/ship/un-baked base keeps exactly today's behaviour.
+        // `Hull` remains the merged shrink-wrap (used for nothing kinematic once SubHulls is set, but
+        // kept non-null so the existing `b.Hull != null` broadphase guards read the same).
+        public readonly ConvexHull[]? SubHulls;
+
+        private StaticBody(
+            ConvexHull? hull,
+            Vec3 center,
+            Quat rot,
+            float scale,
+            float sphereRadius,
+            int baseTeam,
+            DockFace[]? dockFaces,
+            ConvexHull[]? subHulls
+        )
         {
             Hull = hull;
             Center = center;
@@ -139,26 +155,74 @@ public static class Collide
             Scale = scale;
             SphereRadius = sphereRadius;
             BaseTeam = baseTeam;
-            DockDiscs = discs;
+            DockFaces = dockFaces;
+            SubHulls = subHulls;
         }
 
         public static StaticBody AsteroidHull(ConvexHull hull, Vec3 center, Quat rot, float scale) =>
-            new(hull, center, rot, scale, 0f, -1, null);
+            new(hull, center, rot, scale, 0f, -1, null, null);
 
         public static StaticBody AsteroidSphere(Vec3 center, float radius) =>
-            new(null, center, Quat.Identity, 1f, radius, -1, null);
+            new(null, center, Quat.Identity, 1f, radius, -1, null, null);
 
         // A base hull (already world-scaled, so identity rot + scale 1, local frame == world).
-        public static StaticBody BaseHull(ConvexHull hull, Vec3 center, int team, (Vec3, Vec3)[] discs) =>
-            new(hull, center, Quat.Identity, 1f, 0f, team, discs);
+        public static StaticBody BaseHull(ConvexHull hull, Vec3 center, int team, DockFace[] faces) =>
+            new(hull, center, Quat.Identity, 1f, 0f, team, faces, null);
+
+        // A COMPOUND base: `merged` is the shrink-wrap hull (broadphase/metrics parity with the
+        // single-hull form); `subHulls` are the authored convex parts a ship actually bounces off,
+        // in the same already-world-scaled local frame. The dock faces still gate on the merged
+        // envelope. B3 migrates the base-insert callers onto this overload; the 4-arg one stays.
+        public static StaticBody BaseHull(ConvexHull merged, ConvexHull[] subHulls, Vec3 center, int team, DockFace[] faces) =>
+            new(merged, center, Quat.Identity, 1f, 0f, team, faces, subHulls);
 
         public static StaticBody BaseSphere(Vec3 center, float radius, int team) =>
-            new(null, center, Quat.Identity, 1f, radius, team, null);
+            new(null, center, Quat.Identity, 1f, radius, team, null, null);
+
 
         // A deployed recon probe: a plain solid sphere, team-agnostic (no ownership carve-out — you
         // bounce off your own probes too), matching the server's ResolveProbeCollisions footprint.
         public static StaticBody ProbeSphere(Vec3 center, float radius) =>
-            new(null, center, Quat.Identity, 1f, radius, -1, null);
+            new(null, center, Quat.Identity, 1f, radius, -1, null, null);
+    }
+
+    // Sphere vs a static body's SOLID: the single merged hull when SubHulls is null (byte-identical
+    // to calling SphereVsHull directly — the regression-safe path every asteroid/ship/un-baked base
+    // takes), else the DEEPEST-penetration contact across the authored sub-hulls. One deepest contact
+    // = one bounce this tick; any residual overlap with a shallower part resolves next tick, exactly
+    // as the single-hull resolver has always relied on. Reuses SphereVsHull per sub-hull so the
+    // local-frame mapping (center/rot/scale) is identical for bases (identity/1) and would carry over
+    // to any rotated compound body too — no duplicated sphere-vs-hull math.
+    public static bool SphereVsBody(Vec3 pos, float radius, in StaticBody b, out Vec3 normal, out float penetration)
+    {
+        if (b.SubHulls is null)
+            return SphereVsHull(pos, radius, b.Hull!, b.Center, b.Rot, b.Scale, out normal, out penetration);
+
+        normal = default;
+        penetration = 0f;
+
+        // Broad-phase for the compound scan: the merged Hull's BoundingRadius encloses every
+        // sub-hull (parts are clamped strictly inside it), so a sphere beyond that reach can't
+        // touch any part — skip the (hundreds-of-planes) sub-hull loop entirely. The 4× radius
+        // slack covers ResolveSphere's approximate corner contacts (it can report a graze up to
+        // ~a radius outside the true surface near a corner), so gated and ungated results agree.
+        // Lives in the SHARED kernel so server and client prediction gate identically (parity).
+        Vec3 reachD = pos - b.Center;
+        float reach = b.Hull!.BoundingRadius * b.Scale + radius * 4f;
+        if (reachD.LengthSquared() > reach * reach)
+            return false;
+
+        bool any = false;
+        for (int i = 0; i < b.SubHulls.Length; i++)
+        {
+            if (SphereVsHull(pos, radius, b.SubHulls[i], b.Center, b.Rot, b.Scale, out Vec3 n, out float pen) && (!any || pen > penetration))
+            {
+                normal = n;
+                penetration = pen;
+                any = true;
+            }
+        }
+        return any;
     }
 
     // Resolve a ship (a shipRadius sphere) against a sector's static bodies, mutating its state the
@@ -171,7 +235,7 @@ public static class Collide
         System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
         int localTeam,
         float restitution,
-        float dockDiscRadius,
+        float dockFaceDepth,
         out Vec3 hitPos
     )
     {
@@ -181,11 +245,11 @@ public static class Collide
         {
             StaticBody b = bodies[i];
             bool ownBase = b.BaseTeam >= 0 && b.BaseTeam == localTeam;
-            if (ownBase && b.DockDiscs != null && IntersectsDockDisc(s.Pos - b.Center, b.DockDiscs, dockDiscRadius, shipRadius))
+            if (ownBase && b.DockFaces != null && IntersectsDockFace(s.Pos - b.Center, b.DockFaces, dockFaceDepth, shipRadius))
                 continue; // your dock opening — let the ship through (server handles docking)
             if (b.Hull != null)
             {
-                if (SphereVsHull(s.Pos, shipRadius, b.Hull, b.Center, b.Rot, b.Scale, out Vec3 n, out float pen))
+                if (SphereVsBody(s.Pos, shipRadius, b, out Vec3 n, out float pen))
                 {
                     Bounce(ref s, n, pen, restitution, out _);
                     hit = true;
@@ -208,18 +272,18 @@ public static class Collide
         float shipRadius,
         System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
         int localTeam,
-        float dockDiscRadius
+        float dockFaceDepth
     )
     {
         for (int i = 0; i < bodies.Count; i++)
         {
             StaticBody b = bodies[i];
             bool ownBase = b.BaseTeam >= 0 && b.BaseTeam == localTeam;
-            if (ownBase && b.DockDiscs != null && IntersectsDockDisc(pos - b.Center, b.DockDiscs, dockDiscRadius, shipRadius))
+            if (ownBase && b.DockFaces != null && IntersectsDockFace(pos - b.Center, b.DockFaces, dockFaceDepth, shipRadius))
                 continue;
             if (b.Hull != null)
             {
-                if (SphereVsHull(pos, shipRadius, b.Hull, b.Center, b.Rot, b.Scale, out _, out _))
+                if (SphereVsBody(pos, shipRadius, b, out _, out _))
                     return true;
             }
             else
@@ -232,23 +296,27 @@ public static class Collide
         return false;
     }
 
-    // True when a ship sphere intersects one of a base's docking-cone base discs: the ship center is
-    // at/just inside the disc plane and within the disc radius laterally. `d` is the ship position
-    // relative to the base center (disc Pos/Normal are in that same base-local frame). The inward
-    // slack (−discRadius) keeps a fast ship from tunneling the thin disc plane in one tick; lateral
-    // uses discRadius+shipRadius so the ship's hull (not just its center) must reach the disc. This
-    // is the ONLY way to dock at a hull base — everything else is the solid shell.
-    public static bool IntersectsDockDisc(Vec3 d, (Vec3 Pos, Vec3 Normal)[] discs, float discRadius, float shipRadius)
+    // True when a ship sphere intersects one of a base's bounded rectangular docking FACES (doors):
+    // the ship center is inside the door rectangle laterally (± the axis half-extents + shipRadius
+    // slop) AND within a depth window along the face's inward normal. `d` is the ship position
+    // relative to the base center (face fields are in that same base-local, already-world-scaled
+    // frame). Iterates EVERY face — a base may author N doors (each a group of 5 markers). The
+    // inward-slack depth window [−dockFaceDepth, +shipRadius] keeps a fast ship (worst case Scout
+    // ~8 world units/tick at 20 Hz) from tunneling the thin plane between ticks: the window spans
+    // dockFaceDepth+shipRadius ≈ 12 ≥ 8 with margin. NO facing/velocity requirement — pure geometry.
+    // This is the ONLY way to dock at a hull base — everything else is the solid shell.
+    public static bool IntersectsDockFace(Vec3 d, DockFace[] faces, float dockFaceDepth, float shipRadius)
     {
-        float r = discRadius + shipRadius;
-        for (int i = 0; i < discs.Length; i++)
+        for (int i = 0; i < faces.Length; i++)
         {
-            Vec3 rel = d - discs[i].Pos;
-            float along = Dot(rel, discs[i].Normal);
-            if (along > shipRadius || along < -discRadius)
+            DockFace f = faces[i];
+            Vec3 rel = d - f.Center;
+            float along = Dot(rel, f.Normal);
+            if (along > shipRadius || along < -dockFaceDepth)
                 continue;
-            Vec3 lateral = rel - discs[i].Normal * along;
-            if (lateral.LengthSquared() <= r * r)
+            Vec3 lateral = rel - f.Normal * along;
+            if (System.Math.Abs(Dot(lateral, f.U)) <= f.Eu + shipRadius
+                && System.Math.Abs(Dot(lateral, f.V)) <= f.Ev + shipRadius)
                 return true;
         }
         return false;

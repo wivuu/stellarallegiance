@@ -115,16 +115,55 @@ public sealed class CollisionWorld
         // World scale: the client renders the base via NormalizeLongestAxis(radius*2); bake the same.
         float ws = CollisionConfig.BaseRadius * 2f / model.LongestAxis;
         ConvexHull hull = model.Hull.Scaled(ws);
-        // Docking discs: one per HP_DockingEntrance, in base-local world units (authored * ws),
-        // normal radially outward — the own-base carve-out the player docks through.
-        var entrances = new List<(Vec3 Pos, Vec3 Normal)>();
-        foreach (var hp in model.Hardpoints)
-            if (hp.Name.StartsWith("HP_DockingEntrance", System.StringComparison.Ordinal))
+        // Authored compound sub-hulls, world-scaled exactly like the server's World.LoadBase (same GLB
+        // bytes → same ConvexHull.Build per part → bit-identical hulls). Partless bases: model.Hulls
+        // aliases the merged hull ⇒ a 1-element array. We ALWAYS build the compound StaticBody (same as
+        // the server, which always resolves through Collide.SphereVsBody over BaseSubHulls), so the
+        // client and server take the identical contact-selection path — 1-element compound and the old
+        // single-hull form are numerically the same anyway (SphereVsBody's loop resolves the one hull).
+        var subs = new ConvexHull[model.Hulls.Count];
+        for (int i = 0; i < model.Hulls.Count; i++)
+            subs[i] = model.Hulls[i].Scaled(ws);
+        // Docking doors: the SHARED DockFaceParser turns the grouped HP_DockingEntrance markers into
+        // rectangular faces from the SAME GLB bytes + SAME world scale the server uses — so the
+        // client's DockFace[] is bit-identical to World.LoadBase's and prediction agrees with the
+        // server at the bay mouth (no rubber-banding). N doors supported (each a group of 5 markers).
+        DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Log.Warn($"[CollisionWorld] {msg}"));
+        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, faces), default, 0f));
+    }
+
+    // First-entry time t of the ray (pos + vel·t) into any BASE hull in the sector, within [0, maxT].
+    // WorldRenderer's tier-2 bolt clip uses this when a base rendered its procedural placeholder (no
+    // MeshRaycaster): the server-parity hull is far tighter than the coarse BaseDef sphere, so the
+    // tracer stops much closer to the real silhouette. With authored COL_ parts we min-t across the
+    // compound SUB-HULLS (the real superstructure — a shot threading a gap passes through), falling
+    // back to the merged Hull for a partless base. Base bodies are pre-scaled to world with identity
+    // rotation and unit scale, so local == world − center; sphere-fallback bases (Hull == null) are
+    // simply skipped. Margin 0 — this is cosmetic.
+    public bool BaseRayEntry(uint sector, Vec3 pos, Vec3 vel, float maxT, out float t)
+    {
+        t = maxT;
+        bool hit = false;
+        foreach (var b in BodiesIn(sector, 0f))
+        {
+            if (b.BaseTeam < 0 || b.Hull is null)
+                continue;
+            if (b.SubHulls is ConvexHull[] subs)
             {
-                Vec3 p = hp.Pos * ws;
-                entrances.Add((p, Normalize(hp.Pos)));
+                foreach (var hull in subs)
+                    if (hull.RayEntry(pos - b.Center, vel, t, 0f, out float th) && th < t)
+                    {
+                        t = th;
+                        hit = true;
+                    }
             }
-        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, center, row.Team, entrances.ToArray()), default, 0f));
+            else if (b.Hull.RayEntry(pos - b.Center, vel, t, 0f, out float th) && th < t)
+            {
+                t = th;
+                hit = true;
+            }
+        }
+        return hit;
     }
 
     private List<Entry> BodyList(uint sector)
@@ -162,7 +201,7 @@ public sealed class CollisionWorld
         byte[] bytes = FileAccess.GetFileAsBytes(resPath);
         if (bytes is null || bytes.Length == 0)
         {
-            GD.PushWarning($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
+            Log.Warn($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
             return null;
         }
         try
@@ -171,14 +210,8 @@ public sealed class CollisionWorld
         }
         catch (System.Exception e)
         {
-            GD.PushWarning($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
+            Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
             return null;
         }
-    }
-
-    private static Vec3 Normalize(Vec3 v)
-    {
-        float l = v.Length();
-        return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
     }
 }

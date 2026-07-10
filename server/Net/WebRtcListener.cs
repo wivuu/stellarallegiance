@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using SIPSorcery.Net;
 using StellarAllegiance.Net;
 
@@ -98,25 +99,28 @@ public sealed class WebRtcListener
     private readonly string _shareBase; // http://host:port — still needed to POST answers
     private readonly ChannelReader<PendingOfferDto> _offers;
     private readonly List<RTCIceServer> _iceServers;
+    private readonly ILogger _log;
 
     internal WebRtcListener(
         ClientHub hub,
         string shareBase,
         ChannelReader<PendingOfferDto> offers,
-        List<RTCIceServer> iceServers
+        List<RTCIceServer> iceServers,
+        ILogger log
     )
     {
         _hub = hub;
         _shareBase = shareBase.TrimEnd('/');
         _offers = offers;
         _iceServers = iceServers;
+        _log = log;
     }
 
     public void Start(CancellationToken ct) => _ = Task.Run(() => RunLoop(ct), ct);
 
     private async Task RunLoop(CancellationToken ct)
     {
-        Console.WriteLine($"[WebRtc] signaling listener up ({_iceServers.Count} ICE server(s))");
+        Log.WebRtcListenerUp(_log, _iceServers.Count);
         try
         {
             await foreach (var offer in _offers.ReadAllAsync(ct))
@@ -145,7 +149,7 @@ public sealed class WebRtcListener
                 {
                     if (Interlocked.Exchange(ref started, 1) != 0)
                         return;
-                    Console.WriteLine($"[WebRtc] datachannel open (ticket {offer.Ticket})");
+                    Log.WebRtcDataChannelOpen(_log, offer.Ticket);
                     _ = _hub.HandleConnection(transport, ct);
                 }
                 // By the time ondatachannel fires the channel is often ALREADY open, so a late
@@ -168,7 +172,7 @@ public sealed class WebRtcListener
                 )
                 {
                     if (s == RTCPeerConnectionState.failed)
-                        Console.WriteLine($"[WebRtc] connection failed (ticket {offer.Ticket})");
+                        Log.WebRtcConnectionFailed(_log, offer.Ticket);
                     pc.Dispose();
                 }
             };
@@ -178,7 +182,7 @@ public sealed class WebRtcListener
             );
             if (set != SetDescriptionResultEnum.OK)
             {
-                Console.WriteLine($"[WebRtc] bad offer ({set}) for ticket {offer.Ticket}");
+                Log.WebRtcBadOffer(_log, set.ToString(), offer.Ticket);
                 pc.Dispose();
                 return;
             }
@@ -199,14 +203,14 @@ public sealed class WebRtcListener
             );
             if (!resp.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[WebRtc] answer post failed ({(int)resp.StatusCode}) ticket {offer.Ticket}");
+                Log.WebRtcAnswerPostFailed(_log, (int)resp.StatusCode, offer.Ticket);
                 pc.Dispose();
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
-            Console.WriteLine($"[WebRtc] answer error (ticket {offer.Ticket}): {e.Message}");
+            Log.WebRtcAnswerError(_log, offer.Ticket, e.Message);
         }
     }
 }

@@ -43,7 +43,8 @@ public static class MapCatalog
         WorldConfig pristine,
         ulong seed,
         float baseMaxHealth,
-        FactionStart start)
+        FactionStart start,
+        IReadOnlyList<ShipClassDef> ships)
     {
         var list = new List<MapCatalogEntry>(maps.Count);
         // Stable order so the client's picker grid is deterministic run-to-run.
@@ -54,7 +55,7 @@ public static class MapCatalog
             // config in place would leak one map's overrides into the next. Clone keeps them isolated.
             var cfg = Clone(pristine);
             MapLoader.ApplyTo(map, cfg);
-            var world = new World(seed, cfg, baseMaxHealth, start);
+            var world = new World(seed, cfg, baseMaxHealth, start, ships);
 
             var sectors = world.Sectors
                 .Select(s => new MapCatalogSector(

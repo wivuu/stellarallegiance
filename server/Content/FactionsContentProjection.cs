@@ -338,12 +338,14 @@ public static class FactionsContentProjection
             // The library and shared enums are declared value-for-value, so a byte cast is exact.
             Kind = (HardpointKind)(byte)h.Kind,
             Index = h.Index,
-            OffX = (float)h.OffX,
-            OffY = (float)h.OffY,
-            OffZ = (float)h.OffZ,
-            DirX = (float)h.DirX,
-            DirY = (float)h.DirY,
-            DirZ = (float)h.DirZ,
+            // Post-merge geometry is always populated; the ?? 0 guards a hand-built Core (tests)
+            // whose hardpoints skip the merge and may leave a component null.
+            OffX = (float)(h.OffX ?? 0),
+            OffY = (float)(h.OffY ?? 0),
+            OffZ = (float)(h.OffZ ?? 0),
+            DirX = (float)(h.DirX ?? 0),
+            DirY = (float)(h.DirY ?? 0),
+            DirZ = (float)(h.DirZ ?? 0),
             WeaponId = h.WeaponId,
         };
 

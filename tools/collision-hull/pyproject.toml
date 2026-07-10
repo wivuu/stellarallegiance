@@ -1,0 +1,14 @@
+[project]
+name = "collision-hull"
+version = "0.1.0"
+description = "Generate + bake convex collision-proxy parts (COL_* nodes) into any mesh GLB"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pygltflib>=1.16",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+]
+
+[tool.uv]
+package = false

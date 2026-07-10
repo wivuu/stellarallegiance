@@ -57,10 +57,23 @@ public static class SelfTest
         var content = ContentLoader.Load(
             Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml"),
             Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml"));
-        var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start);
+        var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });
-        Approx("world: ExitDir is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
+
+        // Compound superstructure: the baked base.glb carries the generated COL_ parts (tools/collision-hull
+        // `--kind base`: a voxel solid-fill of the visual mesh greedy-merged into ~90 axis-aligned boxes that
+        // SEAL the interior). This is the DEPLOY GUARD — if the bake is missing (or reverted to a single
+        // welded mesh) BaseSubHulls collapses to 1 and this fails loudly, so ships would silently bounce
+        // off (and fly through) the merged shrink-wrap again. The window is a sane cap, not the exact
+        // count, so a re-bake at a different box_res stays green while a missing bake still fails.
+        Check($"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..512)", world.BaseSubHulls.Length is >= 8 and <= 512);
+        bool allSubHullsSolid = true;
+        foreach (var sub in world.BaseSubHulls)
+            if (sub.Planes.Length <= 3)
+                allSubHullsSolid = false; // a real 3-D convex part is a tetrahedron (4) or more
+        Check("world: every base sub-hull has >3 planes", allSubHullsSolid);
+        Check("world: at least one docking exit", world.BaseExits.Length >= 1);
         Approx("world: EntryAxis is unit", world.BaseEntryAxis.Length(), 1f, 1e-3f);
         Check("world: rock bodies built", world.RockBodies.Count > 0);
         Approx(
@@ -69,27 +82,72 @@ public static class SelfTest
             World.BaseRadius * 2f,
             World.BaseRadius * 0.05f
         );
-        Check("world: dock discs built (>=1)", world.BaseDockDiscs.Length >= 1);
-        bool discNormalsUnit = true;
-        foreach (var (_, n) in world.BaseDockDiscs)
-            if (MathF.Abs(n.Length() - 1f) > 1e-3f)
-                discNormalsUnit = false;
-        Check("world: dock disc normals are unit", discNormalsUnit);
+        Check("world: dock doors built (>=1)", world.BaseDockFaces.Length >= 1);
+        bool faceNormalsUnit = true;
+        bool faceAxesOrthonormal = true;
+        foreach (var f in world.BaseDockFaces)
+        {
+            if (MathF.Abs(f.Normal.Length() - 1f) > 1e-3f)
+                faceNormalsUnit = false;
+            // U,V must be unit and mutually ⟂ and ⟂ N (a clean in-plane basis), and the door must
+            // have a real area (positive half-extents) — degenerate doors would dock everywhere.
+            float du = Dot(f.U, f.V),
+                dun = Dot(f.U, f.Normal),
+                dvn = Dot(f.V, f.Normal);
+            if (MathF.Abs(f.U.Length() - 1f) > 1e-3f || MathF.Abs(f.V.Length() - 1f) > 1e-3f
+                || MathF.Abs(du) > 1e-3f || MathF.Abs(dun) > 1e-3f || MathF.Abs(dvn) > 1e-3f
+                || f.Eu <= 0f || f.Ev <= 0f)
+                faceAxesOrthonormal = false;
+        }
+        Check("world: dock face normals are unit", faceNormalsUnit);
+        Check("world: dock face axes orthonormal + positive extents", faceAxesOrthonormal);
         Console.WriteLine(
-            $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
+            $"  base: {world.BaseHull!.Planes.Length} planes, exits={world.BaseExits.Length} [{string.Join("; ", Array.ConvertAll(world.BaseExits, e => $"pos=({F(e.Pos)}) dir=({F(e.Dir)})"))}], EntryAxis=({F(world.BaseEntryAxis)}), dockFaces={world.BaseDockFaces.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
         );
 
-        // Ships catapult from the exit cone's base disc along the axis (PlaceAtBase). The cone base
-        // is a launch-bay mouth ~on the hull surface, so the spawn point (base + ShipRadius along the
-        // axis) must not be deeply embedded — any residual overlap is a tiny, damage-free outward pop.
-        Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
-        Check("world: exit cone base near hull surface (sphere just grazes)", world.BaseExitPos.LengthSquared() > 1f); // a real hardpoint, not the (0,0,0) fallback
-        Vec3 spawn = world.BaseExitPos + world.BaseExitDir * World.ShipRadius;
-        world.BaseHull!.ResolveSphere(spawn, World.ShipRadius, out _, out float spawnPen);
-        Check(
-            $"world: spawn point clears the bay mouth (penetration {spawnPen:0.##} < ShipRadius)",
-            spawnPen < World.ShipRadius
-        );
+        // Ships catapult from a random DockingExit hardpoint along its launch axis — the OPPOSITE
+        // of the node's inward-pointing forward — nudged out by warp-exit-offset + ShipRadius
+        // (PlaceAtBase). EVERY authored exit must produce a valid spawn: unit axis, a real
+        // hardpoint, and a spawn point that isn't deeply embedded (any residual overlap is a
+        // damage-free pop).
+        for (int i = 0; i < world.BaseExits.Length; i++)
+        {
+            var exit = world.BaseExits[i];
+            Approx($"world: exit {i} axis is unit", exit.Dir.Length(), 1f, 1e-3f);
+            Check($"world: exit {i} hardpoint is real (not the (0,0,0) fallback)", exit.Pos.LengthSquared() > 1f);
+            Vec3 spawn = exit.Pos + exit.Dir * (World.ShipRadius + content.World.Mechanics.WarpExitOffset);
+            // Clearance against the COMPOUND superstructure (the real bounce geometry), not the
+            // merged shrink-wrap: the deepest contact across the authored sub-hulls is what
+            // BounceShip would push out, so that's the penetration that must stay below ShipRadius
+            // for a damage-free launch pop.
+            float spawnPen = 0f;
+            foreach (var sub in world.BaseSubHulls)
+                if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float pen) && pen > spawnPen)
+                    spawnPen = pen;
+            Check(
+                $"world: exit {i} spawn clears the bay mouth (deepest sub-hull penetration {spawnPen:0.##} < ShipRadius)",
+                spawnPen < World.ShipRadius
+            );
+        }
+
+        // Dock CORRIDOR: for EVERY door (a base may author N), fire a ray from well outside along the
+        // face's INWARD normal straight at the face centre. A clear corridor means the ray REACHES the
+        // face (t ≈ probe distance) without entering any sub-hull first — i.e. no authored part caps
+        // the docking mouth. (Past the face the ray enters the core; we only test the segment up to the
+        // face.) This mirrors the bake-time corridor validation and guards the dock/spawn-regression.
+        bool corridorsClear = true;
+        foreach (var f in world.BaseDockFaces)
+        {
+            float probe = World.BaseRadius * 2f; // start outside the whole hull, aim inward at the face
+            Vec3 origin = f.Center - f.Normal * probe; // approach side (opposite the inward normal)
+            Vec3 dir = f.Normal;
+            foreach (var sub in world.BaseSubHulls)
+                // The face sits at t == probe; a sub-hull entered at t < probe (small margin) blocks the
+                // corridor. Base sub-hulls are identity-frame, world-scaled ⇒ ray in local == world.
+                if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - 0.5f)
+                    corridorsClear = false;
+        }
+        Check("world: every dock corridor reaches its face without hitting a sub-hull", corridorsClear);
 
         TestShipHulls(world);
     }
@@ -136,6 +194,8 @@ public static class SelfTest
         if (!ok)
             _failures++;
     }
+
+    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     private static string F(Vec3 v) => $"{v.X:0.###}, {v.Y:0.###}, {v.Z:0.###}";
 }

@@ -27,6 +27,14 @@ godot_resolve || exit 1
 
 mkdir -p "${OUT}/mac" "${OUT}/win" "${OUT}/linux"
 
+# Make sure GLB import sidecars exist before exporting — un-imported assets export "successfully"
+# but silently fall back to procedural placeholders at runtime. No-op when already imported.
+"${REPO_ROOT}/tools/godot-import.sh"
+test -f "${CLIENT}/assets/bases/base.glb.import" || {
+  echo "[export] ERROR: GLB import sidecars missing — export would ship placeholder meshes" >&2
+  exit 1
+}
+
 # Godot's export rebuilds the C# project with `dotnet` under the hood. MSBuild
 # node reuse can leave wedged worker processes (e.g. from a different SDK or the
 # IDE's C# Dev Kit) that the next build connects to and hangs on. Disabling node

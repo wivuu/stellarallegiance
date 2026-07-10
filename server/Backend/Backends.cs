@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SimServer.Net;
 using StellarAllegiance.Shared;
 
@@ -68,7 +69,11 @@ public interface IMatchResultSink
 
 public sealed class LoggingMatchResultSink : IMatchResultSink
 {
-    public void ReportResult(byte winner) => Console.WriteLine($"[Result] match ended — winner team {winner}");
+    private readonly ILogger _log;
+
+    public LoggingMatchResultSink(ILogger<LoggingMatchResultSink> log) => _log = log;
+
+    public void ReportResult(byte winner) => Log.MatchResult(_log, winner);
 }
 
 // Decides when a lobby should start its match. Default: start once at least one player is

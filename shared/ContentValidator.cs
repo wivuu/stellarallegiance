@@ -283,6 +283,11 @@ namespace StellarAllegiance.Shared
                 errors.Add($"{ctx} has non-positive RadarSignature {b.RadarSignature}");
         }
 
+        // Validates a ship's/base's hardpoint list: every (Kind,Index) is unique, every hardpoint
+        // has a non-zero facing direction (a zero forward can't orient a muzzle/nozzle/marker), and
+        // every Weapon mount either resolves to a known WeaponDef OR is an explicit empty mount
+        // (HardpointDef.NoWeapon — exists on the hull, fires nothing, assignable via loadout). These
+        // also cover a def set built by hand or via an operator Upsert that never ran the GLB merge.
         private static void ValidateWeaponHardpoints(
             string ownerName,
             List<HardpointDef> hardpoints,
@@ -292,9 +297,16 @@ namespace StellarAllegiance.Shared
         {
             if (hardpoints is null)
                 return;
+            var seen = new HashSet<(HardpointKind, byte)>();
             foreach (var h in hardpoints)
-                if (h.Kind == HardpointKind.Weapon && !weaponIds.Contains(h.WeaponId))
+            {
+                if (!seen.Add((h.Kind, h.Index)))
+                    errors.Add($"\"{ownerName}\" has a duplicate hardpoint (kind {h.Kind}, index {h.Index})");
+                if (h.DirX == 0f && h.DirY == 0f && h.DirZ == 0f)
+                    errors.Add($"\"{ownerName}\" hardpoint (kind {h.Kind}, index {h.Index}) has a zero-length direction");
+                if (h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon && !weaponIds.Contains(h.WeaponId))
                     errors.Add($"\"{ownerName}\" weapon hardpoint references unknown WeaponId {h.WeaponId}");
+            }
         }
     }
 }

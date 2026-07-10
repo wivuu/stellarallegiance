@@ -25,6 +25,20 @@ public sealed class GlbModel
 
     // HP_ nodes: name, world position, world forward (the node's local +Z).
     public readonly List<(string Name, Vec3 Pos, Vec3 Forward)> Hardpoints = new();
+
+    // Authored COMPOUND-COLLISION parts: one entry per top-level "COL_"-named node (a convex proxy
+    // baked into the GLB by tools/collision-hull), holding that node's (and its subtree's) mesh vertices
+    // in world space. Empty for every ship/asteroid/un-baked GLB (⇒ single-hull, zero behaviour
+    // change). Order is the GLB scene-graph WALK order (roots in array order, children in array
+    // order) — a deterministic input order is the float-parity contract: the client and server
+    // ConvexHull.Build the same part from the same points in the same order, so their hulls match.
+    //
+    // METRICS CONTRACT: these verts are ALSO appended into the merged `Vertices` cloud above, so the
+    // server's LongestAxis/BoundingRadius and the client's visual-AABB scale (GlbLoader.MeshAabb
+    // walks hidden COL_ meshes too) still measure the exact same point set. B1's bake-time
+    // containment validation keeps every COL_ vertex strictly interior to the visual hull, so the
+    // merged metrics are unchanged either way — the compound parts are metric-neutral by construction.
+    public readonly List<(string Name, List<Vec3> Verts)> CollisionParts = new();
 }
 
 public static class GlbReader
@@ -83,7 +97,7 @@ public static class GlbReader
 
         for (int i = 0; i < nodeCount; i++)
             if (!isChild[i])
-                Walk(i, Mat4.Identity, nodes, meshes, accessors, views, bin, model);
+                Walk(i, Mat4.Identity, nodes, meshes, accessors, views, bin, model, null);
 
         return model;
     }
@@ -96,28 +110,38 @@ public static class GlbReader
         JsonElement accessors,
         JsonElement views,
         byte[]? bin,
-        GlbModel model
+        GlbModel model,
+        List<Vec3>? part // non-null when this node is inside an active COL_ collision part
     )
     {
         JsonElement node = nodes[nodeIndex];
         Mat4 world = parent * LocalMatrix(node);
 
-        if (
-            node.TryGetProperty("name", out var nameEl)
-            && nameEl.GetString() is string name
-            && name.StartsWith("HP_", StringComparison.Ordinal)
-        )
+        string? name = node.TryGetProperty("name", out var nameEl) ? nameEl.GetString() : null;
+
+        if (name is not null && name.StartsWith("HP_", StringComparison.Ordinal))
         {
             Vec3 pos = world.TransformPoint(new Vec3(0f, 0f, 0f));
             Vec3 fwd = Normalize(world.TransformDir(new Vec3(0f, 0f, 1f)));
             model.Hardpoints.Add((name, pos, fwd));
         }
 
+        // A "COL_"-named node opens a new compound-collision part; its own mesh and its whole subtree
+        // route into that part. COL_ nodes are authored as leaf meshes, but we stay robust to a
+        // subtree by threading `part` down the walk. A nested COL_ inside an active part does NOT
+        // open a second part — it folds into the outer one (so a grouped proxy stays one convex part).
+        if (part is null && name is not null && name.StartsWith("COL_", StringComparison.Ordinal))
+        {
+            part = new List<Vec3>();
+            model.CollisionParts.Add((name, part));
+        }
+
+        // Merged cloud ALWAYS gets the verts (metrics contract); the active COL_ part gets a copy too.
         if (node.TryGetProperty("mesh", out var meshEl) && meshEl.TryGetInt32(out int meshIdx) && bin is not null)
-            AddMeshVertices(meshes[meshIdx], accessors, views, bin, world, model.Vertices);
+            AddMeshVertices(meshes[meshIdx], accessors, views, bin, world, model.Vertices, part);
 
         foreach (int c in Children(node))
-            Walk(c, world, nodes, meshes, accessors, views, bin, model);
+            Walk(c, world, nodes, meshes, accessors, views, bin, model, part);
     }
 
     private static void AddMeshVertices(
@@ -126,7 +150,8 @@ public static class GlbReader
         JsonElement views,
         byte[] bin,
         Mat4 world,
-        List<Vec3> outVerts
+        List<Vec3> outVerts,
+        List<Vec3>? part
     )
     {
         if (!mesh.TryGetProperty("primitives", out var prims))
@@ -162,7 +187,9 @@ public static class GlbReader
                 float x = BitConverter.ToSingle(bin, p);
                 float y = BitConverter.ToSingle(bin, p + 4);
                 float z = BitConverter.ToSingle(bin, p + 8);
-                outVerts.Add(world.TransformPoint(new Vec3(x, y, z)));
+                Vec3 v = world.TransformPoint(new Vec3(x, y, z));
+                outVerts.Add(v);
+                part?.Add(v);
             }
         }
     }

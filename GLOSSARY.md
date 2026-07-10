@@ -47,6 +47,16 @@ Distance-based visibility culling: server only streams entities within fixed dis
 - **Related:** [[Snapshot]], [[Spatial Grid]]
 - **Notes:** Fixed nearest-60 replaced by distance tiers + environment knobs (SIM_NEAR_RADIUS, SIM_FAR_RADIUS, SIM_FAR_EVERY)
 
+### Compound Base Hull (COL_ parts)
+Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into `base.glb` each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill + greedy box merge) by `tools/collision-hull/bake.py --kind base` — never hand-placed.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `tools/collision-hull/` — args-driven bake tool for any mesh GLB (per-kind presets, hull-containment / dock-corridor / reachability validations)
+  - `shared/Collision/GlbReader.cs` (`CollisionParts`), `SimModel.cs` (`Hulls`), `Collide.cs` (`SphereVsBody` deepest-contact)
+  - `server/Sim/World.cs` — `BaseSubHulls`; `server/Assets/SelfTest.cs` + `tests/CollisionTest` — deploy-guard assertions
+- **Related:** [[Hull]], [[Dock Refund]]
+- **Notes:** Merged-hull metrics stay bit-exact (LongestAxis 32.243610 / BoundingRadius 16.543488 / 172 planes) because every part is clamped strictly inside the visual convex hull. Deterministic bake (same GLB + same resolved args = same SHA). Runtime consumes compound hulls only for bases today. See the `base-collision` and `collision-hull-generator` skills.
+
 ---
 
 ## Weapons & Combat
@@ -204,6 +214,23 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
   - `server/Sim/Simulation.cs` — `ShipSim.PaidCost` set in SpawnCombatShip; DockShip refunds (Track A)
 - **Related:** [[Hull]], [[Payload]]
 
+### Docking Door
+Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fives** into one bounded
+**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints); a base
+may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
+rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]` along the inward normal
+(no facing/velocity gate). The rest of the base is a solid hull; the same test carves the no-bounce
+carve-out so client prediction and server agree. `HP_DockingExit_*` (one = one exit) is the launch
+mouth. NOT the old "dock disc" per-hardpoint model (retired 2026-07).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/Collision/DockFace.cs` — `DockFace` struct + `DockFaceParser.Build` (the ONE parser both peers call)
+  - `shared/Collision/Collide.cs` — `IntersectsDockFace` test + dock carve-out
+  - `server/Sim/World.cs` — `LoadBase` → `BaseDockFaces`; `Simulation.cs` dock trigger
+  - `client/scripts/CollisionWorld.cs` — client-prediction mirror (bit-identical parse)
+  - `tools/collision-hull/bake.py` — per-door corridor carve; `docs/GLB-AND-HARDPOINT-FORMAT.md` — spec
+- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]]
+
 ### Shield
 Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,
 `shield-recharge` points/sec, `shield-delay` seconds). Absorbs incoming damage before the hull;
@@ -304,8 +331,20 @@ Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints f
   - `server/Content/core/*.yaml` — hull definitions per faction
   - `client/scripts/ShipController.cs` — hull selection UI
   - `tools/ship-gen/` — modular hull generation from YAML parts
-- **Related:** [[Weapon]], [[Payload]], [[Docking]]
+- **Related:** [[Weapon]], [[Payload]], [[Docking]], [[Hardpoint]]
 - **Notes:** Immutable after game start; each hull has unique GLB 3D model and collision shape
+
+### Hardpoint
+Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. Unbound mesh Weapon nodes stream as empty assignable mounts (`HardpointDef.NoWeapon`).
+- **Frequency:** Very common
+- **Key Files:**
+  - `server/Content/HardpointGeometryMerge.cs` — the mesh→def merge pass (in ContentLoader.Load)
+  - `shared/Collision/GlbReader.cs` — HP_ node extraction (pos + world +Z forward)
+  - `shared/Defs.cs` — `HardpointDef` / `HardpointKind` / `NoWeapon` sentinel
+  - `docs/GLB-AND-HARDPOINT-FORMAT.md` — the full contract
+  - `.claude/skills/hardpoints/` — inspection tool (dumps a GLB's HP_ nodes, authored + world units)
+- **Related:** [[Hull]], [[Weapon]], [[Def (Definition)]], [[Docking]]
+- **Notes:** World scale = model-length / mesh longest axis (bases: radius*2); YAML weapon order stays at the list head so barrel spread-seed indices are stable; `HP_Cockpit` exists in no mesh — always YAML-authored
 
 ### Weapon
 Armament with barrel, fire-rate, projectile type, and damage tuning.

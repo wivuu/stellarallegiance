@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
@@ -296,6 +298,7 @@ public sealed partial class Simulation
     // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
     // sim thread). Reads across the sim keep working — it's a reference field, reassignment is atomic.
     public World World { get; private set; }
+    private readonly ILogger _log;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
     private readonly List<ShipSim> _order = new(); // stable iteration order
     private ulong _nextShipId = 1;
@@ -439,8 +442,9 @@ public sealed partial class Simulation
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
-    public Simulation(World world, ContentSet content)
+    public Simulation(World world, ContentSet content, ILogger? log = null)
     {
+        _log = log ?? NullLogger.Instance;
         World = world;
         Content = content;
 
@@ -687,21 +691,25 @@ public sealed partial class Simulation
                     ResolveBaseCollision(s, b.Pos); // enemy base: fully solid hull
                     continue;
                 }
-                // Own base: with a loaded hull you dock ONLY by flying your ship into a docking cone's
-                // base disc (the green debug cones) — the rest of the base is a solid hull that bounces
-                // you. Without a model, fall back to the legacy core-sphere dock so docking can't break.
+                // Own base: with a loaded hull you dock ONLY by flying your ship into a rectangular
+                // docking door (a bounded face authored as a group of 5 HP_DockingEntrance markers) —
+                // the rest of the base is a solid hull that bounces you. Without a model, fall back to
+                // the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
-                if (World.BaseHull is ConvexHull baseHull)
+                if (World.BaseHull is not null)
                 {
-                    if (Collide.IntersectsDockDisc(d, World.BaseDockDiscs, World.DockDiscRadius, World.ShipRadius))
+                    if (Collide.IntersectsDockFace(d, World.BaseDockFaces, World.DockFaceDepth, World.ShipRadius))
                     {
-                        DockShip(s, tick); // intersected an entrance cone's base disc
+                        DockShip(s, tick); // intersected a rectangular docking door
                         docked = true;
                         break;
                     }
-                    // Base is identity-oriented at scale 1, so its local frame == world (offset by center).
-                    if (baseHull.ResolveSphere(d, World.ShipRadius, out Vec3 bn, out float bpen, out _))
-                        BounceShip(s, bn, bpen); // solid shell everywhere else
+                    // Solid shell everywhere else: the DEEPEST contact across the authored compound
+                    // sub-hulls, resolved through the shared Collide.SphereVsBody kernel so the client
+                    // predicts the identical bounce (same contact-selection rule — deepest wins). A
+                    // partless base collapses to the single merged hull, matching the old behaviour.
+                    if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos), out Vec3 bn, out float bpen))
+                        BounceShip(s, bn, bpen);
                 }
                 else
                 {
@@ -872,7 +880,7 @@ public sealed partial class Simulation
         ResolveTeamUnlocks();
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
-        Console.WriteLine("[Sim] match started");
+        Log.MatchStarted(_log);
         // World may have just been swapped to a new map — let the hub re-Welcome every client onto it
         // and invalidate its world-derived caches. Runs on the sim thread; Welcome frames are queued
         // before AfterStep streams the first Active snapshot, so clients rebuild geometry in order.
@@ -1028,7 +1036,7 @@ public sealed partial class Simulation
         {
             if (!_dispenserByCargo.ContainsKey(cargoId))
             {
-                Console.WriteLine($"[Sim] spawn cargo {cargoId} is not a dispenser cargo — using hull default");
+                Log.SpawnCargoNotDispenser(_log, cargoId);
                 return fallback;
             }
             used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
@@ -1036,16 +1044,17 @@ public sealed partial class Simulation
         float cap = def?.PayloadCapacity ?? 0f;
         if (used > cap)
         {
-            Console.WriteLine($"[Sim] spawn cargo payload {used} exceeds capacity {cap} — using hull default");
+            Log.SpawnCargoPayloadExceeds(_log, used, cap);
             return fallback;
         }
         return requested;
     }
 
-    // Position a ship just outside its team base, launched out of the base's DOCKING-EXIT
-    // hardpoint (World.BaseExitDir, from the GLB). Without a loaded model it falls back to the
-    // pre-hull behavior: outward toward the sector center. `clearance` is added past the base
-    // radius so the spawn sits clear of the solid shell (won't instantly re-dock).
+    // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
+    // hardpoints (World.BaseExits, from the GLB; random pick when a base authors several).
+    // Without a loaded model it falls back to the pre-hull behavior: outward toward the sector
+    // center. `clearance` is added past the base radius so the spawn sits clear of the solid
+    // shell (won't instantly re-dock).
     private void PlaceAtBase(ShipSim s, float clearance, uint tick)
     {
         Vec3 basePos = default;
@@ -1063,13 +1072,15 @@ public sealed partial class Simulation
         Vec3 spawnPos;
         if (World.BaseHull is not null)
         {
-            // Catapult out of the exit cone: start at its base disc (the DockingExit hardpoint) and
-            // fling along the cone axis toward the tip, nudged out by `clearance` so the ship clears
-            // the bay mouth. (The cone base sits at the hull surface, so any residual overlap is a
-            // benign outward pop — ApplyBounce never damages a ship already moving outward.)
-            outward = World.BaseExitDir;
+            // Catapult out of a docking bay picked at random among the base's DockingExit
+            // hardpoints: the ship first appears at the hardpoint pushed warp-exit-offset (plus
+            // `clearance`) along the launch axis — the opposite of the node's inward-pointing
+            // forward. (Any residual overlap with the bay is a benign outward pop — ApplyBounce
+            // never damages a ship already moving outward.)
+            var exit = World.BaseExits[_rng.Next(World.BaseExits.Length)];
+            outward = exit.Dir;
             rot = LookRotationZ(outward);
-            spawnPos = basePos + World.BaseExitPos + outward * clearance;
+            spawnPos = basePos + exit.Pos + outward * (clearance + _mech.WarpExitOffset);
         }
         else
         {
@@ -1343,11 +1354,13 @@ public sealed partial class Simulation
         // Primary fire is the GUNS: one cadence per ship, gated off the first Bolt muzzle's weapon
         // (missile racks have their own cadence in TryFireMissile). A hull with no gun (only racks)
         // has nothing to fire here. Per-weapon cadence arrives with mixed loadouts (Stage 2).
+        // TryGetValue skips an empty/unbound mount (WeaponId == HardpointDef.NoWeapon never
+        // resolves) — same guard every other muzzle consumer uses (PrimaryWeapon, ClassMissileMounts).
         WeaponDef? primary = null;
         foreach (var mz in muzzles)
-            if (WeaponDefs[mz.WeaponId].Kind == WeaponKind.Bolt)
+            if (WeaponDefs.TryGetValue(mz.WeaponId, out var pwd) && pwd.Kind == WeaponKind.Bolt)
             {
-                primary = WeaponDefs[mz.WeaponId];
+                primary = pwd;
                 break;
             }
         if (primary is null)
@@ -1363,7 +1376,8 @@ public sealed partial class Simulation
         // gun barrel seeds stay aligned on both sides regardless of where racks sit in the array.
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
-            var w = WeaponDefs[muzzles[barrel].WeaponId];
+            if (!WeaponDefs.TryGetValue(muzzles[barrel].WeaponId, out var w))
+                continue; // empty/unbound mount (NoWeapon) — assignable slot, nothing to fire
             switch (w.Kind)
             {
                 case WeaponKind.Bolt:
@@ -1399,8 +1413,8 @@ public sealed partial class Simulation
                 var b = World.Bases[i];
                 if (b.SectorId != ship.SectorId || b.Team == ship.Team)
                     continue;
-                bool hit = World.BaseHull is ConvexHull bh
-                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, mv, World.ProjectileRadius, bestT, out float t)
+                bool hit = World.BaseHull is not null
+                    ? BaseHullsRayEntry(b.Pos, mp, mv, World.ProjectileRadius, bestT, out float t)
                     : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
                 if (hit && t < bestT)
                 {
@@ -1493,6 +1507,26 @@ public sealed partial class Simulation
                         targetBase = -1; // stopped by a rock
                     }
                 }
+            }
+        }
+
+        // Alephs are solid barriers to weapon fire: a gate mouth absorbs a bolt with no damage target.
+        // The mouth's known extent is its warp-trigger radius (a ship warps at that distance, so it
+        // never reaches the barrier — only projectiles are stopped). Few gates per sector, not in any
+        // grid → a linear scan (like the probe scan below) is cheap and replay-deterministic in list
+        // order. A closer aleph hit wins and clears any target.
+        float alephR = _mech.AlephTriggerRadius + World.ProjectileRadius;
+        for (int i = 0; i < World.Alephs.Count; i++)
+        {
+            var g = World.Alephs[i];
+            if (g.SectorId != ship.SectorId)
+                continue;
+            if (FirstEntryTime(mp, mv, g.Pos, default, alephR, bestT, out float at) && at < bestT)
+            {
+                bestT = at;
+                targetShip = 0;
+                targetBase = -1;
+                targetProbe = 0; // stopped by an aleph
             }
         }
 
@@ -1736,8 +1770,8 @@ public sealed partial class Simulation
                 var b = World.Bases[bi];
                 if (b.SectorId != mis.SectorId || b.Team == mis.Team)
                     continue; // friendly bases are non-colliding, matching bolts
-                bool bhit = World.BaseHull is ConvexHull bh
-                    ? HullRayEntry(bh, b.Pos, Quat.Identity, 1f, mp, vel, 0f, bestT, out float bt)
+                bool bhit = World.BaseHull is not null
+                    ? BaseHullsRayEntry(b.Pos, mp, vel, 0f, bestT, out float bt)
                     : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadius, bestT, out bt);
                 if (bhit && bt < bestT)
                 {
@@ -1808,6 +1842,24 @@ public sealed partial class Simulation
                             detonate = true;
                         }
                     }
+                }
+            }
+
+            // Alephs are solid barriers: a gate mouth (sized by its warp-trigger radius) on the
+            // segment stops the missile, which detonates on the barrier (blast splash still applies)
+            // with no direct-hit target.
+            float alephR = _mech.AlephTriggerRadius + w.ProjectileRadius;
+            for (int i = 0; i < World.Alephs.Count; i++)
+            {
+                var g = World.Alephs[i];
+                if (g.SectorId != mis.SectorId)
+                    continue;
+                if (FirstEntryTime(mp, vel, g.Pos, default, alephR, bestT, out float at) && at < bestT)
+                {
+                    bestT = at;
+                    hitShip = 0;
+                    hitBase = -1;
+                    detonate = true; // an aleph stops the missile
                 }
             }
 
@@ -2223,13 +2275,44 @@ public sealed partial class Simulation
         }
     }
 
-    // Bounce a ship off a base: the loaded world hull if present, else the legacy radius sphere.
+    // Bounce a ship off a base: the loaded compound world hull if present, else the legacy radius
+    // sphere. Runs through the shared Collide.SphereVsBody kernel over the authored sub-hulls (deepest
+    // contact = one BounceShip), so an enemy base bounces exactly as the client predicts it.
     private void ResolveBaseCollision(ShipSim s, Vec3 center)
     {
-        if (World.BaseHull is ConvexHull hull)
-            ResolveHullCollision(s, hull, center, Quat.Identity, 1f);
+        if (World.BaseHull is not null)
+        {
+            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center), out Vec3 n, out float pen))
+                BounceShip(s, n, pen);
+        }
         else
             ResolveStaticCollision(s, center, World.BaseRadius);
+    }
+
+    // The base as a shared compound StaticBody at `center`: `BaseHull` is the merged shrink-wrap (kept
+    // non-null for the struct + broadphase parity), `BaseSubHulls` are the authored parts the kinematic
+    // kernel actually resolves against. Team/discs are irrelevant to SphereVsBody (it never gates on
+    // them — dock carve-out is handled by the caller), so a fixed team/the discs are passed for shape.
+    // Callers guard World.BaseHull is not null first.
+    private Collide.StaticBody BaseBody(Vec3 center) =>
+        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockFaces);
+
+    // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity
+    // frame), the ray analogue of SphereVsBody: the CLOSEST sub-hull surface stops the bolt/missile, so
+    // a shot threading a gap between parts passes through exactly as the client renders it. Reuses
+    // HullRayEntry per part; the caller's `bestT` plumbing still picks the closest target overall.
+    private bool BaseHullsRayEntry(Vec3 center, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    {
+        t = maxT;
+        bool hit = false;
+        var subs = World.BaseSubHulls;
+        for (int i = 0; i < subs.Length; i++)
+            if (HullRayEntry(subs[i], center, Quat.Identity, 1f, mp, mv, margin, t, out float th) && th < t)
+            {
+                t = th;
+                hit = true;
+            }
+        return hit;
     }
 
     // Resolve a ship against every DEPLOYABLE solid body in its sector. A deployable is a small,

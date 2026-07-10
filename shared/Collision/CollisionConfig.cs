@@ -12,7 +12,12 @@ public static class CollisionConfig
 {
     public const float ShipRadius = 3f; // every ship is this sphere vs static geometry (matches server)
     public const float BaseRadius = 90f; // base sphere-collision fallback radius (no hull)
-    public const float DockDiscRadius = 9f; // docking cone base-disc radius (own base carve-out)
+    // Docking-door depth window: the inward slack (along the face normal) of the bounded rectangular
+    // docking FACE test (Collide.IntersectsDockFace). The lateral extent is now authored in the GLB
+    // (the 4 boundary markers per door), so only this depth constant lives here. Window along the
+    // face normal = [−DockFaceDepth, +ShipRadius] ⇒ depth+ShipRadius = 12 world units, ≥ the worst-
+    // case single-tick travel (Scout 160 u/s at 20 Hz = 8) so a fast ship can't tunnel the thin face.
+    public const float DockFaceDepth = 9f;
     public const float AsteroidCollisionScale = 0.95f; // fraction of a rock's visual radius that's solid
     // ponytail: a FIXED fraction means the inward slop scales with the rock — 0.82 left a ~13-unit-deep
     // soft shell on the biggest rocks (R~70), enough to fly a whole ship inside before bouncing. 0.95

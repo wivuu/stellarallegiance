@@ -51,6 +51,8 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   and hover glow. Use `UiKit.MakeButton(text, onPressed, variant)`.
 - **Controls** (`UiKit`) — `MakeSliderRow`, `MakeToggle`, `MakeCheckbox`, `MakeSegmented`,
   `MakeStepper`, `MakeSelect`.
+- **KeybindRow** — a rebindable-control row (action label + binding button that captures a new
+  key/mouse/gamepad event) for the settings CONTROLS tab; reads/writes via `InputBindings`.
 - **Surfaces** — `BracketPanel` (corner brackets, high-priority frames), `HairlinePanel`
   (1px border + optional clipped tab header), `InsetWell`, `DiamondDivider`.
 - **Data & feedback** — `RadialGauge`, `SegmentedBar`, `StatusPill` (optional pulse), `AlertBox`,

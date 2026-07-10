@@ -30,7 +30,6 @@ int port =
 var stunServers = BuildStunServers();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var bus = new LobbyEventBus();
@@ -267,7 +266,7 @@ app.MapGet(
     }
 );
 
-Console.WriteLine($"[PublicLobby] listening on http://0.0.0.0:{port}  stun={stunServers.Count}");
+Log.Listening(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby"), $"http://0.0.0.0:{port}", stunServers.Count);
 app.Run();
 
 // ---- Helpers ---------------------------------------------------------------

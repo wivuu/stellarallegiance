@@ -43,6 +43,11 @@ namespace StellarAllegiance.Shared
     // only for Kind == Weapon.
     public sealed class HardpointDef
     {
+        // Sentinel WeaponId for an EMPTY weapon mount (exists on the hull, fires nothing,
+        // assignable via loadout). Never resolves in WeaponDefs, so every TryGetValue-guarded
+        // consumer skips it. 0 cannot mean "empty" — weapon-id 0 is a real weapon.
+        public const uint NoWeapon = uint.MaxValue;
+
         public HardpointKind Kind;
         public byte Index; // disambiguates multiples of one kind (e.g. two Boosters)
         public float OffX,
@@ -51,7 +56,7 @@ namespace StellarAllegiance.Shared
         public float DirX,
             DirY,
             DirZ;
-        public uint WeaponId; // Weapon hardpoints only; 0 otherwise
+        public uint WeaponId; // Weapon hardpoints only; NoWeapon = empty mount; 0 otherwise
     }
 
     // One per ship class. ClassId is a raw byte (independent of the ShipClass enum) so new
@@ -500,6 +505,7 @@ namespace StellarAllegiance.Shared
     public sealed class WorldMechanicsTuning
     {
         public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+        // (also the radius of the solid gate-mouth sphere that absorbs bolts/missiles — see FireBolt)
         public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
         public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
         public float PaycheckSeconds = 60f; // between flat per-team credit paychecks

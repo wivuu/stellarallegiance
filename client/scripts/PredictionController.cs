@@ -94,7 +94,7 @@ public partial class PredictionController : Node3D
             bodies,
             Team,
             CollisionConfig.CollisionRestitution,
-            CollisionConfig.DockDiscRadius,
+            CollisionConfig.DockFaceDepth,
             out _
         );
     }
@@ -387,7 +387,7 @@ public partial class PredictionController : Node3D
             e.Predicted.Pos += o;
             _buffer[i] = e;
         }
-        GD.Print($"[Predict] injected divergence {offset.Length():0.0}u; expect a reconcile + recovery");
+        Log.Print($"[Predict] injected divergence {offset.Length():0.0}u; expect a reconcile + recovery");
     }
 
     // Authoritative Ship row arrived: compare against what we predicted for its

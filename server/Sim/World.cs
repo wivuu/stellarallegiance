@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
@@ -21,7 +23,7 @@ public sealed class World
     public const float ShipRadius = CollisionConfig.ShipRadius;
     public const float ProjectileRadius = 1f;
     public const float BaseRadius = CollisionConfig.BaseRadius;
-    public const float DockDiscRadius = CollisionConfig.DockDiscRadius; // docking cone base-disc radius
+    public const float DockFaceDepth = CollisionConfig.DockFaceDepth; // docking-door depth window (own base carve-out)
     public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
@@ -113,15 +115,28 @@ public sealed class World
     // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
     public readonly SimModel? BaseModel;
     public readonly ConvexHull? BaseHull; // base hull in WORLD units (base is identity-oriented)
-    public readonly Vec3 BaseExitDir; // radial launch axis out of the docking bay (cone base → tip)
-    public readonly Vec3 BaseExitPos; // exit cone's base disc (the DockingExit hardpoint), base-local world units
-    public readonly Vec3 BaseEntryAxis; // mean entrance direction (from DockingEntrance), for AI aim
-    public readonly Vec3 BaseDoorCenter; // local centroid of the entrance hardpoints (AI aim target)
 
-    // Docking cone base-discs: one per DockingEntrance hardpoint, in base-local units (offset from
-    // base center). Pos = the hardpoint (= the cone's base), Normal = radial-outward (the cone axis).
-    // A ship docks ONLY by intersecting one of these discs; the rest of the base is a solid hull.
-    public readonly (Vec3 Pos, Vec3 Normal)[] BaseDockDiscs;
+    // Authored compound sub-hulls (one per baked COL_ part), world-scaled in the base's identity
+    // frame — the SOLID a ship actually bounces off / a bolt ray-clips against, so collision matches
+    // the visible concave superstructure instead of the merged shrink-wrap. Empty when no base model
+    // loads (sphere fallback). When the GLB carries NO COL_ parts, model.Hulls aliases the merged
+    // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
+    // behave bit-identically to the pre-compound single-hull path.
+    public readonly ConvexHull[] BaseSubHulls;
+    // One launch bay per authored HP_DockingExit node: Pos = where a launching ship first appears
+    // (the hardpoint, base-local world units), Dir = the launch axis out of the bay (opposite the
+    // node's inward forward). A base may author N exits — the sim picks one at random per launch.
+    // Always at least one element (a modelless/exitless base gets a single default entry).
+    public readonly record struct BaseExit(Vec3 Pos, Vec3 Dir);
+    public readonly BaseExit[] BaseExits;
+    public readonly Vec3 BaseEntryAxis; // mean inward face-normal across doors, for AI aim
+    public readonly Vec3 BaseDoorCenter; // centroid of the door face centres (AI aim target)
+
+    // Rectangular docking DOORS: one DockFace per group of 5 HP_DockingEntrance markers (1 face
+    // marker + 4 boundary markers), in base-local (world-scaled) units offset from the base center.
+    // A base may author N doors. A ship docks ONLY by intersecting one of these bounded faces; the
+    // rest of the base is a solid hull. Parsed by the shared DockFaceParser (same as the client).
+    public readonly DockFace[] BaseDockFaces;
     public readonly Dictionary<ulong, RockBody> RockBodies = new();
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
@@ -138,22 +153,13 @@ public sealed class World
     // falls back to the ShipRadius sphere for that class (like asteroids/bases do without a model).
     public readonly record struct ShipBody(ConvexHull Hull, float BoundingRadius);
 
-    private readonly ShipBody?[] _shipHulls; // indexed by ship class (0 Scout, 1 Fighter, 2 Bomber)
+    private readonly Dictionary<byte, ShipBody> _shipHulls = new(); // keyed by ShipClassDef.ClassId
     private readonly ShipBody? _podHull;
-
-    // Client ShipModelLoader.TargetLength, mirrored here so the server collision hull is scaled to
-    // the exact visual silhouette length the client uniform-scales each GLB to. Keep in sync.
-    private static readonly (string Name, float TargetLen)[] ShipClassAssets =
-    {
-        ("scout", 4.5f),
-        ("fighter", 5.5f),
-        ("bomber", 7.2f),
-    };
-    private const float PodTargetLength = 2.8f;
+    private readonly ILogger _log;
 
     // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
     // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
-    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (cls < _shipHulls.Length ? _shipHulls[cls] : null);
+    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (_shipHulls.TryGetValue(cls, out var b) ? b : null);
 
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
@@ -161,8 +167,9 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, ILogger? log = null)
     {
+        _log = log ?? NullLogger.Instance;
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
@@ -294,9 +301,9 @@ public sealed class World
         }
 
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockDiscs) = LoadBase();
+        (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
         LoadRockBodies();
-        (_shipHulls, _podHull) = LoadShipBodies();
+        (_shipHulls, _podHull) = LoadShipBodies(ships);
     }
 
     // (Re)seed every team's economy from the faction snapshot: reset Credits to the starting grant,
@@ -314,15 +321,29 @@ public sealed class World
         }
     }
 
-    // Per-class ship hulls: load each class's GLB (and the pod's) and pre-scale its hull to the
-    // client's silhouette length (longestAxis → TargetLen), so the world-frame hull matches the
-    // rendered ship. A missing/degenerate GLB leaves that class on the sphere fallback.
-    private static (ShipBody?[], ShipBody?) LoadShipBodies()
+    // Per-class ship hulls: load each ship def's GLB and pre-scale its hull to the def's authored
+    // ModelLength (the same silhouette length the client uniform-scales the GLB to), so the
+    // world-frame collision hull matches the rendered ship and can never diverge from content. A
+    // def with no ModelName (no GLB) is skipped — that class falls back to the ShipRadius sphere,
+    // same as a missing/degenerate GLB. The escape pod is identified by its reserved ClassId
+    // (GameContent.PodClassId), not by name.
+    private static (Dictionary<byte, ShipBody>, ShipBody?) LoadShipBodies(IReadOnlyList<ShipClassDef> ships)
     {
-        var classes = new ShipBody?[ShipClassAssets.Length];
-        for (int i = 0; i < ShipClassAssets.Length; i++)
-            classes[i] = LoadShipHull($"ships/{ShipClassAssets[i].Name}.glb", ShipClassAssets[i].TargetLen);
-        return (classes, LoadShipHull("ships/pod.glb", PodTargetLength));
+        var classes = new Dictionary<byte, ShipBody>();
+        ShipBody? pod = null;
+        foreach (var def in ships)
+        {
+            if (string.IsNullOrEmpty(def.ModelName))
+                continue;
+            var body = LoadShipHull($"ships/{def.ModelName}.glb", def.ModelLength);
+            if (body is null)
+                continue;
+            if (def.ClassId == GameContent.PodClassId)
+                pod = body;
+            else
+                classes[def.ClassId] = body.Value;
+        }
+        return (classes, pod);
     }
 
     private static ShipBody? LoadShipHull(string relPath, float targetLen)
@@ -336,45 +357,53 @@ public sealed class World
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
     // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
-    private static (SimModel?, ConvexHull?, Vec3, Vec3, Vec3, Vec3, (Vec3, Vec3)[]) LoadBase()
+    private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
     {
+        var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
         var model = SimAssets.TryLoad("bases/base.glb");
         if (model is null)
-            return (null, null, default, default, default, default, Array.Empty<(Vec3, Vec3)>());
+            return (null, null, Array.Empty<ConvexHull>(), fallbackExits, default, default, Array.Empty<DockFace>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
-        // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
-        // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
-        Vec3 exitDir,
-            exitPos;
-        if (model.FirstHardpoint("HP_DockingExit") is { } ex)
-        {
-            exitPos = ex.Pos * ws;
-            exitDir = Normalize(ex.Pos);
-        }
-        else
-        {
-            exitPos = default;
-            exitDir = new Vec3(0f, 0f, 1f);
-        }
-
-        // Entrance hardpoints in base-local world units (authored * ws): their mean direction is the
-        // AI-aim axis, their centroid is the AI-aim point, and each one is a docking cone base-disc
-        // (Pos = the hardpoint, Normal = radial-outward = the cone axis the client renders).
-        var entrances = new List<Vec3>();
+        // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒
+        // just uniform scale). Partless models: model.Hulls aliases the merged hull ⇒ one entry whose
+        // geometry equals `hull` (built independently but from the identical planes ⇒ same result).
+        var subHulls = new ConvexHull[model.Hulls.Count];
+        for (int i = 0; i < model.Hulls.Count; i++)
+            subHulls[i] = model.Hulls[i].Scaled(ws);
+        // Exits: one launch bay per HP_DockingExit node. A ship appears at the hardpoint
+        // (world-scaled) and launches OPPOSITE the node's authored forward — the HP_ +Z points back
+        // into the bay, so the launch axis is its negation. A degenerate forward falls back to the
+        // old radially-outward guess; a model with no exit nodes gets the single default entry.
+        var exits = new List<BaseExit>();
         foreach (var hp in model.Hardpoints)
-            if (hp.Name.StartsWith("HP_DockingEntrance", StringComparison.Ordinal))
-                entrances.Add(hp.Pos * ws);
-        Vec3 sum = default;
-        foreach (var p in entrances)
-            sum += p;
-        Vec3 entryAxis = entrances.Count > 0 ? Normalize(sum) : exitDir;
-        Vec3 doorCenter = entrances.Count > 0 ? sum * (1f / entrances.Count) : default;
+            if (hp.Name.StartsWith("HP_DockingExit", StringComparison.Ordinal))
+                exits.Add(
+                    new BaseExit(
+                        hp.Pos * ws,
+                        hp.Forward.LengthSquared() > 1e-6f ? Normalize(hp.Forward * -1f) : Normalize(hp.Pos)
+                    )
+                );
+        BaseExit[] exitArr = exits.Count > 0 ? exits.ToArray() : fallbackExits;
 
-        var discs = new (Vec3, Vec3)[entrances.Count];
-        for (int i = 0; i < entrances.Count; i++)
-            discs[i] = (entrances[i], Normalize(entrances[i]));
-        return (model, hull, exitDir, exitPos, entryAxis, doorCenter, discs);
+        // Rectangular docking doors from the grouped HP_DockingEntrance markers (5 per door), parsed
+        // by the SHARED DockFaceParser so the client's CollisionWorld builds a bit-identical DockFace[]
+        // from the same GLB bytes. A base may author N doors. For AI aim we degrade to aggregates
+        // across every face: BaseDoorCenter = centroid of the door face centres, BaseEntryAxis = mean
+        // inward face-normal (the direction a pod should fly to enter a door).
+        DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Console.WriteLine($"  [World] {msg}"));
+        Vec3 centerSum = default,
+            normalSum = default;
+        foreach (var f in faces)
+        {
+            centerSum += f.Center;
+            normalSum += f.Normal;
+        }
+        Vec3 doorCenter = faces.Length > 0 ? centerSum * (1f / faces.Length) : default;
+        Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitArr[0].Dir;
+        if (entryAxis.LengthSquared() < 0.5f)
+            entryAxis = exitArr[0].Dir; // faces' normals canceled (opposed doors) — fall back to a unit axis
+        return (model, hull, subHulls, exitArr, entryAxis, doorCenter, faces);
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
@@ -400,7 +429,7 @@ public sealed class World
         }
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).
-        Console.WriteLine($"[World] rock hulls loaded: {RockBodies.Count}/{Asteroids.Count}");
+        Log.RockHullsLoaded(_log, RockBodies.Count, Asteroids.Count);
     }
 
     private static Vec3 Normalize(Vec3 v)
@@ -432,6 +461,20 @@ public sealed class World
             grid[key] = cell = new List<Rock>();
         cell.Add(rock);
         return rock;
+    }
+
+    // TEST SEAM: hand-place a gate (aleph) mouth into a sector so the sentinel empty sector 999 can
+    // exercise the projectile-barrier path. Only the mouth Pos/SectorId matter for blocking; the
+    // partner endpoint is irrelevant here. Must only be called from tests before ticking.
+    public Gate AddAlephForTest(uint sector, Vec3 pos)
+    {
+        ulong id = 1;
+        foreach (var g in Alephs)
+            if (g.Id >= id)
+                id = g.Id + 1;
+        var gate = new Gate(id, sector, sector, pos, pos);
+        Alephs.Add(gate);
+        return gate;
     }
 
     public float SectorRadius(uint sector)
