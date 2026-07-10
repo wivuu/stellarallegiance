@@ -75,6 +75,18 @@ WORLD_BASE_RADIUS = 90.0      # CollisionConfig.BaseRadius
 WORLD_SHIP_RADIUS = 3.0       # CollisionConfig.ShipRadius
 WORLD_DOCK_DISC_RADIUS = 9.0  # CollisionConfig.DockDiscRadius
 
+# --- spheroid-primitive greedy-sphere-cover tuning (only read by generate_auto_spheroids) --------
+# These bound the sphere count so a round mesh is covered by TENS of ellipsoids, not thousands: a
+# sphere is seeded at the deepest still-uncovered solid voxel and only kept if its radius clears the
+# floor; the cover stops once the target fraction of the solid volume sits inside some sphere. They
+# are the spheroid analogue of the box pass's count window / min-box thickness and never touch the
+# byte-identical box path.
+SPHERE_COVERAGE_TARGET = 0.90    # stop once this fraction of carved-solid voxels lie inside a sphere
+SPHERE_MIN_RADIUS_FRAC = 0.05    # drop/stop spheres whose authored radius < this * longest mesh axis
+SPHERE_DEFAULT_OVERLAP = 0.35    # default greed if --sphere-overlap unset (0 = none, →1 = heavy overlap)
+SPHERE_MAX_ELONGATION = 2.0      # cap on PCA oblong stretch of the principal ellipsoid axis
+SPHERE_MAX_COUNT = 4000          # hard safety cap on greedy iterations (termination guarantee)
+
 
 # ---------------------------------------------------------------------------
 #  glTF reading helpers (node transforms + POSITION vertices)
@@ -185,10 +197,15 @@ def _box_verts(spec) -> np.ndarray:
 
 
 def part_vertices(part) -> np.ndarray:
-    """Corner cloud for a generated box spec — the only primitive the auto pipeline emits."""
+    """Vertex cloud for a generated part. Boxes carry a `box` spec (8 corners); spheroids carry the
+    already-tessellated icosphere cloud in `sphere_verts` (built + placed by generate_auto_spheroids).
+    Both are fed through the SAME convex_mesh machinery downstream — the box branch is first and
+    unchanged so the base bake stays byte-identical."""
     if "box" in part:
         return _box_verts(part["box"])
-    raise ValueError(f"part {part.get('name')!r} has no box")
+    if "sphere_verts" in part:
+        return np.asarray(part["sphere_verts"], dtype=np.float64)
+    raise ValueError(f"part {part.get('name')!r} has no box/sphere geometry")
 
 
 def convex_mesh(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, ConvexHull]:
@@ -895,6 +912,10 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
         hull_extremes=int(pick("hull_extremes", 0)),
         count_lo=p["count_lo"],
         count_hi=p["count_hi"],
+        # spheroid-only knobs (ignored by the box path); resolved here so both generators share cfg.
+        sphere_segments=int(pick("sphere_segments", 1)),
+        sphere_overlap=float(pick("sphere_overlap", SPHERE_DEFAULT_OVERLAP)),
+        sphere_elongate=bool(pick("sphere_elongate", True)),
     )
 
 
@@ -1056,6 +1077,251 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     return yparts, stats
 
 
+# ---------------------------------------------------------------------------
+#  --primitive spheroid: greedy oblong-sphere cover of the same voxel solid
+# ---------------------------------------------------------------------------
+#
+# For ROUND geometry (asteroids, future organic hulls) a stack of axis-aligned boxes reads badly and
+# stair-steps the collision surface. The spheroid primitive covers the SAME fine voxel solid (reused
+# verbatim: voxelize_surface -> classify_solid) with a small set of overlapping oblong ellipsoids:
+#   1. Distance-transform the carved solid -> each voxel's distance to the nearest non-solid cell = the
+#      radius of the largest interior sphere centred there. Seed the deepest still-uncovered voxel.
+#   2. Optionally stretch that sphere into an oblong ellipsoid along the local uncovered-solid PCA axis.
+#   3. Pad (radius inflation) BEFORE the hull clamp, mirroring the box pad; clamp strictly inside the
+#      visual convex hull; retreat out of any dock corridor. Drop parts that collapse below the floor.
+#   4. Tessellate each survivor to an icosphere (scaled per-axis), then feed it through the SAME
+#      convex_mesh/bake_glb/validation machinery the boxes use.
+# Everything is deterministic (no RNG): fixed voxel scan order, lexsorted deepest-voxel tie-break, and
+# sign-canonicalised eigenvectors, so a re-bake of unchanged input + identical args is byte-identical.
+# COST: a subdiv-1 icosphere hull is ~42 verts / ~80 planes vs 6 for a box, and SphereVsBody is O(planes)
+# — keep --sphere-segments low and the sphere count small; box stays the default/recommended primitive.
+
+
+def _icosphere(subdivisions: int) -> tuple[np.ndarray, np.ndarray]:
+    """Unit-radius icosphere: the 12-vertex regular icosahedron subdivided `subdivisions` times (every
+    triangle -> 4, each new midpoint renormalised to the unit sphere). subdivisions=1 -> 42 verts / 80
+    faces; 0 -> the raw 12-vert icosahedron. Deterministic: fixed base geometry + fixed face iteration
+    order + a per-level midpoint cache keyed on the sorted edge, so the vertex order never varies."""
+    t = (1.0 + np.sqrt(5.0)) / 2.0
+    verts = [np.array(v, dtype=np.float64) for v in (
+        (-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0),
+        (0, -1, t), (0, 1, t), (0, -1, -t), (0, 1, -t),
+        (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1),
+    )]
+    verts = [v / np.linalg.norm(v) for v in verts]
+    faces = [
+        (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
+        (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
+        (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
+        (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
+    ]
+    for _ in range(max(0, subdivisions)):
+        cache: dict[tuple[int, int], int] = {}
+        new_faces = []
+
+        def mid(i, j):
+            key = (min(i, j), max(i, j))
+            if key not in cache:
+                m = verts[i] + verts[j]
+                verts.append(m / np.linalg.norm(m))
+                cache[key] = len(verts) - 1
+            return cache[key]
+
+        for a, b, c in faces:
+            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
+            new_faces += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
+        faces = new_faces
+    return np.array(verts, dtype=np.float64), np.array(faces, dtype=np.int64)
+
+
+def _spheroid_axes(c, r, uncovered, grid, cfg):
+    """Local PCA elongation of a seed sphere into an oblong ellipsoid. Gathers the still-uncovered
+    solid voxels within ~1.5r of the seed and, if they form a clearly anisotropic cluster, stretches
+    the principal axis by a capped factor while the two minor axes keep radius r. Returns
+    (radii[3], R[3,3]) with R's COLUMNS the world-space ellipsoid axes (principal, mid, minor); a plain
+    isotropic sphere (radii=r, R=I) when elongation is disabled or the local cluster is too small/round.
+    Deterministic — np.linalg.eigh + sign-canonicalised eigenvectors, no RNG."""
+    iso = (np.full(3, r, dtype=np.float64), np.eye(3))
+    if not cfg.get("sphere_elongate", True):
+        return iso
+    reach = r * 1.5
+    ext = int(np.ceil(reach / grid.res))
+    ci = np.floor((c - grid.origin) / grid.res - 0.5).astype(int)
+    lo = np.clip(ci - ext, 0, np.array(grid.dims))
+    hi = np.clip(ci + ext + 1, 0, np.array(grid.dims))
+    if not (hi > lo).all():
+        return iso
+    sub = uncovered[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]]
+    if sub.sum() < 8:
+        return iso
+    xs, ys, zs = np.where(sub)
+    pts = grid.origin + (np.stack([xs, ys, zs], axis=1) + lo + 0.5) * grid.res
+    pts = pts[np.linalg.norm(pts - c, axis=1) <= reach]
+    if len(pts) < 8:
+        return iso
+    evals, evecs = np.linalg.eigh(np.cov((pts - c).T))  # ascending eigenvalues, orthonormal columns
+    order = np.argsort(evals)[::-1]                      # principal (largest) first
+    evals, evecs = evals[order], evecs[:, order]
+    if evals[0] <= 1e-9:
+        return iso
+    # Canonicalise eigenvector signs (make the largest-magnitude component positive) so the ellipsoid
+    # frame — hence the tessellated vertex order — is byte-stable regardless of the LAPACK sign choice.
+    for k in range(3):
+        if evecs[np.argmax(np.abs(evecs[:, k])), k] < 0.0:
+            evecs[:, k] = -evecs[:, k]
+    if np.linalg.det(evecs) < 0.0:  # keep a right-handed frame (sign has no geometric effect anyway)
+        evecs[:, 2] = -evecs[:, 2]
+    elong = float(np.clip(np.sqrt(evals[0] / max(evals.mean(), 1e-9)), 1.0, SPHERE_MAX_ELONGATION))
+    return np.array([r * elong, r, r], dtype=np.float64), evecs
+
+
+def _clamp_ellipsoid_to_hull(c, radii, R, eqs, margin):
+    """Uniformly shrink an ellipsoid (centre `c` fixed) until it is strictly inside the visual convex
+    hull with `margin` clearance — the sphere analogue of clamp_box_to_hull, preserving the same
+    metric-neutrality contract. The ellipsoid's support along a plane normal n is ||radii * (R^T n)||,
+    so the largest keep-it-inside scale is min_i (dist_i - margin)/support_i over the hull faces (scipy
+    equations carry UNIT normals, so n.c+d is signed distance). Returns the scaled radii; a non-positive
+    scale collapses them and the caller drops the part."""
+    n, d = eqs[:, :3], eqs[:, 3]
+    dist = -(n @ c + d)                        # per-face signed distance from centre (positive = inside)
+    support = np.linalg.norm((n @ R) * radii, axis=1)  # (n@R)[i] = R^T n_i ; * radii = ellipsoid reach
+    s = float(np.min((dist - margin) / np.maximum(support, 1e-12)))
+    return radii * max(0.0, min(1.0, s))
+
+
+def _clamp_ellipsoid_to_corridors(c, radii, R, segs):
+    """Keep-out DUAL of the hull clamp for dock corridors: uniformly shrink the ellipsoid until its
+    (conservative max-radius) reach clears every corridor capsule by that capsule's radius, using
+    point-to-segment distance from the centre. Only relevant when the mesh has dock hardpoints (segs
+    non-empty); a centre inside a tube yields a non-positive scale and the caller drops the part."""
+    if not segs:
+        return radii
+    reach = float(radii.max())
+    s = 1.0
+    for a, b, cr in segs:
+        a = np.asarray(a, float)
+        b = np.asarray(b, float)
+        ab = b - a
+        L2 = float(ab @ ab) or 1.0
+        t = float(np.clip((c - a) @ ab / L2, 0.0, 1.0))
+        dist = float(np.linalg.norm(c - (a + t * ab)))
+        s = min(s, (dist - cr) / max(reach, 1e-12))
+    return radii * max(0.0, min(1.0, s))
+
+
+def _mark_ellipsoid(mask, grid, c, radii, R):
+    """Set `mask` True for every voxel whose CENTRE lies inside the ellipsoid (c, radii, R). Restricted
+    to the ellipsoid's world-AABB subgrid for speed; deterministic. Used for the greedy cover bookkeeping
+    (which voxels are claimed) — cell-centre-in-ellipsoid semantics mirror the box rasterizers."""
+    ext = np.sqrt(((R * radii) ** 2).sum(axis=1))  # world half-extent per axis of the rotated ellipsoid
+    lo = np.clip(np.floor((c - ext - grid.origin) / grid.res - 0.5).astype(int), 0, np.array(grid.dims))
+    hi = np.clip(np.ceil((c + ext - grid.origin) / grid.res + 0.5).astype(int), 0, np.array(grid.dims))
+    if not (hi > lo).all():
+        return
+    ii = np.arange(lo[0], hi[0])
+    jj = np.arange(lo[1], hi[1])
+    kk = np.arange(lo[2], hi[2])
+    gx, gy, gz = np.meshgrid(ii, jj, kk, indexing="ij")
+    idx = np.stack([gx, gy, gz], axis=-1).reshape(-1, 3)
+    centers = grid.origin + (idx + 0.5) * grid.res
+    u = ((centers - c) @ R) / radii            # (centers-c)@R = R^T(centers-c) = local ellipsoid coords
+    sel = idx[(u * u).sum(axis=1) <= 1.0]
+    mask[sel[:, 0], sel[:, 1], sel[:, 2]] = True
+
+
+def generate_auto_spheroids(verts, V, F, hps, eqs, cfg):
+    """Sibling of generate_auto_parts for --primitive spheroid: greedy oblong-sphere cover of the same
+    fine voxel solid. Returns (yparts, stats). Each ypart carries `sphere_verts` (the placed, tessellated
+    icosphere cloud part_vertices/convex_mesh consume) plus a `sphere` provenance dict; `stats` exposes
+    the fine grid + interior hollow + corridor mask so the reachability guard in main runs unchanged."""
+    from scipy.ndimage import distance_transform_edt as _edt
+
+    voxel_res = cfg["voxel_res"]
+    margin = cfg["margin"]
+    pad = cfg["pad"]
+    ship_r = cfg["ship_r"]
+    corridor_r = cfg["corridor_r"]
+    overlap = min(max(float(cfg.get("sphere_overlap", SPHERE_DEFAULT_OVERLAP)), 0.0), 0.95)
+    segments = int(cfg.get("sphere_segments", 1))
+
+    segs = corridor_segments(hps, corridor_r, cfg["corridor_approach"])
+
+    # Reuse the box pipeline's solid/sealed classification verbatim (drives coverage + reach guard).
+    gfine = grid_for(V, voxel_res)
+    Sfine = voxelize_surface(V, F, gfine)
+    solid_fine, sealed_fine, _ = classify_solid(Sfine)
+    corridor_fine = corridor_mask(gfine, segs)
+    interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > ship_r)
+
+    carved = solid_fine & ~corridor_fine
+    longest = float((V.max(0) - V.min(0)).max())
+    min_radius = SPHERE_MIN_RADIUS_FRAC * longest
+
+    # distance (authored units) from each carved-solid voxel centre to the nearest NON-solid cell = the
+    # radius of the largest interior sphere seated there. Computed ONCE; the greedy cover always seeds the
+    # still-uncovered voxel with the largest such distance (deepest core first).
+    depth = _edt(carved) * gfine.res
+    xs, ys, zs = np.where(carved)                 # np.where yields (x,y,z)-ascending = lexsorted indices
+    idx_all = np.stack([xs, ys, zs], axis=1)
+    depth_all = depth[xs, ys, zs]
+    total_solid = max(1, len(idx_all))
+
+    base_ico, _ico_faces = _icosphere(segments)
+
+    covered_pick = np.zeros(gfine.dims, dtype=bool)  # (1-overlap)-radius marks: gate the next SEED
+    covered_full = np.zeros(gfine.dims, dtype=bool)  # full-radius marks: the coverage/stop metric
+    spheres = []                                     # (c, radii, R) survivors
+    dropped = 0
+
+    for _ in range(SPHERE_MAX_COUNT):
+        if (covered_full[xs, ys, zs]).sum() / total_solid >= SPHERE_COVERAGE_TARGET:
+            break
+        unc = ~covered_pick[xs, ys, zs]
+        if not unc.any():
+            break
+        cand = np.where(unc, depth_all, -1.0)
+        best = int(np.argmax(cand))               # first max on ties; idx_all is lexsorted -> deterministic
+        if cand[best] < min_radius:               # deepest remaining voxel is below the floor -> done
+            break
+        ci = idx_all[best]
+        c = gfine.origin + (ci + 0.5) * gfine.res
+        r = float(depth_all[best])
+        radii, R = _spheroid_axes(c, r, carved & ~covered_pick, gfine, cfg)
+        radii = radii + pad                        # pad = radius inflation BEFORE the hull clamp
+        radii = _clamp_ellipsoid_to_hull(c, radii, R, eqs, margin)
+        radii = _clamp_ellipsoid_to_corridors(c, radii, R, segs)
+        if radii.min() < min_radius:               # collapsed by hull/corridor -> drop, but claim a small
+            dropped += 1                            # core so the seed is not re-picked (guarantees progress)
+            _mark_ellipsoid(covered_pick, gfine, c, np.full(3, max(min_radius, voxel_res)), np.eye(3))
+            continue
+        spheres.append((c, radii, R))
+        _mark_ellipsoid(covered_pick, gfine, c, radii * (1.0 - overlap), R)
+        _mark_ellipsoid(covered_full, gfine, c, radii, R)
+
+    # Deterministic ordering (rounded centre) + stable names, then tessellate each survivor.
+    spheres.sort(key=lambda s: (round(float(s[0][0]), 4), round(float(s[0][1]), 4), round(float(s[0][2]), 4)))
+    yparts = []
+    for i, (c, radii, R) in enumerate(spheres):
+        wv = ((base_ico * radii) @ R.T) + c        # icosphere point c + R @ (radii * unit)
+        yparts.append({
+            "name": f"Sph{i:02d}",
+            "sphere_verts": wv.astype(np.float64),
+            "sphere": {"center": [float(x) for x in c], "radii": [float(x) for x in radii]},
+        })
+
+    coverage = float((covered_full[xs, ys, zs]).sum() / total_solid)
+    ws = world_scale(verts)
+    stats = dict(
+        gfine=gfine, interior_hollow=interior_hollow, corridor_fine=corridor_fine,
+        ship_r=ship_r, dropped=dropped, sphere_count=len(yparts),
+        coverage=coverage, solid_fine=int(solid_fine.sum()), sealed=int(sealed_fine.sum()),
+        hollow=int(interior_hollow.sum()), surface=int(Sfine.sum()),
+        segments=segments, overlap=overlap, min_radius=min_radius, ws=ws, segs=segs,
+        verts_per_part=len(base_ico),
+    )
+    return yparts, stats
+
+
 def write_snapshot(path: Path, yparts, cfg, kind: str, primitive: str, glb: Path, ws: float):
     """Opt-in (`--dump PATH`) human-readable record of a bake: the kind, the source GLB, every
     resolved arg, and the baked box list. Replaces the retired base-col.generated.yaml — NOT consumed
@@ -1074,11 +1340,17 @@ def write_snapshot(path: Path, yparts, cfg, kind: str, primitive: str, glb: Path
         "parts:",
     ]
     for p in yparts:
-        c = p["box"]["center"]
-        s = p["box"]["size"]
         lines.append(f"  - name: {p['name']}")
-        lines.append(f"    box: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
-                     f"size: [{s[0]:.4f}, {s[1]:.4f}, {s[2]:.4f}]}}")
+        if "box" in p:
+            c = p["box"]["center"]
+            s = p["box"]["size"]
+            lines.append(f"    box: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
+                         f"size: [{s[0]:.4f}, {s[1]:.4f}, {s[2]:.4f}]}}")
+        else:
+            c = p["sphere"]["center"]
+            rr = p["sphere"]["radii"]
+            lines.append(f"    sphere: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
+                         f"radii: [{rr[0]:.4f}, {rr[1]:.4f}, {rr[2]:.4f}]}}")
     Path(path).write_text("\n".join(lines) + "\n")
 
 
@@ -1131,12 +1403,12 @@ def main(argv=None):
     ap.add_argument("--sphere-segments", type=int, default=1,
                     help="icosphere subdivisions per spheroid part (spheroid primitive; Phase 3)")
     ap.add_argument("--sphere-overlap", type=float, default=None,
-                    help="greedy sphere-cover overlap factor (spheroid primitive; Phase 3)")
+                    help="greedy sphere-cover overlap factor 0..~0.95 (spheroid primitive; higher = more, "
+                         "overlapping spheres). Default 0.35.")
+    ap.add_argument("--sphere-elongate", action=argparse.BooleanOptionalAction, default=None,
+                    help="PCA-elongate each spheroid into an oblong ellipsoid along the local solid axis "
+                         "(spheroid primitive; default on)")
     args = ap.parse_args(argv)
-
-    if args.primitive == "spheroid":
-        # Phase 3 slots the greedy sphere-cover generator in here; the box path is untouched.
-        sys.exit("ERROR: --primitive spheroid is not implemented yet (Phase 3). Use --primitive box.")
 
     # GLB + scale-basis resolution per kind.
     glb = args.glb if args.glb is not None else (DEF_GLB if args.kind == "base" else None)
@@ -1174,21 +1446,34 @@ def main(argv=None):
     reach_guard = (args.kind == "base") if args.reach_guard is None else args.reach_guard
     corridor_check = has_dock if args.corridor_check is None else args.corridor_check
 
-    print(f"\npipeline: voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
-          f"corridorRadius={cfg['corridor_r']:.4f}  reach_guard={reach_guard}  corridor_check={corridor_check}")
-    yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
-    a = autostats
-    print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
-          f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
-          f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
-          f"{a['shell_added']} shell-cover boxes, "
-          f"{a['dropped']} collapsed/dropped by hull clamp)")
-    print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%  "
-          f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
-    print(f"pipeline: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
-          f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
-          f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
-          f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
+    print(f"\npipeline: primitive={args.primitive}  voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  "
+          f"pad={cfg['pad']}  corridorRadius={cfg['corridor_r']:.4f}  reach_guard={reach_guard}  "
+          f"corridor_check={corridor_check}")
+    if args.primitive == "spheroid":
+        # Spheroid path: greedy oblong-sphere cover of the same voxel solid; parts flow through the same
+        # convex_mesh/validation/bake machinery as boxes below (the box path is entirely untouched).
+        yparts, autostats = generate_auto_spheroids(verts, V, F, hps, eqs, cfg)
+        a = autostats
+        print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
+              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
+              f"{a['sphere_count']} spheroids (segments={a['segments']} -> {a['verts_per_part']} verts each, "
+              f"overlap={a['overlap']:.2f}, min_radius={a['min_radius']:.3f} authored, "
+              f"{a['dropped']} collapsed/dropped by hull/corridor clamp)")
+        print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%")
+    else:
+        yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
+        a = autostats
+        print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
+              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
+              f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
+              f"{a['shell_added']} shell-cover boxes, "
+              f"{a['dropped']} collapsed/dropped by hull clamp)")
+        print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%  "
+              f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
+        print(f"pipeline: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
+              f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
+              f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
+              f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
     if args.dump is not None:
         write_snapshot(args.dump, yparts, cfg, args.kind, args.primitive, glb, ws)
         print(f"pipeline: wrote snapshot {args.dump}")
