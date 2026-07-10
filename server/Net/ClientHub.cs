@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Content;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
@@ -188,6 +190,7 @@ public sealed class ClientHub
     private readonly Backend.IAuthenticator _auth;
     private readonly Backend.IPlayerDirectory _players;
     private readonly Backend.IMatchmaker _matchmaker;
+    private readonly ILogger _log;
 
     // The pre-match lobby (team/ready/name). The sim polls ShouldStartMatch to leave the lobby.
     private readonly Lobby _lobby = new();
@@ -249,7 +252,8 @@ public sealed class ClientHub
         Backend.IPlayerDirectory players,
         Backend.IMatchmaker matchmaker,
         string selectedMap,
-        IReadOnlyList<MapCatalogEntry> mapCatalog
+        IReadOnlyList<MapCatalogEntry> mapCatalog,
+        ILogger? log = null
     )
     {
         _sim = sim;
@@ -258,6 +262,7 @@ public sealed class ClientHub
         _matchmaker = matchmaker;
         _selectedMap = selectedMap;
         _mapCatalog = mapCatalog;
+        _log = log ?? NullLogger.Instance;
 
         if (SnapshotWorkers > 0)
         {
@@ -273,7 +278,7 @@ public sealed class ClientHub
             );
             for (int i = 0; i < SnapshotWorkers; i++)
                 new Thread(SnapshotWorkerLoop) { IsBackground = true, Name = $"SnapWorker{i}" }.Start();
-            Console.WriteLine($"[Hub] snapshot worker pool: {SnapshotWorkers} threads");
+            Log.SnapshotWorkerPool(_log, SnapshotWorkers);
         }
     }
 
@@ -412,8 +417,11 @@ public sealed class ClientHub
                 _sim.EnqueueLeave(client.Id);
             else
                 _sim.EnqueueDetach(client.Id, client.Token);
-            Console.WriteLine(
-                $"[Hub] client {client.Id} disconnected (bye={client.Leaving}, {(cleanLeave ? "clean leave" : "holding ship for reconnect grace")})"
+            Log.ClientDisconnected(
+                _log,
+                client.Id,
+                client.Leaving,
+                cleanLeave ? "clean leave" : "holding ship for reconnect grace"
             );
             _lobby.Remove(client.Id);
             // Host left → transfer to the earliest remaining pilot (lowest id), or -1 if the server
@@ -482,7 +490,7 @@ public sealed class ClientHub
 
                     if (!_auth.Authenticate(secret))
                     {
-                        Console.WriteLine($"[Hub] rejected join (bad secret) from client {client.Id}");
+                        Log.RejectedJoinBadSecret(_log, client.Id);
                         // Tell the client WHY before closing. The WS close frame also carries "bad
                         // secret", but a WebRTC DataChannel close does not — this app-level frame is
                         // the only signal that survives both transports, so the client can re-prompt

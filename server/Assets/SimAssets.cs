@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using StellarAllegiance.Shared;
 
 namespace SimServer.Assets;
@@ -16,9 +18,13 @@ namespace SimServer.Assets;
 // =====================================================================
 public static class SimAssets
 {
-    private static readonly object _lock = new();
+    private static readonly Lock _lock = new();
     private static bool _resolved;
     private static string? _dir;
+
+    // Assigned once at boot (Program.cs) after the host's ILoggerFactory exists; NullLogger keeps
+    // the pre-host --pregen-assets path (which prints its own Console summary) a safe no-op.
+    internal static ILogger Logger { get; set; } = NullLogger.Instance;
 
     // Root dir containing bases/ and asteroids/, or null if it can't be located.
     public static string? AssetsDir
@@ -64,7 +70,7 @@ public static class SimAssets
         }
         catch (Exception e)
         {
-            Console.WriteLine($"[SimAssets] failed to load {relPath}: {e.Message}");
+            Log.AssetLoadFailed(Logger, relPath, e);
             return null;
         }
     }
@@ -94,7 +100,7 @@ public static class SimAssets
                 }
             }
         }
-        Console.WriteLine("[SimAssets] assets dir not found — collision falls back to spheres");
+        Log.AssetsDirNotFound(Logger);
         return null;
     }
 

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
@@ -296,6 +298,7 @@ public sealed partial class Simulation
     // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
     // sim thread). Reads across the sim keep working — it's a reference field, reassignment is atomic.
     public World World { get; private set; }
+    private readonly ILogger _log;
     private readonly Dictionary<ulong, ShipSim> _ships = new();
     private readonly List<ShipSim> _order = new(); // stable iteration order
     private ulong _nextShipId = 1;
@@ -439,8 +442,9 @@ public sealed partial class Simulation
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
-    public Simulation(World world, ContentSet content)
+    public Simulation(World world, ContentSet content, ILogger? log = null)
     {
+        _log = log ?? NullLogger.Instance;
         World = world;
         Content = content;
 
@@ -872,7 +876,7 @@ public sealed partial class Simulation
         ResolveTeamUnlocks();
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
-        Console.WriteLine("[Sim] match started");
+        Log.MatchStarted(_log);
         // World may have just been swapped to a new map — let the hub re-Welcome every client onto it
         // and invalidate its world-derived caches. Runs on the sim thread; Welcome frames are queued
         // before AfterStep streams the first Active snapshot, so clients rebuild geometry in order.
@@ -1028,7 +1032,7 @@ public sealed partial class Simulation
         {
             if (!_dispenserByCargo.ContainsKey(cargoId))
             {
-                Console.WriteLine($"[Sim] spawn cargo {cargoId} is not a dispenser cargo — using hull default");
+                Log.SpawnCargoNotDispenser(_log, cargoId);
                 return fallback;
             }
             used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
@@ -1036,7 +1040,7 @@ public sealed partial class Simulation
         float cap = def?.PayloadCapacity ?? 0f;
         if (used > cap)
         {
-            Console.WriteLine($"[Sim] spawn cargo payload {used} exceeds capacity {cap} — using hull default");
+            Log.SpawnCargoPayloadExceeds(_log, used, cap);
             return fallback;
         }
         return requested;

@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using SIPSorcery.Net;
 
 namespace SimServer.Net;
@@ -47,6 +48,8 @@ public sealed class LobbyRegistrar
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
     private readonly string? _hostedBy; // optional operator label ("hosted by …")
     private readonly bool _protected; // true when a shared-secret password gates joins
+    private readonly ILoggerFactory _loggerFactory; // kept to build the WebRtcListener's logger lazily
+    private readonly ILogger _log;
 
     private string? _sessionId;
     private string? _secret; // per-session capability minted by the lobby at registration
@@ -63,7 +66,8 @@ public sealed class LobbyRegistrar
         string? publicEndpoint,
         int maxPlayers,
         string? hostedBy,
-        bool @protected
+        bool @protected,
+        ILoggerFactory loggerFactory
     )
     {
         _hub = hub;
@@ -74,18 +78,21 @@ public sealed class LobbyRegistrar
         _maxPlayers = maxPlayers;
         _hostedBy = hostedBy;
         _protected = @protected;
+        _loggerFactory = loggerFactory;
+        _log = loggerFactory.CreateLogger<LobbyRegistrar>();
     }
 
     // Builds a registrar from the environment, or returns null when no public name is set
     // (the server stays private). Logs the decision either way.
-    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort, bool @protected)
+    public static LobbyRegistrar? FromEnv(ClientHub hub, int listenPort, bool @protected, ILoggerFactory loggerFactory)
     {
+        var log = loggerFactory.CreateLogger<LobbyRegistrar>();
         var name = (Environment.GetEnvironmentVariable("SIM_PUBLIC_NAME") ?? "").Trim();
         if (name.Length == 0)
             return null; // private: not published to any lobby
         if (name.Length is < 3 or > 50)
         {
-            Console.WriteLine($"[Lobby] SIM_PUBLIC_NAME must be 3-50 chars (got {name.Length}); staying private.");
+            Log.PublicNameInvalid(log, name.Length);
             return null;
         }
 
@@ -115,10 +122,7 @@ public sealed class LobbyRegistrar
         if (hostedBy.Length > 24)
             hostedBy = hostedBy[..24];
 
-        Console.WriteLine(
-            $"[Lobby] publishing \"{name}\" to {shareBase} (port {port}, max {maxPlayers} players"
-                + (hostedBy.Length > 0 ? $", hosted by {hostedBy})" : ")")
-        );
+        Log.LobbyPublishing(log, name, shareBase, port, maxPlayers, hostedBy.Length > 0 ? $", hosted by {hostedBy}" : "");
         return new LobbyRegistrar(
             hub,
             shareBase,
@@ -127,7 +131,8 @@ public sealed class LobbyRegistrar
             endpoint.Length == 0 ? null : endpoint,
             maxPlayers,
             hostedBy.Length == 0 ? null : hostedBy,
-            @protected
+            @protected,
+            loggerFactory
         );
     }
 
@@ -160,9 +165,7 @@ public sealed class LobbyRegistrar
                 if (retrying)
                 {
                     _directRetries++;
-                    Console.WriteLine(
-                        $"[Lobby] endpoint not yet reachable; re-probing ({_directRetries}/{MaxDirectRetries})."
-                    );
+                    Log.EndpointNotReachable(_log, _directRetries, MaxDirectRetries);
                     using var retryCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     retryCts.CancelAfter(DirectRetryEvery);
                     await RunWsAsync(_sessionId!, retryCts.Token); // opens WS for the retry window
@@ -176,7 +179,7 @@ public sealed class LobbyRegistrar
                 await RunWsAsync(_sessionId!, ct);
                 if (ct.IsCancellationRequested)
                     break;
-                Console.WriteLine("[Lobby] WS dropped; re-registering.");
+                Log.WsDroppedReRegister(_log);
                 await Deregister();
             }
         }
@@ -212,7 +215,7 @@ public sealed class LobbyRegistrar
             );
             if (!resp.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[Lobby] register failed ({(int)resp.StatusCode}).");
+                Log.LobbyRegisterFailed(_log, (int)resp.StatusCode);
                 return false;
             }
 
@@ -220,7 +223,7 @@ public sealed class LobbyRegistrar
             var entry = resultDto?.Server;
             if (entry is null || string.IsNullOrEmpty(entry.SessionId) || string.IsNullOrEmpty(resultDto!.Secret))
             {
-                Console.WriteLine("[Lobby] register returned no session id / secret.");
+                Log.LobbyRegisterNoSession(_log);
                 return false;
             }
 
@@ -239,17 +242,18 @@ public sealed class LobbyRegistrar
                     );
                     var ice = ToIceServers(entry.IceServers);
                     _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    new WebRtcListener(_hub, _shareBase, _offerChannel.Reader, ice).Start(_listenerCts.Token);
-                    Console.WriteLine($"[Lobby] registered {_sessionId} — STUN/WebRTC ({ice.Count} ICE server(s)).");
+                    new WebRtcListener(_hub, _shareBase, _offerChannel.Reader, ice, _loggerFactory.CreateLogger<WebRtcListener>())
+                        .Start(_listenerCts.Token);
+                    Log.LobbyRegisteredWebRtc(_log, _sessionId, ice.Count);
                 }
                 else
                 {
-                    Console.WriteLine($"[Lobby] re-registered {_sessionId} — STUN/WebRTC (listener already running).");
+                    Log.LobbyReRegisteredWebRtc(_log, _sessionId);
                 }
             }
             else
             {
-                Console.WriteLine($"[Lobby] registered {_sessionId} — DIRECT at {entry.PublicEndpoint}.");
+                Log.LobbyRegisteredDirect(_log, _sessionId, entry.PublicEndpoint!);
             }
             return true;
         }
@@ -259,7 +263,7 @@ public sealed class LobbyRegistrar
         }
         catch (Exception e)
         {
-            Console.WriteLine($"[Lobby] register error: {e.Message}");
+            Log.LobbyRegisterError(_log, e.Message);
             return false;
         }
     }
@@ -287,10 +291,10 @@ public sealed class LobbyRegistrar
             );
             if (reply?.Type != "ok")
             {
-                Console.WriteLine($"[Lobby] WS auth rejected: {reply?.Message}");
+                Log.WsAuthRejected(_log, reply?.Message);
                 return;
             }
-            Console.WriteLine($"[Lobby] WS connected (session {sessionId}).");
+            Log.WsConnected(_log, sessionId);
 
             using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var sendTask = WsSendLoop(ws, pair.Token);
@@ -304,7 +308,7 @@ public sealed class LobbyRegistrar
         }
         catch (Exception e)
         {
-            Console.WriteLine($"[Lobby] WS error: {e.Message}");
+            Log.WsError(_log, e.Message);
         }
     }
 
@@ -399,7 +403,7 @@ public sealed class LobbyRegistrar
             if (!string.IsNullOrEmpty(secret))
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
             await _http.SendAsync(req, cts.Token);
-            Console.WriteLine($"[Lobby] deregistered session {sid}.");
+            Log.LobbyDeregistered(_log, sid);
         }
         catch
         { /* best effort on shutdown */

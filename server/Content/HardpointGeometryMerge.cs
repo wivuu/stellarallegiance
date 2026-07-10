@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using StellarAllegiance.Shared;
 using Factions = Allegiance.Factions.Model;
@@ -34,6 +36,10 @@ namespace SimServer.Content;
 // =====================================================================
 public static class HardpointGeometryMerge
 {
+    // Assigned once at boot (Program.cs) after the host's ILoggerFactory exists; NullLogger keeps
+    // any pre-host content load a safe no-op.
+    internal static ILogger Logger { get; set; } = NullLogger.Instance;
+
     public static void Apply(Factions.Core core)
     {
         foreach (var hull in core.Hulls)
@@ -90,7 +96,7 @@ public static class HardpointGeometryMerge
             {
                 if (!TryParseNode(name, out var kind, out byte index))
                 {
-                    Console.WriteLine($"[HardpointMerge] {ctx}: skipping unparsable GLB node '{name}'");
+                    Log.UnparsableGlbNode(Logger, ctx, name);
                     continue;
                 }
                 var key = (kind, index);

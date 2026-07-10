@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
@@ -140,6 +142,7 @@ public sealed class World
 
     private readonly Dictionary<byte, ShipBody> _shipHulls = new(); // keyed by ShipClassDef.ClassId
     private readonly ShipBody? _podHull;
+    private readonly ILogger _log;
 
     // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
     // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
@@ -151,8 +154,9 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, ILogger? log = null)
     {
+        _log = log ?? NullLogger.Instance;
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
@@ -404,7 +408,7 @@ public sealed class World
         }
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).
-        Console.WriteLine($"[World] rock hulls loaded: {RockBodies.Count}/{Asteroids.Count}");
+        Log.RockHullsLoaded(_log, RockBodies.Count, Asteroids.Count);
     }
 
     private static Vec3 Normalize(Vec3 v)
