@@ -158,7 +158,7 @@ public partial class SfxManager : Node
             var stream = ResourceLoader.Load<AudioStream>(AssetDir + file);
             if (stream == null)
             {
-                GD.PushWarning($"[SfxManager] missing audio asset: {file}");
+                Log.Warn($"[SfxManager] missing audio asset: {file}");
                 continue;
             }
             // .ogg imports as AudioStreamOggVorbis; flip loopers to loop here so we

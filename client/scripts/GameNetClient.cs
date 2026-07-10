@@ -182,7 +182,7 @@ public partial class GameNetClient : Node
         _probeRows.Clear();
         _rejectReason = "";
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-        GD.Print($"[GameNet] connecting ({what})");
+        Log.Print($"[GameNet] connecting ({what})");
         return _socketCts.Token;
     }
 
@@ -475,7 +475,7 @@ public partial class GameNetClient : Node
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
-            GD.PrintErr($"[GameNet] socket error: {e.Message}");
+            Log.Err($"[GameNet] socket error: {e.Message}");
             // Never-opened socket = the connect itself failed (carry the reason); a post-open
             // drop keeps flowing through NotifyDisconnected so auto-reconnect can kick in.
             if (opened)
@@ -554,7 +554,7 @@ public partial class GameNetClient : Node
             var offerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredList);
             // A srflx count of 0 here is the regression signal — the peer can't reach us off-LAN.
             int offerSrflx = gatheredList.Count(l => l.Contains(" typ srflx", StringComparison.Ordinal));
-            GD.Print($"[GameNet] webrtc offer: {gatheredList.Length} local candidates ({offerSrflx} srflx)");
+            Log.Print($"[GameNet] webrtc offer: {gatheredList.Length} local candidates ({offerSrflx} srflx)");
             using var offerResp = await Http.PostAsJsonAsync(
                 $"{shareBase}/servers/{sessionId}/connect",
                 new { sdpOffer = offerSdp },
@@ -593,7 +593,7 @@ public partial class GameNetClient : Node
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
-            GD.PrintErr($"[GameNet] webrtc error: {e.Message}");
+            Log.Err($"[GameNet] webrtc error: {e.Message}");
             if (opened)
                 CallDeferred(nameof(OnSocketClosed), "");
             else
@@ -677,7 +677,7 @@ public partial class GameNetClient : Node
                 // as the predicted local ship rather than leaving it an un-predicted remote.
                 _rows.Remove(LocalShipId);
                 _world.NetPromoteLocal(LocalShipId);
-                GD.Print($"[GameNet] assigned ship {LocalShipId}");
+                Log.Print($"[GameNet] assigned ship {LocalShipId}");
                 break;
             case 3:
                 ApplySnapshot(r);
@@ -1007,7 +1007,7 @@ public partial class GameNetClient : Node
         byte version = r.ReadByte();
         if (version != ProtocolVersion)
         {
-            GD.PrintErr(
+            Log.Err(
                 $"[GameNet] protocol mismatch: server v{version}, client v{ProtocolVersion}. "
                     + "Restart the sim server with the current build."
             );
@@ -1055,7 +1055,7 @@ public partial class GameNetClient : Node
         ushort alephs = r.ReadUInt16();
         for (int i = 0; i < alephs; i++)
             _world.NetAddAleph(ReadAlephStatic(r));
-        GD.Print($"[GameNet] world received — {sectors} sectors, {bases} bases, {asteroids} asteroids");
+        Log.Print($"[GameNet] world received — {sectors} sectors, {bases} bases, {asteroids} asteroids");
         _cm.NotifyConnected();
         Connected?.Invoke();
     }
@@ -1443,7 +1443,7 @@ public partial class GameNetClient : Node
         };
 
         _defs.Load(ships, weapons, bases, cargoItems, cfg);
-        GD.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
+        Log.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
         DefsReceived?.Invoke();
     }
 

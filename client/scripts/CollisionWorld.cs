@@ -162,7 +162,7 @@ public sealed class CollisionWorld
         byte[] bytes = FileAccess.GetFileAsBytes(resPath);
         if (bytes is null || bytes.Length == 0)
         {
-            GD.PushWarning($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
+            Log.Warn($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
             return null;
         }
         try
@@ -171,7 +171,7 @@ public sealed class CollisionWorld
         }
         catch (System.Exception e)
         {
-            GD.PushWarning($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
+            Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
             return null;
         }
     }

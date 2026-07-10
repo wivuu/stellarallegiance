@@ -1433,7 +1433,7 @@ public partial class WorldRenderer : Node3D
         // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team
         // was already known but its base hadn't arrived yet). Cheap no-op unless it changes the home.
         RehomePreLaunch();
-        GD.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
+        Log.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
     }
 
     // ---- Asteroid -------------------------------------------------------
@@ -1469,7 +1469,7 @@ public partial class WorldRenderer : Node3D
             root.QueueFree();
         }
         if (result.Mesh is null)
-            GD.PushWarning($"[WorldRenderer] asteroid variant '{variant}' unavailable — using sphere fallback");
+            Log.Warn($"[WorldRenderer] asteroid variant '{variant}' unavailable — using sphere fallback");
         _asteroidMeshes[variant] = result;
         return result;
     }
@@ -1592,7 +1592,7 @@ public partial class WorldRenderer : Node3D
             _shipNodes[row.ShipId] = node;
             SetNodeSector(node, row.SectorId);
             RefreshSectorVisibility();
-            GD.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team}, sector {row.SectorId})");
+            Log.Print($"[WorldRenderer] local ship {row.ShipId} spawned (team {row.Team}, sector {row.SectorId})");
             return;
         }
 

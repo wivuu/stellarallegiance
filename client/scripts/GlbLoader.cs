@@ -35,7 +35,7 @@ public static class GlbLoader
             return root;
 
         _missing.Add(resPath);
-        GD.PushWarning($"[GlbLoader] '{resPath}' unavailable — using procedural placeholder");
+        Log.Warn($"[GlbLoader] '{resPath}' unavailable — using procedural placeholder");
         return null;
     }
 

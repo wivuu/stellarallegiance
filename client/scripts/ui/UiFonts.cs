@@ -68,7 +68,7 @@ public static class UiFonts
     {
         if (ResourceLoader.Exists(resPath) && GD.Load(resPath) is FontFile f)
             return f;
-        GD.PushWarning($"[UiFonts] font not imported yet: {resPath} (run `godot --headless --import`)");
+        Log.Warn($"[UiFonts] font not imported yet: {resPath} (run `godot --headless --import`)");
         return fallback;
     }
 

@@ -172,7 +172,7 @@ public partial class ConnectionManager : Node
 		State = ConnState.Connecting;
 		BeginStages();
 		NotifyStage(ConnectStage.Channel); // address is literal — Locate completes instantly
-		GD.Print($"[ConnectionManager] connecting to {ServerUrl}");
+		Log.Print($"[ConnectionManager] connecting to {ServerUrl}");
 		_net.Connect(ServerUrl);
 	}
 
@@ -186,7 +186,7 @@ public partial class ConnectionManager : Node
 		_sessionId = sessionId;
 		State = ConnState.Connecting;
 		BeginStages();
-		GD.Print($"[ConnectionManager] joining lobby server {displayName} ({sessionId})");
+		Log.Print($"[ConnectionManager] joining lobby server {displayName} ({sessionId})");
 		_net.ConnectWebRtc(LobbyBase, sessionId);
 	}
 
@@ -198,7 +198,7 @@ public partial class ConnectionManager : Node
 	// and fall back to the still-visible server browser.
 	public void CancelConnect()
 	{
-		GD.Print("[ConnectionManager] connect cancelled");
+		Log.Print("[ConnectionManager] connect cancelled");
 		_net.Abort();
 		ShowInput();
 	}
@@ -207,7 +207,7 @@ public partial class ConnectionManager : Node
 	// entirely and return to the server browser.
 	public void AbortToBrowser()
 	{
-		GD.Print("[ConnectionManager] returning to server browser");
+		Log.Print("[ConnectionManager] returning to server browser");
 		_net.Abort();
 		ServerUrl = "";
 		ShowInput();
@@ -223,7 +223,7 @@ public partial class ConnectionManager : Node
 		}
 		State = ConnState.Connecting;
 		BeginStages();
-		GD.Print($"[ConnectionManager] retrying {ServerUrl}");
+		Log.Print($"[ConnectionManager] retrying {ServerUrl}");
 		if (_mode == Transport.WebRtc)
 		{
 			_net.ConnectWebRtc(LobbyBase, _sessionId);
@@ -239,7 +239,7 @@ public partial class ConnectionManager : Node
 	// so the player can pick a different one.
 	public void Leave()
 	{
-		GD.Print("[ConnectionManager] leaving server");
+		Log.Print("[ConnectionManager] leaving server");
 		_net.Disconnect();
 		ServerUrl = "";
 		ShowInput();
@@ -263,7 +263,7 @@ public partial class ConnectionManager : Node
 		if (_quitting)
 			return;
 		_quitting = true;
-		GD.Print("[ConnectionManager] quitting to desktop");
+		Log.Print("[ConnectionManager] quitting to desktop");
 		if (State is ConnState.Connected or ConnState.Connecting or ConnState.Reconnecting)
 			_net.Disconnect();
 		// 0.3s covers Disconnect's internal 200ms delay-then-cancel, letting the send loop
@@ -354,14 +354,14 @@ public partial class ConnectionManager : Node
 			rec.DurationMs = rec.State == StageState.Active ? (int)(now - rec.StartMs) : 0;
 			rec.State = StageState.Done;
 		}
-		GD.Print("[ConnectionManager] connected");
+		Log.Print("[ConnectionManager] connected");
 	}
 
 	public void NotifyFailed(string reason)
 	{
 		FailReason = reason;
 		AuthRejected = reason == "bad secret";
-		GD.PrintErr($"[ConnectionManager] connect failed: {reason}");
+		Log.Err($"[ConnectionManager] connect failed: {reason}");
 		// A failed redial while auto-reconnecting settles the attempt and lets the _Process
 		// driver pace the next one — same as NotifyDisconnected's Reconnecting branch.
 		if (State == ConnState.Reconnecting)
@@ -399,7 +399,7 @@ public partial class ConnectionManager : Node
 			_reconnectAttempts = 0;
 			_attemptInFlight = false;
 			_sinceAttempt = ReconnectInterval; // attempt on the next frame
-			GD.Print("[ConnectionManager] connection lost — auto-reconnecting");
+			Log.Print("[ConnectionManager] connection lost — auto-reconnecting");
 			return;
 		}
 		// A pre-Welcome close (never reached Connected): a real connect failure. Carry the server's
@@ -423,7 +423,7 @@ public partial class ConnectionManager : Node
 		_reconnectElapsed += delta;
 		if (_reconnectElapsed >= ReconnectMax)
 		{
-			GD.Print("[ConnectionManager] auto-reconnect timed out");
+			Log.Print("[ConnectionManager] auto-reconnect timed out");
 			State = ConnState.Disconnected; // manual Retry modal takes over
 			_attemptInFlight = false;
 			FailCurrentStage();
@@ -439,7 +439,7 @@ public partial class ConnectionManager : Node
 		_sinceAttempt = 0;
 		_reconnectAttempts++;
 		_attemptInFlight = true;
-		GD.Print($"[ConnectionManager] reconnect attempt {_reconnectAttempts} to {ServerUrl}");
+		Log.Print($"[ConnectionManager] reconnect attempt {_reconnectAttempts} to {ServerUrl}");
 		BeginStages(); // fresh stage log per redial
 		if (_mode == Transport.WebRtc)
 		{
@@ -457,7 +457,7 @@ public partial class ConnectionManager : Node
 	// auto-reconnect keeps running and we rejoin fresh into the team lobby instead of the ship.
 	public void AbandonReconnect()
 	{
-		GD.Print("[ConnectionManager] abandoning ship — rejoining lobby");
+		Log.Print("[ConnectionManager] abandoning ship — rejoining lobby");
 		_net.GiveUpShip();
 		_sinceAttempt = ReconnectInterval; // redial promptly into the lobby
 	}

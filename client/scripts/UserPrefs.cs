@@ -61,7 +61,7 @@ public static class UserPrefs
         Cfg.SetValue(PlayerSection, NameKey, Clamp(name));
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
         Changed?.Invoke();
     }
 
@@ -117,7 +117,7 @@ public static class UserPrefs
         Cfg.SetValue(AudioSection, bus, linear);
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
         ApplyBus(bus, linear);
         Changed?.Invoke();
     }
@@ -157,7 +157,7 @@ public static class UserPrefs
         Cfg.SetValue(InputSection, MouseSensKey, Mathf.Clamp(v, 0.1f, 3f));
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
         Changed?.Invoke();
     }
 
@@ -170,7 +170,7 @@ public static class UserPrefs
         Cfg.SetValue(InputSection, InvertYKey, v);
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
         Changed?.Invoke();
     }
 
@@ -185,7 +185,7 @@ public static class UserPrefs
         Cfg.SetValue(ViewSection, FirstPersonKey, v);
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
         Changed?.Invoke();
     }
 
@@ -234,6 +234,6 @@ public static class UserPrefs
     {
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
-            GD.PrintErr($"[UserPrefs] failed to save {Path}: {err}");
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
     }
 }
