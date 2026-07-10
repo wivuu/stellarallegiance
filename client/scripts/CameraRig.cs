@@ -42,6 +42,24 @@ public partial class CameraRig : Camera3D
     private bool _fpDesired;
     private float _blend; // 0 = third person, 1 = first person (linear param; eased when applied)
 
+    // Launch cinematic: a fresh base spawn/respawn or pod-eject (flagged "Launched" on the ship node)
+    // gets a brief external establishing shot parked ahead of the nose looking BACK at it, rigidly
+    // tracking the ship, then eased into the player's chosen chase/cockpit framing — you watch the
+    // ship punch out rather than blinking into your seat. A reconnect reclaim is NOT flagged.
+    private const float LaunchCamHoldSec = 1.5f; // rigid external hold before the blend-out
+    private const float LaunchAheadLengthMult = 4f; // camera ahead of the nose, in model lengths
+    private const float LaunchRightWidthMult = 2f; // and off to the camera's right, in model widths
+    private const float LaunchUpLengthMult = 0.5f; // mild vertical lift (art-tuning knob; ~ChaseOffset's ratio)
+    private const float LaunchBlendOutSec = 0.6f; // softer/longer than the 0.3s mode-toggle dolly — a cinematic beat
+    // Defensive fallbacks only — ShipModelLoader.Build always stashes the real extents. DefaultModelLength
+    // duplicates ShipModelLoader.DefaultModelLength (same CockpitFallback philosophy: never break on odd content).
+    private const float DefaultModelLength = 4.5f;
+    private const float DefaultModelWidth = 3f;
+    private float _launchCamT; // seconds remaining in the rigid hold; 0 = inactive
+    private float _launchBlendT; // 0..1 progress of the blend-out into the normal framing
+    private Transform3D? _launchFromPose; // frozen launch pose to blend FROM (null once blend done)
+    private float _launchLen = DefaultModelLength, _launchWidth = DefaultModelWidth;
+
     // True only once the dolly INTO first person has (nearly) finished — so the own hull stays
     // rendered while the camera moves in/out and hides only when actually in the cockpit. The
     // cross-system idiom (mirrors ZoomView.Active / SectorOverview.Active); false with no local ship.
@@ -182,7 +200,17 @@ public partial class CameraRig : Camera3D
         {
             _ship = ship;
             _cockpitOffset = ResolveCockpit(ship);
-            _blend = _fpDesired ? 1f : 0f;
+            _blend = _fpDesired ? 1f : 0f; // seeds the blend-out target = the player's chosen framing
+            _launchBlendT = 0f;
+            _launchFromPose = null;
+            // A launch/eject plays the cinematic; anything else (reconnect reclaim) spawns already framed.
+            if (ship.HasMeta("Launched"))
+            {
+                (_launchLen, _launchWidth) = ResolveModelExtents(ship);
+                _launchCamT = LaunchCamHoldSec;
+            }
+            else
+                _launchCamT = 0f;
         }
 
         // Advance the blend toward the desired mode over ~TransitionSec, edge to edge.
@@ -193,8 +221,10 @@ public partial class CameraRig : Camera3D
             _blend = _blend < target ? Mathf.Min(target, _blend + step) : Mathf.Max(target, _blend - step);
         }
         // Hide the own hull only once we're (essentially) all the way into the cockpit, so it stays
-        // rendered throughout the dolly both directions.
-        FirstPersonActive = _blend >= 0.98f;
+        // rendered throughout the dolly both directions — but NEVER during the launch cinematic, whose
+        // whole point is an external shot of the hull (and _blend snaps to 1 instantly for an FP player).
+        bool launchActive = _launchCamT > 0f || _launchFromPose.HasValue;
+        FirstPersonActive = !launchActive && _blend >= 0.98f;
 
         // Rigidly attach to the ship's (smoothly interpolated) transform so the camera moves AND
         // rotates at EXACTLY the ship's rate — no smoothing lag, no world-up reference. Both framings
@@ -226,7 +256,33 @@ public partial class CameraRig : Camera3D
             basis = basis * new Basis(Vector3.Right, pitch) * new Basis(Vector3.Forward, roll);
         }
 
-        GlobalTransform = new Transform3D(basis, t.Origin + t.Basis * offset);
+        Transform3D normalPose = new Transform3D(basis, t.Origin + t.Basis * offset);
+
+        // Launch cinematic overrides the normal framing: an external shot rigidly ahead of the nose for
+        // the hold, then an eased release INTO normalPose (never a hard cut). Inactive ⇒ pose = normalPose.
+        Transform3D pose = normalPose;
+        if (_launchCamT > 0f)
+        {
+            _launchCamT -= (float)delta;
+            Transform3D launchPose = ComputeLaunchPose(t, _launchLen, _launchWidth);
+            if (_launchCamT > 0f)
+                pose = launchPose; // still holding rigidly ahead of the nose
+            else
+            {
+                _launchFromPose = launchPose; // hold just expired — freeze it; the release begins below this frame
+                _launchBlendT = 0f;
+            }
+        }
+        if (_launchFromPose is { } from)
+        {
+            _launchBlendT = Mathf.Min(1f, _launchBlendT + (float)delta / LaunchBlendOutSec);
+            float be = _launchBlendT * _launchBlendT * (3f - 2f * _launchBlendT); // smoothstep — same ease as the mode dolly
+            pose = from.InterpolateWith(normalPose, be);
+            if (_launchBlendT >= 1f)
+                _launchFromPose = null;
+        }
+
+        GlobalTransform = pose;
 
         if (_demoDir != null)
             RunDemo(delta);
@@ -241,6 +297,31 @@ public partial class CameraRig : Camera3D
         if (shipModel?.FindChild("HP_Cockpit_0", recursive: true, owned: false) is Node3D cockpit)
             return ship.GlobalTransform.AffineInverse() * cockpit.GlobalTransform.Origin;
         return CockpitFallback;
+    }
+
+    // Model length/width for the launch-cam framing, off the "ShipModel" child's meta (stashed by
+    // ShipModelLoader.Build). Mirrors ResolveCockpit's node lookup; falls back to sane defaults when
+    // the meta is absent or degenerate (odd server content), so the cinematic never frames to zero.
+    private static (float Length, float Width) ResolveModelExtents(Node3D ship)
+    {
+        var shipModel = ship.GetNodeOrNull<Node3D>("ShipModel");
+        float len = shipModel?.GetMeta("ModelLength", 0f).AsSingle() ?? 0f;
+        float wid = shipModel?.GetMeta("ModelWidth", 0f).AsSingle() ?? 0f;
+        return (len > 0.01f ? len : DefaultModelLength, wid > 0.01f ? wid : DefaultModelWidth);
+    }
+
+    // The rigid launch-cam pose from the ship's transform `t`: parked ahead of the nose (+Z) and off to
+    // the camera's right, looking BACK at the nose. Uses the ship's OWN up (no world up in space) and
+    // deliberately skips FaceForward — the cam faces opposite the ship, so LookingAt(dir, shipUp) with
+    // `dir` pointing from the cam back toward the nose is already the correct facing.
+    private static Transform3D ComputeLaunchPose(Transform3D t, float len, float width)
+    {
+        Vector3 offset = new Vector3(width * LaunchRightWidthMult, len * LaunchUpLengthMult, len * LaunchAheadLengthMult);
+        Vector3 camPos = t.Origin + t.Basis * offset;
+        Vector3 nose = t.Origin + t.Basis * new Vector3(0f, 0f, len * 0.5f);
+        Vector3 dir = (nose - camPos).Normalized();
+        Basis basis = Basis.LookingAt(dir, t.Basis.Y);
+        return new Transform3D(basis, camPos);
     }
 
     // ---- --view-demo=<dir>: scripted self-drive for screenshot verification --------

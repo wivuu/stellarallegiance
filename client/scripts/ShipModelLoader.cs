@@ -62,6 +62,14 @@ public static class ShipModelLoader
         Node3D hull = LoadHull(defs, cls, isPod) ?? BuildPlaceholderMesh(cls, isPod, mat);
         root.AddChild(hull);
 
+        // Stash the built hull's extents for the launch-cam framing (CameraRig reads these). Measure
+        // `root` (identity transform), not `hull`: MeshAabb excludes the walk-root's OWN transform,
+        // so measuring hull standalone would drop its GLB normalize-scale or the Scout placeholder's
+        // root-level RotationDegrees. Ship-forward is local +Z ⇒ Z is length, X is width.
+        Vector3 size = GlbLoader.MeshWorldSize(root);
+        root.SetMeta("ModelLength", size.Z);
+        root.SetMeta("ModelWidth", size.X);
+
         // A GLB that carries its own HP_ node overrides the def-seeded marker (its author placed
         // it in-mesh); otherwise the def marker stands. Either way the contract is identical.
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));

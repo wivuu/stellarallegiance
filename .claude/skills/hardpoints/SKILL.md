@@ -32,6 +32,11 @@ python3 .claude/skills/hardpoints/glb_hardpoints.py client/assets/bases/base.glb
   `HardpointKind` enum member spelling (`Weapon`, `MainEngine`, `Booster`, `Thruster`,
   `Turret`, `Light`, `DockingEntrance`, `DockingExit`, `Cockpit`). Anything else is skipped
   by the merge with a warning.
+- `DockingEntrance` is SPECIAL: the markers are **not** independent points — they group in
+  **fives** (sorted by index) into one bounded rectangular docking DOOR (marker 0 = the face,
+  its +Z = inward normal; markers 1–4 = the rectangle boundary side-midpoints, order-agnostic).
+  A base may author N doors. Parsed by `shared/Collision/DockFace.cs` for BOTH the server and
+  client; see `docs/GLB-AND-HARDPOINT-FORMAT.md` §"Docking doors". `DockingExit` stays one-per-exit.
 - Merge rules (`HardpointGeometryMerge`): YAML entries bind/override by (kind, index) —
   `weapon-id` binding always comes from YAML; authored `off-*`/`dir-*` beat the mesh node.
   Unclaimed mesh nodes append at the end ordered by (kind byte, index); unbound Weapon nodes

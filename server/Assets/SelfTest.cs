@@ -82,14 +82,27 @@ public static class SelfTest
             World.BaseRadius * 2f,
             World.BaseRadius * 0.05f
         );
-        Check("world: dock discs built (>=1)", world.BaseDockDiscs.Length >= 1);
-        bool discNormalsUnit = true;
-        foreach (var (_, n) in world.BaseDockDiscs)
-            if (MathF.Abs(n.Length() - 1f) > 1e-3f)
-                discNormalsUnit = false;
-        Check("world: dock disc normals are unit", discNormalsUnit);
+        Check("world: dock doors built (>=1)", world.BaseDockFaces.Length >= 1);
+        bool faceNormalsUnit = true;
+        bool faceAxesOrthonormal = true;
+        foreach (var f in world.BaseDockFaces)
+        {
+            if (MathF.Abs(f.Normal.Length() - 1f) > 1e-3f)
+                faceNormalsUnit = false;
+            // U,V must be unit and mutually ⟂ and ⟂ N (a clean in-plane basis), and the door must
+            // have a real area (positive half-extents) — degenerate doors would dock everywhere.
+            float du = Dot(f.U, f.V),
+                dun = Dot(f.U, f.Normal),
+                dvn = Dot(f.V, f.Normal);
+            if (MathF.Abs(f.U.Length() - 1f) > 1e-3f || MathF.Abs(f.V.Length() - 1f) > 1e-3f
+                || MathF.Abs(du) > 1e-3f || MathF.Abs(dun) > 1e-3f || MathF.Abs(dvn) > 1e-3f
+                || f.Eu <= 0f || f.Ev <= 0f)
+                faceAxesOrthonormal = false;
+        }
+        Check("world: dock face normals are unit", faceNormalsUnit);
+        Check("world: dock face axes orthonormal + positive extents", faceAxesOrthonormal);
         Console.WriteLine(
-            $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockDiscs={world.BaseDockDiscs.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
+            $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockFaces={world.BaseDockFaces.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
         );
 
         // Ships catapult from the exit cone's base disc along the axis (PlaceAtBase). The cone base
@@ -110,24 +123,24 @@ public static class SelfTest
             spawnPen < World.ShipRadius
         );
 
-        // Dock CORRIDOR: fire a ray from well outside straight at each entrance disc along its inward
-        // normal. A clear corridor means the ray REACHES the disc (t ≈ probe distance) without entering
-        // any sub-hull first — i.e. no authored part caps the docking mouth. (Past the disc the ray
-        // will enter the core; we only test the segment up to the disc.) This mirrors B1's bake-time
-        // corridor validation and guards the dock/spawn-regression risk called out in the plan.
+        // Dock CORRIDOR: for EVERY door (a base may author N), fire a ray from well outside along the
+        // face's INWARD normal straight at the face centre. A clear corridor means the ray REACHES the
+        // face (t ≈ probe distance) without entering any sub-hull first — i.e. no authored part caps
+        // the docking mouth. (Past the face the ray enters the core; we only test the segment up to the
+        // face.) This mirrors the bake-time corridor validation and guards the dock/spawn-regression.
         bool corridorsClear = true;
-        foreach (var (discPos, discNormal) in world.BaseDockDiscs)
+        foreach (var f in world.BaseDockFaces)
         {
-            float probe = World.BaseRadius * 2f; // start outside the whole hull, aim inward at the disc
-            Vec3 origin = discPos + discNormal * probe;
-            Vec3 dir = discNormal * -1f;
+            float probe = World.BaseRadius * 2f; // start outside the whole hull, aim inward at the face
+            Vec3 origin = f.Center - f.Normal * probe; // approach side (opposite the inward normal)
+            Vec3 dir = f.Normal;
             foreach (var sub in world.BaseSubHulls)
-                // The disc sits at t == probe; a sub-hull entered at t < probe (with a small margin)
-                // blocks the corridor. Base sub-hulls are identity-frame, world-scaled ⇒ ray in local.
+                // The face sits at t == probe; a sub-hull entered at t < probe (small margin) blocks the
+                // corridor. Base sub-hulls are identity-frame, world-scaled ⇒ ray in local == world.
                 if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - 0.5f)
                     corridorsClear = false;
         }
-        Check("world: every dock corridor reaches its disc without hitting a sub-hull", corridorsClear);
+        Check("world: every dock corridor reaches its face without hitting a sub-hull", corridorsClear);
 
         TestShipHulls(world);
     }
@@ -174,6 +187,8 @@ public static class SelfTest
         if (!ok)
             _failures++;
     }
+
+    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     private static string F(Vec3 v) => $"{v.X:0.###}, {v.Y:0.###}, {v.Z:0.###}";
 }

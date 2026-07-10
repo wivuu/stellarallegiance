@@ -124,16 +124,12 @@ public sealed class CollisionWorld
         var subs = new ConvexHull[model.Hulls.Count];
         for (int i = 0; i < model.Hulls.Count; i++)
             subs[i] = model.Hulls[i].Scaled(ws);
-        // Docking discs: one per HP_DockingEntrance, in base-local world units (authored * ws),
-        // normal radially outward — the own-base carve-out the player docks through.
-        var entrances = new List<(Vec3 Pos, Vec3 Normal)>();
-        foreach (var hp in model.Hardpoints)
-            if (hp.Name.StartsWith("HP_DockingEntrance", System.StringComparison.Ordinal))
-            {
-                Vec3 p = hp.Pos * ws;
-                entrances.Add((p, Normalize(hp.Pos)));
-            }
-        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, entrances.ToArray()), default, 0f));
+        // Docking doors: the SHARED DockFaceParser turns the grouped HP_DockingEntrance markers into
+        // rectangular faces from the SAME GLB bytes + SAME world scale the server uses — so the
+        // client's DockFace[] is bit-identical to World.LoadBase's and prediction agrees with the
+        // server at the bay mouth (no rubber-banding). N doors supported (each a group of 5 markers).
+        DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Log.Warn($"[CollisionWorld] {msg}"));
+        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, faces), default, 0f));
     }
 
     // First-entry time t of the ray (pos + vel·t) into any BASE hull in the sector, within [0, maxT].
@@ -217,11 +213,5 @@ public sealed class CollisionWorld
             Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
             return null;
         }
-    }
-
-    private static Vec3 Normalize(Vec3 v)
-    {
-        float l = v.Length();
-        return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
     }
 }

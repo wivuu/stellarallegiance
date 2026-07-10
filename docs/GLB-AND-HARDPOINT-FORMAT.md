@@ -66,8 +66,8 @@ it is **append-only** — never reorder or remove members, only add to the end.
 | 3 | `Thruster` | maneuvering (RCS) thruster | engine glow (cosmetic) |
 | 4 | `Turret` | turret base | marker only (firing logic is a later phase) |
 | 5 | `Light` | blinking nav light | blinking team-tinted beacon (`BaseBeacon`) |
-| 6 | `DockingEntrance` | where a ship docks in | marker only (docking logic later) |
-| 7 | `DockingExit` | where a ship spawns back out | marker only (spawn-exit logic later) |
+| 6 | `DockingEntrance` | rectangular docking DOOR — markers **group in fives** into one bounded face a ship docks through (see [Docking doors](#docking-doors-grouped-dockingentrance)) | dock trigger + no-bounce carve-out (server sim + client prediction) |
+| 7 | `DockingExit` | where a ship spawns back out | launch placement (`PlaceAtBase`: catapult along `normalize(pos)`) — one hardpoint = one exit |
 | 8 | `Cockpit` | eye point for the first-person camera | first-person view (`CameraRig` parks the eye here; **client-only** — the sim never reads it) |
 
 `Index` disambiguates multiples of one kind on the same hull (e.g. a Fighter's two
@@ -96,11 +96,55 @@ A GLB `HP_Weapon_N` node with no YAML entry binding it becomes exactly such an e
   `HP_Light_*` nodes the beacons follow those authored hull positions (via
   `GlbLoader.FindHardpoints`); they fall back to the def-seeded `Light` offsets only for the
   procedural sphere placeholder.
-- **Turret / DockingEntrance / DockingExit** — carried as data and shown as positioned
-  `HP_` markers now; their gameplay logic is out of scope for the current phase.
+- **Turret** — carried as data and shown as a positioned `HP_` marker now; firing logic is a later
+  phase.
+- **DockingEntrance / DockingExit** — real gameplay: entrances define the rectangular docking doors a
+  ship docks through (below); the exit is the launch mouth (`PlaceAtBase` catapults a spawning ship
+  from `HP_DockingExit_0` outward along `normalize(pos)`).
 - **Cockpit** — `CameraRig` resolves the local ship's `HP_Cockpit_0` marker to a ship-local eye
   offset for the first-person camera (falling back to `(0, 0.5, 1)` when a hull carries none).
   Client-only: no server plumbing, no wire change (`Kind` is a generic `u8`).
+
+### Docking doors (grouped `DockingEntrance`)
+
+`HP_DockingEntrance_*` markers are **NOT** independent docking points. They come in **groups of five,
+in ascending index order**, each group defining ONE bounded **rectangular docking face** ("door").
+Sort every `HP_DockingEntrance_*` by its trailing index and chunk into consecutive fives — a base may
+author **any number of doors** (the current `base.glb` has exactly one, indices `0..4`):
+
+- The **first** marker of a group is the **face plane**: its position is the face reference point and
+  its forward (local +Z node axis = the parsed `Dir`) is the **INWARD normal** — the direction a ship
+  travels when entering. A ship docks when it intersects this bounded virtual plane.
+- The **next four** markers mark the door **boundary** — nominally the bottom / top / left / right
+  side midpoints of the rectangle. They are parsed **order-agnostically**: each is projected onto the
+  face plane and their projections define the two in-plane axes and half-extents (never assume which
+  of the four is which side; in `base.glb` they happen to be the ±X and ±Z side midpoints).
+
+Docking triggers on pure geometry — no facing/velocity gate. A ship (a sphere of
+`CollisionConfig.ShipRadius`) docks when it is within the rectangle laterally (± the half-extents +
+ship radius) and within a depth window `along ∈ [−CollisionConfig.DockFaceDepth, +ShipRadius]` of the
+face along its inward normal (the depth window is an anti-tunneling slack so a fast ship can't skip
+the thin plane between ticks). The rest of the base is a solid hull.
+
+**Multi-door example** — a station with two docking bays authors ten entrance markers:
+
+```
+HP_DockingEntrance_0   door A face   (pos = face point, +Z = inward)
+HP_DockingEntrance_1..4              (door A: 4 boundary side-midpoints)
+HP_DockingEntrance_5   door B face
+HP_DockingEntrance_6..9              (door B: 4 boundary side-midpoints)
+```
+
+Indices need not restart at multiples of five — they are sorted then chunked. If the total entrance
+count is **not** a multiple of five, the leftover markers fall back to legacy single-point discs
+(old behaviour) with a load warning, so a mis-authored asset never hard-crashes.
+
+**One parser, both peers.** `shared/Collision/DockFace.cs` (`DockFaceParser.Build`) turns the grouped
+markers into `DockFace[]` from the SAME GLB bytes for BOTH the server sim (`World.LoadBase`) and the
+client prediction (`CollisionWorld.AddBase`) — the geometry must stay bit-identical or the ship
+rubber-bands at the bay mouth. `tools/collision-hull/bake.py` reads the SAME grouped doors to carve
+the flight corridor per door (radius = the door rectangle's half-diagonal + a ship radius) so no baked
+COL part can cap a doorway.
 
 ---
 

@@ -691,15 +691,16 @@ public sealed partial class Simulation
                     ResolveBaseCollision(s, b.Pos); // enemy base: fully solid hull
                     continue;
                 }
-                // Own base: with a loaded hull you dock ONLY by flying your ship into a docking cone's
-                // base disc (the green debug cones) — the rest of the base is a solid hull that bounces
-                // you. Without a model, fall back to the legacy core-sphere dock so docking can't break.
+                // Own base: with a loaded hull you dock ONLY by flying your ship into a rectangular
+                // docking door (a bounded face authored as a group of 5 HP_DockingEntrance markers) —
+                // the rest of the base is a solid hull that bounces you. Without a model, fall back to
+                // the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
                 if (World.BaseHull is not null)
                 {
-                    if (Collide.IntersectsDockDisc(d, World.BaseDockDiscs, World.DockDiscRadius, World.ShipRadius))
+                    if (Collide.IntersectsDockFace(d, World.BaseDockFaces, World.DockFaceDepth, World.ShipRadius))
                     {
-                        DockShip(s, tick); // intersected an entrance cone's base disc
+                        DockShip(s, tick); // intersected a rectangular docking door
                         docked = true;
                         break;
                     }
@@ -2291,7 +2292,7 @@ public sealed partial class Simulation
     // them — dock carve-out is handled by the caller), so a fixed team/the discs are passed for shape.
     // Callers guard World.BaseHull is not null first.
     private Collide.StaticBody BaseBody(Vec3 center) =>
-        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockDiscs);
+        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockFaces);
 
     // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity
     // frame), the ray analogue of SphereVsBody: the CLOSEST sub-hull surface stops the bolt/missile, so

@@ -102,11 +102,11 @@ combat:
 # Warp gates, docking, escape pods, economy cadence, match flow.
 mechanics:
   aleph-trigger-radius: 18   # gate mouth: ship warps AND bolts/missiles are absorbed within this radius
-  warp-exit-offset: 60       # how far beyond the destination mouth a warping ship exits
-  warp-exit-jitter: 0.12     # per-axis random spread on the exit cone
+  warp-exit-offset: 10       # how far beyond the destination mouth a warping ship exits
+  warp-exit-jitter: 0.02     # per-axis random spread on the exit cone
   paycheck-seconds: 60       # between flat per-team credit paychecks (amount = faction income)
   dock-radius-frac: 0.9      # dock when within this fraction of your OWN base radius
-  launch-speed: 80           # u/s catapult out of the docking-exit hardpoint on spawn
+  launch-speed: 64           # u/s catapult out of the docking-exit hardpoint on spawn
   rescue-radius-mult: 4      # pod pickup distance, × ship collision radius
   pod-eject-speed: 90        # u/s initial fling (decays to the pod's max speed)
   pod-eject-spin: 5          # rad/s initial tumble (decays via angular drag)

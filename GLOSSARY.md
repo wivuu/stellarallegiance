@@ -214,6 +214,23 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
   - `server/Sim/Simulation.cs` — `ShipSim.PaidCost` set in SpawnCombatShip; DockShip refunds (Track A)
 - **Related:** [[Hull]], [[Payload]]
 
+### Docking Door
+Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fives** into one bounded
+**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints); a base
+may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
+rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]` along the inward normal
+(no facing/velocity gate). The rest of the base is a solid hull; the same test carves the no-bounce
+carve-out so client prediction and server agree. `HP_DockingExit_*` (one = one exit) is the launch
+mouth. NOT the old "dock disc" per-hardpoint model (retired 2026-07).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/Collision/DockFace.cs` — `DockFace` struct + `DockFaceParser.Build` (the ONE parser both peers call)
+  - `shared/Collision/Collide.cs` — `IntersectsDockFace` test + dock carve-out
+  - `server/Sim/World.cs` — `LoadBase` → `BaseDockFaces`; `Simulation.cs` dock trigger
+  - `client/scripts/CollisionWorld.cs` — client-prediction mirror (bit-identical parse)
+  - `tools/collision-hull/bake.py` — per-door corridor carve; `docs/GLB-AND-HARDPOINT-FORMAT.md` — spec
+- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]]
+
 ### Shield
 Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,
 `shield-recharge` points/sec, `shield-delay` seconds). Absorbs incoming damage before the hull;

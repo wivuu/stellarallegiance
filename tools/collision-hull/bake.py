@@ -73,7 +73,9 @@ COL_PREFIX = "COL_"
 # CollisionConfig or the generated coverage will be sized wrong.
 WORLD_BASE_RADIUS = 90.0      # CollisionConfig.BaseRadius
 WORLD_SHIP_RADIUS = 3.0       # CollisionConfig.ShipRadius
-WORLD_DOCK_DISC_RADIUS = 9.0  # CollisionConfig.DockDiscRadius
+WORLD_DOCK_FACE_DEPTH = 9.0   # CollisionConfig.DockFaceDepth (docking-door depth window; lateral
+                              # extent is now authored per-door by the 4 boundary markers, so the
+                              # corridor width is derived from the door rectangle, not this constant)
 
 # --- spheroid-primitive greedy-sphere-cover tuning (only read by generate_auto_spheroids) --------
 # These bound the sphere count so a round mesh is covered by TENS of ellipsoids, not thousands: a
@@ -665,29 +667,91 @@ def downsample_solid(fine: VoxelGrid, fine_solid: np.ndarray, box: VoxelGrid) ->
     return B
 
 
+def _hp_index(name: str) -> int:
+    """Trailing integer index of an 'HP_..._<Index>' node name; 0 if absent (stable sort key)."""
+    tail = name.rsplit("_", 1)[-1]
+    try:
+        return int(tail)
+    except ValueError:
+        return 0
+
+
+def dock_doors(hps):
+    """Group HP_DockingEntrance_* markers (sorted by trailing index) into docking DOORS of FIVE:
+    the FIRST marker of each group is the face — its position is the face centre and its forward
+    (local +Z) is the INWARD normal (the direction a ship travels entering); the NEXT FOUR mark the
+    rectangle boundary. Returns [(face_pos, inward_normal, half_diagonal)] per full group (authored
+    mesh units). Mirrors shared/Collision/DockFace.cs DockFaceParser — KEEP IN SYNC: the bake carves
+    corridors from the same door geometry the sim/client dock against. Leftover (<5) markers are
+    ignored here (the sim treats them as legacy discs; a corridor for them isn't worth the risk)."""
+    ent = [(_hp_index(n), np.asarray(p, float), np.asarray(f, float))
+           for n, p, f in hps if "Entrance" in n]
+    ent.sort(key=lambda t: t[0])
+    doors = []
+    for g in range(len(ent) // 5):
+        _, pos, fwd = ent[g * 5]
+        n = fwd / (np.linalg.norm(fwd) or 1.0)
+        proj = []
+        for k in range(1, 5):
+            rel = ent[g * 5 + k][1] - pos
+            proj.append(rel - n * float(rel @ n))  # onto the face plane
+        u = None
+        for pr in proj:
+            if float(pr @ pr) > 1e-8:
+                u = pr / np.linalg.norm(pr)
+                break
+        if u is None:
+            u = np.array([1.0, 0.0, 0.0])
+        v = np.cross(n, u)
+        v = v / (np.linalg.norm(v) or 1.0)
+        eu = max(abs(float(pr @ u)) for pr in proj) if proj else 0.0
+        ev = max(abs(float(pr @ v)) for pr in proj) if proj else 0.0
+        doors.append((pos, n, float(np.hypot(eu, ev))))  # half-diagonal covers the corners
+    return doors
+
+
 def corridor_segments(hps, corridor_r: float, approach: float):
-    """Swept-cylinder DOCK CORRIDORS that must stay open (never solid). Reuses World.LoadBase's
-    geometry: the bay-door centre is the mean of the HP_DockingEntrance positions; each entrance's
-    approach axis is radial-outward (normalize(pos)) — matching the disc normals the sim carves —
-    and the HP_DockingExit catapults ships radially outward along normalize(exitPos). We sweep from
-    each entrance (extended `approach` units outside) to the door centre, and from the door out
-    along the exit axis. Returns [(a, b, radius)]."""
-    ent = [np.asarray(p, float) for n, p, f in hps if "Entrance" in n]
+    """Swept-cylinder DOCK CORRIDORS that must stay open (never solid). Under the GROUPED-door
+    convention each door is a rectangle (dock_doors): we carve one fat cylinder per door from
+    `approach` units OUTSIDE the face (opposite the inward normal) to the face centre — `corridor_r`
+    is sized by the caller to cover the door rectangle's half-diagonal so no COL part can cap a
+    corner a ship may legally dock through. The HP_DockingExit catapults ships radially outward along
+    normalize(exitPos), so we also sweep from the door reference out along each exit axis. Falls back
+    to the legacy mean-of-entrances sweep for a non-grouped asset. Returns [(a, b, radius)]."""
     ext = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
-    if not ent:
-        return []
-    door = np.mean(ent, axis=0)
 
     def radial(p):
         l = float(np.linalg.norm(p))
         return p / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
 
+    doors = dock_doors(hps)
+    if not doors:
+        ent = [np.asarray(p, float) for n, p, f in hps if "Entrance" in n]
+        if not ent:
+            return []
+        door = np.mean(ent, axis=0)
+        segs = [(e + radial(e) * approach, door, corridor_r) for e in ent]
+        for x in ext:
+            segs.append((door, x + radial(x) * approach, corridor_r))
+        return segs
+
+    door_ref = np.mean([d[0] for d in doors], axis=0)
     segs = []
-    for e in ent:
-        segs.append((e + radial(e) * approach, door, corridor_r))
+    for pos, n, _hd in doors:
+        segs.append((pos - n * approach, pos, corridor_r))  # outside-approach → face centre
     for x in ext:
-        segs.append((door, x + radial(x) * approach, corridor_r))
+        segs.append((door_ref, x + radial(x) * approach, corridor_r))
     return segs
+
+
+def door_corridor_radius(hps, floor: float, ship_r: float) -> float:
+    """The single corridor radius used consistently by the carve mask, the retreat keep-out and the
+    guard rays: wide enough to cover the WIDEST door rectangle (its half-diagonal + a ship radius),
+    but never below `floor` (the ship-clearance minimum). Authored mesh units."""
+    doors = dock_doors(hps)
+    if not doors:
+        return floor
+    return max(floor, max(hd for _, _, hd in doors) + ship_r)
 
 
 def corridor_mask(grid: VoxelGrid, segs) -> np.ndarray:
@@ -980,7 +1044,10 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
 
     clearance = pick("corridor_clearance", p["corridor_clearance"])
     ship_r = pick("ship_radius", WORLD_SHIP_RADIUS / ws)
-    corridor_r = pick("corridor_radius", max(WORLD_DOCK_DISC_RADIUS / ws, ship_r + clearance))
+    # The corridor-width FLOOR (ship radius + clearance). The real per-bake width is widened to cover
+    # the authored door rectangle in generate_auto_parts (door_corridor_radius) — the door lateral
+    # extent is authored by the 4 boundary markers now, not a global disc-radius constant.
+    corridor_r = pick("corridor_radius", ship_r + clearance)
     return dict(
         voxel_res=float(pick("voxel_res", p["voxel_res"])),
         box_res=float(pick("box_res", p["box_res"])),
@@ -1010,7 +1077,12 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     voxel_res = cfg["voxel_res"]
     margin = cfg["margin"]
     pad = cfg["pad"]
-    segs = corridor_segments(hps, cfg["corridor_r"], cfg["corridor_approach"])
+    # Widen the corridor to cover the authored door rectangle(s), then use this ONE radius everywhere
+    # (carve mask, retreat keep-out, guard rays) so the swept tube, the box retreat, and the corridor
+    # validator all agree — no COL part can cap a corner of a doorway a ship may legally dock through.
+    corridor_r = door_corridor_radius(hps, cfg["corridor_r"], ship_r)
+    cfg = dict(cfg, corridor_r=corridor_r)
+    segs = corridor_segments(hps, corridor_r, cfg["corridor_approach"])
     # Grow-outward margin (`pad`): after the greedy merge every box is inflated by `pad` on all six
     # faces BEFORE the hull-containment clamp, so collision reaches out to the visual surface (at the
     # extremity tips the clamp still wins → metric-neutral) instead of stopping strictly inside it —
@@ -1078,22 +1150,21 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
         patched += len(pspecs)
         dropped += pdrop
 
-    # Dock keep-out geometry — the swept carve segments PLUS each hardpoint's straight line to the door
-    # centre (the bake corridor validator) and its radial approach ray (the server SelfTest dock ray /
-    # spawn cone). Both the corridor keep-out and the shell pass retreat against exactly this, so all
-    # three downstream guards (bake corridor validator, SelfTest dock ray, spawn clearance) stay green.
-    ent_p = [np.asarray(p, float) for n, p, f in hps if "Entrance" in n]
+    # Dock keep-out geometry — the swept door carve segments (which already cover each door rectangle
+    # to `corridor_r`, the door half-diagonal + ship radius) PLUS each EXIT hardpoint's radial approach
+    # ray (the server SelfTest spawn cone). Both the corridor keep-out and the shell pass retreat
+    # against exactly this, so all downstream guards (bake corridor validator, SelfTest dock ray,
+    # spawn clearance) stay green — the SelfTest dock ray runs along a door's inward normal, which is a
+    # door carve segment's own axis, so it is protected by the door segments themselves.
     ext_p = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
-    door = np.mean(ent_p, axis=0) if ent_p else np.zeros(3)
 
     def _radial(p):
         l = float(np.linalg.norm(p))
         return p / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
 
     guard_segs = list(segs)
-    for p in ent_p + ext_p:
-        guard_segs.append((p, door, cfg["corridor_r"]))                                  # hardpoint -> door
-        guard_segs.append((p, p + _radial(p) * cfg["corridor_approach"], cfg["corridor_r"]))  # radial ray
+    for p in ext_p:
+        guard_segs.append((p, p + _radial(p) * cfg["corridor_approach"], cfg["corridor_r"]))  # exit radial ray
 
     # Corridor keep-out: `pad` can grow a box into a flyable dock tube (coarse-carve discretization);
     # trim the offending boxes back to the true corridor wall so docking/launch stay clear.
@@ -1323,7 +1394,9 @@ def generate_auto_spheroids(verts, V, F, hps, eqs, cfg):
     margin = cfg["margin"]
     pad = cfg["pad"]
     ship_r = cfg["ship_r"]
-    corridor_r = cfg["corridor_r"]
+    # Widen the corridor to cover the authored door rectangle(s) — same rule as the box path.
+    corridor_r = door_corridor_radius(hps, cfg["corridor_r"], ship_r)
+    cfg = dict(cfg, corridor_r=corridor_r)
     overlap = min(max(float(cfg.get("sphere_overlap", SPHERE_DEFAULT_OVERLAP)), 0.0), 0.95)
     segments = int(cfg.get("sphere_segments", 1))
 
@@ -1611,22 +1684,42 @@ def main(argv=None):
     # from it toward the door centre (the mean of the entrance positions) — and the exit toward that
     # same centre. Every such sample must sit outside all COL parts so no part ever caps a corridor.
     if corridor_check:
-        ent = [(n, p, f) for n, p, f in hps if "Entrance" in n]
+        doors = dock_doors(hps)
         ext = [(n, p, f) for n, p, f in hps if "Exit" in n]
-        door = np.mean([p for n, p, f in ent], axis=0) if ent else np.zeros(3)
-        print(f"\ndock-door centre ~ {np.round(door,2)}; corridor samples must stay OUTSIDE all parts")
+        approach = cfg["corridor_approach"]
+        print(f"\ndock doors parsed: {len(doors)}; corridor samples must stay OUTSIDE all parts")
         corridor_fail = 0
-        for n, p, f in ent + ext:
-            samples = [p]
-            for t in np.linspace(0.0, 1.0, 9):          # door disc -> door centre
-                samples.append(p + (door - p) * t)
+        # Per DOOR (a base may author N): walk the inward-normal approach axis from `approach` units
+        # outside the face straight to the face centre — this is the exact ray the server SelfTest
+        # fires, and it must stay clear of every COL part (no part caps the docking mouth). We also
+        # probe a small in-plane cross at half the door's half-diagonal (well inside the rectangle) to
+        # catch a part that laterally pinches the doorway without blocking the centre axis.
+        for di, (pos, n, hd) in enumerate(doors):
+            seed = np.array([0.0, 1.0, 0.0]) if abs(n[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
+            u = np.cross(n, seed); u /= (np.linalg.norm(u) or 1.0)
+            v = np.cross(n, u); v /= (np.linalg.norm(v) or 1.0)
+            samples = []
+            for t in np.linspace(0.0, 1.0, 9):
+                samples.append(pos - n * approach * (1.0 - t))  # outside-approach -> face centre
+            lat = hd * 0.5  # inside the rectangle (hd is the corner radius) for a lateral pinch probe
+            for s in (u, -u, v, -v):
+                samples.append(pos + s * lat)
             for s in samples:
                 for name, peq in zip([x[0] for x in parts], part_eqs):
                     if point_inside_part(np.asarray(s, float), peq, corridor_tol):
-                        print(f"  VIOLATION: {n} corridor point {np.round(s,2)} is inside part {name}")
+                        print(f"  VIOLATION: door {di} corridor point {np.round(s,2)} is inside part {name}")
+                        corridor_fail += 1
+        # Exit radial rays (launch mouth): from the exit hardpoint out along normalize(pos).
+        for n_, p_, f_ in ext:
+            l = float(np.linalg.norm(p_)); rad = p_ / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
+            for t in np.linspace(0.0, 1.0, 9):
+                s = p_ + rad * approach * t
+                for name, peq in zip([x[0] for x in parts], part_eqs):
+                    if point_inside_part(np.asarray(s, float), peq, corridor_tol):
+                        print(f"  VIOLATION: {n_} exit point {np.round(s,2)} is inside part {name}")
                         corridor_fail += 1
         if corridor_fail == 0:
-            print(f"  corridor clearance OK ({len(ent)} entrances + {len(ext)} exit swept)")
+            print(f"  corridor clearance OK ({len(doors)} doors + {len(ext)} exit swept)")
         else:
             ok = False
     else:

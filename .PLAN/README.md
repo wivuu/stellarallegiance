@@ -20,9 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Ship launch animation -- camera shows ship launching from front (4x from ship length, 2x from ship width to the right (camera's right)), points at ship nose and follows for 1.5 seconds, then tweens to the ship's camera (either 3rd or first person depending on the player's last choice)
-  - Ensure the ship launches from an exit hardpoint on the base
-  - Ensure the entry point is aligned with the docking hardpoint on the base, currently docking is too forgiving - the ship should intersect with the face of the docking hardpoint
 - Content in settings modal(s) needs more padding from scrollbar
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---

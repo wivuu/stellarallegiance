@@ -1053,8 +1053,8 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     int bi = sim.World.Bases.FindIndex(b => b.Team == ship.Team);
     var b = sim.World.Bases[bi];
     ship.SectorId = b.SectorId;
-    ship.State.Pos = sim.World.BaseHull is not null && sim.World.BaseDockDiscs.Length > 0
-        ? b.Pos + sim.World.BaseDockDiscs[0].Pos // land on an entrance-cone disc
+    ship.State.Pos = sim.World.BaseHull is not null && sim.World.BaseDockFaces.Length > 0
+        ? b.Pos + sim.World.BaseDockFaces[0].Center // land on a docking-door face centre
         : b.Pos; // legacy core-sphere dock
     ship.State.Vel = new Vec3(0f, 0f, 0f);
     ship.State.Rot = Quat.Identity;

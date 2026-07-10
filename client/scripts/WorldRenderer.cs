@@ -297,6 +297,11 @@ public partial class WorldRenderer : Node3D
     private uint _localSector;
     private readonly Dictionary<uint, Sector> _sectors = new();
 
+    // Set by NetPromoteLocal ONLY when a reconnect reclaims an already-mid-flight ship (that inner
+    // branch never fires for a brand-new ShipId), so InsertShip can suppress the launch cinematic on
+    // a reclaim while still playing it for every genuine base spawn/respawn and pod-eject.
+    private ulong? _reclaimedShipId;
+
     // The local player's home = the sector holding THEIR team's garrison (base). No hardcoded sector:
     // before we know the team or have its base, fall back to the lowest known sector id (else 0). Used
     // for the pre-spawn / post-death overview view + backdrop.
@@ -1365,7 +1370,7 @@ public partial class WorldRenderer : Node3D
                 CollisionConfig.ShipRadius,
                 bodies,
                 ShipTeamOf(ship),
-                CollisionConfig.DockDiscRadius
+                CollisionConfig.DockFaceDepth
             );
             if (now && _collidingShips.Add(shipId))
                 PlayCollisionSfx(c);
@@ -1590,6 +1595,12 @@ public partial class WorldRenderer : Node3D
             pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
             ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
             pc.Initialize(row, _defs);
+            // Fresh launch (base spawn/respawn or pod-eject) gets the establishing cinematic; a
+            // reconnect reclaim of a ship already in flight does not (NetPromoteLocal tagged it).
+            if (_reclaimedShipId == row.ShipId)
+                _reclaimedShipId = null;
+            else
+                pc.SetMeta("Launched", true);
             // Predict collisions against the local sector's hulls (sector follows the ship on warp).
             pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector, SimSeconds));
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
@@ -1631,6 +1642,9 @@ public partial class WorldRenderer : Node3D
             return;
         if (_shipNodes.TryGetValue(shipId, out var node) && node is RemoteShip)
         {
+            // Only path here is a reconnect reclaim of an in-flight ship — mark it so the re-insert
+            // as a local ship skips the launch cinematic (a returning pilot isn't "launching").
+            _reclaimedShipId = shipId;
             _shipNodes.Remove(shipId);
             _collidingShips.Remove(shipId);
             node.QueueFree();

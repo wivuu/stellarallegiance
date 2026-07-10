@@ -70,7 +70,7 @@ tools/godot-import.sh --force
 | `--shell-iters` | 6 | shell-pass iterations |
 | `--corridor-clearance` | 0.5 | added to ship radius for the default corridor radius |
 | `--corridor-approach` | 5.0 | how far outside each HP the corridor is swept |
-| `--corridor-radius` | `max(9.0/ws, ship_r+clearance)` | swept corridor capsule radius |
+| `--corridor-radius` | `ship_r+clearance` floor, widened per-bake to each door's half-diagonal + ship_r | swept corridor capsule radius |
 | `--corridor-tol` | 0.05 | corridor-clearance validator tolerance |
 | `--ship-radius` | `3.0/ws` | ship radius in authored units |
 | `--hull-extremes INT` | 0 | 0 = full-cloud containment hull; >0 = N Fibonacci extremes (mirrors ConvexHull.cs 256) |
@@ -94,7 +94,7 @@ server/client derive at load:
 A ship is `WORLD_SHIP_RADIUS` (3.0 world) = `3.0/ws` authored units — size `--voxel-res` and the gap
 thresholds off THAT, never the raw world number. The tool prints `longestAxis`, `worldScale`, and
 `shipRadius(authored)` up front. The world constants (`WORLD_SHIP_RADIUS` = 3.0, `WORLD_BASE_RADIUS`
-= 90, `WORLD_DOCK_DISC_RADIUS` = 9 in `bake.py`) MIRROR `shared/Collision/CollisionConfig.cs` — keep
+= 90, `WORLD_DOCK_DISC_RADIUS` = 7 in `bake.py`) MIRROR `shared/Collision/CollisionConfig.cs` — keep
 them in sync if collision config changes.
 
 ## Metric neutrality (why baking is invisible to the merged-hull code)
@@ -114,10 +114,15 @@ if **no COL vertex is ever a directional extreme, and none enlarges the AABB or 
    Result: the merged hull, its `LongestAxis`, and its `BoundingRadius` are **bit-unchanged**.
    (A weaker explicit AABB-containment check is also asserted, matching the `MeshAabb` scale
    contract.)
-2. **Dock corridor** — every `HP_DockingEntrance` disc centre, the `HP_DockingExit`, and the swept
-   segments from each toward the bay-door centre (mean of the entrance positions) lie **outside**
-   all COL parts, so no part ever caps a corridor a ship must fly through. Auto-skipped when the mesh
-   has no `HP_Docking*` nodes.
+2. **Dock corridor** — `HP_DockingEntrance` markers group in FIVES into rectangular docking DOORS
+   (1 face marker + 4 boundary markers; see `docs/GLB-AND-HARDPOINT-FORMAT.md` and the shared
+   `DockFaceParser`). A base may author N doors. Per door the bake sweeps ONE fat cylinder from
+   `--corridor-approach` units outside the face (opposite its inward normal) to the face centre, with
+   the corridor radius **widened to the door rectangle's half-diagonal + a ship radius** so no COL
+   part can cap any corner a ship may now legally dock through; the `HP_DockingExit` adds its radial
+   launch ray. The validator walks each door's inward-normal approach axis (the exact ray the server
+   SelfTest fires) plus an in-plane cross and asserts the samples lie **outside** all COL parts.
+   Auto-skipped when the mesh has no `HP_Docking*` nodes.
 3. **Reachability guard** *(regression test for the fly-inside bug)* — the FINAL parts are rasterized
    into a fine voxel grid and the exterior is flooded with the free space **eroded by the ship
    radius**. No cell of the *interior hollow* (a sealed cell where a ship of radius
@@ -141,7 +146,7 @@ The output is written deterministically (fixed node ordering, cleaned float32, p
 stripped first, no RNG), so a re-bake of unchanged input + identical resolved args yields a
 **byte-identical GLB** (identical SHA). A no-override `uv run bake.py --kind base` reproduces the
 committed `base.glb` **byte-for-byte** (sha256
-`165a5ac4cf051402d7bd45841182b4a7700689920890eb8f12c99cc6d51f39e1`), keeping `tests/CollisionTest`
+`ec54829ab135c7f88f46d89b60d6c9da304ff5a774d34531b81798b592feaef6`), keeping `tests/CollisionTest`
 (LongestAxis 32.243610 / BoundingRadius 16.543488 / 172 planes / 8..512 sub-hulls) and
 `server --selftest` green with zero test edits. `--box-res`, `--pad`, or a non-zero `--hull-extremes`
 break it — verify with `git status` on the GLB. `--dump PATH` records the resolved-arg provenance

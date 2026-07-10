@@ -94,7 +94,7 @@ public partial class PredictionController : Node3D
             bodies,
             Team,
             CollisionConfig.CollisionRestitution,
-            CollisionConfig.DockDiscRadius,
+            CollisionConfig.DockFaceDepth,
             out _
         );
     }

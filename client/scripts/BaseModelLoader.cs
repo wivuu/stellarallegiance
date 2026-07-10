@@ -41,13 +41,14 @@ public static class BaseModelLoader
     public const float FallbackRadius = CollisionConfig.BaseRadius;
 
     // DEBUG: render a faint cone at each docking hardpoint so the dock geometry is visible against the
-    // rendered hull. The server reads these same GLB nodes and treats each green cone's BASE DISC
-    // (radius DebugConeRadius, at the hardpoint, facing outward) as the only place a ship can dock —
-    // fly your ship into a green disc to dock; the rest of the base is a solid hull. Flip to false to
-    // hide. Entry = green, exit = magenta; each cone points radially outward from the base center.
-    // DebugConeRadius MUST match the server's World.DockDiscRadius.
+    // rendered hull. NOTE: HP_DockingEntrance markers are no longer independent discs — they group in
+    // FIVES into one bounded rectangular door (1 face marker + 4 boundary markers; see DockFaceParser),
+    // and a ship docks by intersecting that face laterally within a depth window (CollisionConfig
+    // .DockFaceDepth). This dormant per-marker cone viz predates the grouped convention and only draws
+    // a coarse hint at each marker; DebugConeRadius is just a viz size now, not a collision radius.
+    // Entry markers = green, exit = magenta. Flip ShowHardpointDebug to true to see the markers.
     public const bool ShowHardpointDebug = false;
-    private const float DebugConeRadius = 9f;
+    private const float DebugConeRadius = 7f;
     private const float DebugConeHeight = 34f;
 
     // --- Nav-light palette + base-beacon sizing (shared source; ShipModelLoader references these) ---

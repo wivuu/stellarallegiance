@@ -105,6 +105,11 @@ public static class GlbLoader
         return found;
     }
 
+    // Local-space mesh extents (X/Y/Z) of the subtree — length/width/height for camera framing and
+    // sizing. Same walk as MeshAabb, so root's own transform is excluded (measure a container whose
+    // child hull carries the scale/rotation, not the hull alone; see ShipModelLoader.Build).
+    public static Vector3 MeshWorldSize(Node3D root) => MeshAabb(root).Size;
+
     // Combined AABB of every mesh in the subtree, in `root`'s local space (root's own transform
     // is ignored — it's the freshly-instantiated, not-yet-scaled hull node). Walks the tree
     // accumulating each node's transform and expands over each mesh AABB's 8 corners.
