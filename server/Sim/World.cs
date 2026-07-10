@@ -123,8 +123,12 @@ public sealed class World
     // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
     // behave bit-identically to the pre-compound single-hull path.
     public readonly ConvexHull[] BaseSubHulls;
-    public readonly Vec3 BaseExitDir; // launch axis out of the docking bay (opposite the DockingExit node's inward forward)
-    public readonly Vec3 BaseExitPos; // where a launching ship first appears (the DockingExit hardpoint), base-local world units
+    // One launch bay per authored HP_DockingExit node: Pos = where a launching ship first appears
+    // (the hardpoint, base-local world units), Dir = the launch axis out of the bay (opposite the
+    // node's inward forward). A base may author N exits — the sim picks one at random per launch.
+    // Always at least one element (a modelless/exitless base gets a single default entry).
+    public readonly record struct BaseExit(Vec3 Pos, Vec3 Dir);
+    public readonly BaseExit[] BaseExits;
     public readonly Vec3 BaseEntryAxis; // mean inward face-normal across doors, for AI aim
     public readonly Vec3 BaseDoorCenter; // centroid of the door face centres (AI aim target)
 
@@ -297,7 +301,7 @@ public sealed class World
         }
 
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseSubHulls, BaseExitDir, BaseExitPos, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
+        (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies(ships);
     }
@@ -353,11 +357,12 @@ public sealed class World
 
     // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
     // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
-    private static (SimModel?, ConvexHull?, ConvexHull[], Vec3, Vec3, Vec3, Vec3, DockFace[]) LoadBase()
+    private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
     {
+        var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
         var model = SimAssets.TryLoad("bases/base.glb");
         if (model is null)
-            return (null, null, Array.Empty<ConvexHull>(), default, default, default, default, Array.Empty<DockFace>());
+            return (null, null, Array.Empty<ConvexHull>(), fallbackExits, default, default, Array.Empty<DockFace>());
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒
@@ -366,21 +371,20 @@ public sealed class World
         var subHulls = new ConvexHull[model.Hulls.Count];
         for (int i = 0; i < model.Hulls.Count; i++)
             subHulls[i] = model.Hulls[i].Scaled(ws);
-        // Exit: ships appear at the DockingExit hardpoint (world-scaled) and launch OPPOSITE the
-        // node's authored forward — the HP_ +Z points back into the bay, so the launch axis is its
-        // negation. A degenerate forward falls back to the old radially-outward guess.
-        Vec3 exitDir,
-            exitPos;
-        if (model.FirstHardpoint("HP_DockingExit") is { } ex)
-        {
-            exitPos = ex.Pos * ws;
-            exitDir = ex.Forward.LengthSquared() > 1e-6f ? Normalize(ex.Forward * -1f) : Normalize(ex.Pos);
-        }
-        else
-        {
-            exitPos = default;
-            exitDir = new Vec3(0f, 0f, 1f);
-        }
+        // Exits: one launch bay per HP_DockingExit node. A ship appears at the hardpoint
+        // (world-scaled) and launches OPPOSITE the node's authored forward — the HP_ +Z points back
+        // into the bay, so the launch axis is its negation. A degenerate forward falls back to the
+        // old radially-outward guess; a model with no exit nodes gets the single default entry.
+        var exits = new List<BaseExit>();
+        foreach (var hp in model.Hardpoints)
+            if (hp.Name.StartsWith("HP_DockingExit", StringComparison.Ordinal))
+                exits.Add(
+                    new BaseExit(
+                        hp.Pos * ws,
+                        hp.Forward.LengthSquared() > 1e-6f ? Normalize(hp.Forward * -1f) : Normalize(hp.Pos)
+                    )
+                );
+        BaseExit[] exitArr = exits.Count > 0 ? exits.ToArray() : fallbackExits;
 
         // Rectangular docking doors from the grouped HP_DockingEntrance markers (5 per door), parsed
         // by the SHARED DockFaceParser so the client's CollisionWorld builds a bit-identical DockFace[]
@@ -396,10 +400,10 @@ public sealed class World
             normalSum += f.Normal;
         }
         Vec3 doorCenter = faces.Length > 0 ? centerSum * (1f / faces.Length) : default;
-        Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitDir;
+        Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitArr[0].Dir;
         if (entryAxis.LengthSquared() < 0.5f)
-            entryAxis = exitDir; // faces' normals canceled (opposed doors) — fall back to a unit axis
-        return (model, hull, subHulls, exitDir, exitPos, entryAxis, doorCenter, faces);
+            entryAxis = exitArr[0].Dir; // faces' normals canceled (opposed doors) — fall back to a unit axis
+        return (model, hull, subHulls, exitArr, entryAxis, doorCenter, faces);
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's

@@ -1050,10 +1050,11 @@ public sealed partial class Simulation
         return requested;
     }
 
-    // Position a ship just outside its team base, launched out of the base's DOCKING-EXIT
-    // hardpoint (World.BaseExitDir, from the GLB). Without a loaded model it falls back to the
-    // pre-hull behavior: outward toward the sector center. `clearance` is added past the base
-    // radius so the spawn sits clear of the solid shell (won't instantly re-dock).
+    // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
+    // hardpoints (World.BaseExits, from the GLB; random pick when a base authors several).
+    // Without a loaded model it falls back to the pre-hull behavior: outward toward the sector
+    // center. `clearance` is added past the base radius so the spawn sits clear of the solid
+    // shell (won't instantly re-dock).
     private void PlaceAtBase(ShipSim s, float clearance, uint tick)
     {
         Vec3 basePos = default;
@@ -1071,13 +1072,15 @@ public sealed partial class Simulation
         Vec3 spawnPos;
         if (World.BaseHull is not null)
         {
-            // Catapult out of the docking bay: the ship first appears at the DockingExit hardpoint
-            // pushed warp-exit-offset (plus `clearance`) along the launch axis — the opposite of the
-            // node's inward-pointing forward. (Any residual overlap with the bay is a benign outward
-            // pop — ApplyBounce never damages a ship already moving outward.)
-            outward = World.BaseExitDir;
+            // Catapult out of a docking bay picked at random among the base's DockingExit
+            // hardpoints: the ship first appears at the hardpoint pushed warp-exit-offset (plus
+            // `clearance`) along the launch axis — the opposite of the node's inward-pointing
+            // forward. (Any residual overlap with the bay is a benign outward pop — ApplyBounce
+            // never damages a ship already moving outward.)
+            var exit = World.BaseExits[_rng.Next(World.BaseExits.Length)];
+            outward = exit.Dir;
             rot = LookRotationZ(outward);
-            spawnPos = basePos + World.BaseExitPos + outward * (clearance + _mech.WarpExitOffset);
+            spawnPos = basePos + exit.Pos + outward * (clearance + _mech.WarpExitOffset);
         }
         else
         {

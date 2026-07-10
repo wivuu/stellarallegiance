@@ -73,7 +73,7 @@ public static class SelfTest
             if (sub.Planes.Length <= 3)
                 allSubHullsSolid = false; // a real 3-D convex part is a tetrahedron (4) or more
         Check("world: every base sub-hull has >3 planes", allSubHullsSolid);
-        Approx("world: ExitDir is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
+        Check("world: at least one docking exit", world.BaseExits.Length >= 1);
         Approx("world: EntryAxis is unit", world.BaseEntryAxis.Length(), 1f, 1e-3f);
         Check("world: rock bodies built", world.RockBodies.Count > 0);
         Approx(
@@ -102,26 +102,33 @@ public static class SelfTest
         Check("world: dock face normals are unit", faceNormalsUnit);
         Check("world: dock face axes orthonormal + positive extents", faceAxesOrthonormal);
         Console.WriteLine(
-            $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockFaces={world.BaseDockFaces.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
+            $"  base: {world.BaseHull!.Planes.Length} planes, exits={world.BaseExits.Length} [{string.Join("; ", Array.ConvertAll(world.BaseExits, e => $"pos=({F(e.Pos)}) dir=({F(e.Dir)})"))}], EntryAxis=({F(world.BaseEntryAxis)}), dockFaces={world.BaseDockFaces.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
         );
 
-        // Ships catapult from the DockingExit hardpoint along the launch axis — the OPPOSITE of the
-        // node's inward-pointing forward — nudged out by warp-exit-offset + ShipRadius (PlaceAtBase).
-        // The spawn point must not be deeply embedded — any residual overlap is a damage-free pop.
-        Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
-        Check("world: exit hardpoint is real (not the (0,0,0) fallback)", world.BaseExitPos.LengthSquared() > 1f);
-        Vec3 spawn = world.BaseExitPos + world.BaseExitDir * (World.ShipRadius + content.World.Mechanics.WarpExitOffset);
-        // Clearance against the COMPOUND superstructure (the real bounce geometry), not the merged
-        // shrink-wrap: the deepest contact across the authored sub-hulls is what BounceShip would push
-        // out, so that's the penetration that must stay below ShipRadius for a damage-free launch pop.
-        float spawnPen = 0f;
-        foreach (var sub in world.BaseSubHulls)
-            if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float pen) && pen > spawnPen)
-                spawnPen = pen;
-        Check(
-            $"world: spawn point clears the bay mouth (deepest sub-hull penetration {spawnPen:0.##} < ShipRadius)",
-            spawnPen < World.ShipRadius
-        );
+        // Ships catapult from a random DockingExit hardpoint along its launch axis — the OPPOSITE
+        // of the node's inward-pointing forward — nudged out by warp-exit-offset + ShipRadius
+        // (PlaceAtBase). EVERY authored exit must produce a valid spawn: unit axis, a real
+        // hardpoint, and a spawn point that isn't deeply embedded (any residual overlap is a
+        // damage-free pop).
+        for (int i = 0; i < world.BaseExits.Length; i++)
+        {
+            var exit = world.BaseExits[i];
+            Approx($"world: exit {i} axis is unit", exit.Dir.Length(), 1f, 1e-3f);
+            Check($"world: exit {i} hardpoint is real (not the (0,0,0) fallback)", exit.Pos.LengthSquared() > 1f);
+            Vec3 spawn = exit.Pos + exit.Dir * (World.ShipRadius + content.World.Mechanics.WarpExitOffset);
+            // Clearance against the COMPOUND superstructure (the real bounce geometry), not the
+            // merged shrink-wrap: the deepest contact across the authored sub-hulls is what
+            // BounceShip would push out, so that's the penetration that must stay below ShipRadius
+            // for a damage-free launch pop.
+            float spawnPen = 0f;
+            foreach (var sub in world.BaseSubHulls)
+                if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float pen) && pen > spawnPen)
+                    spawnPen = pen;
+            Check(
+                $"world: exit {i} spawn clears the bay mouth (deepest sub-hull penetration {spawnPen:0.##} < ShipRadius)",
+                spawnPen < World.ShipRadius
+            );
+        }
 
         // Dock CORRIDOR: for EVERY door (a base may author N), fire a ray from well outside along the
         // face's INWARD normal straight at the face centre. A clear corridor means the ray REACHES the
