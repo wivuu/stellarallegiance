@@ -105,12 +105,12 @@ public static class SelfTest
             $"  base: {world.BaseHull!.Planes.Length} planes, ExitDir=({F(world.BaseExitDir)}), ExitPos=({F(world.BaseExitPos)})|{world.BaseExitPos.Length():0.#}|, EntryAxis=({F(world.BaseEntryAxis)}), dockFaces={world.BaseDockFaces.Length}, doorCenter=({F(world.BaseDoorCenter)}); rocks with hulls: {world.RockBodies.Count}"
         );
 
-        // Ships catapult from the exit cone's base disc along the axis (PlaceAtBase). The cone base
-        // is a launch-bay mouth ~on the hull surface, so the spawn point (base + ShipRadius along the
-        // axis) must not be deeply embedded — any residual overlap is a tiny, damage-free outward pop.
+        // Ships catapult from the DockingExit hardpoint along the launch axis — the OPPOSITE of the
+        // node's inward-pointing forward — nudged out by warp-exit-offset + ShipRadius (PlaceAtBase).
+        // The spawn point must not be deeply embedded — any residual overlap is a damage-free pop.
         Approx("world: exit axis is unit", world.BaseExitDir.Length(), 1f, 1e-3f);
-        Check("world: exit cone base near hull surface (sphere just grazes)", world.BaseExitPos.LengthSquared() > 1f); // a real hardpoint, not the (0,0,0) fallback
-        Vec3 spawn = world.BaseExitPos + world.BaseExitDir * World.ShipRadius;
+        Check("world: exit hardpoint is real (not the (0,0,0) fallback)", world.BaseExitPos.LengthSquared() > 1f);
+        Vec3 spawn = world.BaseExitPos + world.BaseExitDir * (World.ShipRadius + content.World.Mechanics.WarpExitOffset);
         // Clearance against the COMPOUND superstructure (the real bounce geometry), not the merged
         // shrink-wrap: the deepest contact across the authored sub-hulls is what BounceShip would push
         // out, so that's the penetration that must stay below ShipRadius for a damage-free launch pop.

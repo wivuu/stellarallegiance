@@ -123,8 +123,8 @@ public sealed class World
     // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
     // behave bit-identically to the pre-compound single-hull path.
     public readonly ConvexHull[] BaseSubHulls;
-    public readonly Vec3 BaseExitDir; // radial launch axis out of the docking bay (cone base → tip)
-    public readonly Vec3 BaseExitPos; // exit cone's base disc (the DockingExit hardpoint), base-local world units
+    public readonly Vec3 BaseExitDir; // launch axis out of the docking bay (opposite the DockingExit node's inward forward)
+    public readonly Vec3 BaseExitPos; // where a launching ship first appears (the DockingExit hardpoint), base-local world units
     public readonly Vec3 BaseEntryAxis; // mean inward face-normal across doors, for AI aim
     public readonly Vec3 BaseDoorCenter; // centroid of the door face centres (AI aim target)
 
@@ -366,14 +366,15 @@ public sealed class World
         var subHulls = new ConvexHull[model.Hulls.Count];
         for (int i = 0; i < model.Hulls.Count; i++)
             subHulls[i] = model.Hulls[i].Scaled(ws);
-        // Exit cone: base disc at the DockingExit hardpoint (world-scaled), axis radially outward
-        // toward the cone tip — ships are catapulted from the base disc along this axis on spawn.
+        // Exit: ships appear at the DockingExit hardpoint (world-scaled) and launch OPPOSITE the
+        // node's authored forward — the HP_ +Z points back into the bay, so the launch axis is its
+        // negation. A degenerate forward falls back to the old radially-outward guess.
         Vec3 exitDir,
             exitPos;
         if (model.FirstHardpoint("HP_DockingExit") is { } ex)
         {
             exitPos = ex.Pos * ws;
-            exitDir = Normalize(ex.Pos);
+            exitDir = ex.Forward.LengthSquared() > 1e-6f ? Normalize(ex.Forward * -1f) : Normalize(ex.Pos);
         }
         else
         {

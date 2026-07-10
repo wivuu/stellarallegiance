@@ -1071,13 +1071,13 @@ public sealed partial class Simulation
         Vec3 spawnPos;
         if (World.BaseHull is not null)
         {
-            // Catapult out of the exit cone: start at its base disc (the DockingExit hardpoint) and
-            // fling along the cone axis toward the tip, nudged out by `clearance` so the ship clears
-            // the bay mouth. (The cone base sits at the hull surface, so any residual overlap is a
-            // benign outward pop — ApplyBounce never damages a ship already moving outward.)
+            // Catapult out of the docking bay: the ship first appears at the DockingExit hardpoint
+            // pushed warp-exit-offset (plus `clearance`) along the launch axis — the opposite of the
+            // node's inward-pointing forward. (Any residual overlap with the bay is a benign outward
+            // pop — ApplyBounce never damages a ship already moving outward.)
             outward = World.BaseExitDir;
             rot = LookRotationZ(outward);
-            spawnPos = basePos + World.BaseExitPos + outward * clearance;
+            spawnPos = basePos + World.BaseExitPos + outward * (clearance + _mech.WarpExitOffset);
         }
         else
         {
