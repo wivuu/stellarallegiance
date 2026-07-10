@@ -1,41 +1,46 @@
 #!/usr/bin/env python3
-"""base-col — bake authored convex COLLISION-PROXY parts into base.glb.
+"""collision-hull — generate + bake convex COLLISION-PROXY parts (COL_ nodes) into any mesh GLB.
 
-The station art (`client/assets/bases/base.glb`) is ONE welded, concave visual mesh. Both the
-server sim and the Godot client currently build a single QuickHull "shrink-wrap" over that whole
-cloud, so ships and bolts collide with an invisible convex balloon rather than the visible
-superstructure. Phase B replaces that with a COMPOUND hull: one convex hull per authored part.
+A visual GLB (e.g. `client/assets/bases/base.glb`) is ONE welded, concave mesh. Both the server sim
+and the Godot client build a single QuickHull "shrink-wrap" over the whole cloud, so ships and bolts
+collide with an invisible convex balloon rather than the visible surface. For BASES the runtime reads
+a COMPOUND hull instead: one convex hull per COL_ part node this tool appends.
 
-This tool authors those parts. It reads `base-col.yaml` (the hand-authored spec — a handful of
-`box` / `cylinder` / `points` primitives that hug the visible masses while leaving the docking
-corridors open) and APPENDS one small triangulated convex mesh node per part, named `COL_<Name>`,
-into the GLB. The visual mesh, its material, and every `HP_` empty are left untouched.
+This tool GENERATES those parts straight from the mesh volume — there is no hand-authored spec. It
+voxel solid-fills the visual triangles, seals the hollow interior, carves any dock corridors back
+open, greedy-merges the solid into axis-aligned boxes, clamps each strictly inside the visual convex
+hull, adds a surface shell pass, and APPENDS one small triangulated `COL_<name>` mesh node per box.
+The visual mesh, its material, and every `HP_` empty are left untouched.
 
-Until the shared/server compound-hull code (packages B2/B3) lands, the OLD single-hull collision
-code reads this NEW glb. So the bake is only safe if it is metric-neutral. Two hard, load-bearing
-validations enforce that (the bake FAILS loudly otherwise):
+All tuning is via CLI args resolved from a per-`--kind` preset (there is no YAML config). The bake
+is metric-neutral for the pre-compound-hull collision code — two hard, load-bearing validations
+enforce that (the bake FAILS loudly otherwise):
 
   1. HULL CONTAINMENT — every COL vertex lies strictly inside the convex hull of the visual mesh
      (signed distance <= -margin to every hull face). Because the max of any linear functional
      (and of |p|) over a convex set is attained at a vertex, a strictly-interior point can never
      be a directional extreme, never enlarge the AABB, and never enlarge the bounding radius.
      Hence ConvexHull.Build's ReduceToExtremes(256) still selects only visual vertices — the
-     merged hull, its LongestAxis, and its BoundingRadius are bit-unchanged. This is what makes
-     the bake invisible to the pre-B2 collision code.
+     merged hull, its LongestAxis, and its BoundingRadius are bit-unchanged.
   2. DOCK CORRIDOR — every docking-entrance disc centre, and a swept segment from it toward the
      bay-door centre and outward along its approach, lies OUTSIDE all COL parts, so no part ever
-     caps a corridor a ship must fly through.
+     caps a corridor a ship must fly through. (Auto-skipped when the mesh has no HP_Docking* nodes.)
 
 A weaker AABB-containment check is also asserted (the explicit MeshAabb scale contract the client
 relies on), and the output is written deterministically (fixed ordering, cleaned float32) so a
-re-bake of unchanged input yields a byte-identical GLB (identical SHA).
+re-bake of unchanged input + identical resolved args yields a byte-identical GLB (identical SHA).
 
 Usage (via uv — deps in pyproject.toml):
-  uv run bake.py                       # bake in place: client/assets/bases/base.glb
-  uv run bake.py --check               # validate only, do not write
-  uv run bake.py --suggest             # print candidate boxes clustered from the mesh (seed only)
-  uv run bake.py --preview-dir DIR     # also render reviewer PNGs (default: ./preview)
-  uv run bake.py --glb PATH --yaml PATH --out PATH
+  uv run bake.py --kind base                    # bake in place: client/assets/bases/base.glb
+  uv run bake.py --kind base --check            # validate only, do not write
+  uv run bake.py --kind ship --glb PATH --model-length 5.5 --check   # any ship mesh (scale basis)
+  uv run bake.py --kind base --preview out.png  # combined visualizer figure to an exact path
+  uv run bake.py --kind base --preview-dir DIR  # ortho + 3D reviewer PNGs into DIR
+  uv run bake.py --kind base --dump snap.txt    # opt-in provenance snapshot of the resolved args
+
+All tunables (--voxel-res --box-res --margin --pad --shell/--no-shell --shell-iters --corridor-*
+--ship-radius --hull-extremes --reach-guard/--no-reach-guard --corridor-check/--no-corridor-check)
+default to the kind preset; pass one to override it.
 """
 
 from __future__ import annotations
@@ -47,13 +52,11 @@ from pathlib import Path
 
 import numpy as np
 import pygltflib
-import yaml
 from scipy.spatial import ConvexHull
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 DEF_GLB = REPO / "client" / "assets" / "bases" / "base.glb"
-DEF_YAML = HERE / "base-col.yaml"
 
 FLOAT = pygltflib.FLOAT
 UINT = pygltflib.UNSIGNED_INT
@@ -181,32 +184,11 @@ def _box_verts(spec) -> np.ndarray:
     return (corners @ R.T) + c
 
 
-def _cylinder_verts(spec) -> np.ndarray:
-    c = np.array(spec["center"], dtype=np.float64)
-    axis = np.array(spec["axis"], dtype=np.float64)
-    axis = axis / (np.linalg.norm(axis) or 1.0)
-    r = float(spec["radius"])
-    half = float(spec["height"]) * 0.5
-    seg = int(spec.get("segments", 12))
-    # Two vectors spanning the plane perpendicular to axis.
-    ref = np.array([1.0, 0, 0]) if abs(axis[0]) < 0.9 else np.array([0, 1.0, 0])
-    u = np.cross(axis, ref); u /= (np.linalg.norm(u) or 1.0)
-    v = np.cross(axis, u)
-    ang = np.linspace(0, 2 * np.pi, seg, endpoint=False)
-    ring = np.outer(np.cos(ang), u) * r + np.outer(np.sin(ang), v) * r
-    top = c + axis * half + ring
-    bot = c - axis * half + ring
-    return np.vstack([top, bot])
-
-
 def part_vertices(part) -> np.ndarray:
+    """Corner cloud for a generated box spec — the only primitive the auto pipeline emits."""
     if "box" in part:
         return _box_verts(part["box"])
-    if "cylinder" in part:
-        return _cylinder_verts(part["cylinder"])
-    if "points" in part:
-        return np.array(part["points"], dtype=np.float64)
-    raise ValueError(f"part {part.get('name')!r} has no box/cylinder/points")
+    raise ValueError(f"part {part.get('name')!r} has no box")
 
 
 def convex_mesh(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, ConvexHull]:
@@ -230,6 +212,25 @@ def convex_mesh(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, ConvexHull]:
 # ---------------------------------------------------------------------------
 #  Validations
 # ---------------------------------------------------------------------------
+
+def reduce_to_extremes(pts: np.ndarray, dir_count: int) -> np.ndarray:
+    """Port of shared/Collision/ConvexHull.cs ReduceToExtremes: keep only the points that are the
+    farthest along each of `dir_count` evenly-spread spherical-Fibonacci directions. A hull vertex is
+    always the extreme along SOME direction, so this leaves a tiny superset of the true hull vertices
+    (interior points never survive) — the containment hull is unchanged but built from far fewer
+    points. `--hull-extremes 256` reproduces exactly the cloud the sim/client per-entity hull reduces
+    to. Returns `pts` unchanged when it already has <= dir_count points (or dir_count <= 0)."""
+    if dir_count <= 0 or len(pts) <= dir_count:
+        return pts
+    i = np.arange(dir_count)
+    y = 1.0 - (i + 0.5) * 2.0 / dir_count
+    r = np.sqrt(np.maximum(0.0, 1.0 - y * y))
+    golden = np.pi * (3.0 - np.sqrt(5.0))
+    theta = golden * i
+    dirs = np.stack([np.cos(theta) * r, y, np.sin(theta) * r], axis=1)  # (D, 3) unit directions
+    keep = np.unique(np.argmax(pts @ dirs.T, axis=0))                   # farthest point per direction
+    return pts[keep]
+
 
 def hull_equations(verts: np.ndarray) -> np.ndarray:
     """scipy hull face inequalities [n | d]: point x is inside iff n.x + d <= 0 for all rows."""
@@ -338,53 +339,26 @@ def bake_glb(gltf, blob: bytes, parts: list[tuple[str, np.ndarray, np.ndarray]])
 
 
 # ---------------------------------------------------------------------------
-#  --suggest: rough region boxes to seed the YAML (never baked directly)
+#  Reviewer preview render (the tool's args-driven visualizer, for ANY mesh/kind)
 # ---------------------------------------------------------------------------
 
-def suggest(verts: np.ndarray, eqs: np.ndarray, k: int = 7):
-    """Lightweight k-means over the cloud; per cluster print a hull-safe AABB. Seed only."""
-    rng = np.random.default_rng(0)
-    cen = verts[rng.choice(len(verts), k, replace=False)]
-    for _ in range(40):
-        lab = np.argmin(((verts[:, None, :] - cen[None]) ** 2).sum(-1), axis=1)
-        new = np.array([verts[lab == j].mean(0) if (lab == j).any() else cen[j] for j in range(k)])
-        if np.allclose(new, cen):
-            break
-        cen = new
-    print("# --suggest candidate boxes (refine by hand; shrunk to stay inside the visual hull):")
-    print("parts:")
-    for j in range(k):
-        cl = verts[lab == j]
-        if len(cl) < 8:
-            continue
-        lo, hi = cl.min(0), cl.max(0)
-        c = (lo + hi) / 2
-        size = (hi - lo)
-        # Shrink toward centre until all 8 corners clear the hull by 0.05.
-        for _ in range(60):
-            box = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1)
-                            for sz in (-1, 1)]) * (size / 2) + c
-            if signed_dist_to_hull(box, eqs).max() <= -0.05:
-                break
-            size *= 0.94
-        print(f"  - name: Region{j}")
-        print(f"    box: {{center: [{c[0]:.2f}, {c[1]:.2f}, {c[2]:.2f}], "
-              f"size: [{size[0]:.2f}, {size[1]:.2f}, {size[2]:.2f}]}}")
-
-
-# ---------------------------------------------------------------------------
-#  Reviewer preview render
-# ---------------------------------------------------------------------------
-
-def render_preview(verts, hps, parts, out_dir: Path):
+def render_preview(verts, hps, parts, stem: str, kind: str,
+                   preview_dir: Path | None = None, preview_path: Path | None = None):
+    """Render the visual cloud (grey) + generated COL_ parts (coloured wireframes) for ANY mesh/kind.
+    Title + output filenames come from `stem` + `kind`; dock-HP star markers are drawn only when the
+    mesh has any (a no-op for ships/asteroids). Two output modes, either or both:
+      * preview_dir → the ortho-triptych PNG + the 3D PNG as <stem>-col-ortho.png / <stem>-col-3d.png
+      * preview_path → ONE combined figure (ortho triptych + 3D, 2x2 grid) written to that exact path
+    Works with --check (visualize without baking). Returns the list of written paths."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
-    out_dir.mkdir(parents=True, exist_ok=True)
     colors = plt.cm.tab10(np.linspace(0, 1, max(10, len(parts))))
     ent = np.array([p for n, p, f in hps if "Entrance" in n or "Exit" in n])
+    title = f"{stem}.glb visual cloud (grey) + {kind} COL_ parts"
+    planes = [(2, 1, "Z", "Y", "side"), (0, 1, "X", "Y", "front"), (2, 0, "Z", "X", "top")]
 
     def edges_of(hv, faces):
         segs = set()
@@ -393,10 +367,7 @@ def render_preview(verts, hps, parts, out_dir: Path):
                 segs.add((min(u, v), max(u, v)))
         return [[hv[u], hv[v]] for u, v in segs]
 
-    # Orthographic triptych.
-    fig, axs = plt.subplots(1, 3, figsize=(21, 7))
-    planes = [(2, 1, "Z", "Y", "side"), (0, 1, "X", "Y", "front"), (2, 0, "Z", "X", "top")]
-    for ax, (a, b, la, lb, title) in zip(axs, planes):
+    def draw_ortho(ax, a, b, la, lb, ptitle):
         ax.scatter(verts[:, a], verts[:, b], s=1, alpha=0.12, c="0.5", linewidths=0)
         for k, (name, hv, faces) in enumerate(parts):
             for seg in edges_of(hv, faces):
@@ -405,30 +376,55 @@ def render_preview(verts, hps, parts, out_dir: Path):
             ax.text(hv[:, a].mean(), hv[:, b].mean(), name, color=colors[k], fontsize=7, ha="center")
         if len(ent):
             ax.plot(ent[:, a], ent[:, b], "r*", ms=13, label="dock HP")
-        ax.set_xlabel(la); ax.set_ylabel(lb); ax.set_title(title); ax.set_aspect("equal")
-    axs[0].legend(loc="upper right", fontsize=8)
-    fig.suptitle("base.glb visual cloud (grey) + authored COL_ parts", fontsize=13)
-    fig.tight_layout()
-    p1 = out_dir / "base-col-ortho.png"
-    fig.savefig(p1, dpi=95); plt.close(fig)
+        ax.set_xlabel(la); ax.set_ylabel(lb); ax.set_title(ptitle); ax.set_aspect("equal")
 
-    # 3D view.
-    fig = plt.figure(figsize=(11, 10))
-    ax = fig.add_subplot(111, projection="3d")
-    samp = verts[::7]
-    ax.scatter(samp[:, 0], samp[:, 1], samp[:, 2], s=1, alpha=0.08, c="0.5", linewidths=0)
-    for k, (name, hv, faces) in enumerate(parts):
-        ax.add_collection3d(Line3DCollection(edges_of(hv, faces), colors=[colors[k]], lw=0.9))
-    if len(ent):
-        ax.scatter(ent[:, 0], ent[:, 1], ent[:, 2], c="r", marker="*", s=90)
-    ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
-    span = np.ptp(verts, axis=0)
-    ax.set_box_aspect((span[0], span[1], span[2]))
-    ax.view_init(elev=18, azim=-60)
-    ax.set_title("COL_ parts vs visual cloud (3D)")
-    p2 = out_dir / "base-col-3d.png"
-    fig.savefig(p2, dpi=95); plt.close(fig)
-    return [p1, p2]
+    def draw_3d(ax):
+        samp = verts[::7]
+        ax.scatter(samp[:, 0], samp[:, 1], samp[:, 2], s=1, alpha=0.08, c="0.5", linewidths=0)
+        for k, (name, hv, faces) in enumerate(parts):
+            ax.add_collection3d(Line3DCollection(edges_of(hv, faces), colors=[colors[k]], lw=0.9))
+        if len(ent):
+            ax.scatter(ent[:, 0], ent[:, 1], ent[:, 2], c="r", marker="*", s=90)
+        ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
+        span = np.ptp(verts, axis=0)
+        ax.set_box_aspect((span[0], span[1], span[2]))
+        ax.view_init(elev=18, azim=-60)
+        ax.set_title(f"{kind} COL_ parts vs visual cloud (3D)")
+
+    written = []
+
+    if preview_dir is not None:  # the reviewer pair, per-stem names
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        fig, axs = plt.subplots(1, 3, figsize=(21, 7))
+        for ax, (a, b, la, lb, pt) in zip(axs, planes):
+            draw_ortho(ax, a, b, la, lb, pt)
+        axs[0].legend(loc="upper right", fontsize=8)
+        fig.suptitle(title, fontsize=13); fig.tight_layout()
+        p1 = preview_dir / f"{stem}-col-ortho.png"
+        fig.savefig(p1, dpi=95); plt.close(fig)
+
+        fig = plt.figure(figsize=(11, 10))
+        ax = fig.add_subplot(111, projection="3d")
+        draw_3d(ax)
+        p2 = preview_dir / f"{stem}-col-3d.png"
+        fig.savefig(p2, dpi=95); plt.close(fig)
+        written += [p1, p2]
+
+    if preview_path is not None:  # one combined figure to the exact path given
+        preview_path = Path(preview_path)
+        if preview_path.parent != Path(""):
+            preview_path.parent.mkdir(parents=True, exist_ok=True)
+        fig = plt.figure(figsize=(20, 14))
+        for i, (a, b, la, lb, pt) in enumerate(planes):
+            ax = fig.add_subplot(2, 2, i + 1)
+            draw_ortho(ax, a, b, la, lb, pt)
+        ax3 = fig.add_subplot(2, 2, 4, projection="3d")
+        draw_3d(ax3)
+        fig.suptitle(title, fontsize=15); fig.tight_layout()
+        fig.savefig(preview_path, dpi=95); plt.close(fig)
+        written.append(preview_path)
+
+    return written
 
 
 # ---------------------------------------------------------------------------
@@ -808,7 +804,7 @@ def retreat_from_corridors(specs, segs, corridor_r: float, res: float):
     lies within `corridor_r` of the centreline = inside the carved corridor, so it never re-opens a
     reachability leak (the guard excludes the corridor). Deterministic small-step shrink."""
     if not segs:
-        return specs
+        return specs, 0
     # Dense samples along every corridor centreline (the capsule axis a corridor is swept along).
     qs = []
     for a, b, _r in segs:
@@ -854,23 +850,51 @@ def retreat_from_corridors(specs, segs, corridor_r: float, res: float):
     return out, dropped
 
 
-def auto_config(spec: dict, ws: float) -> dict:
-    """Resolve the --auto knobs from `auto_config:` in the YAML, filling authored-unit defaults from
-    the world collision constants via the world-scale `ws`."""
-    ac = spec.get("auto_config") or {}
-    ship_r = float(ac.get("ship_radius", WORLD_SHIP_RADIUS / ws))
-    clearance = float(ac.get("corridor_clearance", 0.5))
-    corridor_r = float(ac.get("corridor_radius", max(WORLD_DOCK_DISC_RADIUS / ws, ship_r + clearance)))
+# Per-kind pipeline presets — the resolution baseline for every knob. `base` locks the values the
+# retired base-col.yaml carried (box_res 1.5, pad 0.5, margin 0.05, ...): a no-override `--kind base`
+# MUST reproduce the committed base.glb byte-for-byte, so these are a hard contract, not a default to
+# tweak. `ship` shares the coverage knobs but drops the outward pad (0.0), widens the part-count
+# window, and leaves the reach guard / corridor validator off (turned on by --kind auto-detection or
+# an explicit flag). ship_radius / corridor_radius are filled from the world constants via `ws` below.
+KIND_PRESETS = {
+    "base": dict(voxel_res=0.5, box_res=1.5, margin=0.05, pad=0.5, corridor_tol=0.05,
+                 corridor_clearance=0.5, corridor_approach=5.0, shell=True, shell_iters=6,
+                 count_lo=2, count_hi=1024),
+    "ship": dict(voxel_res=0.5, box_res=1.5, margin=0.05, pad=0.0, corridor_tol=0.05,
+                 corridor_clearance=0.5, corridor_approach=5.0, shell=True, shell_iters=6,
+                 count_lo=1, count_hi=100000),
+}
+
+
+def resolve_cfg(args, kind: str, ws: float) -> dict:
+    """Resolve the pipeline knobs from the kind preset, overridden by any explicit CLI arg (every
+    tunable defaults to None so 'unset' is distinguishable from a passed value). Authored-unit
+    thresholds fall back to the world collision constants via world-scale `ws`, exactly as the
+    sim/client derive them at load. Returns the same cfg dict shape generate_auto_parts consumes,
+    plus the per-kind count window + the resolved corridor_tol / hull_extremes the validators read."""
+    p = KIND_PRESETS[kind]
+
+    def pick(name, default):
+        v = getattr(args, name, None)
+        return default if v is None else v
+
+    clearance = pick("corridor_clearance", p["corridor_clearance"])
+    ship_r = pick("ship_radius", WORLD_SHIP_RADIUS / ws)
+    corridor_r = pick("corridor_radius", max(WORLD_DOCK_DISC_RADIUS / ws, ship_r + clearance))
     return dict(
-        voxel_res=float(ac.get("voxel_res", 0.5)),
-        box_res=float(ac.get("box_res", 1.75)),
-        margin=float(spec.get("margin", 0.05)),
-        pad=float(ac.get("pad", 0.0)),
-        ship_r=ship_r,
-        corridor_r=corridor_r,
-        corridor_approach=float(ac.get("corridor_approach", 5.0)),
-        shell=bool(ac.get("shell", True)),
-        shell_iters=int(ac.get("shell_iters", 6)),
+        voxel_res=float(pick("voxel_res", p["voxel_res"])),
+        box_res=float(pick("box_res", p["box_res"])),
+        margin=float(pick("margin", p["margin"])),
+        pad=float(pick("pad", p["pad"])),
+        ship_r=float(ship_r),
+        corridor_r=float(corridor_r),
+        corridor_approach=float(pick("corridor_approach", p["corridor_approach"])),
+        shell=bool(pick("shell", p["shell"])),
+        shell_iters=int(pick("shell_iters", p["shell_iters"])),
+        corridor_tol=float(pick("corridor_tol", p["corridor_tol"])),
+        hull_extremes=int(pick("hull_extremes", 0)),
+        count_lo=p["count_lo"],
+        count_hi=p["count_hi"],
     )
 
 
@@ -1032,18 +1056,21 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     return yparts, stats
 
 
-def write_generated_yaml(path: Path, yparts, cfg):
-    """Persist the generated box list for inspection (and as the concrete record of what was baked).
-    Not consumed by the bake — the bake regenerates from the mesh each run for determinism."""
+def write_snapshot(path: Path, yparts, cfg, kind: str, primitive: str, glb: Path, ws: float):
+    """Opt-in (`--dump PATH`) human-readable record of a bake: the kind, the source GLB, every
+    resolved arg, and the baked box list. Replaces the retired base-col.generated.yaml — NOT consumed
+    by the bake (which regenerates from the mesh every run for determinism), purely provenance so a
+    reviewer can see exactly what a given SHA was baked from. Manual string formatting, no yaml lib."""
     lines = [
-        "# base-col.generated.yaml — GENERATED by `bake.py --auto`; DO NOT hand-edit.",
-        "# A snapshot of the deterministic voxel solid-fill + greedy box-merge output for review.",
-        "# The bake regenerates these from base.glb every run (auto: true in base-col.yaml); this",
-        "# file is only a human-readable record. Regenerate: `uv run bake.py --auto`.",
+        f"# collision-hull snapshot — GENERATED by `bake.py --kind {kind}`; provenance only, not consumed.",
+        "# A record of the deterministic voxel solid-fill + greedy box-merge output for a bake.",
+        f"# kind={kind}  primitive={primitive}  glb={glb}  worldScale={ws:.6f}",
         f"# voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
-        f"ship_radius(authored)={cfg['ship_r']:.4f}  corridor_radius={cfg['corridor_r']:.4f}",
+        f"margin={cfg['margin']}  hull_extremes={cfg['hull_extremes']}",
+        f"# shell={cfg['shell']}  shell_iters={cfg['shell_iters']}  corridor_tol={cfg['corridor_tol']}",
+        f"# ship_radius(authored)={cfg['ship_r']:.4f}  corridor_radius={cfg['corridor_r']:.4f}  "
+        f"corridor_approach={cfg['corridor_approach']}",
         f"# {len(yparts)} parts",
-        "margin: 0.05",
         "parts:",
     ]
     for p in yparts:
@@ -1052,7 +1079,7 @@ def write_generated_yaml(path: Path, yparts, cfg):
         lines.append(f"  - name: {p['name']}")
         lines.append(f"    box: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
                      f"size: [{s[0]:.4f}, {s[1]:.4f}, {s[2]:.4f}]}}")
-    path.write_text("\n".join(lines) + "\n")
+    Path(path).write_text("\n".join(lines) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -1060,69 +1087,119 @@ def write_generated_yaml(path: Path, yparts, cfg):
 # ---------------------------------------------------------------------------
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Bake authored COL_ collision parts into base.glb")
-    ap.add_argument("--glb", type=Path, default=DEF_GLB)
-    ap.add_argument("--yaml", type=Path, default=DEF_YAML)
+    ap = argparse.ArgumentParser(description="Generate + bake convex COL_ collision parts into a mesh GLB")
+    ap.add_argument("--kind", choices=["base", "ship"], required=True,
+                    help="preset selector: base = station (default GLB + corridors + reach guard); "
+                         "ship = any ship/model mesh (no pad, guard/corridors off unless present)")
+    ap.add_argument("--primitive", choices=["box", "spheroid"], default="box",
+                    help="collision part shape (spheroid = future round/asteroid geometry; not yet)")
+    ap.add_argument("--glb", type=Path, default=None,
+                    help="mesh GLB (defaults to client/assets/bases/base.glb only for --kind base)")
     ap.add_argument("--out", type=Path, default=None, help="default: rewrite --glb in place")
     ap.add_argument("--check", action="store_true", help="validate only; do not write")
-    ap.add_argument("--suggest", action="store_true", help="print candidate boxes and exit")
+    ap.add_argument("--dump", type=Path, default=None,
+                    help="write a human-readable provenance snapshot (kind + resolved args + boxes) to PATH")
+    ap.add_argument("--preview", type=Path, default=None,
+                    help="render ONE combined figure (ortho triptych + 3D) to this exact PNG path")
     ap.add_argument("--preview-dir", type=Path, default=None,
-                    help="render reviewer PNGs to DIR (default ./preview unless --check/--suggest)")
-    ap.add_argument("--auto", action="store_true",
-                    help="generate parts from the mesh volume (voxel solid-fill + greedy box merge), "
-                         "overriding the YAML parts list; also writes base-col.generated.yaml")
+                    help="render the ortho + 3D reviewer PNGs into DIR as <stem>-col-ortho/-3d.png")
+    # --- scale basis (authored mesh units -> world units) ---
+    ap.add_argument("--world-diameter", type=float, default=180.0,
+                    help="base scale basis (CollisionConfig.BaseRadius*2); ws = world_diameter/LongestAxis")
+    ap.add_argument("--model-length", type=float, default=None,
+                    help="ship scale basis (REQUIRED for --kind ship); ws = model_length/LongestAxis")
+    # --- pipeline knobs: all default None so 'unset' falls through to the kind preset ---
+    ap.add_argument("--voxel-res", type=float, default=None)
+    ap.add_argument("--box-res", type=float, default=None)
+    ap.add_argument("--margin", type=float, default=None)
+    ap.add_argument("--pad", type=float, default=None)
+    ap.add_argument("--shell", action=argparse.BooleanOptionalAction, default=None)
+    ap.add_argument("--shell-iters", type=int, default=None)
+    ap.add_argument("--corridor-clearance", type=float, default=None)
+    ap.add_argument("--corridor-approach", type=float, default=None)
+    ap.add_argument("--corridor-radius", type=float, default=None)
+    ap.add_argument("--corridor-tol", type=float, default=None)
+    ap.add_argument("--ship-radius", type=float, default=None)
+    ap.add_argument("--hull-extremes", type=int, default=None,
+                    help="0 = full-cloud containment hull (default); >0 = reduce the visual cloud to N "
+                         "Fibonacci directional extremes before the hull build (mirrors ConvexHull.cs 256)")
+    ap.add_argument("--reach-guard", action=argparse.BooleanOptionalAction, default=None,
+                    help="sealed-interior reachability guard (default on for base, off for ship)")
+    ap.add_argument("--corridor-check", action=argparse.BooleanOptionalAction, default=None,
+                    help="dock-corridor validator (default auto: on iff the mesh has HP_Docking* nodes)")
+    # --- spheroid primitive knobs (Phase 3) ---
+    ap.add_argument("--sphere-segments", type=int, default=1,
+                    help="icosphere subdivisions per spheroid part (spheroid primitive; Phase 3)")
+    ap.add_argument("--sphere-overlap", type=float, default=None,
+                    help="greedy sphere-cover overlap factor (spheroid primitive; Phase 3)")
     args = ap.parse_args(argv)
 
-    gltf = pygltflib.GLTF2().load(str(args.glb))
+    if args.primitive == "spheroid":
+        # Phase 3 slots the greedy sphere-cover generator in here; the box path is untouched.
+        sys.exit("ERROR: --primitive spheroid is not implemented yet (Phase 3). Use --primitive box.")
+
+    # GLB + scale-basis resolution per kind.
+    glb = args.glb if args.glb is not None else (DEF_GLB if args.kind == "base" else None)
+    if glb is None:
+        sys.exit("ERROR: --glb is required for --kind ship")
+    if args.kind == "ship" and args.model_length is None:
+        sys.exit("ERROR: --model-length is REQUIRED for --kind ship (ws = model_length/LongestAxis)")
+
+    gltf = pygltflib.GLTF2().load(str(glb))
     blob = gltf.binary_blob()
     verts, hps = read_visual_vertices(gltf, blob)
+    if not len(verts):
+        sys.exit(f"ERROR: {glb} has no non-COL visual vertices to bake against")
     vlo, vhi = verts.min(0), verts.max(0)
-    eqs = hull_equations(verts)
-    ws = world_scale(verts)
+    longest = float((vhi - vlo).max())
+    # Same derivation the sim/client use at load — only the numerator differs per kind.
+    ws = (args.world_diameter if args.kind == "base" else args.model_length) / max(1e-3, longest)
+
+    cfg = resolve_cfg(args, args.kind, ws)
     print(f"visual mesh: {len(verts)} verts  AABB min={np.round(vlo,2)} max={np.round(vhi,2)} "
-          f"longestAxis={(vhi-vlo).max():.4f}  worldScale={ws:.4f}")
+          f"longestAxis={longest:.4f}  worldScale={ws:.4f}  shipRadius(authored)={cfg['ship_r']:.4f}")
 
-    if args.suggest:
-        suggest(verts, eqs, k=7)
-        return 0
+    # The containment hull the metric-neutrality clamp/validation is measured against. Default is the
+    # FULL visual cloud (conservative + current behaviour); --hull-extremes>0 reduces it first.
+    eqs = hull_equations(reduce_to_extremes(verts, cfg["hull_extremes"]))
 
-    spec = yaml.safe_load(args.yaml.read_text())
-    margin = float(spec.get("margin", 0.05))
-    corridor_tol = float(spec.get("corridor_tol", 0.05))
-
-    # Triangles (with indices) drive the auto voxelizer AND the reachability guard's sealed-interior
-    # classification (run in BOTH modes, so a hand-authored spec is guarded too).
+    # Triangles (with indices) drive the voxelizer AND the reachability guard's sealed-interior class.
     V, F = read_visual_triangles(gltf, blob)
-    cfg = auto_config(spec, ws)
+    if not len(F):
+        sys.exit(f"ERROR: {glb} has no indexed triangles (unindexed prims are skipped) — nothing to voxelize")
 
-    auto = args.auto or bool(spec.get("auto", False))
-    autostats = None
-    if auto:
-        print(f"\n--auto: voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
-              f"shipRadius(authored)={cfg['ship_r']:.4f}  corridorRadius={cfg['corridor_r']:.4f}")
-        yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
-        a = autostats
-        print(f"--auto: {a['surface']} surface + {a['sealed']} sealed voxels "
-              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
-              f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
-              f"{a['shell_added']} shell-cover boxes, "
-              f"{a['dropped']} collapsed/dropped by hull clamp)")
-        print(f"--auto: solid-voxel coverage {a['coverage']*100:.2f}%  "
-              f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
-        print(f"--auto: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
-              f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
-              f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
-              f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
-        write_generated_yaml(HERE / "base-col.generated.yaml", yparts, cfg)
-        print(f"--auto: wrote {HERE / 'base-col.generated.yaml'}")
-        if not (2 <= len(yparts) <= 1024):
-            sys.exit(f"ERROR: auto produced {len(yparts)} parts (expected 2..1024)")
-    else:
-        yparts = spec["parts"]
-        if not (4 <= len(yparts) <= 10):
-            sys.exit(f"ERROR: expected 4..10 parts, got {len(yparts)}")
+    # Resolve the two auto-gated validators. reach-guard: base on / ship off unless overridden.
+    # corridor-check: auto = on iff the mesh actually carries dock hardpoints (self-gates for ships).
+    has_dock = any((n or "").startswith("HP_Docking") for n, p, f in hps)
+    reach_guard = (args.kind == "base") if args.reach_guard is None else args.reach_guard
+    corridor_check = has_dock if args.corridor_check is None else args.corridor_check
 
-    # Build each part's convex mesh (deterministic order = YAML order, then by name for safety).
+    print(f"\npipeline: voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
+          f"corridorRadius={cfg['corridor_r']:.4f}  reach_guard={reach_guard}  corridor_check={corridor_check}")
+    yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
+    a = autostats
+    print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
+          f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
+          f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
+          f"{a['shell_added']} shell-cover boxes, "
+          f"{a['dropped']} collapsed/dropped by hull clamp)")
+    print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%  "
+          f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
+    print(f"pipeline: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
+          f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
+          f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
+          f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
+    if args.dump is not None:
+        write_snapshot(args.dump, yparts, cfg, args.kind, args.primitive, glb, ws)
+        print(f"pipeline: wrote snapshot {args.dump}")
+    lo, hi = cfg["count_lo"], cfg["count_hi"]
+    if not (lo <= len(yparts) <= hi):
+        sys.exit(f"ERROR: produced {len(yparts)} parts (expected {lo}..{hi})")
+
+    margin = cfg["margin"]
+    corridor_tol = cfg["corridor_tol"]
+
+    # Build each part's convex mesh (deterministic order: sort by name).
     yparts = sorted(yparts, key=lambda p: p["name"])
     parts = []
     all_col = []
@@ -1157,71 +1234,75 @@ def main(argv=None):
         print(f"\nAABB containment OK: COL [{np.round(clo,2)}..{np.round(chi,2)}] "
               f"within visual [{np.round(vlo,2)}..{np.round(vhi,2)}]")
 
-    # Dock-corridor clearance. The bay doors face INWARD (each entrance sits on a face of the bay
-    # box and its +Z forward points toward the bay centre), so the meaningful corridor is the
-    # entrance disc itself plus the swept segment from it toward the door centre (the mean of the
-    # entrance positions) — and the exit toward that same centre. Every such sample must sit
-    # outside all COL parts so no part ever caps a corridor.
-    ent = [(n, p, f) for n, p, f in hps if "Entrance" in n]
-    ext = [(n, p, f) for n, p, f in hps if "Exit" in n]
-    door = np.mean([p for n, p, f in ent], axis=0) if ent else np.zeros(3)
-    print(f"\ndock-door centre ~ {np.round(door,2)}; corridor samples must stay OUTSIDE all parts")
-    corridor_fail = 0
-    for n, p, f in ent + ext:
-        samples = [p]
-        for t in np.linspace(0.0, 1.0, 9):          # door disc -> door centre
-            samples.append(p + (door - p) * t)
-        for s in samples:
-            for name, peq in zip([x[0] for x in parts], part_eqs):
-                if point_inside_part(np.asarray(s, float), peq, corridor_tol):
-                    print(f"  VIOLATION: {n} corridor point {np.round(s,2)} is inside part {name}")
-                    corridor_fail += 1
-    if corridor_fail == 0:
-        print(f"  corridor clearance OK ({len(ent)} entrances + {len(ext)} exit swept)")
+    # Dock-corridor clearance (auto-gated: only runs when the mesh carries dock hardpoints). The bay
+    # doors face INWARD (each entrance sits on a face of the bay box and its +Z forward points toward
+    # the bay centre), so the meaningful corridor is the entrance disc itself plus the swept segment
+    # from it toward the door centre (the mean of the entrance positions) — and the exit toward that
+    # same centre. Every such sample must sit outside all COL parts so no part ever caps a corridor.
+    if corridor_check:
+        ent = [(n, p, f) for n, p, f in hps if "Entrance" in n]
+        ext = [(n, p, f) for n, p, f in hps if "Exit" in n]
+        door = np.mean([p for n, p, f in ent], axis=0) if ent else np.zeros(3)
+        print(f"\ndock-door centre ~ {np.round(door,2)}; corridor samples must stay OUTSIDE all parts")
+        corridor_fail = 0
+        for n, p, f in ent + ext:
+            samples = [p]
+            for t in np.linspace(0.0, 1.0, 9):          # door disc -> door centre
+                samples.append(p + (door - p) * t)
+            for s in samples:
+                for name, peq in zip([x[0] for x in parts], part_eqs):
+                    if point_inside_part(np.asarray(s, float), peq, corridor_tol):
+                        print(f"  VIOLATION: {n} corridor point {np.round(s,2)} is inside part {name}")
+                        corridor_fail += 1
+        if corridor_fail == 0:
+            print(f"  corridor clearance OK ({len(ent)} entrances + {len(ext)} exit swept)")
+        else:
+            ok = False
     else:
-        ok = False
+        print("\ncorridor check: skipped (no HP_Docking* nodes / disabled).")
 
-    # REACHABILITY GUARD (the regression test for the fly-inside bug). Rasterize the FINAL parts into
-    # a fine voxel grid and flood the exterior with the free space eroded by the ship radius: no
-    # ship-radius exterior path may reach a sealed-interior cell (a hollow the player could fly into),
-    # except inside a carved dock corridor. Runs in BOTH modes so sparse hand-authored specs are
-    # guarded too — the old star-of-boxes layout leaks badly here, which is the point.
-    if autostats is not None:
+    # REACHABILITY GUARD (the regression test for the fly-inside bug), auto-gated per kind. Rasterize
+    # the FINAL parts into a fine voxel grid and flood the exterior with the free space eroded by the
+    # ship radius: no ship-radius exterior path may reach a sealed-interior cell (a hollow the player
+    # could fly into), except inside a carved dock corridor. The pipeline already computed the fine
+    # grid + interior hollow + corridor mask; reuse them.
+    if reach_guard:
         gfine = autostats["gfine"]
         interior_hollow = autostats["interior_hollow"]
         corridor_fine = autostats["corridor_fine"]
+        leaks = reachability_leaks(part_eqs, gfine, interior_hollow, corridor_fine, cfg["ship_r"])
+        print(f"\nreachability guard: sealed-interior voxels a ship (r={cfg['ship_r']:.3f} authored) can "
+              f"reach from OUTSIDE the FINAL parts (excl. corridors) = {leaks}")
+        if leaks > 0:
+            print(f"  VIOLATION: {leaks} sealed-interior voxels are ship-reachable — the parts leave a "
+                  f"gap a ship can fly through into the station interior.")
+            ok = False
+        else:
+            print("  reachability OK — the interior is sealed against a ship-radius fly-through.")
     else:
-        from scipy.ndimage import distance_transform_edt as _edt
-        segs = corridor_segments(hps, cfg["corridor_r"], cfg["corridor_approach"])
-        gfine = grid_for(V, cfg["voxel_res"])
-        Sfine = voxelize_surface(V, F, gfine)
-        _, sealed_fine, _ = classify_solid(Sfine)
-        interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > cfg["ship_r"])
-        corridor_fine = corridor_mask(gfine, segs)
-    leaks = reachability_leaks(part_eqs, gfine, interior_hollow, corridor_fine, cfg["ship_r"])
-    print(f"\nreachability guard: sealed-interior voxels a ship (r={cfg['ship_r']:.3f} authored) can "
-          f"reach from OUTSIDE the FINAL parts (excl. corridors) = {leaks}")
-    if leaks > 0:
-        print(f"  VIOLATION: {leaks} sealed-interior voxels are ship-reachable — the parts leave a "
-              f"gap a ship can fly through into the station interior.")
-        ok = False
-    else:
-        print("  reachability OK — the interior is sealed against a ship-radius fly-through.")
+        print("\nreachability guard: skipped (disabled for this kind).")
 
     if not ok:
         sys.exit("\nFAILED validation — not writing GLB.")
     print("\nAll validations PASSED.")
 
-    if args.preview_dir is not None or not args.check:
-        pdir = args.preview_dir or (HERE / "preview")
-        pngs = render_preview(verts, hps, parts, pdir)
+    # Visualizer: --preview writes ONE combined figure to an exact path; --preview-dir writes the
+    # reviewer pair (per-stem names). When baking with neither given, default to ./preview. Both work
+    # under --check (visualize without writing the GLB).
+    stem = glb.stem
+    pdir = args.preview_dir
+    if pdir is None and args.preview is None and not args.check:
+        pdir = HERE / "preview"
+    if pdir is not None or args.preview is not None:
+        pngs = render_preview(verts, hps, parts, stem, args.kind,
+                              preview_dir=pdir, preview_path=args.preview)
         print("preview:", *[str(x) for x in pngs])
 
     if args.check:
         print("--check: not writing.")
         return 0
 
-    out = args.out or args.glb
+    out = args.out or glb
     data = bake_glb(gltf, blob, parts)
     Path(out).write_bytes(data)
     print(f"\nwrote {out}  ({len(data)} bytes)  sha256={hashlib.sha256(data).hexdigest()}")
