@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Replace console.writelines with .net high perf logging, and a configurable console log/log levels, with timestamps
 ---
 
 ## Content philosophy (the through-line)
