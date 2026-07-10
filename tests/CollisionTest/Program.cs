@@ -193,7 +193,7 @@ if (glbPath is null)
 else
 {
     var baseModel = SimModel.FromGlb(File.ReadAllBytes(glbPath), glbPath);
-    Check($"baked base: generated sub-hulls (COL_ parts) present (got {baseModel.Hulls.Count}, expect 8..128)", baseModel.Hulls.Count is >= 8 and <= 128);
+    Check($"baked base: generated sub-hulls (COL_ parts) present (got {baseModel.Hulls.Count}, expect 8..512)", baseModel.Hulls.Count is >= 8 and <= 512);
     Check("baked base: merged LongestAxis unchanged (~32.2436)", Near(baseModel.LongestAxis, 32.243610f, 1e-2f));
     Check("baked base: merged BoundingRadius unchanged (~16.5435)", Near(baseModel.BoundingRadius, 16.543488f, 1e-2f));
     Check("baked base: merged Hull has 172 planes", baseModel.Hull.Planes.Length == 172);

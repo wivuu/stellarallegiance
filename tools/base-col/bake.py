@@ -697,6 +697,90 @@ def rasterize_parts(part_eqs_list, grid: VoxelGrid) -> np.ndarray:
     return inside.reshape(grid.dims)
 
 
+def rasterize_boxes(specs, grid: VoxelGrid) -> np.ndarray:
+    """FAST solid mask for AXIS-ALIGNED box specs [(center, size)]: mark every cell whose CENTRE lies
+    inside a box by direct index-range assignment — no per-cell plane dot product, so it scales to the
+    thousands of thin shell boxes the shell pass generates (rasterize_parts over the full fine grid
+    would be minutes at that count). Cell-centre-in-box semantics match rasterize_parts for boxes; it
+    is used only for the shell pass's coverage bookkeeping — the FINAL reachability guard still runs
+    through the exact plane-based rasterize_parts."""
+    dims = np.array(grid.dims)
+    origin = grid.origin
+    res = grid.res
+    B = np.zeros(grid.dims, dtype=bool)
+    for c, s in specs:
+        c = np.asarray(c, float)
+        s = np.asarray(s, float)
+        lo = np.ceil((c - s * 0.5 - origin) / res - 0.5).astype(int)
+        hi = np.floor((c + s * 0.5 - origin) / res - 0.5).astype(int) + 1
+        lo = np.clip(lo, 0, dims)
+        hi = np.clip(hi, 0, dims)
+        if (hi > lo).all():
+            B[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]] = True
+    return B
+
+
+def shell_cover(specs, Sfine, gfine, corridor_fine, eqs, guard_segs, cfg):
+    """SHELL PASS — the surface-shell coverage guarantee.
+
+    After the bulk voxel decomposition + seal-patches, a large fraction of the VISIBLE-SURFACE voxels
+    still have no box at/just outside them: a ship approaching those points — especially the WALLS of a
+    concavity, which sit well inside the visual convex hull — sinks inward until it reaches an interior
+    bulk box before it bounces (the 'visual sink'). This pass closes that gap: it finds the surface
+    voxels not yet covered by any box and greedy-merges THEM into thin boxes, each padded outward by
+    `pad`, hull-clamped, and corridor-retreated exactly like every other box, so collision sits right
+    at the visible skin. Because concavity walls are interior to the convex hull, the outward pad is NOT
+    clamped there — that is exactly where the sink was worst and where this pass wins most. At convex
+    extremities the hull clamp still wins (metric-neutral); a voxel right on the convex skin can only be
+    covered to within `margin`, and a protrusion thinner than a metric-neutral box can hold is left
+    uncovered (reported) — those are the only surface voxels the invariants make impossible to cover.
+
+    Deterministic: greedy_boxes fixed scan order, the same clamp/retreat machinery as the bulk pass, and
+    each candidate box is kept only if it actually covers a still-uncovered surface voxel (so the count
+    stays honest and reproducible). Iterates because clamping/retreating one box can leave a neighbour
+    surface voxel newly exposed. Returns (specs, added)."""
+    pad = cfg["pad"]
+    margin = cfg["margin"]
+    voxel_res = cfg["voxel_res"]
+    corridor_r = cfg["corridor_r"]
+    added = 0
+    for _ in range(int(cfg.get("shell_iters", 6))):
+        solidF = rasterize_boxes(specs, gfine)
+        uncovered = Sfine & ~solidF & ~corridor_fine
+        if not uncovered.any():
+            break
+        boxes = greedy_boxes(uncovered)
+        cand = []
+        for b in boxes:
+            lo, hi = box_bounds(gfine, b)
+            lo = np.asarray(lo, float) - pad
+            hi = np.asarray(hi, float) + pad
+            clamped = clamp_box_to_hull(lo, hi, eqs, margin, gfine.res)
+            if clamped is None:
+                continue
+            clo, chi = clamped
+            cand.append(((clo + chi) * 0.5, chi - clo))
+        if not cand:
+            break
+        cand, _drop = retreat_from_corridors(cand, guard_segs, corridor_r, voxel_res)
+        if not cand:
+            break
+        # Keep only boxes that still cover a previously-uncovered surface voxel after clamp+retreat
+        # (drop the ones the clamp pulled entirely off the skin); charge each voxel to one box only.
+        remaining = uncovered.copy()
+        kept = []
+        for c, s in cand:
+            m = rasterize_boxes([(c, s)], gfine)
+            if (m & remaining).any():
+                kept.append((c, s))
+                remaining &= ~m
+        if not kept:
+            break
+        specs = specs + kept
+        added += len(kept)
+    return specs, added
+
+
 def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, ship_r) -> int:
     """THE REGRESSION GUARD. Rasterize the FINAL parts into the fine grid, then flood the exterior
     with the free space eroded by the ship radius (a ship CENTRE can sit only >= ship_r from solid).
@@ -715,6 +799,61 @@ def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, shi
     return int(leaked.sum())
 
 
+def retreat_from_corridors(specs, segs, corridor_r: float, res: float):
+    """Keep-out DUAL of the hull clamp: pull each box's faces inward until it clears every dock
+    corridor by `corridor_r`. `pad` grows boxes isotropically, and the coarse carve's cell-centre
+    discretization lets a padded box's corner poke into the flyable tube; this trims exactly that
+    overlap so the corridor validator + the SelfTest dock-ray + spawn clearance still pass. Only
+    boxes that actually intrude move (surgical — coverage elsewhere is untouched). The freed sliver
+    lies within `corridor_r` of the centreline = inside the carved corridor, so it never re-opens a
+    reachability leak (the guard excludes the corridor). Deterministic small-step shrink."""
+    if not segs:
+        return specs
+    # Dense samples along every corridor centreline (the capsule axis a corridor is swept along).
+    qs = []
+    for a, b, _r in segs:
+        a = np.asarray(a, float)
+        b = np.asarray(b, float)
+        n = max(2, int(np.ceil(float(np.linalg.norm(b - a)) / (res * 0.5))) + 1)
+        for t in np.linspace(0.0, 1.0, n):
+            qs.append(a + (b - a) * t)
+    Q = np.array(qs)
+    step = res * 0.1
+    out, dropped = [], 0
+    for c, s in specs:
+        lo = c - s * 0.5
+        hi = c + s * 0.5
+        collapsed = False
+        for _ in range(4000):
+            cp = np.clip(Q, lo, hi)                       # closest box point to each centreline sample
+            d = np.linalg.norm(Q - cp, axis=1)
+            w = int(np.argmin(d))
+            if d[w] >= corridor_r:                        # box already clears the whole corridor
+                break
+            q = Q[w]
+            # Cheapest single face to move so this sample sits >= corridor_r outside the box.
+            best_ax, best_hi, best_cost = 0, True, np.inf
+            for ax in range(3):
+                cost_hi = hi[ax] - (q[ax] - corridor_r)   # push hi[ax] down under q-corridor_r
+                cost_lo = (q[ax] + corridor_r) - lo[ax]   # push lo[ax] up over  q+corridor_r
+                if 0.0 < cost_hi < best_cost:
+                    best_cost, best_ax, best_hi = cost_hi, ax, True
+                if 0.0 < cost_lo < best_cost:
+                    best_cost, best_ax, best_hi = cost_lo, ax, False
+            if best_hi:
+                hi[best_ax] -= step
+            else:
+                lo[best_ax] += step
+            if (hi - lo).min() <= res:  # box sat (almost) entirely in the flyable tube — drop it
+                collapsed = True
+                break
+        if collapsed:
+            dropped += 1
+            continue
+        out.append(((lo + hi) * 0.5, hi - lo))
+    return out, dropped
+
+
 def auto_config(spec: dict, ws: float) -> dict:
     """Resolve the --auto knobs from `auto_config:` in the YAML, filling authored-unit defaults from
     the world collision constants via the world-scale `ws`."""
@@ -726,9 +865,12 @@ def auto_config(spec: dict, ws: float) -> dict:
         voxel_res=float(ac.get("voxel_res", 0.5)),
         box_res=float(ac.get("box_res", 1.75)),
         margin=float(spec.get("margin", 0.05)),
+        pad=float(ac.get("pad", 0.0)),
         ship_r=ship_r,
         corridor_r=corridor_r,
         corridor_approach=float(ac.get("corridor_approach", 5.0)),
+        shell=bool(ac.get("shell", True)),
+        shell_iters=int(ac.get("shell_iters", 6)),
     )
 
 
@@ -739,7 +881,14 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     box_res = cfg["box_res"]
     voxel_res = cfg["voxel_res"]
     margin = cfg["margin"]
+    pad = cfg["pad"]
     segs = corridor_segments(hps, cfg["corridor_r"], cfg["corridor_approach"])
+    # Grow-outward margin (`pad`): after the greedy merge every box is inflated by `pad` on all six
+    # faces BEFORE the hull-containment clamp, so collision reaches out to the visual surface (at the
+    # extremity tips the clamp still wins → metric-neutral) instead of stopping strictly inside it —
+    # ships bounce at/just outside the visible hull rather than sinking into the thin outer shell.
+    # The flyable dock tube is protected AFTER padding by the retreat_from_corridors keep-out pass
+    # (trims any box back to the true corridor wall), so the coarse carve here stays at corridor_r.
 
     from scipy.ndimage import label as _label, distance_transform_edt as _edt, binary_dilation as _dil
 
@@ -753,10 +902,13 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     # not the paper-thin near-surface sealed band any finite-box approximation slightly penetrates.
     interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > ship_r)
 
-    def clamp_specs(boxes, grid):
+    def clamp_specs(boxes, grid, pad_amt=0.0):
         out, dropped = [], 0
         for b in boxes:
             lo, hi = box_bounds(grid, b)
+            if pad_amt > 0.0:  # inflate outward on all faces, then let the hull clamp trim the overshoot
+                lo = np.asarray(lo, float) - pad_amt
+                hi = np.asarray(hi, float) + pad_amt
             clamped = clamp_box_to_hull(lo, hi, eqs, margin, grid.res)
             if clamped is None:
                 dropped += 1
@@ -771,7 +923,7 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
     solid_box = downsample_solid(gfine, solid_fine, gbox)
     corridor_box = corridor_mask(gbox, segs)
     boxes = greedy_boxes(solid_box & ~corridor_box)
-    specs, dropped = clamp_specs(boxes, gbox)
+    specs, dropped = clamp_specs(boxes, gbox, pad)  # the coarse bulk grows out to the visual surface
 
     # FINE PATCH passes: the hull-containment clamp shrinks coarse boxes at the extremities (tower
     # top, arm/spindle tips) where the visual hull is tight, which can re-open a narrow gap into a
@@ -798,6 +950,37 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
         patched += len(pspecs)
         dropped += pdrop
 
+    # Dock keep-out geometry — the swept carve segments PLUS each hardpoint's straight line to the door
+    # centre (the bake corridor validator) and its radial approach ray (the server SelfTest dock ray /
+    # spawn cone). Both the corridor keep-out and the shell pass retreat against exactly this, so all
+    # three downstream guards (bake corridor validator, SelfTest dock ray, spawn clearance) stay green.
+    ent_p = [np.asarray(p, float) for n, p, f in hps if "Entrance" in n]
+    ext_p = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
+    door = np.mean(ent_p, axis=0) if ent_p else np.zeros(3)
+
+    def _radial(p):
+        l = float(np.linalg.norm(p))
+        return p / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
+
+    guard_segs = list(segs)
+    for p in ent_p + ext_p:
+        guard_segs.append((p, door, cfg["corridor_r"]))                                  # hardpoint -> door
+        guard_segs.append((p, p + _radial(p) * cfg["corridor_approach"], cfg["corridor_r"]))  # radial ray
+
+    # Corridor keep-out: `pad` can grow a box into a flyable dock tube (coarse-carve discretization);
+    # trim the offending boxes back to the true corridor wall so docking/launch stay clear.
+    if pad > 0.0:
+        specs, rdrop = retreat_from_corridors(specs, guard_segs, cfg["corridor_r"], voxel_res)
+        dropped += rdrop
+
+    # SHELL PASS: cover the visible-surface voxels the bulk decomposition left exposed (the concavity
+    # walls + outer skin) with thin, padded, hull-clamped, corridor-retreated boxes so a ship bounces at
+    # the visible surface instead of sinking to an interior box. This is the visual-sink fix; it may add
+    # many boxes (accepted — each is 6 cheap planes). See shell_cover for the invariant handling.
+    shell_added = 0
+    if cfg.get("shell", True):
+        specs, shell_added = shell_cover(specs, Sfine, gfine, corridor_fine, eqs, guard_segs, cfg)
+
     # Deterministic ordering (rounded center) + stable names.
     specs.sort(key=lambda cs: (round(float(cs[0][0]), 4), round(float(cs[0][1]), 4), round(float(cs[0][2]), 4)))
     yparts = [
@@ -816,12 +999,35 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
         covered |= np.all((scen >= c - s * 0.5 - 1e-9) & (scen <= c + s * 0.5 + 1e-9), axis=1)
     coverage = float(covered.mean()) if len(scen) else 1.0
 
+    # SURFACE coverage + VISUAL SINK: rasterize the final boxes on the fine grid, then for every
+    # visible-surface voxel measure the distance to the nearest box cell (0 if covered). `surface_cov`
+    # = fraction of surface voxels with a box on them; the sink metric is that distance in WORLD units
+    # (authored * ws) — how far a ship sinks past the visible skin before it bounces. Reported two ways:
+    #   * sink_all_* — over ALL surface voxels (0 where covered): the true typical-case feel metric.
+    #   * sink_unc_* — over only the still-UNCOVERED voxels: the residual worst cases (thin protrusions
+    #     / convex skin the metric-neutrality clamp cannot cover); its mean rises as coverage improves
+    #     because it conditions on the hardest voxels, so read it alongside surface_cov, not alone.
+    from scipy.ndimage import distance_transform_edt as _edt2
+    ws = world_scale(verts)  # authored -> world units, same derivation the sim/client use
+    solid_final = rasterize_boxes(specs, gfine)
+    surf_cov = float((Sfine & solid_final).sum() / Sfine.sum()) if Sfine.any() else 1.0
+    sink_world = _edt2(~solid_final) * gfine.res * ws
+    sink_all = sink_world[Sfine]
+    sink_unc = sink_world[Sfine & ~solid_final]
+
     stats = dict(
         gfine=gfine, interior_hollow=interior_hollow, corridor_fine=corridor_fine,
-        ship_r=ship_r, dropped=dropped, patched=patched, box_count=len(yparts),
-        coverage=coverage, solid_fine=int(solid_fine.sum()), sealed=int(sealed_fine.sum()),
-        hollow=int(interior_hollow.sum()), surface=int(Sfine.sum()),
-        box_res=box_res, voxel_res=voxel_res, segs=segs,
+        ship_r=ship_r, dropped=dropped, patched=patched, shell_added=shell_added,
+        box_count=len(yparts),
+        coverage=coverage, surface_cov=surf_cov, solid_fine=int(solid_fine.sum()),
+        sealed=int(sealed_fine.sum()), hollow=int(interior_hollow.sum()), surface=int(Sfine.sum()),
+        sink_all_mean=float(sink_all.mean()) if sink_all.size else 0.0,
+        sink_all_p90=float(np.percentile(sink_all, 90)) if sink_all.size else 0.0,
+        sink_all_max=float(sink_all.max()) if sink_all.size else 0.0,
+        sink_unc_mean=float(sink_unc.mean()) if sink_unc.size else 0.0,
+        sink_unc_max=float(sink_unc.max()) if sink_unc.size else 0.0,
+        sink_over_1r=float((sink_all > WORLD_SHIP_RADIUS).mean()) if sink_all.size else 0.0,
+        box_res=box_res, voxel_res=voxel_res, pad=pad, segs=segs,
     )
     return yparts, stats
 
@@ -834,8 +1040,8 @@ def write_generated_yaml(path: Path, yparts, cfg):
         "# A snapshot of the deterministic voxel solid-fill + greedy box-merge output for review.",
         "# The bake regenerates these from base.glb every run (auto: true in base-col.yaml); this",
         "# file is only a human-readable record. Regenerate: `uv run bake.py --auto`.",
-        f"# voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  ship_radius(authored)={cfg['ship_r']:.4f}"
-        f"  corridor_radius={cfg['corridor_r']:.4f}",
+        f"# voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
+        f"ship_radius(authored)={cfg['ship_r']:.4f}  corridor_radius={cfg['corridor_r']:.4f}",
         f"# {len(yparts)} parts",
         "margin: 0.05",
         "parts:",
@@ -892,18 +1098,25 @@ def main(argv=None):
     auto = args.auto or bool(spec.get("auto", False))
     autostats = None
     if auto:
-        print(f"\n--auto: voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  "
+        print(f"\n--auto: voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
               f"shipRadius(authored)={cfg['ship_r']:.4f}  corridorRadius={cfg['corridor_r']:.4f}")
         yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
-        print(f"--auto: {autostats['surface']} surface + {autostats['sealed']} sealed voxels "
-              f"({autostats['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
-              f"{autostats['box_count']} boxes ({autostats['patched']} fine seal-patches, "
-              f"{autostats['dropped']} collapsed/dropped by hull clamp), "
-              f"coverage {autostats['coverage']*100:.2f}%")
+        a = autostats
+        print(f"--auto: {a['surface']} surface + {a['sealed']} sealed voxels "
+              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
+              f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
+              f"{a['shell_added']} shell-cover boxes, "
+              f"{a['dropped']} collapsed/dropped by hull clamp)")
+        print(f"--auto: solid-voxel coverage {a['coverage']*100:.2f}%  "
+              f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
+        print(f"--auto: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
+              f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
+              f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
+              f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
         write_generated_yaml(HERE / "base-col.generated.yaml", yparts, cfg)
         print(f"--auto: wrote {HERE / 'base-col.generated.yaml'}")
-        if not (2 <= len(yparts) <= 200):
-            sys.exit(f"ERROR: auto produced {len(yparts)} parts (expected 2..200)")
+        if not (2 <= len(yparts) <= 1024):
+            sys.exit(f"ERROR: auto produced {len(yparts)} parts (expected 2..1024)")
     else:
         yparts = spec["parts"]
         if not (4 <= len(yparts) <= 10):

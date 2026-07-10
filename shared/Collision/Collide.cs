@@ -199,6 +199,18 @@ public static class Collide
 
         normal = default;
         penetration = 0f;
+
+        // Broad-phase for the compound scan: the merged Hull's BoundingRadius encloses every
+        // sub-hull (parts are clamped strictly inside it), so a sphere beyond that reach can't
+        // touch any part — skip the (hundreds-of-planes) sub-hull loop entirely. The 4× radius
+        // slack covers ResolveSphere's approximate corner contacts (it can report a graze up to
+        // ~a radius outside the true surface near a corner), so gated and ungated results agree.
+        // Lives in the SHARED kernel so server and client prediction gate identically (parity).
+        Vec3 reachD = pos - b.Center;
+        float reach = b.Hull!.BoundingRadius * b.Scale + radius * 4f;
+        if (reachD.LengthSquared() > reach * reach)
+            return false;
+
         bool any = false;
         for (int i = 0; i < b.SubHulls.Length; i++)
         {

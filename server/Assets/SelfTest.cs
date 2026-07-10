@@ -67,7 +67,7 @@ public static class SelfTest
         // welded mesh) BaseSubHulls collapses to 1 and this fails loudly, so ships would silently bounce
         // off (and fly through) the merged shrink-wrap again. The window is a sane cap, not the exact
         // count, so a re-bake at a different box_res stays green while a missing bake still fails.
-        Check($"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..128)", world.BaseSubHulls.Length is >= 8 and <= 128);
+        Check($"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..512)", world.BaseSubHulls.Length is >= 8 and <= 512);
         bool allSubHullsSolid = true;
         foreach (var sub in world.BaseSubHulls)
             if (sub.Planes.Length <= 3)
