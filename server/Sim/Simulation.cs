@@ -205,6 +205,13 @@ public sealed partial class Simulation
         public uint ApWaypointSector; // waypoint's sector (ApKind==3); 0 / ignored for entity kinds
         public Vec3 ApWaypointPos; // waypoint position (ApKind==3); ignored for entity kinds
 
+        // ---- Friendly-base docking maneuver (server-only, NEVER serialized) — the 3-phase state
+        // machine in DockApproach. Reset on every autopilot engage; recomputed live each tick with
+        // per-tick demotion guards (a hull bounce / drift / bad alignment self-heals to Transit). ----
+        public byte ApDockPhase; // 0 Transit, 1 Align, 2 Creep — friendly-base dock leg only
+        public int ApDockDoor = -1; // sticky BaseDockFaces index for this engagement (-1 = unchosen)
+        public uint ApDockPhaseTick; // tick of the last phase change (align/creep timeouts)
+
         // ---- Guided-missile launcher state (0 / false on hulls with no missile mount) ----
         public byte MissileAmmo; // rounds left in the rack (init = mount MagazineSize at spawn)
         public uint LastMissileTick; // last tick a missile launched (fire-cadence gate)
@@ -877,6 +884,10 @@ public sealed partial class Simulation
                 ship.ApTargetId = id;
                 ship.ApWaypointSector = sector;
                 ship.ApWaypointPos = pos;
+                // Fresh dock state per engagement: unchosen door, start in Transit (see DockApproach).
+                ship.ApDockPhase = 0;
+                ship.ApDockDoor = -1;
+                ship.ApDockPhaseTick = tick;
             }
         }
     }
@@ -1254,6 +1265,30 @@ public sealed partial class Simulation
     // opts out of this by aiming its stop shell just inside the door.
     private const float ApBrakeMargin = 16f;
 
+    // ---- Friendly-base docking maneuver tuning (server-only; see DockApproach) ----
+    // Compile-time geometry gates (the maneuver's feel is stable; only the three world.yaml knobs
+    // below are worth per-server tuning).
+    private const float ApDockHullMargin = 10f; // padding added to BaseRadius for the LOS/detour sphere
+    private const float ApDockLosSlack = 35f; // endSlack in the LOS test — excuses the terminal door pocket
+    private const float ApDockDetourStepRad = 0.6f; // per-tick azimuth advance of the orbit carrot (rad)
+    // MUST exceed ApBrakeMargin (16): the Transit clear-line ApproachPoint brakes to rest ~ApBrakeMargin
+    // short of the standoff point, so a capture radius below that margin is a dead zone the ship can
+    // never enter — Transit would park just outside it and never promote to Align/Creep (the maneuver
+    // would only ever dock by sliding into the door during Transit, never via the intended align+creep).
+    private const float ApDockCapture = 20f; // within this of the standoff point promotes Transit -> Align
+    private const float ApDockCaptureSpeedSq = 9f; // ...and speed^2 below this (~3 u/s) so the ship has settled
+    private const float ApDockRollGain = 3f; // FaceAndRoll roll proportional gain
+    private const float ApDockFacingDot = 0.995f; // Align -> Creep: nose-onto-door facing threshold
+    private const float ApDockRollTol = 0.10f; // Align -> Creep: |localUp.X| roll-alignment tolerance
+    private const float ApDockCreepFacingDot = 0.9f; // Creep demotes below this facing dot
+    private const uint ApDockAlignTimeout = 300; // ticks in Align before demoting to Transit
+    private const uint ApDockCreepTimeout = 200; // ticks in Creep before demoting to Transit
+
+    // world.yaml-overridable (ai.dock-*) — resolved in InitPigTuning from WorldAiTuning.
+    private float ApDockStandoff = 25f; // standoff point distance outside the door plane
+    private float ApDockClearance = 40f; // detour ring radius = BaseRadius + this
+    private float ApDockCreepThrottle = 0.12f; // creep throttle fraction (~19 u/s for a Scout)
+
     private ShipInputState AutopilotStep(ShipSim s, uint tick)
     {
         Vec3 myPos = s.State.Pos;
@@ -1323,16 +1358,18 @@ public sealed partial class Simulation
                 }
                 if (eb.Team == s.Team)
                 {
-                    // Friendly base: fly the docking-bay mouth at FULL THRUST (unchanged from before the
-                    // braking rework) — deliberately NOT braked. A base's docking door can sit on the FAR
-                    // side of a solid hull, and threading it relies on sustained thrust to bounce-and-slide
-                    // around the shell into the door; inserting any brake-to-rest phase stalls the ship on
-                    // the near face and, since bases hug the sector edge, erodes it to death instead of
-                    // docking. "Slamming" a friendly base is a harmless bounce (own-base contact deals no
-                    // damage) and the door simply absorbs the arrival as a dock, so there is nothing to
-                    // brake for here. The dock check ends the tick once the ship enters the door.
-                    Vec3 aim = World.BaseHull is not null ? eb.Pos + World.BaseDoorCenter : eb.Pos;
-                    return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid);
+                    // Friendly base: proper 3-phase docking maneuver (decelerate to a standoff point
+                    // outside the door, align + roll to the door, creep down the corridor until the
+                    // collision-pass dock trigger fires). Needs the parsed door geometry AND a base hull;
+                    // without either (modelless base / no doors) keep the legacy full-thrust SteerToPoint
+                    // at the aggregate door centre (or the base centre for a modelless base) — it bounces/
+                    // slides into the door and still docks, just crudely. Preserved EXACTLY as before.
+                    if (World.BaseDockFaces.Length == 0 || World.BaseHull is null)
+                    {
+                        Vec3 aim = World.BaseHull is not null ? eb.Pos + World.BaseDoorCenter : eb.Pos;
+                        return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid);
+                    }
+                    return DockApproach(s, tick, eb, stats, avoid);
                 }
                 var input = Approach(eb.Pos, World.BaseRadius + PigStandoff, ApBrakeMargin);
                 if (Arrived(myPos, s.State.Vel, eb.Pos, World.BaseRadius + PigStandoff * 1.2f))
@@ -1361,6 +1398,180 @@ public sealed partial class Simulation
                 return input;
             }
         }
+    }
+
+    // One tick of the friendly-base docking maneuver — a server-only Transit -> Align -> Creep state
+    // machine over the sticky ShipSim.ApDock* fields. INVARIANT: bases are identity-oriented (World.cs
+    // bakes the base hull untransformed; the collision pass tests `s.Pos - b.Pos`), so a door's world
+    // geometry is simply `eb.Pos + face.Center` with `Normal/U/V` used as-is. If bases ever gain a
+    // rotation this method must transform the face by it.
+    //
+    // Guards re-validate geometry EVERY tick and demote back to Transit on drift / bad alignment /
+    // timeout, so a hull bounce or overshoot self-heals rather than wedging a phase. Preconditions
+    // (checked by the caller): same sector as `eb`, BaseDockFaces non-empty, BaseHull present.
+    private ShipInputState DockApproach(ShipSim s, uint tick, World.BaseSite eb, ShipStats stats, Func<Vec3, Vec3, Vec3> avoid)
+    {
+        Vec3 myPos = s.State.Pos;
+        Quat myRot = s.State.Rot;
+        Vec3 myVel = s.State.Vel;
+        DockFace[] faces = World.BaseDockFaces;
+
+        DockFace f = faces[SelectDockDoor(s, eb, faces)];
+        Vec3 doorW = eb.Pos + f.Center; // door face plane, world space (identity-oriented base)
+        Vec3 pstand = doorW - f.Normal * ApDockStandoff; // arrival point `standoff` outside the door mouth
+
+        switch (s.ApDockPhase)
+        {
+            case 1: // ALIGN — hold at the standoff point (throttle 0 = active brake) and turn+roll onto the door
+            {
+                Vec3 up = DockUpAxis(f, myRot);
+                var input = AutoSteer.FaceAndRoll(myPos, myRot, doorW, up, PigTurnGain, ApDockRollGain, 0f);
+
+                // Facing = nose (local +Z) alignment with the direction to the door; roll error read from
+                // the door up-axis in ship-local space (localUp.Y > 0 = right way up, |localUp.X| = roll off).
+                Vec3 fwd = myRot.Rotate(new Vec3(0f, 0f, 1f)); // unit
+                Vec3 toDoor = doorW - myPos;
+                float td = toDoor.Length();
+                float facingDot = td > 1e-4f ? (toDoor.X * fwd.X + toDoor.Y * fwd.Y + toDoor.Z * fwd.Z) / td : 1f;
+                Vec3 localUp = myRot.Conjugate().Rotate(up);
+
+                if (facingDot >= ApDockFacingDot && localUp.Y > 0f && MathF.Abs(localUp.X) < ApDockRollTol)
+                {
+                    s.ApDockPhase = 2; // aligned — creep in
+                    s.ApDockPhaseTick = tick;
+                }
+                else if ((pstand - myPos).LengthSquared() > (2f * ApDockCapture) * (2f * ApDockCapture)
+                    || tick - s.ApDockPhaseTick > ApDockAlignTimeout)
+                {
+                    s.ApDockPhase = 0; // drifted off the standoff point or stuck oscillating — re-approach
+                    s.ApDockPhaseTick = tick;
+                }
+                return input;
+            }
+            case 2: // CREEP — slow throttle down the corridor; the collision-pass dock trigger ends the run
+            {
+                Vec3 up = DockUpAxis(f, myRot);
+                // Aim PAST the plane (doorW + Normal*DockFaceDepth) so the aim direction never degenerates
+                // as the nose reaches the door — the ship keeps a valid heading right up to the trigger.
+                Vec3 creepAim = doorW + f.Normal * World.DockFaceDepth;
+                var input = AutoSteer.FaceAndRoll(myPos, myRot, creepAim, up, PigTurnGain, ApDockRollGain, ApDockCreepThrottle);
+
+                Vec3 fwd = myRot.Rotate(new Vec3(0f, 0f, 1f));
+                Vec3 toAim = creepAim - myPos;
+                float ta = toAim.Length();
+                float facingDot = ta > 1e-4f ? (toAim.X * fwd.X + toAim.Y * fwd.Y + toAim.Z * fwd.Z) / ta : 1f;
+
+                // Lateral offset from the door's corridor axis (project ship->door onto the U/V plane).
+                Vec3 rel = myPos - doorW;
+                float alongN = rel.X * f.Normal.X + rel.Y * f.Normal.Y + rel.Z * f.Normal.Z;
+                Vec3 lateral = rel - f.Normal * alongN;
+                float latU = MathF.Abs(lateral.X * f.U.X + lateral.Y * f.U.Y + lateral.Z * f.U.Z);
+                float latV = MathF.Abs(lateral.X * f.V.X + lateral.Y * f.V.Y + lateral.Z * f.V.Z);
+                bool outsideCorridor = latU > f.Eu + World.ShipRadius || latV > f.Ev + World.ShipRadius;
+
+                if (outsideCorridor
+                    || facingDot < ApDockCreepFacingDot
+                    || (doorW - myPos).Length() > 2f * ApDockStandoff
+                    || tick - s.ApDockPhaseTick > ApDockCreepTimeout)
+                {
+                    s.ApDockPhase = 0; // fell out of the corridor / faced away / drifted / timed out — re-approach
+                    s.ApDockPhaseTick = tick;
+                }
+                return input;
+            }
+            default: // 0 TRANSIT — decelerate to the standoff point, detouring around the base sphere if blocked
+            {
+                float sphereR = World.BaseRadius + ApDockHullMargin;
+                ShipInputState input;
+                if (AutoSteer.SegmentEntersSphere(myPos, pstand, eb.Pos, sphereR, ApDockLosSlack))
+                {
+                    // Door is behind the base hull: steer a live-recomputed carrot around the clearance ring
+                    // instead of driving straight through the structure.
+                    float ring = World.BaseRadius + ApDockClearance;
+                    Vec3 carrot = AutoSteer.OrbitWaypoint(
+                        myPos, pstand, eb.Pos, ring, ApDockDetourStepRad,
+                        new Vec3(0f, 1f, 0f), new Vec3(1f, 0f, 0f)
+                    );
+                    carrot = ClampInsideSector(carrot, s.SectorId); // bases hug the sector edge — keep the arc off the eroding boundary
+                    // Throttle governor on the arc: full thrust normally, back to 0.25 once the flight
+                    // model could already stop by the standoff point, so a late-clearing LOS never arrives hot.
+                    float stopDist = AutoSteer.StoppingDistance(myVel.Length(), stats.MaxSpeed, stats.Accel, stats.BackMult);
+                    float distToStand = (pstand - myPos).Length();
+                    float throttle = (stopDist + ApBrakeMargin >= distToStand) ? 0.25f : 1f;
+                    input = AutoSteer.SteerToPoint(myPos, myRot, carrot, PigTurnGain, throttle, avoid);
+                }
+                else
+                {
+                    // Clear line to the standoff point: physics-braked approach (asteroid avoidance included).
+                    input = AutoSteer.ApproachPoint(
+                        myPos, myRot, myVel, pstand, 0f,
+                        stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
+                    );
+                }
+
+                if ((pstand - myPos).LengthSquared() <= ApDockCapture * ApDockCapture
+                    && myVel.LengthSquared() < ApDockCaptureSpeedSq)
+                {
+                    s.ApDockPhase = 1; // arrived + settled at the standoff point — align to the door
+                    s.ApDockPhaseTick = tick;
+                }
+                return input;
+            }
+        }
+    }
+
+    // Pick (once per engagement, then sticky) which docking door to use: argmin over |P - pstand_i|
+    // plus a half-ring detour penalty when the straight line to that standoff point is blocked by the
+    // base sphere, so a reachable door beats a nearer one hidden behind the hull. Stock content is N=1
+    // (this just returns door 0), but the selection stays correct for multi-door bases.
+    private int SelectDockDoor(ShipSim s, World.BaseSite eb, DockFace[] faces)
+    {
+        if (s.ApDockDoor >= 0 && s.ApDockDoor < faces.Length)
+            return s.ApDockDoor; // already chosen — keep it for the whole engagement
+
+        Vec3 myPos = s.State.Pos;
+        float sphereR = World.BaseRadius + ApDockHullMargin;
+        float detourPenalty = MathF.PI * (World.BaseRadius + ApDockClearance); // ~half-ring arc cost
+        int best = 0;
+        float bestCost = float.MaxValue;
+        for (int i = 0; i < faces.Length; i++)
+        {
+            Vec3 doorW = eb.Pos + faces[i].Center;
+            Vec3 pstand = doorW - faces[i].Normal * ApDockStandoff;
+            float cost = (pstand - myPos).Length();
+            if (AutoSteer.SegmentEntersSphere(myPos, pstand, eb.Pos, sphereR, ApDockLosSlack))
+                cost += detourPenalty;
+            if (cost < bestCost)
+            {
+                bestCost = cost;
+                best = i;
+            }
+        }
+        s.ApDockDoor = best;
+        return best;
+    }
+
+    // The door's "up" axis for roll alignment: whichever in-plane axis (U or V) is more aligned with
+    // world +Y (tie -> V), sign-flipped toward the ship's current up so FaceAndRoll rolls the short way.
+    private static Vec3 DockUpAxis(DockFace f, Quat shipRot)
+    {
+        // dot(axis, worldY) is just the axis's Y component (U/V are unit).
+        Vec3 axis = MathF.Abs(f.U.Y) > MathF.Abs(f.V.Y) ? f.U : f.V; // strict > ⇒ tie falls to V
+        Vec3 shipUp = shipRot.Rotate(new Vec3(0f, 1f, 0f));
+        float d = axis.X * shipUp.X + axis.Y * shipUp.Y + axis.Z * shipUp.Z;
+        return d >= 0f ? axis : axis * -1f;
+    }
+
+    // Clamp a point to stay inside the sector's sphere (origin-centered — the boundary-erosion pass
+    // damages by `Pos.Length() - SectorRadius`), leaving a 30 u margin off the eroding boundary. Used to
+    // keep the detour carrot from routing an edge-hugging base's arc out into the boundary hazard.
+    private Vec3 ClampInsideSector(Vec3 p, uint sector)
+    {
+        float limit = World.SectorRadius(sector) - 30f;
+        if (limit <= 0f)
+            return p;
+        float len = p.Length();
+        return len > limit ? p * (limit / len) : p;
     }
 
     // Arrival test shared by the point-destination autopilot kinds: within `band` of the point AND

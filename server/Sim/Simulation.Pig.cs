@@ -113,6 +113,12 @@ public sealed partial class Simulation
         PigJukeAmpMin = t.JukeAmpMin;
         PigJukeAmpMax = t.JukeAmpMax;
         PigAimSinDeg = MathF.Sin(t.AimDeg * (MathF.PI / 180f));
+
+        // Player-autopilot friendly-base docking maneuver (DockApproach) — authored in the same `ai:`
+        // block; server-only navigation, not a PIG behaviour.
+        ApDockStandoff = t.DockStandoff;
+        ApDockClearance = t.DockClearance;
+        ApDockCreepThrottle = t.DockCreepThrottle;
     }
 
     // Lead solving uses the drone's primary weapon (all server weapons share these). Instance

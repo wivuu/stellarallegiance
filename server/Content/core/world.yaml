@@ -87,6 +87,10 @@ ai:
   juke-period-seconds: 0.65
   juke-amp-min: 0.45
   juke-amp-max: 1.0
+  # Player-autopilot friendly-base docking maneuver (server-only; DockApproach Transit->Align->Creep).
+  # dock-standoff: 25         # standoff-point distance outside the door plane (world units)
+  # dock-clearance: 40        # detour ring radius past BaseRadius when routing around the base
+  # dock-creep-throttle: 0.12 # throttle fraction while creeping down the door corridor (~19 u/s Scout)
 
 # Collision damage + sector-boundary hazard (kinematics stay in the shared CollisionConfig —
 # the client predicts bounces; damage is server-only).

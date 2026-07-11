@@ -189,8 +189,119 @@ namespace StellarAllegiance.Shared
             return pureDrag - term * MathF.Log(1f + speed / (maxSpeed * backMult));
         }
 
+        // =====================================================================
+        //  PLAYER-AUTOPILOT DOCKING GEOMETRY — SERVER-ONLY.
+        //
+        //  These three helpers back the friendly-base dock maneuver (Simulation
+        //  DockApproach: Transit -> Align -> Creep). Like ApproachPoint /
+        //  StoppingDistance above they are DELIBERATELY NOT float-identical to any
+        //  PIG path or client prediction — they use ordinary MathF and are never
+        //  called from PIG steering or the prediction integrator, so the PIG
+        //  determinism suites do not (and must not need to) exercise them.
+        // =====================================================================
+
+        // Does the segment from->to pierce the sphere (center,radius) before its terminal `endSlack`?
+        // Used to decide whether the straight run to a standoff point is blocked by the base's
+        // collision sphere (so the dock detours AROUND it). `endSlack` excuses the terminal door
+        // pocket that legitimately sits just inside the padded hull sphere near the door mouth: an
+        // entry that only happens within `endSlack` of the segment's far end is NOT treated as a block.
+        public static bool SegmentEntersSphere(Vec3 from, Vec3 to, Vec3 center, float radius, float endSlack)
+        {
+            Vec3 w = to - from;
+            float L = w.Length();
+            if (L < 1e-4f)
+                return false; // degenerate segment — no traversal to block
+            Vec3 wHat = w * (1f / L);
+            // Closest-approach parameter along the segment, clamped to [0, L].
+            float tStar = Dot(center - from, wHat);
+            tStar = tStar < 0f ? 0f : (tStar > L ? L : tStar);
+            Vec3 closest = from + wHat * tStar;
+            float dc = (closest - center).Length();
+            if (dc >= radius)
+                return false; // whole segment stays outside the sphere
+            // First intersection (entry) parameter: tStar backed off by the half-chord.
+            float tIn = tStar - MathF.Sqrt(radius * radius - dc * dc);
+            return tIn > 0f && tIn < L - endSlack; // an entry strictly inside the segment, before the slack tail
+        }
+
+        // A steering "carrot" that walks the ship's azimuth (around `center`) toward the goal's
+        // azimuth, one `stepRad` bite per call, projected onto the ring of radius `ringRadius`.
+        // Rotate â = normalize(pos-center) toward ĝ = normalize(goal-center) by min(stepRad, angle)
+        // about normalize(â×ĝ) via Rodrigues, then re-project onto the ring. Antiparallel tie-breaks
+        // (â×ĝ ~ 0) fall back to â×tieBreak1 then â×tieBreak2 so a diametrically-opposite goal still
+        // picks a consistent way around.
+        //
+        // Termination: the carrot is recomputed LIVE each tick from the ship's current azimuth, so a
+        // hull bounce only resets â to wherever the ship actually is — it DELAYS progress but never
+        // inverts it (the rotation is always toward ĝ). A ship starting inside the ring gets a
+        // radially-outward-then-around carrot for free (â is still its true azimuth; the projection
+        // pushes it out to ringRadius). No accumulated state ⇒ no wind-up, no oscillation lock.
+        public static Vec3 OrbitWaypoint(
+            Vec3 pos,
+            Vec3 goal,
+            Vec3 center,
+            float ringRadius,
+            float stepRad,
+            Vec3 tieBreak1,
+            Vec3 tieBreak2
+        )
+        {
+            Vec3 a = NormalizeOr(pos - center, tieBreak1);
+            Vec3 g = NormalizeOr(goal - center, tieBreak1);
+            Vec3 axis = Vec3.Cross(a, g);
+            float axisMag = axis.Length(); // ORIGINAL |â×ĝ| — drives the swept angle even after tie-breaks
+            if (axisMag < 1e-4f)
+                axis = Vec3.Cross(a, tieBreak1); // (near-)parallel/antiparallel — pick a stable spin axis
+            if (axis.Length() < 1e-4f)
+                axis = Vec3.Cross(a, tieBreak2); // tieBreak1 was parallel to â too — second fallback
+            axis = NormalizeOr(axis, tieBreak2);
+            // Angle between â and ĝ from the ORIGINAL cross magnitude (0 when already aligned, ~π when
+            // antiparallel → a full stepRad bite around the fallback axis).
+            float phi = MathF.Min(stepRad, MathF.Atan2(axisMag, Dot(a, g)));
+            float c = MathF.Cos(phi),
+                sn = MathF.Sin(phi);
+            // Rodrigues: rotate â about the unit `axis` by φ.
+            Vec3 r = a * c + Vec3.Cross(axis, a) * sn + axis * (Dot(axis, a) * (1f - c));
+            return center + r * ringRadius;
+        }
+
+        // Steer the nose onto `aimPoint` (yaw/pitch EXACTLY the SteerToPoint pattern) AND roll the ship
+        // so its local "up" matches `upWorld`, commanding a fixed `throttle`. Used by the dock Align
+        // (throttle 0 = active brake while pointing) and Creep (slow throttle down the corridor) phases.
+        // Roll is gated until the aim is near the nose (local.Z > 0.5) so the ship faces the door before
+        // it rolls. NOTE: the roll SIGN below is analytically derived but UNVERIFIED — left exactly as
+        // specified; a docking-roll test assertion will catch a flip (fix = the single sign on localUp.X).
+        public static ShipInputState FaceAndRoll(
+            Vec3 myPos,
+            Quat myRot,
+            Vec3 aimPoint,
+            Vec3 upWorld,
+            float turnGain,
+            float rollGain,
+            float throttle
+        )
+        {
+            Vec3 to = aimPoint - myPos;
+            float d = to.Length();
+            Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
+            Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
+            float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * turnGain);
+            float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * turnGain);
+            Vec3 localUp = Conjugate(myRot).Rotate(upWorld);
+            float roll = local.Z > 0.5f ? Clamp1(-localUp.X * rollGain) : 0f;
+            return new ShipInputState
+            {
+                Thrust = throttle,
+                Yaw = yaw,
+                Pitch = pitch,
+                Roll = roll,
+            };
+        }
+
         // ---- small math helpers (verbatim from Simulation.Pig.cs) ----
         private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
+
+        private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
         private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
 

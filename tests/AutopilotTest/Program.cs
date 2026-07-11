@@ -11,9 +11,14 @@
 //
 // Approaches use AutoSteer.ApproachPoint (Issue 2): physics-based braking derived from the flight
 // model — full thrust until the model's stopping distance (retro + linear drag) reaches the arrival
-// shell, then throttle 0 so the ship settles AT the shell instead of ramming through it. The friendly
-// base is the one exception: it keeps the proven full-thrust door steer (braking stalls/erodes it
-// against the far-side door of a boundary-hugging solid hull; own-base contact is a harmless bounce).
+// shell, then throttle 0 so the ship settles AT the shell instead of ramming through it.
+//
+// The friendly base is now a proper docking maneuver (WP1, server-only Transit -> Align -> Creep state
+// machine in Simulation.DockApproach): decelerate to a standoff point outside the door, turn+roll onto
+// the door, then creep down the corridor until the collision-pass dock trigger fires — routing AROUND
+// the base sphere when the door is on the far side. Scenarios 5/5b/5c guard that behaviour, and they
+// first assert BaseDockFaces.Length == 1 as a loud proof the real base.glb loaded (CI without
+// client/assets must fail here, not silently take the modelless full-thrust fallback).
 //
 // Scenarios:
 //   1. Waypoint: fly to an in-sector waypoint → distance falls, ship brakes, settles in the standoff
@@ -23,7 +28,13 @@
 //      a static target (per-tick gap floor).
 //   4. Enemy base: arrives at standoff and disengages, never intersecting the base radius on any tick.
 //   4b. Rock: brakes to standoff without ever intersecting the rock radius (no ram), then disengages.
-//   5. Friendly base: flies home and docks (ship removed / owner returned to spawn).
+//   5. Friendly base: straight-on start — decelerates to a standoff pause outside the door, turns to
+//      face + rolls onto the door up-axis, then creeps in slow (impact speed low, not a ~160 u/s ram)
+//      and docks (ship removed / owner returned to spawn).
+//   5b. Friendly base far side: start on the opposite side of the base from the door → detours AROUND
+//      the base sphere (never hugs/penetrates the hull) before the terminal approach, then docks slow.
+//   5c. Friendly base override + re-engage: engage far-side, a manual yaw disengages mid-dock, then a
+//      fresh engage resets the dock phase/door and the ship still docks.
 //   6. Aleph transit: waypoint in an adjacent sector → the ship warps (SectorId changes) then arrives.
 //   7. Avoidance: a rock planted on the line to the waypoint → the ship never intersects it and still arrives.
 //   8. Determinism: the same waypoint scenario twice → bit-identical final position.
@@ -85,6 +96,7 @@ Simulation.ShipSim Spawn(Simulation sim, int client, byte team, byte cls)
 }
 
 float Dist(Vec3 a, Vec3 b) => (a - b).Length();
+float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
 // ---- 1. Waypoint: approach, brake, settle in the standoff band, disengage --------------------------
 {
@@ -248,28 +260,179 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         $"rock: did not settle at standoff (engaged {ship.ApEngaged}, gap {rockGap:0.0}, speed {ship.State.Vel.Length():0.0})");
 }
 
-// ---- 5. Friendly base: fly home and dock -----------------------------------------------------------
+// ---- 5. Friendly base: straight-on start — decelerate, turn+roll, creep in, dock -------------------
 {
     var sim = BootSim(seed: 5);
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
     var homeBase = sim.World.Bases.First(b => b.Team == 0);
     ulong shipId = ship.ShipId;
-    PlaceAt(ship, homeBase.SectorId, homeBase.Pos + new Vec3(0f, 0f, 300f));
+
+    // Loud guard: the real base.glb must have parsed exactly one docking door. Without it (CI missing
+    // client/assets) the friendly branch silently takes the modelless full-thrust fallback and the
+    // maneuver assertions below become meaningless — so fail HERE, loudly, first.
+    Check(sim.World.BaseDockFaces.Length == 1,
+        $"friendly base: base.glb loaded with exactly one docking door (BaseDockFaces.Length {sim.World.BaseDockFaces.Length})",
+        $"friendly base: expected exactly one parsed docking door — got {sim.World.BaseDockFaces.Length} (assets not loaded?)");
+
+    // Door world geometry, derived from the booted sim (identity-oriented base: doorW = base.Pos + Center).
+    var f = sim.World.BaseDockFaces[0];
+    Vec3 basePos = homeBase.Pos;
+    Vec3 doorW = basePos + f.Center;
+    Vec3 pstand = doorW - f.Normal * 25f; // standoff point, 25 = ai dock-standoff default
+
+    // Straight-on start: 300 u out from the door along the (outward) approach axis.
+    PlaceAt(ship, homeBase.SectorId, doorW - f.Normal * 300f);
     sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
     sim.Step();
 
     bool docked = false;
+    bool sawStandoffPause = false; // some tick paused near the standoff point (decelerated to arrive, not ram)
+    float maxFacing = 0f;          // best nose (local +Z) alignment with the door's inward normal
+    float maxUpAlign = 0f;         // best roll alignment onto a door in-plane axis (sampled only while facing)
+    float lastSpeed = 0f;          // speed on the final tick before the ship is removed (impact speed)
     for (int i = 0; i < 1500 && !docked; i++)
     {
         sim.Step();
         if (!sim.Ships.Any(s => s.ShipId == shipId))
+        {
             docked = true;
+            break;
+        }
+        Vec3 pos = ship.State.Pos;
+        float speed = ship.State.Vel.Length();
+        lastSpeed = speed;
+        Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
+        float facing = Dot(fwd, f.Normal);
+        maxFacing = MathF.Max(maxFacing, facing);
+        // The Transit approach (AutoSteer.ApproachPoint) brakes to rest ~ApBrakeMargin (16 u) short of
+        // the standoff point, so the near-stopped pause physically occurs at ≈16 u — use 18 (just above
+        // that margin), not the plan's provisional 15 which sits below the sim's actual brake distance.
+        if (Dist(pos, pstand) < 18f && speed < 3f)
+            sawStandoffPause = true;
+        if (facing > 0.98f)
+        {
+            Vec3 up = ship.State.Rot.Rotate(new Vec3(0f, 1f, 0f));
+            float upAlign = MathF.Max(MathF.Abs(Dot(up, f.U)), MathF.Abs(Dot(up, f.V)));
+            maxUpAlign = MathF.Max(maxUpAlign, upAlign);
+        }
     }
 
     Check(docked, "friendly base: autopilot flew the ship home and it docked (removed from the world)",
         "friendly base: the ship never docked");
     Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "friendly base: the docked player was returned to the spawn menu",
         "friendly base: the player still owns a flying ship after docking");
+    // Decelerate-to-arrive: the ship pauses near-stopped at the standoff point instead of barreling in.
+    Check(sawStandoffPause, "friendly base: paused near-stopped at the door standoff point (decelerated to arrive)",
+        "friendly base: never paused at the standoff point (no deceleration phase)");
+    // Turn-to-face: the nose comes onto the door's inward normal during Align/Creep.
+    Check(maxFacing > 0.99f, $"friendly base: turned to face the door (max facing dot {maxFacing:0.000} > 0.99)",
+        $"friendly base: never turned to face the door (max facing dot {maxFacing:0.000})");
+    // Roll alignment: ship "up" rolls onto the door's up-axis (guards FaceAndRoll's roll sign).
+    Check(maxUpAlign > 0.95f, $"friendly base: rolled onto the door up-axis (max up-align {maxUpAlign:0.000} > 0.95)",
+        $"friendly base: never rolled onto the door up-axis (max up-align {maxUpAlign:0.000})");
+    // Creep-in: docks at a gentle speed, not the old ~160 u/s hull slam.
+    Check(lastSpeed < 40f, $"friendly base: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
+        $"friendly base: slammed the dock hot (impact speed {lastSpeed:0.0})");
+}
+
+// ---- 5b. Friendly base far side: detour AROUND the base sphere, then dock ---------------------------
+{
+    var sim = BootSim(seed: 55);
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
+    var homeBase = sim.World.Bases.First(b => b.Team == 0);
+    ulong shipId = ship.ShipId;
+
+    var f = sim.World.BaseDockFaces[0];
+    Vec3 basePos = homeBase.Pos;
+    Vec3 doorW = basePos + f.Center;
+    Vec3 pstand = doorW - f.Normal * 25f;
+
+    // Start on the OPPOSITE side of the base from the door (the stock door's inward normal ≈ +Y, so
+    // +Normal*300 puts the ship above a base whose bay is on the bottom — the door is fully occluded).
+    PlaceAt(ship, homeBase.SectorId, basePos + f.Normal * 300f);
+    sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
+    sim.Step();
+
+    bool docked = false;
+    bool enteredTerminal = false;    // first tick the ship comes within 60 of the standoff point
+    float minCenterGap = float.PositiveInfinity; // closest the ship gets to the base CENTRE before terminal
+    float lastSpeed = 0f;
+    for (int i = 0; i < 2500 && !docked; i++)
+    {
+        sim.Step();
+        if (!sim.Ships.Any(s => s.ShipId == shipId))
+        {
+            docked = true;
+            break;
+        }
+        Vec3 pos = ship.State.Pos;
+        lastSpeed = ship.State.Vel.Length();
+        if (!enteredTerminal && Dist(pos, pstand) < 60f)
+            enteredTerminal = true;
+        // Only sample the detour leg: once in the terminal approach the ship legitimately closes on the hull.
+        if (!enteredTerminal)
+            minCenterGap = MathF.Min(minCenterGap, Dist(pos, basePos));
+    }
+
+    Check(docked, "friendly base far side: detoured around the base and docked (removed from the world)",
+        "friendly base far side: the ship never docked");
+    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "friendly base far side: the docked player was returned to the spawn menu",
+        "friendly base far side: the player still owns a flying ship after docking");
+    // Detour proof: on the whole approach leg (before the terminal corridor) it stayed outside the base
+    // sphere — it routed AROUND the hull rather than plowing/bouncing straight through it.
+    Check(minCenterGap > World.BaseRadius,
+        $"friendly base far side: kept clear of the base sphere on the detour (min centre gap {minCenterGap:0.0} > radius {World.BaseRadius})",
+        $"friendly base far side: cut through the base sphere (min centre gap {minCenterGap:0.0} <= radius {World.BaseRadius})");
+    Check(lastSpeed < 40f, $"friendly base far side: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
+        $"friendly base far side: slammed the dock hot (impact speed {lastSpeed:0.0})");
+}
+
+// ---- 5c. Friendly base override + re-engage: manual disengage mid-dock, then dock on re-engage ------
+{
+    var sim = BootSim(seed: 555);
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
+    var homeBase = sim.World.Bases.First(b => b.Team == 0);
+    ulong shipId = ship.ShipId;
+
+    var f = sim.World.BaseDockFaces[0];
+    Vec3 basePos = homeBase.Pos;
+
+    // Same far-side start as 5b, so the re-engage has real transit/detour work to redo.
+    PlaceAt(ship, homeBase.SectorId, basePos + f.Normal * 300f);
+    sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
+    sim.Step();
+    Check(ship.ApEngaged, "override+re-engage: autopilot engaged on the far-side dock run",
+        "override+re-engage: autopilot failed to engage");
+
+    // Let the maneuver get underway (transit/detour), then a hard-yaw stick input overrides it.
+    for (int i = 0; i < 100 && ship.ApEngaged; i++)
+        sim.Step();
+    sim.EnqueueInput(1, tick: 0, input: new ShipInputState { Yaw = 1f });
+    sim.Step();
+    Check(!ship.ApEngaged, "override+re-engage: a hard-yaw stick input disengaged autopilot mid-dock",
+        "override+re-engage: autopilot did not disengage on manual input");
+
+    // Re-engage: a real pilot releases the stick before re-arming — the held override input persists
+    // otherwise and would instantly re-disengage. Neutralize it, then re-engage (the drain applies the
+    // input before the autopilot arm in the same step, and resets ApDockPhase/ApDockDoor for a clean run).
+    sim.EnqueueInput(1, tick: 0, input: new ShipInputState { });
+    sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
+    sim.Step();
+    Check(ship.ApEngaged, "override+re-engage: autopilot re-engaged after the manual override",
+        "override+re-engage: autopilot failed to re-engage");
+
+    bool docked = false;
+    for (int i = 0; i < 3000 && !docked; i++)
+    {
+        sim.Step();
+        if (!sim.Ships.Any(s => s.ShipId == shipId))
+            docked = true;
+    }
+
+    Check(docked, "override+re-engage: the re-engaged autopilot flew home and docked (phase/door reset held)",
+        "override+re-engage: the ship never docked after re-engaging");
+    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "override+re-engage: the docked player was returned to the spawn menu",
+        "override+re-engage: the player still owns a flying ship after docking");
 }
 
 // ---- 6. Aleph transit: waypoint in an adjacent sector → warp, then arrive --------------------------
