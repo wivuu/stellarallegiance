@@ -20,9 +20,10 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Content in settings modal(s) needs more padding from scrollbar
-- Unable to open chat from F3 while sitting in hangar
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
+- Mining:
+  - Miner should make ~10 runs to a single he3 rock, on average, so increase default capacity.
+  - Change which rock meshes are used for different resource types (e.g., he3, silicon, uranium, carbonaceous, regolith, ice -- use corresponding asteroid textures for each type) - see asteroid-gen tool
 ---
 
 ## Content philosophy (the through-line)

@@ -190,10 +190,14 @@ public partial class SettingsDialog : Control
         };
         body.AddChild(scroll);
 
-        // ScrollContainer hosts exactly one child; the visibility-toggled tab pages stack
-        // inside this wrapper.
+        // ScrollContainer hosts exactly one child; a MarginContainer keeps the content off
+        // the vertical scrollbar, then the visibility-toggled tab pages stack inside it.
+        var pad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        pad.AddThemeConstantOverride("margin_right", 14);
+        scroll.AddChild(pad);
+
         var host = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        scroll.AddChild(host);
+        pad.AddChild(host);
 
         AddTab(rail, host, "AUDIO", BuildAudioPage());
         AddTab(rail, host, "CONTROLS", BuildControlsPage());
