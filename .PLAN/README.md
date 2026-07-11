@@ -31,6 +31,7 @@ Archives:
   - Switch miner model to utl119 from pick_assets
   - Fix miner docking; should reuse autopilot autodocking logic, and if that logic should work with any hull, including miners and constructors which turn very slowly. If the logic does not work, then it's a bug. The logic should be to approach a point in front of the entry point, fly towards that point (avoiding collisions along the way), slow down and cut thrust in anticipation of reaching that point, then turning and stopping turning in anticipation of facing the entry point, then flying slowly towards the entrance until docking occurs (or revert logic if docking target disappears).
   - Let me verify manually rather than waste tokens
+  - Plan then dispatch implementation work to opus agent(s)
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 
@@ -310,6 +311,7 @@ Stage-1 YAML pipeline.
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
+  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
 - ✅ **[XL]** **Mining + economy** — DONE (2026-07-11, `mining` branch): rock classes (He3 harvestable,
   volume-proportional shrink streamed via `MsgRockUpdate`), per-team AI miner drones
   (`Simulation.Mining.cs`, purchasable via `/buyminer`, sector orders via `/mine <sector>`, status via
