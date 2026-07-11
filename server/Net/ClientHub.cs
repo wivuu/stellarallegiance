@@ -700,6 +700,21 @@ public sealed class ClientHub
                     _sim.EnqueueInput(client.Id, tick, input);
                     break;
                 }
+                case Protocol.MsgSetAutopilot when count >= 27:
+                {
+                    // Player autopilot engage/disengage. One-shot command (like MsgSetMap): decode + queue;
+                    // the sim thread validates ship ownership and applies it. 27-byte frame (see Protocol).
+                    byte mode = buffer[1];
+                    byte kind = buffer[2];
+                    ulong id = BitConverter.ToUInt64(buffer, 3);
+                    uint sector = BitConverter.ToUInt32(buffer, 11);
+                    var pos = new Vec3(
+                        BitConverter.ToSingle(buffer, 15),
+                        BitConverter.ToSingle(buffer, 19),
+                        BitConverter.ToSingle(buffer, 23));
+                    _sim.EnqueueSetAutopilot(client.Id, mode, kind, id, sector, pos);
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same

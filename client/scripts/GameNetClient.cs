@@ -380,6 +380,24 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
+    // Engage (mode=1) or disengage (mode=0) server-side autopilot toward a target. kind: 0 ship,
+    // 1 base, 2 rock, 3 waypoint. id is the UNENCODED entity id (strip BaseLock/AsteroidFocus flags
+    // before calling; 0 for a waypoint). sector/pos carry the waypoint's sector + world position
+    // (zeros for entity kinds). 27-byte little-endian frame (MsgSetAutopilot = 11).
+    public void SetAutopilot(byte mode, byte kind, ulong id, uint sector, Vector3 pos)
+    {
+        var f = new byte[27];
+        f[0] = 11; // MsgSetAutopilot
+        f[1] = mode;
+        f[2] = kind;
+        BitConverter.TryWriteBytes(f.AsSpan(3), id);
+        BitConverter.TryWriteBytes(f.AsSpan(11), sector);
+        BitConverter.TryWriteBytes(f.AsSpan(15), pos.X);
+        BitConverter.TryWriteBytes(f.AsSpan(19), pos.Y);
+        BitConverter.TryWriteBytes(f.AsSpan(23), pos.Z);
+        _tx.Writer.TryWrite(f);
+    }
+
     public void SendInput(uint tick, in ShipInputState input)
     {
         Span<byte> f = stackalloc byte[38];
@@ -1598,6 +1616,8 @@ public partial class GameNetClient : Node
                 Class = (ShipClass)cls,
                 IsPig = (flags & 1) != 0,
                 IsPod = (flags & 2) != 0,
+                Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
+
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,
                 ProbeAmmo = probeAmmo,

@@ -777,6 +777,39 @@ public partial class WorldRenderer : Node3D
         return _lockableBaseScratch;
     }
 
+    // Scratch reused by AllVisibleBases() (F3 autopilot picking) so the pass allocates nothing.
+    private readonly List<(ulong Id, Vector3 Pos, byte Team)> _pickBaseScratch = new();
+
+    // Every base (ANY team) in the currently-visible sector, as (id, world position, team). Unlike
+    // LockableEnemyBases() this includes friendly bases — a friendly base is a valid autopilot
+    // destination (fly there and auto-dock) — and carries the id so the F3 map click can encode it
+    // via GameContent.BaseLockId. Sector-filtered via Node.Visible. Returns a shared scratch list —
+    // read it immediately.
+    public IReadOnlyList<(ulong Id, Vector3 Pos, byte Team)> AllVisibleBases()
+    {
+        _pickBaseScratch.Clear();
+        foreach (var (node, team, id) in _baseList)
+            if (node.Visible)
+                _pickBaseScratch.Add((id, node.GlobalPosition, team));
+        return _pickBaseScratch;
+    }
+
+    // Scratch reused by AsteroidsInView() so the per-frame Tab-cycle / F3-pick pass allocates nothing.
+    private readonly List<(ulong Id, Node3D Node)> _asteroidViewScratch = new();
+
+    // Asteroids in the currently-visible sector, as (id, node). Sector visibility already drives each
+    // rock node's Visible flag (SetNodeSector / RefreshSectorVisibility), so this mirrors the ship/
+    // base accessors' filter. Feeds the extended Tab cycle (rank-2 targets) and the F3 map pick.
+    // Returns a shared scratch list — read it immediately, don't retain it.
+    public IReadOnlyList<(ulong Id, Node3D Node)> AsteroidsInView()
+    {
+        _asteroidViewScratch.Clear();
+        foreach (var (id, node) in _asteroidNodes)
+            if (node.Visible)
+                _asteroidViewScratch.Add((id, node));
+        return _asteroidViewScratch;
+    }
+
     // Damaged bases in the currently-visible sector, as (world position, 0..1 health fraction),
     // for the screen-space damage bar TargetMarkers draws. Full-health and out-of-sector bases
     // are skipped. Returns a shared scratch list — read it immediately.
@@ -1658,6 +1691,16 @@ public partial class WorldRenderer : Node3D
         switch (node)
         {
             case PredictionController pc:
+                // Follow-authority autopilot: the server raises ShipFlagAutopilot (row.Autopilot) while
+                // it's steering our ship. On the rising edge switch prediction into follow-authority
+                // mode; on the falling edge (arrival / target loss / server-detected manual override)
+                // switch back. Sync the HUD/toggle flag either way so a server-initiated disengage is
+                // reflected client-side even when the pilot didn't ask for it.
+                if (newRow.Autopilot != pc.AutopilotActive)
+                {
+                    pc.SetAutopilot(newRow.Autopilot);
+                    ShipController.SyncApEngaged(newRow.Autopilot);
+                }
                 // A sector change on the LOCAL ship is a warp: hard-snap prediction to the
                 // new position (no spring easing across the discontinuity) and switch the
                 // rendered world to the destination sector.

@@ -235,7 +235,24 @@ Stage-2 economy, no rework.
   RESTORE DEFAULTS + revert), with analog joystick support via `Input.GetAxis`. Menu/system keys
   (Esc, F3/F4/F9, base-select/spawn digits, chat) stay hardcoded to protect the modal input-gating.
   *Deferred: named preset schemes (Default/Southpaw), rebinding the menu/system keys.*
-- ☐ **[L]** **Ship autopilot and navigation** - Currently, PIGs have a form of autopilot/navigation. We want to extend that to player-ships, so the player can set a waypoint, or choose a target (base, ship, asteroid, etc) to navigate towards. 
+- ✅ **[L]** **Ship autopilot and navigation** — shipped 2026-07-10 (protocol v30): players get
+  the PIG-style navigation PIGs already had. Pick a target (Tab now cycles ships → bases →
+  asteroids in view; F3 map left-click selects an entity or drops a grid-plane **waypoint**,
+  right-click engages), press **T** (new rebindable `engage_autopilot`) and the ship flies
+  itself. Steering is **server-side**, synthesized at the existing `InputFor()` seam via the
+  shared `AutoSteer` (verbatim extraction of the PIG steer/attack bodies, determinism-guarded by
+  the PIG suites): approach + brake-to-standoff on waypoints/rocks/enemy bases, keep-station
+  (never auto-fires) on enemy ships, fly-to-door auto-dock on a friendly base, single-hop aleph
+  transit cross-sector; arrival/dock/death/target-loss or any real manual stick input disengages
+  (cruise-control handback). New `MsgSetAutopilot=11` carries the target; `ShipFlagAutopilot=16`
+  echoes the engaged state back. Client uses **follow-authority prediction**: while engaged it
+  suspends own-ship `Step()` and eases the render onto authoritative snapshots through the
+  reconcile spring (chase cam stays smooth, `ReconcileCount` doesn't climb), re-anchoring C¹ on
+  entry/exit; it keeps sampling+sending real sticks so the server detects override. AUTOPILOT HUD
+  banner + disengage toast (`DesignTokens` cyan chrome); friendly-base focus now draws its TARGET
+  bracket (never a lock arc). `tests/AutopilotTest` covers approach/standoff/stop/aleph/avoidance/
+  override/friendly-dock/target-loss. *Deferred: multi-hop aleph routing, enemy-ghost tracking
+  through fog, reuse for miners/constructors.* 
   - Make it so tab can select other types of targets (e.g., bases, asteroids), prioritize in-view enemy ships, then enemy bases, then cycle through other targets (e.g., asteroids) in view.
   - Make it so targets can be selected with the mouse from the F3 screen.
   - Abstract the PIG autopilot/autosteer behavior so that it can be reused for player ships, allowing them to follow waypoints or targets with similar logic.
@@ -285,9 +302,16 @@ Stage-1 YAML pipeline.
   already exist from Stage 2.
 - ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
-  - Create classes of rock that asteroids should be categorized into (e.g., iron, ice, 
+  - Create classes of rock that asteroids should be categorized into (e.g., helium-3, uranium, silicon, and carbonaceous).
   - Each team starts with 1 miner
-  - Miners 
+  - Miners harvest only from helium-3 asteroids
+  - Miners, once launched, will auto-pilot to the nearest helium-3 asteroid that is
+    - a. Not already targeted by another miner
+    - b. Not depleted
+    - c. Was already 'working on' before filling
+  - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.
+  - If the nearest base is not in the same sector, the miner will navigate to the base across sectors, potentially taking longer to offload resources before resuming harvesting.
+  - A miner will not enter a new sector to mine unless the commander tells him to go to that sector to mine (at least once)
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
 - ✅ **[M]** **Maps** — shipped (2026-07-10): base/asteroid/aleph positions reshuffle every match

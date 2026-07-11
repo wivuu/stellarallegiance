@@ -1108,52 +1108,34 @@ public sealed partial class Simulation
         return null;
     }
 
-    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing)
-    {
-        Vec3 to = point - myPos;
-        float d = to.Length();
-        Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
-        desired = PigAvoidAsteroids(me.SectorId, myPos, desired);
-        Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
-        float yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Clamp1(local.X * PigTurnGain);
-        float pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Clamp1(-local.Y * PigTurnGain);
-        float thrust = local.Z > 0.3f ? thrustWhenFacing : 0.2f;
-        return new ShipInputState
-        {
-            Thrust = thrust,
-            Yaw = yaw,
-            Pitch = pitch,
-        };
-    }
+    // Thin wrapper: delegates the steering geometry to the shared AutoSteer.SteerToPoint,
+    // injecting the PIG's asteroid avoidance + turn gain. Behavior is float-identical to the
+    // pre-extraction body (determinism contract).
+    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing) =>
+        AutoSteer.SteerToPoint(
+            myPos,
+            myRot,
+            point,
+            PigTurnGain,
+            thrustWhenFacing,
+            (p, d) => PigAvoidAsteroids(me.SectorId, p, d)
+        );
 
     private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius, ulong baseLockId)
     {
-        Vec3 to = point - myPos;
-        float dist = to.Length();
-        Vec3 desired = PigAvoidAsteroids(me.SectorId, myPos, NormalizeOr(to, myRot.Rotate(new Vec3(0f, 0f, 1f))));
-        Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
+        // Shared steering/standoff geometry (float-identical to the pre-extraction body:
+        // standoff = radius + PigStandoff, brake at radius + PigStandoff * 0.6f).
+        ShipInputState input = AutoSteer.AttackPoint(
+            myPos,
+            myRot,
+            point,
+            radius,
+            PigStandoff,
+            PigTurnGain,
+            (p, d) => PigAvoidAsteroids(me.SectorId, p, d)
+        );
 
-        float yaw,
-            pitch;
-        if (local.Z < 0f)
-        {
-            yaw = local.X >= 0f ? 1f : -1f;
-            pitch = local.Y >= 0f ? -1f : 1f;
-        }
-        else
-        {
-            yaw = Clamp1(local.X * PigTurnGain);
-            pitch = Clamp1(-local.Y * PigTurnGain);
-        }
-
-        float standoff = radius + PigStandoff;
-        float thrust;
-        if (dist > standoff * 1.2f)
-            thrust = local.Z > 0.3f ? 1f : 0.5f;
-        else if (dist < radius + PigStandoff * 0.6f)
-            thrust = -0.25f;
-        else
-            thrust = 0.2f;
+        float dist = (point - myPos).Length();
 
         // Guns no longer damage bases — holding primary fire on a base is a shoots-but-nothing-
         // happens look, so Firing is always false here. A hull whose missile mount CAN damage a
@@ -1167,15 +1149,10 @@ public sealed partial class Simulation
             firing2 = me.Locked && (dist - radius) <= mw.LockRange;
         }
 
-        return new ShipInputState
-        {
-            Thrust = thrust,
-            Yaw = yaw,
-            Pitch = pitch,
-            Firing = false,
-            Firing2 = firing2,
-            LockTargetId = lockTargetId,
-        };
+        input.Firing = false;
+        input.Firing2 = firing2;
+        input.LockTargetId = lockTargetId;
+        return input;
     }
 
     // Per-slot stable aiming competence in [0,1] (integer avalanche on PigId).
