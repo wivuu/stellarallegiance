@@ -1429,6 +1429,46 @@ Vec3 AtAngle(float dist, float angleDeg)
     Check(noDust.DustClouds.Count == 0, "a world with no dust config seeds zero dust clouds", "a no-dust world produced dust clouds");
 }
 
+// (seed) The whole static layout is seed-driven. Two Worlds built with the SAME seed are byte-identical
+// in base/rock/aleph placement (so --seed / SIM_SEED reproduces an exact arena for tests / benchmarks /
+// bug repro), while two built with DIFFERENT seeds place them differently (so the per-match reroll in
+// Program.cs actually reshuffles every match — players must re-scout). Uses the live world config, which
+// populates all three static kinds via its default arena/ring.
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    float mh = content.Bases[0].MaxHealth;
+
+    World Build(ulong s) => new World(s, content.World, mh, content.Start, content.Ships);
+
+    // Compare only the seeded positions of the three static kinds (counts + XYZ), which is all the
+    // reroll touches — GLB hulls / grids are identical across seeds.
+    bool SamePositions(World a, World b) =>
+        a.Bases.Count == b.Bases.Count
+        && a.Asteroids.Count == b.Asteroids.Count
+        && a.Alephs.Count == b.Alephs.Count
+        && a.Bases.Zip(b.Bases).All(p =>
+            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
+        && a.Asteroids.Zip(b.Asteroids).All(p =>
+            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
+        && a.Alephs.Zip(b.Alephs).All(p =>
+            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z);
+
+    var same1 = Build(777);
+    var same2 = Build(777);
+    Check(
+        same1.Bases.Count > 0 && same1.Asteroids.Count > 0 && same1.Alephs.Count > 0 && SamePositions(same1, same2),
+        "same seed → identical base/rock/aleph layout (a pinned --seed reproduces an exact arena)",
+        "two same-seed Worlds produced different static layouts"
+    );
+
+    var diff = Build(778);
+    Check(
+        !SamePositions(same1, diff),
+        "different seed → different base/rock/aleph layout (per-match reroll reshuffles the arena)",
+        "two different-seed Worlds produced an identical static layout"
+    );
+}
+
 // (env-3) A dust cloud on the sightline shrinks radar range: an enemy detected in clear air at 0.6× the
 // sphere radius drops OFF radar once a full-density cloud sits between viewer and target. Geometry is
 // sized from the defs so it holds regardless of tuning; base vision + rocks are removed to isolate dust.

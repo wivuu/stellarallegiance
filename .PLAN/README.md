@@ -281,10 +281,10 @@ Stage-1 YAML pipeline.
   Stage-2 flat paycheck into the real Allegiance economy.
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
-- ☐ **[M]** **Custom maps** — server-configurable aleph layout instead of a hardcoded asteroid field;
-  store as YAML in a known location (same per-server-override mechanism as Stage 1). Each file is a
-  map; env vars pick the map (random, specific, pick-from-files). *(Could be pulled forward to feed
-  Stage-4 resource-asteroid maps.)*
+- ✅ **[M]** **Maps** — shipped (2026-07-10): base/asteroid/aleph positions reshuffle every match
+  (fresh random seed per match start, even on the same map), so players explore instead of
+  memorizing. Layouts were already fully seed-generated; the seed is now random by default and
+  pinnable via `SIM_SEED` / `--seed N` for exact repro (each rolled match seed is logged).
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream

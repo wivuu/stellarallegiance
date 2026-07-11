@@ -71,7 +71,22 @@ int port =
     int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var pe) ? pe
     : int.TryParse(Environment.GetEnvironmentVariable("SIM_PORT"), out var sp) ? sp
     : 8090;
-ulong seed = 1234567;
+
+// World-layout seed sourcing. By DEFAULT the seed is rolled FRESH (cryptographically random) at boot
+// and again for every match (see BuildWorldForMap), so each launch — and each match, even on the same
+// map — reshuffles bases/asteroids/alephs and players must explore rather than memorize a layout.
+// Pin it with SIM_SEED / --seed (flag wins over env, matching the SIM_MAP/--map convention) to
+// reproduce an EXACT layout for tests / benchmarks / bug repro: a pinned seed is used everywhere
+// (boot world, every match world) and the per-match reroll is suppressed. Every rolled seed is logged
+// so any live layout can be reproduced later with --seed.
+static ulong RandomSeed()
+{
+    Span<byte> b = stackalloc byte[8];
+    System.Security.Cryptography.RandomNumberGenerator.Fill(b);
+    return BitConverter.ToUInt64(b);
+}
+ulong? pinnedSeed =
+    ulong.TryParse(Environment.GetEnvironmentVariable("SIM_SEED"), out var envSeed) ? envSeed : null;
 
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
@@ -115,7 +130,7 @@ for (int i = 0; i < args.Length; i++)
     if (args[i] == "--port")
         port = int.Parse(args[i + 1]);
     if (args[i] == "--seed")
-        seed = ulong.Parse(args[i + 1]);
+        pinnedSeed = ulong.Parse(args[i + 1]);
     if (args[i] == "--secret")
         secret = args[i + 1];
     if (args[i] == "--content")
@@ -127,6 +142,11 @@ for (int i = 0; i < args.Length; i++)
     if (args[i] == "--maps-dir")
         extraMapsDir = args[i + 1];
 }
+
+// Resolve the boot seed now that flag + env are both known: pinned value if the operator supplied
+// one, else a fresh random roll. This seed builds the boot world + the seed-agnostic MapCatalog
+// previews; unpinned matches reroll their own seed at match start (BuildWorldForMap).
+ulong seed = pinnedSeed ?? RandomSeed();
 
 // ---- Host + logging ----
 // Build the ASP.NET host early so the console logger (appsettings.json: timestamps + per-category
@@ -238,7 +258,13 @@ World? BuildWorldForMap(string name)
         return null;
     var cfg = MapCatalog.Clone(pristineWorldCfg);
     MapLoader.ApplyTo(def, cfg);
-    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
+    // Reroll the layout for each match unless the operator pinned a seed: a fresh random seed
+    // reshuffles bases/asteroids/alephs at every match start (even restarting the same map), so
+    // players must re-scout. A pinned seed reuses the boot seed for an exact repro. Log the rolled
+    // seed so any live layout can be reproduced later with --seed.
+    ulong matchSeed = pinnedSeed ?? RandomSeed();
+    Log.MatchWorldSeed(log, name, matchSeed);
+    return new World(matchSeed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
 }
 sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
 sim.OnMatchStart = hub.OnMatchStart;

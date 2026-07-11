@@ -10,11 +10,14 @@ using CapabilitySet = Allegiance.Factions.Model.CapabilitySet;
 
 namespace SimServer.Sim;
 
-// Static world: sectors, bases, asteroid fields, aleph pair — generated from one seed
-// exactly like the module's GenerateMap (Lib.cs), so a given seed produces the same map
-// here, in the module, and (later) on clients that re-derive it. Asteroids are bucketed
-// once into the same uniform spatial grid the module used (cell = PigAvoidLookahead) for
-// broad-phase collision/shot tests.
+// Static world: sectors, bases, asteroid fields, aleph pair — deterministically generated from one
+// seed. A given seed always produces the exact same layout, so the server is authoritative and the
+// world is reproducible: pin the seed (--seed / SIM_SEED) to rebuild a specific arena for tests /
+// benchmarks / bug repro. Clients never re-derive anything from the seed — every static (bases,
+// rocks, alephs, sector env/dust) is streamed per-entity via Welcome / MsgReveal — so the seed lives
+// server-side only. By default it is rolled fresh per match (Program.BuildWorldForMap), so each match
+// reshuffles even on the same map. Asteroids are bucketed once into a uniform spatial grid
+// (cell = GridCell) for broad-phase collision/shot tests.
 public sealed class World
 {
     // ---- Tuning ported from module/spacetimedb/Lib.cs (keep in sync) ----

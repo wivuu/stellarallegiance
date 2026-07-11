@@ -8,6 +8,16 @@ Reference guide for common terminology across the Stellar Allegiance codebase. O
 
 ## Simulation & Physics
 
+### World Layout Seed
+Single `ulong` from which the whole static arena — base positions, asteroid fields/belts, aleph pair, dust clouds — is deterministically placed (`new World(seed, …)`). By DEFAULT it is rolled fresh (cryptographically random) per match, so each match reshuffles the layout even on the same map and players must re-scout. Pin it with `SIM_SEED` / `--seed N` (flag wins over env) to rebuild an EXACT arena for tests/benchmarks/bug repro. Server-side only — clients never re-derive from the seed; every static is streamed per-entity via Welcome/MsgReveal.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Program.cs` — seed sourcing (random default, `SIM_SEED`/`--seed` pin), per-match reroll in `BuildWorldForMap`
+  - `server/Sim/World.cs` — `Seed`; `DetRng` streams for bases (`seed ^ 0xB453…`), asteroids/alephs (`DetRng(seed)`), dust (own RNG)
+  - `tests/FogTest/Program.cs` — same-seed identical / different-seed differ layout assertions
+- **Related:** [[Minefield]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
+- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement.
+
 ### Flight Model
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.
 - **Frequency:** Very common

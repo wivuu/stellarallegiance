@@ -46,6 +46,12 @@ Or directly: `dotnet run --project server [--port 8090] [--seed N] [--secret PW]
 - **Auth** — `SIM_SECRET` / `--secret` sets a shared-secret password. **Empty = open server**
   (fine for LAN/dev/benchmarking; set a secret before exposing to untrusted networks).
 - **Autostart** — `SIM_AUTOSTART=1` / `--autostart` bypasses the lobby gate.
+- **World seed** — the base/asteroid/aleph layout is deterministic in a seed. **By default the seed is
+  random per match** (rolled fresh at each match start, even on the same map — so players explore
+  rather than memorize). Pin it with `SIM_SEED` / `--seed N` (flag wins over env) to reproduce an
+  **exact** layout for tests/benchmarks/bug repro; a pinned seed is reused for every match. Each
+  rolled match seed is logged (`match world: … seed=…`), so any live layout can be rebuilt with
+  `--seed`. Seeds are server-side only — clients receive every static streamed per-entity.
 - **Public name** — `SIM_PUBLIC_NAME` is the name shown in the public-lobby server browser.
 - AOI tuning lives behind `SIM_*_RADIUS` / `SIM_*_EVERY` env knobs (distance-tiered LOD).
 
