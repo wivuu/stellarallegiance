@@ -303,10 +303,10 @@ Stage-1 YAML pipeline.
 - ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
   - Create classes of rock that asteroids should be categorized into (e.g., helium-3, uranium, silicon, and carbonaceous).
-  - Each team starts with 1 miner
+  - Each team starts with 1 miner, but can purchase up to 4 at a time (configurable max in world yaml)
   - Miners harvest only from helium-3 asteroids
   - Miners, once launched, will auto-pilot to the nearest helium-3 asteroid that is
-    - a. Not already targeted by another miner
+    - a. Not already targeted by another miner, unless there are more miners than asteroids
     - b. Not depleted
     - c. Was already 'working on' before filling
   - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.
