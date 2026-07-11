@@ -235,6 +235,12 @@ Stage-2 economy, no rework.
   RESTORE DEFAULTS + revert), with analog joystick support via `Input.GetAxis`. Menu/system keys
   (Esc, F3/F4/F9, base-select/spawn digits, chat) stay hardcoded to protect the modal input-gating.
   *Deferred: named preset schemes (Default/Southpaw), rebinding the menu/system keys.*
+- ☐ **[L]** **Ship autopilot and navigation** - Currently, PIGs have a form of autopilot/navigation. We want to extend that to player-ships, so the player can set a waypoint, or choose a target (base, ship, asteroid, etc) to navigate towards. 
+  - Make it so tab can select other types of targets (e.g., bases, asteroids), prioritize in-view enemy ships, then enemy bases, then cycle through other targets (e.g., asteroids) in view.
+  - Make it so targets can be selected with the mouse from the F3 screen.
+  - Abstract the PIG autopilot/autosteer behavior so that it can be reused for player ships, allowing them to follow waypoints or targets with similar logic.
+  - We will eventually (out of scope) want to be able to attach this autopilot behavior to other entities, such as miners and constructors (that fly to asteroids to make bases)
+  - Press 'T' (new mappable control) to engage the autopilot towards the selected target or waypoint.
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
@@ -279,6 +285,9 @@ Stage-1 YAML pipeline.
   already exist from Stage 2.
 - ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
   Stage-2 flat paycheck into the real Allegiance economy.
+  - Create classes of rock that asteroids should be categorized into (e.g., iron, ice, 
+  - Each team starts with 1 miner
+  - Miners 
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
 - ✅ **[M]** **Maps** — shipped (2026-07-10): base/asteroid/aleph positions reshuffle every match
