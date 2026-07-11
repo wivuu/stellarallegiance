@@ -594,6 +594,7 @@ public partial class TargetMarkers : Control
                     Vector3 rp = node.GlobalPosition;
                     DrawEntity(view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
                     DrawFocusTag(view, rp, AsteroidFocusColor, _world.LocalShip);
+                    DrawRockDetail(view, rp, rockId);
                     break;
                 }
         }
@@ -668,6 +669,9 @@ public partial class TargetMarkers : Control
             DrawFocusTag(view, focusedShip, local);
             DrawLockArc(focusedShip);
             DrawTargetHealthArc(focusedShip);
+            // A non-combat miner reads as "MINER" under its bracket so its role is obvious at focus.
+            if (focusedShip.IsMiner)
+                DrawShipRoleTag(view, focusedShip.GlobalPosition, "MINER");
         }
 
         // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
@@ -1252,6 +1256,51 @@ public partial class TargetMarkers : Control
             float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
             DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
         }
+    }
+
+    // A small role tag (e.g. "MINER") under a focused ship's bracket, in neutral data chrome.
+    private void DrawShipRoleTag(Vector2 view, Vector3 worldPos, string tag)
+    {
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(worldPos))
+            return;
+        Vector2 sp = cam.UnprojectPosition(worldPos);
+        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+            return;
+        Font font = UiFonts.Mono;
+        float w = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 10).X;
+        DrawString(font, sp + new Vector2(-w * 0.5f, FocusHalf + 29f), tag, HorizontalAlignment.Left, -1, 10, DesignTokens.Data);
+    }
+
+    // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
+    // harvestable; the others are cosmetic today (future refinery/shipyard hooks).
+    private static string RockClassName(byte cls) => (RockClass)cls switch
+    {
+        RockClass.Helium3 => "Helium-3",
+        RockClass.Uranium => "Uranium",
+        RockClass.Silicon => "Silicon",
+        _ => "Carbonaceous",
+    };
+
+    // A focused rock's resource class under its TARGET tag, with "DEPLETED" appended when a mined-out
+    // He3 rock has no ore left (orePct == 0). Neutral data chrome, minimal text — no new panel. Drawn
+    // a line below DrawFocusTag's range readout.
+    private void DrawRockDetail(Vector2 view, Vector3 worldPos, ulong rockId)
+    {
+        if (_world.GetAsteroid(rockId) is not { } rock)
+            return;
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(worldPos))
+            return;
+        Vector2 sp = cam.UnprojectPosition(worldPos);
+        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+            return;
+        string label = RockClassName(rock.RockClass);
+        if (rock.RockClass == (byte)RockClass.Helium3 && rock.OrePct <= 0)
+            label += "  DEPLETED";
+        Font font = UiFonts.Mono;
+        float w = font.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
+        DrawString(font, sp + new Vector2(-w * 0.5f, FocusHalf + 29f), label, HorizontalAlignment.Left, -1, 10, AsteroidFocusColor);
     }
 
     // The navigation waypoint: a hollow cyan (chrome) diamond with a center dot at the dropped point,

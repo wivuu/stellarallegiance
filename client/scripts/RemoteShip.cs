@@ -83,6 +83,10 @@ public partial class RemoteShip : Node3D
     // (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
     public bool IsPod { get; private set; }
 
+    // AI mining ship (Ship.IsMiner): a non-combat harvester. TargetMarkers tags a focused
+    // one "MINER" so its role reads at a glance.
+    public bool IsMiner { get; private set; }
+
     // Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
     // (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
     // than being finite-differenced from positions — differencing 20 Hz snapshots over
@@ -164,6 +168,7 @@ public partial class RemoteShip : Node3D
         Class = row.Class;
         IsPig = row.IsPig;
         IsPod = row.IsPod;
+        IsMiner = row.IsMiner;
         _defs = defs; // kept so MaxHealth/MaxShield can resolve the class def live (it may stream in later)
         // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
         // leaves the harmless 1f default until the row lands — no baked tuning on the

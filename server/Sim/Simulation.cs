@@ -33,6 +33,10 @@ public sealed partial class Simulation
     private readonly float PodEjectSpin; // rad/s initial tumble (decays via angular drag)
     private readonly WorldMechanicsTuning _mech; // gate/warp knobs read at their use sites
     private readonly WorldCombatTuning _combat; // collision damage + boundary hazard
+    // Mining tuning reads through the LIVE World (not a ctor-cached copy): the world owns the knob
+    // set it seeded ore with, and StartMatch may swap in a fresh World — harvest rate/standoff must
+    // follow it (and a test world's custom knobs must actually drive the sim).
+    private WorldMiningTuning _mining => World.Mining;
 
     // The resolved content this match runs on (GameContent defaults, optionally YAML-overlaid at
     // boot). ONE source of truth with the defs streamed to the client (Protocol.BuildDefs(Content)),
@@ -194,6 +198,13 @@ public sealed partial class Simulation
         // pod) or auto-flown home by PodThink (PIG pod). A ship is at most one of these.
         public bool IsPig;
         public bool IsPod;
+
+        // AI ore miner — a non-combat drone (hull class 4) that harvests He3 rocks and offloads at a
+        // friendly base for team credits. Ore is its live hold (He3 units, 0..the class def's
+        // OreCapacity); HarvestStep fills it, an offload drains it. Nothing sets IsMiner yet — the
+        // miner spawn/brain lands in a later stream; the PIG brain skips IsMiner ships (distinct flag).
+        public bool IsMiner;
+        public float Ore;
 
         // Server-side autopilot engaged on this ship (player-requested navigation, WP1). While set,
         // InputFor synthesizes steering instead of using the client's held input, and WriteShip raises
@@ -605,6 +616,10 @@ public sealed partial class Simulation
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
+        // Live rock shrink deltas accumulate on World across a step; clear alongside the other
+        // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
+        World.RocksChangedThisStep.Clear();
+        MinerNoticesThisStep.Clear();
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -625,6 +640,7 @@ public sealed partial class Simulation
         if (Phase == PhaseActive)
         {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
+            MinerBrainStep(tick); // 5 Hz miner lifecycle + rock/base targeting (Simulation.Mining.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
             // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
             // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
@@ -728,7 +744,12 @@ public sealed partial class Simulation
                 {
                     if (Collide.IntersectsDockFace(d, World.BaseDockFaces, World.DockFaceDepth, World.ShipRadius))
                     {
-                        DockShip(s, tick); // intersected a rectangular docking door
+                        // Intersected a rectangular docking door. Miners never enter DockShip
+                        // (it refunds PaidCost + rebinds the client) — they offload instead.
+                        if (s.IsMiner)
+                            OffloadMiner(s, b, tick);
+                        else
+                            DockShip(s, tick);
                         docked = true;
                         break;
                     }
@@ -744,7 +765,10 @@ public sealed partial class Simulation
                     float dockR = World.BaseRadius * DockRadiusFrac;
                     if (d.LengthSquared() <= dockR * dockR)
                     {
-                        DockShip(s, tick);
+                        if (s.IsMiner)
+                            OffloadMiner(s, b, tick);
+                        else
+                            DockShip(s, tick);
                         docked = true;
                         break;
                     }
@@ -889,6 +913,7 @@ public sealed partial class Simulation
                 ship.ApDockDoor = -1;
                 ship.ApDockPhaseTick = tick;
             }
+            DrainMinerQueues(tick); // miner buys + /mine sector orders (Simulation.Mining.cs)
         }
     }
 
@@ -933,6 +958,7 @@ public sealed partial class Simulation
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
         ResolveTeamUnlocks();
+        SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Log.MatchStarted(_log);
@@ -963,6 +989,7 @@ public sealed partial class Simulation
     public void ReturnToLobby()
     {
         DespawnAllPigs();
+        DespawnAllMiners();
         // Tear down any in-flight missiles too (emit gone so live clients don't keep ghosts).
         foreach (var mis in _missiles)
             MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
@@ -1109,18 +1136,25 @@ public sealed partial class Simulation
     // hardpoints (World.BaseExits, from the GLB; random pick when a base authors several).
     // Without a loaded model it falls back to the pre-hull behavior: outward toward the sector
     // center. `clearance` is added past the base radius so the spawn sits clear of the solid
-    // shell (won't instantly re-dock).
-    private void PlaceAtBase(ShipSim s, float clearance, uint tick)
+    // shell (won't instantly re-dock). `at` pins the launch to a specific base (miners relaunch
+    // from the base they offloaded at); null keeps the first-team-base pick.
+    private void PlaceAtBase(ShipSim s, float clearance, uint tick, World.BaseSite? at = null)
     {
         Vec3 basePos = default;
         uint sector = World.DefaultSector;
-        foreach (var b in World.Bases)
-            if (b.Team == s.Team)
-            {
-                basePos = b.Pos;
-                sector = b.SectorId;
-                break;
-            }
+        if (at is World.BaseSite site)
+        {
+            basePos = site.Pos;
+            sector = site.SectorId;
+        }
+        else
+            foreach (var b in World.Bases)
+                if (b.Team == s.Team)
+                {
+                    basePos = b.Pos;
+                    sector = b.SectorId;
+                    break;
+                }
 
         Vec3 outward;
         Quat rot;
@@ -1180,6 +1214,11 @@ public sealed partial class Simulation
                 continue; // disconnected
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
+            // A miner hull is a team drone, never a player ship: a MsgSpawn asking for it is
+            // dropped like a locked class (buy one with /buyminer instead). Guards the sim even
+            // when a client fails to hide ore hulls from its hangar.
+            if (IsMinerClass(info.cls))
+                continue;
             // Stage-2 economy gate: a locked or unaffordable buy is dropped (no ship, no charge,
             // no reschedule). The client's spawn-pending retry times out and its pre-check stops it
             // re-spamming a request it can predict will fail.
@@ -1217,6 +1256,8 @@ public sealed partial class Simulation
             return PodThink(s, tick);
         if (s.IsPig)
             return PigExecute(s, tick);
+        if (s.IsMiner)
+            return MinerExecute(s, tick); // server-driven drone: no input ring, no autopilot flags
 
         int slot = (int)(tick % InputRingSize);
         if (s.InputRingTick[slot] == tick)
@@ -1313,20 +1354,22 @@ public sealed partial class Simulation
                 stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, margin, avoid
             );
 
-        // Fly to a point that lives in `destSector`: if it's another sector, hop the single aleph that
-        // leads there (full-thrust steer to the gate mouth; TryWarp handles transit). No gate → give up.
-        // Returns true and fills `input` when it handled a cross-sector leg; false = point is in-sector.
+        // Fly to a point that lives in `destSector`: if it's another sector, steer to the next-hop aleph
+        // on a shortest route there (World.NextGateTo — multi-hop capable, so a destination several
+        // sectors away is reached one gate at a time; full-thrust steer to the gate mouth, TryWarp handles
+        // transit). No route → give up. Returns true and fills `input` when it handled a cross-sector leg;
+        // false = point is in-sector.
         bool CrossSector(uint destSector, out ShipInputState input)
         {
             input = default;
             if (destSector == s.SectorId)
                 return false;
-            if (AlephTo(s.SectorId, destSector) is World.Gate gate)
+            if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
             {
                 input = AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid);
                 return true;
             }
-            s.ApEngaged = false; // unreachable (no direct aleph) — disengage
+            s.ApEngaged = false; // unreachable (no route to the destination sector) — disengage
             return true;
         }
 
@@ -1390,8 +1433,11 @@ public sealed partial class Simulation
                     s.ApEngaged = false;
                     return default;
                 }
-                var input = Approach(rock.Pos, rock.Radius + PigStandoff, ApBrakeMargin);
-                if (Arrived(myPos, s.State.Vel, rock.Pos, rock.Radius + PigStandoff * 1.2f))
+                // Standoff off the rock's CURRENT (possibly mined-down) surface, so a player autopilot
+                // to a shrunk rock stops at the live shell rather than the stale spawn radius.
+                float rockR = World.RockCurrentRadius(rock.Id);
+                var input = Approach(rock.Pos, rockR + PigStandoff, ApBrakeMargin);
+                if (Arrived(myPos, s.State.Vel, rock.Pos, rockR + PigStandoff * 1.2f))
                     s.ApEngaged = false;
                 return input;
             }
@@ -1637,7 +1683,9 @@ public sealed partial class Simulation
     private void ResolveDeath(ShipSim s, uint tick)
     {
         s.ApEngaged = false; // autopilot never survives the ship it was flying
-        if (s.IsPod)
+        if (s.IsMiner)
+            KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
+        else if (s.IsPod)
             KillPod(s, tick);
         else if (s.IsPig)
             KillPigCombat(s, tick);
@@ -1947,8 +1995,11 @@ public sealed partial class Simulation
             {
                 foreach (var a in rocks)
                 {
-                    // Bounding-sphere pre-test, then the rock's convex hull if it has one.
-                    float r = a.Radius * World.AsteroidCollisionScale + World.ProjectileRadius;
+                    // Resolution radius = the rock's CURRENT (mined-down) surface; a mined He3 rock
+                    // stops a bolt only at its live shell. The broad-phase pre-test stays at the SPAWN
+                    // radius (conservative — rocks only shrink, so it never rejects a real hit; the hull
+                    // path below tests the live-scaled body, the sphere fallback tests the live `r`).
+                    float r = World.RockCurrentRadius(a.Id) * World.AsteroidCollisionScale + World.ProjectileRadius;
                     if (!FirstEntryTime(mp, mv, a.Pos, default, a.Radius + World.ProjectileRadius, bestT, out _))
                         continue;
                     bool hit = World.RockBodies.TryGetValue(a.Id, out var body)
@@ -2292,9 +2343,12 @@ public sealed partial class Simulation
                 {
                     foreach (var a in rocks)
                     {
+                        // Pre-test at spawn radius (conservative broad-phase); resolve against the live
+                        // (mined-down) surface — the hull path uses the live-scaled body, the sphere
+                        // fallback uses `r` = current radius.
                         if (!FirstEntryTime(mp, vel, a.Pos, default, a.Radius + w.ProjectileRadius, bestT, out _))
                             continue;
-                        float r = a.Radius * World.AsteroidCollisionScale + w.ProjectileRadius;
+                        float r = World.RockCurrentRadius(a.Id) * World.AsteroidCollisionScale + w.ProjectileRadius;
                         bool hit = World.RockBodies.TryGetValue(a.Id, out var rbody)
                             ? HullRayEntry(rbody.Hull, a.Pos, rbody.Rot, rbody.Scale, mp, vel, w.ProjectileRadius, bestT, out float t)
                             : FirstEntryTime(mp, vel, a.Pos, default, r, bestT, out t);
@@ -2720,8 +2774,9 @@ public sealed partial class Simulation
                 continue;
             foreach (var a in cell)
             {
-                // Cheap bounding-sphere reject (rock.Radius is the visual/world bound), then the
-                // convex hull if this rock has one — else the legacy sphere.
+                // Cheap bounding-sphere reject at the SPAWN radius (conservative — rocks only shrink,
+                // so this never skips a real contact), then the convex hull if this rock has one — else
+                // the legacy sphere sized to the rock's CURRENT (mined-down) surface.
                 Vec3 dd = s.State.Pos - a.Pos;
                 float bound = a.Radius + World.ShipRadius;
                 if (dd.LengthSquared() >= bound * bound)
@@ -2730,11 +2785,12 @@ public sealed partial class Simulation
                 {
                     // Live tumble: compose the spawn pose with the spin at the current tick so the
                     // authoritative hull matches the rendered rock (Collide.RockRotationAt, shared).
+                    // body.Scale tracks the live radius (SetOreRemaining re-scales it as ore is mined).
                     Quat rot = Collide.RockRotationAt(body.Rot, body.SpinAxis, body.SpinSpeed, _tick * FlightModel.Dt);
                     ResolveHullCollision(s, body.Hull, a.Pos, rot, body.Scale);
                 }
                 else
-                    ResolveStaticCollision(s, a.Pos, a.Radius * World.AsteroidCollisionScale);
+                    ResolveStaticCollision(s, a.Pos, World.RockCurrentRadius(a.Id) * World.AsteroidCollisionScale);
             }
         }
     }

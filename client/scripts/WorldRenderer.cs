@@ -58,6 +58,24 @@ public partial class WorldRenderer : Node3D
     // derived once from its id (stable across frames; the sim treats rocks as static spheres).
     // Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
     private readonly Dictionary<ulong, (Node3D Node, Quaternion Base, Vector3 Axis, float Speed)> _asteroidSpins = new();
+
+    // Decoded rock rows kept by id so a live MsgRockUpdate (mining shrink) can update the stored
+    // CurrentRadius/OrePct and the target display can read the rock's class/depletion. Mirrors
+    // _asteroidNodes' lifetime.
+    private readonly Dictionary<ulong, Asteroid> _asteroidRows = new();
+
+    // Scale basis per rock: the node's mesh divides its render radius by this to get its uniform
+    // scale (mesh authored bound, or the baked sphere-fallback radius), so a target radius maps to a
+    // node scale of Vector3.One * (radius / Divisor). Populated at InsertAsteroid.
+    private readonly Dictionary<ulong, (Node3D Node, float Divisor)> _rockScaleBasis = new();
+    // Rocks currently easing toward a new (mined-down) radius; the value is the target radius. Eased
+    // in _Process and dropped once the node reaches it, so a static world costs nothing here.
+    private readonly Dictionary<ulong, float> _rockShrinkTarget = new();
+    private readonly List<ulong> _rockShrinkDone = new(); // scratch: rocks that finished easing this frame
+    // id -> index into _asteroidClip, so a live shrink updates the bolt/sun-occlusion clip radius in
+    // O(1) (clip entries are append-only until Clear, so the index is stable).
+    private readonly Dictionary<ulong, int> _asteroidClipIndex = new();
+
     private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 
     // Latest authoritative shield charge per ship, fed from the snapshot rows. CheckBoltImpacts reads
@@ -1247,6 +1265,10 @@ public partial class WorldRenderer : Node3D
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
+        _asteroidRows.Clear();
+        _rockScaleBasis.Clear();
+        _rockShrinkTarget.Clear();
+        _asteroidClipIndex.Clear();
         _hullVertCache.Clear(); // keyed by the rock nodes freed just above
         _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
         _shipNodes.Clear();
@@ -1294,6 +1316,37 @@ public partial class WorldRenderer : Node3D
     public void NetAddBase(Base row) => InsertBase(row);
 
     public void NetAddAsteroid(Asteroid row) => InsertAsteroid(row);
+
+    // The decoded rock row for a target readout (class name + depletion), or null if not present /
+    // not yet streamed. Read-only — callers must not mutate it.
+    public Asteroid? GetAsteroid(ulong id) => _asteroidRows.TryGetValue(id, out var a) ? a : null;
+
+    // MsgRockUpdate: a rock was mined — ease its rendered mesh + client collision toward the new radius
+    // (no pop) and refresh the stored CurrentRadius/OrePct (drives the DEPLETED target readout). The
+    // collision + clip caches update to the ABSOLUTE new size (same as the server's absolute rescale)
+    // so local prediction never bounces off empty space where the rock used to be.
+    public void NetUpdateRock(ulong id, float radius, int orePct)
+    {
+        if (_asteroidRows.TryGetValue(id, out var row))
+        {
+            row.CurrentRadius = radius;
+            row.OrePct = orePct;
+        }
+        // Ease the mesh scale toward the new radius over the next frames (see _Process).
+        if (_rockScaleBasis.ContainsKey(id))
+            _rockShrinkTarget[id] = radius;
+        // Client collision hull/sphere — rescaled absolutely so prediction tracks the shrunk rock.
+        _collisionWorld.UpdateAsteroidRadius(id, radius);
+        // Cheap cosmetic caches keyed on radius: the bolt/sun-occlusion clip sphere + the shadow reach.
+        if (_asteroidClipIndex.TryGetValue(id, out int ci) && ci < _asteroidClip.Count)
+        {
+            var c = _asteroidClip[ci];
+            c.Radius = radius * AsteroidCollisionScale;
+            _asteroidClip[ci] = c;
+        }
+        if (_asteroidNodes.TryGetValue(id, out var n))
+            n.SetMeta("shadowRadius", radius);
+    }
 
     public void NetAddAleph(Aleph row) => InsertAleph(row);
 
@@ -1557,7 +1610,12 @@ public partial class WorldRenderer : Node3D
         if (_asteroidNodes.ContainsKey(row.AsteroidId))
             return;
 
+        // Spawn at the CURRENT (possibly already-mined) radius so a rock seen for the first time in its
+        // shrunk state reads correctly; Radius stays the immutable spawn baseline. `divisor` converts a
+        // target radius to a uniform node scale (mesh authored bound, or the baked sphere radius).
+        float rad = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
         MeshInstance3D node;
+        float divisor;
         var (mesh, authored) = string.IsNullOrEmpty(row.Variant) ? (null, 0f) : AsteroidMesh(row.Variant);
         if (mesh is not null)
         {
@@ -1567,35 +1625,41 @@ public partial class WorldRenderer : Node3D
                 Mesh = mesh,
                 Position = new Vector3(row.PosX, row.PosY, row.PosZ),
                 Rotation = new Vector3(row.RotX, row.RotY, row.RotZ),
-                Scale = Vector3.One * (row.Radius / authored),
+                Scale = Vector3.One * (rad / authored),
             };
+            divisor = authored;
         }
         else
         {
-            // Fallback: missing/failed variant renders as the old grey sphere.
+            // Fallback: missing/failed variant renders as the old grey sphere. The SphereMesh is baked
+            // at `rad`, so node.Scale One = that radius and shrink eases the scale down from there.
             node = new MeshInstance3D
             {
                 Name = $"Asteroid_{row.AsteroidId}",
                 Mesh = new SphereMesh
                 {
-                    Radius = row.Radius,
-                    Height = row.Radius * 2f,
+                    Radius = rad,
+                    Height = rad * 2f,
                     RadialSegments = 12,
                     Rings = 6,
                 },
                 MaterialOverride = _asteroidMat,
                 Position = new Vector3(row.PosX, row.PosY, row.PosZ),
             };
+            divisor = rad;
         }
         _asteroids.AddChild(node);
         _asteroidNodes[row.AsteroidId] = node;
+        _asteroidRows[row.AsteroidId] = row;
+        _rockScaleBasis[row.AsteroidId] = (node, divisor > 1e-6f ? divisor : 1f);
         // Capture the spawn pose as the spin base, then tumble absolutely off the shared sim clock so
         // the rendered rock stays in lockstep with its collision hull (shared Collide.RockSpin).
         var (sa, sp) = Collide.RockSpin(row.AsteroidId);
         _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
-        _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
+        _asteroidClipIndex[row.AsteroidId] = _asteroidClip.Count;
+        _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), rad * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
-        node.SetMeta("shadowRadius", row.Radius); // extends its shadow-caster reach (big rocks cast from farther)
+        node.SetMeta("shadowRadius", rad); // extends its shadow-caster reach (big rocks cast from farther)
 
         // A rock landing in the sector we just warped into arrives UNDER the held WarpFlash: snap it in
         // (no fade) and push the settle window out so the flash holds until the field stops streaming.
@@ -2167,6 +2231,34 @@ public partial class WorldRenderer : Node3D
             float t = SimSeconds;
             foreach (var (node, baseQ, axis, speed) in _asteroidSpins.Values)
                 node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
+        }
+
+        // Mining shrink: ease each changed rock's mesh scale toward its new radius (smooth, no pop),
+        // then drop it from the active set once it settles. Absolute node.Scale from the rock's basis
+        // (render radius / divisor), so repeated shrinks never compound. Empty in a non-mining world.
+        if (_rockShrinkTarget.Count > 0)
+        {
+            float k = 1f - Mathf.Exp(-(float)delta * 10f); // ~exponential ease toward target
+            _rockShrinkDone.Clear();
+            foreach (var (id, target) in _rockShrinkTarget)
+            {
+                if (!_rockScaleBasis.TryGetValue(id, out var basis))
+                {
+                    _rockShrinkDone.Add(id);
+                    continue;
+                }
+                float want = target / basis.Divisor;
+                float have = basis.Node.Scale.X;
+                float next = Mathf.Lerp(have, want, k);
+                if (Mathf.Abs(next - want) < want * 0.002f)
+                {
+                    next = want;
+                    _rockShrinkDone.Add(id);
+                }
+                basis.Node.Scale = Vector3.One * next;
+            }
+            foreach (var id in _rockShrinkDone)
+                _rockShrinkTarget.Remove(id);
         }
 
         // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that

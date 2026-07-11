@@ -42,6 +42,7 @@ Simulation BootSim(ulong seed, bool sync = true)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.FogEnabled = true;
     sim.VisionSynchronous = sync;
     sim.StartMatch();
@@ -126,7 +127,8 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
-    long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 41);
+    // RockStatic v31: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct) = 47.
+    long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 47);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
     if (ms.Position != frame.Length) throw new Exception("Welcome count != body");
     return (ns, nb, (int)nr, na);
@@ -419,6 +421,94 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     Run(sim, () => Park(scout, EmptySector, new Vec3(50000f, 0, 0)), Settle);
     Check(Vision(sim, 0).DiscoveredRocks.Contains(rock.Id), "the rock stays discovered after the scout leaves (persistent fog memory)", "a discovered rock was forgotten after the scout left");
+}
+
+// ================================================================================================
+// 7b. Mining live shrink (MsgRockUpdate) — fog filtering + the shared-helper guarantee. A fog-on
+//     client gets rock-updates ONLY for rocks its team has DISCOVERED (an enemy mining an unscouted
+//     rock must not leak); fog-off broadcasts every changed rock; a NoTeam (null vision) client gets
+//     none. And the SAME WriteRockStatic feeds Welcome + MsgReveal, so a discovered rock's static
+//     record is byte-identical in both paths.
+// ================================================================================================
+{
+    var sim = BootSim(72);
+    var seen = sim.World.AddRockForTest(EmptySector, new Vec3(0, 0, 300f), 60f);   // scout discovers it
+    var unseen = sim.World.AddRockForTest(EmptySector, new Vec3(80000f, 0, 0), 60f); // never in range
+    var scout = Join(sim, 1, 0, FlightModel.ClassScout);
+    Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
+    var tv = Vision(sim, 0);
+    Check(tv.DiscoveredRocks.Contains(seen.Id) && !tv.DiscoveredRocks.Contains(unseen.Id),
+        "pre-condition: the scout discovered the near rock but not the far one", "rock discovery pre-condition failed");
+
+    // Extract the ids from a set of MsgRockUpdate frames (count-prefixed 13-byte records).
+    List<ulong> UpdateIds(List<byte[]> frames)
+    {
+        var ids = new List<ulong>();
+        foreach (var f in frames)
+        {
+            using var ms = new MemoryStream(f);
+            using var br = new BinaryReader(ms);
+            if (br.ReadByte() != Protocol.MsgRockUpdate) throw new Exception("wrong id on a rock-update frame");
+            int n = br.ReadByte();
+            for (int i = 0; i < n; i++) { ids.Add(br.ReadUInt64()); br.ReadSingle(); br.ReadByte(); }
+            if (ms.Position != f.Length) throw new Exception("rock-update count != body");
+        }
+        return ids;
+    }
+
+    var changed = new List<ulong> { seen.Id, unseen.Id };
+    var fogOn = UpdateIds(Protocol.BuildRockUpdatesFor(sim.World, tv, changed));
+    Check(fogOn.Contains(seen.Id) && !fogOn.Contains(unseen.Id),
+        "fog-on rock-updates carry ONLY the team's discovered rock (an unscouted rock does not leak)",
+        "an undiscovered rock leaked into a fog-on client's rock-updates");
+    var fogOff = UpdateIds(Protocol.BuildRockUpdates(sim.World, changed));
+    Check(fogOff.Contains(seen.Id) && fogOff.Contains(unseen.Id),
+        "fog-off rock-updates broadcast every changed rock", "the fog-off broadcast dropped a changed rock");
+    Check(Protocol.BuildRockUpdatesFor(sim.World, null, changed).Count == 0,
+        "a NoTeam (null-vision) client receives no rock-updates", "a null-vision client got rock-updates");
+
+    // Shared-helper guarantee: pull the discovered rock's 47-byte static record out of a fog-off
+    // Welcome and a MsgReveal slice and assert byte-equality (both go through WriteRockStatic).
+    byte[]? WelcomeRock(byte[] frame, ulong id)
+    {
+        using var ms = new MemoryStream(frame);
+        using var br = new BinaryReader(ms);
+        br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
+        int tl = br.ReadByte(); br.ReadBytes(tl);
+        int ns = br.ReadUInt16();
+        for (int i = 0; i < ns; i++)
+        {
+            br.ReadUInt32(); br.ReadSingle(); br.ReadString();
+            if (br.ReadByte() != 0) br.ReadBytes(8);
+            if (br.ReadByte() != 0) br.ReadBytes(40);
+            if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); }
+            if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); }
+        }
+        int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
+        long nr = br.ReadUInt32();
+        for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(47); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        return null;
+    }
+    byte[]? RevealRock(byte[] frame, ulong id)
+    {
+        using var ms = new MemoryStream(frame);
+        using var br = new BinaryReader(ms);
+        br.ReadByte();
+        int nb = br.ReadByte(); br.ReadBytes(nb * 33);
+        int nr = br.ReadUInt16();
+        for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(47); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        return null;
+    }
+
+    var rockIndex = new Dictionary<ulong, int>();
+    for (int i = 0; i < sim.World.Asteroids.Count; i++) rockIndex[sim.World.Asteroids[i].Id] = i;
+    var welcome = Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null);
+    var reveal = Protocol.BuildRevealSlice(sim.World, tv, rockIndex, 0, 0, 0, 0, out _, out _, out _, out _);
+    var wRec = WelcomeRock(welcome, seen.Id);
+    var rRec = reveal is null ? null : RevealRock(reveal, seen.Id);
+    Check(wRec is not null && rRec is not null && wRec.AsSpan().SequenceEqual(rRec),
+        "a discovered rock's static record is byte-identical in a fog-off Welcome and a MsgReveal slice (shared WriteRockStatic)",
+        "the Welcome and Reveal rock static records diverged");
 }
 
 // ================================================================================================
@@ -1056,7 +1146,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var br = new BinaryReader(ms);
         br.ReadByte(); // MsgReveal
         int nb = br.ReadByte(); br.ReadBytes(nb * 33);
-        int nr = br.ReadUInt16(); br.ReadBytes(nr * 41);
+        int nr = br.ReadUInt16(); br.ReadBytes(nr * 47); // RockStatic v31: 41 + mining block (class + currentRadius + orePct)
         int na = br.ReadByte(); br.ReadBytes(na * 28);
         int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
         if (ms.Position != frame.Length) throw new Exception("Reveal count != body");
@@ -1174,7 +1264,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
-    var sim = new Simulation(world, content) { PigsEnabled = false, FogEnabled = true, VisionSynchronous = false };
+    var sim = new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = true, VisionSynchronous = false };
     var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
         new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true),
         "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
@@ -1504,6 +1594,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         w = new World(77, c.World, c.Bases[0].MaxHealth, c.Start, c.Ships);
         var s = new Simulation(w, c);
         s.PigsEnabled = false;
+        s.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
         s.FogEnabled = true;
         s.VisionSynchronous = true;
         s.StartMatch();
@@ -1678,6 +1769,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         w.DustClouds.Add(new World.DustCloud(0, new Vec3(0, 0, 0), cloudR, 1f)); // full density
         var sim = new Simulation(w, c);
         sim.PigsEnabled = false;
+        sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
         sim.FogEnabled = true;
         sim.VisionSynchronous = true;
         sim.StartMatch();

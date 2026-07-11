@@ -139,13 +139,16 @@ public partial class DefRegistry : Node
 
     public bool TryGetShipDef(byte classId, out ShipClassDef def) => _ships.TryGetValue(classId, out def!);
 
-    // Every buildable ship class (every ship def except the reserved pod), ascending by ClassId so the
-    // buy menu has a stable order regardless of dictionary iteration. Empty until the defs arrive.
+    // Every buildable ship class (every ship def except the reserved pod and team-only ore miners),
+    // ascending by ClassId so the buy menu has a stable order regardless of dictionary iteration.
+    // Miner hulls (OreCapacity > 0) are AI-owned team drones bought via /buyminer, never a personal
+    // spawn — the server drops a player MsgSpawn of one, so hiding them here is UX only. Empty until
+    // the defs arrive.
     public List<ShipClassDef> BuildableShips()
     {
         var list = new List<ShipClassDef>();
         foreach (var s in _ships.Values)
-            if (s.ClassId != PodClassId)
+            if (s.ClassId != PodClassId && s.OreCapacity <= 0f)
                 list.Add(s);
         list.Sort((a, b) => a.ClassId.CompareTo(b.ClassId));
         return list;

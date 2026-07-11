@@ -136,3 +136,21 @@ seeding:
   base-inner-frac: 0.14      # garrison radial band, as fractions of the sector radius
   base-outer-frac: 0.30
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
+
+# Mining + ore economy: how asteroids are classified into resource types at world-gen and how the AI
+# miner economy is tuned. Only helium-3 rocks are harvestable; the He3 count per sector is guaranteed
+# within [he3-per-sector-min, he3-per-sector-max] (maps can override per-sector via he3-min/he3-max/
+# he3-fraction-mult/ore-richness-mult). Per-rock capacity scales with the rock's volume. All
+# server-side only (never streamed) — the client only ever sees the resulting rock state.
+mining:
+  max-miners-per-team: 4        # cap on live AI miners a team may field at once
+  harvest-rate-per-second: 40   # ore units a miner pulls from a rock per second
+  credits-per-ore-unit: 0.5     # team credits granted per ore unit offloaded at base
+  offload-delay-seconds: 5      # dwell after an offload before the miner relaunches
+  he3-fraction: 0.12            # fraction of a sector's rocks made harvestable helium-3 (pre-clamp)
+  he3-per-sector-min: 2         # guaranteed [min, max] He3 count per sector (clamped to rock count)
+  he3-per-sector-max: 8
+  ore-capacity-min: 800         # per-He3-rock capacity range, before the radius/richness scaling
+  ore-capacity-max: 3000
+  shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
+  miner-standoff: 60            # harvest range from a target rock's surface, world units

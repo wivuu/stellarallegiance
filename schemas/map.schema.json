@@ -112,6 +112,34 @@
             ],
             "description": "Optional per-sector multiplier on the world asteroid density."
           },
+          "he3-min": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Optional per-sector override of the minimum guaranteed He3 rock count (world mining default otherwise)."
+          },
+          "he3-max": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Optional per-sector override of the maximum guaranteed He3 rock count (world mining default otherwise)."
+          },
+          "he3-fraction-mult": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector multiplier on the world He3 fraction before the count clamp."
+          },
+          "ore-richness-mult": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector multiplier on the per-He3-rock ore capacity here."
+          },
           "map-pos": {
             "type": [
               "array",

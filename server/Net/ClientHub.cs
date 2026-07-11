@@ -728,28 +728,131 @@ public sealed class ClientHub
     }
 
     // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
-    // Currently just /pigs on|off, which toggles AI drone spawns (see Simulation.PigsEnabled).
+    // /pigs toggles AI drone spawns; /buyminer, /mine, /miners drive the team's mining drones
+    // (thread-safe enqueues — results come back as team-scoped MinerNoticesThisStep chat).
     private void HandleCommand(Client client, string text)
     {
-        var parts = text[1..].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var parts = text[1..].Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
         string verb = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
-        string arg = parts.Length > 1 ? parts[1].ToLowerInvariant() : "";
+        string arg = parts.Length > 1 ? parts[1].Trim() : "";
 
         switch (verb)
         {
             case "pigs":
-                if (arg != "on" && arg != "off")
+            {
+                string sw = arg.ToLowerInvariant();
+                if (sw != "on" && sw != "off")
                 {
                     SystemTo(client, "Usage: /pigs on|off");
                     break;
                 }
-                bool on = arg == "on";
+                bool on = sw == "on";
                 _sim.PigsEnabled = on;
                 SystemAll(client, $"AI drones turned {(on ? "ON" : "OFF")} by {_players.NameOf(client.Id)}");
                 break;
+            }
+            case "buyminer":
+            {
+                if (TeamOrWarn(client) is byte team)
+                    _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
+                break;
+            }
+            case "mine":
+            {
+                if (TeamOrWarn(client) is not byte team)
+                    break;
+                if (arg.Length == 0)
+                {
+                    SystemTo(client, "Usage: /mine <sector name or id>");
+                    break;
+                }
+                if (ResolveSector(arg, out string err) is not uint sector)
+                {
+                    SystemTo(client, err);
+                    break;
+                }
+                _sim.EnqueueMineOrder(team, sector);
+                break;
+            }
+            case "miners":
+            {
+                if (TeamOrWarn(client) is byte team)
+                    _sim.EnqueueMinerStatus(team);
+                break;
+            }
             default:
                 break; // unknown command: silently ignored
         }
+    }
+
+    // The sender's team for a team-scoped command, or null (+ a usage hint) for a NOAT spectator.
+    private byte? TeamOrWarn(Client client)
+    {
+        byte team = _lobby.TeamOf(client.Id);
+        if (team is 0 or 1)
+            return team;
+        SystemTo(client, "Pick a team first.");
+        return null;
+    }
+
+    // Resolve a /mine argument to a sector id against the CURRENT world: a bare numeric id, an exact
+    // (case-insensitive) sector name, else a UNIQUE case-insensitive name prefix. Returns null and
+    // sets `error` (unknown / ambiguous, listing the sector names) when it can't land on one sector.
+    // World.Sectors is immutable after its ctor, so reading it off the receive thread is safe.
+    private uint? ResolveSector(string arg, out string error)
+    {
+        var world = _sim.World;
+        // A bare numeric id addresses a sector directly.
+        if (uint.TryParse(arg, out uint id))
+        {
+            foreach (var s in world.Sectors)
+                if (s.Id == id)
+                {
+                    error = "";
+                    return s.Id;
+                }
+            error = $"No sector with id {id}. Sectors: {SectorNames()}";
+            return null;
+        }
+        // Exact name wins outright, even if it also prefixes a longer name.
+        foreach (var s in world.Sectors)
+            if (string.Equals(s.Name, arg, StringComparison.OrdinalIgnoreCase))
+            {
+                error = "";
+                return s.Id;
+            }
+        // Else a unique case-insensitive prefix; two+ matches are ambiguous.
+        uint? hit = null;
+        bool ambiguous = false;
+        foreach (var s in world.Sectors)
+            if (s.Name.StartsWith(arg, StringComparison.OrdinalIgnoreCase))
+            {
+                if (hit is null)
+                    hit = s.Id;
+                else
+                    ambiguous = true;
+            }
+        if (ambiguous)
+        {
+            error = $"'{arg}' matches several sectors: {SectorNames()}";
+            return null;
+        }
+        if (hit is uint u)
+        {
+            error = "";
+            return u;
+        }
+        error = $"No sector named '{arg}'. Sectors: {SectorNames()}";
+        return null;
+    }
+
+    // Comma-joined sector names of the current world, for /mine error hints.
+    private string SectorNames()
+    {
+        var names = new List<string>();
+        foreach (var s in _sim.World.Sectors)
+            names.Add(s.Name);
+        return string.Join(", ", names);
     }
 
     // System chat lines reuse the normal chat-relay wire type; "★" is the sender name.
@@ -762,6 +865,18 @@ public sealed class ClientHub
         var frame = Protocol.BuildChatRelay(0, _lobby.TeamOf(origin.Id), "★", text);
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+    }
+
+    // System line to every client currently on `team` (miner notices).
+    private void SystemToTeam(byte team, string text)
+    {
+        byte[]? frame = null;
+        foreach (var c in _clients.Values)
+            if (_lobby.TeamOf(c.Id) == team)
+            {
+                frame ??= Protocol.BuildChatRelay(0, team, "★", text);
+                c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+            }
     }
 
     private async Task SendLoop(Client client, CancellationToken ct)
@@ -797,6 +912,11 @@ public sealed class ClientHub
                 foreach (var c in _clients.Values)
                     SendWelcome(c);
         }
+
+        // Mining notices ("Miner purchased", "offloaded ore: +N", ...): team-scoped system chat,
+        // accumulated by the sim during Step and cleared at the top of the next one.
+        foreach (var (team, msg) in _sim.MinerNoticesThisStep)
+            SystemToTeam(team, msg);
 
         SerializeRecords(ships);
 
@@ -950,6 +1070,19 @@ public sealed class ClientHub
                     chaffVisByTeam[t] = vis;
             }
         }
+
+        // Live rock shrink (mining): the rocks whose ore/radius changed this step (World.RocksChangedThisStep,
+        // cleared at the TOP of the next Step — read here, after Step, exactly like MinefieldsChangedThisStep).
+        // ON-CHANGE ONLY, no coarse keepalive: the Welcome + MsgReveal static records already carry each rock's
+        // CURRENT radius/orePct, so a fresh join, a first fog-discovery, and a reconnect re-Welcome are never
+        // stale — there is nothing to self-heal between deltas. Fog off: one shared frame set broadcast to all.
+        // Fog on: per-team, only rocks that team has DISCOVERED (Protocol.BuildRockUpdatesFor) — an enemy mining
+        // an unscouted rock must not leak its shrink; the rock arrives (with current size) via MsgReveal later.
+        var changedRocks = _sim.World.RocksChangedThisStep;
+        bool sendRocks = changedRocks.Count > 0;
+        List<ulong>? changedRockList = sendRocks ? new List<ulong>(changedRocks) : null;
+        List<byte[]>? rockBroadcast = (sendRocks && !fog) ? Protocol.BuildRockUpdates(_sim.World, changedRockList!) : null;
+        Dictionary<byte, List<byte[]>>? rockFramesByTeam = (sendRocks && fog) ? new() : null;
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
@@ -1123,6 +1256,26 @@ public sealed class ClientHub
                 client.Outbound.Writer.TryWrite(
                     OutFrame.Whole(BuildMinefieldsFor(
                         client.AnchorSector, client.Team, mineVisByTeam is null ? null : mineVisByTeam.GetValueOrDefault(client.Team))));
+
+            // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
+            // discovered-only frames, built once per team (lazily) — a NoTeam spectator's null vision
+            // yields no frames. Frames are non-pooled byte[], safe to hand to multiple clients.
+            if (sendRocks)
+            {
+                if (!fog)
+                {
+                    foreach (var f in rockBroadcast!)
+                        client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+                }
+                else
+                {
+                    if (!rockFramesByTeam!.TryGetValue(client.Team, out var rkf))
+                        rockFramesByTeam[client.Team] = rkf =
+                            Protocol.BuildRockUpdatesFor(_sim.World, _sim.VisionFor(client.Team), changedRockList!);
+                    foreach (var f in rkf)
+                        client.Outbound.Writer.TryWrite(OutFrame.Whole(f));
+                }
+            }
 
             // In-flight missiles this client can see: same-sector within full-rate radius of its
             // anchor, OR homing on its own ship (incoming warning at any range). Built from the

@@ -213,13 +213,19 @@ public partial class Chat : Control
                         + "  /score — both teams' scores\n"
                         + "  /team — which team you're on\n"
                         + "  /server — server address & connection info\n"
-                        + "  /pigs on|off — toggle AI drone spawns (server-wide)"
+                        + "  /pigs on|off — toggle AI drone spawns (server-wide)\n"
+                        + "  /buyminer — buy a mining drone for your team\n"
+                        + "  /mine <sector> — authorize your miners to mine a sector\n"
+                        + "  /miners — your team's miner status"
                 );
                 break;
             case "/pigs":
-                // Server-side command: relay the raw text so the sim toggles PigsEnabled
-                // and broadcasts the result. Scope is irrelevant — the server intercepts
-                // '/'-prefixed chat before any relay.
+            case "/buyminer":
+            case "/mine":
+            case "/miners":
+                // Server-side commands: relay the raw text so the sim acts on it and answers
+                // via system chat. Scope is irrelevant — the server intercepts '/'-prefixed
+                // chat before any relay.
                 _net.SendChat(text, false);
                 break;
             case "/money":

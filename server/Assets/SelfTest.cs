@@ -161,6 +161,7 @@ public static class SelfTest
             (0, false, "scout", 4.5f),
             (1, false, "fighter", 5.5f),
             (2, false, "bomber", 7.2f),
+            (4, false, "miner", 6.5f),
             (0, true, "pod", 2.8f),
         };
         foreach (var (cls, pod, name, target) in kinds)

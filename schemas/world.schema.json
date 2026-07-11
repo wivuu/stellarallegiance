@@ -343,6 +343,27 @@
             "null"
           ],
           "description": "Maximum juke side-thrust amplitude fraction."
+        },
+        "dock-standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Standoff-point distance outside a docking door\u0027s plane, world units."
+        },
+        "dock-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Detour ring radius past BaseRadius when routing around the base to a far-side door."
+        },
+        "dock-creep-throttle": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Throttle fraction while creeping down the docking corridor."
         }
       },
       "description": "PIG drone AI tuning (server-side only \u2014 never streamed). Null -\u003E stock values.",
@@ -607,6 +628,93 @@
         }
       },
       "description": "Map-seeding shape tuning: asteroid fields/belts \u002B base placement. Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "mining": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "max-miners-per-team": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Cap on live AI miners a team may field at once."
+        },
+        "harvest-rate-per-second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Ore units a miner pulls from a rock per second."
+        },
+        "credits-per-ore-unit": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Team credits granted per ore unit offloaded at a base."
+        },
+        "offload-delay-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Dwell after an offload before the miner relaunches, seconds."
+        },
+        "he3-fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Fraction of a sector\u0027s rocks made harvestable helium-3 (before the count clamp)."
+        },
+        "he3-per-sector-min": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "World default minimum He3 rocks per sector (clamp floor)."
+        },
+        "he3-per-sector-max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "World default maximum He3 rocks per sector (clamp ceiling)."
+        },
+        "ore-capacity-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum per-He3-rock ore capacity, before the radius/richness scaling."
+        },
+        "ore-capacity-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum per-He3-rock ore capacity, before the radius/richness scaling."
+        },
+        "shrink-floor-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Fraction of its spawn radius a fully-mined rock shrinks toward (never below)."
+        },
+        "miner-standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Distance from a target rock\u0027s surface within which a miner harvests, world units."
+        }
+      },
+      "description": "Mining/ore economy tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
       "additionalProperties": false
     }
   },

@@ -32,6 +32,7 @@ Check(content.Start.IncomePerPaycheck == 100, "stock faction income is 100 per p
 
 var world = new World(12345, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
 var sim = new Simulation(world, content);
+sim.MinersEnabled = false; // isolate exact-credit assertions from miner ore income (mirrors PigsEnabled)
 
 // ---- 1. Seeding: both teams exist and start from the faction snapshot. ----
 Check(world.TeamStates.Count == 2 && world.TeamStates.ContainsKey(0) && world.TeamStates.ContainsKey(1),

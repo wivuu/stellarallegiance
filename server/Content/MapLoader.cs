@@ -53,6 +53,18 @@ public sealed class MapSectorDef
     /// <summary>Optional per-sector multiplier on the world asteroid density.</summary>
     public double? AsteroidDensity { get; set; }
 
+    /// <summary>Optional per-sector override of the minimum guaranteed He3 rock count (world mining default otherwise).</summary>
+    public int? He3Min { get; set; }
+
+    /// <summary>Optional per-sector override of the maximum guaranteed He3 rock count (world mining default otherwise).</summary>
+    public int? He3Max { get; set; }
+
+    /// <summary>Optional per-sector multiplier on the world He3 fraction before the count clamp.</summary>
+    public double? He3FractionMult { get; set; }
+
+    /// <summary>Optional per-sector multiplier on the per-He3-rock ore capacity here.</summary>
+    public double? OreRichnessMult { get; set; }
+
     /// <summary>2D map-diagram position [x, y], normalized roughly -1..1, where this sector's node draws on the minimap/lobby preview; omitted auto-lays out in a ring.</summary>
     public double[]? MapPos { get; set; }
 
@@ -205,6 +217,10 @@ public static class MapLoader
                 Garrison = ProjectGarrison(s.Garrison, s.Id),
                 Asteroids = ParseAsteroidKind(s.Asteroids, s.Id),
                 AsteroidDensityMult = F(s.AsteroidDensity),
+                He3Min = s.He3Min,
+                He3Max = s.He3Max,
+                He3FractionMult = F(s.He3FractionMult),
+                OreRichnessMult = F(s.OreRichnessMult),
                 MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
                 MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,
                 Env = ProjectEnv(s.Environment),

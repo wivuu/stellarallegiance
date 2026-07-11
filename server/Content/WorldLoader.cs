@@ -123,6 +123,9 @@ public sealed class WorldDef
 
     /// <summary>Map-seeding shape tuning: asteroid fields/belts + base placement. Null -&gt; stock.</summary>
     public WorldSeedingDef? Seeding { get; set; }
+
+    /// <summary>Mining/ore economy tuning (server-side only — never streamed). Null -&gt; stock.</summary>
+    public WorldMiningDef? Mining { get; set; }
 }
 
 /// <summary>
@@ -374,6 +377,48 @@ public sealed class WorldSeedingDef
     public double? BaseYJitter { get; set; }
 }
 
+/// <summary>
+/// Mining / ore economy tuning, authored under <c>mining:</c> — the He3 rock selection + capacity
+/// knobs and the miner economy rates. Every field is optional; a null falls back to the stock value
+/// at projection (the shared <c>WorldMiningTuning</c> initializers), so an author only writes the
+/// knobs they sweep. Server-side only — never streamed. Durations are authored in SECONDS.
+/// </summary>
+public sealed class WorldMiningDef
+{
+    /// <summary>Cap on live AI miners a team may field at once.</summary>
+    public int? MaxMinersPerTeam { get; set; }
+
+    /// <summary>Ore units a miner pulls from a rock per second.</summary>
+    public double? HarvestRatePerSecond { get; set; }
+
+    /// <summary>Team credits granted per ore unit offloaded at a base.</summary>
+    public double? CreditsPerOreUnit { get; set; }
+
+    /// <summary>Dwell after an offload before the miner relaunches, seconds.</summary>
+    public double? OffloadDelaySeconds { get; set; }
+
+    /// <summary>Fraction of a sector's rocks made harvestable helium-3 (before the count clamp).</summary>
+    public double? He3Fraction { get; set; }
+
+    /// <summary>World default minimum He3 rocks per sector (clamp floor).</summary>
+    public int? He3PerSectorMin { get; set; }
+
+    /// <summary>World default maximum He3 rocks per sector (clamp ceiling).</summary>
+    public int? He3PerSectorMax { get; set; }
+
+    /// <summary>Minimum per-He3-rock ore capacity, before the radius/richness scaling.</summary>
+    public double? OreCapacityMin { get; set; }
+
+    /// <summary>Maximum per-He3-rock ore capacity, before the radius/richness scaling.</summary>
+    public double? OreCapacityMax { get; set; }
+
+    /// <summary>Fraction of its spawn radius a fully-mined rock shrinks toward (never below).</summary>
+    public double? ShrinkFloorFrac { get; set; }
+
+    /// <summary>Distance from a target rock's surface within which a miner harvests, world units.</summary>
+    public double? MinerStandoff { get; set; }
+}
+
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
 // the wire streams (the streamed subset: id/scale/density/debug/fog-of-war — Protocol.BuildDefs).
 // Fail-fast like ContentLoader/MapLoader: a missing or malformed world file throws at boot (the
@@ -521,6 +566,21 @@ public static class WorldLoader
             t.BaseInnerFrac = F(se.BaseInnerFrac, t.BaseInnerFrac);
             t.BaseOuterFrac = F(se.BaseOuterFrac, t.BaseOuterFrac);
             t.BaseYJitter = F(se.BaseYJitter, t.BaseYJitter);
+        }
+        if (w.Mining is { } mi)
+        {
+            var t = cfg.Mining;
+            t.MaxMinersPerTeam = mi.MaxMinersPerTeam ?? t.MaxMinersPerTeam;
+            t.HarvestRatePerSecond = F(mi.HarvestRatePerSecond, t.HarvestRatePerSecond);
+            t.CreditsPerOreUnit = F(mi.CreditsPerOreUnit, t.CreditsPerOreUnit);
+            t.OffloadDelaySeconds = F(mi.OffloadDelaySeconds, t.OffloadDelaySeconds);
+            t.He3Fraction = F(mi.He3Fraction, t.He3Fraction);
+            t.He3PerSectorMin = mi.He3PerSectorMin ?? t.He3PerSectorMin;
+            t.He3PerSectorMax = mi.He3PerSectorMax ?? t.He3PerSectorMax;
+            t.OreCapacityMin = F(mi.OreCapacityMin, t.OreCapacityMin);
+            t.OreCapacityMax = F(mi.OreCapacityMax, t.OreCapacityMax);
+            t.ShrinkFloorFrac = F(mi.ShrinkFloorFrac, t.ShrinkFloorFrac);
+            t.MinerStandoff = F(mi.MinerStandoff, t.MinerStandoff);
         }
         return cfg;
     }

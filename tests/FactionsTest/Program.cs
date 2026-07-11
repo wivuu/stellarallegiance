@@ -77,6 +77,16 @@ var pod = stock.Hulls.Single(h => h.Id == "pod");
 Check(pod.ClassId == 255, "stock pod is class-id 255 (lifepod)", $"stock pod class-id wrong ({pod.ClassId})");
 Check(stock.Factions.Single().LifepodHullId == "pod", "stock faction lifepod resolves to pod hull", "stock lifepod-hull-id wrong");
 
+// The AI miner (class-id 4): carries an ore hold and is deliberately UNARMED (no weapon hardpoint),
+// which CoreValidator accepts (proven above by the whole bundle validating green).
+var miner = stock.Hulls.Single(h => h.Id == "miner");
+Check(
+    miner.ClassId == 4 && miner.OreCapacity == 2000
+        && !miner.Hardpoints.Any(hp => hp.Kind == RuntimeHardpointKind.Weapon),
+    "stock miner is class-id 4, carries ore-capacity, and is unarmed",
+    $"stock miner wrong (class {miner.ClassId}, ore {miner.OreCapacity}, weapon-hps {miner.Hardpoints.Count(hp => hp.Kind == RuntimeHardpointKind.Weapon)})"
+);
+
 var scoutCannon = stock.Weapons.Single(w => w.Id == "scout-cannon");
 Check(
     scoutCannon.WeaponId == 0 && scoutCannon.FireIntervalTicks == 4 && scoutCannon.ProjectileLifeTicks == 16

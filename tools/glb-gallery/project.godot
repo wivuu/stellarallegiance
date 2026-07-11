@@ -1,0 +1,10 @@
+; Minimal Godot project used only to render GLB thumbnails headlessly-ish.
+config_version=5
+
+[application]
+config/name="glb-gallery"
+run/main_scene="res://render.tscn"
+config/features=PackedStringArray("4.7")
+
+[rendering]
+renderer/rendering_method="mobile"

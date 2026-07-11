@@ -21,6 +21,16 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Content in settings modal(s) needs more padding from scrollbar
+- Unable to open chat from F3 while sitting in hangar
+- Mining/miner fixes
+  - Miner should launch as soon as game starts. Game starts as soon as the first player clicks launch. When first player clicks launch, all players on teams should automatically be in the hangar of their garrison.
+  - Miner went to first he3 asteroid, then decided randomly to go to the next (bug)
+  - Show a 'mining laser' effect, and have the miner gently roll as it mines, pointing at the center of the asteroid; at a distance of asteroid radius + 10% asteroid radius
+  - Unable to target miners in HUD; they should be selectable like any other ship
+  - When close enough to an asteroid, display the type of asteroid on the HUD in small text without having to target. For He3 mines, show how much He3 is remaining in HUD, out of its total capacity (if in sight)
+  - Switch miner model to utl119 from pick_assets
+  - Fix miner docking; should reuse autopilot autodocking logic, and if that logic should work with any hull, including miners and constructors which turn very slowly. If the logic does not work, then it's a bug. The logic should be to approach a point in front of the entry point, fly towards that point (avoiding collisions along the way), slow down and cut thrust in anticipation of reaching that point, then turning and stopping turning in anticipation of facing the entry point, then flying slowly towards the entrance until docking occurs (or revert logic if docking target disappears).
+  - Let me verify manually rather than waste tokens
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 
@@ -300,8 +310,13 @@ Stage-1 YAML pipeline.
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
-  Stage-2 flat paycheck into the real Allegiance economy.
+- ✅ **[XL]** **Mining + economy** — DONE (2026-07-11, `mining` branch): rock classes (He3 harvestable,
+  volume-proportional shrink streamed via `MsgRockUpdate`), per-team AI miner drones
+  (`Simulation.Mining.cs`, purchasable via `/buyminer`, sector orders via `/mine <sector>`, status via
+  `/miners`), multi-hop aleph routing (`World.NextGateTo`, players get multi-hop autopilot free),
+  offload → team credits alongside the flat paycheck. `tests/MiningTest` + pinned-seed layout golden.
+  *Deferred:* build queues, commander-gated authority, refinery uses for uranium/silicon/carbonaceous,
+  shrunk-rock vision occlusion / PIG avoidance (stay at spawn radius).
   - Create classes of rock that asteroids should be categorized into (e.g., helium-3, uranium, silicon, and carbonaceous).
   - Each team starts with 1 miner, but can purchase up to 4 at a time (configurable max in world yaml)
   - Miners harvest only from helium-3 asteroids

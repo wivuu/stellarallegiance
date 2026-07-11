@@ -99,6 +99,17 @@ Check(
     "loader projected payload capacity + weapon mass",
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
+// Mining hull (class-id 4): the projection carries Hull.OreCapacity onto ShipClassDef.OreCapacity;
+// a non-mining hull projects 0. The miner has a GLB (miner.glb) whose Booster/Thruster/Light nodes
+// merge in, but its HP_Weapon_0 node was stripped from the mesh, so it keeps zero weapon mounts
+// alongside its authored main-engine + cockpit hardpoints (it's deliberately unarmed).
+var miner = stock.Ships.First(s => s.ClassId == 4);
+Check(
+    miner.OreCapacity == 2000f && scout.OreCapacity == 0f
+        && miner.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 0,
+    "loader projected miner ore-capacity (unarmed class-id 4; non-miners project 0)",
+    $"miner projection wrong (ore {miner.OreCapacity}, scout ore {scout.OreCapacity}, weapon-hps {miner.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)})"
+);
 // Fog-of-war vision (behavior-inert until a later WP): scout carries the longest cone + an
 // explicit stealthy RadarSignature < 1.
 Check(

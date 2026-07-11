@@ -122,6 +122,7 @@ namespace StellarAllegiance.Shared
 
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
+        public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
 
@@ -260,6 +261,12 @@ namespace StellarAllegiance.Shared
     // Belt = annular ring; None = no rocks. Replaces the old per-sector-id field/belt hardcoding.
     public enum AsteroidKind { None, Field, Belt }
 
+    // Resource class assigned to each asteroid at world-gen (World.RockOre). Only Helium3 is
+    // harvestable today (miners fill their ore hold from He3 rocks); the others are cosmetic-only
+    // classifications reserved for future refinery/shipyard uses. APPEND-ONLY — the byte value is a
+    // stable identity the sim keys on (and a later WP streams it), so never reorder or remove a member.
+    public enum RockClass : byte { Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3 }
+
     // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
     // determines how many teams the map supports (one home per team).
     public sealed class SectorGarrison
@@ -288,6 +295,15 @@ namespace StellarAllegiance.Shared
         // multiplier on WorldConfig.AsteroidDensity (null → 1×) is the only granular rock knob left.
         public AsteroidKind Asteroids = AsteroidKind.Field;
         public float? AsteroidDensityMult;
+
+        // Optional per-sector mining overrides (null → the world-level WorldMiningTuning default).
+        // He3Min/He3Max override the guaranteed-count clamp [min, max] for this sector's He3 rocks;
+        // He3FractionMult scales the world He3Fraction before the clamp; OreRichnessMult scales the
+        // per-rock He3 capacity here. Server-side only — resolved during World's ore-assignment pass.
+        public int? He3Min;
+        public int? He3Max;
+        public float? He3FractionMult;
+        public float? OreRichnessMult;
 
         // 2D LAYOUT coordinate for the map diagram (minimap + lobby preview), normalized ~[-1,1].
         // Distinct from 3D geometry — purely where this sector's node is drawn. Both-null → the
@@ -424,14 +440,15 @@ namespace StellarAllegiance.Shared
         public float RockRadarSignature = 2f;
 
         // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
-        // `seeding:`). NONE of these ride the wire — Protocol.BuildDefs deliberately skips them
-        // (drones/damage/seeding are server-authoritative; the client only sees their results).
-        // The field initializers below ARE the stock values: projection only overrides the knobs
-        // an author actually wrote, so an omitted block or field always means "stock".
+        // `seeding:` / `mining:`). NONE of these ride the wire — Protocol.BuildDefs deliberately
+        // skips them (drones/damage/seeding/mining are server-authoritative; the client only sees
+        // their results). The field initializers below ARE the stock values: projection only
+        // overrides the knobs an author actually wrote, so an omitted block or field means "stock".
         public WorldAiTuning Ai = new();
         public WorldCombatTuning Combat = new();
         public WorldMechanicsTuning Mechanics = new();
         public WorldSeedingTuning Seeding = new();
+        public WorldMiningTuning Mining = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -548,6 +565,38 @@ namespace StellarAllegiance.Shared
         public float BaseInnerFrac = 0.14f;
         public float BaseOuterFrac = 0.3f;
         public float BaseYJitter = 80f;
+    }
+
+    // Mining + ore economy tuning (world.yaml `mining:`). Server-side only — like ai/combat/
+    // mechanics/seeding, Protocol.BuildDefs deliberately does NOT stream this (ore state and the
+    // miner economy are server-authoritative; the client only sees the results). The initializers
+    // below ARE the stock values (starting tunes), so an omitted block or field always means "stock".
+    // Durations are seconds. Consumed by World's ore-assignment pass + the miner sim.
+    public sealed class WorldMiningTuning
+    {
+        public int MaxMinersPerTeam = 4; // cap on live AI miners a team may field at once
+        public float HarvestRatePerSecond = 40f; // ore units a miner pulls from a rock per second
+        public float CreditsPerOreUnit = 0.5f; // team credits granted per ore unit offloaded at base
+        public float OffloadDelaySeconds = 5f; // dwell after an offload before the miner relaunches
+
+        // He3 selection: the fraction of a sector's rocks made harvestable helium-3, then clamped to
+        // the guaranteed [min, max] count (and to the sector's actual rock count). A sector with no
+        // rocks gets zero He3. Per-sector overrides (SectorConfig.He3Min/Max/FractionMult) win.
+        public float He3Fraction = 0.12f;
+        public int He3PerSectorMin = 2;
+        public int He3PerSectorMax = 8;
+
+        // Per-He3-rock ore capacity: lerped across [min, max] by a per-rock roll, then scaled by the
+        // rock's volume (radius³ vs the reference radius) and the sector's OreRichnessMult.
+        public float OreCapacityMin = 800f;
+        public float OreCapacityMax = 3000f;
+
+        // As a rock is mined its radius shrinks toward this fraction of its spawn radius (never below,
+        // never vanishing); the CurrentRadius shrink is volume-proportional (see World.SetOreRemaining).
+        public float ShrinkFloorFrac = 0.4f;
+
+        // Distance from a target rock's surface within which a miner harvests, world units.
+        public float MinerStandoff = 60f;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

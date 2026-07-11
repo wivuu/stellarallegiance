@@ -28,6 +28,12 @@ public sealed class CollisionWorld
     private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
     private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
 
+    // Per-rock rebuild info so a live mining shrink (MsgRockUpdate) can rescale a rock's body ABSOLUTELY
+    // to the new radius (matching the server's absolute rescale), not by compounding a factor. Index is
+    // stable (rocks are only appended to _src until Clear). Model null ⇒ the sphere-fallback rock.
+    private readonly record struct RockRef(uint Sector, int Index, SimModel? Model, Vec3 Center, Quat Rot, Vec3 SpinAxis, float SpinSpeed);
+    private readonly Dictionary<ulong, RockRef> _rockRefs = new();
+
     // Deployed probes are DYNAMIC solid bodies (added/removed mid-match, unlike Welcome-time
     // asteroids/bases), so they live in their own sector→probeId map and merge into BodiesIn's output.
     // The local ship then predicts bouncing off a probe exactly as the server does (ResolveProbeCollisions);
@@ -82,24 +88,54 @@ public sealed class CollisionWorld
         _src.Clear();
         _live.Clear();
         _probes.Clear();
+        _rockRefs.Clear();
     }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)
     {
         var list = BodyList(row.SectorId);
         var center = new Vec3(row.PosX, row.PosY, row.PosZ);
+        // Build at the CURRENT (possibly already-mined) radius so a rock first seen shrunk collides at
+        // its true size; UpdateAsteroidRadius later rescales it absolutely as it is mined further.
+        float rad = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
         SimModel? model = string.IsNullOrEmpty(row.Variant) ? null : VariantModel(row.Variant);
+        int index = list.Count;
+        Quat rot = Collide.RockRotation(row.RotX, row.RotY, row.RotZ);
+        var (spinAxis, spinSpeed) = Collide.RockSpin(row.AsteroidId);
         if (model is null || model.Hull.BoundingRadius <= 1e-3f)
         {
             // Sphere fallback — matches the server's ResolveStaticCollision for a hull-less rock.
             // A sphere is rotation-invariant, so it carries no spin.
-            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, row.Radius * CollisionConfig.AsteroidCollisionScale), default, 0f));
+            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, rad * CollisionConfig.AsteroidCollisionScale), default, 0f));
+            _rockRefs[row.AsteroidId] = new RockRef(row.SectorId, index, null, center, rot, default, 0f);
             return;
         }
-        float scale = row.Radius * CollisionConfig.AsteroidCollisionScale / model.Hull.BoundingRadius;
-        Quat rot = Collide.RockRotation(row.RotX, row.RotY, row.RotZ);
-        var (spinAxis, spinSpeed) = Collide.RockSpin(row.AsteroidId);
+        float scale = rad * CollisionConfig.AsteroidCollisionScale / model.Hull.BoundingRadius;
         list.Add(new Entry(Collide.StaticBody.AsteroidHull(model.Hull, center, rot, scale), spinAxis, spinSpeed));
+        _rockRefs[row.AsteroidId] = new RockRef(row.SectorId, index, model, center, rot, spinAxis, spinSpeed);
+    }
+
+    // A rock was mined: rebuild its body at the new radius, ABSOLUTELY (radius → scale), the same way
+    // the server recomputes RockBody.Scale from its immutable spawn scale — so the predicted hull tracks
+    // the shrunk rock and the ship never bounces off empty space where the rock used to be. No-op for an
+    // unknown id (a rock this client never received, e.g. still fogged).
+    public void UpdateAsteroidRadius(ulong id, float newRadius)
+    {
+        if (!_rockRefs.TryGetValue(id, out var rr))
+            return;
+        if (!_src.TryGetValue(rr.Sector, out var list) || rr.Index >= list.Count)
+            return;
+        if (rr.Model is null || rr.Model.Hull.BoundingRadius <= 1e-3f)
+        {
+            list[rr.Index] = new Entry(
+                Collide.StaticBody.AsteroidSphere(rr.Center, newRadius * CollisionConfig.AsteroidCollisionScale), default, 0f);
+        }
+        else
+        {
+            float scale = newRadius * CollisionConfig.AsteroidCollisionScale / rr.Model.Hull.BoundingRadius;
+            list[rr.Index] = new Entry(
+                Collide.StaticBody.AsteroidHull(rr.Model.Hull, rr.Center, rr.Rot, scale), rr.SpinAxis, rr.SpinSpeed);
+        }
     }
 
     public void AddBase(StellarAllegiance.Net.Base row)

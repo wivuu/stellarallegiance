@@ -25,6 +25,7 @@
     <Project Path="tests/CryptoTest/CryptoTest.csproj" />
     <Project Path="tests/FactionsTest/FactionsTest.csproj" />
     <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />
+    <Project Path="tests/MiningTest/MiningTest.csproj" />
     <Project Path="tests/MissileTest/MissileTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
   </Folder>

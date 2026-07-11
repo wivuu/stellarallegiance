@@ -187,6 +187,54 @@ hulls:
       - { item: proximity-mine, count: 8 }
       - { item: sensor-decoy, count: 1 }
 
+  # Miner (class-id 4): the AI mining hull — slow, heavy, unarmed. Harvests helium-3 from asteroids
+  # into its ore hold (ore-capacity) and offloads it at friendly bases for team credits. No weapon
+  # hardpoints — an ore hull is deliberately unarmed (CoreValidator/ContentValidator both accept a
+  # no-loadout hull). Scout-ish eyes so it discovers rocks as it flies, but a loud radar-signature —
+  # a big industrial hull is easy to spot.
+  - id: miner
+    name: Miner
+    glyph: "⬟"
+    role: MINING
+    description: "Slow, unarmed ore hauler. Strips helium-3 from asteroids and offloads it at base for credits. Defenseless — keep it escorted."
+    model-name: miner   # res://assets/ships/miner.glb (original Allegiance utility hull; HP_Weapon_0 stripped so it stays unarmed)
+    model-length: 6.5
+    class-id: 4
+    mass: 60
+    speed: 70
+    thrust: 14
+    # Pod-class agility: still heavy next to a fighter (60), but tight enough for the AI to thread
+    # aleph triggers and dock doors — at 18°/s its turning circle out-radiused both and it orbited.
+    max-turn-rates: { yaw: 40, pitch: 40, roll: 40 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 160  # tougher than a fighter (120) — it soaks hits it can't shoot back at
+    shield-capacity: 40    # a modest regenerating shield over the hull
+    shield-recharge: 6     # points/sec once the quiet delay elapses (~6.7 s to full)
+    shield-delay: 3        # seconds after the last shield hit before recharge resumes
+    # Fog-of-war vision: scout-ish reach so a miner discovers new He3 rocks as it flies, but it reads
+    # loud on radar — a slow industrial hull is seen from far off.
+    vision-cone-length: 2000
+    vision-cone-angle-deg: 28
+    vision-sphere-radius: 1000
+    radar-signature: 1.5   # big and loud — spotted well before it can react
+    price: 400
+    ore-capacity: 2000     # helium-3 units the miner fills at a rock and offloads at base
+    required-capabilities: [base]
+    # No weapon hardpoints (unarmed) — the GLB's HP_Weapon_0 node was stripped, so nothing arms it.
+    # The GLB's Booster/Thruster/Light nodes merge in (engine glow + nav beacons); the main-engine
+    # nozzle + cockpit eye are fully authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the
+    # pod. main-engine anchors the client engine glow / team trail.
+    hardpoints:
+      - { kind: main-engine, off-z: -3.0, dir-z: -1 }
+      # Cockpit eye point for the first-person camera (client-only).
+      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod
     name: Pod

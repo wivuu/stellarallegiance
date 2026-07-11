@@ -1039,6 +1039,10 @@ public sealed partial class Simulation
                     continue;
                 Vec3 closest = pos + dir * proj;
                 Vec3 off = closest - rock.Pos;
+                // Deliberately the SPAWN radius (not RockCurrentRadius): steering wider around a mined
+                // rock is harmless (extra clearance), and this runs inside the PIG-determinism-guarded
+                // brain — reading live ore state here would couple avoidance to harvest timing. v1 keeps
+                // PIG avoidance at spawn size (conservative, documented).
                 float clearance = rock.Radius + World.ShipRadius + PigAvoidMargin;
                 float perp = off.Length();
                 if (perp >= clearance)

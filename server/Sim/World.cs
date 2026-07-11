@@ -48,6 +48,10 @@ public sealed class World
     // size — a bigger sector just gets proportionally more rocks at the same spacing.
     private readonly WorldSeedingTuning _seed;
 
+    // Mining/ore tuning (world.yaml `mining:`), consumed by the post-seeding ore-assignment pass and
+    // the shrink helper. Server-side only — like _seed, never streamed.
+    public readonly WorldMiningTuning Mining;
+
     // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
     // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
@@ -91,6 +95,16 @@ public sealed class World
     // in the gameplay sense — a player's home is their team's garrison sector (scan Bases by team).
     public uint DefaultSector => Sectors.Count > 0 ? Sectors[0].Id : 0;
 
+    // Authored display name for a sector id ("Sector <id>" for an unknown id — callers use this in
+    // chat-facing text and never need to distinguish the miss).
+    public string SectorName(uint id)
+    {
+        foreach (var s in Sectors)
+            if (s.Id == id)
+                return s.Name;
+        return $"Sector {id}";
+    }
+
     // Stage-2 strategy spine: per-team economy/owned state, keyed by team byte (parallel to the
     // per-team bases). Credits accrue in the sim step (Simulation.AccrueTeamCredits); OwnedTechs/
     // OwnedCapabilities are mutable per-team clones of the faction seed, fed to the unlock-gating
@@ -107,6 +121,12 @@ public sealed class World
         // checks membership here; the wire snapshot (Protocol.BuildTeamState) streams it so the client
         // can predict locks and gray out the buy menu.
         public HashSet<byte> UnlockedClasses = new();
+
+        // Sectors this team's miners may SELECT rocks in (Stage-4 mining). Seeded to the team's
+        // garrison sector(s) each match (SeedEconomy); grown by the "/mine <sector>" order. Gates
+        // rock selection only — a miner freely TRANSITS any sector en route (returning to base is
+        // always allowed).
+        public HashSet<uint> AuthorizedMiningSectors = new();
     }
 
     // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot
@@ -146,7 +166,33 @@ public sealed class World
     // and the uniform scale mapping authored units → this rock's collision size.
     // Rot is the SPAWN pose; SpinAxis/SpinSpeed give the live tumble — the resolver composes them at
     // the current tick (Collide.RockRotationAt) so the hull rotates with the rendered rock.
-    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale, Vec3 SpinAxis, float SpinSpeed);
+    // Scale is the LIVE scale (shrinks as a He3 rock is mined, kept in lockstep with CurrentRadius by
+    // SetOreRemaining); SpawnScale is the immutable spawn-size scale, so a live re-scale recomputes
+    // ABSOLUTELY (SpawnScale·currentRadius/spawnRadius) and repeated harvests never compound drift.
+    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale, Vec3 SpinAxis, float SpinSpeed, float SpawnScale);
+
+    // Per-rock MUTABLE resource state, assigned once after asteroid seeding (AssignOre) and keyed by
+    // rock id. Every rock gets an entry: its RockClass, plus (He3 rocks only) an ore hold that a miner
+    // depletes. Non-He3 rocks carry Capacity/Remaining = 0 (never harvested, never shrink). CurrentRadius
+    // starts at the spawn radius and shrinks volume-proportionally as He3 ore is pulled (SetOreRemaining;
+    // the harvest transfer itself lands in a later stream). A class so the sim mutates it in place.
+    public sealed class OreState
+    {
+        public RockClass Class;
+        public float OreCapacity;  // total He3 units this rock holds (0 = non-He3)
+        public float OreRemaining; // He3 units left to mine
+        public float CurrentRadius; // live (shrunk) radius; == the spawn radius until mined
+    }
+
+    // Rock id → ore state. Rebuilt from scratch every World (so a match restart re-rolls it via the
+    // StartMatch world swap — nothing else caches it). Read via RockClassOf / RockCurrentRadius.
+    public readonly Dictionary<ulong, OreState> RockOre = new();
+
+    // Rocks whose ore/radius actually changed this sim step (appended by SetOreRemaining on a real
+    // change, skipped on no-ops). Mirrors the Minefields/TeamState "changed-this-step" seam so a later
+    // wire stream can drain only the deltas (live shrink); cleared once per step alongside the other
+    // change flags (Simulation.Step). Nothing consumes it yet — the wire hookup lands in a later stream.
+    public readonly HashSet<ulong> RocksChangedThisStep = new();
 
     // Per-class ship collision hulls, loaded from the same GLBs the client renders and pre-scaled
     // to the client's per-class silhouette length (ShipModelLoader.TargetLength), so the hull a
@@ -168,6 +214,14 @@ public sealed class World
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
     private static readonly Dictionary<(int, int, int), List<Rock>> NoGrid = new();
 
+    // Precomputed all-pairs sector routing: (fromSector, toSector) -> the gate to leave fromSector by
+    // as the next hop of a shortest route toward toSector. Built once at construction from Alephs
+    // (BuildSectorRouting); NextGateTo is an O(1) read into it.
+    private readonly Dictionary<(uint from, uint to), Gate> _nextHop = new();
+
+    // Hop distances backing _nextHop (same BFS). Absent = unreachable; (S, S) is not stored (0 hops).
+    private readonly Dictionary<(uint from, uint to), int> _hops = new();
+
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
     public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, ILogger? log = null)
@@ -176,6 +230,7 @@ public sealed class World
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
+        Mining = cfg.Mining;
         // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
@@ -307,6 +362,260 @@ public sealed class World
         (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies(ships);
+
+        // Collapse the aleph gate graph into an all-pairs next-hop table (players route multi-hop across
+        // sectors, not just through a single direct gate). The graph is tiny (~2-10 nodes); deterministic
+        // (lowest gate Id breaks equal-hop ties, no Random, no dictionary-order dependence) so it is safe
+        // to consult from the 20Hz sim step.
+        BuildSectorRouting();
+
+        // Assign each rock a resource class + (He3 rocks) an ore hold. Runs AFTER all seeding and draws
+        // ONLY from per-rock derived sub-RNGs — never the shared `rng` above — so the rock/aleph layout
+        // for a pinned seed stays byte-identical no matter how the mining knobs are tuned (the canary).
+        AssignOre(secCfg);
+    }
+
+    // Stateless strong mix of the world seed with a per-rock id, feeding a private DetRng so each rock's
+    // class/capacity is drawn from its OWN scrambled stream. Independent of the shared world-gen rng and
+    // of any Dictionary/list iteration order (the id alone selects the stream), so ore assignment can
+    // never perturb the rock/aleph layout. splitmix-style spread; DetRng's own scrambler does the rest.
+    private static ulong OreMix(ulong seed, ulong id) => seed ^ (id * 0x9E3779B97F4A7C15UL);
+
+    // Post-seeding ore-assignment pass. For each sector (rocks taken from Asteroids in list order — a
+    // deterministic order), pick a guaranteed count of Helium3 rocks and give them ore holds; the rest
+    // are cosmetic classes. Selection + capacity come entirely from per-rock derived sub-RNGs (OreMix),
+    // so the shared world-gen RNG stream is untouched and the layout stays byte-identical for a seed.
+    private void AssignOre(List<WorldSectorConfig> secCfg)
+    {
+        // Reference radius for the volume scaling of capacity: the midpoint of the FIELD rock-size
+        // range (field is the primary/most-common shape), so an average-size rock scales at ~1×.
+        float refRadius = 0.5f * (_seed.FieldRockMin + _seed.FieldRockMax);
+
+        // Per-sector config lookup for the optional overrides (a bare test world may have no config for
+        // a sector id — then the world-level WorldMiningTuning defaults apply).
+        var scById = new Dictionary<uint, WorldSectorConfig>();
+        foreach (var sc in secCfg)
+            scById[sc.Id] = sc;
+
+        // Group rocks by sector, preserving Asteroids list order (deterministic across runs).
+        var bySector = new Dictionary<uint, List<Rock>>();
+        foreach (var r in Asteroids)
+        {
+            if (!bySector.TryGetValue(r.SectorId, out var list))
+                bySector[r.SectorId] = list = new List<Rock>();
+            list.Add(r);
+        }
+
+        // Each sector is processed independently and results are stored keyed by rock id, so the final
+        // RockOre is identical regardless of which order the sectors are visited in.
+        foreach (var (sectorId, rocks) in bySector)
+        {
+            int n = rocks.Count;
+            if (n == 0)
+                continue;
+            scById.TryGetValue(sectorId, out var sc); // sc may be null (test world)
+
+            // Per-rock derived hash (rank/class) + capacity roll, from each rock's own sub-RNG.
+            var hash = new ulong[n];
+            var roll = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                var rr = new DetRng(OreMix(Seed, rocks[i].Id));
+                hash[i] = rr.NextULong();       // ranking + cosmetic-class selector
+                roll[i] = (float)rr.NextDouble(); // capacity lerp (drawn AFTER the hash, always)
+            }
+
+            // Guaranteed He3 count: fraction of the sector's rocks, clamped to [min, max] (sector
+            // override ?? world default), then again to the actual rock count. Zero-rock sectors bailed
+            // above, so he3Count ∈ [0, n].
+            float frac = Mining.He3Fraction * (sc?.He3FractionMult ?? 1f);
+            int he3Min = sc?.He3Min ?? Mining.He3PerSectorMin;
+            int he3Max = sc?.He3Max ?? Mining.He3PerSectorMax;
+            if (he3Max < he3Min)
+                he3Max = he3Min; // a nonsensical override pair collapses to the min rather than throwing
+            int he3Count = (int)MathF.Round(frac * n);
+            he3Count = Math.Clamp(he3Count, he3Min, he3Max);
+            he3Count = Math.Clamp(he3Count, 0, n);
+
+            // Rank the sector's rocks by hash (descending); ties broken by rock id (ascending) so the
+            // order is fully deterministic. The top he3Count become Helium3.
+            var order = new int[n];
+            for (int i = 0; i < n; i++)
+                order[i] = i;
+            Array.Sort(order, (a, b) =>
+            {
+                int c = hash[b].CompareTo(hash[a]); // descending hash
+                return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id); // ascending id tie-break
+            });
+            var isHe3 = new bool[n];
+            for (int k = 0; k < he3Count; k++)
+                isHe3[order[k]] = true;
+
+            float richness = sc?.OreRichnessMult ?? 1f;
+            for (int i = 0; i < n; i++)
+            {
+                var rock = rocks[i];
+                if (isHe3[i])
+                {
+                    float cap = Lerp(Mining.OreCapacityMin, Mining.OreCapacityMax, roll[i])
+                        * MathF.Pow(rock.Radius / refRadius, 3f) * richness;
+                    RockOre[rock.Id] = new OreState
+                    {
+                        Class = RockClass.Helium3,
+                        OreCapacity = cap,
+                        OreRemaining = cap,
+                        CurrentRadius = rock.Radius,
+                    };
+                }
+                else
+                {
+                    // Remaining rocks split among the three cosmetic classes by the same hash (0=
+                    // Carbonaceous, 1=Silicon, 2=Uranium). No ore hold — capacity 0, never shrinks.
+                    var cls = (RockClass)(byte)(hash[i] % 3);
+                    RockOre[rock.Id] = new OreState
+                    {
+                        Class = cls,
+                        OreCapacity = 0f,
+                        OreRemaining = 0f,
+                        CurrentRadius = rock.Radius,
+                    };
+                }
+            }
+        }
+    }
+
+    // The resource class assigned to a rock at world-gen (default Carbonaceous for an unknown id, e.g.
+    // a test-seam rock added after construction — those carry no ore state).
+    public RockClass RockClassOf(ulong id) =>
+        RockOre.TryGetValue(id, out var s) ? s.Class : RockClass.Carbonaceous;
+
+    // The rock's CURRENT (possibly shrunk) collision/render radius, falling back to its static spawn
+    // radius for any id with no ore state (non-assigned/test rocks).
+    public float RockCurrentRadius(ulong id) =>
+        RockOre.TryGetValue(id, out var s) ? s.CurrentRadius : (RockById(id)?.Radius ?? 0f);
+
+    // Set a He3 rock's remaining ore and recompute its volume-proportional CurrentRadius:
+    //   radius = floor + (spawn − floor) · (remaining / capacity)^(1/3),  floor = ShrinkFloorFrac·spawn.
+    // Encapsulates the shrink formula so the harvest stream just calls this. A no-op for non-He3 /
+    // unknown rocks (they never shrink). The spawn radius is the static rock radius (RockById).
+    public void SetOreRemaining(ulong id, float remaining)
+    {
+        if (!RockOre.TryGetValue(id, out var s) || s.OreCapacity <= 0f)
+            return;
+        float clamped = Math.Clamp(remaining, 0f, s.OreCapacity);
+        float spawn = RockById(id)?.Radius ?? s.CurrentRadius;
+        float floor = Mining.ShrinkFloorFrac * spawn;
+        float t = s.OreCapacity > 0f ? clamped / s.OreCapacity : 0f;
+        float newRadius = floor + (spawn - floor) * MathF.Pow(t, 1f / 3f);
+        // No-op guard: a redundant set (same ore, same derived radius — e.g. a keepalive or a
+        // full→full call) neither flags the rock changed nor re-scales its body. Matches the
+        // change-flag discipline of the minefield/team seams (only real deltas mark the step dirty).
+        if (clamped == s.OreRemaining && newRadius == s.CurrentRadius)
+            return;
+        s.OreRemaining = clamped;
+        s.CurrentRadius = newRadius;
+        RocksChangedThisStep.Add(id);
+        // Keep the collision body's scale tracking the live radius. Recompute ABSOLUTELY from the
+        // immutable SpawnScale (never multiply the current Scale) so repeated harvests can't compound
+        // rounding drift: collision scale ∝ radius, so liveScale = SpawnScale · currentRadius/spawn.
+        if (spawn > 1e-6f && RockBodies.TryGetValue(id, out var body))
+            RockBodies[id] = body with { Scale = body.SpawnScale * (s.CurrentRadius / spawn) };
+    }
+
+    // Build the all-pairs next-hop table over the aleph gate graph. For every ordered sector pair (S, D)
+    // reachable through gates, record the one gate to leave S by on a shortest-hop route to D. BFS gives
+    // the hop distances; among S's outgoing gates that step one hop closer to D the LOWEST gate Id wins.
+    // Fully deterministic: node/gate lists are sorted by id, so the result never depends on Dictionary or
+    // Alephs iteration order, and there is no Random anywhere (routing runs inside the deterministic sim).
+    private void BuildSectorRouting()
+    {
+        // Adjacency: outgoing gates per sector, each list sorted by gate Id (the equal-hop tie-break).
+        var gatesFrom = new Dictionary<uint, List<Gate>>();
+        var nodes = new HashSet<uint>();
+        foreach (var s in Sectors)
+            nodes.Add(s.Id);
+        foreach (var g in Alephs)
+        {
+            nodes.Add(g.SectorId);
+            nodes.Add(g.DestSectorId);
+            if (!gatesFrom.TryGetValue(g.SectorId, out var list))
+                gatesFrom[g.SectorId] = list = new List<Gate>();
+            list.Add(g);
+        }
+        foreach (var list in gatesFrom.Values)
+            list.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+        // Hop distance from every source to every reachable sector (unweighted BFS on the gate graph).
+        var sorted = new List<uint>(nodes);
+        sorted.Sort();
+        var dist = new Dictionary<uint, Dictionary<uint, int>>();
+        foreach (var src in sorted)
+        {
+            var d = new Dictionary<uint, int> { [src] = 0 };
+            var queue = new Queue<uint>();
+            queue.Enqueue(src);
+            while (queue.Count > 0)
+            {
+                uint cur = queue.Dequeue();
+                if (!gatesFrom.TryGetValue(cur, out var outs))
+                    continue;
+                foreach (var g in outs)
+                    if (!d.ContainsKey(g.DestSectorId))
+                    {
+                        d[g.DestSectorId] = d[cur] + 1;
+                        queue.Enqueue(g.DestSectorId);
+                    }
+            }
+            dist[src] = d;
+        }
+
+        // Keep the hop distances too (SectorHops) — consumers rank cross-sector candidates ("nearest
+        // rock/base by route") without re-walking the gate graph.
+        foreach (var src in sorted)
+            foreach (var (dst, hops) in dist[src])
+                if (dst != src)
+                    _hops[(src, dst)] = hops;
+
+        // Next hop: for each (S, D), the lowest-Id outgoing gate of S whose destination sits one hop
+        // closer to D than S is. `outs` is Id-sorted, so the first match is the lowest-Id gate.
+        foreach (var src in sorted)
+        {
+            if (!gatesFrom.TryGetValue(src, out var outs))
+                continue;
+            var dSrc = dist[src];
+            foreach (var dst in sorted)
+            {
+                if (dst == src || !dSrc.TryGetValue(dst, out int need))
+                    continue; // self, or unreachable from src
+                foreach (var g in outs)
+                    if (dist.TryGetValue(g.DestSectorId, out var dMid)
+                        && dMid.TryGetValue(dst, out int viaHop)
+                        && viaHop == need - 1)
+                    {
+                        _nextHop[(src, dst)] = g;
+                        break;
+                    }
+            }
+        }
+    }
+
+    // The gate to take FROM `fromSector` as the next hop of a shortest route toward `toSector`, or null
+    // when they are the same sector or `toSector` is unreachable through gates. Precomputed all-pairs
+    // (BuildSectorRouting) → O(1), safe to call from the deterministic sim step.
+    public Gate? NextGateTo(uint fromSector, uint toSector)
+    {
+        if (fromSector == toSector)
+            return null;
+        return _nextHop.TryGetValue((fromSector, toSector), out var g) ? g : null;
+    }
+
+    // Shortest gate count from one sector to another: 0 = same sector, -1 = unreachable. Same BFS
+    // that feeds NextGateTo, precomputed → O(1) from the sim step.
+    public int SectorHops(uint fromSector, uint toSector)
+    {
+        if (fromSector == toSector)
+            return 0;
+        return _hops.TryGetValue((fromSector, toSector), out int h) ? h : -1;
     }
 
     // (Re)seed every team's economy from the faction snapshot: reset Credits to the starting grant,
@@ -315,12 +624,17 @@ public sealed class World
     // at construction and on each match start (Simulation.StartMatch).
     public void SeedEconomy(FactionStart start)
     {
-        foreach (var team in TeamStates.Values)
+        foreach (var (teamId, team) in TeamStates)
         {
             team.Credits = start.StartingCredits;
             team.Score = 0;
             team.OwnedTechs = start.BaseTechs.Clone();
             team.OwnedCapabilities = start.BaseCapabilities.Clone();
+            // Miners start authorized only where the team already lives: its garrison sector(s).
+            team.AuthorizedMiningSectors.Clear();
+            foreach (var b in Bases)
+                if (b.Team == teamId)
+                    team.AuthorizedMiningSectors.Add(b.SectorId);
         }
     }
 
@@ -428,7 +742,7 @@ public sealed class World
                 continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
             var (spinAxis, spinSpeed) = Collide.RockSpin(r.Id);
-            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale, spinAxis, spinSpeed);
+            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale, spinAxis, spinSpeed, scale);
         }
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).

@@ -44,6 +44,7 @@ var content = ContentLoader.Load(stockPath, worldPath);
 var world = new World(1u, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
 var sim = new Simulation(world, content);
 sim.PigsEnabled = false;
+sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
 sim.ShieldsEnabled = false;
 sim.StartMatch();
 

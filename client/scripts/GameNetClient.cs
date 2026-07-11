@@ -751,6 +751,24 @@ public partial class GameNetClient : Node
             case 20:
                 ApplyMapList(r);
                 break;
+            case 22:
+                ApplyRockUpdate(r);
+                break;
+        }
+    }
+
+    // MsgRockUpdate (mining): live rock shrink deltas — the renderer eases each rock's mesh + collision
+    // toward the new radius and refreshes its stored orePct (drives the DEPLETED readout). Fog on:
+    // only rocks this team has discovered arrive here (server-filtered).
+    private void ApplyRockUpdate(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            float radius = r.ReadSingle();
+            int orePct = r.ReadByte();
+            _world.NetUpdateRock(id, radius, orePct);
         }
     }
 
@@ -1216,6 +1234,12 @@ public partial class GameNetClient : Node
         row.RotY = r.ReadSingle();
         row.RotZ = r.ReadSingle();
         row.Variant = AsteroidShapes.NameForIndex(variant);
+        // Mining block (mirror of Protocol.WriteRockStatic): class + the live (possibly mined-down)
+        // radius + ore fill. A rock seen for the first time already carries its shrunk size here, so
+        // the renderer/collision spawn it at CurrentRadius rather than the spawn Radius.
+        row.RockClass = r.ReadByte();
+        row.CurrentRadius = r.ReadSingle();
+        row.OrePct = r.ReadByte();
         return row;
     }
 
@@ -1352,6 +1376,7 @@ public partial class GameNetClient : Node
             d.RadarSignature = r.ReadSingle();
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
+            d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
@@ -1617,6 +1642,7 @@ public partial class GameNetClient : Node
                 IsPig = (flags & 1) != 0,
                 IsPod = (flags & 2) != 0,
                 Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
+                IsMiner = (flags & 32) != 0, // ShipFlagMiner — AI mining ship
 
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,

@@ -70,6 +70,7 @@ namespace StellarAllegiance.Net
         public bool IsPig; // AI combat drone
         public bool IsPod; // escape pod
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
+        public bool IsMiner; // AI mining ship (ShipFlagMiner) — HUD tags it MINER
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The
@@ -135,7 +136,10 @@ namespace StellarAllegiance.Net
         public float Health;
     }
 
-    // A field asteroid (static, from Welcome). Variant is the GLB mesh name (cosmetic).
+    // A field asteroid (static, from Welcome). Variant is the GLB mesh name (cosmetic). Radius is the
+    // immutable SPAWN radius; CurrentRadius is the live (mined-down) size — the renderer/collision use
+    // CurrentRadius so a shrunk rock reads at its actual size. RockClass mirrors Shared.RockClass;
+    // OrePct is 0-100 (He3 fill) and 0 for every non-He3 rock. Live shrink arrives via MsgRockUpdate.
     public sealed class Asteroid
     {
         public ulong AsteroidId;
@@ -148,6 +152,9 @@ namespace StellarAllegiance.Net
         public float RotX,
             RotY,
             RotZ;
+        public byte RockClass;
+        public float CurrentRadius;
+        public int OrePct;
     }
 
     // An aleph warp gate (static, from Welcome).

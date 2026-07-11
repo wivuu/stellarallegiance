@@ -77,7 +77,31 @@ Server-side hands-off navigation for player ships (protocol v30), reusing the PI
   - `client/scripts/PredictionController.cs` — `SetAutopilot(bool)` follow-authority mode; `client/scripts/ShipController.cs` — T toggle / `EngageAutopilot` / manual-override handback / `ApEngagedLocal`; `client/scripts/SectorOverview.cs` — F3 pick + waypoint; `client/scripts/TargetMarkers.cs` — extended Tab, waypoint diamond, AUTOPILOT banner + disengage toast
   - `tests/AutopilotTest` — approach / standoff / stop+disengage / aleph / avoidance / manual-override / friendly-dock / target-loss
 - **Related:** [[Flight Model]], [[PigBrain]], [[Client Prediction]], [[SimTick]]
-- **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). Cross-sector routing is single-hop only. *Deferred: multi-hop aleph routing, enemy-ghost tracking through fog, reuse for miners/constructors.*
+- **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). ~~Cross-sector routing is single-hop only~~ (multi-hop since Stage-4 mining: the `CrossSector` leg routes via `World.NextGateTo`). *Deferred: enemy-ghost tracking through fog; reuse for constructors.*
+
+### Rock Class / Ore (Mining)
+Stage-4 resource layer over the seeded asteroids. Every rock gets a `RockClass` (Carbonaceous / Silicon / Uranium / Helium3, append-only in `shared/Defs.cs`) chosen by a **per-sector deterministic selection pass** — per-rock derived hashes (`Mix(seed, rock.Id)`), never extra draws on the shared world `DetRng` stream, so pinned-seed layouts stay byte-identical (guard-tested golden). Only **Helium-3** is harvestable: each He3 rock rolls an ore capacity (radius-cubed volume factor × world/map richness knobs) and **shrinks volume-proportionally** as it's mined down to a floor fraction, through the single seam `World.SetOreRemaining` (recomputes `CurrentRadius`, re-scales the collision body, flags the change). Live shrink streams as `MsgRockUpdate` (on-change only; fog on → per-team, discovered rocks only); Welcome/Reveal rock statics carry class + current radius + ore % so late joiners are never stale.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/World.cs` — `RockOre` (OreState dict), `RockClassOf`, `RockCurrentRadius`, `SetOreRemaining`, class/capacity seeding; `shared/Defs.cs` — `RockClass`, `WorldMiningTuning` (+ per-sector overrides on `SectorConfig`)
+  - `server/Content/core/world.yaml` `mining:` block (server-only, not streamed) + `schemas/world.schema.json` / `schemas/map.schema.json` mirrors
+  - `server/Net/Protocol.cs` — `WriteRockStatic` (class/radius/orePct), `MsgRockUpdate = 22`, `BuildRockUpdates(For)`
+  - `client/scripts/WorldRenderer.cs` — `NetUpdateRock` mesh re-scale + collision update; `client/scripts/TargetMarkers.cs` — class name + `DEPLETED` bracket
+  - `tests/MiningTest` — class/capacity determinism, pinned-seed layout golden, shrink arithmetic, wire round-trip
+- **Related:** [[World Layout Seed]], [[Fog of War (Team Vision)]], [[Miner (AI ore drone)]]
+- **Notes:** Non-He3 classes are cosmetic v1 (future refinery/shipyard hooks). Vision occlusion + PIG avoidance stay at spawn radius (conservative, deferred). Grid membership stays spawn-size — rocks only shrink.
+
+### Miner (AI ore drone)
+A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull class-id 4 with `ore-capacity`) that harvests He3 rocks and offloads ore at friendly bases for team credits — alongside, not replacing, the flat paycheck. Each team seeds **one free miner slot** per match; more are bought (`/buyminer`, same `TryReserveSpawn` charge seam as player hulls) up to `mining.max-miners-per-team`. `MinerSlot` is a separate pool from `PigSlot`: purchased lifecycle, no wave respawn, no pod — a killed miner's slot is gone until repurchased. Brain at the PIG 5 Hz cadence (`MinerBrainStep`): picks **team-discovered** He3 rocks in **authorized sectors** (`TeamState.AuthorizedMiningSectors`, seeded to the garrison, extended via `/mine <sector>`; transit is free, only *selection* is gated), preferring its previous rock, avoiding friendly claims unless miners outnumber rocks, else nearest by gate hops. Steering at 20 Hz (`MinerExecute` via the `InputFor` seam) reuses `AutoSteer` + the 3-phase `DockApproach`; cross-sector legs route `World.NextGateTo`. The dock-trigger collision pass routes miners to `OffloadMiner` (credits + `GoneClean` despawn + delayed relaunch) — never `DockShip` (which refunds `PaidCost` and rebinds a client). `MinersEnabled` mirrors `PigsEnabled` as the test kill-switch; results/errors reach the team as `MinerNoticesThisStep` system chat.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Mining.cs` — `HarvestStep`, `MinerSlot`/`MinerState`, brain + steering + offload + buy/order/status queues
+  - `server/Sim/Simulation.cs` — `SeedMinerSlots` (StartMatch), `MinerBrainStep`/`MinerExecute`/`OffloadMiner`/`KillMiner` hook sites, `DrainMinerQueues`
+  - `server/Net/ClientHub.cs` — `/buyminer` `/mine` `/miners` in `HandleCommand`, `SystemToTeam` notice relay; `client/scripts/Chat.cs` — command relay + `/help`
+  - `server/Content/core/hulls.yaml` — `miner` (class-id 4, unarmed, `ore-capacity`); `client/assets/ships/miner.glb`
+  - `tests/MiningTest` — full loop, claim rules, cross-sector return, authorization/discovery gating
+- **Related:** [[Rock Class / Ore (Mining)]], [[PigBrain]], [[Autopilot / AutoSteer]], [[Dock Refund]]
+- **Notes:** Enemy PIGs auto-hunt miners via the normal chase path (intended). Any teammate can buy/order v1 (Stage-2 bootstrap authority; commander tightens later). Miners scout as they fly (hull vision values) — a miner's own vision reveals new rocks.
 
 ---
 

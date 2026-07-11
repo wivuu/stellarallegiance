@@ -50,6 +50,7 @@ Simulation BootSim(ulong seed)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw bolt/missile damage from shields (ShieldTest covers shields)
     sim.FogEnabled = false; // no radar-visibility gate on bolt/missile targeting (FogTest covers fog)
     sim.StartMatch();
@@ -187,6 +188,91 @@ const int BurstTicks = 30;
     var b = Run(7);
     Check(a.SequenceEqual(b), "determinism: identical scripts yield bit-identical target-health timelines",
         "determinism: target-health timelines diverged between two identical runs");
+}
+
+// ================================================================================================
+// Multi-hop aleph routing (World.NextGateTo). The sim links sectors by aleph gate PAIRS (one per
+// authored map link); the World ctor collapses that graph into an all-pairs next-hop table so player
+// autopilot can route several sectors away, not just through a single direct gate. These scenarios
+// build small custom sector graphs (a fresh WorldConfig, no Simulation needed) and check the table.
+// ================================================================================================
+
+// Build a World over a custom sector chain: `sectors` = (id, team?) where a non-null team plants a
+// garrison base (the sim needs ≥1 and at most 2 teams), and `links` = bidirectional gate edges. All
+// sectors are asteroid-free so nothing but the gate topology matters. Seed only jitters gate positions,
+// never the topology/gate-ids the routing table is built from.
+World BuildChainWorld(ulong seed, (uint id, byte? team)[] sectors, (uint a, uint b)[] links)
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var cfg = content.World;
+    cfg.Sectors = sectors
+        .Select(s => new WorldSectorConfig
+        {
+            Id = s.id,
+            Asteroids = AsteroidKind.None,
+            Garrison = s.team is byte t ? new SectorGarrison { Team = t } : null,
+        })
+        .ToList();
+    cfg.Links = links.Select(l => new SectorLink(l.a, l.b)).ToList();
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
+}
+
+string GateStr(World.Gate? g) => g is World.Gate x ? $"{x.SectorId}->{x.DestSectorId}" : "null";
+
+// ---- 5. Next-hop on a 3-sector chain A(10)-B(20)-C(30) -----------------------------------------
+{
+    var world = BuildChainWorld(1,
+        new (uint, byte?)[] { (10, 0), (20, null), (30, 1) },
+        new (uint, uint)[] { (10, 20), (20, 30) });
+
+    // From A toward C the next hop is the A->B gate (10->20), NOT a nonexistent direct A->C gate.
+    var ac = world.NextGateTo(10, 30);
+    Check(ac is World.Gate hop && hop.SectorId == 10 && hop.DestSectorId == 20,
+        $"routing: A->C next hop is the A->B gate ({GateStr(ac)})",
+        $"routing: A->C should hop through B first, got {GateStr(ac)}");
+
+    // Direct legs resolve to their direct gate.
+    var ab = world.NextGateTo(10, 20);
+    Check(ab is World.Gate g1 && g1.SectorId == 10 && g1.DestSectorId == 20,
+        $"routing: A->B next hop is the direct A->B gate ({GateStr(ab)})", $"routing: A->B wrong gate {GateStr(ab)}");
+    var bc = world.NextGateTo(20, 30);
+    Check(bc is World.Gate g2 && g2.SectorId == 20 && g2.DestSectorId == 30,
+        $"routing: B->C next hop is the direct B->C gate ({GateStr(bc)})", $"routing: B->C wrong gate {GateStr(bc)}");
+
+    // Reverse: C toward A hops through B first (the C->B gate 30->20).
+    var ca = world.NextGateTo(30, 10);
+    Check(ca is World.Gate g3 && g3.SectorId == 30 && g3.DestSectorId == 20,
+        $"routing: C->A next hop is the C->B gate ({GateStr(ca)})",
+        $"routing: C->A should hop through B first, got {GateStr(ca)}");
+}
+
+// ---- 6. Unreachable sector ⇒ null; fromSector == toSector ⇒ null --------------------------------
+{
+    // Sector 40 is authored but has no link — nothing routes to it.
+    var world = BuildChainWorld(2,
+        new (uint, byte?)[] { (10, 0), (20, null), (30, 1), (40, null) },
+        new (uint, uint)[] { (10, 20), (20, 30) });
+    Check(world.NextGateTo(10, 40) is null, "routing: an unreachable sector returns null (autopilot then disengages)",
+        $"routing: unreachable sector 40 returned {GateStr(world.NextGateTo(10, 40))}");
+    Check(world.NextGateTo(10, 10) is null, "routing: fromSector == toSector returns null",
+        $"routing: self-route returned {GateStr(world.NextGateTo(10, 10))}");
+}
+
+// ---- 7. Determinism: two Worlds, same seed ⇒ bit-identical next-hop table -----------------------
+{
+    (uint from, uint to, ulong gate)[] Table(ulong seed)
+    {
+        var w = BuildChainWorld(seed,
+            new (uint, byte?)[] { (10, 0), (20, null), (30, 1) },
+            new (uint, uint)[] { (10, 20), (20, 30) });
+        uint[] ids = { 10, 20, 30 };
+        return (from f in ids from t in ids
+                let g = w.NextGateTo(f, t)
+                select (f, t, g is World.Gate x ? x.Id : 0UL)).ToArray();
+    }
+    Check(Table(4242).SequenceEqual(Table(4242)),
+        "routing: two Worlds built from the same seed yield an identical next-hop table",
+        "routing: next-hop table diverged between two same-seed Worlds");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL PASS" : $"\n{failures} FAILURE(S)");
