@@ -290,6 +290,8 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     float maxFacing = 0f;          // best nose (local +Z) alignment with the door's inward normal
     float maxUpAlign = 0f;         // best roll alignment onto a door in-plane axis (sampled only while facing)
     float lastSpeed = 0f;          // speed on the final tick before the ship is removed (impact speed)
+    byte lastPhase = 0;            // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
+    float minPocketGap = float.PositiveInfinity; // pre-Creep along-normal gap to the door plane while inside the door column
     for (int i = 0; i < 1500 && !docked; i++)
     {
         sim.Step();
@@ -301,6 +303,7 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
         Vec3 pos = ship.State.Pos;
         float speed = ship.State.Vel.Length();
         lastSpeed = speed;
+        lastPhase = ship.ApDockPhase;
         Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
         float facing = Dot(fwd, f.Normal);
         maxFacing = MathF.Max(maxFacing, facing);
@@ -315,6 +318,15 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
             float upAlign = MathF.Max(MathF.Abs(Dot(up, f.U)), MathF.Abs(Dot(up, f.V)));
             maxUpAlign = MathF.Max(maxUpAlign, upAlign);
         }
+        // Overshoot guard: before Creep, the ship must never barrel down the door COLUMN past the
+        // standoff pocket (gap measured OUTSIDE the plane; pstand sits at 25, the dock trigger at 9).
+        Vec3 rel = pos - doorW;
+        float along = Dot(rel, f.Normal);
+        Vec3 lat = rel - f.Normal * along;
+        if (ship.ApDockPhase < 2
+            && MathF.Abs(Dot(lat, f.U)) <= f.Eu + World.ShipRadius
+            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius)
+            minPocketGap = MathF.Min(minPocketGap, -along);
     }
 
     Check(docked, "friendly base: autopilot flew the ship home and it docked (removed from the world)",
@@ -333,11 +345,27 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     // Creep-in: docks at a gentle speed, not the old ~160 u/s hull slam.
     Check(lastSpeed < 40f, $"friendly base: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
         $"friendly base: slammed the dock hot (impact speed {lastSpeed:0.0})");
+    // The dock must fire FROM the Creep phase — docking by sliding through the trigger during
+    // Transit means the maneuver overshot the standoff point instead of stopping to align.
+    Check(lastPhase == 2, "friendly base: docked from the Creep phase (full maneuver, not a transit slide)",
+        $"friendly base: docked from phase {lastPhase}, not Creep — overshot the standoff maneuver");
+    Check(minPocketGap > 10f,
+        $"friendly base: never overshot the standoff into the door pocket before Creep (min plane gap {minPocketGap:0.0} > 10)",
+        $"friendly base: overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)");
 }
 
 // ---- 5b. Friendly base far side: detour AROUND the base sphere, then dock ---------------------------
+// Two far-side starts: AXIAL (directly opposite the door) and OBLIQUE (opposite AND off-axis). The
+// oblique one rides the detour ring the longest and clears line-of-sight to the standoff point at the
+// last moment — the geometry where a late throttle cut overshoots the standoff point into the door
+// pocket (the MaxArrestableSpeed governor on the arc is what keeps the handoff speed stoppable).
+foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[]
 {
-    var sim = BootSim(seed: 55);
+    ("axial", 55, face => face.Normal * 300f),
+    ("oblique", 56, face => face.Normal * 180f + face.U * 240f),
+})
+{
+    var sim = BootSim(seed: seed);
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
     var homeBase = sim.World.Bases.First(b => b.Team == 0);
     ulong shipId = ship.ShipId;
@@ -348,8 +376,8 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     Vec3 pstand = doorW - f.Normal * 25f;
 
     // Start on the OPPOSITE side of the base from the door (the stock door's inward normal ≈ +Y, so
-    // +Normal*300 puts the ship above a base whose bay is on the bottom — the door is fully occluded).
-    PlaceAt(ship, homeBase.SectorId, basePos + f.Normal * 300f);
+    // +Normal offsets put the ship above a base whose bay is on the bottom — the door is occluded).
+    PlaceAt(ship, homeBase.SectorId, basePos + offset(f));
     sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
     sim.Step();
 
@@ -357,6 +385,8 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     bool enteredTerminal = false;    // first tick the ship comes within 60 of the standoff point
     float minCenterGap = float.PositiveInfinity; // closest the ship gets to the base CENTRE before terminal
     float lastSpeed = 0f;
+    byte lastPhase = 0;              // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
+    float minPocketGap = float.PositiveInfinity; // pre-Creep along-normal gap to the plane inside the door column
     for (int i = 0; i < 2500 && !docked; i++)
     {
         sim.Step();
@@ -367,24 +397,38 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
         }
         Vec3 pos = ship.State.Pos;
         lastSpeed = ship.State.Vel.Length();
+        lastPhase = ship.ApDockPhase;
         if (!enteredTerminal && Dist(pos, pstand) < 60f)
             enteredTerminal = true;
         // Only sample the detour leg: once in the terminal approach the ship legitimately closes on the hull.
         if (!enteredTerminal)
             minCenterGap = MathF.Min(minCenterGap, Dist(pos, basePos));
+        // Overshoot guard (same as scenario 5): pre-Creep, never deep into the door column pocket.
+        Vec3 rel = pos - doorW;
+        float along = Dot(rel, f.Normal);
+        Vec3 lat = rel - f.Normal * along;
+        if (ship.ApDockPhase < 2
+            && MathF.Abs(Dot(lat, f.U)) <= f.Eu + World.ShipRadius
+            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius)
+            minPocketGap = MathF.Min(minPocketGap, -along);
     }
 
-    Check(docked, "friendly base far side: detoured around the base and docked (removed from the world)",
-        "friendly base far side: the ship never docked");
-    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "friendly base far side: the docked player was returned to the spawn menu",
-        "friendly base far side: the player still owns a flying ship after docking");
+    Check(docked, $"friendly base far side ({label}): detoured around the base and docked (removed from the world)",
+        $"friendly base far side ({label}): the ship never docked");
+    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), $"friendly base far side ({label}): the docked player was returned to the spawn menu",
+        $"friendly base far side ({label}): the player still owns a flying ship after docking");
     // Detour proof: on the whole approach leg (before the terminal corridor) it stayed outside the base
     // sphere — it routed AROUND the hull rather than plowing/bouncing straight through it.
     Check(minCenterGap > World.BaseRadius,
-        $"friendly base far side: kept clear of the base sphere on the detour (min centre gap {minCenterGap:0.0} > radius {World.BaseRadius})",
-        $"friendly base far side: cut through the base sphere (min centre gap {minCenterGap:0.0} <= radius {World.BaseRadius})");
-    Check(lastSpeed < 40f, $"friendly base far side: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
-        $"friendly base far side: slammed the dock hot (impact speed {lastSpeed:0.0})");
+        $"friendly base far side ({label}): kept clear of the base sphere on the detour (min centre gap {minCenterGap:0.0} > radius {World.BaseRadius})",
+        $"friendly base far side ({label}): cut through the base sphere (min centre gap {minCenterGap:0.0} <= radius {World.BaseRadius})");
+    Check(lastSpeed < 40f, $"friendly base far side ({label}): crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
+        $"friendly base far side ({label}): slammed the dock hot (impact speed {lastSpeed:0.0})");
+    Check(lastPhase == 2, $"friendly base far side ({label}): docked from the Creep phase (full maneuver, not a transit slide)",
+        $"friendly base far side ({label}): docked from phase {lastPhase}, not Creep — overshot the standoff maneuver");
+    Check(minPocketGap > 10f,
+        $"friendly base far side ({label}): never overshot the standoff into the door pocket before Creep (min plane gap {minPocketGap:0.0} > 10)",
+        $"friendly base far side ({label}): overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)");
 }
 
 // ---- 5c. Friendly base override + re-engage: manual disengage mid-dock, then dock on re-engage ------

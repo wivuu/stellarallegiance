@@ -189,6 +189,32 @@ namespace StellarAllegiance.Shared
             return pureDrag - term * MathF.Log(1f + speed / (maxSpeed * backMult));
         }
 
+        // Inverse of StoppingDistance: the highest speed that can still be arrested within `dist`
+        // under the same brake model. No closed form (the log term), but StoppingDistance is strictly
+        // monotone in speed, so bisect. Used as a SPEED GOVERNOR on the docking detour arc: with
+        // throttle-commands-speed, capping the commanded throttle at (result/maxSpeed) keeps the ship
+        // permanently able to stop short of the standoff point no matter how late on the arc the
+        // line-of-sight clears — a threshold cut ("brake once inside the envelope") is by construction
+        // already too late when it fires. Server-only (ordinary MathF, like StoppingDistance).
+        public static float MaxArrestableSpeed(float dist, float maxSpeed, float accel, float backMult)
+        {
+            if (dist <= 0f || accel <= 0f || maxSpeed <= 0f)
+                return 0f;
+            float hi = maxSpeed * 4f; // headroom above terminal speed (post-boost / gate-exit carry)
+            if (StoppingDistance(hi, maxSpeed, accel, backMult) <= dist)
+                return hi;
+            float lo = 0f;
+            for (int it = 0; it < 24; it++) // 24 halvings of 4*maxSpeed ⇒ sub-mm precision, branch-free cost
+            {
+                float mid = 0.5f * (lo + hi);
+                if (StoppingDistance(mid, maxSpeed, accel, backMult) <= dist)
+                    lo = mid;
+                else
+                    hi = mid;
+            }
+            return lo;
+        }
+
         // =====================================================================
         //  PLAYER-AUTOPILOT DOCKING GEOMETRY — SERVER-ONLY.
         //

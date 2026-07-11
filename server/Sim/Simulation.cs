@@ -1276,6 +1276,13 @@ public sealed partial class Simulation
     // never enter — Transit would park just outside it and never promote to Align/Creep (the maneuver
     // would only ever dock by sliding into the door during Transit, never via the intended align+creep).
     private const float ApDockCapture = 20f; // within this of the standoff point promotes Transit -> Align
+    // Outer axis-acquire point for Transit: far enough out that (unlike the standoff point, which may
+    // sit inside a recessed door pocket WITHIN the padded sphere) it clears the padded base sphere with
+    // margin, so the straight-in leg's LOS test doesn't flap on small lateral drift.
+    private const float ApDockOuterStandoff = 60f;
+    private const float ApDockAxisSlop = 12f; // lateral slack past the door half-extents that counts as "on the corridor axis"
+    private const float ApDockDescentMargin = 8f; // arrest cushion on the on-axis descent (speeds are low; ApBrakeMargin would park short)
+    private const float ApDockDescentMaxThrottle = 0.3f; // descent speed cap (fraction of MaxSpeed) — dock-pattern pace, not cruise
     private const float ApDockCaptureSpeedSq = 9f; // ...and speed^2 below this (~3 u/s) so the ship has settled
     private const float ApDockRollGain = 3f; // FaceAndRoll roll proportional gain
     private const float ApDockFacingDot = 0.995f; // Align -> Creep: nose-onto-door facing threshold
@@ -1479,34 +1486,79 @@ public sealed partial class Simulation
                 }
                 return input;
             }
-            default: // 0 TRANSIT — decelerate to the standoff point, detouring around the base sphere if blocked
+            default: // 0 TRANSIT — acquire the corridor axis outside the door, then descend it governed
             {
-                float sphereR = World.BaseRadius + ApDockHullMargin;
+                // Two-stage transit. The standoff point can sit INSIDE the padded base sphere (a
+                // recessed door pocket — true for the stock base), so a direct bang-bang run at it
+                // flaps the blocked test on any lateral drift and hands the terminal approach over
+                // tangentially, sliding the ship sideways through the dock trigger before it ever
+                // aligns. Instead:
+                //  - OFF the corridor axis: fly to an outer axis point (`ApDockOuterStandoff` out —
+                //    beyond the padded sphere, so the LOS geometry has real margin), detouring around
+                //    the clearance ring while the straight line is hull-blocked.
+                //  - ON the axis: governed descent to the standoff point — speed-command the highest
+                //    arrestable speed for the room that remains (capped), FaceAndRoll pre-aligning
+                //    nose and roll on the door. Overshoot is impossible by construction: at every
+                //    tick the commanded speed can be arrested inside the remaining distance.
+                Vec3 relT = myPos - doorW;
+                float alongT = relT.X * f.Normal.X + relT.Y * f.Normal.Y + relT.Z * f.Normal.Z;
+                Vec3 latT = relT - f.Normal * alongT;
+                float gap = -alongT; // distance OUTSIDE the door plane (negative = past/inside it)
+                bool onAxis = gap > ApDockStandoff * 0.8f
+                    && latT.Length() < MathF.Max(f.Eu, f.Ev) + ApDockAxisSlop;
+
                 ShipInputState input;
-                if (AutoSteer.SegmentEntersSphere(myPos, pstand, eb.Pos, sphereR, ApDockLosSlack))
+                if (onAxis)
                 {
-                    // Door is behind the base hull: steer a live-recomputed carrot around the clearance ring
-                    // instead of driving straight through the structure.
-                    float ring = World.BaseRadius + ApDockClearance;
-                    Vec3 carrot = AutoSteer.OrbitWaypoint(
-                        myPos, pstand, eb.Pos, ring, ApDockDetourStepRad,
-                        new Vec3(0f, 1f, 0f), new Vec3(1f, 0f, 0f)
+                    // Aim at the door plane (not the standoff point) so the heading stays defined
+                    // through the stop; the arrest-governed throttle is what actually parks the ship
+                    // at the standoff point. No avoidance delegate — the corridor is base clearance.
+                    float distP = (pstand - myPos).Length();
+                    float vAllow = AutoSteer.MaxArrestableSpeed(
+                        MathF.Max(0f, distP - ApDockDescentMargin),
+                        stats.MaxSpeed, stats.Accel, stats.BackMult
                     );
-                    carrot = ClampInsideSector(carrot, s.SectorId); // bases hug the sector edge — keep the arc off the eroding boundary
-                    // Throttle governor on the arc: full thrust normally, back to 0.25 once the flight
-                    // model could already stop by the standoff point, so a late-clearing LOS never arrives hot.
-                    float stopDist = AutoSteer.StoppingDistance(myVel.Length(), stats.MaxSpeed, stats.Accel, stats.BackMult);
-                    float distToStand = (pstand - myPos).Length();
-                    float throttle = (stopDist + ApBrakeMargin >= distToStand) ? 0.25f : 1f;
-                    input = AutoSteer.SteerToPoint(myPos, myRot, carrot, PigTurnGain, throttle, avoid);
+                    float throttle = MathF.Min(ApDockDescentMaxThrottle, vAllow / stats.MaxSpeed);
+                    input = AutoSteer.FaceAndRoll(
+                        myPos, myRot, doorW, DockUpAxis(f, myRot), PigTurnGain, ApDockRollGain, throttle
+                    );
                 }
                 else
                 {
-                    // Clear line to the standoff point: physics-braked approach (asteroid avoidance included).
-                    input = AutoSteer.ApproachPoint(
-                        myPos, myRot, myVel, pstand, 0f,
-                        stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
-                    );
+                    Vec3 goal = doorW - f.Normal * ApDockOuterStandoff;
+                    float sphereR = World.BaseRadius + ApDockHullMargin;
+                    if (AutoSteer.SegmentEntersSphere(myPos, goal, eb.Pos, sphereR, ApDockLosSlack))
+                    {
+                        // Goal is behind the base hull: steer a live-recomputed carrot around the
+                        // clearance ring instead of driving straight through the structure.
+                        float ring = World.BaseRadius + ApDockClearance;
+                        Vec3 carrot = AutoSteer.OrbitWaypoint(
+                            myPos, goal, eb.Pos, ring, ApDockDetourStepRad,
+                            new Vec3(0f, 1f, 0f), new Vec3(1f, 0f, 0f)
+                        );
+                        carrot = ClampInsideSector(carrot, s.SectorId); // bases hug the sector edge — keep the arc off the eroding boundary
+                        // Speed governor on the arc: command the highest speed the brake model can
+                        // still arrest within the straight-line (<= actual arc) distance to the goal,
+                        // so however late on the arc LOS clears, the handoff never carries more speed
+                        // than the room that remains can stop. (A threshold cut — "brake once inside
+                        // the envelope" — fires when the envelope is already reached, i.e. by
+                        // construction too late, and overshoots the goal.)
+                        float distToGoal = (goal - myPos).Length();
+                        float vAllow = AutoSteer.MaxArrestableSpeed(
+                            MathF.Max(0f, distToGoal - ApBrakeMargin),
+                            stats.MaxSpeed, stats.Accel, stats.BackMult
+                        );
+                        float throttle = MathF.Min(1f, vAllow / stats.MaxSpeed);
+                        input = AutoSteer.SteerToPoint(myPos, myRot, carrot, PigTurnGain, throttle, avoid);
+                    }
+                    else
+                    {
+                        // Clear line to the axis point: physics-braked approach (avoidance included).
+                        input = AutoSteer.ApproachPoint(
+                            myPos, myRot, myVel, goal, 0f,
+                            stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
+                        );
+                    }
                 }
 
                 if ((pstand - myPos).LengthSquared() <= ApDockCapture * ApDockCapture
