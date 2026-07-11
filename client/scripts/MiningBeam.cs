@@ -66,10 +66,11 @@ public partial class MiningBeam : Node3D
         AddChild(_beam);
     }
 
-    // Point the beam from the miner (`from`) at the rock: the visible endpoint is the rock SURFACE
-    // (center pulled back along the beam direction by the rock's current radius), so the laser stops
-    // on the rock instead of vanishing into its center. Called every frame by WorldRenderer while the
-    // ship's ShipFlagMining is set. `cameraPos` gates the proximity-only debris.
+    // Point the beam from the miner (`from`) at the rock. The beam runs all the way to the rock's
+    // CENTER (letting the cylinder clip into the mesh) so the laser visibly bites into the rock rather
+    // than stopping short of it; the debris/chips, however, spray from the rock SURFACE (center pulled
+    // back by the rock's current radius) where the cut physically happens. Called every frame by
+    // WorldRenderer while the ship's ShipFlagMining is set. `cameraPos` gates the proximity-only debris.
     public void UpdateBeam(Vector3 from, Vector3 rockCenter, float rockRadius, Vector3 cameraPos)
     {
         Vector3 toRock = rockCenter - from;
@@ -82,10 +83,11 @@ public partial class MiningBeam : Node3D
             return;
         }
         Vector3 dir = toRock / dist;
-        Vector3 impact = rockCenter - dir * rockRadius; // surface point (spec endpoint)
+        Vector3 beamEnd = rockCenter; // run into the center; the mesh clips the cylinder
+        Vector3 surface = rockCenter - dir * rockRadius; // where the chips fly off
 
-        // Orient + scale the unit +Y cylinder to span [from, impact] in world space.
-        Vector3 seg = impact - from;
+        // Orient + scale the unit +Y cylinder to span [from, beamEnd] in world space.
+        Vector3 seg = beamEnd - from;
         float len = seg.Length();
         if (len < 0.01f)
         {
@@ -104,22 +106,22 @@ public partial class MiningBeam : Node3D
             xAxis = xAxis.Normalized();
             Vector3 zAxis = xAxis.Cross(yAxis).Normalized();
             var basis = new Basis(xAxis * BeamThickness, yAxis * len, zAxis * BeamThickness);
-            _beam.GlobalTransform = new Transform3D(basis, (from + impact) * 0.5f);
+            _beam.GlobalTransform = new Transform3D(basis, (from + beamEnd) * 0.5f);
         }
 
         // Emission pulse (a gentle sine throb on the HDR energy) so the beam reads as an active cutter.
         float pulse = BaseEnergy + PulseAmp * Mathf.Sin(Time.GetTicksMsec() / 1000f * Mathf.Tau * PulseHz);
         _mat.EmissionEnergyMultiplier = pulse;
 
-        // Proximity-gated debris at the impact point. Lazily built on first entry into range.
-        bool inRange = cameraPos.DistanceSquaredTo(impact) <= DebrisRange * DebrisRange;
+        // Proximity-gated debris at the SURFACE cut point. Lazily built on first entry into range.
+        bool inRange = cameraPos.DistanceSquaredTo(surface) <= DebrisRange * DebrisRange;
         if (inRange)
         {
             _debris ??= BuildDebris();
             _debris.Emitting = true;
-            // Position the emitter at the impact point and orient +Y along the outward surface normal
-            // (rock → miner) so the chunks spray outward + tangentially off the face.
-            _debris.GlobalTransform = new Transform3D(new Basis(AlignUp(-dir)), impact);
+            // Position the emitter at the surface cut point and orient +Y along the outward surface
+            // normal (rock → miner) so the chunks spray outward + tangentially off the face.
+            _debris.GlobalTransform = new Transform3D(new Basis(AlignUp(-dir)), surface);
         }
         else if (_debris != null)
         {

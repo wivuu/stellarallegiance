@@ -21,7 +21,9 @@ public static class Wire
     // deltas; ShipFlagMiner=32 in the ship flags byte; ShipClassDef.OreCapacity added to MsgDefs.
     // v32: miner brain — RockStatic appends f32 OreCapacity as its LAST field (47->51 bytes);
     // ShipFlagMining=64 in the ship flags byte (set while a miner is actively moving ore).
-    public const byte ProtocolVersion = 32;
+    // v33: MsgMinerTargets=23 (u8 count, count x u64 shipId + u64 rockId) — the exact rock each active
+    // miner is harvesting, so the client mining beam aims at the real target instead of guessing.
+    public const byte ProtocolVersion = 33;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -66,9 +66,14 @@ public partial class WorldRenderer : Node3D
 
     // One active mining beam per ship currently transferring ore (ShipFlagMining). Attached as a
     // child of the ship node and torn down on the flag's falling edge (UpdateMiningBeams). Purely
-    // client-side VFX — the server streams only the flag, not a beam or a target-rock id.
+    // client-side VFX — the server streams the flag plus (via MsgMinerTargets) the exact target rock.
     private readonly Dictionary<ulong, MiningBeam> _miningBeams = new();
     private readonly List<ulong> _miningBeamPrune = new(); // scratch: beams to drop this frame
+
+    // Streamed (MsgMinerTargets): shipId -> the rock that miner is actively harvesting, so the beam
+    // aims at the real target instead of guessing the nearest He3. Replaced wholesale each frame it
+    // arrives; a miner that stops mining drops out of the broadcast (and its beam clears on the flag).
+    private Dictionary<ulong, ulong> _minerTargetRock = new();
 
     // Scale basis per rock: the node's mesh divides its render radius by this to get its uniform
     // scale (mesh authored bound, or the baked sphere-fallback radius), so a target radius maps to a
@@ -2303,10 +2308,13 @@ public partial class WorldRenderer : Node3D
         }
     }
 
+    // MsgMinerTargets: replace the shipId -> target-rock map wholesale. A ship that stopped mining
+    // simply isn't in the new map; its beam clears on the ShipFlagMining falling edge below.
+    public void NetUpdateMinerTargets(Dictionary<ulong, ulong> map) => _minerTargetRock = map;
+
     // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is
-    // visible, ensure a MiningBeam child exists and point it at the nearest in-view He3 rock with ore
-    // left; tear a beam down on the flag's falling edge (or when the ship leaves / hides / has no rock
-    // to aim at). Flag-only endpoint heuristic — the server never streams the miner's target rock id.
+    // visible, ensure a MiningBeam child exists and point it at the rock it's harvesting; tear a beam
+    // down on the flag's falling edge (or when the ship leaves / hides / has no rock to aim at).
     private void UpdateMiningBeams()
     {
         Vector3 camPos = ShadowRefPos();
@@ -2316,8 +2324,8 @@ public partial class WorldRenderer : Node3D
         {
             if (node is not RemoteShip rs || !rs.IsMining || !rs.Visible)
                 continue;
-            if (NearestHe3Rock(rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius))
-                continue; // no minable rock in view — hold off (drop any stale beam in the prune below)
+            if (MiningTargetRock(id, rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius))
+                continue; // no known/visible rock — hold off (drop any stale beam in the prune below)
 
             if (!_miningBeams.TryGetValue(id, out var beam))
             {
@@ -2336,7 +2344,7 @@ public partial class WorldRenderer : Node3D
             {
                 bool keep = _shipNodes.TryGetValue(id, out var node)
                     && node is RemoteShip rs && rs.IsMining && rs.Visible
-                    && NearestHe3Rock(rs.GlobalPosition) is not null;
+                    && MiningTargetRock(id, rs.GlobalPosition) is not null;
                 if (!keep)
                     _miningBeamPrune.Add(id);
             }
@@ -2348,9 +2356,20 @@ public partial class WorldRenderer : Node3D
         }
     }
 
+    // The rock a mining ship is aiming at, as (center, current radius). Prefer the server-streamed
+    // exact target (MsgMinerTargets) when that rock is known + in view; otherwise fall back to the
+    // nearest in-view He3 rock so a pre-v33 server (or a not-yet-arrived frame) still shows a beam.
+    private (Vector3 Center, float Radius)? MiningTargetRock(ulong shipId, Vector3 fromPos)
+    {
+        if (_minerTargetRock.TryGetValue(shipId, out ulong rockId)
+            && _asteroidNodes.TryGetValue(rockId, out var node)
+            && GetAsteroid(rockId) is { } rock)
+            return (node.GlobalPosition, rock.CurrentRadius);
+        return NearestHe3Rock(fromPos);
+    }
+
     // The nearest visible He3 rock (with ore remaining) to `from`, as (center, current radius), or
-    // null if none is in view. Used to aim a mining beam — a flag-only heuristic, since the server
-    // doesn't tell us which rock a miner is actually harvesting.
+    // null if none is in view. The fallback aim when the streamed target rock isn't known/visible.
     private (Vector3 Center, float Radius)? NearestHe3Rock(Vector3 from)
     {
         (Vector3, float)? best = null;

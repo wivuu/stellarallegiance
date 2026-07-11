@@ -685,6 +685,13 @@
           ],
           "description": "World default maximum He3 rocks per sector (clamp ceiling)."
         },
+        "special-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith/Ice."
+        },
         "ore-capacity-min": {
           "type": [
             "number",

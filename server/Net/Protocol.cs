@@ -98,6 +98,7 @@ public static class Protocol
     public const byte MsgMapList = 20; // u8 mapCount x MapCatalog entry — the server's available maps + thumbnail layout, sent once after Defs
     public const byte MsgReject = 21; // u8 code (1 = bad secret) — join refused; sent right before the transport closes so the client learns WHY across BOTH transports (a WebRTC DataChannel close carries no reason)
     public const byte MsgRockUpdate = 22; // u8 count, count x (u64 id, f32 currentRadius, u8 orePct) — live rock shrink deltas (mining), on-change; fog-on = discovered rocks only. See BuildRockUpdates.
+    public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -471,6 +472,38 @@ public static class Protocol
             frames.Add(buf);
         }
         return frames;
+    }
+
+    // Fixed serialized size of one miner-target record (see BuildMinerTargets): u64 shipId | u64 rockId.
+    public const int MinerTargetRecordSize = 8 + 8; // 16
+
+    // Which rock each ACTIVELY-mining miner is harvesting (MsgMinerTargets), so the client's mining
+    // beam can aim at the exact rock the server chose rather than guessing the nearest He3. One record
+    // per miner whose ship is harvesting a live claim; there are at most a handful, so a single frame
+    // always suffices (capped at the u8 count). Returns null when nothing is mining (no frame to send).
+    // Broadcast to every client: a receiver that can't see the ship or the rock simply renders nothing,
+    // so this leaks no more than the already-streamed ShipFlagMining bit.
+    public static byte[]? BuildMinerTargets(Simulation sim)
+    {
+        List<(ulong ship, ulong rock)>? pairs = null;
+        foreach (var row in sim.MinerSlotsView())
+            if (row.Ship is { IsHarvesting: true } s && row.TargetRockId != 0)
+                (pairs ??= new()).Add((s.ShipId, row.TargetRockId));
+        if (pairs is null)
+            return null;
+        int count = Math.Min(pairs.Count, 255);
+        var buf = new byte[2 + count * MinerTargetRecordSize];
+        buf[0] = MsgMinerTargets;
+        buf[1] = (byte)count;
+        int o = 2;
+        for (int i = 0; i < count; i++)
+        {
+            BitConverter.TryWriteBytes(buf.AsSpan(o), pairs[i].ship);
+            o += 8;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), pairs[i].rock);
+            o += 8;
+        }
+        return buf;
     }
 
     // Fog-filtered rock-update frames for one team: only rocks the team has DISCOVERED, so an enemy

@@ -133,6 +133,13 @@
             ],
             "description": "Optional per-sector multiplier on the world He3 fraction before the count clamp."
           },
+          "special-count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 -> none. World mining default otherwise."
+          },
           "ore-richness-mult": {
             "type": [
               "number",

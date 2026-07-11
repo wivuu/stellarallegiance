@@ -451,6 +451,15 @@ public sealed class World
             for (int k = 0; k < he3Count; k++)
                 isHe3[order[k]] = true;
 
+            // RARE special rocks: the next `specialCount` ranked rocks (immediately after the He3
+            // block, so He3 and special never collide) become cosmetic special classes. Clamped to the
+            // rocks left after He3, so a small sector never over-allocates. Everything else is common.
+            int specialCount = sc?.SpecialCount ?? Mining.SpecialPerSector;
+            specialCount = Math.Clamp(specialCount, 0, Math.Max(0, n - he3Count));
+            var isSpecial = new bool[n];
+            for (int k = he3Count; k < he3Count + specialCount; k++)
+                isSpecial[order[k]] = true;
+
             float richness = sc?.OreRichnessMult ?? 1f;
             for (int i = 0; i < n; i++)
             {
@@ -469,9 +478,12 @@ public sealed class World
                 }
                 else
                 {
-                    // Remaining rocks split among the three cosmetic classes by the same hash (0=
-                    // Carbonaceous, 1=Silicon, 2=Uranium). No ore hold — capacity 0, never shrinks.
-                    var cls = (RockClass)(byte)(hash[i] % 3);
+                    // Non-He3 rocks carry no ore hold — capacity 0, never shrinks. A selected special
+                    // rock gets one of the three special classes by the same hash (0=Carbonaceous,
+                    // 1=Silicon, 2=Uranium); every other rock is common Regolith/Ice (hash parity).
+                    RockClass cls = isSpecial[i]
+                        ? (RockClass)(byte)(hash[i] % 3)
+                        : ((hash[i] & 1UL) == 0UL ? RockClass.Regolith : RockClass.Ice);
                     RockOre[rock.Id] = new OreState
                     {
                         Class = cls,

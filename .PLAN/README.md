@@ -22,14 +22,6 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Content in settings modal(s) needs more padding from scrollbar
 - Unable to open chat from F3 while sitting in hangar
-- Miner fixes
-  - Miner doesnt show in F3 hud - the F3 hud should show all the same targets as in-ship hud
-  - F3 behaves differently from launched vs hangar - it pans more slowly and doesnt show all the same targets as in-ship F3
-  - In F3, show rock types with small text on the HUD, similar to in-ship view
-  - The mining laser appears to stop before it reaches the rock - elongate the laser so it passes into the rock all the way to the center (let the mesh clip)
-  - The miner does not directly face the center of the rock while mining (bug)
-  - Miner flight appears 'jerky' relative to my ship's; needs predictive smoothing on client
-  - Not all asteroids need to be a special/rare type (rare: helium, silicon, carbonaceous, uranium, etc - everything else is simple regolith or ice)
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 

@@ -62,6 +62,9 @@ public sealed class MapSectorDef
     /// <summary>Optional per-sector multiplier on the world He3 fraction before the count clamp.</summary>
     public double? He3FractionMult { get; set; }
 
+    /// <summary>Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 → none. World mining default otherwise.</summary>
+    public int? SpecialCount { get; set; }
+
     /// <summary>Optional per-sector multiplier on the per-He3-rock ore capacity here.</summary>
     public double? OreRichnessMult { get; set; }
 
@@ -220,6 +223,7 @@ public static class MapLoader
                 He3Min = s.He3Min,
                 He3Max = s.He3Max,
                 He3FractionMult = F(s.He3FractionMult),
+                SpecialCount = s.SpecialCount,
                 OreRichnessMult = F(s.OreRichnessMult),
                 MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
                 MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,

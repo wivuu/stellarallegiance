@@ -243,13 +243,23 @@ public partial class SectorOverview : Node3D
             return; // no sector data yet — nothing to show
 
         BuildGrid(radius);
-        // Start viewing the local sector, centered on the player (fall back to the sector
-        // center while spectating), zoomed in close so they can spin around their own ship.
+        // Start viewing the local sector. Launched → frame the player, zoomed in close so they can spin
+        // around their own ship. Pre-launch / spectating (no own ship) → zoom-to-FIT the whole sector
+        // exactly like SwitchView's non-local branch, so a big home sector doesn't open zoomed-in (a
+        // fixed 700 on a large sector makes panning feel sluggish, since a drag covers little ground).
         _world.SetViewSector(null);
-        _target = _world.LocalShip?.GlobalPosition ?? _world.ViewSectorCenter;
+        if (_world.LocalShip is { } ship)
+        {
+            _target = ship.GlobalPosition;
+            _dist = Mathf.Min(700f, radius);
+        }
+        else
+        {
+            _target = _world.ViewSectorCenter;
+            _dist = Mathf.Clamp(radius * 1.5f, MinDist, radius * 3f);
+        }
         _yawDeg = DefaultYawDeg;
         _pitchDeg = DefaultPitchDeg;
-        _dist = Mathf.Min(700f, radius);
 
         Active = true;
         _grid.Visible = true;

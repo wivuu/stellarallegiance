@@ -642,34 +642,50 @@ public partial class TargetMarkers : Control
                 }
         }
 
-        // Asteroid proximity labels: for the few in-view rocks the local ship is flying close to, a
-        // dim mono caption (class name + He3 ore readout) at the rock so you can read what you're near
-        // without focusing it. "Close" scales with the rock's own size — surface distance under
-        // clamp(3·radius, 80, 400) — and we cap it at the nearest 3 so a dense field never floods the
-        // HUD. The currently-focused rock is skipped (it already shows its detail via DrawRockDetail).
-        // Fog gating is free: undiscovered rocks never reach the client.
-        if (_world.LocalShip is { } rockShip)
+        // Asteroid type labels: a dim mono caption (class name + He3 ore readout) at each rock so you
+        // can read what's out there without focusing it. Two modes, same RockLabel text:
+        //   • In flight — anchored to your ship: only the nearest 3 rocks you're flying close to (surface
+        //     distance under clamp(3·radius, 80, 400)), so a dense field never floods the cockpit HUD.
+        //   • In the F3 overview — anchored to the orbit CAMERA: label the whole sector's He3 + special
+        //     rocks (the gameplay-relevant ones) always, plus the nearest commons up to a cap, so the map
+        //     reads rock types like the in-ship view (and works pre-launch, where there's no own ship).
+        // The focused rock is skipped (it shows its detail via DrawRockDetail); fog gating is free
+        // (undiscovered rocks never reach the client).
+        Camera3D rockCam = Cam;
+        bool f3Rocks = SectorOverview.Active;
+        PredictionController? rockAnchorShip = _world.LocalShip;
+        if (f3Rocks || rockAnchorShip != null)
         {
+            const float F3CameraFar = 1e9f;   // interesting rocks sort ahead of every common in F3
+            const int F3MaxRockLabels = 14;   // cap total F3 captions so a huge field never floods
             ulong focusedRockId = _focused is ulong rfl && GameContent.IsAsteroidFocus(rfl)
                 ? GameContent.AsteroidIdOf(rfl) : 0UL;
-            Vector3 shipPos = rockShip.GlobalPosition;
+            Vector3 anchor = f3Rocks ? rockCam.GlobalPosition : rockAnchorShip!.GlobalPosition;
             _nearRocks.Clear();
             foreach (var (id, node) in _world.AsteroidsInView())
             {
                 if (id == focusedRockId || _world.GetAsteroid(id) is not { } rock)
                     continue;
                 Vector3 rp = node.GlobalPosition;
-                float surfDist = (shipPos - rp).Length() - rock.CurrentRadius;
-                float threshold = Mathf.Clamp(3f * rock.CurrentRadius, 80f, 400f);
-                if (surfDist < threshold)
-                    _nearRocks.Add((surfDist, id, rp));
+                float surfDist = (anchor - rp).Length() - rock.CurrentRadius;
+                bool interesting = rock.RockClass is (byte)RockClass.Helium3 or (byte)RockClass.Uranium
+                    or (byte)RockClass.Silicon or (byte)RockClass.Carbonaceous;
+                if (f3Rocks)
+                    // Keep He3/special always (sort them first via a large negative key); commons rank
+                    // by distance to the camera and get trimmed by the cap below.
+                    _nearRocks.Add((interesting ? -F3CameraFar : surfDist, id, rp));
+                else
+                {
+                    float threshold = Mathf.Clamp(3f * rock.CurrentRadius, 80f, 400f);
+                    if (surfDist < threshold)
+                        _nearRocks.Add((surfDist, id, rp));
+                }
             }
             _nearRocks.Sort(static (a, b) => a.Dist.CompareTo(b.Dist));
-            Camera3D rockCam = Cam;
-            int shown = 0;
+            int shown = 0, cap = f3Rocks ? F3MaxRockLabels : 3;
             foreach (var (_, id, rp) in _nearRocks)
             {
-                if (shown >= 3)
+                if (shown >= cap)
                     break;
                 if (rockCam.IsPositionBehind(rp) || _world.GetAsteroid(id) is not { } rock)
                     continue;
@@ -729,9 +745,12 @@ public partial class TargetMarkers : Control
         DrawGhosts(view);
         DrawContactLost(view);
 
+        // Own ship — null pre-launch / while spectating. The ship glyphs, brackets, and focus tags
+        // below reproject through Cam and DON'T need it, so they draw in EVERY state (hangar, F3, in
+        // flight); that's why a miner or teammate now shows on the F3 map and in the pre-launch peek,
+        // matching the in-flight HUD. Only the ship-centric combat readouts further down (aim reticle,
+        // lead, incoming banner) require a live own ship — they stay gated on `local != null` below.
         var local = _world.LocalShip;
-        if (local == null)
-            return;
 
         // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as
         // an enemy (in a shade of the team color), so a focused teammate reads distinctly. A focused
@@ -782,9 +801,10 @@ public partial class TargetMarkers : Control
         }
 
         // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
-        // banner are ship-centric combat readouts, meaningless in the F3 orbit view — skip them
-        // there. The entity brackets/glyphs/ghosts above still reproject onto the map.
-        if (!SectorOverview.Active)
+        // banner are ship-centric combat readouts, meaningless in the F3 orbit view (and impossible
+        // without an own ship) — skip them there and pre-launch. The entity brackets/glyphs/ghosts
+        // above still reproject onto the map in every state.
+        if (local != null && !SectorOverview.Active)
         {
             // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
             // view axis — and the chase camera is offset above/behind the ship, so screen
@@ -1338,7 +1358,7 @@ public partial class TargetMarkers : Control
     // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only
     // drawn when the focus is on screen; skipped when behind the camera or off-screen (the
     // edge arrow already points the way). Range is in world units, matching the HUD's u/s.
-    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController local) =>
+    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController? local) =>
         DrawFocusTag(view, ship.GlobalPosition, FocusTint(ship.Team), local);
 
     // Position-based overload so a focused BASE or ASTEROID (no RemoteShip) shares the same TARGET
@@ -1380,13 +1400,16 @@ public partial class TargetMarkers : Control
     }
 
     // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
-    // harvestable; the others are cosmetic today (future refinery/shipyard hooks).
+    // harvestable; Regolith/Ice are the common majority, the rest are rare cosmetic specials today
+    // (future refinery/shipyard hooks).
     private static string RockClassName(byte cls) => (RockClass)cls switch
     {
         RockClass.Helium3 => "Helium-3",
         RockClass.Uranium => "Uranium",
         RockClass.Silicon => "Silicon",
-        _ => "Carbonaceous",
+        RockClass.Carbonaceous => "Carbonaceous",
+        RockClass.Ice => "Ice",
+        _ => "Regolith",
     };
 
     // The label for a rock: its class name, plus for a He3 rock with a known capacity (OreCapacity > 0)

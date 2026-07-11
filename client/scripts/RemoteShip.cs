@@ -39,6 +39,12 @@ public partial class RemoteShip : Node3D
     private const float GapDelayFactor = 1.5f; // render this many smoothed gaps behind
     private const float GapEmaAlpha = 0.3f; // inter-arrival EMA responsiveness
 
+    // When renderT runs PAST the newest sample (a dropped/late update), dead-reckon this far along the
+    // last segment's velocity instead of hard-holding then snapping — the hold-then-snap reads as a
+    // stutter, most visible on slow station-keeping ships (a mining drone) against the predicted own
+    // ship. Kept small so a genuinely stalled feed can't rubber-band a fast enemy far off its truth.
+    private const double MaxExtrapolateMs = 120.0;
+
     // Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
     private double _gapEma = InterpDelayMs / GapDelayFactor;
 
@@ -348,11 +354,25 @@ public partial class RemoteShip : Node3D
             }
         }
 
-        // renderT is past our newest sample (no fresh data) → hold latest, no
-        // extrapolation. A brief stall here means updates stopped arriving.
+        // renderT is past our newest sample (no fresh data). Dead-reckon a SHORT bounded distance along
+        // the last segment's velocity so the motion glides instead of hold-then-snapping (the stutter
+        // that reads worst on slow miners next to the predicted own ship). The horizon is clamped to
+        // MaxExtrapolateMs so a real stall can't fling the ship far from its next authoritative sample.
         var last = _samples[n - 1];
-        Position = last.Pos;
-        Quaternion = last.Rot;
+        var prev = _samples[n - 2];
+        double segDt = last.T - prev.T;
+        double over = System.Math.Min(renderT - last.T, MaxExtrapolateMs);
+        if (segDt > 1.0 && over > 0.0)
+        {
+            float ef = (float)(over / segDt); // fraction of the last segment to extend past its end
+            Position = last.Pos + (last.Pos - prev.Pos) * ef;
+            Quaternion = prev.Rot.Slerp(last.Rot, 1f + ef).Normalized();
+        }
+        else
+        {
+            Position = last.Pos;
+            Quaternion = last.Rot;
+        }
     }
 
     // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.

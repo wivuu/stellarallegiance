@@ -1084,6 +1084,11 @@ public sealed class ClientHub
         List<byte[]>? rockBroadcast = (sendRocks && !fog) ? Protocol.BuildRockUpdates(_sim.World, changedRockList!) : null;
         Dictionary<byte, List<byte[]>>? rockFramesByTeam = (sendRocks && fog) ? new() : null;
 
+        // Which rock each actively-mining miner is harvesting, so the client's beam aims true (not a
+        // nearest-rock guess). Broadcast, on-change-free (tiny: at most a handful of miners); null when
+        // nothing is mining. Rendering is naturally gated by ship+rock visibility, so no fog filtering.
+        byte[]? minerTargetsFrame = Protocol.BuildMinerTargets(_sim);
+
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
         // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
@@ -1157,6 +1162,9 @@ public sealed class ClientHub
 
             if (teamStateFrame is not null)
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(teamStateFrame));
+
+            if (minerTargetsFrame is not null)
+                client.Outbound.Writer.TryWrite(OutFrame.Whole(minerTargetsFrame));
 
             // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
             // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).

@@ -676,7 +676,10 @@ public sealed partial class Simulation
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
         var stats = StatsFor(s.Class, false);
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d);
+        // Exclude the miner's current claim from avoidance: while flying at / mining a rock, avoiding
+        // that same rock would deflect the nose off it (the "doesn't face the rock" bug). TargetRockId
+        // is 0 while heading to base, so the offload leg avoids every rock normally.
+        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d, slot.TargetRockId);
 
         ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(

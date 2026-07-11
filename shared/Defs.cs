@@ -262,10 +262,15 @@ namespace StellarAllegiance.Shared
     public enum AsteroidKind { None, Field, Belt }
 
     // Resource class assigned to each asteroid at world-gen (World.RockOre). Only Helium3 is
-    // harvestable today (miners fill their ore hold from He3 rocks); the others are cosmetic-only
-    // classifications reserved for future refinery/shipyard uses. APPEND-ONLY — the byte value is a
-    // stable identity the sim keys on (and a later WP streams it), so never reorder or remove a member.
-    public enum RockClass : byte { Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3 }
+    // harvestable today (miners fill their ore hold from He3 rocks). Regolith + Ice are the COMMON
+    // classes — the overwhelming majority of a sector's rocks — while Carbonaceous/Silicon/Uranium are
+    // the RARE "special" cosmetic classes (≤1 per sector by default), reserved for future refinery/
+    // shipyard uses. APPEND-ONLY — the byte value is a stable identity the sim keys on (and streamed on
+    // the wire), so never reorder or remove a member; new classes append after the highest value.
+    public enum RockClass : byte
+    {
+        Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4, Ice = 5,
+    }
 
     // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
     // determines how many teams the map supports (one home per team).
@@ -297,12 +302,15 @@ namespace StellarAllegiance.Shared
         public float? AsteroidDensityMult;
 
         // Optional per-sector mining overrides (null → the world-level WorldMiningTuning default).
-        // He3Min/He3Max override the guaranteed-count clamp [min, max] for this sector's He3 rocks;
-        // He3FractionMult scales the world He3Fraction before the clamp; OreRichnessMult scales the
-        // per-rock He3 capacity here. Server-side only — resolved during World's ore-assignment pass.
+        // He3Min/He3Max override the guaranteed-count clamp [min, max] for this sector's He3 rocks
+        // (set both equal to pin an exact count); He3FractionMult scales the world He3Fraction before
+        // the clamp; SpecialCount overrides how many RARE special rocks (Carbonaceous/Silicon/Uranium)
+        // this sector gets (0 → none); OreRichnessMult scales the per-rock He3 capacity here.
+        // Server-side only — resolved during World's ore-assignment pass.
         public int? He3Min;
         public int? He3Max;
         public float? He3FractionMult;
+        public int? SpecialCount;
         public float? OreRichnessMult;
 
         // 2D LAYOUT coordinate for the map diagram (minimap + lobby preview), normalized ~[-1,1].
@@ -581,10 +589,18 @@ namespace StellarAllegiance.Shared
 
         // He3 selection: the fraction of a sector's rocks made harvestable helium-3, then clamped to
         // the guaranteed [min, max] count (and to the sector's actual rock count). A sector with no
-        // rocks gets zero He3. Per-sector overrides (SectorConfig.He3Min/Max/FractionMult) win.
+        // rocks gets zero He3. The STOCK content (world.yaml) pins min == max == 4 so every sector
+        // yields a fixed 4 He3 by default; maps override per-sector via He3Min/He3Max (set equal to
+        // pin a different exact count). Per-sector overrides (SectorConfig.He3Min/Max/FractionMult) win.
         public float He3Fraction = 0.12f;
         public int He3PerSectorMin = 2;
         public int He3PerSectorMax = 8;
+
+        // RARE "special" rocks: after He3 selection, this many of the sector's remaining (top-ranked)
+        // rocks become one of the cosmetic special classes (Carbonaceous/Silicon/Uranium); EVERY other
+        // rock is common Regolith/Ice. Default 1 — a sector is overwhelmingly common rock sprinkled
+        // with a handful of He3 and at most one special. Per-sector override: SectorConfig.SpecialCount.
+        public int SpecialPerSector = 1;
 
         // Per-He3-rock ore capacity: lerped across [min, max] by a per-rock roll, then scaled by the
         // rock's volume (radius³ vs the reference radius) and the sector's OreRichnessMult.

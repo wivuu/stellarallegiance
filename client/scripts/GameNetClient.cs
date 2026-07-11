@@ -754,7 +754,27 @@ public partial class GameNetClient : Node
             case 22:
                 ApplyRockUpdate(r);
                 break;
+            case 23:
+                ApplyMinerTargets(r);
+                break;
         }
+    }
+
+    // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
+    // at the real target instead of guessing the nearest He3 rock. Replaces the whole set each frame it
+    // arrives (a miner that stopped mining simply drops out of the broadcast). Broadcast — the renderer
+    // only draws a beam for a ship+rock it can actually see, so an unknown id is harmless.
+    private void ApplyMinerTargets(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var map = new System.Collections.Generic.Dictionary<ulong, ulong>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            ulong rockId = r.ReadUInt64();
+            map[shipId] = rockId;
+        }
+        _world.NetUpdateMinerTargets(map);
     }
 
     // MsgRockUpdate (mining): live rock shrink deltas — the renderer eases each rock's mesh + collision

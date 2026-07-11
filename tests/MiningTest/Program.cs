@@ -75,7 +75,8 @@ Dictionary<uint, int> He3Counts(World w)
 // A single field sector garrisoned to team 0, sized to hold a healthy rock count (~dozens), with the
 // given mining tuning. One sector is enough — the tests only read World.RockOre.
 WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null, int? he3Min = null,
-    int? he3Max = null, float? richness = null, float radius = 1500f, float density = 3f)
+    int? he3Max = null, float? richness = null, float radius = 1500f, float density = 3f,
+    int? specialCount = null)
 {
     var sc = new WorldSectorConfig
     {
@@ -86,6 +87,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         He3FractionMult = he3FractionMult,
         He3Min = he3Min,
         He3Max = he3Max,
+        SpecialCount = specialCount,
         OreRichnessMult = richness,
     };
     return new WorldConfig
@@ -287,17 +289,65 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
 // ---- 7. RockCurrentRadius / RockClassOf fallbacks for non-He3 + unknown ids. ----
 {
     var w = MakeWorld(4242, stockCfg);
-    // A known non-He3 rock: RockCurrentRadius == its static spawn radius; class is one of the cosmetic 3.
+    // A known non-He3 rock: RockCurrentRadius == its static spawn radius; class is a valid non-He3 class.
     var nonHe3 = w.Asteroids.FirstOrDefault(r => w.RockClassOf(r.Id) != RockClass.Helium3);
     Check(nonHe3.Id != 0, "found a non-He3 rock to probe", "no non-He3 rock present");
     Check(w.RockCurrentRadius(nonHe3.Id) == nonHe3.Radius,
         "RockCurrentRadius returns the static spawn radius for a non-He3 rock", "non-He3 RockCurrentRadius mismatch");
     var cls = w.RockClassOf(nonHe3.Id);
-    Check(cls is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium,
-        $"a non-He3 rock is a cosmetic class ({cls})", $"non-He3 rock has unexpected class {cls}");
+    Check(cls is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium
+        or RockClass.Regolith or RockClass.Ice,
+        $"a non-He3 rock is a valid non-He3 class ({cls})", $"non-He3 rock has unexpected class {cls}");
     // Unknown id: class defaults to Carbonaceous.
     Check(w.RockClassOf(0xDEADBEEF) == RockClass.Carbonaceous,
         "RockClassOf defaults to Carbonaceous for an unknown id", "unknown-id class default wrong");
+}
+
+// ---- 7b. Rarity: a sector is overwhelmingly common (Regolith/Ice); specials obey special-per-sector. ----
+{
+    // Stock content pins He3 at 4 and special-per-sector at 1: every sector has ≤1 special rock, the
+    // rest (non-He3) are common Regolith/Ice, and commons dominate the non-He3 population.
+    var w = MakeWorld(4242, stockCfg);
+    bool specialsCapped = true, commonsExist = false, he3PinnedOk = true;
+    int totalCommon = 0, totalSpecial = 0;
+    string detail = "";
+    var bySector = new Dictionary<uint, (int he3, int special, int common)>();
+    foreach (var r in w.Asteroids)
+    {
+        var c = w.RockClassOf(r.Id);
+        var e = bySector.GetValueOrDefault(r.SectorId);
+        if (c == RockClass.Helium3) e.he3++;
+        else if (c is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium) { e.special++; totalSpecial++; }
+        else if (c is RockClass.Regolith or RockClass.Ice) { e.common++; totalCommon++; }
+        bySector[r.SectorId] = e;
+    }
+    foreach (var (sector, e) in bySector)
+    {
+        int n = e.he3 + e.special + e.common;
+        if (e.special > 1) { specialsCapped = false; detail = $"sector {sector}: {e.special} specials"; }
+        if (e.common > 0) commonsExist = true;
+        // He3 pinned at 4 (or the whole sector if it has fewer than 4 rocks).
+        if (e.he3 != Math.Min(4, n)) { he3PinnedOk = false; detail = $"sector {sector}: he3={e.he3}, n={n}"; }
+    }
+    Check(specialsCapped, "no sector exceeds special-per-sector (≤1 special rock)", $"special cap exceeded: {detail}");
+    Check(he3PinnedOk, "stock content pins exactly 4 He3 per sector (min==max==4)", $"He3 count not pinned: {detail}");
+    Check(commonsExist && totalCommon > totalSpecial,
+        $"commons (Regolith/Ice) dominate the field (common={totalCommon}, special={totalSpecial})",
+        $"commons do not dominate (common={totalCommon}, special={totalSpecial})");
+
+    // A per-sector special-count override adds more specials; 0 removes them entirely.
+    var mining = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2 };
+    int SpecialsIn(int? sc)
+    {
+        var ww = MakeWorld(31337, FieldConfig(mining, radius: 1500f, specialCount: sc));
+        return ww.Asteroids.Count(r => w2IsSpecial(ww, r.Id));
+    }
+    static bool w2IsSpecial(World ww, ulong id) =>
+        ww.RockClassOf(id) is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium;
+    int none = SpecialsIn(0), few = SpecialsIn(1), many = SpecialsIn(5);
+    Check(none == 0 && few == 1 && many == 5,
+        $"per-sector special-count override controls the special rock count (0→{none}, 1→{few}, 5→{many})",
+        $"special-count override wrong (0→{none}, 1→{few}, 5→{many})");
 }
 
 // ---- 8. SetOreRemaining shrink helper: volume-proportional radius toward the floor. ----
