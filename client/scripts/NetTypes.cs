@@ -71,6 +71,7 @@ namespace StellarAllegiance.Net
         public bool IsPod; // escape pod
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
         public bool IsMiner; // AI mining ship (ShipFlagMiner) — HUD tags it MINER
+        public bool IsMining; // actively transferring ore (ShipFlagMining) — toggles per tick, drives the mining beam/roll VFX
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The
@@ -155,6 +156,9 @@ namespace StellarAllegiance.Net
         public byte RockClass;
         public float CurrentRadius;
         public int OrePct;
+        // Total He3 ore this rock can yield (server-authored capacity). Remaining ore =
+        // round(OrePct/100 × OreCapacity). ≤ 0 means "no readout" (non-He3 rock).
+        public float OreCapacity;
     }
 
     // An aleph warp gate (static, from Welcome).

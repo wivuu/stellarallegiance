@@ -309,9 +309,12 @@ public sealed partial class Simulation
         foreach (var team in teams)
         {
             var slot = NewMinerSlot(team, tick);
-            // Hold the free miner in the bay past the first fog-vision apply (an async 2 Hz pass) so
-            // its first rock pick sees the base-sphere-discovered home rocks instead of announcing a
-            // spurious "idle" into team chat at second zero. Fog off: a launch 1s in is still instant.
+            // Hold the free miner in the bay ONLY past the first couple of fog-vision applies (an
+            // async 2 Hz pass) so its first rock pick sees the base-sphere-discovered home rocks
+            // instead of announcing a spurious "idle" into team chat at second zero. This is a
+            // one-time launch grace for the first vision passes — NOT a permanent idle sleep; the
+            // docked branch rescans every brain tick, so a rock that appears later relaunches at once.
+            // Fog off: a launch 1s in is still effectively instant.
             slot.LaunchAtTick = tick + 2 * VisionEvery;
         }
     }
@@ -415,6 +418,11 @@ public sealed partial class Simulation
                     // Target rock still worth working? (exists, He3, ore left, still authorized/seen)
                     if (!RockEligible(slot.Team, slot.TargetRockId))
                     {
+                        // Announce the drop + why BEFORE clearing the target — relays to team chat so
+                        // manual verification shows every target switch and its cause.
+                        string reason = RockIneligibleReason(slot.Team, slot.TargetRockId);
+                        MinerNoticesThisStep.Add((slot.Team,
+                            $"Miner dropped rock {slot.TargetRockId} — {reason}; retargeting."));
                         slot.TargetRockId = 0;
                         if (PickRock(slot, s.SectorId, s.State.Pos) is ulong next)
                         {
@@ -447,6 +455,7 @@ public sealed partial class Simulation
         slot.LastRockId = remember ? slot.TargetRockId : 0;
         slot.TargetRockId = 0;
         slot.State = MinerState.ToBase;
+        s.IsHarvesting = false; // no longer mining once it heads for the offload leg
         slot.TargetBaseId = NearestFriendlyBase(s)?.Id ?? 0;
         // Fresh dock FSM for DockApproach (same reset an autopilot engage does).
         s.ApDockPhase = 0;
@@ -522,9 +531,33 @@ public sealed partial class Simulation
         return true;
     }
 
+    // Why a rock the team was working is no longer eligible — the SAME checks as RockEligible in the
+    // SAME order, phrased for a team-chat notice. "" means it is still eligible. Drives the explicit
+    // abandon lines so a manual verifier sees every target switch and its cause.
+    private string RockIneligibleReason(byte team, ulong rockId)
+    {
+        if (rockId == 0 || !World.RockOre.TryGetValue(rockId, out var ore))
+            return "rock gone";
+        if (ore.Class != RockClass.Helium3)
+            return "not helium-3";
+        if (ore.OreRemaining <= 0f)
+            return "depleted";
+        if (World.RockById(rockId) is not World.Rock rock)
+            return "rock gone";
+        if (!World.TeamStates.TryGetValue(team, out var ts)
+            || !ts.AuthorizedMiningSectors.Contains(rock.SectorId))
+            return "sector not authorized";
+        if (FogEnabled && VisionFor(team) is { } tv && !tv.DiscoveredRocks.Contains(rockId))
+            return "not discovered (fog)";
+        return "";
+    }
+
     // Pick the slot's next rock from `fromSector`/`fromPos` (the ship, or the dock it relaunches
     // from), honoring the selection rules:
-    //   (c) prefer the rock it was already working (LastRockId) when still eligible;
+    //   (c) prefer the rock the miner is ALREADY flying at (TargetRockId) or was last working
+    //       (LastRockId) when still eligible — this keeps every pick sticky so a re-pick can't wander
+    //       to a marginally-closer rock and leave the drone forever half-committed. A relaunch (no
+    //       live TargetRockId) falls back to LastRockId (MiningTest 17: same rock after offload).
     //   (a) skip rocks claimed by another friendly miner — UNLESS the team fields more miners than
     //       there are eligible rocks (then they double up);
     //   (b) otherwise nearest by route: fewest gate hops, then squared distance (same-sector legs
@@ -532,6 +565,8 @@ public sealed partial class Simulation
     //       of RockOre never decides).
     private ulong? PickRock(MinerSlot slot, uint fromSector, Vec3 fromPos)
     {
+        // The rock this slot is already committed to (live target first, else the relaunch memory).
+        ulong prefer = slot.TargetRockId != 0 ? slot.TargetRockId : slot.LastRockId;
         // Claims held by the team's OTHER miners (live or launching).
         var claims = new List<ulong>();
         int teamMiners = 0;
@@ -561,7 +596,7 @@ public sealed partial class Simulation
             if (hops < 0)
                 continue; // unreachable
             bool claimed = claims.Contains(rockId);
-            if (rockId == slot.LastRockId)
+            if (rockId == prefer)
             {
                 lastEligible = true;
                 lastClaimed = claimed;
@@ -584,9 +619,9 @@ public sealed partial class Simulation
             return null;
         // (a) claims bind only while there are enough eligible rocks to go around.
         bool claimsBind = teamMiners <= eligible;
-        // (c) the previous rock wins outright when it's still takeable.
+        // (c) the already-committed rock wins outright when it's still takeable.
         if (lastEligible && (!lastClaimed || !claimsBind))
-            return slot.LastRockId;
+            return prefer;
         if (claimsBind)
             return bestUnclaimedId != 0 ? bestUnclaimedId : null;
         return bestId;
@@ -618,6 +653,12 @@ public sealed partial class Simulation
     // ---- Steering (20 Hz, via InputFor). Synthesized inputs never set fire/dispense flags —
     // a miner is unarmed by content AND by construction. ----
 
+    // The station-keeping distance FROM ROCK CENTER a miner holds while harvesting: the asteroid's
+    // live radius + 10%, floored so even a tiny (nearly-drained) rock keeps the drone outside its own
+    // collision shell + a little clearance. HarvestStep's reach (rockR + MinerStandoff + ShipRadius)
+    // always exceeds this for any seeded rock, so ore still flows at the hold distance.
+    private float MinerHoldDistance(float rockR) => MathF.Max(rockR * 1.1f, rockR + World.ShipRadius + 6f);
+
     private ShipInputState MinerExecute(ShipSim s, uint tick)
     {
         MinerSlot? slot = null;
@@ -629,6 +670,8 @@ public sealed partial class Simulation
             }
         if (slot is null)
             return default; // being torn down this step
+
+        s.IsHarvesting = false; // set true below only on a tick HarvestStep actually moves ore
 
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
@@ -686,11 +729,12 @@ public sealed partial class Simulation
                     return default; // brain retargets on its next tick
                 if (CrossSector(rock.SectorId, out var xin))
                     return xin;
-                // Park HALF a standoff off the live shell: the brake margin makes ApproachPoint rest
-                // a little PAST its stop distance, and the rest point must land inside HarvestStep's
-                // reach window (shell + standoff + ship radius) or the drone stalls just out of range.
+                // Arrive at the hold shell (rock radius + 10%, floored outside the drone's own
+                // collision shell). The brake margin makes ApproachPoint rest a little PAST its stop
+                // distance, and HarvestStep's reach (shell + standoff + ship radius) always exceeds
+                // the hold distance, so the rest point lands inside the transfer window.
                 float rockR = World.RockCurrentRadius(rock.Id);
-                var input = Approach(rock.Pos, rockR + _mining.MinerStandoff * 0.5f);
+                var input = Approach(rock.Pos, MinerHoldDistance(rockR));
                 // Switch to harvesting the moment the transfer window opens (same gate HarvestStep
                 // range-checks) — no full-stop requirement; ore flows while it settles.
                 float reach = rockR + _mining.MinerStandoff + World.ShipRadius;
@@ -702,11 +746,20 @@ public sealed partial class Simulation
             {
                 if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
                     return default;
-                // Pull ore this tick (range-gated inside), then station-keep inside the transfer
-                // window (the shell shrinks under it as the rock drains).
-                HarvestStep(s, slot.TargetRockId, FlightModel.Dt);
+                // Pull ore this tick (range-gated inside); flag actively-harvesting only when it moved.
+                if (HarvestStep(s, slot.TargetRockId, FlightModel.Dt) > 0f)
+                    s.IsHarvesting = true;
                 float rockR = World.RockCurrentRadius(rock.Id);
-                return Approach(rock.Pos, rockR + _mining.MinerStandoff * 0.5f);
+                float hold = MinerHoldDistance(rockR);
+                float d = (myPos - rock.Pos).Length();
+                // Drifted well outside the hold shell: re-approach (the asteroid-avoid deflection is
+                // fine here). Otherwise nose DEAD ON the rock center with zero roll and throttle 0
+                // (active brake in this flight model) so the harvest beam points at what it's mining —
+                // the avoid-deflected Approach would swing the nose off the very rock being drained.
+                if (d > hold + 8f)
+                    return Approach(rock.Pos, hold);
+                return AutoSteer.FaceAndRoll(
+                    myPos, myRot, rock.Pos, myRot.Rotate(new Vec3(0f, 1f, 0f)), PigTurnGain, 0f, 0f);
             }
             default: // ToBase
             {

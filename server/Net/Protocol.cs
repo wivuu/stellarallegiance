@@ -113,6 +113,7 @@ public static class Protocol
     public const byte ShipFlagLockedMe = 8; // that lock completed — a launch can come any moment (ThreatLockState == 2)
     public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
     public const byte ShipFlagMiner = 32; // AI mining ship (ShipSim.IsMiner) — HUD tags it a MINER; PIG brain never touches it (distinct flag)
+    public const byte ShipFlagMining = 64; // that miner is actively moving ore this tick (ShipSim.IsHarvesting) — HUD "MINING" state
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -145,6 +146,8 @@ public static class Protocol
             flags |= ShipFlagAutopilot;
         if (s.IsMiner)
             flags |= ShipFlagMiner;
+        if (s.IsHarvesting)
+            flags |= ShipFlagMining;
 
         int o = 0;
         BitConverter.TryWriteBytes(dst.Slice(o), s.ShipId);
@@ -407,7 +410,7 @@ public static class Protocol
     // every non-He3 rock — a nonzero orePct always means "harvestable He3 with ore left" (see RockOrePct).
     // World is needed to read the mutable ore state (World.RockOre); the SHARED helper keeps Welcome and
     // MsgReveal byte-identical for the same rock. Layout: u64 id | u32 sector | 3x f32 pos | f32 radius |
-    // u8 variant | 3x f32 rot | u8 rockClass | f32 currentRadius | u8 orePct.
+    // u8 variant | 3x f32 rot | u8 rockClass | f32 currentRadius | u8 orePct | f32 oreCapacity.
     private static void WriteRockStatic(BinaryWriter w, World world, in World.Rock a)
     {
         w.Write(a.Id);
@@ -421,6 +424,7 @@ public static class Protocol
         w.Write((byte)world.RockClassOf(a.Id));
         w.Write(world.RockCurrentRadius(a.Id));
         w.Write(RockOrePct(world, a.Id));
+        w.Write(world.RockOre.TryGetValue(a.Id, out var os) ? os.OreCapacity : 0f);
     }
 
     // A rock's ore fill as an integer percent 0-100, meaningful ONLY for Helium3 rocks (the only

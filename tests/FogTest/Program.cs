@@ -127,8 +127,8 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
     int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
-    // RockStatic v31: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct) = 47.
-    long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 47);
+    // RockStatic v32: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct + f32 oreCapacity) = 51.
+    long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 51);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
     if (ms.Position != frame.Length) throw new Exception("Welcome count != body");
     return (ns, nb, (int)nr, na);
@@ -467,7 +467,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     Check(Protocol.BuildRockUpdatesFor(sim.World, null, changed).Count == 0,
         "a NoTeam (null-vision) client receives no rock-updates", "a null-vision client got rock-updates");
 
-    // Shared-helper guarantee: pull the discovered rock's 47-byte static record out of a fog-off
+    // Shared-helper guarantee: pull the discovered rock's 51-byte static record out of a fog-off
     // Welcome and a MsgReveal slice and assert byte-equality (both go through WriteRockStatic).
     byte[]? WelcomeRock(byte[] frame, ulong id)
     {
@@ -486,7 +486,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         }
         int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
         long nr = br.ReadUInt32();
-        for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(47); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
     }
     byte[]? RevealRock(byte[] frame, ulong id)
@@ -496,7 +496,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         br.ReadByte();
         int nb = br.ReadByte(); br.ReadBytes(nb * 33);
         int nr = br.ReadUInt16();
-        for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(47); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
     }
 
@@ -1146,7 +1146,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var br = new BinaryReader(ms);
         br.ReadByte(); // MsgReveal
         int nb = br.ReadByte(); br.ReadBytes(nb * 33);
-        int nr = br.ReadUInt16(); br.ReadBytes(nr * 47); // RockStatic v31: 41 + mining block (class + currentRadius + orePct)
+        int nr = br.ReadUInt16(); br.ReadBytes(nr * 51); // RockStatic v32: 41 + mining block (class + currentRadius + orePct + oreCapacity)
         int na = br.ReadByte(); br.ReadBytes(na * 28);
         int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
         if (ms.Position != frame.Length) throw new Exception("Reveal count != body");

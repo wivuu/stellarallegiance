@@ -197,8 +197,8 @@ hulls:
     glyph: "⬟"
     role: MINING
     description: "Slow, unarmed ore hauler. Strips helium-3 from asteroids and offloads it at base for credits. Defenseless — keep it escorted."
-    model-name: miner   # res://assets/ships/miner.glb (original Allegiance utility hull; HP_Weapon_0 stripped so it stays unarmed)
-    model-length: 6.5
+    model-name: utl19   # res://assets/ships/utl19.glb (industrial utility hull; bbox 1.91×1.41×4.71, length-dominant)
+    model-length: 6.5   # loader normalizes the longest mesh axis (4.71) to this length
     class-id: 4
     mass: 60
     speed: 70
@@ -226,10 +226,11 @@ hulls:
     price: 400
     ore-capacity: 2000     # helium-3 units the miner fills at a rock and offloads at base
     required-capabilities: [base]
-    # No weapon hardpoints (unarmed) — the GLB's HP_Weapon_0 node was stripped, so nothing arms it.
-    # The GLB's Booster/Thruster/Light nodes merge in (engine glow + nav beacons); the main-engine
-    # nozzle + cockpit eye are fully authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the
-    # pod. main-engine anchors the client engine glow / team trail.
+    # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,
+    # so it merges as an APPENDED EMPTY mount that armed-weapon consumers skip (HardpointGeometryMerge
+    # .cs:30-32), leaving the hull unarmed. The GLB's thruster/light HP nodes merge in (engine glow +
+    # nav beacons); the main-engine nozzle + cockpit eye are fully authored here (no HP_MainEngine/
+    # HP_Cockpit mesh nodes), like the pod. main-engine anchors the client engine glow / team trail.
     hardpoints:
       - { kind: main-engine, off-z: -3.0, dir-z: -1 }
       # Cockpit eye point for the first-person camera (client-only).

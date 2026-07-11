@@ -64,6 +64,12 @@ public partial class WorldRenderer : Node3D
     // _asteroidNodes' lifetime.
     private readonly Dictionary<ulong, Asteroid> _asteroidRows = new();
 
+    // One active mining beam per ship currently transferring ore (ShipFlagMining). Attached as a
+    // child of the ship node and torn down on the flag's falling edge (UpdateMiningBeams). Purely
+    // client-side VFX — the server streams only the flag, not a beam or a target-rock id.
+    private readonly Dictionary<ulong, MiningBeam> _miningBeams = new();
+    private readonly List<ulong> _miningBeamPrune = new(); // scratch: beams to drop this frame
+
     // Scale basis per rock: the node's mesh divides its render radius by this to get its uniform
     // scale (mesh authored bound, or the baked sphere-fallback radius), so a target radius maps to a
     // node scale of Vector3.One * (radius / Divisor). Populated at InsertAsteroid.
@@ -2261,6 +2267,8 @@ public partial class WorldRenderer : Node3D
                 _rockShrinkTarget.Remove(id);
         }
 
+        UpdateMiningBeams();
+
         // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that
         // holds the WarpFlash until the warped-into sector's rocks have finished streaming in.
         AdvanceFades(delta);
@@ -2293,6 +2301,74 @@ public partial class WorldRenderer : Node3D
                 _bolts.RemoveAt(i);
             }
         }
+    }
+
+    // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is
+    // visible, ensure a MiningBeam child exists and point it at the nearest in-view He3 rock with ore
+    // left; tear a beam down on the flag's falling edge (or when the ship leaves / hides / has no rock
+    // to aim at). Flag-only endpoint heuristic — the server never streams the miner's target rock id.
+    private void UpdateMiningBeams()
+    {
+        Vector3 camPos = ShadowRefPos();
+
+        // Drive / create a beam for each actively-mining visible ship.
+        foreach (var (id, node) in _shipNodes)
+        {
+            if (node is not RemoteShip rs || !rs.IsMining || !rs.Visible)
+                continue;
+            if (NearestHe3Rock(rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius))
+                continue; // no minable rock in view — hold off (drop any stale beam in the prune below)
+
+            if (!_miningBeams.TryGetValue(id, out var beam))
+            {
+                beam = new MiningBeam { Name = "MiningBeam" };
+                rs.AddChild(beam);
+                _miningBeams[id] = beam;
+            }
+            beam.UpdateBeam(rs.GlobalPosition, rockCenter, rockRadius, camPos);
+        }
+
+        // Prune beams whose ship stopped mining, hid, left, or lost its target rock.
+        if (_miningBeams.Count > 0)
+        {
+            _miningBeamPrune.Clear();
+            foreach (var (id, _) in _miningBeams)
+            {
+                bool keep = _shipNodes.TryGetValue(id, out var node)
+                    && node is RemoteShip rs && rs.IsMining && rs.Visible
+                    && NearestHe3Rock(rs.GlobalPosition) is not null;
+                if (!keep)
+                    _miningBeamPrune.Add(id);
+            }
+            foreach (var id in _miningBeamPrune)
+            {
+                if (_miningBeams.Remove(id, out var beam) && GodotObject.IsInstanceValid(beam))
+                    beam.QueueFree();
+            }
+        }
+    }
+
+    // The nearest visible He3 rock (with ore remaining) to `from`, as (center, current radius), or
+    // null if none is in view. Used to aim a mining beam — a flag-only heuristic, since the server
+    // doesn't tell us which rock a miner is actually harvesting.
+    private (Vector3 Center, float Radius)? NearestHe3Rock(Vector3 from)
+    {
+        (Vector3, float)? best = null;
+        float bestSq = float.MaxValue;
+        foreach (var (id, node) in AsteroidsInView())
+        {
+            if (GetAsteroid(id) is not { } rock)
+                continue;
+            if (rock.RockClass != (byte)RockClass.Helium3 || rock.OrePct <= 0)
+                continue;
+            float dSq = (node.GlobalPosition - from).LengthSquared();
+            if (dSq < bestSq)
+            {
+                bestSq = dSq;
+                best = (node.GlobalPosition, rock.CurrentRadius);
+            }
+        }
+        return best;
     }
 
     // Purely client-side hit sparks: flash where a rendered bolt visually meets a ship this frame,

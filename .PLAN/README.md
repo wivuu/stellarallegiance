@@ -22,16 +22,14 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Content in settings modal(s) needs more padding from scrollbar
 - Unable to open chat from F3 while sitting in hangar
-- Mining/miner fixes
-  - Miner should launch as soon as game starts. Game starts as soon as the first player clicks launch. When first player clicks launch, all players on teams should automatically be in the hangar of their garrison.
-  - Miner went to first he3 asteroid, then decided randomly to go to the next (bug)
-  - Show a 'mining laser' effect, and have the miner gently roll as it mines, pointing at the center of the asteroid; at a distance of asteroid radius + 10% asteroid radius
-  - Unable to target miners in HUD; they should be selectable like any other ship
-  - When close enough to an asteroid, display the type of asteroid on the HUD in small text without having to target. For He3 mines, show how much He3 is remaining in HUD, out of its total capacity (if in sight)
-  - Switch miner model to utl119 from pick_assets
-  - Fix miner docking; should reuse autopilot autodocking logic, and if that logic should work with any hull, including miners and constructors which turn very slowly. If the logic does not work, then it's a bug. The logic should be to approach a point in front of the entry point, fly towards that point (avoiding collisions along the way), slow down and cut thrust in anticipation of reaching that point, then turning and stopping turning in anticipation of facing the entry point, then flying slowly towards the entrance until docking occurs (or revert logic if docking target disappears).
-  - Let me verify manually rather than waste tokens
-  - Plan then dispatch implementation work to opus agent(s)
+- Miner fixes
+  - Miner doesnt show in F3 hud - the F3 hud should show all the same targets as in-ship hud
+  - F3 behaves differently from launched vs hangar - it pans more slowly and doesnt show all the same targets as in-ship F3
+  - In F3, show rock types with small text on the HUD, similar to in-ship view
+  - The mining laser appears to stop before it reaches the rock - elongate the laser so it passes into the rock all the way to the center (let the mesh clip)
+  - The miner does not directly face the center of the rock while mining (bug)
+  - Miner flight appears 'jerky' relative to my ship's; needs predictive smoothing on client
+  - Not all asteroids need to be a special/rare type (rare: helium, silicon, carbonaceous, uranium, etc - everything else is simple regolith or ice)
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 

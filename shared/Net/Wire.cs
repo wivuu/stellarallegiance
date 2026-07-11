@@ -19,7 +19,9 @@ public static class Wire
     // v31: mining — every RockStatic (Welcome + MsgReveal) appends u8 rockClass | f32 currentRadius |
     // u8 orePct (live shrink carried on first sight); new MsgRockUpdate=22 streams live rock shrink
     // deltas; ShipFlagMiner=32 in the ship flags byte; ShipClassDef.OreCapacity added to MsgDefs.
-    public const byte ProtocolVersion = 31;
+    // v32: miner brain — RockStatic appends f32 OreCapacity as its LAST field (47->51 bytes);
+    // ShipFlagMining=64 in the ship flags byte (set while a miner is actively moving ore).
+    public const byte ProtocolVersion = 32;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

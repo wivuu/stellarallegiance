@@ -324,6 +324,98 @@ namespace StellarAllegiance.Shared
             };
         }
 
+        // Angular-anticipation twin of FaceAndRoll — SERVER-ONLY (see the banner above; ordinary MathF,
+        // never a PIG / prediction path). Same nose-onto-`aimPoint` yaw/pitch GEOMETRY and same gated
+        // roll as FaceAndRoll, but instead of a raw P-on-target-rate stick it commands a sqrt
+        // (bang-bang-optimal) rate profile per axis so the accel-limited integrator sheds angular
+        // velocity BEFORE the null and does not overshoot on a SLOW-TURNING hull.
+        //
+        // Why: FaceAndRoll's yaw/pitch stick = clamp(localError * turnGain) is a pure P controller on
+        // TARGET RATE, while FlightModel.Integrate slews the ACTUAL angular velocity toward stick*maxRate
+        // under a torque budget (TorqueMultiplier = 0.5 at rest — exactly the docking regime). A P-on-rate
+        // command on an accel-limited plant carries angular momentum through the null and rings; a
+        // slow turner's ring exceeds the dock Align facing gate and never promotes. The sqrt profile
+        //     desiredRate = sign(err) * min(maxRate, sqrt(2 * angAccel * |err|))
+        //     stick       = desiredRate / maxRate
+        // is the fastest attitude change that can still be arrested by decel `angAccel` within the
+        // remaining error, so recomputed live each tick it decelerates the actual rate to zero exactly
+        // at the null — overshoot-free for ANY turn rate. It saturates at full stick when far (entry
+        // momentum is handled implicitly: the profile just holds max rate until |err| is small) and
+        // shrinks the command as |err| falls. Pass `angAccel` CONSERVATIVELY (the at-rest torque
+        // multiplier, 0.5*Torque/Mass): a decel target below the plant's true capability guarantees the
+        // integrator can always keep up, so the actual rate never leads the profile past zero.
+        //
+        // `angVelLocal` (ship-local rates, X=pitch/Y=yaw/Z=roll, exactly FlightModel's AngVel layout) is
+        // accepted for optional rate damping; the sqrt profile alone suffices here so it is currently
+        // unused (kept in the signature so a caller can wire damping without a source-compat break).
+        // The target-behind (local.Z < 0) branch and the gated proportional roll are byte-copies of
+        // FaceAndRoll — the same AutopilotTest roll-sign assertion guards `-localUp.X * rollGain`.
+        public static ShipInputState FaceAndRollAnticipated(
+            Vec3 myPos,
+            Quat myRot,
+            Vec3 angVelLocal,
+            Vec3 aimPoint,
+            Vec3 upWorld,
+            float maxRatePitchRad,
+            float maxRateYawRad,
+            float maxRateRollRad,
+            float angAccelPitchRad,
+            float angAccelYawRad,
+            float angAccelRollRad,
+            float rollGain,
+            float throttle
+        )
+        {
+            Vec3 to = aimPoint - myPos;
+            float d = to.Length();
+            Vec3 desired = d > 1e-4f ? to * (1f / d) : myRot.Rotate(new Vec3(0f, 0f, 1f));
+            Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desired), new Vec3(0f, 0f, 1f));
+
+            float yaw,
+                pitch;
+            if (local.Z < 0f)
+            {
+                // Target behind the nose — bang-bang the shortest way around (verbatim FaceAndRoll).
+                yaw = local.X >= 0f ? 1f : -1f;
+                pitch = local.Y >= 0f ? -1f : 1f;
+            }
+            else
+            {
+                // Target in front — sqrt anticipation. Error angles use FaceAndRoll's exact sign
+                // conventions: yaw ∝ +local.X, pitch ∝ -local.Y (both measured off local +Z).
+                float yawErr = MathF.Atan2(local.X, local.Z);
+                float pitchErr = MathF.Atan2(-local.Y, local.Z);
+                yaw = AnticipatedStick(yawErr, maxRateYawRad, angAccelYawRad);
+                pitch = AnticipatedStick(pitchErr, maxRatePitchRad, angAccelPitchRad);
+            }
+
+            Vec3 localUp = Conjugate(myRot).Rotate(upWorld);
+            float roll = local.Z > 0.5f ? Clamp1(-localUp.X * rollGain) : 0f;
+            return new ShipInputState
+            {
+                Thrust = throttle,
+                Yaw = yaw,
+                Pitch = pitch,
+                Roll = roll,
+            };
+        }
+
+        // Stick command for one anticipated axis: sign(err) * min(maxRate, sqrt(2*angAccel*|err|)) / maxRate.
+        // The sqrt term is the peak rate from which decel `angAccel` still stops within |err| (double-
+        // integrator time-optimal profile); dividing by maxRate maps it to the [-1,1] stick the integrator
+        // multiplies back by maxRate. Degenerate maxRate/angAccel <= 0 yields a zero (neutral) stick.
+        private static float AnticipatedStick(float err, float maxRate, float angAccel)
+        {
+            if (maxRate <= 1e-6f || angAccel <= 0f)
+                return 0f;
+            float mag = err < 0f ? -err : err; // |err|
+            float desiredRate = MathF.Sqrt(2f * angAccel * mag);
+            if (desiredRate > maxRate)
+                desiredRate = maxRate;
+            float stick = desiredRate / maxRate; // in [0,1]
+            return err >= 0f ? stick : -stick;
+        }
+
         // ---- small math helpers (verbatim from Simulation.Pig.cs) ----
         private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
 

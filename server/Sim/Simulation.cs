@@ -205,6 +205,9 @@ public sealed partial class Simulation
         // miner spawn/brain lands in a later stream; the PIG brain skips IsMiner ships (distinct flag).
         public bool IsMiner;
         public float Ore;
+        // True on the ticks a miner actually moved ore this step (drives ShipFlagMining on the wire so
+        // clients can tag the drone as actively harvesting). Set/cleared per tick in MinerExecute.
+        public bool IsHarvesting;
 
         // Server-side autopilot engaged on this ship (player-requested navigation, WP1). While set,
         // InputFor synthesizes steering instead of using the client's held input, and WriteShip raises
@@ -1467,7 +1470,16 @@ public sealed partial class Simulation
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
+        Vec3 angVel = s.State.AngVel; // ship-local turn rates (X=pitch,Y=yaw,Z=roll) — the frame FaceAndRollAnticipated expects
         DockFace[] faces = World.BaseDockFaces;
+
+        // Conservative per-axis angular-accel budgets for the anticipation profile: the at-rest
+        // TorqueMultiplier (0.5) times turnTorque/mass — i.e. the slew cap FlightModel.Integrate applies
+        // while docking (speed ~ 0). Targeting this floor means the integrator can always out-decelerate
+        // the sqrt profile, so the actual angular velocity is arrested AT the null, never past it.
+        float angAccelPitch = 0.5f * stats.TorquePitchRad / stats.Mass;
+        float angAccelYaw = 0.5f * stats.TorqueYawRad / stats.Mass;
+        float angAccelRoll = 0.5f * stats.TorqueRollRad / stats.Mass;
 
         DockFace f = faces[SelectDockDoor(s, eb, faces)];
         Vec3 doorW = eb.Pos + f.Center; // door face plane, world space (identity-oriented base)
@@ -1478,7 +1490,11 @@ public sealed partial class Simulation
             case 1: // ALIGN — hold at the standoff point (throttle 0 = active brake) and turn+roll onto the door
             {
                 Vec3 up = DockUpAxis(f, myRot);
-                var input = AutoSteer.FaceAndRoll(myPos, myRot, doorW, up, PigTurnGain, ApDockRollGain, 0f);
+                var input = AutoSteer.FaceAndRollAnticipated(
+                    myPos, myRot, angVel, doorW, up,
+                    stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
+                    angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, 0f
+                );
 
                 // Facing = nose (local +Z) alignment with the direction to the door; roll error read from
                 // the door up-axis in ship-local space (localUp.Y > 0 = right way up, |localUp.X| = roll off).
@@ -1507,7 +1523,11 @@ public sealed partial class Simulation
                 // Aim PAST the plane (doorW + Normal*DockFaceDepth) so the aim direction never degenerates
                 // as the nose reaches the door — the ship keeps a valid heading right up to the trigger.
                 Vec3 creepAim = doorW + f.Normal * World.DockFaceDepth;
-                var input = AutoSteer.FaceAndRoll(myPos, myRot, creepAim, up, PigTurnGain, ApDockRollGain, ApDockCreepThrottle);
+                var input = AutoSteer.FaceAndRollAnticipated(
+                    myPos, myRot, angVel, creepAim, up,
+                    stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
+                    angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, ApDockCreepThrottle
+                );
 
                 Vec3 fwd = myRot.Rotate(new Vec3(0f, 0f, 1f));
                 Vec3 toAim = creepAim - myPos;
@@ -1565,8 +1585,10 @@ public sealed partial class Simulation
                         stats.MaxSpeed, stats.Accel, stats.BackMult
                     );
                     float throttle = MathF.Min(ApDockDescentMaxThrottle, vAllow / stats.MaxSpeed);
-                    input = AutoSteer.FaceAndRoll(
-                        myPos, myRot, doorW, DockUpAxis(f, myRot), PigTurnGain, ApDockRollGain, throttle
+                    input = AutoSteer.FaceAndRollAnticipated(
+                        myPos, myRot, angVel, doorW, DockUpAxis(f, myRot),
+                        stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
+                        angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, throttle
                     );
                 }
                 else

@@ -87,6 +87,11 @@ public partial class RemoteShip : Node3D
     // one "MINER" so its role reads at a glance.
     public bool IsMiner { get; private set; }
 
+    // Actively transferring ore (Ship.IsMining / ShipFlagMining): toggles per tick as the server's
+    // miner grinds a rock. WorldRenderer reads this to attach/detach the mining beam; _Process rolls
+    // the cosmetic ship model while it's set. Updated in Push (NOT Initialize — it's per-tick state).
+    public bool IsMining { get; private set; }
+
     // Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
     // (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
     // than being finite-differenced from positions — differencing 20 Hz snapshots over
@@ -127,6 +132,18 @@ public partial class RemoteShip : Node3D
     private float _burnCooldown; // seconds until the next burst roll
     private Vector3 _prevHeading; // last travel direction (for turn detection)
     private bool _hasHeading;
+
+    // Cosmetic mining roll: while IsMining, the ShipModel child gently barrel-rolls about the hull's
+    // forward axis (a "beam grinding" flourish); it eases back to upright when the flag drops. The
+    // ship's LOGICAL transform stays server-true — only the model child spins, the same local-VFX
+    // precedent as the synthesized afterburner. The applied roll = _rollPhase × _rollBlend, so
+    // dropping the flag (blend → 0) unwinds the roll smoothly to 0 without snapping.
+    private const float MiningRollRate = 25f * Mathf.Pi / 180f; // ~25°/s barrel roll (rad/s)
+    private const float MiningRollEase = 6f; // blend ease rate (1/s) in/out of the roll
+    private Node3D? _shipModel; // cached ShipModel child (lazy)
+    private bool _lookedUpShipModel;
+    private float _rollPhase; // accumulated roll angle (rad) while mining
+    private float _rollBlend; // 0..1 eased presence of the roll
 
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
@@ -234,6 +251,7 @@ public partial class RemoteShip : Node3D
         // Latest authoritative hull/shield for the focused-target HP arc (no interpolation needed).
         Health = row.Health;
         Shield = row.Shield;
+        IsMining = row.IsMining; // per-tick mining flag → drives the beam (WorldRenderer) + model roll (_Process)
 
         // Track the smoothed gap between successive samples (now in jitter-free server time, so
         // this is the ship's true update cadence) to size the render delay below. Reject
@@ -286,6 +304,8 @@ public partial class RemoteShip : Node3D
             _engine.SetThrottle(throttle, boost);
         }
 
+        UpdateMiningRoll((float)delta);
+
         int n = _samples.Count;
         if (n == 0)
             return;
@@ -333,6 +353,48 @@ public partial class RemoteShip : Node3D
         var last = _samples[n - 1];
         Position = last.Pos;
         Quaternion = last.Rot;
+    }
+
+    // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.
+    // Rolls about the hull's forward axis (local +Z), leaving the logical Node3D transform untouched
+    // so prediction/interp/collision stay server-true. Once fully unwound (blend ≈ 0) the model's
+    // roll is reset to identity so it never drifts.
+    private void UpdateMiningRoll(float dt)
+    {
+        // Ease the roll presence toward on/off. The applied angle is phase × blend, so a dropped flag
+        // fades the whole roll back to upright rather than freezing at an arbitrary angle.
+        _rollBlend = Mathf.Lerp(_rollBlend, IsMining ? 1f : 0f, 1f - Mathf.Exp(-MiningRollEase * dt));
+        if (_rollBlend < 0.001f && !IsMining)
+        {
+            if (_rollPhase != 0f)
+            {
+                _rollPhase = 0f;
+                _rollBlend = 0f;
+                if (ResolveShipModel() is { } m0)
+                    m0.Rotation = m0.Rotation with { Z = 0f };
+            }
+            return;
+        }
+        // Wrap the accumulated phase to one turn WHILE mining (blend is saturated at 1 there, so the
+        // 2π→0 wrap is seamless) — this bounds the unwind on the falling edge to at most one rotation
+        // rather than spinning back through every turn of a long mining session.
+        if (IsMining)
+            _rollPhase = (_rollPhase + MiningRollRate * dt) % Mathf.Tau;
+
+        if (ResolveShipModel() is { } m)
+            m.Rotation = m.Rotation with { Z = _rollPhase * _rollBlend };
+    }
+
+    // Lazily resolve (and cache) the ShipModel child WorldRenderer attaches. Cached even when null
+    // so the lookup runs at most once (a pod/ship whose model failed to build never re-walks).
+    private Node3D? ResolveShipModel()
+    {
+        if (!_lookedUpShipModel)
+        {
+            _shipModel = GetNodeOrNull<Node3D>("ShipModel");
+            _lookedUpShipModel = true;
+        }
+        return _shipModel;
     }
 
     // Synthesized PIG afterburner. Tracks the drone's travel direction (from the

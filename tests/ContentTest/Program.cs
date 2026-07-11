@@ -100,15 +100,16 @@ Check(
     $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
 );
 // Mining hull (class-id 4): the projection carries Hull.OreCapacity onto ShipClassDef.OreCapacity;
-// a non-mining hull projects 0. The miner has a GLB (miner.glb) whose Booster/Thruster/Light nodes
-// merge in, but its HP_Weapon_0 node was stripped from the mesh, so it keeps zero weapon mounts
-// alongside its authored main-engine + cockpit hardpoints (it's deliberately unarmed).
+// a non-mining hull projects 0. The miner's GLB (utl19.glb) carries an HP_Weapon_0 node with no
+// YAML weapon binding, so it merges as ONE appended EMPTY mount (WeaponId == NoWeapon) alongside
+// the authored main-engine + cockpit hardpoints — the hull stays deliberately unarmed.
 var miner = stock.Ships.First(s => s.ClassId == 4);
+var minerWeaponHps = miner.Hardpoints.Where(h => h.Kind == HardpointKind.Weapon).ToList();
 Check(
     miner.OreCapacity == 2000f && scout.OreCapacity == 0f
-        && miner.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 0,
-    "loader projected miner ore-capacity (unarmed class-id 4; non-miners project 0)",
-    $"miner projection wrong (ore {miner.OreCapacity}, scout ore {scout.OreCapacity}, weapon-hps {miner.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)})"
+        && minerWeaponHps.Count == 1 && minerWeaponHps[0].WeaponId == HardpointDef.NoWeapon,
+    "loader projected miner ore-capacity (unarmed class-id 4: one empty weapon mount; non-miners project 0)",
+    $"miner projection wrong (ore {miner.OreCapacity}, scout ore {scout.OreCapacity}, weapon-hps {minerWeaponHps.Count}, first weapon-id {(minerWeaponHps.Count > 0 ? minerWeaponHps[0].WeaponId.ToString() : "n/a")})"
 );
 // Fog-of-war vision (behavior-inert until a later WP): scout carries the longest cone + an
 // explicit stealthy RadarSignature < 1.

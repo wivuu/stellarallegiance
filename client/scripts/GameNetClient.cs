@@ -1240,6 +1240,9 @@ public partial class GameNetClient : Node
         row.RockClass = r.ReadByte();
         row.CurrentRadius = r.ReadSingle();
         row.OrePct = r.ReadByte();
+        // OreCapacity is the LAST field of the rock static (Welcome + MsgReveal share this reader).
+        // ≤ 0 = no readout (non-He3 rock). Remaining ore = round(OrePct/100 × OreCapacity).
+        row.OreCapacity = r.ReadSingle();
         return row;
     }
 
@@ -1643,6 +1646,7 @@ public partial class GameNetClient : Node
                 IsPod = (flags & 2) != 0,
                 Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
                 IsMiner = (flags & 32) != 0, // ShipFlagMiner — AI mining ship
+                IsMining = (flags & 64) != 0, // ShipFlagMining — actively transferring ore (drives beam/roll VFX)
 
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,
