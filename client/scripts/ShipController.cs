@@ -67,6 +67,22 @@ public partial class ShipController : Node
     // the buy went through / none is pending. Read by Hud to surface a one-line hint near the menu.
     public string? SpawnHint { get; private set; }
     private bool _perturbHeld; // edge-detect the P debug key
+    private bool _apHeld; // edge-detect the autopilot toggle (T)
+
+    // Optimistic local autopilot-engaged flag: set the moment we send an engage frame, cleared on a
+    // disengage send (T toggle, manual-input handback, death). The server independently drives the
+    // true state via the ShipFlagAutopilot snapshot bit (WP4 will reconcile the follow-authority
+    // prediction mode from it); this local flag only gates the T toggle + handback here and stays
+    // deliberately simple/self-contained. Static so SectorOverview's F3 right-click engage can read
+    // and set it through the same seam.
+    public static bool ApEngagedLocal { get; private set; }
+
+    // Sync the engaged flag from the SERVER's authoritative ShipFlagAutopilot bit (driven by
+    // WorldRenderer on the snapshot edge). Server-side disengagement — arrival, target loss, override
+    // detection — clears it here so the HUD banner/toggle track truth even when the client didn't ask.
+    public static void SyncApEngaged(bool on) => ApEngagedLocal = on;
+
+    private bool _apActivePrev; // edge-detect follow-authority exit to re-anchor the prediction clock
 
     // Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
     // commanded turn RATES that slew in under a torque limit, so it needs a HELD stick
@@ -212,6 +228,107 @@ public partial class ShipController : Node
             _spawnRequest = cls;
     }
 
+    // Resolve the current autopilot destination, in priority order: the Tab focus (a ship / base /
+    // asteroid, decoded from its FocusedId encoding), else a dropped F3 waypoint. Returns false when
+    // there's nothing to engage toward. kind: 0 ship, 1 base, 2 rock, 3 waypoint; id is UNENCODED
+    // (flags stripped); sector/pos carry the waypoint (zeros for entity kinds).
+    private static bool ResolveEngageTarget(out byte kind, out ulong id, out uint sector, out Vector3 pos)
+    {
+        kind = 0;
+        id = 0;
+        sector = 0;
+        pos = Vector3.Zero;
+
+        ulong focus = TargetMarkers.FocusedId;
+        if (focus != 0)
+        {
+            if (GameContent.IsBaseLock(focus))
+            {
+                kind = 1;
+                id = GameContent.BaseIdOf(focus);
+            }
+            else if (GameContent.IsAsteroidFocus(focus))
+            {
+                kind = 2;
+                id = GameContent.AsteroidIdOf(focus);
+            }
+            else
+            {
+                kind = 0;
+                id = focus;
+            }
+            return true;
+        }
+
+        var wp = TargetMarkers.Waypoint;
+        if (wp.Has)
+        {
+            kind = 3;
+            sector = wp.Sector;
+            pos = wp.Pos;
+            return true;
+        }
+        return false;
+    }
+
+    // Engage autopilot toward the current focus/waypoint (send mode=1). No-op (returns false) unless
+    // the player is launched and a destination resolves. Shared by the T toggle and SectorOverview's
+    // F3 right-click engage. Sets the optimistic local flag.
+    public bool EngageAutopilot()
+    {
+        if (_world.LocalShip == null)
+            return false; // not launched — nothing to steer
+        if (!ResolveEngageTarget(out byte kind, out ulong id, out uint sector, out Vector3 pos))
+            return false;
+        _net?.SetAutopilot(1, kind, id, sector, pos);
+        ApEngagedLocal = true;
+        return true;
+    }
+
+    // Disengage autopilot (send mode=0) and clear the optimistic local flag. Called by the T toggle
+    // and the manual-input handback below.
+    public void DisengageAutopilot()
+    {
+        _net?.SetAutopilot(0, 0, 0, 0, Vector3.Zero);
+        ApEngagedLocal = false;
+        // Hand control back to local prediction IMMEDIATELY (don't wait ~1 RTT for the server flag to
+        // clear) so a manual takeover feels instant; the server flag's later falling edge is then a
+        // no-op. RebaseTo inside SetAutopilot keeps the handoff visually continuous.
+        _world.LocalShip?.SetAutopilot(false);
+    }
+
+    // Autopilot toggle (T): edge-triggered like Tab. Swallowed while chatting (T would type). Toggles
+    // between engage (toward the current focus/waypoint) and disengage.
+    private void HandleAutopilotToggle()
+    {
+        if (Chat.Capturing)
+        {
+            _apHeld = true;
+            return;
+        }
+        bool t = Input.IsActionPressed("engage_autopilot");
+        bool pressed = t && !_apHeld;
+        _apHeld = t;
+        if (!pressed || _world.LocalShip == null)
+            return;
+        if (ApEngagedLocal)
+            DisengageAutopilot();
+        else
+            EngageAutopilot();
+    }
+
+    // Whether the sampled input represents deliberate manual flight — any flight axis or thrust past
+    // a quarter deflection, or afterburner. Cruise-control handback: this instant-disengages a
+    // local autopilot (the server detects the same override independently). Firing does NOT count.
+    private static bool ManualOverride(in ShipInputState i) =>
+        Mathf.Abs(i.Thrust) > 0.25f
+        || Mathf.Abs(i.StrafeX) > 0.25f
+        || Mathf.Abs(i.StrafeY) > 0.25f
+        || Mathf.Abs(i.Yaw) > 0.25f
+        || Mathf.Abs(i.Pitch) > 0.25f
+        || Mathf.Abs(i.Roll) > 0.25f
+        || i.Boost;
+
     public override void _Process(double delta)
     {
         // Neutral input while the chat box is open, the sector overview map is up, or the
@@ -310,6 +427,7 @@ public partial class ShipController : Node
         {
             _hadShip = false;
             _acc = 0;
+            ApEngagedLocal = false; // no ship (death / pre-spawn) → autopilot can't be engaged
             return;
         }
         if (!_hadShip)
@@ -321,6 +439,7 @@ public partial class ShipController : Node
             // Fresh ship: force the first step to send (server starts from default input).
             _lastSentInput = default;
             _lastSentTick = 0;
+            ApEngagedLocal = false; // a fresh launch starts hands-on
             // Launch locks the cursor to flight immediately — steering is captured relative mouse
             // motion (see _Input / ReadInput), so the pilot flies straight out of the hangar without
             // a click to capture first. ShipLoadout is deliberately NOT in the guard: the mandatory
@@ -342,7 +461,21 @@ public partial class ShipController : Node
         // headless runs exercise the boost + exhaust path.
         bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
         _input.Boost = boost;
-        pc.SetAfterburner(boost ? 1f : 0f);
+        // While the server flies us the boost decision is the server's; PredictionController drives the
+        // plume from the authoritative AbPower instead (feeding the local key here would fight it).
+        if (!pc.AutopilotActive)
+            pc.SetAfterburner(boost ? 1f : 0f);
+
+        // Autopilot: hand back to manual the instant the pilot makes a real flight input (cruise-
+        // control style; firing doesn't count), then process the T engage/disengage toggle. Skipped
+        // under headless autofly. Neutral input while a menu/map/chat owns the sticks won't trip the
+        // handback (the input was zeroed above).
+        if (!_autoFly)
+        {
+            if (ApEngagedLocal && ManualOverride(_input))
+                DisengageAutopilot();
+            HandleAutopilotToggle();
+        }
 
         // An escape pod is unarmed: drop BOTH fire channels so the player can't shoot and the
         // client doesn't predict muzzle ghosts the server (which also ignores pod fire) won't make.
@@ -369,6 +502,20 @@ public partial class ShipController : Node
                 _net!.SendPing(nonce);
             }
         }
+        // Follow-authority (autopilot): the server is steering, so the client suspends its own-ship
+        // prediction (Step) and renders from eased authoritative snapshots (PredictionController). We
+        // KEEP sampling + sending real stick input below so the server can detect a manual override.
+        // On the falling edge (handback), re-anchor the prediction clock to authority so predicted[N]
+        // realigns with auth[N]; SetAutopilot already cleared the stale buffer + RebaseTo'd.
+        bool apActive = pc.AutopilotActive;
+        if (_apActivePrev && !apActive)
+        {
+            _predTick = _world.ServerTick; // re-anchor; slew rebuilds the lead
+            _lastSentInput = default; // force the first hands-on input to send
+            _lastSentTick = 0;
+        }
+        _apActivePrev = apActive;
+
         int lead = (int)_predTick - (int)_world.ServerTick;
         float slew = Mathf.Clamp((_targetLead - lead) * SlewGain, -MaxSlew, MaxSlew);
         _acc += delta * (1f + slew);
@@ -385,13 +532,16 @@ public partial class ShipController : Node
             {
                 // Gameplay is native-only now (a local ship only ever exists in native mode).
                 // The sim server's tick-stamped input ring replays this exactly at _predTick;
-                // RTT is sampled separately via the Ping/Pong probe above.
+                // RTT is sampled separately via the Ping/Pong probe above. Sent even while engaged so
+                // the server sees our neutral (or override) stick for handback detection.
                 _net?.SendInput(_predTick, _input);
                 _lastSentInput = _input;
                 _lastSentTick = _predTick;
             }
-            foreach (var shot in pc.Step(_input, _predTick))
-                _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
+            // Skip local prediction while the server flies us; snapshots drive the render instead.
+            if (!apActive)
+                foreach (var shot in pc.Step(_input, _predTick))
+                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
         }
 
         // T5 divergence injection (debug). Press P to force a misprediction and
@@ -560,7 +710,7 @@ public partial class ShipController : Node
             DropChaff = Input.IsActionPressed("drop_chaff"),
             DropMine = Input.IsActionPressed("drop_mine"),
             DropProbe = Input.IsActionPressed("drop_probe"),
-            LockTargetId = TargetMarkers.FocusedId,
+            LockTargetId = TargetMarkers.WireLockId,
         };
     }
 

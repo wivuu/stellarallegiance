@@ -68,6 +68,12 @@ public partial class TargetMarkers : Control
     // matching the AlephView vortex rather than a team color.
     private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
 
+    // Asteroids are team-neutral navigation targets — a focused rock reads in the bright mono-data
+    // chrome tint rather than a faction color (it's never a combat lock). The waypoint diamond uses
+    // the cyan structural accent (chrome), distinct from the enemy-red brackets.
+    private static readonly Color AsteroidFocusColor = DesignTokens.Data;
+    private static readonly Color WaypointColor = DesignTokens.TeamAccent;
+
     // The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
     // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon.
     private enum Kind
@@ -80,6 +86,7 @@ public partial class TargetMarkers : Control
         Aleph,
         Probe,
         Mine,
+        Asteroid,
     }
 
     private WorldRenderer _world = null!;
@@ -102,6 +109,13 @@ public partial class TargetMarkers : Control
     private byte _prevThreat;
     private double _lockWarnCd; // seconds until the lock-warning tone may re-fire
 
+    // Autopilot HUD: an "AUTOPILOT" chrome banner while engaged (tracked from ShipController's
+    // server-synced ApEngagedLocal flag), plus a brief "AUTOPILOT DISENGAGED" toast that fades on the
+    // falling edge (any cause — voluntary T, manual override, or server-side arrival/target-loss).
+    private bool _apPrevEngaged;
+    private double _apToastUntil; // wall-clock seconds until the disengage toast fully fades
+    private const double ApToastSec = 2.0;
+
     // The camera the indicators project through: the F3 overview camera while the sector
     // map is open (so every bracket / glyph / arrow reprojects onto the map), otherwise the
     // flight chase camera. Resolved per-access so it follows the F3 toggle live.
@@ -110,11 +124,41 @@ public partial class TargetMarkers : Control
     private ulong? _focused; // ShipId of the focused enemy, or null
     private bool _tabHeld; // edge-detect Tab so a held key cycles once
 
-    // The current Tab-focused enemy ShipId (0 = none), mirrored to a static each frame so
-    // ShipController can pack it as the missile-lock target in the input frame without an
-    // ownership chain to this overlay — the same cross-overlay idiom as Chat.Capturing /
-    // SectorOverview.Active. Cleared to 0 whenever focus drops (no ship / no target).
+    // The current Tab-focused target id (0 = none), mirrored to a static each frame so other
+    // overlays / ShipController can read it without an ownership chain to this overlay — the same
+    // cross-overlay idiom as Chat.Capturing / SectorOverview.Active. Encoding: a raw ship id, a
+    // base id flagged with GameContent.BaseLockFlag (bit 63), or an asteroid id flagged with
+    // GameContent.AsteroidFocusFlag (bit 62). Cleared to 0 whenever focus drops (no ship / target).
     public static ulong FocusedId { get; private set; }
+
+    // The id to pack into the input frame's missile-lock slot: the focus id EXCEPT an asteroid-
+    // encoded focus, which strips to 0. Rock ids and ship ids come from independent counters and can
+    // collide numerically, so a rock focus must never reach the server-authoritative missile lock;
+    // bases already flow through the lock path (BaseLockFlag disambiguates), so they pass unchanged.
+    public static ulong WireLockId => GameContent.IsAsteroidFocus(FocusedId) ? 0UL : FocusedId;
+
+    // Navigation waypoint dropped from the F3 sector map (Has, its sector, and world position). A
+    // static so SectorOverview can set it and ShipController can resolve it for an autopilot engage
+    // without a node reference — the same cross-overlay idiom as FocusedId. Drawn as a diamond marker
+    // (below) only while its sector matches the viewed/local sector.
+    public static (bool Has, uint Sector, Vector3 Pos) Waypoint { get; private set; }
+
+    // Set / clear the navigation waypoint (called by SectorOverview on an F3 empty-space click).
+    public static void SetWaypoint(uint sector, Vector3 pos) => Waypoint = (true, sector, pos);
+
+    public static void ClearWaypoint() => Waypoint = (false, 0, Vector3.Zero);
+
+    // Set the Tab focus directly from another overlay (SectorOverview's F3 pick). `encodedId` is the
+    // same encoding as FocusedId (raw ship / BaseLockId / AsteroidFocusId); 0 clears it. Persists
+    // through HandleFocusCycle's per-frame revalidation as long as the target stays in view.
+    private static TargetMarkers? _instance;
+
+    public static void SetFocus(ulong encodedId)
+    {
+        FocusedId = encodedId;
+        if (_instance != null)
+            _instance._focused = encodedId == 0 ? (ulong?)null : encodedId;
+    }
 
     // Reusable scratch arrays for DrawColoredPolygon — Godot copies on call so sequential
     // reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
@@ -122,10 +166,11 @@ public partial class TargetMarkers : Control
     private readonly Vector2[] _poly4 = new Vector2[4]; // Fighter chevron
     private readonly Vector2[] _poly6 = new Vector2[6]; // Bomber hexagon
 
-    // Scratch for the focus cycle: visible enemies paired with their distance (px²) from
-    // the AIM RETICLE (the firing line), sorted nearest-first so Tab locks what you're
-    // pointing at and each repeat steps outward.
-    private readonly List<(float AimDist2, ulong Id)> _visible = new();
+    // Scratch for the focus cycle: visible targets, each with a GROUP RANK (0 enemy ships, 1 enemy
+    // bases, 2 asteroids) and their distance (px²) from the AIM RETICLE (the firing line). Sorted by
+    // rank then nearest-first, so Tab steps ships → bases → asteroids, each ordered by what you're
+    // pointing at. Ids carry the FocusedId encoding (raw ship / BaseLockId / AsteroidFocusId).
+    private readonly List<(int Rank, float AimDist2, ulong Id)> _visible = new();
 
     // Wired up by the Hud (which already resolves these siblings).
     public void Init(WorldRenderer world, Camera3D camera, GameNetClient net, DefRegistry defs)
@@ -134,6 +179,7 @@ public partial class TargetMarkers : Control
         _camera = camera;
         _net = net;
         _defs = defs;
+        _instance = this;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // mono font for the focused-target tag, read directly (no Theme)
@@ -202,19 +248,44 @@ public partial class TargetMarkers : Control
             return;
         }
 
-        // EnemyShips() returns a shared scratch list — read it once and don't re-call it
-        // below (a second call would clear it mid-use). Same for LockableEnemyBases() below.
+        // EnemyShips() / LockableEnemyBases() each return a shared scratch list — read once and
+        // don't re-call mid-use (a second call clears it). Bases are ALWAYS in the cycle now
+        // (targeting is navigation, not just siege): the siege gate moved to lock-arc rendering
+        // only, so any hull can focus an enemy base to fly to it.
         var enemies = _world.EnemyShips();
+        var bases = _world.LockableEnemyBases();
 
-        // The enemy base only enters the cycle when the local hull mounts a CanDamageBase
-        // missile weapon (D3) — a seeker rack can't use a base lock, so a fighter/scout/pod
-        // never sees it in Tab. Read once (siege == false skips the call entirely).
-        bool siege = HasSiegeCapability(local);
-        IEnumerable<(ulong Id, Vector3 Pos)>? bases = siege ? _world.LockableEnemyBases() : null;
+        // If the focus is no longer valid — a focused SHIP died/left, a focused BASE fell out of
+        // sector/was destroyed, or a focused ASTEROID left the view — auto-target the nearest
+        // remaining enemy ship instead of dropping focus outright.
+        if (_focused is ulong f)
+        {
+            bool stillValid;
+            if (GameContent.IsBaseLock(f))
+            {
+                // A focused base stays valid whether enemy (health-filtered LockableEnemyBases) OR
+                // friendly (any visible same-team base — a navigation/dock destination), so a Tab-focused
+                // friendly base isn't dropped and re-aimed at the nearest enemy each frame.
+                ulong bid = GameContent.BaseIdOf(f);
+                stillValid = ContainsBaseId(bases, bid) || ContainsFriendlyBaseId(bid);
+            }
+            else if (GameContent.IsAsteroidFocus(f))
+                stillValid = ContainsRockId(_world.AsteroidsInView(), GameContent.AsteroidIdOf(f));
+            else
+                stillValid = ContainsId(enemies, f);
+            if (!stillValid)
+                _focused = NearestEnemy(enemies);
+        }
 
-        // Order the in-front enemies (ships, then the lockable base(s)) by how close they
-        // project to the aim reticle, so the cycle reads as "what I'm pointing at first, then
-        // outward."
+        if (!pressed)
+            return;
+
+        // Build the combined cycle list only on a Tab press: enemy ships (rank 0), enemy bases
+        // (rank 1), FRIENDLY bases (rank 2 — dock/navigation destinations), then asteroids in view
+        // (rank 3), each ordered within its group by how close it projects to the aim reticle — so Tab
+        // reads as "what I'm pointing at first, then outward, ships before enemy bases before friendly
+        // bases before rocks." Gated behind the press so the potentially large asteroid set is only
+        // projected when actually cycling.
         Vector2 aimPt = AimReticleScreenPoint(local);
         Camera3D cam = Cam;
         _visible.Clear();
@@ -222,41 +293,44 @@ public partial class TargetMarkers : Control
             if (!cam.IsPositionBehind(e.GlobalPosition))
             {
                 float d2 = (cam.UnprojectPosition(e.GlobalPosition) - aimPt).LengthSquared();
-                _visible.Add((d2, e.ShipId));
+                _visible.Add((0, d2, e.ShipId));
             }
-        if (bases != null)
-            foreach (var (id, pos) in bases)
-                if (!cam.IsPositionBehind(pos))
+        foreach (var (id, pos) in bases)
+            if (!cam.IsPositionBehind(pos))
+            {
+                float d2 = (cam.UnprojectPosition(pos) - aimPt).LengthSquared();
+                _visible.Add((1, d2, GameContent.BaseLockId(id)));
+            }
+        // Friendly bases (rank 2): every visible same-team base, same BaseLockId encoding as an enemy
+        // base. A friendly base can't be locked/damaged (no lock arc — see _Draw), it's purely a
+        // navigation/auto-dock destination, so it ranks above rocks but below hostile targets.
+        if (_world.LocalTeam is byte lt)
+            foreach (var (id, pos, team) in _world.AllVisibleBases())
+                if (team == lt && !cam.IsPositionBehind(pos))
                 {
                     float d2 = (cam.UnprojectPosition(pos) - aimPt).LengthSquared();
-                    _visible.Add((d2, GameContent.BaseLockId(id)));
+                    _visible.Add((2, d2, GameContent.BaseLockId(id)));
                 }
-        _visible.Sort(static (a, b) => a.AimDist2.CompareTo(b.AimDist2));
-
-        // If the focus is no longer valid — a focused SHIP died/left, or a focused BASE is no
-        // longer enemy/alive/in-sector/lockable (siege capability lost, e.g. a respawn into a
-        // different hull) — auto-target the nearest remaining enemy ship instead of dropping
-        // focus outright.
-        if (_focused is ulong f)
+        foreach (var (id, node) in _world.AsteroidsInView())
         {
-            bool stillValid = GameContent.IsBaseLock(f)
-                ? bases != null && ContainsBaseId(bases, GameContent.BaseIdOf(f))
-                : ContainsId(enemies, f);
-            if (!stillValid)
-                _focused = NearestEnemy(enemies);
+            Vector3 pos = node.GlobalPosition;
+            if (!cam.IsPositionBehind(pos))
+            {
+                float d2 = (cam.UnprojectPosition(pos) - aimPt).LengthSquared();
+                _visible.Add((3, d2, GameContent.AsteroidFocusId(id)));
+            }
         }
+        _visible.Sort(static (a, b) => a.Rank != b.Rank ? a.Rank.CompareTo(b.Rank) : a.AimDist2.CompareTo(b.AimDist2));
 
-        if (!pressed)
-            return;
         if (_visible.Count == 0)
         {
             _focused = null;
             return;
         }
 
-        // Aim-priority: the enemy nearest the reticle. If that isn't already our focus, lock
-        // it — this makes "point at an enemy and press Tab" reliable. If we're already on it,
-        // step outward to the next nearest (wrapping past the last to none → nearest).
+        // Aim-priority: the nearest target in the earliest group. If that isn't already our focus,
+        // lock it — this makes "point at something and press Tab" reliable. If we're already on it,
+        // step outward to the next (wrapping past the last to none → nearest).
         ulong nearest = _visible[0].Id;
         if (_focused != nearest)
         {
@@ -288,6 +362,27 @@ public partial class TargetMarkers : Control
     {
         foreach (var (id, _) in bases)
             if (id == baseId)
+                return true;
+        return false;
+    }
+
+    // Whether `baseId` names a visible FRIENDLY base (same team as the local ship). Used to keep a
+    // Tab-focused friendly base (a dock/navigation destination) valid across frames — LockableEnemyBases
+    // only carries hostile bases, so friendly focus must be revalidated against AllVisibleBases + team.
+    private bool ContainsFriendlyBaseId(ulong baseId)
+    {
+        if (_world.LocalTeam is not byte lt)
+            return false;
+        foreach (var (id, _, team) in _world.AllVisibleBases())
+            if (id == baseId && team == lt)
+                return true;
+        return false;
+    }
+
+    private static bool ContainsRockId(IEnumerable<(ulong Id, Node3D Node)> rocks, ulong rockId)
+    {
+        foreach (var (id, _) in rocks)
+            if (id == rockId)
                 return true;
         return false;
     }
@@ -416,6 +511,14 @@ public partial class TargetMarkers : Control
             _lockWarnCd = 0;
         }
         _prevThreat = _threat;
+
+        // Autopilot engaged/disengaged edges: on the falling edge start the disengage toast. The flag
+        // is server-authoritative (WorldRenderer syncs it from ShipFlagAutopilot), so this fires for a
+        // server-initiated disengage (arrival / target loss / override) as well as a voluntary one.
+        bool apEngaged = ShipController.ApEngagedLocal;
+        if (_apPrevEngaged && !apEngaged)
+            _apToastUntil = Time.GetTicksMsec() / 1000.0 + ApToastSec;
+        _apPrevEngaged = apEngaged;
     }
 
     public override void _Draw()
@@ -425,18 +528,23 @@ public partial class TargetMarkers : Control
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
         Vector2 view = GetViewportRect().Size;
 
-        // The focused enemy base's world position (D3's siege lock), or null if focus isn't a
-        // base right now. Resolved once via LockableEnemyBases() — VisibleBases() doesn't carry
-        // Id — both to skip it in the dim pass below (it gets the bright focused treatment
-        // instead, later in this method) and to draw the lock arc against the same position.
+        // The focused base's world position, or null if focus isn't a base right now. Resolved via
+        // AllVisibleBases() (ANY team, carries id + team) rather than LockableEnemyBases() so a
+        // FRIENDLY base focused for navigation (an autopilot dock destination) also draws its bracket.
+        // Used both to skip it in the dim pass below (it gets the bright focused treatment instead) and
+        // to draw the marker/lock arc against the same position. The lock arc is enemy-only (below).
         Vector3? focusedBasePos = null;
+        byte focusedBaseTeam = 1;
+        bool focusedBaseEnemy = false;
         if (_focused is ulong bf && GameContent.IsBaseLock(bf))
         {
             ulong baseId = GameContent.BaseIdOf(bf);
-            foreach (var (id, pos) in _world.LockableEnemyBases())
+            foreach (var (id, pos, team) in _world.AllVisibleBases())
                 if (id == baseId)
                 {
                     focusedBasePos = pos;
+                    focusedBaseTeam = team;
+                    focusedBaseEnemy = _world.LocalTeam is byte lt && team != lt;
                     break;
                 }
         }
@@ -444,10 +552,11 @@ public partial class TargetMarkers : Control
         // Bases first (drawn under the ships). Bases + their damage bars are drawn even when
         // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
         // The focused base is skipped here — it's drawn bright/bracketed below instead.
-        byte focusedBaseTeam = 1; // resolved from VisibleBases below when a base is focused
         foreach (var (pos, team, dead) in _world.VisibleBases())
             if (focusedBasePos is Vector3 fbp && pos == fbp)
-                focusedBaseTeam = team; // skip the dim pass; drawn bright/bracketed below
+            {
+                /* focused base: skip the dim pass; drawn bright/bracketed below */
+            }
             else if (dead)
                 // Fog stale memory: a destroyed base still remembered on the team map draws as a
                 // dim hollow marker (no health bar — VisibleBaseHealth() skips it) so it reads as
@@ -458,14 +567,40 @@ public partial class TargetMarkers : Control
         foreach (var (pos, frac) in _world.VisibleBaseHealth())
             DrawBaseHealthBar(view, pos, frac);
 
-        // The focused base itself: same bright bracket treatment as a focused ship, in a shade of
-        // its team color. No lead indicator — a base is a static target, so there's nothing to
-        // deflect for.
+        // The focused base itself: same bright bracket + TARGET tag treatment as a focused ship, in
+        // a shade of its team color. No lead indicator — a base is a static target. The missile
+        // lock-progress arc draws ONLY when the local hull can actually siege the base (mounts a
+        // CanDamageBase weapon); a non-siege hull still focuses it for navigation, just without a
+        // lock arc it can't fill.
         if (focusedBasePos is Vector3 fp)
         {
             DrawEntity(view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
-            DrawLockArc(fp, focusedBaseTeam);
+            DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), _world.LocalShip);
+            // Lock arc ONLY for an enemy base the local hull can actually siege — never for a friendly
+            // base (a dock destination), which focuses for navigation but can't be locked/damaged.
+            if (focusedBaseEnemy && _world.LocalShip is { } ls && HasSiegeCapability(ls))
+                DrawLockArc(fp, focusedBaseTeam);
         }
+
+        // The focused asteroid: a neutral-chrome bracket + range tag, resolved from the in-view rock
+        // set. Never a lock arc or lead circle — a rock is a pure navigation target. Drawn here (with
+        // the bases, before the local-ship gate) so it also reprojects onto the F3 map.
+        if (_focused is ulong rf && GameContent.IsAsteroidFocus(rf))
+        {
+            ulong rockId = GameContent.AsteroidIdOf(rf);
+            foreach (var (id, node) in _world.AsteroidsInView())
+                if (id == rockId)
+                {
+                    Vector3 rp = node.GlobalPosition;
+                    DrawEntity(view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
+                    DrawFocusTag(view, rp, AsteroidFocusColor, _world.LocalShip);
+                    break;
+                }
+        }
+
+        // The navigation waypoint diamond (F3-dropped), drawn in the ship's-sector view whenever its
+        // sector matches the viewed sector. Reprojects through the F3 cam too, so it shows on both.
+        DrawWaypoint(view);
 
         // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
         // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
@@ -603,6 +738,37 @@ public partial class TargetMarkers : Control
 
             // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
             DrawLockWarning(view);
+
+            // Autopilot: engaged banner + brief disengage toast (cyan chrome).
+            DrawAutopilotStatus(view);
+        }
+    }
+
+    // Autopilot flight-HUD readout: a steady "◈ AUTOPILOT" chrome banner low-center while engaged, and
+    // a brief "AUTOPILOT DISENGAGED" toast that fades over ApToastSec on the falling edge. Cyan chrome
+    // family (DesignTokens.TeamAccent) per the design system — not a threat colour. Kept clear of the
+    // top-center missile/lock banners by sitting in the lower third.
+    private void DrawAutopilotStatus(Vector2 view)
+    {
+        Font font = UiFonts.Mono;
+        if (ShipController.ApEngagedLocal)
+        {
+            // Gentle breathing pulse so it reads as an active, hands-off state (not an alarm).
+            float pulse = 0.7f + 0.3f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 2.2f);
+            Color c = new(DesignTokens.TeamAccent, pulse);
+            const string txt = "◈  AUTOPILOT";
+            float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 14).X;
+            DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f), txt, HorizontalAlignment.Left, -1, 14, c);
+            return;
+        }
+        double now = Time.GetTicksMsec() / 1000.0;
+        if (now < _apToastUntil)
+        {
+            float alpha = Mathf.Clamp((float)((_apToastUntil - now) / ApToastSec), 0f, 1f); // fade out
+            Color c = new(DesignTokens.TeamAccent, alpha);
+            const string txt = "AUTOPILOT DISENGAGED";
+            float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 13).X;
+            DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f), txt, HorizontalAlignment.Left, -1, 13, c);
         }
     }
 
@@ -1034,6 +1200,12 @@ public partial class TargetMarkers : Control
                 }
                 DrawCircle(p, r * 0.45f, color);
                 break;
+            case Kind.Asteroid:
+                // Navigation rock: a hollow ring with a small center dot — a neutral, non-threat
+                // marker distinct from the pod's filled circle and the aleph's concentric rings.
+                DrawArc(p, r, 0f, Mathf.Tau, 16, color, 1.5f, true);
+                DrawCircle(p, r * 0.3f, color);
+                break;
         }
     }
 
@@ -1055,22 +1227,72 @@ public partial class TargetMarkers : Control
     // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only
     // drawn when the focus is on screen; skipped when behind the camera or off-screen (the
     // edge arrow already points the way). Range is in world units, matching the HUD's u/s.
-    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController local)
+    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController local) =>
+        DrawFocusTag(view, ship.GlobalPosition, FocusTint(ship.Team), local);
+
+    // Position-based overload so a focused BASE or ASTEROID (no RemoteShip) shares the same TARGET
+    // tag + range readout as a focused ship. `tint` colors the tag; the range line is skipped when
+    // there's no local ship to measure from (pre-spawn / spectating).
+    private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, PredictionController? local)
     {
         Camera3D cam = Cam;
-        if (cam.IsPositionBehind(ship.GlobalPosition))
+        if (cam.IsPositionBehind(worldPos))
             return;
-        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
+        Vector2 sp = cam.UnprojectPosition(worldPos);
         if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
             return;
 
         Font font = UiFonts.Mono;
         const string tag = "▣ TARGET";
-        string info = $"{(ship.GlobalPosition - local.GlobalPosition).Length():0} u";
         float tagW = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 11).X;
-        float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, FocusTint(ship.Team));
-        DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, tint);
+        if (local != null)
+        {
+            string info = $"{(worldPos - local.GlobalPosition).Length():0} u";
+            float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
+            DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+        }
+    }
+
+    // The navigation waypoint: a hollow cyan (chrome) diamond with a center dot at the dropped point,
+    // shown only while its sector matches the viewed sector. On screen it sits at the point; off
+    // screen (or behind the camera) it clamps to the viewport edge with an arrow pointing the way —
+    // the same edge treatment as live entities. Distinct from the enemy-red brackets and the amber
+    // focus chrome so a nav destination never reads as a threat.
+    private void DrawWaypoint(Vector2 view)
+    {
+        if (!Waypoint.Has || Waypoint.Sector != _world.ViewSector)
+            return;
+
+        Camera3D cam = Cam;
+        Vector3 wp = Waypoint.Pos;
+        Vector2 center = view * 0.5f;
+        bool behind = cam.IsPositionBehind(wp);
+        Vector2 sp = cam.UnprojectPosition(wp);
+        if (behind)
+            sp = center * 2f - sp;
+
+        var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
+        if (!behind && onScreen.HasPoint(sp))
+        {
+            float r = GlyphSize * 1.15f;
+            _poly4[0] = sp + new Vector2(0f, -r);
+            _poly4[1] = sp + new Vector2(r, 0f);
+            _poly4[2] = sp + new Vector2(0f, r);
+            _poly4[3] = sp + new Vector2(-r, 0f);
+            DrawLine(_poly4[0], _poly4[1], WaypointColor, 1.75f, true);
+            DrawLine(_poly4[1], _poly4[2], WaypointColor, 1.75f, true);
+            DrawLine(_poly4[2], _poly4[3], WaypointColor, 1.75f, true);
+            DrawLine(_poly4[3], _poly4[0], WaypointColor, 1.75f, true);
+            DrawCircle(sp, r * 0.28f, WaypointColor);
+            const string tag = "NAV";
+            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
+            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 4f), tag, HorizontalAlignment.Left, -1, 9, WaypointColor);
+            return;
+        }
+
+        Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
+        DrawArrow(edge, dir, WaypointColor);
     }
 
     // A gunsight at p marking the firing line: a ring with four short spokes and a

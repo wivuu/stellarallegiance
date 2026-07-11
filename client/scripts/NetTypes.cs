@@ -69,6 +69,7 @@ namespace StellarAllegiance.Net
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
         public bool IsPig; // AI combat drone
         public bool IsPod; // escape pod
+        public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The

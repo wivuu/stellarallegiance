@@ -60,6 +60,15 @@ public partial class PredictionController : Node3D
     private float _throttle;
     private float _afterburner; // afterburner glow intensity (0/1); see ShipController
 
+    // Follow-authority (autopilot) mode. While the SERVER is steering this ship (ShipFlagAutopilot,
+    // synced by WorldRenderer), the client STOPS predicting its own ship: Step() is skipped by
+    // ShipController and each authoritative snapshot is eased onto server truth through the same
+    // RebaseTo spring the reconcile path uses, so the rigidly-attached chase camera stays smooth
+    // (exactly a remote ship's interpolation, reusing this class's smoothing). No input replay runs,
+    // so ReconcileCount never climbs. Enter/exit both go through RebaseTo for a C1-continuous handoff.
+    private bool _autopilot;
+    public bool AutopilotActive => _autopilot;
+
     private ShipState _state; // latest predicted state (tick N)
     private ShipState _prevState; // previous predicted state (tick N-1)
     private ShipStats _stats;
@@ -404,8 +413,27 @@ public partial class PredictionController : Node3D
 
         Health = row.Health;
         Shield = row.Shield;
+        var authState = ShipMath.StateFromRow(row);
+
+        // Follow-authority: while the server steers us, don't reconcile-replay our (neutral) input
+        // against the server's autopilot steering — that would rubber-band every tick. Instead ease
+        // the rendered ship straight onto authority via the RebaseTo spring, like a remote ship.
+        // ReconcileCount is deliberately left untouched (no divergence math runs here).
+        if (_autopilot)
+        {
+            _lastFireTick = row.LastFireTick;
+            // Keep the exhaust alive: local input.Thrust isn't driving _throttle while Step is
+            // skipped, so feed the glow from the authoritative forward speed / afterburner ramp.
+            _throttle = _hasStats && _stats.MaxSpeed > 0f
+                ? Mathf.Clamp((float)(authState.Vel.Length() / _stats.MaxSpeed), 0f, 1f)
+                : 0f;
+            _afterburner = _hasStats && _stats.AbThrust > 0f ? Mathf.Clamp(authState.AbPower, 0f, 1f) : 0f;
+            RebaseTo(authState);
+            return;
+        }
+
         uint n = row.LastInputTick;
-        var auth = ShipMath.StateFromRow(row);
+        var auth = authState;
 
         int idx = _buffer.FindIndex(e => e.Tick == n);
         if (idx < 0)
@@ -444,6 +472,20 @@ public partial class PredictionController : Node3D
             _buffer.Add(e);
         }
         RebaseTo(s);
+    }
+
+    // Enter/leave follow-authority (autopilot) mode. Idempotent. On BOTH transitions the stale input
+    // buffer is dropped and the render is re-anchored via RebaseTo so the handoff is C1-continuous
+    // (no snap): entering, we stop predicting and coast on interpolated snapshots; exiting, prediction
+    // resumes from the latest authoritative state (ShipController re-anchors _predTick on the same
+    // edge). The server flag drives ENTER; local manual input drives an immediate EXIT.
+    public void SetAutopilot(bool on)
+    {
+        if (on == _autopilot)
+            return;
+        _autopilot = on;
+        _buffer.Clear();
+        RebaseTo(_state); // keep the rendered transform continuous across the mode switch
     }
 
     // Warp: teleport the predicted state to authority with NO visual easing. Clears the

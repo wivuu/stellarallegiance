@@ -237,6 +237,16 @@ public sealed class WorldAiDef
 
     /// <summary>Maximum juke side-thrust amplitude fraction.</summary>
     public double? JukeAmpMax { get; set; }
+
+    // Player-autopilot friendly-base docking maneuver (server-only; DockApproach).
+    /// <summary>Standoff-point distance outside a docking door's plane, world units.</summary>
+    public double? DockStandoff { get; set; }
+
+    /// <summary>Detour ring radius past BaseRadius when routing around the base to a far-side door.</summary>
+    public double? DockClearance { get; set; }
+
+    /// <summary>Throttle fraction while creeping down the docking corridor.</summary>
+    public double? DockCreepThrottle { get; set; }
 }
 
 /// <summary>
@@ -463,6 +473,9 @@ public static class WorldLoader
             t.JukePeriodSeconds = F(ai.JukePeriodSeconds, t.JukePeriodSeconds);
             t.JukeAmpMin = F(ai.JukeAmpMin, t.JukeAmpMin);
             t.JukeAmpMax = F(ai.JukeAmpMax, t.JukeAmpMax);
+            t.DockStandoff = F(ai.DockStandoff, t.DockStandoff);
+            t.DockClearance = F(ai.DockClearance, t.DockClearance);
+            t.DockCreepThrottle = F(ai.DockCreepThrottle, t.DockCreepThrottle);
         }
         if (w.Combat is { } co)
         {

@@ -46,6 +46,7 @@ public static class InputBindings
         new("drop_mine", "Drop Mine", Category.Combat),
         new("drop_probe", "Deploy Probe", Category.Combat),
         new("cycle_target", "Cycle Target", Category.Combat),
+        new("engage_autopilot", "Engage Autopilot", Category.Combat),
         new("toggle_view", "Toggle View", Category.View),
         new("scope_zoom_in", "Scope / Zoom In", Category.View),
         new("scope_zoom_out", "Scope Zoom Out", Category.View),
@@ -361,6 +362,9 @@ public static class InputBindings
         K("drop_mine", Key.B); Pad("drop_mine", JoyButton.X);
         K("drop_probe", Key.G); Pad("drop_probe", JoyButton.Y);
         K("cycle_target", Key.Tab); Pad("cycle_target", JoyButton.RightStick);
+        // Autopilot toggle: T on keyboard; D-pad Down on the pad (D-pad Up is Toggle View, the
+        // other D-pad directions strafe, so Down is the one unused D-pad button).
+        K("engage_autopilot", Key.T); Pad("engage_autopilot", JoyButton.DpadDown);
 
         // View (scope zoom stays keyboard-only by default — a niche control).
         K("toggle_view", Key.V); Pad("toggle_view", JoyButton.DpadUp);

@@ -446,6 +446,30 @@ public sealed class World
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>
         _rockGrid.TryGetValue(sector, out var g) ? g : NoGrid;
 
+    // Resolve an asteroid by id (player-autopilot rock targets). Rocks are static per match, so a
+    // linear scan is fine; lazily memoize an id→Rock map on first use to keep repeated lookups cheap.
+    public Rock? RockById(ulong id)
+    {
+        if (_rockById is null)
+        {
+            _rockById = new Dictionary<ulong, Rock>(Asteroids.Count);
+            foreach (var r in Asteroids)
+                _rockById[r.Id] = r;
+        }
+        return _rockById.TryGetValue(id, out var rock) ? rock : null;
+    }
+
+    private Dictionary<ulong, Rock>? _rockById; // lazily built id→Rock cache for RockById
+
+    // Resolve a base by id (player-autopilot base targets). Bases is tiny (a handful) — linear scan.
+    public BaseSite? BaseById(ulong id)
+    {
+        foreach (var b in Bases)
+            if (b.Id == id)
+                return b;
+        return null;
+    }
+
     // TEST SEAM: hand-place an occluder rock into a sector's spatial grid (and the flat list) so the
     // sentinel empty sector 999 can exercise the fog cone-occlusion path — the grid is immutable in
     // production (built once at world-gen), so this must only be called from tests before ticking.
@@ -457,6 +481,7 @@ public sealed class World
                 id = r.Id + 1;
         var rock = new Rock(id, sector, pos, radius, variant, 0f, 0f, 0f);
         Asteroids.Add(rock);
+        _rockById = null; // invalidate the lazy id→Rock cache (test seam mutates the rock list)
         if (!_rockGrid.TryGetValue(sector, out var grid))
             _rockGrid[sector] = grid = new Dictionary<(int, int, int), List<Rock>>();
         var key = (CellOf(pos.X), CellOf(pos.Y), CellOf(pos.Z));

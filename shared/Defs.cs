@@ -481,6 +481,13 @@ namespace StellarAllegiance.Shared
         public float JukePeriodSeconds = 0.65f;
         public float JukeAmpMin = 0.45f;
         public float JukeAmpMax = 1f;
+
+        // Player-autopilot friendly-base docking maneuver (server-only; the DockApproach
+        // Transit->Align->Creep state machine). Not a PIG behaviour but authored in the same `ai:`
+        // block since it is server-side navigation tuning.
+        public float DockStandoff = 25f; // standoff-point distance outside the door plane, world units
+        public float DockClearance = 40f; // detour ring radius past BaseRadius when routing around the base
+        public float DockCreepThrottle = 0.12f; // throttle fraction while creeping down the door corridor
     }
 
     // Collision-damage + sector-boundary-hazard tuning (world.yaml `combat:`). Server-side
@@ -568,5 +575,15 @@ namespace StellarAllegiance.Shared
         public static bool IsBaseLock(ulong id) => (id & BaseLockFlag) != 0;
         public static ulong BaseLockId(ulong baseId) => BaseLockFlag | baseId;
         public static ulong BaseIdOf(ulong lockId) => lockId & ~BaseLockFlag;
+
+        // Asteroid focus id encoding — mirrors the BaseLock scheme one bit down. Rock ids and
+        // ship/missile ids come from independent counters and can collide numerically, so an
+        // autopilot/focus reference to an ASTEROID sets bit 62 to disambiguate the kind. This is a
+        // navigation-only marker (asteroids are never missile-lock targets); the focus->LockTargetId
+        // path strips a rock-encoded id to 0 so it never reaches the missile lock system.
+        public const ulong AsteroidFocusFlag = 1UL << 62;
+        public static bool IsAsteroidFocus(ulong id) => (id & AsteroidFocusFlag) != 0;
+        public static ulong AsteroidFocusId(ulong asteroidId) => AsteroidFocusFlag | asteroidId;
+        public static ulong AsteroidIdOf(ulong focusId) => focusId & ~AsteroidFocusFlag;
     }
 }

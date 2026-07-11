@@ -1,4 +1,5 @@
 using Godot;
+using StellarAllegiance.Shared;
 using StellarAllegiance.Ui;
 
 // F3 sector overview: an orbiting tactical-map camera around the local sector.
@@ -59,6 +60,15 @@ public partial class SectorOverview : Node3D
     private Label _hint = null!;
     private Label _sectorName = null!; // viewed sector's name (WorldRenderer.SectorName); hidden when blank
     private Minimap? _minimap; // resolved lazily; clicking its nodes retargets the view
+    private ShipController? _shipController; // resolved lazily; F3 right-click engages autopilot through it
+
+    // Click-vs-drag: a press that releases within this many pixels of where it went down (and wasn't
+    // a minimap click) is a CLICK — pick a target / drop a waypoint — rather than an orbit/pan drag.
+    private const float ClickMovePx = 5f;
+    private const float PickRadiusPx = 24f; // max screen distance from the click to an entity to pick it
+    private Vector2 _leftPressPos,
+        _rightPressPos;
+    private bool _leftMinimap; // the left press landed on the minimap → no target pick on release
 
     private Vector3 _target; // orbit focus point
     private float _yawDeg,
@@ -318,14 +328,35 @@ public partial class SectorOverview : Node3D
                             Zoom(ZoomStep);
                         break;
                     case MouseButton.Left:
-                        // A click on the minimap retargets the view sector instead of orbiting.
-                        if (mb.Pressed && TryMinimapClick(mb.Position))
-                            break;
-                        _orbitDrag = mb.Pressed && !mb.ShiftPressed;
-                        _panDrag = mb.Pressed && mb.ShiftPressed;
+                        if (mb.Pressed)
+                        {
+                            _leftPressPos = mb.Position;
+                            // A click on the minimap retargets the view sector instead of orbiting /
+                            // picking; flag it so the release doesn't also pick a target.
+                            _leftMinimap = TryMinimapClick(mb.Position);
+                            _orbitDrag = !_leftMinimap && !mb.ShiftPressed;
+                            _panDrag = !_leftMinimap && mb.ShiftPressed;
+                        }
+                        else
+                        {
+                            _orbitDrag = false;
+                            _panDrag = false;
+                            // Release close to the press (and not a minimap click) = a click:
+                            // select a target / drop a waypoint (LEFT = no engage).
+                            if (!_leftMinimap && (mb.Position - _leftPressPos).Length() < ClickMovePx)
+                                HandleMapClick(mb.Position, engage: false);
+                        }
                         break;
-                    case MouseButton.Right or MouseButton.Middle:
+                    case MouseButton.Middle:
                         _panDrag = mb.Pressed;
+                        break;
+                    case MouseButton.Right:
+                        _panDrag = mb.Pressed;
+                        if (mb.Pressed)
+                            _rightPressPos = mb.Position;
+                        else if ((mb.Position - _rightPressPos).Length() < ClickMovePx)
+                            // RIGHT click (not a pan drag): same resolution as left, then engage.
+                            HandleMapClick(mb.Position, engage: true);
                         break;
                 }
                 break;
@@ -384,6 +415,101 @@ public partial class SectorOverview : Node3D
             _target = _world.ViewSectorCenter;
             _dist = Mathf.Clamp(r * 1.5f, MinDist, r * 3f);
         }
+    }
+
+    // Resolve a map click into a target (or a waypoint) in the VIEWED sector. Minimap keeps
+    // precedence (a click on a minimap sector retargets the view, same as a left press). Otherwise:
+    // an entity within PickRadiusPx of the click sets the Tab focus; a miss drops a waypoint on the
+    // grid plane. `engage` (RIGHT click) also fires the autopilot toward whatever was picked, if the
+    // player is launched.
+    private void HandleMapClick(Vector2 point, bool engage)
+    {
+        if (TryMinimapClick(point))
+            return; // minimap precedence (covers the right-click path; left already gated on press)
+
+        if (TryPickEntity(point, out ulong encoded))
+        {
+            TargetMarkers.SetFocus(encoded);
+            TargetMarkers.ClearWaypoint(); // a picked target supersedes any dropped waypoint
+        }
+        else if (TryGridPoint(point, out Vector3 world))
+        {
+            TargetMarkers.SetWaypoint(_world.ViewSector, world);
+            TargetMarkers.SetFocus(0); // a fresh waypoint supersedes any focused target
+        }
+        else
+        {
+            return; // click missed both an entity and the grid plane — nothing to do
+        }
+
+        if (engage)
+        {
+            _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
+            _shipController?.EngageAutopilot(); // no-op unless launched
+        }
+    }
+
+    // Nearest of {enemy ships, bases (ANY team — a friendly base is a valid dock destination),
+    // asteroids} in the viewed sector, by screen distance from the click, within PickRadiusPx and in
+    // front of the camera. Returns the FocusedId-encoded id (raw ship / BaseLockId / AsteroidFocusId).
+    private bool TryPickEntity(Vector2 point, out ulong encoded)
+    {
+        encoded = 0;
+        float bestD2 = PickRadiusPx * PickRadiusPx;
+
+        foreach (var e in _world.EnemyShips())
+        {
+            if (_cam.IsPositionBehind(e.GlobalPosition))
+                continue;
+            float d2 = (_cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                encoded = e.ShipId;
+            }
+        }
+        foreach (var (id, pos, _) in _world.AllVisibleBases())
+        {
+            if (_cam.IsPositionBehind(pos))
+                continue;
+            float d2 = (_cam.UnprojectPosition(pos) - point).LengthSquared();
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                encoded = GameContent.BaseLockId(id);
+            }
+        }
+        foreach (var (id, node) in _world.AsteroidsInView())
+        {
+            Vector3 pos = node.GlobalPosition;
+            if (_cam.IsPositionBehind(pos))
+                continue;
+            float d2 = (_cam.UnprojectPosition(pos) - point).LengthSquared();
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                encoded = GameContent.AsteroidFocusId(id);
+            }
+        }
+        return encoded != 0;
+    }
+
+    // Intersect the camera ray through the click point with the sector's grid plane (Y = sector
+    // center Y, where the reference grid and altitude stems sit) → the waypoint world position.
+    // Returns false if the ray runs parallel to the plane or would hit it behind the camera.
+    private bool TryGridPoint(Vector2 point, out Vector3 world)
+    {
+        world = Vector3.Zero;
+        Vector3 origin = _cam.ProjectRayOrigin(point);
+        Vector3 dir = _cam.ProjectRayNormal(point);
+        if (Mathf.Abs(dir.Y) < 1e-5f)
+            return false;
+        float planeY = _world.ViewSectorCenter.Y;
+        float t = (planeY - origin.Y) / dir.Y;
+        if (t < 0f)
+            return false;
+        world = origin + dir * t;
+        return true;
     }
 
     private void Orbit(Vector2 deltaPx)

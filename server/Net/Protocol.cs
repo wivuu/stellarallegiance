@@ -69,6 +69,7 @@ public static class Protocol
     public const byte MsgBye = 8; // (no body) voluntary leave — free my ship NOW, don't hold it for reconnect
     public const byte MsgSetTeamName = 9; // u8 team, u16 len, utf8 name — rename a team you're on (server validates membership)
     public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
+    public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -109,6 +110,7 @@ public static class Protocol
     public const byte ShipFlagPod = 2; // escape pod — pod mesh, smaller/weaker
     public const byte ShipFlagLockingMe = 4; // a missile-armed enemy is locking THIS ship (ThreatLockState >= 1)
     public const byte ShipFlagLockedMe = 8; // that lock completed — a launch can come any moment (ThreatLockState == 2)
+    public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -137,6 +139,8 @@ public static class Protocol
             flags |= ShipFlagLockingMe;
         if (s.ThreatLockState >= 2)
             flags |= ShipFlagLockedMe;
+        if (s.ApEngaged)
+            flags |= ShipFlagAutopilot;
 
         int o = 0;
         BitConverter.TryWriteBytes(dst.Slice(o), s.ShipId);

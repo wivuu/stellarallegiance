@@ -14,7 +14,9 @@ public static class Wire
     // v28: sun block carries an `ambient` float (after energy) — the sector's ambient/fill light energy.
     // v29: sun block carries a `size` float (after ambient) — the visible disc's world-space quad width
     // (-1 sentinel = client default). See Protocol.WriteSectorEnv / Sun.SetDiscSize.
-    public const byte ProtocolVersion = 29;
+    // v30: MsgSetAutopilot=11 (client->server engage/disengage) + ShipFlagAutopilot=16 in the ship
+    // record flags byte (server-steered autopilot engaged). See server/Net/Protocol.cs.
+    public const byte ProtocolVersion = 30;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

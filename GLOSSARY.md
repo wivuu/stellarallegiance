@@ -67,6 +67,18 @@ Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into `
 - **Related:** [[Hull]], [[Dock Refund]]
 - **Notes:** Merged-hull metrics stay bit-exact (LongestAxis 32.243610 / BoundingRadius 16.543488 / 172 planes) because every part is clamped strictly inside the visual convex hull. Deterministic bake (same GLB + same resolved args = same SHA). Runtime consumes compound hulls only for bases today. See the `base-collision` and `collision-hull-generator` skills.
 
+### Autopilot / AutoSteer
+Server-side hands-off navigation for player ships (protocol v30), reusing the PIG steering. The player picks a target — Tab cycles ships → bases → asteroids in view, or the F3 map left-click selects an entity / drops a grid-plane **waypoint** — and presses **T** (`engage_autopilot`) to fly there. `AutoSteer` is a shared, pure static extraction of the PIG steer/attack bodies (float-identical, so it's determinism-guarded by the PIG suites); the server synthesizes input at the `InputFor()` seam exactly like a PIG. Arrival rules: brake-to-standoff on waypoints/rocks/enemy bases, keep-station (never auto-fires) on enemy ships, fly-to-door auto-dock on a friendly base, single-hop `AlephTo` transit cross-sector. Disengage on arrival/dock/death/target-loss or any real manual stick input (cruise-control handback). The client runs **follow-authority prediction** while engaged: it suspends own-ship `Step()` and eases the render onto authoritative snapshots via the reconcile spring (chase cam stays smooth, `ReconcileCount` doesn't climb), and keeps sampling+sending real sticks so the server can detect override.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/AutoSteer.cs` — pure `SteerToPoint` / `AttackPoint` (verbatim PIG steering; avoidance injected as a delegate so `shared/` never depends on server `World`)
+  - `server/Sim/Simulation.cs` — `ShipSim.ApEngaged/ApKind/ApTargetId/ApWaypoint*`, `EnqueueSetAutopilot`, `InputFor` autopilot branch + `AutopilotStep` + `ManualOverride`; `server/Sim/Simulation.Pig.cs` — thin PIG wrappers over AutoSteer
+  - `server/Net/Protocol.cs` — `MsgSetAutopilot=11` (client→server engage/disengage), `ShipFlagAutopilot=16` (echo bit in the ship-record flags byte)
+  - `client/scripts/PredictionController.cs` — `SetAutopilot(bool)` follow-authority mode; `client/scripts/ShipController.cs` — T toggle / `EngageAutopilot` / manual-override handback / `ApEngagedLocal`; `client/scripts/SectorOverview.cs` — F3 pick + waypoint; `client/scripts/TargetMarkers.cs` — extended Tab, waypoint diamond, AUTOPILOT banner + disengage toast
+  - `tests/AutopilotTest` — approach / standoff / stop+disengage / aleph / avoidance / manual-override / friendly-dock / target-loss
+- **Related:** [[Flight Model]], [[PigBrain]], [[Client Prediction]], [[SimTick]]
+- **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). Cross-sector routing is single-hop only. *Deferred: multi-hop aleph routing, enemy-ghost tracking through fog, reuse for miners/constructors.*
+
 ---
 
 ## Weapons & Combat
