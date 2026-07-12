@@ -29,8 +29,15 @@ public partial class MiningBeam : Node3D
     // reads as freshly-broken He3 crystal.
     private static readonly Color DebrisColor = new(0.58f, 0.75f, 0.78f);
 
+    // Spatial mining loop: attenuates with distance so only nearby listeners hear the cutter. Lives on
+    // this beam node (a child of the mining ship), so it follows the ship and starts/stops with the
+    // beam's own create/teardown on the ShipFlagMining edges (WorldRenderer.UpdateMiningBeams).
+    private const float MiningUnitSize = 55f; // matches the engine-loop distance scale (world units are large)
+    private const float MiningMaxDistance = 1600f;
+
     private MeshInstance3D _beam = null!;
     private StandardMaterial3D _mat = null!;
+    private AudioStreamPlayer3D? _sfx;
 
     // Lazily created the first time the camera comes within DebrisRange of the impact point, so
     // distant miners never allocate a particle system. Null until then.
@@ -65,6 +72,22 @@ public partial class MiningBeam : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         AddChild(_beam);
+
+        // Looping spatial cutter sound, positional at the mining ship. Following the client's
+        // no-fallback discipline: if the stream failed to load we simply skip it (no player, no sound).
+        if (SfxManager.Instance?.GetStream(SfxManager.SfxId.MiningLoop) is { } miningStream)
+        {
+            _sfx = new AudioStreamPlayer3D
+            {
+                Stream = miningStream,
+                Bus = "SFX",
+                UnitSize = MiningUnitSize,
+                MaxDistance = MiningMaxDistance,
+                AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance,
+            };
+            AddChild(_sfx);
+            _sfx.Play();
+        }
     }
 
     // Point the beam from the miner (`from`) at the rock. The beam runs all the way to the rock's

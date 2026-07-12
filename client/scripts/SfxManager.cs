@@ -49,6 +49,7 @@ public partial class SfxManager : Node
         LockWarning,
         ContactEnemy,
         ContactNeutral,
+        MiningLoop,
     }
 
     private static readonly Dictionary<SfxId, string> Files = new()
@@ -75,10 +76,11 @@ public partial class SfxManager : Node
         { SfxId.LockWarning, "missile_lock_warning.ogg" },
         { SfxId.ContactEnemy, "contact_enemy.ogg" },
         { SfxId.ContactNeutral, "contact_neutral.ogg" },
+        { SfxId.MiningLoop, "mining_loop.ogg" },
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).
-    private static readonly HashSet<SfxId> Loops = new() { SfxId.AmbientHum, SfxId.EngineLoop, SfxId.BoosterLoop, SfxId.AsteroidAmbient };
+    private static readonly HashSet<SfxId> Loops = new() { SfxId.AmbientHum, SfxId.EngineLoop, SfxId.BoosterLoop, SfxId.AsteroidAmbient, SfxId.MiningLoop };
 
     private const int Pool3DSize = 24;
     private const int PoolUiSize = 6;

@@ -24,5 +24,5 @@ public static class CollisionConfig
     // keeps a small inward margin (hull is the convex envelope, ≥ the mesh, so this avoids bouncing on
     // air over concavities). If big-vs-small still feels uneven, switch to an absolute margin
     // (solidRadius = R - k) instead of a fraction.
-    public const float CollisionRestitution = 0.3f; // bounce restitution on a closing contact
+    public const float CollisionRestitution = 0.6f; // bounce restitution on a closing contact
 }
