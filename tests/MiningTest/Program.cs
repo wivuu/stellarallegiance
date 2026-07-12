@@ -108,18 +108,39 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     bool same = a.RockOre.Count == b.RockOre.Count && a.Asteroids.Count == b.Asteroids.Count;
     Check(a.RockOre.Count > 0, $"world seeds ore state for {a.RockOre.Count} rocks", "no ore state assigned");
     if (same)
-        foreach (var r in a.Asteroids)
+        for (int i = 0; i < a.Asteroids.Count; i++)
         {
-            var oa = a.RockOre[r.Id];
-            var ob = b.RockOre[r.Id];
-            if (oa.Class != ob.Class || oa.OreCapacity != ob.OreCapacity
+            var ra = a.Asteroids[i];
+            var rb = b.Asteroids[i];
+            var oa = a.RockOre[ra.Id];
+            var ob = b.RockOre[rb.Id];
+            // Class-derived Variant + (special-oversized) Radius are now a pure function of the class,
+            // so a second same-seed build must reproduce them byte-for-byte alongside the ore state.
+            if (ra.Id != rb.Id || ra.Variant != rb.Variant || ra.Radius != rb.Radius
+                || oa.Class != ob.Class || oa.OreCapacity != ob.OreCapacity
                 || oa.OreRemaining != ob.OreRemaining || oa.CurrentRadius != ob.CurrentRadius)
             {
                 same = false;
                 break;
             }
         }
-    Check(same, "same seed ⇒ byte-identical class + capacity for every rock", "ore assignment is not seed-deterministic");
+    Check(same, "same seed ⇒ byte-identical class + capacity + variant + radius for every rock", "ore assignment is not seed-deterministic");
+
+    // Every rock's cosmetic mesh Variant is drawn from its RockClass's pool (AssignVariants ⇄
+    // AsteroidShapes.VariantForClass), so the shape/texture always matches the resource type.
+    bool poolOk = true;
+    string poolDetail = "";
+    foreach (var r in a.Asteroids)
+    {
+        var cls = a.RockClassOf(r.Id);
+        if (Array.IndexOf(AsteroidShapes.PoolFor(cls), r.Variant) < 0)
+        {
+            poolOk = false;
+            poolDetail = $"rock {r.Id} class {cls} variant {r.Variant} ({AsteroidShapes.NameForIndex(r.Variant)}) not in class pool";
+            break;
+        }
+    }
+    Check(poolOk, "every rock's mesh variant belongs to its RockClass pool", $"variant/class mismatch: {poolDetail}");
 }
 
 // ---- 2. THE CANARY: ore-knob tuning never perturbs the rock/aleph LAYOUT for a pinned seed. ----
@@ -138,6 +159,11 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     var w1 = MakeWorld(seed, cfgOff);
     var w2 = MakeWorld(seed, cfgLoud);
 
+    // POSITION + ROTATION are the direct shared-DetRng draws — if AssignOre/AssignVariants ever touched
+    // that stream they would shift, so those staying byte-identical is the real determinism guarantee.
+    // Radius and Variant are DELIBERATELY excluded now: both are class-derived (Variant = the class mesh
+    // pool; Radius = special-rock oversize), and the class flips with the mining knobs, so they SHOULD
+    // differ here. Their seed-determinism is pinned by test 1 instead.
     bool rocksIdentical = w1.Asteroids.Count == w2.Asteroids.Count && w1.Asteroids.Count > 0;
     if (rocksIdentical)
         for (int i = 0; i < w1.Asteroids.Count; i++)
@@ -145,14 +171,14 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
             var ra = w1.Asteroids[i];
             var rb = w2.Asteroids[i];
             if (ra.Id != rb.Id || ra.SectorId != rb.SectorId || ra.Pos.X != rb.Pos.X
-                || ra.Pos.Y != rb.Pos.Y || ra.Pos.Z != rb.Pos.Z || ra.Radius != rb.Radius
-                || ra.Variant != rb.Variant || ra.RotX != rb.RotX || ra.RotY != rb.RotY || ra.RotZ != rb.RotZ)
+                || ra.Pos.Y != rb.Pos.Y || ra.Pos.Z != rb.Pos.Z
+                || ra.RotX != rb.RotX || ra.RotY != rb.RotY || ra.RotZ != rb.RotZ)
             {
                 rocksIdentical = false;
                 break;
             }
         }
-    Check(rocksIdentical, "rock positions/radii/variants byte-identical across wildly different mining knobs", "ore assignment perturbed the rock layout (drew on the shared RNG!)");
+    Check(rocksIdentical, "rock positions/rotations byte-identical across wildly different mining knobs", "ore assignment perturbed the rock layout (drew on the shared RNG!)");
 
     bool alephsIdentical = w1.Alephs.Count == w2.Alephs.Count;
     if (alephsIdentical)
@@ -296,17 +322,17 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         "RockCurrentRadius returns the static spawn radius for a non-He3 rock", "non-He3 RockCurrentRadius mismatch");
     var cls = w.RockClassOf(nonHe3.Id);
     Check(cls is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium
-        or RockClass.Regolith or RockClass.Ice,
+        or RockClass.Regolith,
         $"a non-He3 rock is a valid non-He3 class ({cls})", $"non-He3 rock has unexpected class {cls}");
     // Unknown id: class defaults to Carbonaceous.
     Check(w.RockClassOf(0xDEADBEEF) == RockClass.Carbonaceous,
         "RockClassOf defaults to Carbonaceous for an unknown id", "unknown-id class default wrong");
 }
 
-// ---- 7b. Rarity: a sector is overwhelmingly common (Regolith/Ice); specials obey special-per-sector. ----
+// ---- 7b. Rarity: a sector is overwhelmingly common (Regolith); specials obey special-per-sector. ----
 {
     // Stock content pins He3 at 4 and special-per-sector at 1: every sector has ≤1 special rock, the
-    // rest (non-He3) are common Regolith/Ice, and commons dominate the non-He3 population.
+    // rest (non-He3) are common Regolith, and commons dominate the non-He3 population.
     var w = MakeWorld(4242, stockCfg);
     bool specialsCapped = true, commonsExist = false, he3PinnedOk = true;
     int totalCommon = 0, totalSpecial = 0;
@@ -318,7 +344,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         var e = bySector.GetValueOrDefault(r.SectorId);
         if (c == RockClass.Helium3) e.he3++;
         else if (c is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium) { e.special++; totalSpecial++; }
-        else if (c is RockClass.Regolith or RockClass.Ice) { e.common++; totalCommon++; }
+        else if (c is RockClass.Regolith) { e.common++; totalCommon++; }
         bySector[r.SectorId] = e;
     }
     foreach (var (sector, e) in bySector)
@@ -332,7 +358,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     Check(specialsCapped, "no sector exceeds special-per-sector (≤1 special rock)", $"special cap exceeded: {detail}");
     Check(he3PinnedOk, "stock content pins exactly 4 He3 per sector (min==max==4)", $"He3 count not pinned: {detail}");
     Check(commonsExist && totalCommon > totalSpecial,
-        $"commons (Regolith/Ice) dominate the field (common={totalCommon}, special={totalSpecial})",
+        $"commons (Regolith) dominate the field (common={totalCommon}, special={totalSpecial})",
         $"commons do not dominate (common={totalCommon}, special={totalSpecial})");
 
     // A per-sector special-count override adds more specials; 0 removes them entirely.
@@ -348,6 +374,36 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     Check(none == 0 && few == 1 && many == 5,
         $"per-sector special-count override controls the special rock count (0→{none}, 1→{few}, 5→{many})",
         $"special-count override wrong (0→{none}, 1→{few}, 5→{many})");
+}
+
+// ---- 7c. Special (rare) rocks are oversized by SpecialRockRadiusMult; He3 + commons keep their size. ----
+{
+    // Same seed + knobs, differing ONLY in the mult ⇒ identical class assignment; every special rock's
+    // radius scales, every other rock is untouched. Force several specials so the sample is meaningful.
+    var m1 = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2, SpecialPerSector = 3, SpecialRockRadiusMult = 1f };
+    var m3 = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2, SpecialPerSector = 3, SpecialRockRadiusMult = 3f };
+    var w1 = MakeWorld(70707, FieldConfig(m1, radius: 1500f));
+    var w3 = MakeWorld(70707, FieldConfig(m3, radius: 1500f));
+    var byId1 = w1.Asteroids.ToDictionary(r => r.Id, r => r.Radius);
+    bool specialsScaled = true, othersUnchanged = true;
+    int specialsSeen = 0;
+    string detail = "";
+    foreach (var r3 in w3.Asteroids)
+    {
+        float r1 = byId1[r3.Id];
+        var cls = w3.RockClassOf(r3.Id);
+        bool special = cls is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium;
+        if (special)
+        {
+            specialsSeen++;
+            if (MathF.Abs(r3.Radius - r1 * 3f) > 1e-3f) { specialsScaled = false; detail = $"special {r3.Id}: {r1:F2}→{r3.Radius:F2} (want ×3)"; }
+            if (MathF.Abs(w3.RockCurrentRadius(r3.Id) - r3.Radius) > 1e-3f) { specialsScaled = false; detail = $"special {r3.Id} CurrentRadius != Radius"; }
+        }
+        else if (MathF.Abs(r3.Radius - r1) > 1e-3f) { othersUnchanged = false; detail = $"non-special {r3.Id} ({cls}) changed {r1:F2}→{r3.Radius:F2}"; }
+    }
+    Check(specialsSeen >= 3, $"oversize test observed {specialsSeen} special rocks", $"too few special rocks ({specialsSeen})");
+    Check(specialsScaled, "special (rare) rocks scale by SpecialRockRadiusMult (×3) in radius + CurrentRadius", $"special oversize wrong: {detail}");
+    Check(othersUnchanged, "He3 + common rocks keep their rolled radius (only specials oversize)", $"a non-special rock changed size: {detail}");
 }
 
 // ---- 8. SetOreRemaining shrink helper: volume-proportional radius toward the floor. ----

@@ -358,6 +358,15 @@ public sealed class World
             cell.Add(r);
         }
 
+        // Assign each rock a resource class + (He3 rocks) an ore hold, then remap each rock's cosmetic
+        // mesh Variant to a member of its class's pool so the shape/texture reads the resource type.
+        // Both draw ONLY from per-rock derived sub-RNGs (OreMix) — never the shared `rng` above — so the
+        // rock/aleph layout for a pinned seed stays byte-identical no matter how the mining knobs are
+        // tuned (the canary). Runs BEFORE LoadRockBodies so the collision hull is built from the same
+        // class-derived variant the client renders (LoadRockBodies keys convex hulls off r.Variant).
+        AssignOre(secCfg);
+        AssignVariants();
+
         // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
         (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
         LoadRockBodies();
@@ -368,11 +377,22 @@ public sealed class World
         // (lowest gate Id breaks equal-hop ties, no Random, no dictionary-order dependence) so it is safe
         // to consult from the 20Hz sim step.
         BuildSectorRouting();
+    }
 
-        // Assign each rock a resource class + (He3 rocks) an ore hold. Runs AFTER all seeding and draws
-        // ONLY from per-rock derived sub-RNGs — never the shared `rng` above — so the rock/aleph layout
-        // for a pinned seed stays byte-identical no matter how the mining knobs are tuned (the canary).
-        AssignOre(secCfg);
+    // Rewrite every rock's cosmetic mesh Variant to a variant from its RockClass's pool, so a rock's
+    // shape/texture matches its resource type. Keyed on the same per-rock OreMix hash that AssignOre
+    // used for the class, so it's fully seed-deterministic and never touches the shared world RNG (the
+    // NextShape variant draw is retained only to keep that RNG stream — and thus positions — stable;
+    // its value is overwritten here). Must run after AssignOre (needs RockClassOf) and before
+    // LoadRockBodies (collision hulls key off the final Variant).
+    private void AssignVariants()
+    {
+        for (int i = 0; i < Asteroids.Count; i++)
+        {
+            var r = Asteroids[i];
+            byte variant = AsteroidShapes.VariantForClass(RockClassOf(r.Id), OreMix(Seed, r.Id));
+            Asteroids[i] = r with { Variant = variant };
+        }
     }
 
     // Stateless strong mix of the world seed with a per-rock id, feeding a private DetRng so each rock's
@@ -405,6 +425,12 @@ public sealed class World
                 bySector[r.SectorId] = list = new List<Rock>();
             list.Add(r);
         }
+
+        // Rock id → its index in Asteroids, so the special-rock oversize below can write the scaled
+        // radius back to the canonical list (the per-sector `rocks` above hold value-type copies).
+        var idToIndex = new Dictionary<ulong, int>(Asteroids.Count);
+        for (int i = 0; i < Asteroids.Count; i++)
+            idToIndex[Asteroids[i].Id] = i;
 
         // Each sector is processed independently and results are stored keyed by rock id, so the final
         // RockOre is identical regardless of which order the sectors are visited in.
@@ -480,16 +506,27 @@ public sealed class World
                 {
                     // Non-He3 rocks carry no ore hold — capacity 0, never shrinks. A selected special
                     // rock gets one of the three special classes by the same hash (0=Carbonaceous,
-                    // 1=Silicon, 2=Uranium); every other rock is common Regolith/Ice (hash parity).
+                    // 1=Silicon, 2=Uranium); every other rock is common Regolith.
                     RockClass cls = isSpecial[i]
                         ? (RockClass)(byte)(hash[i] % 3)
-                        : ((hash[i] & 1UL) == 0UL ? RockClass.Regolith : RockClass.Ice);
+                        : RockClass.Regolith;
+
+                    // Special (rare) rocks are landmark-sized: scale the spawn radius (collision + visual)
+                    // by the tuning mult and write it back to the canonical Asteroids list, so the rock is
+                    // genuinely bigger everywhere (hull in LoadRockBodies keys off r.Radius). Common
+                    // Regolith keeps its rolled size. He3 is handled in the branch above (never scaled).
+                    float radius = rock.Radius;
+                    if (isSpecial[i] && Mining.SpecialRockRadiusMult != 1f)
+                    {
+                        radius = rock.Radius * Mining.SpecialRockRadiusMult;
+                        Asteroids[idToIndex[rock.Id]] = rock with { Radius = radius };
+                    }
                     RockOre[rock.Id] = new OreState
                     {
                         Class = cls,
                         OreCapacity = 0f,
                         OreRemaining = 0f,
-                        CurrentRadius = rock.Radius,
+                        CurrentRadius = radius,
                     };
                 }
             }

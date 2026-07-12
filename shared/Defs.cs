@@ -262,14 +262,14 @@ namespace StellarAllegiance.Shared
     public enum AsteroidKind { None, Field, Belt }
 
     // Resource class assigned to each asteroid at world-gen (World.RockOre). Only Helium3 is
-    // harvestable today (miners fill their ore hold from He3 rocks). Regolith + Ice are the COMMON
-    // classes — the overwhelming majority of a sector's rocks — while Carbonaceous/Silicon/Uranium are
-    // the RARE "special" cosmetic classes (≤1 per sector by default), reserved for future refinery/
-    // shipyard uses. APPEND-ONLY — the byte value is a stable identity the sim keys on (and streamed on
-    // the wire), so never reorder or remove a member; new classes append after the highest value.
+    // harvestable today (miners fill their ore hold from He3 rocks). Regolith is the COMMON class —
+    // the overwhelming majority of a sector's rocks — while Carbonaceous/Silicon/Uranium are the RARE
+    // "special" cosmetic classes (≤1 per sector by default), reserved for future refinery/shipyard
+    // uses. APPEND-ONLY — the byte value is a stable identity the sim keys on (and streamed on the
+    // wire), so never reorder or remove a member; new classes append after the highest value.
     public enum RockClass : byte
     {
-        Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4, Ice = 5,
+        Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4,
     }
 
     // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
@@ -598,14 +598,19 @@ namespace StellarAllegiance.Shared
 
         // RARE "special" rocks: after He3 selection, this many of the sector's remaining (top-ranked)
         // rocks become one of the cosmetic special classes (Carbonaceous/Silicon/Uranium); EVERY other
-        // rock is common Regolith/Ice. Default 1 — a sector is overwhelmingly common rock sprinkled
+        // rock is common Regolith. Default 1 — a sector is overwhelmingly common rock sprinkled
         // with a handful of He3 and at most one special. Per-sector override: SectorConfig.SpecialCount.
         public int SpecialPerSector = 1;
 
+        // The rare special rocks (Carbonaceous/Silicon/Uranium — NOT He3) are landmark-sized: their spawn
+        // radius (collision + visual) is multiplied by this so they stand out from the common field. 1 =
+        // no change; 3 = oversized by 200%. He3 and common Regolith keep their rolled size.
+        public float SpecialRockRadiusMult = 3f;
+
         // Per-He3-rock ore capacity: lerped across [min, max] by a per-rock roll, then scaled by the
         // rock's volume (radius³ vs the reference radius) and the sector's OreRichnessMult.
-        public float OreCapacityMin = 800f;
-        public float OreCapacityMax = 3000f;
+        public float OreCapacityMin = 8000f;
+        public float OreCapacityMax = 32000f;
 
         // As a rock is mined its radius shrinks toward this fraction of its spawn radius (never below,
         // never vanishing); the CurrentRadius shrink is volume-proportional (see World.SetOreRemaining).

@@ -406,8 +406,11 @@ public sealed class WorldMiningDef
     /// <summary>World default maximum He3 rocks per sector (clamp ceiling).</summary>
     public int? He3PerSectorMax { get; set; }
 
-    /// <summary>World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith/Ice.</summary>
+    /// <summary>World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith.</summary>
     public int? SpecialPerSector { get; set; }
+
+    /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
+    public double? SpecialRockRadiusMult { get; set; }
 
     /// <summary>Minimum per-He3-rock ore capacity, before the radius/richness scaling.</summary>
     public double? OreCapacityMin { get; set; }
@@ -581,6 +584,7 @@ public static class WorldLoader
             t.He3PerSectorMin = mi.He3PerSectorMin ?? t.He3PerSectorMin;
             t.He3PerSectorMax = mi.He3PerSectorMax ?? t.He3PerSectorMax;
             t.SpecialPerSector = mi.SpecialPerSector ?? t.SpecialPerSector;
+            t.SpecialRockRadiusMult = F(mi.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
             t.OreCapacityMin = F(mi.OreCapacityMin, t.OreCapacityMin);
             t.OreCapacityMax = F(mi.OreCapacityMax, t.OreCapacityMax);
             t.ShrinkFloorFrac = F(mi.ShrinkFloorFrac, t.ShrinkFloorFrac);

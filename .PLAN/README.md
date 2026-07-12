@@ -22,8 +22,8 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 - Mining:
-  - Miner should make ~10 runs to a single he3 rock, on average, so increase default capacity.
   - Change which rock meshes are used for different resource types (e.g., he3, silicon, uranium, carbonaceous, regolith, ice -- use corresponding asteroid textures for each type) - see asteroid-gen tool
+  - There are 7+ He3 rocks per sector, all the maps we have should default to 4 per sector, except home sectors which should be set to 2. This should be set in the sector configuration YAML so the server can enforce it consistently.
 ---
 
 ## Content philosophy (the through-line)

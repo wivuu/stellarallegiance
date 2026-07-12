@@ -690,7 +690,7 @@
             "integer",
             "null"
           ],
-          "description": "World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith/Ice."
+          "description": "World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith."
         },
         "ore-capacity-min": {
           "type": [

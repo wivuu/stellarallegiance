@@ -138,7 +138,7 @@ seeding:
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
 
 # Mining + ore economy: how asteroids are classified into resource types at world-gen and how the AI
-# miner economy is tuned. A sector is OVERWHELMINGLY common rock (Regolith/Ice), sprinkled with a
+# miner economy is tuned. A sector is OVERWHELMINGLY common rock (Regolith), sprinkled with a
 # fixed count of harvestable helium-3 (min == max == 4 → exactly 4 per sector) and at most one RARE
 # special rock (Carbonaceous/Silicon/Uranium). Maps override per-sector via he3-min/he3-max (set equal
 # to pin a count), he3-fraction-mult, special-count, ore-richness-mult. Per-rock He3 capacity scales
@@ -151,8 +151,8 @@ mining:
   he3-fraction: 0.12            # fraction of a sector's rocks made He3 (pre-clamp; pinned by min==max)
   he3-per-sector-min: 4         # min==max pins the guaranteed He3 count at exactly 4 per sector
   he3-per-sector-max: 4
-  special-per-sector: 1         # RARE special rocks per sector; everything else is common Regolith/Ice
-  ore-capacity-min: 800         # per-He3-rock capacity range, before the radius/richness scaling
-  ore-capacity-max: 3000
+  special-per-sector: 1         # RARE special rocks per sector; everything else is common Regolith
+  ore-capacity-min: 8000        # per-He3-rock capacity range, before the radius/richness scaling.
+  ore-capacity-max: 32000       # midpoint 20000 vs the 2000-unit miner hold ≈ 10 harvest runs/rock avg
   shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
-  miner-standoff: 60            # harvest range from a target rock's surface, world units
+  miner-standoff: 50            # harvest range from a target rock's surface, world units

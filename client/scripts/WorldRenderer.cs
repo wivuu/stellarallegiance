@@ -1558,15 +1558,15 @@ public partial class WorldRenderer : Node3D
     // colour/normal/ORM maps. AuthoredRadius is the mesh's bounding radius at author scale,
     // used to scale each instance to its row's collision Radius. A null Mesh marks a variant
     // that failed to load (e.g. asset missing) so we don't retry and fall back to a sphere.
-    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius)> _asteroidMeshes = new();
+    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
 
     // Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
-    private (Mesh? Mesh, float AuthoredRadius) AsteroidMesh(string variant)
+    private (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
     {
         if (_asteroidMeshes.TryGetValue(variant, out var cached))
             return cached;
 
-        (Mesh? Mesh, float AuthoredRadius) result = (null, 0f);
+        (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) result = (null, 0f, null);
         var scene = GD.Load<PackedScene>($"res://assets/asteroids/{variant}.glb");
         if (scene?.Instantiate() is Node root)
         {
@@ -1579,7 +1579,13 @@ public partial class WorldRenderer : Node3D
                 // the radius by up to sqrt(3), shrinking the rock well inside its hitbox.
                 float authored = MeshBoundingRadius(mesh);
                 if (authored > 0.001f)
-                    result = (mesh, authored);
+                {
+                    // Keep the baked GLB material (albedo/normal/ORM textures) so instances that
+                    // want a per-rock albedo tint can duplicate it and multiply AlbedoColor. The
+                    // GLB import stows the material either on the surface or as a surface override.
+                    var baseMat = mi.GetSurfaceOverrideMaterial(0) ?? mesh.SurfaceGetMaterial(0);
+                    result = (mesh, authored, baseMat);
+                }
             }
             root.QueueFree();
         }
@@ -1588,6 +1594,52 @@ public partial class WorldRenderer : Node3D
         _asteroidMeshes[variant] = result;
         return result;
     }
+
+    // Number of distinct per-rock regolith shades. The per-instance tint is quantised into this many
+    // buckets and each (base material, bucket) pair shares one duplicated material, so a large field
+    // costs at most REGOLITH_TINT_BUCKETS materials per variant instead of one per rock.
+    private const int RegolithTintBuckets = 48;
+    private readonly Dictionary<(ulong BaseMatId, int Bucket), StandardMaterial3D> _regolithTintCache = new();
+
+    // Deterministic, cached per-rock tint for a regolith instance: duplicates the baked material once
+    // per shade bucket and multiplies its AlbedoColor. The spread stays muted (grey <-> tan <-> olive
+    // + brightness) so every rock still reads as the same dull dust, just not a cloned one.
+    private StandardMaterial3D TintedRegolithMaterial(StandardMaterial3D baseMat, ulong asteroidId)
+    {
+        int bucket = (int)(Hash64(asteroidId) % RegolithTintBuckets);
+        var key = (baseMat.GetInstanceId(), bucket);
+        if (_regolithTintCache.TryGetValue(key, out var cached))
+            return cached;
+
+        float t1 = Hash01((ulong)bucket * 3UL + 0UL);
+        float t2 = Hash01((ulong)bucket * 3UL + 1UL);
+        float t3 = Hash01((ulong)bucket * 3UL + 2UL);
+        // AlbedoColor MULTIPLIES the baked albedo, so keep the spread at/below 1.0 — a darken-biased
+        // range preserves the full variety instead of clamping the bright end to white.
+        float bright = 0.58f + t1 * 0.42f;   // 0.58 .. 1.00 — darker/lighter dust
+        float warm = -0.09f + t2 * 0.16f;    // + tan, - cool grey (R up / B down)
+        float grn = -0.05f + t3 * 0.10f;     // + olive, - cool grey
+        var tint = new Color(
+            Mathf.Clamp(bright * (1f + warm), 0f, 1f),
+            Mathf.Clamp(bright * (1f + grn), 0f, 1f),
+            Mathf.Clamp(bright * (1f - warm), 0f, 1f));
+
+        var mat = (StandardMaterial3D)baseMat.Duplicate();
+        mat.AlbedoColor = tint;
+        _regolithTintCache[key] = mat;
+        return mat;
+    }
+
+    // splitmix64 finaliser — a cheap well-mixed hash of a 64-bit key.
+    private static ulong Hash64(ulong x)
+    {
+        x += 0x9E3779B97F4A7C15UL;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9UL;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBUL;
+        return x ^ (x >> 31);
+    }
+
+    private static float Hash01(ulong x) => (Hash64(x) >> 40) / (float)(1UL << 24);
 
     private static MeshInstance3D? FindMeshInstance(Node node)
     {
@@ -1627,7 +1679,7 @@ public partial class WorldRenderer : Node3D
         float rad = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
         MeshInstance3D node;
         float divisor;
-        var (mesh, authored) = string.IsNullOrEmpty(row.Variant) ? (null, 0f) : AsteroidMesh(row.Variant);
+        var (mesh, authored, baseMat) = string.IsNullOrEmpty(row.Variant) ? (null, 0f, null) : AsteroidMesh(row.Variant);
         if (mesh is not null)
         {
             node = new MeshInstance3D
@@ -1639,6 +1691,13 @@ public partial class WorldRenderer : Node3D
                 Scale = Vector3.One * (rad / authored),
             };
             divisor = authored;
+            // Regolith is the common filler rock and its whole class shares just a handful of baked
+            // meshes, so a field of them reads as identical clones. Give each instance a MUTED,
+            // deterministic per-rock albedo tint (grey <-> tan <-> olive + a brightness wobble) by
+            // duplicating the baked material and multiplying its AlbedoColor. Only regolith gets this:
+            // the valuable classes keep their pinned single-colour identity.
+            if ((RockClass)row.RockClass == RockClass.Regolith && baseMat is StandardMaterial3D sm)
+                node.SetSurfaceOverrideMaterial(0, TintedRegolithMaterial(sm, row.AsteroidId));
         }
         else
         {

@@ -666,14 +666,17 @@ public partial class TargetMarkers : Control
             {
                 if (id == focusedRockId || _world.GetAsteroid(id) is not { } rock)
                     continue;
+                // Only the valuable classes (He3/U/Si/C) earn a caption — common Regolith rocks are
+                // the overwhelming majority and reading "Regolith" on every one is pure clutter, so
+                // they're left unlabeled in both the in-flight HUD and the F3 overview.
+                if (!IsSpecialRock(rock.RockClass))
+                    continue;
                 Vector3 rp = node.GlobalPosition;
                 float surfDist = (anchor - rp).Length() - rock.CurrentRadius;
-                bool interesting = rock.RockClass is (byte)RockClass.Helium3 or (byte)RockClass.Uranium
-                    or (byte)RockClass.Silicon or (byte)RockClass.Carbonaceous;
                 if (f3Rocks)
-                    // Keep He3/special always (sort them first via a large negative key); commons rank
-                    // by distance to the camera and get trimmed by the cap below.
-                    _nearRocks.Add((interesting ? -F3CameraFar : surfDist, id, rp));
+                    // In F3, label every special/He3 rock in the sector (sort key is unused among them
+                    // since they all qualify; the cap only guards a degenerate special-heavy field).
+                    _nearRocks.Add((-F3CameraFar, id, rp));
                 else
                 {
                     float threshold = Mathf.Clamp(3f * rock.CurrentRadius, 80f, 400f);
@@ -696,6 +699,14 @@ public partial class TargetMarkers : Control
                 float w = UiFonts.Mono.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
                 DrawString(UiFonts.Mono, sp + new Vector2(-w * 0.5f, GlyphSize + 12f), label,
                     HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+                // Special rocks (He3/U/Si/C) get a distinctive material-tinted glyph just left of the
+                // label so the valuable classes read at a glance; commons draw text only.
+                if (IsSpecialRock(rock.RockClass))
+                {
+                    const float rg = 5.5f;
+                    DrawRockGlyph(sp + new Vector2(-w * 0.5f - rg - 4f, GlyphSize + 12f - 3f),
+                        rock.RockClass, rg, RockGlyphColor(rock.RockClass));
+                }
                 shown++;
             }
         }
@@ -1340,6 +1351,65 @@ public partial class TargetMarkers : Control
         }
     }
 
+    // A small distinctive vector icon for each of the four "special" resource classes, drawn beside a
+    // rock's HUD label so the valuable rocks read at a glance. Shapes are chosen to stay distinct from
+    // each other AND from the ship glyphs in DrawClassGlyph; commons (Regolith) draw nothing. Tinted
+    // to echo each rock's material family (RockGlyphColor). Reuses the preallocated _poly* scratch —
+    // allocates nothing per frame.
+    private void DrawRockGlyph(Vector2 center, byte rockClass, float r, Color color)
+    {
+        switch ((RockClass)rockClass)
+        {
+            case RockClass.Helium3:
+                // THE valuable one: a bright filled crystalline diamond (rotated, slightly narrow) with a
+                // tiny sparkle dot — solid, so it never reads as the probe's hollow diamond.
+                _poly4[0] = center + new Vector2(0f, -r);
+                _poly4[1] = center + new Vector2(r * 0.72f, 0f);
+                _poly4[2] = center + new Vector2(0f, r);
+                _poly4[3] = center + new Vector2(-r * 0.72f, 0f);
+                DrawColoredPolygon(_poly4, color);
+                DrawCircle(center + new Vector2(0f, -r * 0.28f), r * 0.22f, new Color(1f, 1f, 1f, 0.85f));
+                break;
+            case RockClass.Uranium:
+                // Radiation trefoil: three filled blades at 120° around a hot center dot — a hazard read,
+                // distinct from the scout's single upright triangle.
+                for (int i = 0; i < 3; i++)
+                {
+                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 3f;
+                    DrawCircle(center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r * 0.68f, r * 0.42f, color);
+                }
+                DrawCircle(center, r * 0.3f, color);
+                break;
+            case RockClass.Silicon:
+                // Faceted crystal: a tall pointy-top hexagon (a standing gem), distinct from the bomber's
+                // flat regular hexagon by both proportion and its pale tint.
+                for (int i = 0; i < 6; i++)
+                {
+                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 6f;
+                    _poly6[i] = center + new Vector2(Mathf.Cos(a) * r * 0.68f, Mathf.Sin(a) * r);
+                }
+                DrawColoredPolygon(_poly6, color);
+                break;
+            case RockClass.Carbonaceous:
+                // Rubble pile: a lumpy blob — a main disc with two smaller overlapping lobes — distinct
+                // from the pod's clean single circle and the asteroid glyph's hollow ring.
+                DrawCircle(center, r * 0.72f, color);
+                DrawCircle(center + new Vector2(-r * 0.55f, r * 0.28f), r * 0.4f, color);
+                DrawCircle(center + new Vector2(r * 0.5f, -r * 0.35f), r * 0.34f, color);
+                break;
+        }
+    }
+
+    // Material-family tint for each special rock's HUD glyph so the icon echoes the 3D material look.
+    private static Color RockGlyphColor(byte cls) => (RockClass)cls switch
+    {
+        RockClass.Helium3 => new Color(0.45f, 0.85f, 0.95f),      // bright cyan — the valuable one
+        RockClass.Uranium => new Color(0.95f, 0.45f, 0.25f),      // orange-red — hazard
+        RockClass.Silicon => new Color(0.65f, 0.85f, 0.60f),      // pale green
+        RockClass.Carbonaceous => new Color(0.55f, 0.68f, 0.90f), // cool blue
+        _ => DesignTokens.Text2,
+    };
+
     // A rounded four-corner bracket reticle centered on p: four short arcs at the diagonal corners
     // (with gaps at the cardinal directions, where the ticks/lead/tag sit). Drawn on a circle of
     // radius h so the reticle is curved and concentric with the target's health arc — the rounded
@@ -1400,15 +1470,21 @@ public partial class TargetMarkers : Control
     }
 
     // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
-    // harvestable; Regolith/Ice are the common majority, the rest are rare cosmetic specials today
+    // harvestable; Regolith are the common majority, the rest are rare cosmetic specials today
     // (future refinery/shipyard hooks).
+    // The four "special"/high-value resource classes that earn a HUD glyph (and an always-on F3
+    // label); Regolith and Ice are commons. Single definition shared by the near/F3 label predicate
+    // and the glyph draw sites so "special" is defined in exactly one place.
+    private static bool IsSpecialRock(byte cls) =>
+        (RockClass)cls is RockClass.Helium3 or RockClass.Uranium
+            or RockClass.Silicon or RockClass.Carbonaceous;
+
     private static string RockClassName(byte cls) => (RockClass)cls switch
     {
         RockClass.Helium3 => "Helium-3",
         RockClass.Uranium => "Uranium",
         RockClass.Silicon => "Silicon",
         RockClass.Carbonaceous => "Carbonaceous",
-        RockClass.Ice => "Ice",
         _ => "Regolith",
     };
 
@@ -1435,6 +1511,10 @@ public partial class TargetMarkers : Control
     {
         if (_world.GetAsteroid(rockId) is not { } rock)
             return;
+        // Commons (Regolith) carry no caption even when focused — a "Regolith" readout is noise; the
+        // focus bracket alone marks the target. Only the valuable classes get the class/ore detail.
+        if (!IsSpecialRock(rock.RockClass))
+            return;
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(worldPos))
             return;
@@ -1445,6 +1525,13 @@ public partial class TargetMarkers : Control
         Font font = UiFonts.Mono;
         float w = font.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
         DrawString(font, sp + new Vector2(-w * 0.5f, FocusHalf + 29f), label, HorizontalAlignment.Left, -1, 10, AsteroidFocusColor);
+        // Echo the special-rock glyph beside the focused rock's label too, so it matches the near/F3 labels.
+        if (IsSpecialRock(rock.RockClass))
+        {
+            const float rg = 5.5f;
+            DrawRockGlyph(sp + new Vector2(-w * 0.5f - rg - 4f, FocusHalf + 29f - 3f),
+                rock.RockClass, rg, RockGlyphColor(rock.RockClass));
+        }
     }
 
     // The navigation waypoint: a hollow cyan (chrome) diamond with a center dot at the dropped point,
