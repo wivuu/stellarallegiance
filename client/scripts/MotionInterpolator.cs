@@ -20,6 +20,9 @@ using StellarAllegiance.Shared;
 //    coarse entity's long segments follow the server's curved/braking path instead of a
 //    polyline with corner snaps. At full-rate 50 ms gaps the tangent terms are O(gap²) — it
 //    degrades to visually-identical linear interp, so fast dogfight motion is unchanged.
+//    Tangents are EMA-smoothed over ~TangentSmoothTauMs of server time (raw Vel is kept for
+//    dead-reckoning): the f16 wire velocity is coarse near zero, and unsmoothed it re-bends
+//    the curve at every segment seam on a slow ship watched up close.
 //  - VELOCITY dead-reckoning past the newest sample (bounded), replacing hold-then-snap when a
 //    packet is late/dropped — the stutter that reads worst on slow station-keeping ships (a
 //    mining drone) next to the predicted own ship. Orientation advances by the wire LOCAL
@@ -40,6 +43,7 @@ public sealed class MotionInterpolator
         public double MaxExtrapolateMs; // dead-reckon horizon past the newest sample
         public float ErrorDecayRate;    // 1/s exponential decay of the correction offset
         public float SnapDistance;      // pos error beyond this snaps instead of blending
+        public double TangentSmoothTauMs; // EMA time-constant for Hermite TANGENT velocities; 0 = raw
 
         public static Tunables Default => new()
         {
@@ -54,6 +58,12 @@ public sealed class MotionInterpolator
             MaxExtrapolateMs = 250.0,
             ErrorDecayRate = 10f,  // ~100 ms correction glide
             SnapDistance = 100f,   // a teleport-sized error is not worth gliding across
+            // The f16 wire velocity is coarse near zero (a slow miner's tangent flicks
+            // direction sample to sample, visibly bending the curve at each segment seam
+            // up close). ~1.5 full-rate gaps of smoothing steadies the tangents; the
+            // time-constant form means a coarse-AOI entity's long gaps pass through
+            // near-raw (k → 1), keeping real curvature for the segments that need it.
+            TangentSmoothTauMs = 80.0,
         };
     }
 
@@ -63,6 +73,7 @@ public sealed class MotionInterpolator
         public Vector3 Pos;
         public Quaternion Rot;
         public Vector3 Vel;         // world-space, u/s (zero when HasVel is false)
+        public Vector3 TanVel;      // EMA-smoothed Vel used ONLY as the Hermite tangent
         public Vector3 AngVelLocal; // ship-local rad/s (X=pitch, Y=yaw, Z=roll)
         public bool HasVel;
     }
@@ -146,12 +157,28 @@ public sealed class MotionInterpolator
             hasVel = false;
         }
 
+        // Hermite tangents ride an EMA of the wire velocity, not the raw f16 value: near zero
+        // speed the half-float is coarse, so a slow ship's raw tangent flicks direction every
+        // sample and visibly re-bends the curve at each segment seam when watched up close.
+        // The blend factor comes from the true server-time gap (k = 1 − e^(−gap/τ)), so a
+        // coarse-AOI entity's ~500 ms segments take their tangents near-raw — smoothing there
+        // would flatten real curvature. Raw Vel is kept alongside for dead-reckoning and
+        // LatestVelocity, which want the server's actual integrated state, not a lagged one.
+        Vector3 tanVel = vel;
+        if (hasVel && _t.TangentSmoothTauMs > 0.0 && _samples.Count > 0 && _samples[^1].HasVel)
+        {
+            double gap0 = serverMs - _samples[^1].T; // > 0 by the stale guard above
+            float k = 1f - (float)System.Math.Exp(-gap0 / _t.TangentSmoothTauMs);
+            tanVel = _samples[^1].TanVel.Lerp(vel, k);
+        }
+
         var s = new Sample
         {
             T = serverMs,
             Pos = pos,
             Rot = SafeRot(rot),
             Vel = vel,
+            TanVel = tanVel,
             AngVelLocal = angVelLocal,
             HasVel = hasVel,
         };
@@ -248,7 +275,7 @@ public sealed class MotionInterpolator
                 float segDt = (float)(b.T - a.T);
                 float u = segDt > 0f ? Mathf.Clamp((float)(t - a.T) / segDt, 0f, 1f) : 1f;
                 pos = a.HasVel && b.HasVel
-                    ? Hermite(a.Pos, a.Vel, b.Pos, b.Vel, u, segDt / 1000f)
+                    ? Hermite(a.Pos, a.TanVel, b.Pos, b.TanVel, u, segDt / 1000f)
                     : a.Pos.Lerp(b.Pos, u);
                 // Rotation stays Slerp: at these gaps an angular Hermite adds nothing visible.
                 rot = a.Rot.Slerp(b.Rot, u);
