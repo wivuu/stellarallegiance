@@ -21,11 +21,6 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
-- Mining:
-  - What does 'he3-fraction' do?
-  - special-per-sector doesnt belong under 'mining'
-  - The chance of having a special rock spawning in a home (an initial team garrison) sector should be configurable, but by default 0
-  - Miner movement still appears jerky on client - presumably due to the server-side update rate; needs to be smoothed more since miner movement should be very predictable
 ---
 
 ## Content philosophy (the through-line)
