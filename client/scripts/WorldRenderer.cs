@@ -627,6 +627,12 @@ public partial class WorldRenderer : Node3D
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
 
+    // Team used to classify friend/foe for the HUD ship markers: the spawned ship's team once flying,
+    // else the lobby-picked side so the PRE-LAUNCH F3 peek still marks the garrison's ships (a miner,
+    // a teammate) before an own ship exists. Mirrors HomeSector's `_localTeam ?? _lobbyTeam` fallback —
+    // without it FriendlyShips()/EnemyShips() return empty pre-launch and the peek shows bare meshes.
+    private byte? MarkerTeam => _localTeam ?? _lobbyTeam;
+
     // The side the pilot has picked in the lobby roster, pushed by GameNetClient.ApplyLobbyState
     // each time the roster lands (null while unassigned/NOAT). It's what lets the pre-launch F3 peek
     // frame the pilot's own garrison before a ship exists — see HomeSector.
@@ -721,7 +727,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<RemoteShip> EnemyShips()
     {
         _enemyScratch.Clear();
-        if (_localTeam is byte lt)
+        if (MarkerTeam is byte lt)
         {
             bool fog = FogActive;
             foreach (var node in _shipNodes.Values)
@@ -741,7 +747,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<RemoteShip> FriendlyShips()
     {
         _friendlyScratch.Clear();
-        if (_localTeam is byte lt)
+        if (MarkerTeam is byte lt)
         {
             foreach (var node in _shipNodes.Values)
                 if (node is RemoteShip rs && rs.Team == lt && rs.Visible)

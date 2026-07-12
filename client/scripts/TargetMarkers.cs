@@ -82,6 +82,7 @@ public partial class TargetMarkers : Control
         Scout,
         Fighter,
         Bomber,
+        Miner,
         Pod,
         Aleph,
         Probe,
@@ -173,6 +174,7 @@ public partial class TargetMarkers : Control
     // reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
     private readonly Vector2[] _poly3 = new Vector2[3]; // Scout tri + off-screen arrow
     private readonly Vector2[] _poly4 = new Vector2[4]; // Fighter chevron
+    private readonly Vector2[] _poly5 = new Vector2[5]; // Miner pentagon
     private readonly Vector2[] _poly6 = new Vector2[6]; // Bomber hexagon
 
     // Scratch for the focus cycle: visible targets, each with a GROUP RANK (0 enemy ships, 1 enemy
@@ -1057,16 +1059,20 @@ public partial class TargetMarkers : Control
         DrawArrow(edge, dir, c);
     }
 
-    // Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class.
+    // Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class; an AI miner
+    // gets its own pentagon (the miner hull carries no distinct ShipClass enum value — its class byte
+    // resolves to the default below — so IsMiner is the identity that gives it a distinct marker).
     private static Kind KindOf(RemoteShip s) =>
         s.IsPod
             ? Kind.Pod
-            : s.Class switch
-            {
-                ShipClass.Scout => Kind.Scout,
-                ShipClass.Bomber => Kind.Bomber,
-                _ => Kind.Fighter,
-            };
+            : s.IsMiner
+                ? Kind.Miner
+                : s.Class switch
+                {
+                    ShipClass.Scout => Kind.Scout,
+                    ShipClass.Bomber => Kind.Bomber,
+                    _ => Kind.Fighter,
+                };
 
     // The hull's authored marker glyph (ShipClassDef.Glyph), rendered as text by DrawClassGlyph.
     // Empty for a pod (keeps the drawn circle) or a hull that authored none (drawn silhouette).
@@ -1259,13 +1265,28 @@ public partial class TargetMarkers : Control
             ? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
             : new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
 
+    // True when the font carries a glyph for every char of s (BMP codepoints — the authored hull
+    // symbols are all single BMP chars). Guards the text path in DrawClassGlyph so an authored symbol
+    // the mono font lacks (⬟/⬢) falls back to a drawn silhouette instead of rendering invisible tofu.
+    private static bool FontHasGlyph(Font font, string s)
+    {
+        foreach (char c in s)
+            if (!font.HasChar(c))
+                return false;
+        return true;
+    }
+
     // A small symbol encoding the entity class, centered on p. Ship hulls render their authored
     // glyph (ShipClassDef.Glyph, e.g. ▲/◆/⬢) as mono text so a new hull's marker is data-driven;
     // the non-ship landmarks (base square, warp-gate rings) and any glyph-less hull fall back to
     // the distinct drawn silhouettes so class still reads at a glance even tiny.
     private void DrawClassGlyph(Vector2 p, Kind kind, Color color, float r, string glyph = "")
     {
-        if (glyph.Length > 0)
+        // Only take the text path when the mono font can actually render every char of the authored
+        // glyph — JetBrains Mono has no ⬟ (miner) or ⬢ (bomber), so those would draw as invisible tofu.
+        // When a glyph is unsupported (or empty), fall through to the drawn silhouette below so the
+        // class still reads. (Keeps the marker data-driven for hulls whose glyph the font DOES carry.)
+        if (glyph.Length > 0 && FontHasGlyph(UiFonts.Mono, glyph))
         {
             Font font = UiFonts.Mono;
             int fs = Mathf.RoundToInt(r * 2.6f);
@@ -1305,6 +1326,16 @@ public partial class TargetMarkers : Control
                     _poly6[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
                 }
                 DrawColoredPolygon(_poly6, color);
+                break;
+            case Kind.Miner:
+                // Industrial ore hull: an upright filled pentagon (echoes the authored ⬟ glyph),
+                // distinct from the fighter chevron and bomber hexagon so a miner reads at a glance.
+                for (int i = 0; i < 5; i++)
+                {
+                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 5f;
+                    _poly5[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+                }
+                DrawColoredPolygon(_poly5, color);
                 break;
             case Kind.Pod:
                 // Small circle.

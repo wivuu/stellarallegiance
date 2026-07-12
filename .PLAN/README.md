@@ -21,6 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
+- "esc" doesnt work from F3 screen once your ship is launched, it should also pop open the menu
 ---
 
 ## Content philosophy (the through-line)
