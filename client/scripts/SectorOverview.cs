@@ -326,6 +326,16 @@ public partial class SectorOverview : Node3D
 
         switch (@event)
         {
+            // Esc from the map: close the overview and pop the flight escape menu. ShipController's
+            // Esc handler is gated off while the map owns input, so we mirror it here. Close() would
+            // recapture the cursor for flight; the menu needs it free, so re-show it before opening.
+            case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
+                Close();
+                Input.MouseMode = Input.MouseModeEnum.Visible;
+                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                GetViewport().SetInputAsHandled();
+                break;
+
             case InputEventMouseButton mb:
                 switch (mb.ButtonIndex)
                 {
