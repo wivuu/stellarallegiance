@@ -26,6 +26,12 @@ public sealed class MapDef
     /// <summary>Default sector radius (× sector-scale) for any sector that omits its own radius; omitted inherits the world's sector-radius.</summary>
     public double? SectorRadius { get; set; }
 
+    /// <summary>Map-wide default for the per-He3-rock ore-capacity band floor; any sector may override it, and omitting it inherits the world's ore-capacity-min.</summary>
+    public double? OreCapacityMin { get; set; }
+
+    /// <summary>Map-wide default for the per-He3-rock ore-capacity band ceiling; any sector may override it, and omitting it inherits the world's ore-capacity-max.</summary>
+    public double? OreCapacityMax { get; set; }
+
     /// <summary>Gate (aleph) topology as bidirectional sector-id pairs, e.g. <c>[[0, 1], [1, 2]]</c>; omitted links sectors in a ring by id.</summary>
     public List<List<uint>>? Links { get; set; }
 
@@ -53,20 +59,20 @@ public sealed class MapSectorDef
     /// <summary>Optional per-sector multiplier on the world asteroid density.</summary>
     public double? AsteroidDensity { get; set; }
 
-    /// <summary>Optional per-sector override of the minimum guaranteed He3 rock count (world mining default otherwise).</summary>
-    public int? He3Min { get; set; }
+    /// <summary>Optional per-sector pin of the guaranteed He3 rock count (replaces the retired he3-min/he3-max/he3-fraction-mult trio; world seeding default otherwise).</summary>
+    public int? He3Count { get; set; }
 
-    /// <summary>Optional per-sector override of the maximum guaranteed He3 rock count (world mining default otherwise).</summary>
-    public int? He3Max { get; set; }
-
-    /// <summary>Optional per-sector multiplier on the world He3 fraction before the count clamp.</summary>
-    public double? He3FractionMult { get; set; }
-
-    /// <summary>Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 → none. World mining default otherwise.</summary>
+    /// <summary>Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 → none, and an authored value bypasses the home-special-chance roll. World seeding default otherwise.</summary>
     public int? SpecialCount { get; set; }
 
     /// <summary>Optional per-sector multiplier on the per-He3-rock ore capacity here.</summary>
     public double? OreRichnessMult { get; set; }
+
+    /// <summary>Optional per-sector override of the per-He3-rock ore-capacity band floor (wins over the map/world ore-capacity-min).</summary>
+    public double? OreCapacityMin { get; set; }
+
+    /// <summary>Optional per-sector override of the per-He3-rock ore-capacity band ceiling (wins over the map/world ore-capacity-max).</summary>
+    public double? OreCapacityMax { get; set; }
 
     /// <summary>2D map-diagram position [x, y], normalized roughly -1..1, where this sector's node draws on the minimap/lobby preview; omitted auto-lays out in a ring.</summary>
     public double[]? MapPos { get; set; }
@@ -217,13 +223,12 @@ public static class MapLoader
                 var garrison = ProjectGarrison(s.Garrison, s.Id);
                 // A team's HOME (garrison) sector defaults to the leaner world he3-per-home-sector count
                 // so home fields stay lean and teams must push out to mine — UNLESS the map authors its
-                // own he3-min/he3-max for that sector, which always wins. Ordinary (non-garrison) sectors
-                // leave He3Min/He3Max null and fall through to the world he3-per-sector default in
+                // own he3-count for that sector, which always wins. Ordinary (non-garrison) sectors
+                // leave He3Count null and fall through to the world he3-per-sector default in
                 // AssignOre. This is the single seam that enforces the home-sector economy across every map.
-                int? he3Min = s.He3Min;
-                int? he3Max = s.He3Max;
-                if (garrison is not null && he3Min is null && he3Max is null)
-                    he3Min = he3Max = world.Mining.He3PerHomeSector;
+                int? he3 = s.He3Count;
+                if (garrison is not null && he3 is null)
+                    he3 = world.Seeding.He3PerHomeSector;
                 return new WorldSectorConfig
                 {
                     Id = s.Id,
@@ -232,11 +237,15 @@ public static class MapLoader
                     Garrison = garrison,
                     Asteroids = ParseAsteroidKind(s.Asteroids, s.Id),
                     AsteroidDensityMult = F(s.AsteroidDensity),
-                    He3Min = he3Min,
-                    He3Max = he3Max,
-                    He3FractionMult = F(s.He3FractionMult),
+                    He3Count = he3,
                     SpecialCount = s.SpecialCount,
                     OreRichnessMult = F(s.OreRichnessMult),
+                    // Ore-capacity band resolves sector → map → world: a sector's own bound wins,
+                    // else the map-wide default, else (null here) the world ore-capacity-min/max in
+                    // AssignOre. Folding the map default in per-sector keeps the shared Mining tuning
+                    // instance untouched (see MapCatalog.Clone).
+                    OreCapacityMin = F(s.OreCapacityMin ?? map.OreCapacityMin),
+                    OreCapacityMax = F(s.OreCapacityMax ?? map.OreCapacityMax),
                     MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
                     MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,
                     Env = ProjectEnv(s.Environment),

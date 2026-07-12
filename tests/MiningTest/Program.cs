@@ -3,10 +3,12 @@
 // failure so CI / a manual run can gate on it. Server-only — no wire/client involvement.
 //
 // Covers World's post-seeding ore-assignment pass: each rock gets a RockClass, He3 rocks get an ore
-// hold whose capacity scales with the rock's volume + sector richness, per-sector He3 counts stay
-// within the guaranteed [min, max] clamp, and — THE CANARY — ore assignment draws only from per-rock
-// derived sub-RNGs, so the rock/aleph LAYOUT for a pinned seed is byte-identical no matter how the
-// mining knobs are tuned (proving the shared world-gen RNG stream is never perturbed).
+// hold whose capacity scales with the rock's size and is clamped into [ore-capacity-min, max] (with
+// sector richness scaling within the band), per-sector He3 counts follow
+// the guaranteed seeding count (he3-per-sector / per-sector he3-count pins), and — THE CANARY — ore
+// assignment draws only from per-rock derived sub-RNGs, so the rock/aleph LAYOUT for a pinned seed is
+// byte-identical no matter how the ore knobs are tuned (the shared world-gen RNG stream is never
+// perturbed — including by the home-special-chance roll, which rides its own salted sub-RNG).
 
 using SimServer.Content;
 using SimServer.Sim;
@@ -31,24 +33,19 @@ var content = ContentLoader.Load(manifest, worldPath);
 var stockCfg = content.World;
 float baseHp = content.Bases[0].MaxHealth;
 
-// Reference radius the capacity scaling pivots on (documented in World.AssignOre): the midpoint of the
-// FIELD rock-size range — mirror it here so the capacity-bound assertions match the sim.
-float RefRadius(WorldSeedingTuning s) => 0.5f * (s.FieldRockMin + s.FieldRockMax);
+// Mirror World.AssignOre's size-scaled, clamped He3 capacity so the capacity assertions match the sim
+// exactly: the rock's volume (radius³) fraction across the field size range interpolates [capMin,
+// capMax], richness scales it, and the result is clamped hard back into the band.
+float Cube(float r) => r * r * r;
+float ExpectedCap(float radius, WorldSeedingTuning s, float capMin, float capMax, float richness)
+{
+    float vMin = Cube(s.FieldRockMin);
+    float vSpan = MathF.Max(Cube(s.FieldRockMax) - vMin, 1e-3f);
+    float vFrac = Math.Clamp((Cube(radius) - vMin) / vSpan, 0f, 1f);
+    return Math.Clamp((capMin + (capMax - capMin) * vFrac) * richness, capMin, capMax);
+}
 
 World MakeWorld(ulong seed, WorldConfig cfg) => new(seed, cfg, baseHp, content.Start, content.Ships);
-
-// Mirror of World.AssignOre's guaranteed-count formula so tests can assert the exact He3 count.
-int ExpectedHe3(int n, float he3Fraction, float fracMult, int min, int max)
-{
-    if (n == 0)
-        return 0;
-    if (max < min)
-        max = min;
-    int c = (int)MathF.Round(he3Fraction * fracMult * n);
-    c = Math.Clamp(c, min, max);
-    c = Math.Clamp(c, 0, n);
-    return c;
-}
 
 // Count the rocks in each sector (Asteroids grouped by SectorId).
 Dictionary<uint, int> RockCounts(World w)
@@ -73,9 +70,13 @@ Dictionary<uint, int> He3Counts(World w)
 }
 
 // A single field sector garrisoned to team 0, sized to hold a healthy rock count (~dozens), with the
-// given mining tuning. One sector is enough — the tests only read World.RockOre.
-WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null, int? he3Min = null,
-    int? he3Max = null, float? richness = null, float radius = 1500f, float density = 3f,
+// given mining/seeding tuning. One sector is enough — the tests only read World.RockOre.
+// NOTE the sector IS a garrison (home) sector: with the stock home-special-chance of 0 it gets NO
+// special rocks unless the test authors `specialCount` (which bypasses the roll) or passes a seeding
+// with HomeSpecialChance = 1. A custom seeding instance keeps the stock SHAPE knobs (the class
+// initializers), so the physical rock layout for a seed never shifts — only the class knobs vary.
+WorldConfig FieldConfig(WorldMiningTuning mining, WorldSeedingTuning? seeding = null,
+    int? he3Count = null, float? richness = null, float radius = 1500f, float density = 3f,
     int? specialCount = null)
 {
     var sc = new WorldSectorConfig
@@ -84,9 +85,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         Radius = radius,
         Asteroids = AsteroidKind.Field,
         Garrison = new SectorGarrison { Team = 0 },
-        He3FractionMult = he3FractionMult,
-        He3Min = he3Min,
-        He3Max = he3Max,
+        He3Count = he3Count,
         SpecialCount = specialCount,
         OreRichnessMult = richness,
     };
@@ -95,7 +94,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         SectorScale = 1f,
         AsteroidDensity = density,
         SectorRadius = 700f,
-        Seeding = stockCfg.Seeding,
+        Seeding = seeding ?? stockCfg.Seeding,
         Mining = mining,
         Sectors = new List<WorldSectorConfig> { sc },
     };
@@ -146,16 +145,15 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
 // ---- 2. THE CANARY: ore-knob tuning never perturbs the rock/aleph LAYOUT for a pinned seed. ----
 {
     const ulong seed = 90210;
-    // A world with mining effectively OFF (no He3), then one with wildly different knobs.
-    var off = new WorldMiningTuning { He3Fraction = 0f, He3PerSectorMin = 0, He3PerSectorMax = 0 };
-    var loud = new WorldMiningTuning
-    {
-        He3Fraction = 0.9f, He3PerSectorMin = 1, He3PerSectorMax = 9999,
-        OreCapacityMin = 1f, OreCapacityMax = 999999f,
-    };
-    // Same base config (same sectors/links/seeding), only Mining differs.
-    var cfgOff = FieldConfig(off, radius: 2000f, density: 2f);
-    var cfgLoud = FieldConfig(loud, radius: 2000f, density: 2f);
+    // A world with ore effectively OFF (no He3, no specials), then one with wildly different knobs —
+    // including a hot home-special-chance, so this canary also pins that the home roll never draws
+    // on the shared world-gen stream.
+    var seedOff = new WorldSeedingTuning { He3PerSector = 0, SpecialPerSector = 0 };
+    var seedLoud = new WorldSeedingTuning { He3PerSector = 9999, SpecialPerSector = 5, HomeSpecialChance = 1f };
+    var loud = new WorldMiningTuning { OreCapacityMin = 1f, OreCapacityMax = 999999f };
+    // Same base config (same sectors/links/shape knobs), only the ore/class knobs differ.
+    var cfgOff = FieldConfig(new WorldMiningTuning(), seeding: seedOff, radius: 2000f, density: 2f);
+    var cfgLoud = FieldConfig(loud, seeding: seedLoud, radius: 2000f, density: 2f);
     var w1 = MakeWorld(seed, cfgOff);
     var w2 = MakeWorld(seed, cfgLoud);
 
@@ -201,9 +199,9 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     Check(he3Off == 0 && he3Loud > he3Off, $"mining knobs still take effect (He3: off={he3Off}, loud={he3Loud})", "mining knobs had no effect — the canary would be vacuous");
 }
 
-// ---- 3. Per-sector He3 count: within [min, max], ≤ rock count, across several seeds (stock knobs). ----
+// ---- 3. Per-sector He3 count: the guaranteed count, ≤ rock count, across several seeds (stock knobs). ----
 {
-    var m = stockCfg.Mining;
+    int want = stockCfg.Seeding.He3PerSector;
     bool allOk = true;
     string detail = "";
     foreach (ulong seed in new ulong[] { 1, 2, 7, 55, 12345, 99999 })
@@ -214,7 +212,7 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         foreach (var (sector, n) in counts)
         {
             int got = he3[sector];
-            int expected = ExpectedHe3(n, m.He3Fraction, 1f, m.He3PerSectorMin, m.He3PerSectorMax);
+            int expected = Math.Min(want, n);
             if (got != expected || got > n)
             {
                 allOk = false;
@@ -225,91 +223,89 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         if (!allOk)
             break;
     }
-    Check(allOk, "per-sector He3 count matches the clamp formula and never exceeds the rock count (6 seeds)", $"He3 count off: {detail}");
+    Check(allOk, $"per-sector He3 count is the guaranteed he3-per-sector ({want}) and never exceeds the rock count (6 seeds)", $"He3 count off: {detail}");
 }
 
-// ---- 4. A per-sector he3-min/he3-max override BEATS the world default. ----
+// ---- 4. A per-sector he3-count override BEATS the world default. ----
 {
     // World default would allow at most 1 He3 here; the sector override forces exactly 5.
-    var mining = new WorldMiningTuning { He3Fraction = 0.12f, He3PerSectorMin = 0, He3PerSectorMax = 1 };
-    var cfg = FieldConfig(mining, he3Min: 5, he3Max: 5);
+    var cfg = FieldConfig(new WorldMiningTuning(), seeding: new WorldSeedingTuning { He3PerSector = 1 }, he3Count: 5);
     var w = MakeWorld(31337, cfg);
     int n = RockCounts(w).GetValueOrDefault(0u);
     int he3 = He3Counts(w).GetValueOrDefault(0u);
     Check(n >= 5, $"override test sector has enough rocks (n={n})", $"too few rocks to test override (n={n})");
-    Check(he3 == 5, $"sector he3-min/he3-max override forces exactly 5 He3 (world default cap was 1) — got {he3}", $"per-sector override ignored: got {he3}, want 5");
+    Check(he3 == 5, $"sector he3-count override forces exactly 5 He3 (world default was 1) — got {he3}", $"per-sector override ignored: got {he3}, want 5");
 }
 
-// ---- 5. He3FractionMult shifts the count (same seed/rocks, only the multiplier differs). ----
+// ---- 6. Capacity: size-scaled, clamped into [ore-capacity-min, ore-capacity-max], richness within band. ----
 {
-    var mining = new WorldMiningTuning { He3Fraction = 0.1f, He3PerSectorMin = 0, He3PerSectorMax = 1000 };
-    var cfgLo = FieldConfig(mining, he3FractionMult: 1f);
-    var cfgHi = FieldConfig(mining, he3FractionMult: 4f);
-    var wLo = MakeWorld(24680, cfgLo);
-    var wHi = MakeWorld(24680, cfgHi);
-    int n = RockCounts(wLo).GetValueOrDefault(0u);
-    int lo = He3Counts(wLo).GetValueOrDefault(0u);
-    int hi = He3Counts(wHi).GetValueOrDefault(0u);
-    int expLo = ExpectedHe3(n, mining.He3Fraction, 1f, mining.He3PerSectorMin, mining.He3PerSectorMax);
-    int expHi = ExpectedHe3(n, mining.He3Fraction, 4f, mining.He3PerSectorMin, mining.He3PerSectorMax);
-    Check(lo == expLo && hi == expHi, $"He3FractionMult scales the count (mult 1→{lo}, mult 4→{hi}, n={n})", $"FractionMult wrong: lo {lo}!={expLo} or hi {hi}!={expHi}");
-    Check(hi > lo, "a higher He3FractionMult yields more He3 rocks", $"FractionMult did not raise the count ({lo} → {hi})");
-}
-
-// ---- 6. Capacity: within the lerp bounds (radius-factored out), and scales with OreRichnessMult. ----
-{
-    var mining = new WorldMiningTuning
-    {
-        He3Fraction = 0.15f, He3PerSectorMin = 4, He3PerSectorMax = 20,
-        OreCapacityMin = 800f, OreCapacityMax = 3000f,
-    };
-    float refR = RefRadius(stockCfg.Seeding);
-    var cfg1 = FieldConfig(mining, richness: 1f);
-    var cfg2 = FieldConfig(mining, richness: 2f);
-    var w1 = MakeWorld(56789, cfg1);
-    var w2 = MakeWorld(56789, cfg2);
+    var mining = new WorldMiningTuning { OreCapacityMin = 800f, OreCapacityMax = 3000f };
+    var seeding = new WorldSeedingTuning { He3PerSector = 12 };
+    var w1 = MakeWorld(56789, FieldConfig(mining, seeding: seeding, richness: 1f));
+    var w2 = MakeWorld(56789, FieldConfig(mining, seeding: seeding, richness: 2f));
 
     int he3Seen = 0;
-    bool boundsOk = true, radiusStateOk = true, richnessOk = true;
+    bool exactOk = true, boundsOk = true, radiusStateOk = true;
     foreach (var r in w1.Asteroids)
     {
         var o1 = w1.RockOre[r.Id];
         if (o1.Class != RockClass.Helium3)
             continue;
         he3Seen++;
-        // Factor out the (radius/ref)^3 volume term to isolate the lerp × richness bound.
-        float vol = MathF.Pow(r.Radius / refR, 3f);
-        float perVol = o1.OreCapacity / vol;
-        if (perVol < mining.OreCapacityMin - 0.5f || perVol > mining.OreCapacityMax + 0.5f)
+        // Capacity is now a PURE function of size (no random roll left): it equals the mirrored formula.
+        float exp = ExpectedCap(r.Radius, seeding, mining.OreCapacityMin, mining.OreCapacityMax, 1f);
+        if (MathF.Abs(o1.OreCapacity - exp) > exp * 1e-4f + 1e-3f)
+            exactOk = false;
+        // ...and always sits inside the hard clamp band — a tiny rock can never drop below the floor.
+        if (o1.OreCapacity < mining.OreCapacityMin - 0.5f || o1.OreCapacity > mining.OreCapacityMax + 0.5f)
             boundsOk = false;
         // He3 rocks start full, at their spawn radius.
         if (o1.OreRemaining != o1.OreCapacity || o1.CurrentRadius != r.Radius)
             radiusStateOk = false;
-        // Richness 2 = exactly double capacity for the SAME rock (same seed ⇒ same roll + selection).
-        var o2 = w2.RockOre[r.Id];
-        if (o2.Class != RockClass.Helium3 || MathF.Abs(o2.OreCapacity - o1.OreCapacity * 2f) > o1.OreCapacity * 1e-4f + 1e-3f)
-            richnessOk = false;
     }
     Check(he3Seen >= 4, $"capacity test observed {he3Seen} He3 rocks", $"too few He3 rocks for the capacity test ({he3Seen})");
-    Check(boundsOk, "every He3 capacity (radius-factored) lands within [ore-capacity-min, ore-capacity-max]", "a He3 capacity fell outside the lerp bounds");
+    Check(exactOk, "every He3 capacity == the size-scaled, clamped formula (pure function of radius)", "a He3 capacity did not match the size-scaled formula");
+    Check(boundsOk, "every He3 capacity lands within [ore-capacity-min, ore-capacity-max] (hard clamp)", "a He3 capacity fell outside the clamp band");
     Check(radiusStateOk, "He3 rocks start full (OreRemaining == OreCapacity) at their spawn radius (CurrentRadius == radius)", "He3 rock initial ore state wrong");
-    Check(richnessOk, "OreRichnessMult scales per-rock capacity exactly (richness 2 = double)", "OreRichnessMult did not scale capacity proportionally");
 
-    // Radius scaling: bigger rocks tend to hold more ore. Compare per-roll capacity (perVol) is bounded,
-    // and the ABSOLUTE capacity of the largest He3 rock exceeds the smallest (volume term dominates a
-    // bounded roll spread only loosely, so assert the volume factor itself is monotonic instead).
+    // Richness raises capacity monotonically. With this narrow band, richness 2 saturates most rocks
+    // to the ceiling, so assert richer ≥ leaner for every rock and strictly greater for at least one.
+    bool richMono = true, richStrict = false;
+    foreach (var r in w1.Asteroids)
+    {
+        if (w1.RockOre[r.Id].Class != RockClass.Helium3)
+            continue;
+        float c1 = w1.RockOre[r.Id].OreCapacity, c2 = w2.RockOre[r.Id].OreCapacity;
+        if (c2 < c1 - 1e-3f) richMono = false;
+        if (c2 > c1 + 1e-3f) richStrict = true;
+    }
+    Check(richMono && richStrict, "OreRichnessMult raises capacity (richer ≥ leaner, strictly greater for some rock)", "OreRichnessMult did not raise capacity");
+
+    // Exact linear richness scaling WITHIN the band: floor 0 + a huge ceiling means neither clamp
+    // bites, so richness 0.5 must halve every rock's capacity precisely.
+    var wide = new WorldMiningTuning { OreCapacityMin = 0f, OreCapacityMax = 9_000_000f };
+    var wFull = MakeWorld(56789, FieldConfig(wide, seeding: seeding, richness: 1f));
+    var wHalf = MakeWorld(56789, FieldConfig(wide, seeding: seeding, richness: 0.5f));
+    bool halfOk = true; int wideSeen = 0;
+    foreach (var r in wFull.Asteroids)
+    {
+        if (wFull.RockOre[r.Id].Class != RockClass.Helium3)
+            continue;
+        wideSeen++;
+        float full = wFull.RockOre[r.Id].OreCapacity, half = wHalf.RockOre[r.Id].OreCapacity;
+        if (MathF.Abs(half - full * 0.5f) > full * 1e-4f + 1e-3f)
+            halfOk = false;
+    }
+    Check(wideSeen >= 4 && halfOk, "OreRichnessMult scales capacity linearly within the band (0.5 = exactly half)", "OreRichnessMult did not scale capacity proportionally within the band");
+
+    // Size scaling: capacity is monotonic non-decreasing in rock radius (bigger rock ⇒ ≥ ore).
     var he3rocks = w1.Asteroids.Where(r => w1.RockOre[r.Id].Class == RockClass.Helium3)
         .OrderBy(r => r.Radius).ToList();
-    if (he3rocks.Count >= 2)
-    {
-        var small = he3rocks.First();
-        var big = he3rocks.Last();
-        float capIfSameRoll_small = MathF.Pow(small.Radius / refR, 3f);
-        float capIfSameRoll_big = MathF.Pow(big.Radius / refR, 3f);
-        Check(capIfSameRoll_big >= capIfSameRoll_small,
-            $"capacity's volume factor grows with radius (r {small.Radius:F1}→{big.Radius:F1})",
-            "capacity volume factor is not monotonic in radius");
-    }
+    bool sizeMono = true;
+    for (int i = 1; i < he3rocks.Count; i++)
+        if (w1.RockOre[he3rocks[i].Id].OreCapacity < w1.RockOre[he3rocks[i - 1].Id].OreCapacity - 1e-3f)
+            sizeMono = false;
+    Check(sizeMono, "capacity is monotonic non-decreasing in rock radius", "a bigger He3 rock held less ore than a smaller one");
 }
 
 // ---- 7. RockCurrentRadius / RockClassOf fallbacks for non-He3 + unknown ids. ----
@@ -361,11 +357,12 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         $"commons (Regolith) dominate the field (common={totalCommon}, special={totalSpecial})",
         $"commons do not dominate (common={totalCommon}, special={totalSpecial})");
 
-    // A per-sector special-count override adds more specials; 0 removes them entirely.
-    var mining = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2 };
+    // A per-sector special-count override adds more specials; 0 removes them entirely. An AUTHORED
+    // count also bypasses the home-special-chance roll (this sector is a garrison, stock chance 0).
+    var seeding = new WorldSeedingTuning { He3PerSector = 2 };
     int SpecialsIn(int? sc)
     {
-        var ww = MakeWorld(31337, FieldConfig(mining, radius: 1500f, specialCount: sc));
+        var ww = MakeWorld(31337, FieldConfig(new WorldMiningTuning(), seeding: seeding, radius: 1500f, specialCount: sc));
         return ww.Asteroids.Count(r => w2IsSpecial(ww, r.Id));
     }
     static bool w2IsSpecial(World ww, ulong id) =>
@@ -379,11 +376,12 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
 // ---- 7c. Special (rare) rocks are oversized by SpecialRockRadiusMult; He3 + commons keep their size. ----
 {
     // Same seed + knobs, differing ONLY in the mult ⇒ identical class assignment; every special rock's
-    // radius scales, every other rock is untouched. Force several specials so the sample is meaningful.
-    var m1 = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2, SpecialPerSector = 3, SpecialRockRadiusMult = 1f };
-    var m3 = new WorldMiningTuning { He3PerSectorMin = 2, He3PerSectorMax = 2, SpecialPerSector = 3, SpecialRockRadiusMult = 3f };
-    var w1 = MakeWorld(70707, FieldConfig(m1, radius: 1500f));
-    var w3 = MakeWorld(70707, FieldConfig(m3, radius: 1500f));
+    // radius scales, every other rock is untouched. Force several specials so the sample is meaningful
+    // (authored specialCount, since the garrison test sector would otherwise roll chance-0 → none).
+    var s1 = new WorldSeedingTuning { He3PerSector = 2, SpecialRockRadiusMult = 1f };
+    var s3 = new WorldSeedingTuning { He3PerSector = 2, SpecialRockRadiusMult = 3f };
+    var w1 = MakeWorld(70707, FieldConfig(new WorldMiningTuning(), seeding: s1, radius: 1500f, specialCount: 3));
+    var w3 = MakeWorld(70707, FieldConfig(new WorldMiningTuning(), seeding: s3, radius: 1500f, specialCount: 3));
     var byId1 = w1.Asteroids.ToDictionary(r => r.Id, r => r.Radius);
     bool specialsScaled = true, othersUnchanged = true;
     int specialsSeen = 0;
@@ -406,38 +404,44 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     Check(othersUnchanged, "He3 + common rocks keep their rolled radius (only specials oversize)", $"a non-special rock changed size: {detail}");
 }
 
-// ---- 7d. Home-sector economy: MapLoader stamps he3-per-home-sector (2) onto garrison sectors, a
-//          contested (non-garrison) sector keeps he3-per-sector (4), and a map's OWN he3-min/max wins. ----
+// A 3-sector test map driving the REAL map seam (MapLoader.ApplyTo): sector 0 a plain home
+// (garrison team 0), sector 1 contested, sector 2 a home (garrison team 1) with optional authored
+// overrides. Shared by 7d (He3 home economy) and 7e (home-special-chance).
+MapDef HomeMap(int? sector2He3 = null, int? sector2Specials = null) => new()
 {
-    // Drive the REAL map seam: build a 3-sector map and apply it through MapLoader.ApplyTo onto a
-    // config carrying the stock mining tuning (per-sector 4, per-home 2). Sector 0 is a plain home,
-    // sector 1 contested, sector 2 a home that authors its own he3-min/max (author override must win).
-    var map = new MapDef
+    Name = "HomeEconTest",
+    Sectors = new List<MapSectorDef>
     {
-        Name = "HomeEconTest",
-        Sectors = new List<MapSectorDef>
-        {
-            new() { Id = 0, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 0 } },
-            new() { Id = 1, Radius = 1500, Asteroids = "field" },
-            new() { Id = 2, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 1 }, He3Min = 5, He3Max = 5 },
-        },
-        Links = new List<List<uint>> { new() { 0, 1 }, new() { 1, 2 } },
-    };
+        new() { Id = 0, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 0 } },
+        new() { Id = 1, Radius = 1500, Asteroids = "field" },
+        new() { Id = 2, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 1 }, He3Count = sector2He3, SpecialCount = sector2Specials },
+    },
+    Links = new List<List<uint>> { new() { 0, 1 }, new() { 1, 2 } },
+};
+WorldConfig HomeMapConfig(MapDef map, WorldSeedingTuning? seeding = null)
+{
     var cfg = new WorldConfig
     {
         SectorScale = 1f,
         AsteroidDensity = 3f,
         SectorRadius = 700f,
-        Seeding = stockCfg.Seeding,
-        Mining = stockCfg.Mining, // stock: He3PerSectorMin/Max == 4, He3PerHomeSector == 2
+        Seeding = seeding ?? stockCfg.Seeding,
+        Mining = stockCfg.Mining,
     };
     MapLoader.ApplyTo(map, cfg);
+    return cfg;
+}
+
+// ---- 7d. Home-sector economy: MapLoader stamps he3-per-home-sector (2) onto garrison sectors, a
+//          contested (non-garrison) sector keeps he3-per-sector (4), and a map's OWN he3-count wins. ----
+{
+    var cfg = HomeMapConfig(HomeMap(sector2He3: 5)); // stock seeding: per-sector 4, per-home 2
     var w = MakeWorld(4242, cfg);
     var n = RockCounts(w);
     var he3 = He3Counts(w);
-    Check(cfg.Mining.He3PerHomeSector == 2 && cfg.Mining.He3PerSectorMin == 4 && cfg.Mining.He3PerSectorMax == 4,
-        $"stock mining tuning: per-home {cfg.Mining.He3PerHomeSector}, per-sector {cfg.Mining.He3PerSectorMin}..{cfg.Mining.He3PerSectorMax}",
-        $"stock mining He3 defaults drifted (home {cfg.Mining.He3PerHomeSector}, sector {cfg.Mining.He3PerSectorMin}..{cfg.Mining.He3PerSectorMax})");
+    Check(cfg.Seeding.He3PerHomeSector == 2 && cfg.Seeding.He3PerSector == 4 && cfg.Seeding.HomeSpecialChance == 0f,
+        $"stock seeding tuning: per-home {cfg.Seeding.He3PerHomeSector}, per-sector {cfg.Seeding.He3PerSector}, home-special-chance {cfg.Seeding.HomeSpecialChance}",
+        $"stock seeding defaults drifted (home {cfg.Seeding.He3PerHomeSector}, sector {cfg.Seeding.He3PerSector}, chance {cfg.Seeding.HomeSpecialChance})");
     Check(he3[0] == Math.Min(2, n[0]),
         $"a team's HOME (garrison) sector gets he3-per-home-sector (2) — got {he3[0]} of {n[0]} rocks",
         $"home sector He3 not stamped to 2: got {he3[0]} of {n[0]}");
@@ -445,14 +449,65 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
         $"a contested (non-garrison) sector keeps he3-per-sector (4) — got {he3[1]} of {n[1]} rocks",
         $"contested sector He3 not 4: got {he3[1]} of {n[1]}");
     Check(he3[2] == Math.Min(5, n[2]),
-        $"a home sector's OWN he3-min/max override beats the home default — got {he3[2]} (want 5)",
-        $"map he3-min/max override lost to the home default: got {he3[2]} of {n[2]}");
+        $"a home sector's OWN he3-count override beats the home default — got {he3[2]} (want 5)",
+        $"map he3-count override lost to the home default: got {he3[2]} of {n[2]}");
+}
+
+// ---- 7e. home-special-chance gates specials in HOME sectors (default 0 = none; authored count wins;
+//          deterministic per seed; never touches the shared layout stream — test 2 pins that part). ----
+{
+    Dictionary<uint, int> SpecialCounts(World w)
+    {
+        var d = new Dictionary<uint, int>();
+        foreach (var r in w.Asteroids)
+        {
+            d.TryAdd(r.SectorId, 0);
+            if (w.RockClassOf(r.Id) is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium)
+                d[r.SectorId]++;
+        }
+        return d;
+    }
+
+    // (a) Stock chance 0: BOTH home sectors hold no special rock; the contested sector keeps its 1.
+    var w0 = MakeWorld(4242, HomeMapConfig(HomeMap()));
+    var s0 = SpecialCounts(w0);
+    Check(s0[0] == 0 && s0[2] == 0,
+        "stock home-special-chance (0) leaves home sectors with NO special rock",
+        $"home sectors got specials at chance 0 (sector0={s0[0]}, sector2={s0[2]})");
+    Check(s0[1] == 1,
+        "the contested sector keeps its special-per-sector (1) special rock",
+        $"contested sector specials wrong (got {s0[1]}, want 1)");
+
+    // (b) Chance 1: the same map's home sectors get their specials (class knobs only — layout aside).
+    var w1 = MakeWorld(4242, HomeMapConfig(HomeMap(), new WorldSeedingTuning { HomeSpecialChance = 1f }));
+    var s1 = SpecialCounts(w1);
+    Check(s1[0] == 1 && s1[2] == 1 && s1[1] == 1,
+        "home-special-chance 1 restores specials in home sectors (1 each, like contested)",
+        $"chance-1 specials wrong (sector0={s1[0]}, sector1={s1[1]}, sector2={s1[2]})");
+
+    // (c) An authored per-sector special-count on a HOME sector bypasses the roll even at chance 0.
+    var wc = MakeWorld(4242, HomeMapConfig(HomeMap(sector2Specials: 2)));
+    var sc = SpecialCounts(wc);
+    Check(sc[2] == 2 && sc[0] == 0,
+        "a map-authored special-count (2) on a home sector wins over the chance-0 roll",
+        $"authored special-count lost to the home roll (sector2={sc[2]}, sector0={sc[0]})");
+
+    // (d) A fractional chance is deterministic per (seed, sector): two same-seed builds agree exactly.
+    var half = new WorldSeedingTuning { HomeSpecialChance = 0.5f };
+    var wa = MakeWorld(13579, HomeMapConfig(HomeMap(), half));
+    var wb = MakeWorld(13579, HomeMapConfig(HomeMap(), half));
+    var sa = SpecialCounts(wa);
+    var sb = SpecialCounts(wb);
+    bool identical = sa.Count == sb.Count && sa.All(kv => sb.TryGetValue(kv.Key, out int v) && v == kv.Value);
+    Check(identical,
+        $"a 0.5 home-special-chance rolls identically across two same-seed builds (sector0={sa[0]}, sector2={sa[2]})",
+        "the home-special roll is not seed-deterministic");
 }
 
 // ---- 8. SetOreRemaining shrink helper: volume-proportional radius toward the floor. ----
 {
-    var mining = new WorldMiningTuning { He3Fraction = 0.2f, He3PerSectorMin = 3, He3PerSectorMax = 30, ShrinkFloorFrac = 0.4f };
-    var cfg = FieldConfig(mining);
+    var mining = new WorldMiningTuning { ShrinkFloorFrac = 0.4f };
+    var cfg = FieldConfig(mining, seeding: new WorldSeedingTuning { He3PerSector = 8 });
     var w = MakeWorld(11111, cfg);
     var he3 = w.Asteroids.First(r => w.RockOre[r.Id].Class == RockClass.Helium3);
     float spawn = he3.Radius;
@@ -493,10 +548,9 @@ float MinerHold() => content.Ships.First(s => s.ClassId == 4).OreCapacity;
 WorldConfig HarvestConfig(float rate = 40f, float floorFrac = 0.4f, float standoff = 60f) =>
     FieldConfig(new WorldMiningTuning
     {
-        He3Fraction = 0.3f, He3PerSectorMin = 3, He3PerSectorMax = 30,
         HarvestRatePerSecond = rate, ShrinkFloorFrac = floorFrac, MinerStandoff = standoff,
         OreCapacityMin = 800f, OreCapacityMax = 3000f,
-    });
+    }, seeding: new WorldSeedingTuning { He3PerSector = 8 });
 
 Simulation.ShipSim MinerAt(Vec3 pos, uint sector, float ore = 0f) =>
     new() { Class = 4, SectorId = sector, IsMiner = true, Ore = ore, State = { Pos = pos } };
@@ -754,12 +808,13 @@ content.World.FogOfWar = false;
 
 // Loop tuning: fat rocks (hold fills first), fast harvest, short offload — the whole loop fits
 // well inside one paycheck window (PaycheckSeconds 60 ⇒ 1200 ticks) so credit deltas are pure ore.
-WorldMiningTuning LoopMining(int he3Min = 2, int he3Max = 6) => new()
+// He3 density is a SEEDING knob now: pair LoopMining() with LoopSeeding(count) in FieldConfig.
+WorldMiningTuning LoopMining() => new()
 {
-    He3Fraction = 0.2f, He3PerSectorMin = he3Min, He3PerSectorMax = he3Max,
     HarvestRatePerSecond = 400f, OreCapacityMin = 5000f, OreCapacityMax = 6000f,
     OffloadDelaySeconds = 1f, MinerStandoff = 60f,
 };
+WorldSeedingTuning LoopSeeding(int he3 = 2) => new() { He3PerSector = he3 };
 
 // Collect this step's miner notices (cleared per step — sample after every Step()).
 List<string> noticesSeen = new();
@@ -773,7 +828,7 @@ void StepAndCollect(Simulation sim)
 // ---- 17. Full loop: launch → harvest → fill → return → offload (credits) → relaunch, SAME rock. ----
 {
     noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), radius: 500f, density: 3f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f, density: 3f);
     var w = MakeWorld(90210, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -814,7 +869,7 @@ void StepAndCollect(Simulation sim)
 
 // ---- 18. Claims: two miners split rocks (rule a); miners > eligible rocks ⇒ they double up. ----
 {
-    var cfg = FieldConfig(LoopMining(he3Min: 4, he3Max: 8), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(4), radius: 500f);
     var w = MakeWorld(555, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -829,7 +884,7 @@ void StepAndCollect(Simulation sim)
         $"claim split wrong (targets {rows[0].TargetRockId} / {rows[1].TargetRockId})");
 
     // Single eligible rock + two miners ⇒ the claim rule relaxes and they share it.
-    var cfg1 = FieldConfig(LoopMining(he3Min: 1, he3Max: 1), radius: 500f);
+    var cfg1 = FieldConfig(LoopMining(), seeding: LoopSeeding(1), radius: 500f);
     var w1 = MakeWorld(556, cfg1);
     var sim1 = new Simulation(w1, content);
     sim1.StartMatch();
@@ -848,14 +903,13 @@ void StepAndCollect(Simulation sim)
 //          harvests, and hauls the ore 2 hops home. ----
 {
     noticesSeen.Clear();
-    var mining = LoopMining(he3Min: 2, he3Max: 4);
     var cfg = new WorldConfig
     {
         SectorScale = 1f,
         AsteroidDensity = 3f,
         SectorRadius = 400f,
-        Seeding = stockCfg.Seeding,
-        Mining = mining,
+        Seeding = LoopSeeding(2),
+        Mining = LoopMining(),
         Sectors = new List<WorldSectorConfig>
         {
             new() { Id = 0, Asteroids = AsteroidKind.None, Garrison = new SectorGarrison { Team = 0 } },
@@ -910,7 +964,7 @@ void StepAndCollect(Simulation sim)
 // ---- 20. Death: a killed miner's slot is GONE — no pod, no respawn, repurchase only. ----
 {
     noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(2222, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -935,7 +989,7 @@ void StepAndCollect(Simulation sim)
 
 // ---- 21. Purchase: cap enforced, cost charged through the Stage-2 buy seam. ----
 {
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(3333, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -954,7 +1008,7 @@ void StepAndCollect(Simulation sim)
 
 // ---- 22. A miner hull can never be a PLAYER ship (MsgSpawn for class 4 is dropped). ----
 {
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(4444, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -969,8 +1023,7 @@ void StepAndCollect(Simulation sim)
 
 // ---- 23. Fog gate: with fog ON and the rock undiscovered, the miner stays idle-docked. ----
 {
-    var mining = LoopMining();
-    var cfg = FieldConfig(mining, radius: 1500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(6), radius: 1500f);
     content.World.FogOfWar = true; // the sim reads fog from CONTENT; 1500-radius field ⇒ most rocks unseen
     var w = MakeWorld(6060, cfg);
     var sim = new Simulation(w, content);
@@ -1019,7 +1072,7 @@ content.World.FogOfWar = false;
 // ---- 24. Kill-switch OFF + buy phase-gating (disabled / lobby / insufficient credits). ----
 {
     int minerCost = content.Ships.First(s => s.ClassId == 4).Cost;
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
 
     // MinersEnabled=false before StartMatch ⇒ nothing seeds; a buy is refused politely.
     noticesSeen.Clear();
@@ -1055,7 +1108,7 @@ content.World.FogOfWar = false;
 // ---- 25. /mine on an UNKNOWN sector id: "No such sector." and authorizes nothing. ----
 {
     noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(25, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -1073,7 +1126,7 @@ content.World.FogOfWar = false;
     var cfg = new WorldConfig
     {
         SectorScale = 1f, AsteroidDensity = 3f, SectorRadius = 700f,
-        Seeding = stockCfg.Seeding, Mining = LoopMining(he3Min: 2, he3Max: 6),
+        Seeding = LoopSeeding(3), Mining = LoopMining(),
         Sectors = new List<WorldSectorConfig>
         {
             new() { Id = 0, Radius = 700f, Asteroids = AsteroidKind.Field, Garrison = new SectorGarrison { Team = 0 } },
@@ -1119,7 +1172,7 @@ content.World.FogOfWar = false;
 
 // ---- 27. Repurchase after a kill restores the count (slot is GONE until rebought; no pod). ----
 {
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(27, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();
@@ -1139,7 +1192,7 @@ content.World.FogOfWar = false;
 // ---- 28. /miners status: EnqueueMinerStatus answers with a team summary line + a per-miner line. ----
 {
     noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), radius: 500f);
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
     var w = MakeWorld(28, cfg);
     var sim = new Simulation(w, content);
     sim.StartMatch();

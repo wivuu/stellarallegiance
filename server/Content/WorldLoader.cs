@@ -375,13 +375,30 @@ public sealed class WorldSeedingDef
 
     /// <summary>Vertical (Y-axis) random jitter applied to garrison placement, world units.</summary>
     public double? BaseYJitter { get; set; }
+
+    // Rock-class seeding: which rocks become He3 / special at world-gen.
+    /// <summary>Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count). A map's per-sector he3-count override wins.</summary>
+    public int? He3PerSector { get; set; }
+
+    /// <summary>Guaranteed He3 rocks in a team's HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-count, so home fields stay leaner than contested space.</summary>
+    public int? He3PerHomeSector { get; set; }
+
+    /// <summary>Count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith.</summary>
+    public int? SpecialPerSector { get; set; }
+
+    /// <summary>Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll.</summary>
+    public double? HomeSpecialChance { get; set; }
+
+    /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
+    public double? SpecialRockRadiusMult { get; set; }
 }
 
 /// <summary>
-/// Mining / ore economy tuning, authored under <c>mining:</c> — the He3 rock selection + capacity
-/// knobs and the miner economy rates. Every field is optional; a null falls back to the stock value
-/// at projection (the shared <c>WorldMiningTuning</c> initializers), so an author only writes the
-/// knobs they sweep. Server-side only — never streamed. Durations are authored in SECONDS.
+/// Mining / ore economy tuning, authored under <c>mining:</c> — harvest/economy mechanics and the
+/// per-rock capacity knobs (the rock-CLASS seeding knobs live under <c>seeding:</c>). Every field
+/// is optional; a null falls back to the stock value at projection (the shared
+/// <c>WorldMiningTuning</c> initializers), so an author only writes the knobs they sweep.
+/// Server-side only — never streamed. Durations are authored in SECONDS.
 /// </summary>
 public sealed class WorldMiningDef
 {
@@ -396,24 +413,6 @@ public sealed class WorldMiningDef
 
     /// <summary>Dwell after an offload before the miner relaunches, seconds.</summary>
     public double? OffloadDelaySeconds { get; set; }
-
-    /// <summary>Fraction of a sector's rocks made harvestable helium-3 (before the count clamp).</summary>
-    public double? He3Fraction { get; set; }
-
-    /// <summary>World default minimum He3 rocks per sector (clamp floor).</summary>
-    public int? He3PerSectorMin { get; set; }
-
-    /// <summary>World default maximum He3 rocks per sector (clamp ceiling).</summary>
-    public int? He3PerSectorMax { get; set; }
-
-    /// <summary>World default He3 rocks in a team's HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-min/he3-max, so home fields stay leaner than contested space.</summary>
-    public int? He3PerHomeSector { get; set; }
-
-    /// <summary>World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith.</summary>
-    public int? SpecialPerSector { get; set; }
-
-    /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
-    public double? SpecialRockRadiusMult { get; set; }
 
     /// <summary>Minimum per-He3-rock ore capacity, before the radius/richness scaling.</summary>
     public double? OreCapacityMin { get; set; }
@@ -575,6 +574,11 @@ public static class WorldLoader
             t.BaseInnerFrac = F(se.BaseInnerFrac, t.BaseInnerFrac);
             t.BaseOuterFrac = F(se.BaseOuterFrac, t.BaseOuterFrac);
             t.BaseYJitter = F(se.BaseYJitter, t.BaseYJitter);
+            t.He3PerSector = se.He3PerSector ?? t.He3PerSector;
+            t.He3PerHomeSector = se.He3PerHomeSector ?? t.He3PerHomeSector;
+            t.SpecialPerSector = se.SpecialPerSector ?? t.SpecialPerSector;
+            t.HomeSpecialChance = F(se.HomeSpecialChance, t.HomeSpecialChance);
+            t.SpecialRockRadiusMult = F(se.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
         }
         if (w.Mining is { } mi)
         {
@@ -583,12 +587,6 @@ public static class WorldLoader
             t.HarvestRatePerSecond = F(mi.HarvestRatePerSecond, t.HarvestRatePerSecond);
             t.CreditsPerOreUnit = F(mi.CreditsPerOreUnit, t.CreditsPerOreUnit);
             t.OffloadDelaySeconds = F(mi.OffloadDelaySeconds, t.OffloadDelaySeconds);
-            t.He3Fraction = F(mi.He3Fraction, t.He3Fraction);
-            t.He3PerSectorMin = mi.He3PerSectorMin ?? t.He3PerSectorMin;
-            t.He3PerSectorMax = mi.He3PerSectorMax ?? t.He3PerSectorMax;
-            t.He3PerHomeSector = mi.He3PerHomeSector ?? t.He3PerHomeSector;
-            t.SpecialPerSector = mi.SpecialPerSector ?? t.SpecialPerSector;
-            t.SpecialRockRadiusMult = F(mi.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
             t.OreCapacityMin = F(mi.OreCapacityMin, t.OreCapacityMin);
             t.OreCapacityMax = F(mi.OreCapacityMax, t.OreCapacityMax);
             t.ShrinkFloorFrac = F(mi.ShrinkFloorFrac, t.ShrinkFloorFrac);

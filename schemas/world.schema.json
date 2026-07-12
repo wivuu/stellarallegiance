@@ -625,6 +625,41 @@
             "null"
           ],
           "description": "Vertical (Y-axis) random jitter applied to garrison placement, world units."
+        },
+        "he3-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Guaranteed He3 rocks per ordinary sector (clamped to the sector\u0027s actual rock count). A map\u0027s per-sector he3-count override wins."
+        },
+        "he3-per-home-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Guaranteed He3 rocks in a team\u0027s HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-count, so home fields stay leaner than contested space."
+        },
+        "special-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith."
+        },
+        "home-special-chance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll."
+        },
+        "special-rock-radius-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%."
         }
       },
       "description": "Map-seeding shape tuning: asteroid fields/belts \u002B base placement. Null -\u003E stock.",
@@ -663,48 +698,6 @@
             "null"
           ],
           "description": "Dwell after an offload before the miner relaunches, seconds."
-        },
-        "he3-fraction": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "description": "Fraction of a sector\u0027s rocks made harvestable helium-3 (before the count clamp)."
-        },
-        "he3-per-sector-min": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "World default minimum He3 rocks per sector (clamp floor)."
-        },
-        "he3-per-sector-max": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "World default maximum He3 rocks per sector (clamp ceiling)."
-        },
-        "he3-per-home-sector": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "World default He3 rocks in a team\u0027s HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-min/he3-max, so home fields stay leaner than contested space."
-        },
-        "special-per-sector": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith."
-        },
-        "special-rock-radius-mult": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "description": "Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%."
         },
         "ore-capacity-min": {
           "type": [

@@ -117,9 +117,14 @@ mechanics:
   reconnect-grace-seconds: 5 # dropped ship held (simulated, vulnerable) for reconnect reclaim
   ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby
 
-# Map-seeding shapes: ONE shared default set per asteroid shape (field = shallow disc,
-# belt = flattened ring), applied to any sector by its declared `asteroids` kind, plus team-base
-# placement. Counts derive from filled area, so density (spacing) is invariant to sector size.
+# Map seeding: ONE shared default set per asteroid shape (field = shallow disc, belt = flattened
+# ring), applied to any sector by its declared `asteroids` kind, plus team-base placement — counts
+# derive from filled area, so density (spacing) is invariant to sector size — plus the ROCK-CLASS
+# knobs deciding which rocks become harvestable helium-3 or a RARE special rock at world-gen. A
+# sector is OVERWHELMINGLY common rock (Regolith), sprinkled with a fixed count of He3 (4 per
+# ordinary sector, 2 in a team's home/garrison sector) and at most one special rock (Carbonaceous/
+# Silicon/Uranium) — and home sectors roll home-special-chance (stock 0) for theirs. Maps override
+# per-sector via he3-count, special-count. All server-side only (never streamed).
 seeding:
   field-fill-frac: 0.9       # disc radius as a fraction of the sector radius
   field-flatten: 0.1         # disc half-thickness as a fraction of its radius (shallow)
@@ -136,24 +141,25 @@ seeding:
   base-inner-frac: 0.14      # garrison radial band, as fractions of the sector radius
   base-outer-frac: 0.30
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
+  he3-per-sector: 4          # guaranteed He3 rocks per ordinary (non-home) sector
+  he3-per-home-sector: 2     # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
+  special-per-sector: 1      # RARE special rocks per sector; everything else is common Regolith
+  home-special-chance: 0.0   # chance a HOME sector gets its specials at all (0 = never; per-seed roll)
+  special-rock-radius-mult: 3 # landmark sizing for the rare specials (1 = no change)
 
-# Mining + ore economy: how asteroids are classified into resource types at world-gen and how the AI
-# miner economy is tuned. A sector is OVERWHELMINGLY common rock (Regolith), sprinkled with a
-# fixed count of harvestable helium-3 (4 per ordinary sector, 2 in a team's home/garrison sector) and at most one RARE
-# special rock (Carbonaceous/Silicon/Uranium). Maps override per-sector via he3-min/he3-max (set equal
-# to pin a count), he3-fraction-mult, special-count, ore-richness-mult. Per-rock He3 capacity scales
-# with the rock's volume. All server-side only (never streamed) — the client only sees the results.
+# Mining + ore economy: how the AI miner economy is tuned and how much ore a He3 rock holds (which
+# rocks BECOME He3/special is decided by the rock-class knobs under `seeding:`). Per-rock He3
+# capacity scales with the rock's SIZE and is CLAMPED into [ore-capacity-min, ore-capacity-max]:
+# a min-size rock sits at the floor, a max-size one at the ceiling, ore-richness-mult scales within
+# the band, and the clamp guarantees the bounds (so a tiny rock never drops below the floor). A map
+# may raise/lower the band map-wide or per-sector (map/sector ore-capacity-min/max). All server-side
+# only (never streamed) — the client only sees the results.
 mining:
   max-miners-per-team: 4        # cap on live AI miners a team may field at once
   harvest-rate-per-second: 40   # ore units a miner pulls from a rock per second
   credits-per-ore-unit: 1     # team credits granted per ore unit offloaded at base
   offload-delay-seconds: 5      # dwell after an offload before the miner relaunches
-  he3-fraction: 0.12            # fraction of a sector's rocks made He3 (pre-clamp; pinned by min==max)
-  he3-per-sector-min: 4         # min==max pins ordinary (non-home) sectors at exactly 4 He3 rocks
-  he3-per-sector-max: 4
-  he3-per-home-sector: 2        # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
-  special-per-sector: 1         # RARE special rocks per sector; everything else is common Regolith
-  ore-capacity-min: 8000        # per-He3-rock capacity range, before the radius/richness scaling.
-  ore-capacity-max: 32000       # midpoint 20000 vs the 2000-unit miner hold ≈ 10 harvest runs/rock avg
+  ore-capacity-min: 8000        # per-He3-rock capacity FLOOR (a min-size rock; the hard clamp lower bound)
+  ore-capacity-max: 32000       # per-He3-rock capacity CEILING (a max-size rock); midpoint ~20000 vs the 2000-unit miner hold
   shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
   miner-standoff: 50            # harvest range from a target rock's surface, world units

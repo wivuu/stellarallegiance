@@ -407,12 +407,15 @@ public sealed class World
     // so the shared world-gen RNG stream is untouched and the layout stays byte-identical for a seed.
     private void AssignOre(List<WorldSectorConfig> secCfg)
     {
-        // Reference radius for the volume scaling of capacity: the midpoint of the FIELD rock-size
-        // range (field is the primary/most-common shape), so an average-size rock scales at ~1×.
-        float refRadius = 0.5f * (_seed.FieldRockMin + _seed.FieldRockMax);
+        // Capacity scales with a rock's SIZE across the FIELD rock-size range (field is the primary/
+        // most-common shape): the volume (radius³) fraction of a rock between the min- and max-size
+        // volumes picks where in the [capMin, capMax] band its ore capacity lands. Precompute the two
+        // reference volumes here; guard a degenerate (min == max) size range against a zero span.
+        float vMinRef = Cube(_seed.FieldRockMin);
+        float vSpan = MathF.Max(Cube(_seed.FieldRockMax) - vMinRef, 1e-3f);
 
         // Per-sector config lookup for the optional overrides (a bare test world may have no config for
-        // a sector id — then the world-level WorldMiningTuning defaults apply).
+        // a sector id — then the world-level WorldSeedingTuning defaults apply).
         var scById = new Dictionary<uint, WorldSectorConfig>();
         foreach (var sc in secCfg)
             scById[sc.Id] = sc;
@@ -441,29 +444,21 @@ public sealed class World
                 continue;
             scById.TryGetValue(sectorId, out var sc); // sc may be null (test world)
 
-            // Per-rock derived hash (rank/class) + capacity roll, from each rock's own sub-RNG.
+            // Per-rock derived hash from each rock's own sub-RNG, for ranking + cosmetic-class
+            // selection. Capacity is no longer a random roll — it is a pure function of the rock's
+            // size (see the He3 branch below) — so the hash is the only draw needed here.
             var hash = new ulong[n];
-            var roll = new float[n];
             for (int i = 0; i < n; i++)
             {
                 var rr = new DetRng(OreMix(Seed, rocks[i].Id));
                 hash[i] = rr.NextULong();       // ranking + cosmetic-class selector
-                roll[i] = (float)rr.NextDouble(); // capacity lerp (drawn AFTER the hash, always)
             }
 
-            // Guaranteed He3 count: fraction of the sector's rocks, clamped to [min, max] (sector
-            // override ?? world default), then again to the actual rock count. Zero-rock sectors bailed
-            // above, so he3Count ∈ [0, n]. A team's HOME sector carries a leaner He3Min/He3Max stamped
-            // by MapLoader.ApplyTo (he3-per-home-sector), so the garrison case needs no special-casing
-            // here — it arrives as an ordinary per-sector override.
-            float frac = Mining.He3Fraction * (sc?.He3FractionMult ?? 1f);
-            int he3Min = sc?.He3Min ?? Mining.He3PerSectorMin;
-            int he3Max = sc?.He3Max ?? Mining.He3PerSectorMax;
-            if (he3Max < he3Min)
-                he3Max = he3Min; // a nonsensical override pair collapses to the min rather than throwing
-            int he3Count = (int)MathF.Round(frac * n);
-            he3Count = Math.Clamp(he3Count, he3Min, he3Max);
-            he3Count = Math.Clamp(he3Count, 0, n);
+            // Guaranteed He3 count: the sector override ?? world default, clamped to the actual rock
+            // count. Zero-rock sectors bailed above, so he3Count ∈ [0, n]. A team's HOME sector
+            // carries a leaner He3Count stamped by MapLoader.ApplyTo (he3-per-home-sector), so the
+            // garrison case needs no special-casing here — it arrives as an ordinary override.
+            int he3Count = Math.Clamp(sc?.He3Count ?? _seed.He3PerSector, 0, n);
 
             // Rank the sector's rocks by hash (descending); ties broken by rock id (ascending) so the
             // order is fully deterministic. The top he3Count become Helium3.
@@ -482,20 +477,41 @@ public sealed class World
             // RARE special rocks: the next `specialCount` ranked rocks (immediately after the He3
             // block, so He3 and special never collide) become cosmetic special classes. Clamped to the
             // rocks left after He3, so a small sector never over-allocates. Everything else is common.
-            int specialCount = sc?.SpecialCount ?? Mining.SpecialPerSector;
+            // A HOME (garrison) sector only gets its specials when the per-sector chance roll passes
+            // (stock home-special-chance is 0 — home fields hold no landmark rock); a map-authored
+            // special-count bypasses the roll entirely.
+            int specialCount = sc?.SpecialCount ?? _seed.SpecialPerSector;
+            if (sc?.SpecialCount is null && sc?.Garrison is not null && _seed.HomeSpecialChance < 1f)
+            {
+                // Salted per-sector sub-RNG: sector ids overlap the rock-id space, so a raw
+                // OreMix(Seed, sectorId) stream could collide with a rock's own sub-RNG. The salt
+                // keeps the domains disjoint; the shared world-gen RNG stream stays untouched.
+                var hr = new DetRng(OreMix(Seed ^ 0x484F4D45_53504543UL /* "HOMESPEC" */, sectorId));
+                if (hr.NextDouble() >= _seed.HomeSpecialChance)
+                    specialCount = 0;
+            }
             specialCount = Math.Clamp(specialCount, 0, Math.Max(0, n - he3Count));
             var isSpecial = new bool[n];
             for (int k = he3Count; k < he3Count + specialCount; k++)
                 isSpecial[order[k]] = true;
 
             float richness = sc?.OreRichnessMult ?? 1f;
+            // Capacity band this sector clamps to, resolved sector → map → world. MapLoader.ApplyTo
+            // already folds any map-level ore-capacity-min/max into each sector's config (a sector's
+            // own value winning), so here it is just the sector override else the world default.
+            float capMin = sc?.OreCapacityMin ?? Mining.OreCapacityMin;
+            float capMax = sc?.OreCapacityMax ?? Mining.OreCapacityMax;
             for (int i = 0; i < n; i++)
             {
                 var rock = rocks[i];
                 if (isHe3[i])
                 {
-                    float cap = Lerp(Mining.OreCapacityMin, Mining.OreCapacityMax, roll[i])
-                        * MathF.Pow(rock.Radius / refRadius, 3f) * richness;
+                    // Size-scaled capacity: the rock's volume fraction across the field size range
+                    // interpolates the [capMin, capMax] band, richness scales it, and the result is
+                    // clamped hard back into the band (so a tiny rock never falls below capMin nor a
+                    // giant rises above capMax).
+                    float vFrac = Math.Clamp((Cube(rock.Radius) - vMinRef) / vSpan, 0f, 1f);
+                    float cap = Math.Clamp(Lerp(capMin, capMax, vFrac) * richness, capMin, capMax);
                     RockOre[rock.Id] = new OreState
                     {
                         Class = RockClass.Helium3,
@@ -518,9 +534,9 @@ public sealed class World
                     // genuinely bigger everywhere (hull in LoadRockBodies keys off r.Radius). Common
                     // Regolith keeps its rolled size. He3 is handled in the branch above (never scaled).
                     float radius = rock.Radius;
-                    if (isSpecial[i] && Mining.SpecialRockRadiusMult != 1f)
+                    if (isSpecial[i] && _seed.SpecialRockRadiusMult != 1f)
                     {
-                        radius = rock.Radius * Mining.SpecialRockRadiusMult;
+                        radius = rock.Radius * _seed.SpecialRockRadiusMult;
                         Asteroids[idToIndex[rock.Id]] = rock with { Radius = radius };
                     }
                     RockOre[rock.Id] = new OreState
@@ -983,6 +999,9 @@ public sealed class World
     }
 
     private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
+    // r³ — a rock's volume proportion, used to scale ore capacity by size.
+    private static float Cube(float r) => r * r * r;
 
     // Teams seeded by the default-arena fallback (below) when a config authors sectors but no garrison.
     private const int DefaultTeamCount = 2;

@@ -83,9 +83,9 @@ Server-side hands-off navigation for player ships (protocol v30), reusing the PI
 Stage-4 resource layer over the seeded asteroids. Every rock gets a `RockClass` (Carbonaceous / Silicon / Uranium / Helium3, append-only in `shared/Defs.cs`) chosen by a **per-sector deterministic selection pass** — per-rock derived hashes (`Mix(seed, rock.Id)`), never extra draws on the shared world `DetRng` stream, so pinned-seed layouts stay byte-identical (guard-tested golden). Only **Helium-3** is harvestable: each He3 rock rolls an ore capacity (radius-cubed volume factor × world/map richness knobs) and **shrinks volume-proportionally** as it's mined down to a floor fraction, through the single seam `World.SetOreRemaining` (recomputes `CurrentRadius`, re-scales the collision body, flags the change). Live shrink streams as `MsgRockUpdate` (on-change only; fog on → per-team, discovered rocks only); Welcome/Reveal rock statics carry class + current radius + ore % so late joiners are never stale. **A rock's mesh/texture now reflects its class**: after the class pass, `World.AssignVariants` overwrites each rock's cosmetic `Variant` with one from that class's pool (`AsteroidShapes.VariantForClass`, keyed on the same per-rock `OreMix` hash — never the shared RNG, so positions stay byte-stable), and the rare **special** rocks (Carbonaceous/Silicon/Uranium — not He3) are landmark-**oversized** by `SpecialRockRadiusMult` (stock 3×). Each of the 5 classes owns a pool of `tools/asteroid-gen` variants sharing that class's PBR "kind" (He3 = pale-cyan crystal, Regolith = dull grey-brown dust, Uranium = green-steel, Silicon = tan, Carbonaceous = charcoal). The client stays dumb (loads the streamed variant name); the server's collision hull keys off the same class-derived `Variant`, so hull and visual match.
 - **Frequency:** Domain-specific
 - **Key Files:**
-  - `server/Sim/World.cs` — `RockOre` (OreState dict), `RockClassOf`, `RockCurrentRadius`, `SetOreRemaining`, class/capacity seeding, `AssignVariants` (class→mesh); `shared/Defs.cs` — `RockClass`, `WorldMiningTuning` (+ `SpecialRockRadiusMult`, per-sector overrides on `SectorConfig`)
+  - `server/Sim/World.cs` — `RockOre` (OreState dict), `RockClassOf`, `RockCurrentRadius`, `SetOreRemaining`, class/capacity seeding, `AssignVariants` (class→mesh); `shared/Defs.cs` — `RockClass`, `WorldSeedingTuning` rock-class knobs (`He3PerSector`/`He3PerHomeSector`/`SpecialPerSector`/`HomeSpecialChance`/`SpecialRockRadiusMult`; per-sector `He3Count`/`SpecialCount` overrides on `SectorConfig`), `WorldMiningTuning` (harvest/economy + ore capacity)
   - `shared/AsteroidShapes.cs` — `Variants[]` (wire-indexed mesh names) + `ClassPools`/`VariantForClass`/`PoolFor` (RockClass → mesh pool); `tools/asteroid-gen` (`shapefield.py` `_MATERIAL`/`_SHAPE` per-class kinds, `asteroids.json` catalog) → `client/assets/asteroids/*.glb`
-  - `server/Content/core/world.yaml` `mining:` block (server-only, not streamed) + `schemas/world.schema.json` / `schemas/map.schema.json` mirrors
+  - `server/Content/core/world.yaml` — rock-class knobs under `seeding:` (incl. `home-special-chance`, stock 0 = no special rock in a garrison sector), harvest/economy under `mining:` (both server-only, not streamed) + `schemas/world.schema.json` / `schemas/map.schema.json` mirrors
   - `server/Net/Protocol.cs` — `WriteRockStatic` (class/radius/orePct), `MsgRockUpdate = 22`, `BuildRockUpdates(For)`
   - `client/scripts/WorldRenderer.cs` — `NetUpdateRock` mesh re-scale + collision update; `client/scripts/TargetMarkers.cs` — class name + `DEPLETED` bracket
   - `tests/MiningTest` — class/capacity determinism, pinned-seed layout golden, shrink arithmetic, wire round-trip
@@ -536,10 +536,20 @@ Client-side extrapolation of ship state between server snapshots to reduce perce
 - **Frequency:** Very common
 - **Key Files:**
   - `client/scripts/PredictionController.cs` — prediction state and reconciliation
-  - `client/scripts/RemoteShip.cs` — remote ship interpolation
+  - `client/scripts/RemoteShip.cs` — remote ship interpolation (consumes [[MotionInterpolator]])
   - `client/scripts/WorldRenderer.cs` — frame rendering
-- **Related:** [[Flight Model]], [[Held-Input Replay]], [[MsgSnapshot]]
+- **Related:** [[Flight Model]], [[Held-Input Replay]], [[MsgSnapshot]], [[MotionInterpolator]]
 - **Notes:** Never blocks authority; server snapshot always wins
+
+### MotionInterpolator
+Reusable snapshot-smoothing engine for any server-controlled streamed entity (remote ships today; missiles etc. can adopt it). Samples are stamped on the server-tick timeline, rendered behind an adaptive delay sized to each entity's smoothed inter-arrival gap (full-rate ships ~100 ms, coarse-AOI ~1.5× their gap): cubic HERMITE interpolation between samples using the wire velocities as tangents (degrades to linear at full-rate gaps), bounded velocity/angular-velocity dead-reckoning past the newest sample, and error-blend correction (a late authoritative sample glides in over ~100 ms instead of snapping; a teleport-sized error snaps). Server side, same-sector miners are exempted from the coarse AOI tier (`SIM_MINER_MIDRATE`, default on) so slow station-keeping drones refresh at mid cadence.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/MotionInterpolator.cs` — the engine (Tunables, Push/Evaluate/Reset)
+  - `client/scripts/RemoteShip.cs` — the ship-flavored consumer (flags/HUD/glow stay local)
+  - `server/Net/ClientHub.cs` — AOI distance tiers + the miner mid-rate exemption
+- **Related:** [[Client Prediction]], [[AOI (Area of Interest)]], [[Miner (AI ore drone)]]
+- **Notes:** Wire velocity + LOCAL angular velocity (f16) already ride every ship record — no protocol change; rotation extrapolation right-composes yaw→pitch→roll like `FlightModel.Step`
 
 ### WorldRenderer
 Master 3D scene renderer: camera, world geometry, ships, projectiles, effects.

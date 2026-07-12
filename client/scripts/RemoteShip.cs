@@ -1,78 +1,23 @@
-using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Other players' ships (T6). The client cannot predict a remote ship (it doesn't
-// have that player's input), so it renders authoritative snapshots with a fixed
-// delay and INTERPOLATES between them — standard snapshot interpolation. This
-// trades ~100 ms of latency for smooth motion despite 20 Hz (~18.7 Hz here)
-// authoritative updates. No forward extrapolation (.PLAN/07).
-//
-// Samples are placed on the SERVER-TICK timeline (tick × MsPerTick), NOT on client
-// arrival time. The server emits state on an exactly uniform tick cadence, but the
-// packets arrive jittered by the network; timestamping by arrival makes the interp
-// segments uneven in duration while the playback clock sweeps uniformly, so the
-// rendered speed wobbles frame-to-frame — visible as choppy motion, worst when
-// pacing a teammate at matched velocity (their relative motion should be dead
-// steady). Stamping by tick makes every segment uniform; the playback clock then
-// rides a smoothed wall→server offset (filters arrival jitter, still tracks drift).
+// have that player's input), so it renders authoritative snapshots behind an
+// adaptive delay via the shared MotionInterpolator: Hermite interpolation between
+// samples on the wire velocities, bounded velocity dead-reckoning past the newest
+// sample, and error-blend (no snap) when a late authoritative sample lands. All
+// timeline/smoothing mechanics (tick-stamped samples, adaptive gap-sized delay,
+// clock-offset EMA, corrupt-sample guards) live in MotionInterpolator — this node
+// is just the ship-flavored consumer (flags, HUD state, engine glow, mining roll).
 public partial class RemoteShip : Node3D
 {
-    // Render this far behind the latest sample so there are normally two samples
-    // bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07) This is the FLOOR
-    // for the adaptive delay below — nearby full-rate ships never need more.
-    private const double InterpDelayMs = 100.0;
-    private const int MaxSamples = 16;
-
-    // Adaptive interpolation. Coarse-AOI ships (beyond the server's nearest-N, or in another
-    // sector) arrive at ~1/10th the rate of full-rate ships — ~500 ms apart — so the fixed
-    // 100 ms buffer can't bracket their gaps: renderT runs past the newest sample, the ship
-    // holds, then snaps when the next coarse sample lands (the visible teleport). So instead
-    // of a fixed delay, track each ship's smoothed inter-arrival gap and render ~1.5 gaps
-    // behind, clamped to [floor, cap]. Full-rate ships sit at the 100 ms floor; coarse ships
-    // widen their buffer to span their gap and lerp smoothly across it. The extra latency is
-    // harmless — by construction these are the distant / other-sector ships the server itself
-    // deemed low-priority. As a ship crosses into the full-rate set its gap (hence delay)
-    // decays back to the floor within ~0.5 s.
-    private const double MaxInterpDelayMs = 800.0; // cap: bounds added latency; < MaxSamples*gap
-    private const float GapDelayFactor = 1.5f; // render this many smoothed gaps behind
-    private const float GapEmaAlpha = 0.3f; // inter-arrival EMA responsiveness
-
-    // When renderT runs PAST the newest sample (a dropped/late update), dead-reckon this far along the
-    // last segment's velocity instead of hard-holding then snapping — the hold-then-snap reads as a
-    // stutter, most visible on slow station-keeping ships (a mining drone) against the predicted own
-    // ship. Kept small so a genuinely stalled feed can't rubber-band a fast enemy far off its truth.
-    private const double MaxExtrapolateMs = 120.0;
-
-    // Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
-    private double _gapEma = InterpDelayMs / GapDelayFactor;
-
-    // Server-tick → server-time conversion. The sim integrates at a fixed dt, so a tick
-    // number maps to an exact server-time stamp; samples live on this jitter-free axis.
-    private const double MsPerTick = FlightModel.Dt * 1000.0;
-
-    // Playback clock = wall clock minus a smoothed (wall − server) offset, kept `delay`
-    // behind the newest sample. The EMA absorbs per-packet arrival jitter (so the clock
-    // advances smoothly with wall time) while still tracking slow client/server clock
-    // drift. Small alpha ⇒ heavy jitter rejection over the ~18 Hz arrival rate.
-    private const float ClockOffsetAlpha = 0.05f;
-    private double _clockOffset; // smoothed (wall ms − server ms)
-    private bool _haveClockOffset;
-
-    private struct Sample
-    {
-        public double T; // server-time stamp (ms) = serverTick * MsPerTick
-        public Vector3 Pos;
-        public Quaternion Rot;
-    }
+    private readonly MotionInterpolator _interp = new(MotionInterpolator.Tunables.Default);
 
     // How fast the smoothed Velocity eases toward the latest authoritative value, as
     // an exponential rate (1/s). ~16 → ~60 ms time constant: fast enough to feel
     // responsive, slow enough to bridge the gaps between snapshots smoothly.
     private const float VelSmoothRate = 16f;
-
-    private readonly List<Sample> _samples = new(); // chronological
 
     public ulong ShipId { get; private set; }
     public byte Team { get; private set; }
@@ -207,78 +152,34 @@ public partial class RemoteShip : Node3D
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
 
-    // Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
-    // un-initialized or transient ship state on the wire — would NaN under Normalized()
-    // (divide by ~0), and a single NaN assignment permanently poisons the node's Basis
-    // (every later read throws "must be normalized"), since a ship that then stops
-    // receiving samples never recovers. Reject non-finite/zero-length; fall back to identity.
-    private static Quaternion SafeRot(float x, float y, float z, float w)
-    {
-        var q = new Quaternion(x, y, z, w);
-        float len2 = q.LengthSquared();
-        if (!float.IsFinite(len2) || len2 < 1e-6f)
-            return Quaternion.Identity;
-        return q.Normalized();
-    }
-
-    private static bool IsFinite(Vector3 v) => v.IsFinite();
-
     private void Push(Ship row, uint serverTick)
     {
-        double serverMs = serverTick * MsPerTick;
+        bool first = !_interp.HasSamples;
+        bool accepted = _interp.Push(
+            serverTick,
+            new Vector3(row.PosX, row.PosY, row.PosZ),
+            new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW),
+            new Vector3(row.VelX, row.VelY, row.VelZ),
+            new Vector3(row.AngVelX, row.AngVelY, row.AngVelZ),
+            hasVel: true,
+            Time.GetTicksMsec());
+        if (!accepted)
+            return; // stale/out-of-order frame — per-tick state below would regress too
 
-        // Reject stale/out-of-order frames (a reordered or duplicate packet on the unreliable
-        // WebRTC channel): the segment search below assumes _samples is chronological by T, and
-        // a backward stamp would corrupt it. Newest-only is fine — we never extrapolate.
-        if (_samples.Count > 0 && serverMs <= _samples[^1].T)
-            return;
-
-        // Smoothed wall→server offset so _Process can map wall time onto the server timeline
-        // without inheriting this packet's arrival jitter. Seed from the first sample.
-        double offset = Time.GetTicksMsec() - serverMs;
-        if (!_haveClockOffset)
-        {
-            _clockOffset = offset;
-            _haveClockOffset = true;
-        }
-        else
-            _clockOffset += (offset - _clockOffset) * ClockOffsetAlpha;
-
-        var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-        var s = new Sample
-        {
-            T = serverMs,
-            Pos = IsFinite(pos) ? pos : Position, // keep last good on a corrupt sample
-            Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
-        };
-        var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
-        _velTarget = IsFinite(vel) ? vel : Vector3.Zero;
+        _velTarget = _interp.LatestVelocity;
 
         // Latest authoritative hull/shield for the focused-target HP arc (no interpolation needed).
         Health = row.Health;
         Shield = row.Shield;
         IsMining = row.IsMining; // per-tick mining flag → drives the beam (WorldRenderer) + model roll (_Process)
 
-        // Track the smoothed gap between successive samples (now in jitter-free server time, so
-        // this is the ship's true update cadence) to size the render delay below. Reject
-        // absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
-        if (_samples.Count > 0)
+        if (first)
         {
-            double gap = s.T - _samples[^1].T; // > 0 by the stale guard above
-            if (gap < 4000.0)
-                _gapEma += (gap - _gapEma) * GapEmaAlpha;
-        }
-
-        _samples.Add(s);
-        if (_samples.Count > MaxSamples)
-            _samples.RemoveRange(0, _samples.Count - MaxSamples);
-
-        if (_samples.Count == 1)
-        {
-            // First sample: render at it until we have a pair to interpolate, and seed
-            // the velocity so it eases from the real value rather than ramping from zero.
-            Position = s.Pos;
-            Quaternion = s.Rot;
+            // First sample: render at it until a pair exists to interpolate, and seed the
+            // velocity so it eases from the real value rather than ramping from zero.
+            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            Position = p;
+            Quaternion = q;
             Velocity = _velTarget;
         }
     }
@@ -312,66 +213,13 @@ public partial class RemoteShip : Node3D
 
         UpdateMiningRoll((float)delta);
 
-        int n = _samples.Count;
-        if (n == 0)
-            return;
-        if (n == 1)
+        // The shared interpolator owns the whole pose pipeline: adaptive delay, Hermite
+        // interpolation on the wire velocities, bounded dead-reckoning, error-blend correction.
+        if (_interp.HasSamples)
         {
-            Position = _samples[0].Pos;
-            Quaternion = _samples[0].Rot;
-            return;
-        }
-
-        // Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. Floor keeps nearby
-        // ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
-        // renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
-        double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
-        // Map wall time onto the server timeline via the smoothed offset, then render `delay`
-        // behind. The offset filtered out the arrival jitter, so renderT sweeps the uniformly
-        // tick-spaced samples at a steady rate — uniform interp segments, smooth motion.
-        double renderT = (Time.GetTicksMsec() - _clockOffset) - delay;
-
-        // Before our oldest sample → clamp to it.
-        if (renderT <= _samples[0].T)
-        {
-            Position = _samples[0].Pos;
-            Quaternion = _samples[0].Rot;
-            return;
-        }
-
-        // Find the segment [a, b] with a.T <= renderT <= b.T and interpolate.
-        for (int i = 0; i < n - 1; i++)
-        {
-            var a = _samples[i];
-            var b = _samples[i + 1];
-            if (renderT >= a.T && renderT <= b.T)
-            {
-                float dt = (float)(b.T - a.T);
-                float f = dt > 0f ? Mathf.Clamp((float)(renderT - a.T) / dt, 0f, 1f) : 1f;
-                Position = a.Pos.Lerp(b.Pos, f);
-                Quaternion = a.Rot.Slerp(b.Rot, f);
-                return;
-            }
-        }
-
-        // renderT is past our newest sample (no fresh data). Dead-reckon a SHORT bounded distance along
-        // the last segment's velocity so the motion glides instead of hold-then-snapping (the stutter
-        // that reads worst on slow miners next to the predicted own ship). The horizon is clamped to
-        // MaxExtrapolateMs so a real stall can't fling the ship far from its next authoritative sample.
-        var last = _samples[n - 1];
-        var prev = _samples[n - 2];
-        double segDt = last.T - prev.T;
-        double over = System.Math.Min(renderT - last.T, MaxExtrapolateMs);
-        if (segDt > 1.0 && over > 0.0)
-        {
-            float ef = (float)(over / segDt); // fraction of the last segment to extend past its end
-            Position = last.Pos + (last.Pos - prev.Pos) * ef;
-            Quaternion = prev.Rot.Slerp(last.Rot, 1f + ef).Normalized();
-        }
-        else
-        {
-            Position = last.Pos;
-            Quaternion = last.Rot;
+            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            Position = p;
+            Quaternion = q;
         }
     }
 

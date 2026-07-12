@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Runtime-verify a change by driving the real server + Godot client headlessly and capturing screenshots/movies as evidence. Use after any nontrivial gameplay/sim/client change.
+description: Runtime-verify a change by driving the real server + Godot client headlessly and capturing screenshots/movies as evidence. Use after any nontrivial gameplay/sim/client change when requested - defer to manual verification otherwise.
 ---
 
 # Verify a change end-to-end (server + client)
@@ -37,3 +37,4 @@ MOVIE_RESOLUTION=1280x720 scripts/run-client.sh --local --autofly --combat-test 
   point the client at it with `SIM_PORT=8099 scripts/run-client.sh --local ...`).
 - A held connection is required or the sim loop won't tick (autofly provides one).
 - Kill servers when done: `kill $(lsof -tnP -iTCP:8090 -sTCP:LISTEN)`.
+-  `timeout` likely will not work on MacOS

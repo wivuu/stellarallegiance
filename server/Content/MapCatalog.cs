@@ -137,6 +137,7 @@ public static class MapCatalog
         Ai = w.Ai,
         Combat = w.Combat,
         Mechanics = w.Mechanics,
+        Mining = w.Mining,
         Seeding = w.Seeding,
     };
 }

@@ -31,6 +31,13 @@ public sealed class ClientHub
     private static readonly int MidEveryTicks = Math.Max(1, EnvI("SIM_MID_EVERY", 3));
     private static readonly int CoarseEveryTicks = Math.Max(1, EnvI("SIM_COARSE_EVERY", 10));
     private static readonly int MaxRecords = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
+
+    // Miners in the viewer's sector ride the MID cadence regardless of distance (default on).
+    // A distant same-sector miner would otherwise refresh only on the ~500 ms coarse keepalive,
+    // which reads as jerky station-keeping against the smoothly-predicted own ship — and miner
+    // motion is exactly the slow, watchable kind that exposes it. A handful of miners at mid
+    // rate is negligible bandwidth; cross-sector miners stay coarse (radar blips).
+    private static readonly bool MinerMidRate = EnvI("SIM_MINER_MIDRATE", 1) != 0;
     private const int OutboundQueueDepth = 8;
 
     // AOI broad-phase grid cell (server/Net only — distinct from the sim's 160 u collision grid,
@@ -1678,7 +1685,9 @@ public sealed class ClientHub
                     if (RadarSeen(ships[i]))
                         continue; // streamed live above, distance-independent
                     float d2 = (ships[i].State.Pos - myPos).LengthSquared();
-                    if (d2 <= r2sq)
+                    // Same-sector miners bypass the distance gate (see MinerMidRate) — this
+                    // loop only walks the viewer's sector grid, so sector scope is implicit.
+                    if (d2 <= r2sq || (MinerMidRate && ships[i].IsMiner))
                         picks.Add((d2, i));
                 }
         }

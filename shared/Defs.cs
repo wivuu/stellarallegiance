@@ -301,17 +301,19 @@ namespace StellarAllegiance.Shared
         public AsteroidKind Asteroids = AsteroidKind.Field;
         public float? AsteroidDensityMult;
 
-        // Optional per-sector mining overrides (null → the world-level WorldMiningTuning default).
-        // He3Min/He3Max override the guaranteed-count clamp [min, max] for this sector's He3 rocks
-        // (set both equal to pin an exact count); He3FractionMult scales the world He3Fraction before
-        // the clamp; SpecialCount overrides how many RARE special rocks (Carbonaceous/Silicon/Uranium)
-        // this sector gets (0 → none); OreRichnessMult scales the per-rock He3 capacity here.
-        // Server-side only — resolved during World's ore-assignment pass.
-        public int? He3Min;
-        public int? He3Max;
-        public float? He3FractionMult;
+        // Optional per-sector rock-class overrides (null → the world-level WorldSeedingTuning
+        // default). He3Count pins this sector's guaranteed He3 rock count exactly; SpecialCount
+        // overrides how many RARE special rocks (Carbonaceous/Silicon/Uranium) this sector gets
+        // (0 → none — an authored value also bypasses the home-special-chance roll);
+        // OreRichnessMult scales the per-rock He3 capacity here.
+        // OreCapacityMin/Max override the per-He3-rock capacity band this sector clamps to (null →
+        // the map/world-level WorldMiningTuning bound). Server-side only — resolved during World's
+        // ore-assignment pass.
+        public int? He3Count;
         public int? SpecialCount;
         public float? OreRichnessMult;
+        public float? OreCapacityMin;
+        public float? OreCapacityMax;
 
         // 2D LAYOUT coordinate for the map diagram (minimap + lobby preview), normalized ~[-1,1].
         // Distinct from 3D geometry — purely where this sector's node is drawn. Both-null → the
@@ -550,9 +552,12 @@ namespace StellarAllegiance.Shared
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
     }
 
-    // Map-seeding shape tuning (world.yaml `seeding:`): the ONE shared default set per
-    // asteroid shape (field = shallow disc, belt = flattened ring), applied to any sector by its
-    // declared `asteroids` kind, plus team-base placement. Consumed by World map seeding only.
+    // Map-seeding tuning (world.yaml `seeding:`): the ONE shared default set per asteroid shape
+    // (field = shallow disc, belt = flattened ring), applied to any sector by its declared
+    // `asteroids` kind, team-base placement, and the ROCK-CLASS seeding knobs (how many He3 /
+    // special rocks a sector gets at world-gen). Server-side only — never streamed. The
+    // initializers below ARE the stock values (must match the stock world.yaml), so an omitted
+    // block or field always means "stock". Consumed by World map seeding + its ore-assignment pass.
     public sealed class WorldSeedingTuning
     {
         public float FieldFillFrac = 0.9f; // disc radius as a fraction of sector radius
@@ -573,34 +578,17 @@ namespace StellarAllegiance.Shared
         public float BaseInnerFrac = 0.14f;
         public float BaseOuterFrac = 0.3f;
         public float BaseYJitter = 80f;
-    }
 
-    // Mining + ore economy tuning (world.yaml `mining:`). Server-side only — like ai/combat/
-    // mechanics/seeding, Protocol.BuildDefs deliberately does NOT stream this (ore state and the
-    // miner economy are server-authoritative; the client only sees the results). The initializers
-    // below ARE the stock values (starting tunes), so an omitted block or field always means "stock".
-    // Durations are seconds. Consumed by World's ore-assignment pass + the miner sim.
-    public sealed class WorldMiningTuning
-    {
-        public int MaxMinersPerTeam = 4; // cap on live AI miners a team may field at once
-        public float HarvestRatePerSecond = 40f; // ore units a miner pulls from a rock per second
-        public float CreditsPerOreUnit = 0.5f; // team credits granted per ore unit offloaded at base
-        public float OffloadDelaySeconds = 5f; // dwell after an offload before the miner relaunches
+        // ---- Rock-class seeding (which rocks become He3 / special at world-gen) ----
 
-        // He3 selection: the fraction of a sector's rocks made harvestable helium-3, then clamped to
-        // the guaranteed [min, max] count (and to the sector's actual rock count). A sector with no
-        // rocks gets zero He3. min == max == 4 pins every ordinary sector at a fixed 4 He3. These
-        // compiled defaults MUST match the stock world.yaml so a build that fails to load the mining
-        // block still yields 4 rather than an over-rich field. Maps override per-sector via
-        // He3Min/He3Max (set equal to pin an exact count) — a per-sector override wins.
-        public float He3Fraction = 0.12f;
-        public int He3PerSectorMin = 4;
-        public int He3PerSectorMax = 4;
+        // Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count).
+        // Maps pin a sector's exact count via its per-sector `he3-count` — an authored override wins.
+        public int He3PerSector = 4;
 
         // Guaranteed He3 count for a team's HOME sector (one that hosts a garrison). Home fields are
         // deliberately leaner than contested space so teams must push out to mine. MapLoader.ApplyTo
-        // stamps this onto every garrison sector (as He3Min == He3Max) that doesn't author its own
-        // he3-min/he3-max, so it is enforced uniformly across all maps without per-map authoring.
+        // stamps this onto every garrison sector (as He3Count) that doesn't author its own
+        // he3-count, so it is enforced uniformly across all maps without per-map authoring.
         public int He3PerHomeSector = 2;
 
         // RARE "special" rocks: after He3 selection, this many of the sector's remaining (top-ranked)
@@ -609,13 +597,37 @@ namespace StellarAllegiance.Shared
         // with a handful of He3 and at most one special. Per-sector override: SectorConfig.SpecialCount.
         public int SpecialPerSector = 1;
 
+        // Chance (0..1) that a HOME (garrison) sector receives its special rocks at all. Default 0 —
+        // home fields hold no landmark rock; teams find them in contested space. Rolled once per
+        // garrison sector from a deterministic per-sector sub-RNG (same world seed → same outcome).
+        // A map-authored per-sector special-count bypasses the roll entirely.
+        public float HomeSpecialChance = 0f;
+
         // The rare special rocks (Carbonaceous/Silicon/Uranium — NOT He3) are landmark-sized: their spawn
         // radius (collision + visual) is multiplied by this so they stand out from the common field. 1 =
         // no change; 3 = oversized by 200%. He3 and common Regolith keep their rolled size.
         public float SpecialRockRadiusMult = 3f;
+    }
 
-        // Per-He3-rock ore capacity: lerped across [min, max] by a per-rock roll, then scaled by the
-        // rock's volume (radius³ vs the reference radius) and the sector's OreRichnessMult.
+    // Mining + ore economy tuning (world.yaml `mining:`) — harvest/economy mechanics only; the
+    // rock-CLASS seeding knobs (He3/special counts) live in WorldSeedingTuning. Server-side only —
+    // like ai/combat/mechanics/seeding, Protocol.BuildDefs deliberately does NOT stream this (ore
+    // state and the miner economy are server-authoritative; the client only sees the results). The
+    // initializers below ARE the stock values (starting tunes), so an omitted block or field always
+    // means "stock". Durations are seconds. Consumed by World's ore-assignment pass + the miner sim.
+    public sealed class WorldMiningTuning
+    {
+        public int MaxMinersPerTeam = 4; // cap on live AI miners a team may field at once
+        public float HarvestRatePerSecond = 40f; // ore units a miner pulls from a rock per second
+        public float CreditsPerOreUnit = 0.5f; // team credits granted per ore unit offloaded at base
+        public float OffloadDelaySeconds = 5f; // dwell after an offload before the miner relaunches
+
+        // Per-He3-rock ore capacity BAND. A rock's capacity scales with its size: the volume fraction
+        // of its radius across the field rock-size range picks a point in [min, max] (a min-size rock
+        // → min, a max-size rock → max), the sector's OreRichnessMult scales that, and the result is
+        // CLAMPED hard back into [min, max] — so a tiny rock can never fall below the floor nor a giant
+        // exceed the ceiling. A map or sector may override either bound (map-level ore-capacity-min/max
+        // replace these defaults; a sector's own values win over the map).
         public float OreCapacityMin = 8000f;
         public float OreCapacityMax = 32000f;
 
