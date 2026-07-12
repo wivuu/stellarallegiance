@@ -151,6 +151,11 @@ public partial class SectorOverview : Node3D
 
     public override void _Process(double delta)
     {
+        // Escape menu owns input while it's stacked over the map: freeze the F3 toggle and all
+        // orbit/zoom so the map just sits behind the menu until it's dismissed.
+        if (EscapeMenu.Active)
+            return;
+
         // F3 edge-detect (polled; F3 isn't used by flight input so no conflict).
         bool f3 = Input.IsPhysicalKeyPressed(Key.F3);
         if (f3 && !_f3Held)
@@ -321,17 +326,16 @@ public partial class SectorOverview : Node3D
     // the wheel/gesture events before they reach us.
     public override void _Input(InputEvent @event)
     {
-        if (!Active)
+        if (!Active || EscapeMenu.Active)
             return;
 
         switch (@event)
         {
-            // Esc from the map: close the overview and pop the flight escape menu. ShipController's
-            // Esc handler is gated off while the map owns input, so we mirror it here. Close() would
-            // recapture the cursor for flight; the menu needs it free, so re-show it before opening.
+            // Esc from the map: pop the flight escape menu ON TOP of the map. ShipController's Esc
+            // handler is gated off while the map owns input, so we mirror it here. The map stays
+            // Active (and frozen — see _Process / the EscapeMenu.Active guard above), so closing the
+            // menu drops back into the map, not straight into flight. Cursor is already free.
             case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
-                Close();
-                Input.MouseMode = Input.MouseModeEnum.Visible;
                 EscapeMenu.Open(this, EscapeMenu.Context.Flight);
                 GetViewport().SetInputAsHandled();
                 break;
