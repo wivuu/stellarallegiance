@@ -406,7 +406,8 @@ public partial class GameNetClient : Node
     }
 
     // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
-    // targetKind: 0 ship, 1 base, 2 rock, 3 point, 255 clear (release to autonomy). targetId is
+    // targetKind: 0 ship, 1 base, 2 rock, 3 point, 4 sector (pos ignored — pigs hold just inside
+    // the entry aleph, miners prospect-patrol), 255 clear (release to autonomy). targetId is
     // the UNENCODED entity id (strip BaseLock/AsteroidFocus flags before calling; 0 for a point).
     // The server infers the verb (attack vs go-to-idle) from the target's kind+team, gates AI
     // subjects on commander status, and turns human subjects into advisory chat directives.

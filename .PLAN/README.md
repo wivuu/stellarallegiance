@@ -22,6 +22,9 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 - Unable to hit 'enter' to talk form the hangar screen - this should be available on ALL screens once on a game-server
+- When going to another sector, don't "fade out" the old rocks, they should never be visible in the new sector
+- F3 Selection should not exclude your own ship or any other friendly ships
+- All base meshes are rotated incorrectly in their design, so we have to correct their orientation in-code. Rotate it by +90 degrees around the **X-axis**.
 ---
 
 ## Content philosophy (the through-line)
@@ -317,12 +320,10 @@ Stage-1 YAML pipeline.
   authorizes the sector; point = per-miner `/mine`; friendly base = pinned offload).
   `tests/CommanderTest` (9 scenarios). *Deferred: multi-select / order queueing, order markers on
   the F3 map, PIG order-status HUD.*
-- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
-- ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
-  the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
-  already exist from Stage 2.
-  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
+- ✅ **[M]** **Maps** — shipped (2026-07-10): base/asteroid/aleph positions reshuffle every match
+  (fresh random seed per match start, even on the same map), so players explore instead of
+  memorizing. Layouts were already fully seed-generated; the seed is now random by default and
+  pinnable via `SIM_SEED` / `--seed N` for exact repro (each rolled match seed is logged).
 - ✅ **[XL]** **Mining + economy** — DONE (2026-07-11, `mining` branch): rock classes (He3 harvestable,
   volume-proportional shrink streamed via `MsgRockUpdate`), per-team AI miner drones
   (`Simulation.Mining.cs`, purchasable via `/buyminer`, sector orders via `/mine <sector>`, status via
@@ -340,12 +341,14 @@ Stage-1 YAML pipeline.
   - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.
   - If the nearest base is not in the same sector, the miner will navigate to the base across sectors, potentially taking longer to offload resources before resuming harvesting.
   - A miner will not enter a new sector to mine unless the commander tells him to go to that sector to mine (at least once)
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
+- ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
+- ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
+  the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
+  already exist from Stage 2.
+  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
 - ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
-- ✅ **[M]** **Maps** — shipped (2026-07-10): base/asteroid/aleph positions reshuffle every match
-  (fresh random seed per match start, even on the same map), so players explore instead of
-  memorizing. Layouts were already fully seed-generated; the seed is now random by default and
-  pinnable via `SIM_SEED` / `--seed N` for exact repro (each rolled match seed is logged).
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream

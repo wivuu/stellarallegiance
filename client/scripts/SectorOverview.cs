@@ -27,13 +27,17 @@ public partial class SectorOverview : Node3D
     public static Camera3D? ActiveCamera => Active ? _instance?._cam : null;
     private static SectorOverview? _instance;
 
-    // The map's SELECTED entity (commander orders, proto 34) — FocusedId encoding (raw ship id /
-    // BaseLockId / AsteroidFocusId), 0 = none. Deliberately SEPARATE from TargetMarkers.FocusedId:
-    // focus is "what my own ship targets", selection is "which ship I'm commanding". Left-click
-    // selects any entity (click-away deselects); with a friendly non-local ship selected, a
-    // right-click sends it a MsgOrder instead of engaging our own autopilot. Cleared on Close and
-    // whenever the entity leaves the viewed sector / despawns (revalidated per frame).
-    public static ulong SelectedId { get; private set; }
+    // The map's SELECTED entities (commander orders, proto 34) — FocusedId encoding (raw ship id /
+    // BaseLockId / AsteroidFocusId), empty = none. Deliberately SEPARATE from TargetMarkers.FocusedId:
+    // focus is "what my own ship targets", selection is "which ship(s) I'm commanding". Left-click
+    // selects any one entity (click-away deselects); left-DRAG rubber-bands every friendly ship in
+    // the box; shift-click toggles a friendly ship in/out of the set. With friendly non-local
+    // ships selected, a right-click sends each a MsgOrder instead of engaging our own autopilot.
+    // Multi-entries are always commandable friendly ships — a base/rock/enemy can only ever be a
+    // lone informational entry. Cleared on Close and pruned per frame as entities leave the viewed
+    // sector / despawn.
+    private static readonly System.Collections.Generic.List<ulong> _selection = new();
+    public static ulong SelectedId => _selection.Count == 0 ? 0 : _selection[^1];
 
     private const float Fov = 50f; // perspective FOV (deg); perspective avoids the
 
@@ -70,9 +74,22 @@ public partial class SectorOverview : Node3D
     private Minimap? _minimap; // resolved lazily; clicking its nodes retargets the view
     private ShipController? _shipController; // resolved lazily; F3 right-click engages autopilot through it
     private GameNetClient? _net; // resolved lazily; F3 right-click orders a selected friendly ship through it
-    private Control _selMarker = null!; // corner-bracket marker over the selected entity (gold = commandable)
-    private Vector2 _selMarkerPos;
-    private Color _selMarkerColor;
+    private Control _selMarker = null!; // corner-bracket markers over the selected entities (gold = commandable)
+    private readonly System.Collections.Generic.List<(Vector2 pos, Color col)> _selMarkerDraws = new();
+
+    // Ordered goto destinations (subject raw ship id → sector + sector-local point), recorded when
+    // a point order is SENT so the map can show where a selected unit was told to go (gold diamond
+    // + leader line, drawn only while the subject is selected and its destination sector is the one
+    // being viewed). Entries are superseded by entity-target orders and removed on release; the sim
+    // side of the order isn't echoed back, so this is client-side bookkeeping of intent.
+    private readonly System.Collections.Generic.Dictionary<ulong, (uint Sector, Vector3 Pos)> _orderedPoints = new();
+    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 point, bool line)> _orderMarkerDraws = new();
+
+    // Matches the server's arrive bands (miner ProspectArriveRange 300, pig patrol-arrive +
+    // wobble): inside this of the mark the unit has arrived and its waypoint marker is dismissed.
+    private const float OrderedPointDismissRange = 300f;
+    private Control _selBox = null!; // rubber-band selection rectangle while left-dragging
+    private Vector2 _boxEnd; // current cursor corner of the box (anchor = _leftPressPos)
 
     // Click-vs-drag: a press that releases within this many pixels of where it went down (and wasn't
     // a minimap click) is a CLICK — pick a target / drop a waypoint — rather than an orbit/pan drag.
@@ -90,10 +107,13 @@ public partial class SectorOverview : Node3D
     private bool _f3Held;
     private bool _orbitDrag,
         _panDrag;
+    private bool _boxSelecting, // left button is down without shift — a box select may start
+        _boxDragging; // the cursor moved past ClickMovePx: the box is live and drawn
 
     public override void _Ready()
     {
         _instance = this;
+        UiFonts.EnsureLoaded(); // CMD waypoint tag draws with the mono font directly, not via a Theme
         _world = GetNode<WorldRenderer>("../WorldRenderer");
         _chaseCam = GetNode<Camera3D>("../Camera3D");
 
@@ -145,7 +165,7 @@ public partial class SectorOverview : Node3D
             HorizontalAlignment = HorizontalAlignment.Center,
             AnchorRight = 1f,
             OffsetTop = 46f,
-            Text = "SECTOR MAP — drag / arrows orbit · shift-drag pan · wheel zoom · click select · right-click command / engage · F3 to exit",
+            Text = "SECTOR MAP — drag box-select · shift-click add · right-drag / arrows orbit · shift-drag / mid-drag pan · wheel zoom · click select · right-click command / engage · F3 to exit",
         };
         _hint.AddThemeFontSizeOverride("font_size", 18);
         _hint.AddThemeColorOverride("font_color", new Color(0.6f, 0.85f, 1f));
@@ -158,19 +178,56 @@ public partial class SectorOverview : Node3D
         _selMarker.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _selMarker.Draw += DrawSelectionMarker;
         _hudLayer.AddChild(_selMarker);
+
+        // Rubber-band box: same passive-overlay pattern; visible only while a left-drag is live.
+        _selBox = new Control { Name = "SelectionBox", Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _selBox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _selBox.Draw += DrawSelectionBox;
+        _hudLayer.AddChild(_selBox);
     }
 
     private void DrawSelectionMarker()
     {
         const float half = 26f, arm = 10f, w = 2f;
-        Vector2 c = _selMarkerPos;
-        Color col = _selMarkerColor;
-        foreach (var (sx, sy) in new[] { (-1f, -1f), (1f, -1f), (-1f, 1f), (1f, 1f) })
+        foreach (var (c, col) in _selMarkerDraws)
+            foreach (var (sx, sy) in new[] { (-1f, -1f), (1f, -1f), (-1f, 1f), (1f, 1f) })
+            {
+                var corner = c + new Vector2(sx * half, sy * half);
+                _selMarker.DrawLine(corner, corner + new Vector2(-sx * arm, 0f), col, w);
+                _selMarker.DrawLine(corner, corner + new Vector2(0f, -sy * arm), col, w);
+            }
+
+        // Ordered-destination glyphs: the SAME hollow diamond + center dot + tag the nav waypoint
+        // uses (TargetMarkers.DrawWaypoint), recolored commander-gold with a CMD tag, plus a faint
+        // leader line from the unit so multi-unit orders read as "who goes where".
+        const float r = 9.2f; // TargetMarkers: GlyphSize (8) * 1.15
+        Color gold = DesignTokens.CmdrGold;
+        foreach (var (ship, point, line) in _orderMarkerDraws)
         {
-            var corner = c + new Vector2(sx * half, sy * half);
-            _selMarker.DrawLine(corner, corner + new Vector2(-sx * arm, 0f), col, w);
-            _selMarker.DrawLine(corner, corner + new Vector2(0f, -sy * arm), col, w);
+            if (line)
+                _selMarker.DrawLine(ship, point, new Color(gold, 0.35f), 1f);
+            var top = point + new Vector2(0f, -r);
+            var right = point + new Vector2(r, 0f);
+            var bottom = point + new Vector2(0f, r);
+            var left = point + new Vector2(-r, 0f);
+            _selMarker.DrawLine(top, right, gold, 1.75f, true);
+            _selMarker.DrawLine(right, bottom, gold, 1.75f, true);
+            _selMarker.DrawLine(bottom, left, gold, 1.75f, true);
+            _selMarker.DrawLine(left, top, gold, 1.75f, true);
+            _selMarker.DrawCircle(point, r * 0.28f, gold);
+            const string tag = "CMD";
+            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
+            _selMarker.DrawString(UiFonts.Mono, point + new Vector2(-tw * 0.5f, -r - 4f), tag,
+                HorizontalAlignment.Left, -1, 9, gold);
         }
+    }
+
+    private void DrawSelectionBox()
+    {
+        var rect = new Rect2(_leftPressPos, _boxEnd - _leftPressPos).Abs();
+        Color col = DesignTokens.CmdrGold;
+        _selBox.DrawRect(rect, new Color(col, 0.08f));
+        _selBox.DrawRect(rect, col, filled: false, width: 1.5f);
     }
 
     // Refresh the viewed-sector name label; hidden entirely when the sector has no name
@@ -213,35 +270,110 @@ public partial class SectorOverview : Node3D
         UpdateSelectionMarker();
     }
 
-    // Revalidate the selection each frame (the entity may despawn or fall out of the viewed
-    // sector) and reproject the bracket marker over it. Gold = a friendly non-local ship (a
-    // right-click will command it); chrome cyan = anything else (informational selection).
+    // Revalidate the selection each frame and reproject a bracket marker over each entity. Gold =
+    // a friendly non-local ship (a right-click will command it); chrome cyan = anything else
+    // (informational selection). Friendly SHIPS stay selected while the commander views OTHER
+    // sectors (that's how cross-sector orders are issued: select, view a sector, right-click) —
+    // they just don't draw until their sector is on screen. Only genuinely-despawned ships and
+    // out-of-view informational entities (bases/rocks/enemies) are pruned.
     private void UpdateSelectionMarker()
     {
-        if (SelectedId != 0 && TryResolveSelected(out Vector3 pos, out bool commandable) && !_cam.IsPositionBehind(pos))
+        // Dismiss ordered waypoints on arrival: once the unit is within the server's arrive band
+        // of its mark the marker's job is done (miners then swing off to a rock, pigs hold — the
+        // stale diamond would otherwise linger forever). Only measurable while the destination
+        // sector is the one being viewed, which is also the only time it draws.
+        if (_orderedPoints.Count > 0)
+            foreach (var s in _world.FriendlyShips())
+                if (_orderedPoints.TryGetValue(s.ShipId, out var d)
+                    && d.Sector == _world.ViewSector
+                    && s.GlobalPosition.DistanceSquaredTo(d.Pos) <= OrderedPointDismissRange * OrderedPointDismissRange)
+                    _orderedPoints.Remove(s.ShipId);
+
+        _selMarkerDraws.Clear();
+        _orderMarkerDraws.Clear();
+        for (int i = _selection.Count - 1; i >= 0; i--)
         {
-            _selMarkerPos = _cam.UnprojectPosition(pos);
-            _selMarkerColor = commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent;
-            _selMarker.Visible = true;
+            ulong id = _selection[i];
+            bool inView = TryResolveEntity(id, out Vector3 pos, out bool commandable);
+            bool liveShip = IsLiveCommandable(id);
+            if (!inView && !liveShip)
+            {
+                _selection.RemoveAt(i); // despawned ship / out-of-view informational entity
+                continue;
+            }
+            bool shipDrawable = inView && !_cam.IsPositionBehind(pos);
+            // Ordered destination for this unit (pigs AND miners): drawn while it's selected and
+            // its destination sector is the one on screen — INDEPENDENT of where the unit itself
+            // currently is (a cross-sector order shows its mark before the unit gets there).
+            // Points are sector-local == render coords (sectors are origin-centered).
+            if (liveShip
+                && _orderedPoints.TryGetValue(id, out var dest)
+                && dest.Sector == _world.ViewSector
+                && !_cam.IsPositionBehind(dest.Pos))
+                _orderMarkerDraws.Add((
+                    shipDrawable ? _cam.UnprojectPosition(pos) : Vector2.Zero,
+                    _cam.UnprojectPosition(dest.Pos),
+                    shipDrawable));
+            if (!shipDrawable)
+                continue; // still selected, just not drawable this frame
+            _selMarkerDraws.Add((_cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
+        }
+        _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0;
+        if (_selMarker.Visible)
             _selMarker.QueueRedraw();
-        }
-        else
-        {
-            if (SelectedId != 0 && !TryResolveSelected(out _, out _))
-                SelectedId = 0; // entity gone — auto-deselect
-            _selMarker.Visible = false;
-        }
     }
 
-    // Resolve SelectedId to its live world position via the same sector-filtered accessors the
+    // Replace the whole selection with one entity (0 = clear) — the plain-click path.
+    private static void SelectOnly(ulong encoded)
+    {
+        _selection.Clear();
+        if (encoded != 0)
+            _selection.Add(encoded);
+    }
+
+    // Shift-click: toggle a commandable ship in/out of the set. Adding displaces any
+    // non-commandable lone entry (base/rock/enemy) so the set stays orderable.
+    private void ToggleSelect(ulong encoded)
+    {
+        if (_selection.Remove(encoded))
+            return;
+        _selection.RemoveAll(id => !IsLiveCommandable(id));
+        _selection.Add(encoded);
+    }
+
+    // Prune dead ids, then return the commandable subset in click order — the order subjects.
+    // World-wide, NOT view-filtered: units stay commandable while the commander views another
+    // sector (select in one sector, click a different sector, order there).
+    private System.Collections.Generic.List<ulong> CommandableSelection()
+    {
+        var subjects = new System.Collections.Generic.List<ulong>();
+        for (int i = _selection.Count - 1; i >= 0; i--)
+        {
+            if (IsLiveCommandable(_selection[i]))
+                subjects.Add(_selection[i]);
+            else if (!TryResolveEntity(_selection[i], out _, out _))
+                _selection.RemoveAt(i); // neither a live ship nor a view-resolvable entity — gone
+        }
+        subjects.Reverse();
+        return subjects;
+    }
+
+    // A live friendly SHIP anywhere in the world (not view-filtered) — the cross-sector order
+    // subject test. Base/rock flag bits are never ships; the local ship is naturally excluded.
+    private bool IsLiveCommandable(ulong encoded) =>
+        !GameContent.IsBaseLock(encoded)
+        && !GameContent.IsAsteroidFocus(encoded)
+        && _world.FriendlyShipById(encoded) != null;
+
+    // Resolve an encoded id to its live world position via the same sector-filtered accessors the
     // pick uses. `commandable` = a friendly ship that is not our own (an order subject).
-    private bool TryResolveSelected(out Vector3 pos, out bool commandable)
+    private bool TryResolveEntity(ulong encoded, out Vector3 pos, out bool commandable)
     {
         pos = default;
         commandable = false;
-        if (GameContent.IsBaseLock(SelectedId))
+        if (GameContent.IsBaseLock(encoded))
         {
-            ulong baseId = GameContent.BaseIdOf(SelectedId);
+            ulong baseId = GameContent.BaseIdOf(encoded);
             foreach (var (id, p, _) in _world.AllVisibleBases())
                 if (id == baseId)
                 {
@@ -250,9 +382,9 @@ public partial class SectorOverview : Node3D
                 }
             return false;
         }
-        if (GameContent.IsAsteroidFocus(SelectedId))
+        if (GameContent.IsAsteroidFocus(encoded))
         {
-            ulong rockId = GameContent.AsteroidIdOf(SelectedId);
+            ulong rockId = GameContent.AsteroidIdOf(encoded);
             foreach (var (id, node) in _world.AsteroidsInView())
                 if (id == rockId)
                 {
@@ -262,14 +394,14 @@ public partial class SectorOverview : Node3D
             return false;
         }
         foreach (var s in _world.FriendlyShips())
-            if (s.ShipId == SelectedId)
+            if (s.ShipId == encoded)
             {
                 pos = s.GlobalPosition;
                 commandable = true; // FriendlyShips never contains the local ship
                 return true;
             }
         foreach (var s in _world.EnemyShips())
-            if (s.ShipId == SelectedId)
+            if (s.ShipId == encoded)
             {
                 pos = s.GlobalPosition;
                 return true;
@@ -377,13 +509,14 @@ public partial class SectorOverview : Node3D
     private void Close()
     {
         Active = false;
-        SelectedId = 0;
+        _selection.Clear();
         _selMarker.Visible = false;
+        _selBox.Visible = false;
         _grid.Visible = false;
         _stems.Visible = false;
         _hint.Visible = false;
         _sectorName.Visible = false;
-        _orbitDrag = _panDrag = false;
+        _orbitDrag = _panDrag = _boxSelecting = _boxDragging = false;
         _world.SetViewSector(null); // restore the local-sector view for normal flight
         _chaseCam.Current = true;
         // Recapture for mouse-look if we're back to flying; ShipController otherwise
@@ -436,6 +569,10 @@ public partial class SectorOverview : Node3D
             // Active (and frozen — see _Process / the EscapeMenu.Active guard above), so closing the
             // menu drops back into the map, not straight into flight. Cursor is already free.
             case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
+                // Cancel any live drag first — the menu swallows the mouse release, and a stale
+                // box/orbit drag must not resume when the menu closes.
+                _orbitDrag = _panDrag = _boxSelecting = _boxDragging = false;
+                _selBox.Visible = false;
                 EscapeMenu.Open(this, EscapeMenu.Context.Flight);
                 GetViewport().SetInputAsHandled();
                 break;
@@ -458,28 +595,38 @@ public partial class SectorOverview : Node3D
                             // A click on the minimap retargets the view sector instead of orbiting /
                             // picking; flag it so the release doesn't also pick a target.
                             _leftMinimap = TryMinimapClick(mb.Position);
-                            _orbitDrag = !_leftMinimap && !mb.ShiftPressed;
+                            // Shift+drag pans; a plain drag arms the rubber-band box (drawn only
+                            // once the cursor moves past ClickMovePx so a click never flashes it).
+                            // Orbit lives on right-drag.
                             _panDrag = !_leftMinimap && mb.ShiftPressed;
+                            _boxSelecting = !_leftMinimap && !mb.ShiftPressed;
+                            _boxEnd = mb.Position;
                         }
                         else
                         {
-                            _orbitDrag = false;
                             _panDrag = false;
+                            bool wasBox = _boxDragging;
+                            _boxSelecting = _boxDragging = false;
+                            _selBox.Visible = false;
+                            if (wasBox)
+                                // Drag past the click threshold = box select the friendlies inside.
+                                FinalizeBoxSelect(_leftPressPos, mb.Position);
                             // Release close to the press (and not a minimap click) = a click:
-                            // select a target / drop a waypoint (LEFT = no engage).
-                            if (!_leftMinimap && (mb.Position - _leftPressPos).Length() < ClickMovePx)
-                                HandleMapClick(mb.Position, engage: false);
+                            // select a target / drop a waypoint (LEFT = no engage); with shift,
+                            // toggle a ship in/out of the multi-selection.
+                            else if (!_leftMinimap && (mb.Position - _leftPressPos).Length() < ClickMovePx)
+                                HandleMapClick(mb.Position, engage: false, additive: mb.ShiftPressed);
                         }
                         break;
                     case MouseButton.Middle:
                         _panDrag = mb.Pressed;
                         break;
                     case MouseButton.Right:
-                        _panDrag = mb.Pressed;
+                        _orbitDrag = mb.Pressed;
                         if (mb.Pressed)
                             _rightPressPos = mb.Position;
                         else if ((mb.Position - _rightPressPos).Length() < ClickMovePx)
-                            // RIGHT click (not a pan drag): same resolution as left, then engage.
+                            // RIGHT click (not an orbit drag): same resolution as left, then engage.
                             HandleMapClick(mb.Position, engage: true);
                         break;
                 }
@@ -490,6 +637,17 @@ public partial class SectorOverview : Node3D
                     Pan(motion.Relative);
                 else if (_orbitDrag)
                     Orbit(motion.Relative);
+                else if (_boxSelecting)
+                {
+                    _boxEnd = motion.Position;
+                    if (!_boxDragging && (_boxEnd - _leftPressPos).Length() >= ClickMovePx)
+                    {
+                        _boxDragging = true;
+                        _selBox.Visible = true;
+                    }
+                    if (_boxDragging)
+                        _selBox.QueueRedraw();
+                }
                 break;
 
             // Apple trackpad: pinch to zoom.
@@ -541,48 +699,88 @@ public partial class SectorOverview : Node3D
         }
     }
 
-    // Resolve a map click in the VIEWED sector. Minimap keeps precedence (a click on a minimap
-    // sector retargets the view, same as a left press).
+    // Resolve a map click in the VIEWED sector. Minimap keeps precedence: a LEFT click on a
+    // minimap sector retargets the view (same as a left press); a RIGHT click on one with a
+    // command group selected orders the group to that sector instead.
     //
-    // LEFT click: SELECT whatever was hit (any entity — friendly, enemy, base, rock; click-away
-    // deselects), plus the legacy behavior: an entity hit sets the Tab focus, a miss drops a
-    // waypoint on the grid plane.
+    // LEFT click: SELECT whatever was hit (any entity — friendly, enemy, base, rock; an entity
+    // hit also sets the Tab focus); a miss just DESELECTS — left click never drops waypoints
+    // (waypoints live on right-click, which engages our own autopilot at them). With SHIFT
+    // (additive), toggle a friendly ship in/out of the multi-selection instead — never touching
+    // focus, and a miss keeps the set intact.
     //
-    // RIGHT click: with a friendly non-local ship SELECTED, command it — send a MsgOrder naming
-    // whatever was right-clicked (the server infers attack vs go-to-idle; right-clicking the
-    // selected ship itself releases it to autonomy). Otherwise the legacy path: focus/waypoint +
-    // engage our own autopilot.
-    private void HandleMapClick(Vector2 point, bool engage)
+    // RIGHT click: with friendly non-local ships SELECTED, command them — send each a MsgOrder
+    // naming whatever was right-clicked (the server infers attack vs go-to-idle; right-clicking
+    // any selected ship releases them all to autonomy). Otherwise the legacy path: focus/waypoint
+    // + engage our own autopilot.
+    private void HandleMapClick(Vector2 point, bool engage, bool additive = false)
     {
-        if (TryMinimapClick(point))
-            return; // minimap precedence (covers the right-click path; left already gated on press)
+        // Minimap precedence (covers the right-click path; left already gated on press).
+        // LEFT click on a sector node views it; RIGHT click with a command group sends the group
+        // there instead — a SECTOR order (targetKind 4): combat drones go through the aleph and
+        // hold just inside (never a run at the sector center), miners prospect-patrol the sector
+        // until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
+        // server-side (wherever the unit enters), so any client-drawn diamond would lie.
+        _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
+        if (_minimap != null && _minimap.TryClickSector(point, out uint mapSector))
+        {
+            if (engage)
+            {
+                var group = CommandableSelection();
+                if (group.Count > 0)
+                {
+                    _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
+                    if (_net is null)
+                        return;
+                    foreach (ulong subject in group)
+                    {
+                        _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
+                        _orderedPoints.Remove(subject); // supersedes any earlier point order
+                    }
+                    return;
+                }
+            }
+            SwitchView(mapSector);
+            return;
+        }
 
         bool picked = TryPickEntity(point, out ulong encoded);
 
         if (!engage)
         {
-            SelectedId = picked ? encoded : 0; // click-away deselects (req: one left click away)
+            if (additive)
+            {
+                if (picked && TryResolveEntity(encoded, out _, out bool c) && c)
+                    ToggleSelect(encoded);
+                return;
+            }
+            // Click-away deselects; so does re-clicking the sole selected entity (in-place toggle
+            // off). Clicking one ship of a multi-selection narrows to it first, then deselects.
+            bool toggleOff = picked && _selection.Count == 1 && _selection[0] == encoded;
+            SelectOnly(picked && !toggleOff ? encoded : 0);
             if (picked)
             {
                 TargetMarkers.SetFocus(encoded);
                 TargetMarkers.ClearWaypoint(); // a picked target supersedes any dropped waypoint
             }
-            else if (TryGridPoint(point, out Vector3 world))
-            {
-                TargetMarkers.SetWaypoint(_world.ViewSector, world);
-                TargetMarkers.SetFocus(0); // a fresh waypoint supersedes any focused target
-            }
             return;
         }
 
-        // RIGHT click while commanding a selected friendly ship: never touches focus/own autopilot.
-        if (SelectedId != 0 && TryResolveSelected(out _, out bool commandable) && commandable)
+        // RIGHT click while commanding selected friendly ships: never touches focus/own autopilot.
+        // One MsgOrder frame per subject — the wire carries a single subject, so a group order is
+        // a client-side fan-out; the server validates and applies each independently.
+        var subjects = CommandableSelection();
+        if (subjects.Count > 0)
         {
             _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
             if (_net is null)
                 return;
-            if (picked && encoded == SelectedId)
-                _net.SendOrder(SelectedId, targetKind: 255, targetId: 0, sector: 0, pos: Vector3.Zero); // release
+            if (picked && _selection.Contains(encoded))
+                foreach (ulong subject in subjects) // clicked a selected ship: release them ALL
+                {
+                    _net.SendOrder(subject, targetKind: 255, targetId: 0, sector: 0, pos: Vector3.Zero);
+                    _orderedPoints.Remove(subject);
+                }
             else if (picked)
             {
                 // Strip the entity-kind flags into the wire's (kind, raw id) pair — same contract
@@ -591,10 +789,18 @@ public partial class SectorOverview : Node3D
                     GameContent.IsBaseLock(encoded) ? ((byte)1, GameContent.BaseIdOf(encoded))
                     : GameContent.IsAsteroidFocus(encoded) ? ((byte)2, GameContent.AsteroidIdOf(encoded))
                     : ((byte)0, encoded);
-                _net.SendOrder(SelectedId, kind, id, sector: 0, pos: Vector3.Zero);
+                foreach (ulong subject in subjects)
+                {
+                    _net.SendOrder(subject, kind, id, sector: 0, pos: Vector3.Zero);
+                    _orderedPoints.Remove(subject); // an entity target supersedes any goto point
+                }
             }
             else if (TryGridPoint(point, out Vector3 world))
-                _net.SendOrder(SelectedId, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
+                foreach (ulong subject in subjects)
+                {
+                    _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
+                    _orderedPoints[subject] = (_world.ViewSector, world);
+                }
             return;
         }
 
@@ -615,6 +821,22 @@ public partial class SectorOverview : Node3D
         }
         _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
         _shipController?.EngageAutopilot(); // no-op unless launched
+    }
+
+    // Box select: replace the selection with every friendly non-local ship whose screen position
+    // falls inside the drag rectangle (empty box = clear, matching click-away). Friendlies only —
+    // the multi-selection is an order group, and only friendly ships are order subjects.
+    private void FinalizeBoxSelect(Vector2 a, Vector2 b)
+    {
+        var rect = new Rect2(a, b - a).Abs();
+        _selection.Clear();
+        foreach (var s in _world.FriendlyShips())
+        {
+            if (_cam.IsPositionBehind(s.GlobalPosition))
+                continue;
+            if (rect.HasPoint(_cam.UnprojectPosition(s.GlobalPosition)))
+                _selection.Add(s.ShipId);
+        }
     }
 
     // Nearest of {friendly ships (order subjects — commander selection), enemy ships, bases (ANY

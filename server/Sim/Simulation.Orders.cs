@@ -25,6 +25,7 @@ public sealed partial class Simulation
     private const byte OrderTargetBase = 1;
     private const byte OrderTargetRock = 2;
     private const byte OrderTargetPoint = 3;
+    private const byte OrderTargetSector = 4; // minimap sector order: pos ignored — pigs hold just inside the entry aleph, miners prospect-patrol the sector
     private const byte OrderTargetClear = 255;
 
     // PigOrder.Kind — the inferred verb.
@@ -40,6 +41,7 @@ public sealed partial class Simulation
         public uint Sector; // OrderGoto destination sector
         public Vec3 Pos; // OrderGoto hold point (sector-local)
         public bool Holding; // OrderGoto: arrived — station-keep + defend the point
+        public bool EntryHold; // OrderGoto via a SECTOR order: Pos unset until the drone enters the sector, then anchors where it came through the aleph ("no further")
     }
 
     // Keyed by the drone's ShipId (NOT PigSlot): a slot outlives its drone (pod/respawn), and an
@@ -144,6 +146,23 @@ public sealed partial class Simulation
         {
             if (combatPig)
                 _pigOrders.Remove(subject);
+            // A prospecting miner is mid-order: cancel the run and resume autonomy from here.
+            if (miner is MinerSlot mp && mp.ProspectSector != 0 && mp.Ship is ShipSim mlive)
+            {
+                mp.ProspectSector = 0;
+                mp.ProspectPatrol = false;
+                mp.ProspectFromEntry = false;
+                if (mp.State == MinerState.Prospect)
+                {
+                    if (PickRock(mp, mlive.SectorId, mlive.State.Pos) is ulong next)
+                    {
+                        mp.TargetRockId = next;
+                        mp.State = MinerState.ToRock;
+                    }
+                    else
+                        GoHome(mp, mlive, remember: false);
+                }
+            }
             Notice($"{DescribeAi(ship, miner)} released to autonomy.");
             return;
         }
@@ -245,6 +264,21 @@ public sealed partial class Simulation
                 Directive($"{subjectName}: move to {World.SectorName(sector)}");
                 return;
             }
+            case OrderTargetSector:
+            {
+                if (!SectorKnown(sector))
+                {
+                    Notice("No such sector.");
+                    return;
+                }
+                // Already there → hold in place; otherwise hold where it comes through the aleph
+                // (EntryHold anchors on entry) — a sector order never sends anyone to the center.
+                _pigOrders[subject] = ship.SectorId == sector
+                    ? new PigOrder { Kind = OrderGoto, Sector = sector, Pos = ship.State.Pos }
+                    : new PigOrder { Kind = OrderGoto, Sector = sector, EntryHold = true };
+                Directive($"{subjectName}: move to {World.SectorName(sector)}");
+                return;
+            }
             default:
                 return; // malformed targetKind — drop silently, like other malformed frames
         }
@@ -295,6 +329,7 @@ public sealed partial class Simulation
                 slot.TargetRockId = targetId;
                 slot.LastRockId = targetId; // relaunch preference if it docks first
                 slot.BasePinned = false;
+                slot.ProspectSector = 0; // a direct rock order supersedes any prospect run
                 slot.Idle = false;
                 if (slot.Ship is ShipSim live)
                 {
@@ -312,25 +347,64 @@ public sealed partial class Simulation
                     return;
                 }
                 AuthorizeMiningSector(team, sector);
-                // Drop the current claim/preference and re-pick FROM the ordered point, so the
-                // nearest eligible rock to the commander's mark wins (fog still applies — an
-                // undiscovered field leaves the miner on the closest discovered one).
+                // Drop the current claim/preference and re-pick IN the ordered sector only — the
+                // commander said "mine THERE", so the pick must never fall back to a nearer rock
+                // elsewhere (that read as the order being ignored). No eligible rock yet (fog hides
+                // the field until something flies in, or it's depleted) → PROSPECT: fly to the
+                // ordered point, re-trying the restricted pick every brain tick en route.
                 slot.TargetRockId = 0;
                 slot.LastRockId = 0;
                 slot.BasePinned = false;
                 slot.Idle = false;
+                slot.ProspectSector = sector;
+                slot.ProspectPos = pos;
+                slot.ProspectFromEntry = false;
+                slot.ProspectPatrol = false;
+                if (slot.Ship is ShipSim live)
+                {
+                    // The waypoint is LITERAL: always fly via the mark (Prospect), then pick the
+                    // nearest eligible rock in the ordered sector FROM it on arrival (or start the
+                    // search sweep). No shortcut even when a rock sits next to the mark — the
+                    // commander watches the drone visit the point they set.
+                    live.IsHarvesting = false;
+                    slot.State = MinerState.Prospect;
+                }
+                // Docked: ProspectSector stays set — the relaunch branch of MinerBrainStep spawns
+                // it straight into the run.
+                Directive($"Miner {slot.MinerId}: mine in {World.SectorName(sector)}");
+                return;
+            }
+            case OrderTargetSector:
+            {
+                if (!SectorKnown(sector))
+                {
+                    Notice("No such sector.");
+                    return;
+                }
+                AuthorizeMiningSector(team, sector);
+                // Sector order = PROSPECT the sector: enter through the aleph, then patrol —
+                // sweeping still-undiscovered rocks — until helium-3 turns up (or the sector is
+                // provably dry). The mark anchors wherever the drone enters the sector.
+                slot.TargetRockId = 0;
+                slot.LastRockId = 0;
+                slot.BasePinned = false;
+                slot.Idle = false;
+                slot.ProspectSector = sector;
+                slot.ProspectPos = default;
+                slot.ProspectPatrol = false;
+                slot.ProspectFromEntry = true;
                 if (slot.Ship is ShipSim live)
                 {
                     live.IsHarvesting = false;
-                    if (PickRock(slot, sector, pos) is ulong next)
+                    slot.State = MinerState.Prospect;
+                    if (live.SectorId == sector)
                     {
-                        slot.TargetRockId = next;
-                        slot.State = MinerState.ToRock;
+                        // Already inside: prospect from where it sits.
+                        slot.ProspectPos = live.State.Pos;
+                        slot.ProspectFromEntry = false;
                     }
-                    else
-                        GoHome(slot, live, remember: false);
                 }
-                Directive($"Miner {slot.MinerId}: mine in {World.SectorName(sector)}");
+                Directive($"Miner {slot.MinerId}: prospect {World.SectorName(sector)}");
                 return;
             }
             case OrderTargetBase:
@@ -465,6 +539,14 @@ public sealed partial class Simulation
             {
                 if (me.SectorId != o.Sector)
                     return OrderGatePlan(in ctx, o.Sector) ?? CompleteOrder(me.ShipId);
+                if (o.EntryHold)
+                {
+                    // Sector-transit order: anchor the hold point where the drone ENTERED the
+                    // sector — through the aleph and no further, never a run at the center.
+                    o.Pos = ctx.MyPos;
+                    o.EntryHold = false;
+                    _pigOrders[me.ShipId] = o;
+                }
                 if (!o.Holding && (o.Pos - ctx.MyPos).LengthSquared() <= PigPatrolArrive * PigPatrolArrive)
                 {
                     o.Holding = true;

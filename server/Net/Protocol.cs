@@ -70,7 +70,7 @@ public static class Protocol
     public const byte MsgSetTeamName = 9; // u8 team, u16 len, utf8 name — rename a team you're on (server validates membership)
     public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
     public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
-    public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only).
+    public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/4 sector/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only). Kind 4 ignores pos: pigs hold just inside the entry aleph, miners prospect-patrol the sector until helium-3 is found.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)

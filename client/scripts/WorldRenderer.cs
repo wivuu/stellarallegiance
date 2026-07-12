@@ -759,6 +759,18 @@ public partial class WorldRenderer : Node3D
         return _friendlyScratch;
     }
 
+    // A live friendly ship by id, IGNORING the view-sector visibility filter — the F3 map keeps
+    // units selected while the commander views OTHER sectors (team ships are streamed in every
+    // sector, so the node exists until the ship actually despawns). Null once despawned. The
+    // local ship is a PredictionController, not a RemoteShip, so it stays naturally excluded.
+    public RemoteShip? FriendlyShipById(ulong shipId) =>
+        MarkerTeam is byte team
+        && _shipNodes.TryGetValue(shipId, out var node)
+        && node is RemoteShip rs
+        && rs.Team == team
+            ? rs
+            : null;
+
     // Bases in the currently-visible (local) sector, as (world position, team, dead). Returns a
     // shared scratch list — read it immediately. Mirrors the ship accessors' sector filter
     // via Node.Visible, so off-screen base indicators only reflect the sector you're flying.
