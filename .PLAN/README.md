@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Content in settings modal(s) needs more padding from scrollbar
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 ---
 
@@ -300,13 +299,19 @@ Stage-1 YAML pipeline.
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **[XL]** **Mining + economy** — resource asteroids, miners, ore flow, build queues — *upgrades* the
-  Stage-2 flat paycheck into the real Allegiance economy.
+  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
+- ✅ **[XL]** **Mining + economy** — DONE (2026-07-11, `mining` branch): rock classes (He3 harvestable,
+  volume-proportional shrink streamed via `MsgRockUpdate`), per-team AI miner drones
+  (`Simulation.Mining.cs`, purchasable via `/buyminer`, sector orders via `/mine <sector>`, status via
+  `/miners`), multi-hop aleph routing (`World.NextGateTo`, players get multi-hop autopilot free),
+  offload → team credits alongside the flat paycheck. `tests/MiningTest` + pinned-seed layout golden.
+  *Deferred:* build queues, commander-gated authority, refinery uses for uranium/silicon/carbonaceous,
+  shrunk-rock vision occlusion / PIG avoidance (stay at spawn radius).
   - Create classes of rock that asteroids should be categorized into (e.g., helium-3, uranium, silicon, and carbonaceous).
-  - Each team starts with 1 miner
+  - Each team starts with 1 miner, but can purchase up to 4 at a time (configurable max in world yaml)
   - Miners harvest only from helium-3 asteroids
   - Miners, once launched, will auto-pilot to the nearest helium-3 asteroid that is
-    - a. Not already targeted by another miner
+    - a. Not already targeted by another miner, unless there are more miners than asteroids
     - b. Not depleted
     - c. Was already 'working on' before filling
   - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.

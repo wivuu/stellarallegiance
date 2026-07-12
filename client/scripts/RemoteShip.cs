@@ -1,72 +1,23 @@
-using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 
 // Other players' ships (T6). The client cannot predict a remote ship (it doesn't
-// have that player's input), so it renders authoritative snapshots with a fixed
-// delay and INTERPOLATES between them — standard snapshot interpolation. This
-// trades ~100 ms of latency for smooth motion despite 20 Hz (~18.7 Hz here)
-// authoritative updates. No forward extrapolation (.PLAN/07).
-//
-// Samples are placed on the SERVER-TICK timeline (tick × MsPerTick), NOT on client
-// arrival time. The server emits state on an exactly uniform tick cadence, but the
-// packets arrive jittered by the network; timestamping by arrival makes the interp
-// segments uneven in duration while the playback clock sweeps uniformly, so the
-// rendered speed wobbles frame-to-frame — visible as choppy motion, worst when
-// pacing a teammate at matched velocity (their relative motion should be dead
-// steady). Stamping by tick makes every segment uniform; the playback clock then
-// rides a smoothed wall→server offset (filters arrival jitter, still tracks drift).
+// have that player's input), so it renders authoritative snapshots behind an
+// adaptive delay via the shared MotionInterpolator: Hermite interpolation between
+// samples on the wire velocities, bounded velocity dead-reckoning past the newest
+// sample, and error-blend (no snap) when a late authoritative sample lands. All
+// timeline/smoothing mechanics (tick-stamped samples, adaptive gap-sized delay,
+// clock-offset EMA, corrupt-sample guards) live in MotionInterpolator — this node
+// is just the ship-flavored consumer (flags, HUD state, engine glow, mining roll).
 public partial class RemoteShip : Node3D
 {
-    // Render this far behind the latest sample so there are normally two samples
-    // bracketing the render time. ~100 ms ≈ 2 server ticks. (.PLAN/07) This is the FLOOR
-    // for the adaptive delay below — nearby full-rate ships never need more.
-    private const double InterpDelayMs = 100.0;
-    private const int MaxSamples = 16;
-
-    // Adaptive interpolation. Coarse-AOI ships (beyond the server's nearest-N, or in another
-    // sector) arrive at ~1/10th the rate of full-rate ships — ~500 ms apart — so the fixed
-    // 100 ms buffer can't bracket their gaps: renderT runs past the newest sample, the ship
-    // holds, then snaps when the next coarse sample lands (the visible teleport). So instead
-    // of a fixed delay, track each ship's smoothed inter-arrival gap and render ~1.5 gaps
-    // behind, clamped to [floor, cap]. Full-rate ships sit at the 100 ms floor; coarse ships
-    // widen their buffer to span their gap and lerp smoothly across it. The extra latency is
-    // harmless — by construction these are the distant / other-sector ships the server itself
-    // deemed low-priority. As a ship crosses into the full-rate set its gap (hence delay)
-    // decays back to the floor within ~0.5 s.
-    private const double MaxInterpDelayMs = 800.0; // cap: bounds added latency; < MaxSamples*gap
-    private const float GapDelayFactor = 1.5f; // render this many smoothed gaps behind
-    private const float GapEmaAlpha = 0.3f; // inter-arrival EMA responsiveness
-
-    // Start a fresh ship exactly at the floor: floor = gap*factor ⇒ gap = floor/factor.
-    private double _gapEma = InterpDelayMs / GapDelayFactor;
-
-    // Server-tick → server-time conversion. The sim integrates at a fixed dt, so a tick
-    // number maps to an exact server-time stamp; samples live on this jitter-free axis.
-    private const double MsPerTick = FlightModel.Dt * 1000.0;
-
-    // Playback clock = wall clock minus a smoothed (wall − server) offset, kept `delay`
-    // behind the newest sample. The EMA absorbs per-packet arrival jitter (so the clock
-    // advances smoothly with wall time) while still tracking slow client/server clock
-    // drift. Small alpha ⇒ heavy jitter rejection over the ~18 Hz arrival rate.
-    private const float ClockOffsetAlpha = 0.05f;
-    private double _clockOffset; // smoothed (wall ms − server ms)
-    private bool _haveClockOffset;
-
-    private struct Sample
-    {
-        public double T; // server-time stamp (ms) = serverTick * MsPerTick
-        public Vector3 Pos;
-        public Quaternion Rot;
-    }
+    private readonly MotionInterpolator _interp = new(MotionInterpolator.Tunables.Default);
 
     // How fast the smoothed Velocity eases toward the latest authoritative value, as
     // an exponential rate (1/s). ~16 → ~60 ms time constant: fast enough to feel
     // responsive, slow enough to bridge the gaps between snapshots smoothly.
     private const float VelSmoothRate = 16f;
-
-    private readonly List<Sample> _samples = new(); // chronological
 
     public ulong ShipId { get; private set; }
     public byte Team { get; private set; }
@@ -75,13 +26,25 @@ public partial class RemoteShip : Node3D
     // the per-class HUD glyph; a pod (IsPod) overrides this with the pod symbol.
     public ShipClass Class { get; private set; }
 
-    // AI combat drone (PIG) rather than a player ship — read straight off the row.
-    // TargetMarkers uses it to highlight drones distinctly on the HUD.
+    // AI combat drone (PIG) rather than a player ship — read straight off the row. Orthogonal to
+    // Kind (a PIG pod is IsPig && Kind.Pod). TargetMarkers uses it to highlight drones distinctly.
     public bool IsPig { get; private set; }
 
-    // Escape pod (Ship.IsPod): harmless, unarmed. Excluded from the enemy target set
-    // (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
-    public bool IsPod { get; private set; }
+    // The ship's ROLE (Ship.Kind): Combat / Pod / Miner / Constructor. Single source of truth for the
+    // derived reads below; TargetMarkers switches on it to pick the HUD glyph.
+    public ShipKind Kind { get; private set; }
+
+    // Escape pod (Kind.Pod): harmless, unarmed. Excluded from the enemy target set (no marker, no Tab
+    // focus) so you don't waste a lock on a drifting opponent's pod.
+    public bool IsPod => Kind == ShipKind.Pod;
+
+    // AI mining ship (Kind.Miner): a non-combat harvester. TargetMarkers tags a focused one "MINER".
+    public bool IsMiner => Kind == ShipKind.Miner;
+
+    // Actively transferring ore (Ship.IsMining / ShipFlagMining): toggles per tick as the server's
+    // miner grinds a rock. WorldRenderer reads this to attach/detach the mining beam; _Process rolls
+    // the cosmetic ship model while it's set. Updated in Push (NOT Initialize — it's per-tick state).
+    public bool IsMining { get; private set; }
 
     // Smoothed authoritative velocity (u/s, Godot space) for the target-lead indicator
     // (TargetMarkers). The value comes straight from the Ship row (`Ship.Vel`) rather
@@ -102,6 +65,10 @@ public partial class RemoteShip : Node3D
     // then. MaxShield is 0 for a hull that carries no shield, so no shield band is drawn.
     public float Health { get; private set; }
     public float Shield { get; private set; }
+
+    // Authoritative instance mass off the Ship row — the local ship's ship-ship collision
+    // prediction weights its impulse share by it, matching the server's ResolveShipImpulse.
+    public float Mass { get; private set; }
     public float MaxHealth =>
         _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
     public float MaxShield =>
@@ -123,6 +90,18 @@ public partial class RemoteShip : Node3D
     private float _burnCooldown; // seconds until the next burst roll
     private Vector3 _prevHeading; // last travel direction (for turn detection)
     private bool _hasHeading;
+
+    // Cosmetic mining roll: while IsMining, the ShipModel child gently barrel-rolls about the hull's
+    // forward axis (a "beam grinding" flourish); it eases back to upright when the flag drops. The
+    // ship's LOGICAL transform stays server-true — only the model child spins, the same local-VFX
+    // precedent as the synthesized afterburner. The applied roll = _rollPhase × _rollBlend, so
+    // dropping the flag (blend → 0) unwinds the roll smoothly to 0 without snapping.
+    private const float MiningRollRate = 25f * Mathf.Pi / 180f; // ~25°/s barrel roll (rad/s)
+    private const float MiningRollEase = 6f; // blend ease rate (1/s) in/out of the roll
+    private Node3D? _shipModel; // cached ShipModel child (lazy)
+    private bool _lookedUpShipModel;
+    private float _rollPhase; // accumulated roll angle (rad) while mining
+    private float _rollBlend; // 0..1 eased presence of the roll
 
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
@@ -163,7 +142,7 @@ public partial class RemoteShip : Node3D
         Team = row.Team;
         Class = row.Class;
         IsPig = row.IsPig;
-        IsPod = row.IsPod;
+        Kind = row.Kind;
         _defs = defs; // kept so MaxHealth/MaxShield can resolve the class def live (it may stream in later)
         // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
         // leaves the harmless 1f default until the row lands — no baked tuning on the
@@ -179,77 +158,35 @@ public partial class RemoteShip : Node3D
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
 
-    // Sanitize a snapshot rotation. A degenerate (0,0,0,0) quaternion — e.g. an
-    // un-initialized or transient ship state on the wire — would NaN under Normalized()
-    // (divide by ~0), and a single NaN assignment permanently poisons the node's Basis
-    // (every later read throws "must be normalized"), since a ship that then stops
-    // receiving samples never recovers. Reject non-finite/zero-length; fall back to identity.
-    private static Quaternion SafeRot(float x, float y, float z, float w)
-    {
-        var q = new Quaternion(x, y, z, w);
-        float len2 = q.LengthSquared();
-        if (!float.IsFinite(len2) || len2 < 1e-6f)
-            return Quaternion.Identity;
-        return q.Normalized();
-    }
-
-    private static bool IsFinite(Vector3 v) => v.IsFinite();
-
     private void Push(Ship row, uint serverTick)
     {
-        double serverMs = serverTick * MsPerTick;
+        bool first = !_interp.HasSamples;
+        bool accepted = _interp.Push(
+            serverTick,
+            new Vector3(row.PosX, row.PosY, row.PosZ),
+            new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW),
+            new Vector3(row.VelX, row.VelY, row.VelZ),
+            new Vector3(row.AngVelX, row.AngVelY, row.AngVelZ),
+            hasVel: true,
+            Time.GetTicksMsec());
+        if (!accepted)
+            return; // stale/out-of-order frame — per-tick state below would regress too
 
-        // Reject stale/out-of-order frames (a reordered or duplicate packet on the unreliable
-        // WebRTC channel): the segment search below assumes _samples is chronological by T, and
-        // a backward stamp would corrupt it. Newest-only is fine — we never extrapolate.
-        if (_samples.Count > 0 && serverMs <= _samples[^1].T)
-            return;
-
-        // Smoothed wall→server offset so _Process can map wall time onto the server timeline
-        // without inheriting this packet's arrival jitter. Seed from the first sample.
-        double offset = Time.GetTicksMsec() - serverMs;
-        if (!_haveClockOffset)
-        {
-            _clockOffset = offset;
-            _haveClockOffset = true;
-        }
-        else
-            _clockOffset += (offset - _clockOffset) * ClockOffsetAlpha;
-
-        var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-        var s = new Sample
-        {
-            T = serverMs,
-            Pos = IsFinite(pos) ? pos : Position, // keep last good on a corrupt sample
-            Rot = SafeRot(row.RotX, row.RotY, row.RotZ, row.RotW),
-        };
-        var vel = new Vector3(row.VelX, row.VelY, row.VelZ);
-        _velTarget = IsFinite(vel) ? vel : Vector3.Zero;
+        _velTarget = _interp.LatestVelocity;
 
         // Latest authoritative hull/shield for the focused-target HP arc (no interpolation needed).
         Health = row.Health;
         Shield = row.Shield;
+        Mass = row.Mass;
+        IsMining = row.IsMining; // per-tick mining flag → drives the beam (WorldRenderer) + model roll (_Process)
 
-        // Track the smoothed gap between successive samples (now in jitter-free server time, so
-        // this is the ship's true update cadence) to size the render delay below. Reject
-        // absurd (>4 s, a stall or respawn) deltas so a hiccup doesn't blow up the buffer.
-        if (_samples.Count > 0)
+        if (first)
         {
-            double gap = s.T - _samples[^1].T; // > 0 by the stale guard above
-            if (gap < 4000.0)
-                _gapEma += (gap - _gapEma) * GapEmaAlpha;
-        }
-
-        _samples.Add(s);
-        if (_samples.Count > MaxSamples)
-            _samples.RemoveRange(0, _samples.Count - MaxSamples);
-
-        if (_samples.Count == 1)
-        {
-            // First sample: render at it until we have a pair to interpolate, and seed
-            // the velocity so it eases from the real value rather than ramping from zero.
-            Position = s.Pos;
-            Quaternion = s.Rot;
+            // First sample: render at it until a pair exists to interpolate, and seed the
+            // velocity so it eases from the real value rather than ramping from zero.
+            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            Position = p;
+            Quaternion = q;
             Velocity = _velTarget;
         }
     }
@@ -281,53 +218,76 @@ public partial class RemoteShip : Node3D
             _engine.SetThrottle(throttle, boost);
         }
 
-        int n = _samples.Count;
-        if (n == 0)
-            return;
-        if (n == 1)
+        UpdateMiningRoll((float)delta);
+
+        // The shared interpolator owns the whole pose pipeline: adaptive delay, Hermite
+        // interpolation on the wire velocities, bounded dead-reckoning, error-blend correction.
+        if (_interp.HasSamples)
         {
-            Position = _samples[0].Pos;
-            Quaternion = _samples[0].Rot;
-            return;
+            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            Position = p;
+            Quaternion = q;
         }
+    }
 
-        // Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. Floor keeps nearby
-        // ships crisp; the widened delay lets coarse ships' two bracketing samples straddle
-        // renderT so the lerp below bridges the ~500 ms gap instead of holding then snapping.
-        double delay = System.Math.Clamp(_gapEma * GapDelayFactor, InterpDelayMs, MaxInterpDelayMs);
-        // Map wall time onto the server timeline via the smoothed offset, then render `delay`
-        // behind. The offset filtered out the arrival jitter, so renderT sweeps the uniformly
-        // tick-spaced samples at a steady rate — uniform interp segments, smooth motion.
-        double renderT = (Time.GetTicksMsec() - _clockOffset) - delay;
-
-        // Before our oldest sample → clamp to it.
-        if (renderT <= _samples[0].T)
+    // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.
+    // Rolls about the hull's forward axis (local +Z), leaving the logical Node3D transform untouched
+    // so prediction/interp/collision stay server-true. Once fully unwound (blend ≈ 0) the model's
+    // roll is reset to identity so it never drifts.
+    private void UpdateMiningRoll(float dt)
+    {
+        // Ease the roll presence toward on/off. The applied angle is phase × blend, so a dropped flag
+        // fades the whole roll back to upright rather than freezing at an arbitrary angle.
+        _rollBlend = Mathf.Lerp(_rollBlend, IsMining ? 1f : 0f, 1f - Mathf.Exp(-MiningRollEase * dt));
+        if (_rollBlend < 0.001f && !IsMining)
         {
-            Position = _samples[0].Pos;
-            Quaternion = _samples[0].Rot;
-            return;
-        }
-
-        // Find the segment [a, b] with a.T <= renderT <= b.T and interpolate.
-        for (int i = 0; i < n - 1; i++)
-        {
-            var a = _samples[i];
-            var b = _samples[i + 1];
-            if (renderT >= a.T && renderT <= b.T)
+            if (_rollPhase != 0f)
             {
-                float dt = (float)(b.T - a.T);
-                float f = dt > 0f ? Mathf.Clamp((float)(renderT - a.T) / dt, 0f, 1f) : 1f;
-                Position = a.Pos.Lerp(b.Pos, f);
-                Quaternion = a.Rot.Slerp(b.Rot, f);
-                return;
+                _rollPhase = 0f;
+                _rollBlend = 0f;
+                if (ResolveShipModel() is { } m0)
+                    m0.Rotation = m0.Rotation with { Z = 0f };
             }
+            return;
         }
+        // Wrap the accumulated phase to one turn WHILE mining (blend is saturated at 1 there, so the
+        // 2π→0 wrap is seamless) — this bounds the unwind on the falling edge to at most one rotation
+        // rather than spinning back through every turn of a long mining session.
+        if (IsMining)
+            _rollPhase = (_rollPhase + MiningRollRate * dt) % Mathf.Tau;
 
-        // renderT is past our newest sample (no fresh data) → hold latest, no
-        // extrapolation. A brief stall here means updates stopped arriving.
-        var last = _samples[n - 1];
-        Position = last.Pos;
-        Quaternion = last.Rot;
+        if (ResolveShipModel() is { } m)
+            m.Rotation = m.Rotation with { Z = _rollPhase * _rollBlend };
+    }
+
+    // Lazily resolve (and cache) the ShipModel child WorldRenderer attaches. Cached even when null
+    // so the lookup runs at most once (a pod/ship whose model failed to build never re-walks).
+    private Node3D? ResolveShipModel()
+    {
+        if (!_lookedUpShipModel)
+        {
+            _shipModel = GetNodeOrNull<Node3D>("ShipModel");
+            _lookedUpShipModel = true;
+        }
+        return _shipModel;
+    }
+
+    // The mining muzzle: the ship's first weapon hardpoint (HP_Weapon_0). The miner hull is unarmed
+    // in YAML, but its GLB still carries an HP_Weapon_0 node (merged as an empty mount), so the beam
+    // can emanate from the actual muzzle geometry instead of the hull origin. The node lives under the
+    // (barrel-rolling) ShipModel, so its GlobalPosition already tracks the cosmetic mining roll.
+    // Resolved once and cached (even when absent → fall back to the hull centre).
+    private Node3D? _miningMuzzle;
+    private bool _lookedUpMuzzle;
+
+    public Vector3 MiningMuzzleWorld()
+    {
+        if (!_lookedUpMuzzle)
+        {
+            _lookedUpMuzzle = true;
+            _miningMuzzle = ResolveShipModel()?.FindChild("HP_Weapon_*", recursive: true, owned: false) as Node3D;
+        }
+        return _miningMuzzle is { } m ? m.GlobalPosition : GlobalPosition;
     }
 
     // Synthesized PIG afterburner. Tracks the drone's travel direction (from the

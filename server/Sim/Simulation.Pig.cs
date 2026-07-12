@@ -1017,7 +1017,10 @@ public sealed partial class Simulation
     }
 
     // Bend desiredDir around asteroids lying ahead within the lookahead distance.
-    private Vec3 PigAvoidAsteroids(uint sector, Vec3 pos, Vec3 desiredDir)
+    // excludeRockId (default 0 = none) skips one rock from the avoidance scan — used by a miner flying
+    // AT / harvesting a rock, so the avoid deflection never swings its nose off the very rock it's
+    // heading for. Default keeps every combat-PIG caller byte-identical (PIG-determinism guarded).
+    private Vec3 PigAvoidAsteroids(uint sector, Vec3 pos, Vec3 desiredDir, ulong excludeRockId = 0)
     {
         Vec3 dir = NormalizeOr(desiredDir, new Vec3(0f, 0f, 1f));
         Vec3 steer = default;
@@ -1033,12 +1036,18 @@ public sealed partial class Simulation
                 continue;
             foreach (var rock in cell)
             {
+                if (rock.Id == excludeRockId)
+                    continue; // don't avoid the rock we're flying at / mining
                 Vec3 toA = rock.Pos - pos;
                 float proj = Dot(toA, dir);
                 if (proj <= 0f || proj > PigAvoidLookahead)
                     continue;
                 Vec3 closest = pos + dir * proj;
                 Vec3 off = closest - rock.Pos;
+                // Deliberately the SPAWN radius (not RockCurrentRadius): steering wider around a mined
+                // rock is harmless (extra clearance), and this runs inside the PIG-determinism-guarded
+                // brain — reading live ore state here would couple avoidance to harvest timing. v1 keeps
+                // PIG avoidance at spawn size (conservative, documented).
                 float clearance = rock.Radius + World.ShipRadius + PigAvoidMargin;
                 float perp = off.Length();
                 if (perp >= clearance)

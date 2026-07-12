@@ -76,10 +76,11 @@ public sealed class LoggingMatchResultSink : IMatchResultSink
     public void ReportResult(byte winner) => Log.MatchResult(_log, winner);
 }
 
-// Decides when a lobby should start its match. Default: start once at least one player is
-// ready and every connected player is ready (so a solo dev can ready-up and play, and a full
-// lobby starts when everyone's set). A future implementation could add team-balance checks,
-// queues, or rating. `autoStart` short-circuits to "always start" for bots / benchmarking.
+// Decides when a lobby should start its match. Default: start the instant ANY teamed pilot is
+// ready — the first pilot to click LAUNCH kicks off the match rather than waiting for every
+// teamed pilot to ready up (so a solo dev can ready-up and play, and a group starts the moment
+// the first player commits). A future implementation could add team-balance checks, queues, or
+// rating. `autoStart` short-circuits to "always start" for bots / benchmarking.
 public interface IMatchmaker
 {
     bool ShouldStart(System.Collections.Generic.IReadOnlyList<LobbyEntry> lobby);
@@ -97,17 +98,16 @@ public sealed class ReadyUpMatchmaker : IMatchmaker
             return false;
         if (_autoStart)
             return true;
-        // NOAT pilots (no side picked) are spectators — they don't gate the match. Start once at
-        // least one teamed pilot exists and every teamed pilot is ready.
-        bool anyReady = false;
+        // NOAT pilots (no side picked) are spectators — they never gate or trigger the match. Start
+        // the instant ANY teamed pilot is ready: the first pilot to click LAUNCH begins the match;
+        // un-readied teammates don't hold it back (they auto-enter the hangar on match start).
         foreach (var e in lobby)
         {
             if (e.Team != 0 && e.Team != 1)
                 continue;
-            if (!e.Ready)
-                return false;
-            anyReady = true;
+            if (e.Ready)
+                return true;
         }
-        return anyReady;
+        return false;
     }
 }

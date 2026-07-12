@@ -751,6 +751,44 @@ public partial class GameNetClient : Node
             case 20:
                 ApplyMapList(r);
                 break;
+            case 22:
+                ApplyRockUpdate(r);
+                break;
+            case 23:
+                ApplyMinerTargets(r);
+                break;
+        }
+    }
+
+    // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
+    // at the real target instead of guessing the nearest He3 rock. Replaces the whole set each frame it
+    // arrives (a miner that stopped mining simply drops out of the broadcast). Broadcast — the renderer
+    // only draws a beam for a ship+rock it can actually see, so an unknown id is harmless.
+    private void ApplyMinerTargets(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var map = new System.Collections.Generic.Dictionary<ulong, ulong>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            ulong rockId = r.ReadUInt64();
+            map[shipId] = rockId;
+        }
+        _world.NetUpdateMinerTargets(map);
+    }
+
+    // MsgRockUpdate (mining): live rock shrink deltas — the renderer eases each rock's mesh + collision
+    // toward the new radius and refreshes its stored orePct (drives the DEPLETED readout). Fog on:
+    // only rocks this team has discovered arrive here (server-filtered).
+    private void ApplyRockUpdate(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            float radius = r.ReadSingle();
+            int orePct = r.ReadByte();
+            _world.NetUpdateRock(id, radius, orePct);
         }
     }
 
@@ -1216,6 +1254,15 @@ public partial class GameNetClient : Node
         row.RotY = r.ReadSingle();
         row.RotZ = r.ReadSingle();
         row.Variant = AsteroidShapes.NameForIndex(variant);
+        // Mining block (mirror of Protocol.WriteRockStatic): class + the live (possibly mined-down)
+        // radius + ore fill. A rock seen for the first time already carries its shrunk size here, so
+        // the renderer/collision spawn it at CurrentRadius rather than the spawn Radius.
+        row.RockClass = r.ReadByte();
+        row.CurrentRadius = r.ReadSingle();
+        row.OrePct = r.ReadByte();
+        // OreCapacity is the LAST field of the rock static (Welcome + MsgReveal share this reader).
+        // ≤ 0 = no readout (non-He3 rock). Remaining ore = round(OrePct/100 × OreCapacity).
+        row.OreCapacity = r.ReadSingle();
         return row;
     }
 
@@ -1352,6 +1399,7 @@ public partial class GameNetClient : Node
             d.RadarSignature = r.ReadSingle();
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
+            d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
@@ -1615,8 +1663,15 @@ public partial class GameNetClient : Node
                 Team = team,
                 Class = (ShipClass)cls,
                 IsPig = (flags & 1) != 0,
-                IsPod = (flags & 2) != 0,
                 Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
+                // Role bits are mutually exclusive; Combat (no bit) is the default. Order mirrors the
+                // server's WriteShip switch (ShipFlagConstructor=128, Miner=32, Pod=2).
+                Kind =
+                    (flags & 128) != 0 ? ShipKind.Constructor
+                    : (flags & 32) != 0 ? ShipKind.Miner
+                    : (flags & 2) != 0 ? ShipKind.Pod
+                    : ShipKind.Combat,
+                IsMining = (flags & 64) != 0, // ShipFlagMining — actively transferring ore (drives beam/roll VFX)
 
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,

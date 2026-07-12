@@ -16,6 +16,8 @@
 //  since the server and client compile the same source for them.
 // =====================================================================
 
+using StellarAllegiance.Shared;
+
 namespace StellarAllegiance.Net
 {
     // Ship class id. Order fixes the byte values on the wire: Scout=0, Fighter=1, Bomber=2.
@@ -67,9 +69,15 @@ namespace StellarAllegiance.Net
         public byte MineAmmo; // mine fields left in the dispenser
         public byte ProbeAmmo; // recon probes left in the dispenser
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
-        public bool IsPig; // AI combat drone
-        public bool IsPod; // escape pod
+        public bool IsPig; // AI combat drone (orthogonal to Kind — a PIG pod is IsPig && Kind.Pod)
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
+        public ShipKind Kind; // the ship's ROLE (Combat/Pod/Miner/Constructor), decoded from the flags byte
+        public bool IsMining; // actively transferring ore (ShipFlagMining) — toggles per tick, drives the mining beam/roll VFX
+
+        // Derived role reads — Kind is the single source of truth, so the many pod/miner-aware call
+        // sites keep working and can never disagree with it.
+        public bool IsPod => Kind == ShipKind.Pod; // ejected escape pod
+        public bool IsMiner => Kind == ShipKind.Miner; // AI mining ship — HUD tags it MINER
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The
@@ -135,7 +143,10 @@ namespace StellarAllegiance.Net
         public float Health;
     }
 
-    // A field asteroid (static, from Welcome). Variant is the GLB mesh name (cosmetic).
+    // A field asteroid (static, from Welcome). Variant is the GLB mesh name (cosmetic). Radius is the
+    // immutable SPAWN radius; CurrentRadius is the live (mined-down) size — the renderer/collision use
+    // CurrentRadius so a shrunk rock reads at its actual size. RockClass mirrors Shared.RockClass;
+    // OrePct is 0-100 (He3 fill) and 0 for every non-He3 rock. Live shrink arrives via MsgRockUpdate.
     public sealed class Asteroid
     {
         public ulong AsteroidId;
@@ -148,6 +159,12 @@ namespace StellarAllegiance.Net
         public float RotX,
             RotY,
             RotZ;
+        public byte RockClass;
+        public float CurrentRadius;
+        public int OrePct;
+        // Total He3 ore this rock can yield (server-authored capacity). Remaining ore =
+        // round(OrePct/100 × OreCapacity). ≤ 0 means "no readout" (non-He3 rock).
+        public float OreCapacity;
     }
 
     // An aleph warp gate (static, from Welcome).

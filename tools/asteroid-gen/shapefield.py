@@ -25,17 +25,39 @@ from __future__ import annotations
 import numpy as np
 
 EPS = 1e-3
-KINDS = ("carbonaceous", "stony", "metallic")
+# The base spectral types (carbonaceous / stony / metallic) plus the resource-class looks the
+# game maps onto RockClass (helium3 / uranium / regolith). Each is purely a silhouette +
+# PBR material recipe — the gameplay meaning lives on the server (RockClass); asteroid-gen only
+# knows the look. See shared/AsteroidShapes.cs for the class -> variant-pool binding.
+KINDS = ("carbonaceous", "stony", "metallic", "helium3", "uranium", "regolith")
 
-# type -> base silhouette generator
-_SHAPE = {"carbonaceous": "lobed", "stony": "faceted_gouged", "metallic": "faceted"}
+# type -> base silhouette generator (new resource kinds reuse the three existing generators)
+_SHAPE = {
+    "carbonaceous": "lobed", "stony": "faceted_gouged", "metallic": "faceted",
+    "helium3": "faceted", "uranium": "faceted", "regolith": "lobed",
+}
 
 # type -> (albedo lit tone, albedo shadow tone, base roughness, metalness)
+# IMPORTANT: tones are LINEAR — bake.py sRGB-encodes them before writing the 8-bit albedo, so a
+# linear 0.30 bakes to ~0.58 sRGB (a bright grey). Keep tones LOW or rocks read washed-out/white.
 _MATERIAL = {
-    "carbonaceous": ((0.075, 0.070, 0.064), (0.034, 0.032, 0.030), 0.95, 0.0),
-    "stony":        ((0.36, 0.31, 0.26),    (0.17, 0.145, 0.12),    0.85, 0.06),
+    # Base spectral types. "stony" is repurposed as the Silicon look; "carbonaceous" as the
+    # Carbonaceous look (see gameplay comments below). "metallic" is currently unused by any pool.
+    "carbonaceous": ((0.033, 0.055, 0.107), (0.016, 0.026, 0.052), 0.90, 0.0),   # Carbonaceous: dark blue-grey
+    "stony":        ((0.215, 0.300, 0.195), (0.110, 0.155, 0.100), 0.80, 0.05),  # Silicon: greenish-white silicate (green > R,B so it reads green-white, not yellow-white)
     "metallic":     ((0.56, 0.56, 0.59),    (0.30, 0.30, 0.33),     0.34, 0.92),
+    # Resource-class looks (RockClass): each reads distinctly at a glance.
+    "helium3":      ((0.30, 0.52, 0.57),    (0.15, 0.28, 0.32),     0.45, 0.12),  # valuable: bright saturated cyan crystal
+    "uranium":      ((0.26, 0.045, 0.014),  (0.12, 0.020, 0.007),   0.68, 0.10),  # orange-red ore, matte (not metallic)
+    "regolith":     ((0.073, 0.058, 0.045),  (0.036, 0.028, 0.021),  0.97, 0.0),   # dull grey-brown dust, matte (desaturated so per-seed hue can push it grey<->tan<->olive)
 }
+
+# Kinds whose colour IS the gameplay class identity: every rock of the class must read as the
+# SAME colour, so their per-seed hue lean is pinned off (only a faint brightness wobble remains
+# for non-cloned variety). "metallic" is the sole free spectral type and keeps the full hue range.
+# "regolith" is a special case (see _colour_params): as the common filler rock it keeps a *muted*
+# per-seed hue lean so a field isn't cloned, while still reading as one dull dust composition.
+_CLASS_UNIFORM = {"carbonaceous", "stony", "helium3", "uranium", "regolith"}
 
 # bump amplitude cutoff used to estimate each bump's angular footprint (for culling)
 _BUMP_CUTOFF = 0.02
@@ -170,9 +192,26 @@ def _colour_params(rng, kind, *, tint=None, value=None) -> dict:
     # axis is anti-correlated across R/B so luminance stays put and the rock genuinely changes
     # colour rather than just value. Amplitudes are proportional (multiplicative), tuned to be
     # clearly visible but still mineral (brass / steel / cool-grey / olive), not neon.
-    bright = rng.uniform(0.78, 1.22)
-    warm = rng.uniform(-0.14, 0.18)        # + warm (brassy), - cool (steely blue)
-    grn = rng.uniform(-0.09, 0.09)         # + green/olive, - magenta
+    # For gameplay-class kinds the HUE is pinned (colour = class identity, so all rocks of a class
+    # match); only a faint brightness wobble survives so a field doesn't look cloned.
+    uniform = kind in _CLASS_UNIFORM
+    # Regolith is the common filler rock: every one should read as the same dull dust
+    # *composition*, but a field of identical clones looks wrong. So it gets a MUTED
+    # per-seed hue lean (grey <-> tan <-> olive) — much smaller than the free spectral
+    # range, just enough to break the cloned look while staying clearly one material.
+    muted = kind == "regolith"
+    if muted:
+        bright = rng.uniform(0.82, 1.18)
+        warm = rng.uniform(-0.07, 0.09)   # + warm (tan), - cool (grey)
+        grn = rng.uniform(-0.05, 0.05)    # + olive, - cool grey
+    elif uniform:
+        bright = rng.uniform(0.90, 1.10)
+        warm = 0.0
+        grn = 0.0
+    else:
+        bright = rng.uniform(0.78, 1.22)
+        warm = rng.uniform(-0.14, 0.18)   # + warm (brassy), - cool (steely blue)
+        grn = rng.uniform(-0.09, 0.09)    # + green/olive, - magenta
     hue = 1.0 + np.array([warm, grn, -warm])
     # deliberate per-entry nudges from the catalog (default: none)
     if value is not None:

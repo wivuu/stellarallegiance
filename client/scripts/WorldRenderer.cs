@@ -58,6 +58,35 @@ public partial class WorldRenderer : Node3D
     // derived once from its id (stable across frames; the sim treats rocks as static spheres).
     // Applied each frame in _Process; entries mirror _asteroidNodes' lifetime.
     private readonly Dictionary<ulong, (Node3D Node, Quaternion Base, Vector3 Axis, float Speed)> _asteroidSpins = new();
+
+    // Decoded rock rows kept by id so a live MsgRockUpdate (mining shrink) can update the stored
+    // CurrentRadius/OrePct and the target display can read the rock's class/depletion. Mirrors
+    // _asteroidNodes' lifetime.
+    private readonly Dictionary<ulong, Asteroid> _asteroidRows = new();
+
+    // One active mining beam per ship currently transferring ore (ShipFlagMining). Attached as a
+    // child of the ship node and torn down on the flag's falling edge (UpdateMiningBeams). Purely
+    // client-side VFX — the server streams the flag plus (via MsgMinerTargets) the exact target rock.
+    private readonly Dictionary<ulong, MiningBeam> _miningBeams = new();
+    private readonly List<ulong> _miningBeamPrune = new(); // scratch: beams to drop this frame
+
+    // Streamed (MsgMinerTargets): shipId -> the rock that miner is actively harvesting, so the beam
+    // aims at the real target instead of guessing the nearest He3. Replaced wholesale each frame it
+    // arrives; a miner that stops mining drops out of the broadcast (and its beam clears on the flag).
+    private Dictionary<ulong, ulong> _minerTargetRock = new();
+
+    // Scale basis per rock: the node's mesh divides its render radius by this to get its uniform
+    // scale (mesh authored bound, or the baked sphere-fallback radius), so a target radius maps to a
+    // node scale of Vector3.One * (radius / Divisor). Populated at InsertAsteroid.
+    private readonly Dictionary<ulong, (Node3D Node, float Divisor)> _rockScaleBasis = new();
+    // Rocks currently easing toward a new (mined-down) radius; the value is the target radius. Eased
+    // in _Process and dropped once the node reaches it, so a static world costs nothing here.
+    private readonly Dictionary<ulong, float> _rockShrinkTarget = new();
+    private readonly List<ulong> _rockShrinkDone = new(); // scratch: rocks that finished easing this frame
+    // id -> index into _asteroidClip, so a live shrink updates the bolt/sun-occlusion clip radius in
+    // O(1) (clip entries are append-only until Clear, so the index is stable).
+    private readonly Dictionary<ulong, int> _asteroidClipIndex = new();
+
     private readonly Dictionary<ulong, Node3D> _shipNodes = new();
 
     // Latest authoritative shield charge per ship, fed from the snapshot rows. CheckBoltImpacts reads
@@ -288,6 +317,9 @@ public partial class WorldRenderer : Node3D
     // Ships currently overlapping a static obstruction, so the collision thud fires once on
     // ENTRY rather than every frame while grinding against a hull. Mirrors _shipNodes' lifetime.
     private readonly HashSet<ulong> _collidingShips = new();
+
+    // Ship-PAIR thud debounce (id-ordered key), mirroring _collidingShips for ship-vs-ship contacts.
+    private readonly HashSet<(ulong, ulong)> _collidingPairs = new();
 
     // Sector partitioning. The world is split into sectors (see module Sector/Aleph
     // tables); the client subscribes to everything but only SHOWS objects in the
@@ -598,6 +630,12 @@ public partial class WorldRenderer : Node3D
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _localTeam;
 
+    // Team used to classify friend/foe for the HUD ship markers: the spawned ship's team once flying,
+    // else the lobby-picked side so the PRE-LAUNCH F3 peek still marks the garrison's ships (a miner,
+    // a teammate) before an own ship exists. Mirrors HomeSector's `_localTeam ?? _lobbyTeam` fallback —
+    // without it FriendlyShips()/EnemyShips() return empty pre-launch and the peek shows bare meshes.
+    private byte? MarkerTeam => _localTeam ?? _lobbyTeam;
+
     // The side the pilot has picked in the lobby roster, pushed by GameNetClient.ApplyLobbyState
     // each time the roster lands (null while unassigned/NOAT). It's what lets the pre-launch F3 peek
     // frame the pilot's own garrison before a ship exists — see HomeSector.
@@ -692,7 +730,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<RemoteShip> EnemyShips()
     {
         _enemyScratch.Clear();
-        if (_localTeam is byte lt)
+        if (MarkerTeam is byte lt)
         {
             bool fog = FogActive;
             foreach (var node in _shipNodes.Values)
@@ -712,7 +750,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<RemoteShip> FriendlyShips()
     {
         _friendlyScratch.Clear();
-        if (_localTeam is byte lt)
+        if (MarkerTeam is byte lt)
         {
             foreach (var node in _shipNodes.Values)
                 if (node is RemoteShip rs && rs.Team == lt && rs.Visible)
@@ -1247,6 +1285,10 @@ public partial class WorldRenderer : Node3D
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
+        _asteroidRows.Clear();
+        _rockScaleBasis.Clear();
+        _rockShrinkTarget.Clear();
+        _asteroidClipIndex.Clear();
         _hullVertCache.Clear(); // keyed by the rock nodes freed just above
         _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
         _shipNodes.Clear();
@@ -1256,6 +1298,7 @@ public partial class WorldRenderer : Node3D
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
         _collidingShips.Clear();
+        _collidingPairs.Clear();
         _alephNodes.Clear();
         _ghosts.Clear();
         _radarVisible.Clear();
@@ -1294,6 +1337,37 @@ public partial class WorldRenderer : Node3D
     public void NetAddBase(Base row) => InsertBase(row);
 
     public void NetAddAsteroid(Asteroid row) => InsertAsteroid(row);
+
+    // The decoded rock row for a target readout (class name + depletion), or null if not present /
+    // not yet streamed. Read-only — callers must not mutate it.
+    public Asteroid? GetAsteroid(ulong id) => _asteroidRows.TryGetValue(id, out var a) ? a : null;
+
+    // MsgRockUpdate: a rock was mined — ease its rendered mesh + client collision toward the new radius
+    // (no pop) and refresh the stored CurrentRadius/OrePct (drives the DEPLETED target readout). The
+    // collision + clip caches update to the ABSOLUTE new size (same as the server's absolute rescale)
+    // so local prediction never bounces off empty space where the rock used to be.
+    public void NetUpdateRock(ulong id, float radius, int orePct)
+    {
+        if (_asteroidRows.TryGetValue(id, out var row))
+        {
+            row.CurrentRadius = radius;
+            row.OrePct = orePct;
+        }
+        // Ease the mesh scale toward the new radius over the next frames (see _Process).
+        if (_rockScaleBasis.ContainsKey(id))
+            _rockShrinkTarget[id] = radius;
+        // Client collision hull/sphere — rescaled absolutely so prediction tracks the shrunk rock.
+        _collisionWorld.UpdateAsteroidRadius(id, radius);
+        // Cheap cosmetic caches keyed on radius: the bolt/sun-occlusion clip sphere + the shadow reach.
+        if (_asteroidClipIndex.TryGetValue(id, out int ci) && ci < _asteroidClip.Count)
+        {
+            var c = _asteroidClip[ci];
+            c.Radius = radius * AsteroidCollisionScale;
+            _asteroidClip[ci] = c;
+        }
+        if (_asteroidNodes.TryGetValue(id, out var n))
+            n.SetMeta("shadowRadius", radius);
+    }
 
     public void NetAddAleph(Aleph row) => InsertAleph(row);
 
@@ -1389,27 +1463,114 @@ public partial class WorldRenderer : Node3D
     // (_collidingShips debounce) so grinding a hull doesn't machine-gun the sound.
     private void CheckCollisions()
     {
-        var bodies = _collisionWorld.BodiesIn(_localSector, SimSeconds);
-        if (_shipNodes.Count == 0 || bodies.Count == 0)
+        if (_shipNodes.Count == 0)
             return;
+        var bodies = _collisionWorld.BodiesIn(_localSector, SimSeconds);
 
+        _pairScratch.Clear();
         foreach (var (shipId, ship) in _shipNodes)
         {
             if (!ship.Visible)
                 continue;
             Vector3 c = ship.GlobalPosition;
-            bool now = Collide.Touches(
-                new Vec3(c.X, c.Y, c.Z),
-                CollisionConfig.ShipRadius,
-                bodies,
-                ShipTeamOf(ship),
-                CollisionConfig.DockFaceDepth
-            );
-            if (now && _collidingShips.Add(shipId))
-                PlayCollisionSfx(c);
-            else if (!now)
-                _collidingShips.Remove(shipId);
+            if (bodies.Count > 0)
+            {
+                bool now = Collide.Touches(
+                    new Vec3(c.X, c.Y, c.Z),
+                    CollisionConfig.ShipRadius,
+                    bodies,
+                    ShipTeamOf(ship),
+                    CollisionConfig.DockFaceDepth
+                );
+                if (now && _collidingShips.Add(shipId))
+                    PlayCollisionSfx(c);
+                else if (!now)
+                    _collidingShips.Remove(shipId);
+            }
+            _pairScratch.Add((shipId, ship));
         }
+
+        // Ship-vs-ship thud: same hull-aware contact the sim resolves (shared kernel), over the
+        // visible local-sector ships — few enough that the O(n²) pair sweep is trivial. Entry-edge
+        // debounce per id-ordered pair, exactly like the static _collidingShips gate above.
+        for (int i = 0; i < _pairScratch.Count; i++)
+            for (int j = i + 1; j < _pairScratch.Count; j++)
+            {
+                var (idA, a) = _pairScratch[i];
+                var (idB, b) = _pairScratch[j];
+                var (clsA, podA) = ShipClassOf(a);
+                var (clsB, podB) = ShipClassOf(b);
+                var ha = _collisionWorld.ShipHull(_defs, clsA, podA);
+                var hb = _collisionWorld.ShipHull(_defs, clsB, podB);
+                Vector3 pa = a.GlobalPosition,
+                    pb = b.GlobalPosition;
+                Quaternion qa = a.Quaternion,
+                    qb = b.Quaternion;
+                bool now = Collide.ShipShipContact(
+                    new Vec3(pa.X, pa.Y, pa.Z),
+                    new Quat(qa.X, qa.Y, qa.Z, qa.W),
+                    ha?.Hull,
+                    ha?.Bound ?? CollisionConfig.ShipRadius,
+                    new Vec3(pb.X, pb.Y, pb.Z),
+                    new Quat(qb.X, qb.Y, qb.Z, qb.W),
+                    hb?.Hull,
+                    hb?.Bound ?? CollisionConfig.ShipRadius,
+                    CollisionConfig.ShipRadius,
+                    out _,
+                    out _
+                );
+                var key = idA < idB ? (idA, idB) : (idB, idA);
+                if (now && _collidingPairs.Add(key))
+                    PlayCollisionSfx((pa + pb) * 0.5f);
+                else if (!now)
+                    _collidingPairs.Remove(key);
+            }
+    }
+
+    // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
+    private readonly List<(ulong Id, Node3D Node)> _pairScratch = new();
+
+    // Class + pod flag of a ship node, for the per-class collision-hull lookup.
+    private static (byte Cls, bool IsPod) ShipClassOf(Node3D ship) =>
+        ship switch
+        {
+            PredictionController pc => ((byte)pc.Class, pc.IsPod),
+            RemoteShip rs => ((byte)rs.Class, rs.IsPod),
+            _ => ((byte)0, false),
+        };
+
+    // The other ships the LOCAL predicted ship can bump into: every visible remote ship in the
+    // local sector, as shared MovingShip obstacles (interpolated pose, smoothed authoritative
+    // velocity, row mass, class hull). Fogged / other-sector ships aren't included — a small
+    // predict-miss the server reconciles, same tradeoff as fogged probes. One reusable buffer;
+    // PredictionController consumes it synchronously each predicted tick.
+    private readonly List<Collide.MovingShip> _shipObstacleScratch = new();
+
+    private IReadOnlyList<Collide.MovingShip> ShipObstacles()
+    {
+        _shipObstacleScratch.Clear();
+        foreach (var node in _shipNodes.Values)
+        {
+            if (node is not RemoteShip rs || !rs.Visible)
+                continue;
+            if (!rs.HasMeta("sector") || (int)rs.GetMeta("sector") != (int)_localSector)
+                continue;
+            var hull = _collisionWorld.ShipHull(_defs, (byte)rs.Class, rs.IsPod);
+            Vector3 p = rs.Position;
+            Quaternion q = rs.Quaternion;
+            Vector3 v = rs.Velocity;
+            _shipObstacleScratch.Add(
+                new Collide.MovingShip(
+                    new Vec3(p.X, p.Y, p.Z),
+                    new Quat(q.X, q.Y, q.Z, q.W),
+                    new Vec3(v.X, v.Y, v.Z),
+                    rs.Mass,
+                    hull?.Hull,
+                    hull?.Bound ?? CollisionConfig.ShipRadius
+                )
+            );
+        }
+        return _shipObstacleScratch;
     }
 
     // Team of a ship node (for the own-base dock-disc carve-out). -1 if unknown.
@@ -1494,15 +1655,15 @@ public partial class WorldRenderer : Node3D
     // colour/normal/ORM maps. AuthoredRadius is the mesh's bounding radius at author scale,
     // used to scale each instance to its row's collision Radius. A null Mesh marks a variant
     // that failed to load (e.g. asset missing) so we don't retry and fall back to a sphere.
-    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius)> _asteroidMeshes = new();
+    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
 
     // Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
-    private (Mesh? Mesh, float AuthoredRadius) AsteroidMesh(string variant)
+    private (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
     {
         if (_asteroidMeshes.TryGetValue(variant, out var cached))
             return cached;
 
-        (Mesh? Mesh, float AuthoredRadius) result = (null, 0f);
+        (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) result = (null, 0f, null);
         var scene = GD.Load<PackedScene>($"res://assets/asteroids/{variant}.glb");
         if (scene?.Instantiate() is Node root)
         {
@@ -1515,7 +1676,13 @@ public partial class WorldRenderer : Node3D
                 // the radius by up to sqrt(3), shrinking the rock well inside its hitbox.
                 float authored = MeshBoundingRadius(mesh);
                 if (authored > 0.001f)
-                    result = (mesh, authored);
+                {
+                    // Keep the baked GLB material (albedo/normal/ORM textures) so instances that
+                    // want a per-rock albedo tint can duplicate it and multiply AlbedoColor. The
+                    // GLB import stows the material either on the surface or as a surface override.
+                    var baseMat = mi.GetSurfaceOverrideMaterial(0) ?? mesh.SurfaceGetMaterial(0);
+                    result = (mesh, authored, baseMat);
+                }
             }
             root.QueueFree();
         }
@@ -1524,6 +1691,52 @@ public partial class WorldRenderer : Node3D
         _asteroidMeshes[variant] = result;
         return result;
     }
+
+    // Number of distinct per-rock regolith shades. The per-instance tint is quantised into this many
+    // buckets and each (base material, bucket) pair shares one duplicated material, so a large field
+    // costs at most REGOLITH_TINT_BUCKETS materials per variant instead of one per rock.
+    private const int RegolithTintBuckets = 48;
+    private readonly Dictionary<(ulong BaseMatId, int Bucket), StandardMaterial3D> _regolithTintCache = new();
+
+    // Deterministic, cached per-rock tint for a regolith instance: duplicates the baked material once
+    // per shade bucket and multiplies its AlbedoColor. The spread stays muted (grey <-> tan <-> olive
+    // + brightness) so every rock still reads as the same dull dust, just not a cloned one.
+    private StandardMaterial3D TintedRegolithMaterial(StandardMaterial3D baseMat, ulong asteroidId)
+    {
+        int bucket = (int)(Hash64(asteroidId) % RegolithTintBuckets);
+        var key = (baseMat.GetInstanceId(), bucket);
+        if (_regolithTintCache.TryGetValue(key, out var cached))
+            return cached;
+
+        float t1 = Hash01((ulong)bucket * 3UL + 0UL);
+        float t2 = Hash01((ulong)bucket * 3UL + 1UL);
+        float t3 = Hash01((ulong)bucket * 3UL + 2UL);
+        // AlbedoColor MULTIPLIES the baked albedo, so keep the spread at/below 1.0 — a darken-biased
+        // range preserves the full variety instead of clamping the bright end to white.
+        float bright = 0.58f + t1 * 0.42f;   // 0.58 .. 1.00 — darker/lighter dust
+        float warm = -0.09f + t2 * 0.16f;    // + tan, - cool grey (R up / B down)
+        float grn = -0.05f + t3 * 0.10f;     // + olive, - cool grey
+        var tint = new Color(
+            Mathf.Clamp(bright * (1f + warm), 0f, 1f),
+            Mathf.Clamp(bright * (1f + grn), 0f, 1f),
+            Mathf.Clamp(bright * (1f - warm), 0f, 1f));
+
+        var mat = (StandardMaterial3D)baseMat.Duplicate();
+        mat.AlbedoColor = tint;
+        _regolithTintCache[key] = mat;
+        return mat;
+    }
+
+    // splitmix64 finaliser — a cheap well-mixed hash of a 64-bit key.
+    private static ulong Hash64(ulong x)
+    {
+        x += 0x9E3779B97F4A7C15UL;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9UL;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBUL;
+        return x ^ (x >> 31);
+    }
+
+    private static float Hash01(ulong x) => (Hash64(x) >> 40) / (float)(1UL << 24);
 
     private static MeshInstance3D? FindMeshInstance(Node node)
     {
@@ -1557,8 +1770,13 @@ public partial class WorldRenderer : Node3D
         if (_asteroidNodes.ContainsKey(row.AsteroidId))
             return;
 
+        // Spawn at the CURRENT (possibly already-mined) radius so a rock seen for the first time in its
+        // shrunk state reads correctly; Radius stays the immutable spawn baseline. `divisor` converts a
+        // target radius to a uniform node scale (mesh authored bound, or the baked sphere radius).
+        float rad = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
         MeshInstance3D node;
-        var (mesh, authored) = string.IsNullOrEmpty(row.Variant) ? (null, 0f) : AsteroidMesh(row.Variant);
+        float divisor;
+        var (mesh, authored, baseMat) = string.IsNullOrEmpty(row.Variant) ? (null, 0f, null) : AsteroidMesh(row.Variant);
         if (mesh is not null)
         {
             node = new MeshInstance3D
@@ -1567,35 +1785,48 @@ public partial class WorldRenderer : Node3D
                 Mesh = mesh,
                 Position = new Vector3(row.PosX, row.PosY, row.PosZ),
                 Rotation = new Vector3(row.RotX, row.RotY, row.RotZ),
-                Scale = Vector3.One * (row.Radius / authored),
+                Scale = Vector3.One * (rad / authored),
             };
+            divisor = authored;
+            // Regolith is the common filler rock and its whole class shares just a handful of baked
+            // meshes, so a field of them reads as identical clones. Give each instance a MUTED,
+            // deterministic per-rock albedo tint (grey <-> tan <-> olive + a brightness wobble) by
+            // duplicating the baked material and multiplying its AlbedoColor. Only regolith gets this:
+            // the valuable classes keep their pinned single-colour identity.
+            if ((RockClass)row.RockClass == RockClass.Regolith && baseMat is StandardMaterial3D sm)
+                node.SetSurfaceOverrideMaterial(0, TintedRegolithMaterial(sm, row.AsteroidId));
         }
         else
         {
-            // Fallback: missing/failed variant renders as the old grey sphere.
+            // Fallback: missing/failed variant renders as the old grey sphere. The SphereMesh is baked
+            // at `rad`, so node.Scale One = that radius and shrink eases the scale down from there.
             node = new MeshInstance3D
             {
                 Name = $"Asteroid_{row.AsteroidId}",
                 Mesh = new SphereMesh
                 {
-                    Radius = row.Radius,
-                    Height = row.Radius * 2f,
+                    Radius = rad,
+                    Height = rad * 2f,
                     RadialSegments = 12,
                     Rings = 6,
                 },
                 MaterialOverride = _asteroidMat,
                 Position = new Vector3(row.PosX, row.PosY, row.PosZ),
             };
+            divisor = rad;
         }
         _asteroids.AddChild(node);
         _asteroidNodes[row.AsteroidId] = node;
+        _asteroidRows[row.AsteroidId] = row;
+        _rockScaleBasis[row.AsteroidId] = (node, divisor > 1e-6f ? divisor : 1f);
         // Capture the spawn pose as the spin base, then tumble absolutely off the shared sim clock so
         // the rendered rock stays in lockstep with its collision hull (shared Collide.RockSpin).
         var (sa, sp) = Collide.RockSpin(row.AsteroidId);
         _asteroidSpins[row.AsteroidId] = (node, node.Quaternion, new Vector3(sa.X, sa.Y, sa.Z), sp);
-        _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.Radius * AsteroidCollisionScale, row.SectorId));
+        _asteroidClipIndex[row.AsteroidId] = _asteroidClip.Count;
+        _asteroidClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), rad * AsteroidCollisionScale, row.SectorId));
         _collisionWorld.AddAsteroid(row);
-        node.SetMeta("shadowRadius", row.Radius); // extends its shadow-caster reach (big rocks cast from farther)
+        node.SetMeta("shadowRadius", rad); // extends its shadow-caster reach (big rocks cast from farther)
 
         // A rock landing in the sector we just warped into arrives UNDER the held WarpFlash: snap it in
         // (no fade) and push the settle window out so the flash holds until the field stops streaming.
@@ -1636,6 +1867,12 @@ public partial class WorldRenderer : Node3D
                 pc.SetMeta("Launched", true);
             // Predict collisions against the local sector's hulls (sector follows the ship on warp).
             pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector, SimSeconds));
+            // ... and against the other SHIPS in the local sector (interpolated remote poses), with
+            // this hull's own collision hull for the hull-aware contact — mirroring server Pass C.
+            pc.SetShipCollisionProvider(
+                ShipObstacles,
+                () => _collisionWorld.ShipHull(_defs, (byte)pc.Class, pc.IsPod)
+            );
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
@@ -2169,6 +2406,36 @@ public partial class WorldRenderer : Node3D
                 node.Quaternion = new Quaternion(axis, speed * t) * baseQ;
         }
 
+        // Mining shrink: ease each changed rock's mesh scale toward its new radius (smooth, no pop),
+        // then drop it from the active set once it settles. Absolute node.Scale from the rock's basis
+        // (render radius / divisor), so repeated shrinks never compound. Empty in a non-mining world.
+        if (_rockShrinkTarget.Count > 0)
+        {
+            float k = 1f - Mathf.Exp(-(float)delta * 10f); // ~exponential ease toward target
+            _rockShrinkDone.Clear();
+            foreach (var (id, target) in _rockShrinkTarget)
+            {
+                if (!_rockScaleBasis.TryGetValue(id, out var basis))
+                {
+                    _rockShrinkDone.Add(id);
+                    continue;
+                }
+                float want = target / basis.Divisor;
+                float have = basis.Node.Scale.X;
+                float next = Mathf.Lerp(have, want, k);
+                if (Mathf.Abs(next - want) < want * 0.002f)
+                {
+                    next = want;
+                    _rockShrinkDone.Add(id);
+                }
+                basis.Node.Scale = Vector3.One * next;
+            }
+            foreach (var id in _rockShrinkDone)
+                _rockShrinkTarget.Remove(id);
+        }
+
+        UpdateMiningBeams();
+
         // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that
         // holds the WarpFlash until the warped-into sector's rocks have finished streaming in.
         AdvanceFades(delta);
@@ -2201,6 +2468,91 @@ public partial class WorldRenderer : Node3D
                 _bolts.RemoveAt(i);
             }
         }
+    }
+
+    // MsgMinerTargets: replace the shipId -> target-rock map wholesale. A ship that stopped mining
+    // simply isn't in the new map; its beam clears on the ShipFlagMining falling edge below.
+    public void NetUpdateMinerTargets(Dictionary<ulong, ulong> map) => _minerTargetRock = map;
+
+    // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is
+    // visible, ensure a MiningBeam child exists and point it at the rock it's harvesting; tear a beam
+    // down on the flag's falling edge (or when the ship leaves / hides / has no rock to aim at).
+    private void UpdateMiningBeams()
+    {
+        Vector3 camPos = ShadowRefPos();
+
+        // Drive / create a beam for each actively-mining visible ship.
+        foreach (var (id, node) in _shipNodes)
+        {
+            if (node is not RemoteShip rs || !rs.IsMining || !rs.Visible)
+                continue;
+            if (MiningTargetRock(id, rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius, var rockMesh))
+                continue; // no known/visible rock — hold off (drop any stale beam in the prune below)
+
+            if (!_miningBeams.TryGetValue(id, out var beam))
+            {
+                beam = new MiningBeam { Name = "MiningBeam" };
+                rs.AddChild(beam);
+                _miningBeams[id] = beam;
+            }
+            // Fire from the ship's weapon-hardpoint muzzle (not the hull centre); debris chips off the
+            // rock's real mesh surface via rockMesh.
+            beam.UpdateBeam(rs.MiningMuzzleWorld(), rockCenter, rockRadius, rockMesh, camPos);
+        }
+
+        // Prune beams whose ship stopped mining, hid, left, or lost its target rock.
+        if (_miningBeams.Count > 0)
+        {
+            _miningBeamPrune.Clear();
+            foreach (var (id, _) in _miningBeams)
+            {
+                bool keep = _shipNodes.TryGetValue(id, out var node)
+                    && node is RemoteShip rs && rs.IsMining && rs.Visible
+                    && MiningTargetRock(id, rs.GlobalPosition) is not null;
+                if (!keep)
+                    _miningBeamPrune.Add(id);
+            }
+            foreach (var id in _miningBeamPrune)
+            {
+                if (_miningBeams.Remove(id, out var beam) && GodotObject.IsInstanceValid(beam))
+                    beam.QueueFree();
+            }
+        }
+    }
+
+    // The rock a mining ship is aiming at, as (center, current radius). Prefer the server-streamed
+    // exact target (MsgMinerTargets) when that rock is known + in view; otherwise fall back to the
+    // nearest in-view He3 rock so a pre-v33 server (or a not-yet-arrived frame) still shows a beam.
+    private (Vector3 Center, float Radius, MeshInstance3D? Node)? MiningTargetRock(ulong shipId, Vector3 fromPos)
+    {
+        if (_minerTargetRock.TryGetValue(shipId, out ulong rockId)
+            && _asteroidNodes.TryGetValue(rockId, out var node)
+            && GetAsteroid(rockId) is { } rock)
+            return (node.GlobalPosition, rock.CurrentRadius, node as MeshInstance3D);
+        return NearestHe3Rock(fromPos);
+    }
+
+    // The nearest visible He3 rock (with ore remaining) to `from`, as (center, current radius, node),
+    // or null if none is in view. The fallback aim when the streamed target rock isn't known/visible.
+    // The node is handed to the beam so its chips ray off the rock's real mesh surface.
+    private (Vector3 Center, float Radius, MeshInstance3D? Node)? NearestHe3Rock(Vector3 from)
+    {
+        (Vector3, float, MeshInstance3D?)? best = null;
+        float bestSq = float.MaxValue;
+        foreach (var (id, node) in AsteroidsInView())
+        {
+            if (GetAsteroid(id) is not { } rock)
+                continue;
+            if (rock.RockClass != (byte)RockClass.Helium3 || rock.OrePct <= 0)
+                continue;
+            float dSq = (node.GlobalPosition - from).LengthSquared();
+            if (dSq < bestSq)
+            {
+                bestSq = dSq;
+                best = (node.GlobalPosition, rock.CurrentRadius, node as MeshInstance3D);
+            }
+        }
+        return best;
     }
 
     // Purely client-side hit sparks: flash where a rendered bolt visually meets a ship this frame,

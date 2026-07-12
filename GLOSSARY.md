@@ -77,7 +77,32 @@ Server-side hands-off navigation for player ships (protocol v30), reusing the PI
   - `client/scripts/PredictionController.cs` — `SetAutopilot(bool)` follow-authority mode; `client/scripts/ShipController.cs` — T toggle / `EngageAutopilot` / manual-override handback / `ApEngagedLocal`; `client/scripts/SectorOverview.cs` — F3 pick + waypoint; `client/scripts/TargetMarkers.cs` — extended Tab, waypoint diamond, AUTOPILOT banner + disengage toast
   - `tests/AutopilotTest` — approach / standoff / stop+disengage / aleph / avoidance / manual-override / friendly-dock / target-loss
 - **Related:** [[Flight Model]], [[PigBrain]], [[Client Prediction]], [[SimTick]]
-- **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). Cross-sector routing is single-hop only. *Deferred: multi-hop aleph routing, enemy-ghost tracking through fog, reuse for miners/constructors.*
+- **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). ~~Cross-sector routing is single-hop only~~ (multi-hop since Stage-4 mining: the `CrossSector` leg routes via `World.NextGateTo`). *Deferred: enemy-ghost tracking through fog; reuse for constructors.*
+
+### Rock Class / Ore (Mining)
+Stage-4 resource layer over the seeded asteroids. Every rock gets a `RockClass` (Carbonaceous / Silicon / Uranium / Helium3, append-only in `shared/Defs.cs`) chosen by a **per-sector deterministic selection pass** — per-rock derived hashes (`Mix(seed, rock.Id)`), never extra draws on the shared world `DetRng` stream, so pinned-seed layouts stay byte-identical (guard-tested golden). Only **Helium-3** is harvestable: each He3 rock rolls an ore capacity (radius-cubed volume factor × world/map richness knobs) and **shrinks volume-proportionally** as it's mined down to a floor fraction, through the single seam `World.SetOreRemaining` (recomputes `CurrentRadius`, re-scales the collision body, flags the change). Live shrink streams as `MsgRockUpdate` (on-change only; fog on → per-team, discovered rocks only); Welcome/Reveal rock statics carry class + current radius + ore % so late joiners are never stale. **A rock's mesh/texture now reflects its class**: after the class pass, `World.AssignVariants` overwrites each rock's cosmetic `Variant` with one from that class's pool (`AsteroidShapes.VariantForClass`, keyed on the same per-rock `OreMix` hash — never the shared RNG, so positions stay byte-stable), and the rare **special** rocks (Carbonaceous/Silicon/Uranium — not He3) are landmark-**oversized** by `SpecialRockRadiusMult` (stock 3×). Each of the 5 classes owns a pool of `tools/asteroid-gen` variants sharing that class's PBR "kind" (He3 = pale-cyan crystal, Regolith = dull grey-brown dust, Uranium = green-steel, Silicon = tan, Carbonaceous = charcoal). The client stays dumb (loads the streamed variant name); the server's collision hull keys off the same class-derived `Variant`, so hull and visual match.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/World.cs` — `RockOre` (OreState dict), `RockClassOf`, `RockCurrentRadius`, `SetOreRemaining`, class/capacity seeding, `AssignVariants` (class→mesh); `shared/Defs.cs` — `RockClass`, `WorldSeedingTuning` rock-class knobs (`He3PerSector`/`He3PerHomeSector`/`SpecialPerSector`/`HomeSpecialChance`/`SpecialRockRadiusMult`; per-sector `He3Count`/`SpecialCount` overrides on `SectorConfig`), `WorldMiningTuning` (harvest/economy + ore capacity)
+  - `shared/AsteroidShapes.cs` — `Variants[]` (wire-indexed mesh names) + `ClassPools`/`VariantForClass`/`PoolFor` (RockClass → mesh pool); `tools/asteroid-gen` (`shapefield.py` `_MATERIAL`/`_SHAPE` per-class kinds, `asteroids.json` catalog) → `client/assets/asteroids/*.glb`
+  - `server/Content/core/world.yaml` — rock-class knobs under `seeding:` (incl. `home-special-chance`, stock 0 = no special rock in a garrison sector), harvest/economy under `mining:` (both server-only, not streamed) + `schemas/world.schema.json` / `schemas/map.schema.json` mirrors
+  - `server/Net/Protocol.cs` — `WriteRockStatic` (class/radius/orePct), `MsgRockUpdate = 22`, `BuildRockUpdates(For)`
+  - `client/scripts/WorldRenderer.cs` — `NetUpdateRock` mesh re-scale + collision update; `client/scripts/TargetMarkers.cs` — class name + `DEPLETED` bracket
+  - `tests/MiningTest` — class/capacity determinism, pinned-seed layout golden, shrink arithmetic, wire round-trip
+- **Related:** [[World Layout Seed]], [[Fog of War (Team Vision)]], [[Miner (AI ore drone)]]
+- **Notes:** Non-He3 classes are cosmetic v1 (future refinery/shipyard hooks). Vision occlusion + PIG avoidance stay at spawn radius (conservative, deferred). Grid membership stays spawn-size — rocks only shrink.
+
+### Miner (AI ore drone)
+A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull class-id 4 with `ore-capacity`) that harvests He3 rocks and offloads ore at friendly bases for team credits — alongside, not replacing, the flat paycheck. Each team seeds **one free miner slot** per match; more are bought (`/buyminer`, same `TryReserveSpawn` charge seam as player hulls) up to `mining.max-miners-per-team`. `MinerSlot` is a separate pool from `PigSlot`: purchased lifecycle, no wave respawn, no pod — a killed miner's slot is gone until repurchased. Brain at the PIG 5 Hz cadence (`MinerBrainStep`): picks **team-discovered** He3 rocks in **authorized sectors** (`TeamState.AuthorizedMiningSectors`, seeded to the garrison, extended via `/mine <sector>`; transit is free, only *selection* is gated), preferring its previous rock, avoiding friendly claims unless miners outnumber rocks, else nearest by gate hops. Steering at 20 Hz (`MinerExecute` via the `InputFor` seam) reuses `AutoSteer` + the 3-phase `DockApproach`; cross-sector legs route `World.NextGateTo`. The dock-trigger collision pass routes miners to `OffloadMiner` (credits + `GoneClean` despawn + delayed relaunch) — never `DockShip` (which refunds `PaidCost` and rebinds a client). `MinersEnabled` mirrors `PigsEnabled` as the test kill-switch; results/errors reach the team as `MinerNoticesThisStep` system chat. Miners collide like any ship (the ship-ship pass runs between ALL ships, friend or foe): any physical bump — ship, asteroid, or base, damaging or not — stamps `ShipSim.LastCollisionTick` and the `DisruptCollidedMiners` sweep knocks a Harvesting miner back to ToRock (beam reset, cargo + claim kept). A miner whose hull drops below `mining.retreat-health-frac` (stock 0.8) of max abandons the field (`GoHome`), offloads whatever it carries, and relaunches at full health.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Mining.cs` — `HarvestStep`, `MinerSlot`/`MinerState`, brain + steering + offload + buy/order/status queues
+  - `server/Sim/Simulation.cs` — `SeedMinerSlots` (StartMatch), `MinerBrainStep`/`MinerExecute`/`OffloadMiner`/`KillMiner` hook sites, `DrainMinerQueues`
+  - `server/Net/ClientHub.cs` — `/buyminer` `/mine` `/miners` in `HandleCommand`, `SystemToTeam` notice relay; `client/scripts/Chat.cs` — command relay + `/help`
+  - `server/Content/core/hulls.yaml` — `miner` (class-id 4, unarmed, `ore-capacity`); `client/assets/ships/miner.glb`
+  - `tests/MiningTest` — full loop, claim rules, cross-sector return, authorization/discovery gating
+- **Related:** [[Rock Class / Ore (Mining)]], [[PigBrain]], [[Autopilot / AutoSteer]], [[Dock Refund]]
+- **Notes:** Enemy PIGs auto-hunt miners via the normal chase path (intended). Any teammate can buy/order v1 (Stage-2 bootstrap authority; commander tightens later). Miners scout as they fly (hull vision values) — a miner's own vision reveals new rocks.
 
 ---
 
@@ -507,14 +532,26 @@ Handshake message from server to client: assigns player ID, initial ship, world 
 ## Client Rendering & UI
 
 ### Client Prediction
-Client-side extrapolation of ship state between server snapshots to reduce perceived latency.
+Client-side extrapolation of ship state between server snapshots to reduce perceived latency. The predicted local ship also resolves collisions each tick: against the sector's static hulls (`CollisionWorld` — same GLB bytes → bit-identical hulls) AND against the other ships it can see (`Collide.ShipShipContact` + `ResolveShipsLocal`, the shared kernel behind the server's ship-ship Pass C, applying only the LOCAL ship's mass-weighted impulse/push-out share against each remote's interpolated pose).
 - **Frequency:** Very common
 - **Key Files:**
   - `client/scripts/PredictionController.cs` — prediction state and reconciliation
-  - `client/scripts/RemoteShip.cs` — remote ship interpolation
-  - `client/scripts/WorldRenderer.cs` — frame rendering
-- **Related:** [[Flight Model]], [[Held-Input Replay]], [[MsgSnapshot]]
-- **Notes:** Never blocks authority; server snapshot always wins
+  - `client/scripts/RemoteShip.cs` — remote ship interpolation (consumes [[MotionInterpolator]])
+  - `client/scripts/CollisionWorld.cs` — client mirror of the server's static + per-class ship hulls
+  - `shared/Collision/Collide.cs` — `ShipShipContact` / `ResolveShipsLocal` (one kernel, both peers)
+  - `client/scripts/WorldRenderer.cs` — frame rendering + `ShipObstacles` provider
+- **Related:** [[Flight Model]], [[Held-Input Replay]], [[MsgSnapshot]], [[MotionInterpolator]]
+- **Notes:** Never blocks authority; server snapshot always wins. Remote poses lag by the interp delay, so a hard ship bump may still reconcile — the spring absorbs it; the win is never visibly interpenetrating another ship.
+
+### MotionInterpolator
+Reusable snapshot-smoothing engine for any server-controlled streamed entity (remote ships today; missiles etc. can adopt it). Samples are stamped on the server-tick timeline, rendered behind an adaptive delay sized to each entity's smoothed inter-arrival gap (full-rate ships ~100 ms, coarse-AOI ~1.5× their gap): cubic HERMITE interpolation between samples using the wire velocities as tangents (degrades to linear at full-rate gaps), bounded velocity/angular-velocity dead-reckoning past the newest sample, and error-blend correction (a late authoritative sample glides in over ~100 ms instead of snapping; a teleport-sized error snaps). Server side, same-sector miners are exempted from the coarse AOI tier (`SIM_MINER_MIDRATE`, default on) so slow station-keeping drones refresh at mid cadence.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/MotionInterpolator.cs` — the engine (Tunables, Push/Evaluate/Reset)
+  - `client/scripts/RemoteShip.cs` — the ship-flavored consumer (flags/HUD/glow stay local)
+  - `server/Net/ClientHub.cs` — AOI distance tiers + the miner mid-rate exemption
+- **Related:** [[Client Prediction]], [[AOI (Area of Interest)]], [[Miner (AI ore drone)]]
+- **Notes:** Wire velocity + LOCAL angular velocity (f16) already ride every ship record — no protocol change; rotation extrapolation right-composes yaw→pitch→roll like `FlightModel.Step`
 
 ### WorldRenderer
 Master 3D scene renderer: camera, world geometry, ships, projectiles, effects.

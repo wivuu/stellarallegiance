@@ -116,6 +116,24 @@ public class ValidationTests
         Assert.DoesNotContain(result.Errors, e => e.Contains("payload-capacity"));
     }
 
+    // A mining hull carries an ore hold but no weapons and no payload budget: the validator must
+    // accept it (an ore hull is deliberately unarmed — 0 weapon mass fits a 0 payload-capacity).
+    [Fact]
+    public void UnarmedOreHull_IsValid()
+    {
+        var core = new Core
+        {
+            Hulls =
+            {
+                new Hull { Id = "miner", Name = "Miner", ClassId = 4, OreCapacity = 2000 },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.DoesNotContain(result.Errors, e => e.Contains("miner"));
+    }
+
     // Non-runtime hulls (no class-id) are catalog-only — never gated on payload authoring.
     [Fact]
     public void HullWithoutClassId_SkipsPayloadCheck()

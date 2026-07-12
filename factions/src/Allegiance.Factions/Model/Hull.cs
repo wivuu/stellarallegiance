@@ -113,6 +113,14 @@ public record Hull : Buildable
     /// </summary>
     public double PayloadCapacity { get; set; }
 
+    /// <summary>
+    /// Ore hold size (helium-3 units) for a mining hull: the harvest capacity a miner fills at a rock
+    /// and offloads at a friendly base. 0 = not a miner (no ore hold). Independent of
+    /// <see cref="PayloadCapacity"/> (weapons/cargo budget) — an ore hull is typically unarmed.
+    /// Omit-when-default; projected onto <c>ShipClassDef.OreCapacity</c>.
+    /// </summary>
+    public double OreCapacity { get; set; }
+
     /// <summary>Drift (turn-rate slop) knobs the game's flight model needs; no clean Core source.</summary>
     public double DriftYawDeg { get; set; }
     /// <summary>Pitch-axis drift (turn-rate slop) knob, in degrees; pairs with drift-yaw-deg above.</summary>

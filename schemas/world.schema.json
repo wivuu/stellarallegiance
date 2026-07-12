@@ -343,6 +343,27 @@
             "null"
           ],
           "description": "Maximum juke side-thrust amplitude fraction."
+        },
+        "dock-standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Standoff-point distance outside a docking door\u0027s plane, world units."
+        },
+        "dock-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Detour ring radius past BaseRadius when routing around the base to a far-side door."
+        },
+        "dock-creep-throttle": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Throttle fraction while creeping down the docking corridor."
         }
       },
       "description": "PIG drone AI tuning (server-side only \u2014 never streamed). Null -\u003E stock values.",
@@ -604,9 +625,117 @@
             "null"
           ],
           "description": "Vertical (Y-axis) random jitter applied to garrison placement, world units."
+        },
+        "he3-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Guaranteed He3 rocks per ordinary sector (clamped to the sector\u0027s actual rock count). A map\u0027s per-sector he3-count override wins."
+        },
+        "he3-per-home-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Guaranteed He3 rocks in a team\u0027s HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-count, so home fields stay leaner than contested space."
+        },
+        "special-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith."
+        },
+        "home-special-chance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll."
+        },
+        "special-rock-radius-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%."
         }
       },
       "description": "Map-seeding shape tuning: asteroid fields/belts \u002B base placement. Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "mining": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "max-miners-per-team": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Cap on live AI miners a team may field at once."
+        },
+        "harvest-rate-per-second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Ore units a miner pulls from a rock per second."
+        },
+        "credits-per-ore-unit": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Team credits granted per ore unit offloaded at a base."
+        },
+        "offload-delay-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Dwell after an offload before the miner relaunches, seconds."
+        },
+        "ore-capacity-min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum per-He3-rock ore capacity, before the radius/richness scaling."
+        },
+        "ore-capacity-max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Maximum per-He3-rock ore capacity, before the radius/richness scaling."
+        },
+        "shrink-floor-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Fraction of its spawn radius a fully-mined rock shrinks toward (never below)."
+        },
+        "miner-standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Distance from a target rock\u0027s surface within which a miner harvests, world units."
+        },
+        "retreat-health-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Hull fraction below which a miner abandons mining and returns to base (0 disables)."
+        }
+      },
+      "description": "Mining/ore economy tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
       "additionalProperties": false
     }
   },

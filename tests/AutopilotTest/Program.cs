@@ -71,6 +71,7 @@ Simulation BootSim(ulong seed)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false;
     sim.FogEnabled = false; // no radar-visibility gate on autopilot ship targeting (FogTest covers fog)
     sim.StartMatch();
@@ -572,6 +573,53 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     sim.Step(); // next autopilot resolve sees the target gone
 
     Check(!ship.ApEngaged, "target-loss: autopilot disengaged once the target was gone", "target-loss: autopilot kept flying at a dead target");
+}
+
+// ---- 10. Multi-hop transit: a waypoint two sectors away → transit BOTH gates and arrive -----------
+// A 3-sector chain A(10)-B(20)-C(30); the player spawns at team 0's base in A and engages autopilot on
+// a waypoint in C. Only A-B and B-C gates exist (no direct A-C), so reaching C proves autopilot routes
+// multi-hop through World.NextGateTo — the intermediate sector B is transited, not skipped.
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var cfg = content.World;
+    cfg.Sectors = new List<WorldSectorConfig>
+    {
+        new() { Id = 10, Asteroids = AsteroidKind.None, Garrison = new SectorGarrison { Team = 0 } },
+        new() { Id = 20, Asteroids = AsteroidKind.None },
+        new() { Id = 30, Asteroids = AsteroidKind.None, Garrison = new SectorGarrison { Team = 1 } },
+    };
+    cfg.Links = new List<SectorLink> { new(10, 20), new(20, 30) };
+    var world = new World(seed: 10, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content);
+    sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
+    sim.ShieldsEnabled = false;
+    sim.FogEnabled = false;
+    sim.StartMatch();
+
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
+    Check(ship.SectorId == 10, "multi-hop: player spawned in the origin sector A", $"multi-hop: player spawned in sector {ship.SectorId}, not A(10)");
+
+    // Waypoint at the centre of the far sector C; autopilot must hop A->B->C to reach it.
+    sim.EnqueueSetAutopilot(1, mode: 1, kind: 3, id: 0, sector: 30, pos: new Vec3(0f, 0f, 0f));
+    sim.Step();
+
+    bool transitedB = false;
+    bool arrivedC = false;
+    for (int i = 0; i < 8000 && ship.ApEngaged; i++)
+    {
+        sim.Step();
+        if (ship.SectorId == 20)
+            transitedB = true;
+        if (ship.SectorId == 30)
+            arrivedC = true;
+    }
+
+    Check(transitedB, "multi-hop: the ship transited the intermediate sector B on the way", "multi-hop: the ship never passed through sector B");
+    Check(arrivedC, "multi-hop: the ship reached the destination sector C two hops away", "multi-hop: the ship never reached sector C");
+    Check(!ship.ApEngaged && ship.SectorId == 30,
+        "multi-hop: after both transits the ship arrived at the cross-sector waypoint and disengaged",
+        $"multi-hop: did not arrive/disengage in C (engaged {ship.ApEngaged}, sector {ship.SectorId})");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL AUTOPILOT TESTS PASSED" : $"\n{failures} AUTOPILOT TEST(S) FAILED");

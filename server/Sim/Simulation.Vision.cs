@@ -1309,6 +1309,10 @@ public sealed partial class Simulation
                 if (r.Id == excludeRock)
                     continue;
                 // A rock strictly between the endpoints occludes; endpoints excluded by the epsilons.
+                // Deliberately the SPAWN radius (not RockCurrentRadius): fog-of-war occlusion stays at
+                // spawn size in v1 (conservative — a mined rock still blocks line-of-sight as before,
+                // and the vision worker reads a lock-free static snapshot, so it must not depend on live
+                // ore state). Shrunk-rock occlusion is a documented future refinement.
                 if (FirstEntryTime(from, dir, r.Pos, default, r.Radius, len, out float t) && t > 1e-3f && t < len - 1e-3f)
                     return true;
             }

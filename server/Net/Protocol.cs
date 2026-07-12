@@ -97,6 +97,8 @@ public static class Protocol
     public const byte MsgProbeGone = 19; // u64 id, u8 reason (0 expired, 1 cleanup, 2 destroyed), u16 sector, 3x i16 pos — mirrors MsgMissileGone
     public const byte MsgMapList = 20; // u8 mapCount x MapCatalog entry — the server's available maps + thumbnail layout, sent once after Defs
     public const byte MsgReject = 21; // u8 code (1 = bad secret) — join refused; sent right before the transport closes so the client learns WHY across BOTH transports (a WebRTC DataChannel close carries no reason)
+    public const byte MsgRockUpdate = 22; // u8 count, count x (u64 id, f32 currentRadius, u8 orePct) — live rock shrink deltas (mining), on-change; fog-on = discovered rocks only. See BuildRockUpdates.
+    public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -111,6 +113,9 @@ public static class Protocol
     public const byte ShipFlagLockingMe = 4; // a missile-armed enemy is locking THIS ship (ThreatLockState >= 1)
     public const byte ShipFlagLockedMe = 8; // that lock completed — a launch can come any moment (ThreatLockState == 2)
     public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
+    public const byte ShipFlagMiner = 32; // AI mining ship (ShipKind.Miner) — HUD tags it a MINER; PIG brain never touches it
+    public const byte ShipFlagMining = 64; // that miner is actively moving ore this tick (ShipSim.IsHarvesting) — HUD "MINING" state
+    public const byte ShipFlagConstructor = 128; // RESERVED (ShipKind.Constructor) — never emitted yet; kept so the role round-trips end-to-end
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -133,14 +138,23 @@ public static class Protocol
         byte flags = 0;
         if (s.IsPig)
             flags |= ShipFlagPig;
-        if (s.IsPod)
-            flags |= ShipFlagPod;
+        // The ship's ROLE (ShipKind) maps to at most one role bit; Combat sets none. Pod/Miner keep
+        // their historical bits so the wire stays byte-identical for existing entities.
+        flags |= s.Kind switch
+        {
+            ShipKind.Pod => ShipFlagPod,
+            ShipKind.Miner => ShipFlagMiner,
+            ShipKind.Constructor => ShipFlagConstructor,
+            _ => (byte)0,
+        };
         if (s.ThreatLockState >= 1)
             flags |= ShipFlagLockingMe;
         if (s.ThreatLockState >= 2)
             flags |= ShipFlagLockedMe;
         if (s.ApEngaged)
             flags |= ShipFlagAutopilot;
+        if (s.IsHarvesting)
+            flags |= ShipFlagMining;
 
         int o = 0;
         BitConverter.TryWriteBytes(dst.Slice(o), s.ShipId);
@@ -395,9 +409,16 @@ public static class Protocol
     }
 
     // One asteroid static record (Welcome + MsgReveal). Cosmetic shape: variant index into
-    // Shared.AsteroidShapes + fixed orientation. One-time (not hot), so no quantization.
-    // Layout: u64 id | u32 sector | 3x f32 pos | f32 radius | u8 variant | 3x f32 rot.
-    private static void WriteRockStatic(BinaryWriter w, in World.Rock a)
+    // Shared.AsteroidShapes + fixed orientation. One-time (not hot), so no quantization. The mining
+    // block (rockClass | currentRadius | orePct) is appended so a late joiner / first-time discoverer
+    // renders the rock at its already-mined size and reads its class without re-deriving the shrink
+    // curve. `radius` stays the immutable SPAWN radius (the shrink baseline); `currentRadius` is the
+    // live (possibly shrunk) size. orePct is 0-100 for a He3 rock (OreRemaining/OreCapacity) and 0 for
+    // every non-He3 rock — a nonzero orePct always means "harvestable He3 with ore left" (see RockOrePct).
+    // World is needed to read the mutable ore state (World.RockOre); the SHARED helper keeps Welcome and
+    // MsgReveal byte-identical for the same rock. Layout: u64 id | u32 sector | 3x f32 pos | f32 radius |
+    // u8 variant | 3x f32 rot | u8 rockClass | f32 currentRadius | u8 orePct | f32 oreCapacity.
+    private static void WriteRockStatic(BinaryWriter w, World world, in World.Rock a)
     {
         w.Write(a.Id);
         w.Write(a.SectorId);
@@ -407,6 +428,104 @@ public static class Protocol
         w.Write(a.RotX);
         w.Write(a.RotY);
         w.Write(a.RotZ);
+        w.Write((byte)world.RockClassOf(a.Id));
+        w.Write(world.RockCurrentRadius(a.Id));
+        w.Write(RockOrePct(world, a.Id));
+        w.Write(world.RockOre.TryGetValue(a.Id, out var os) ? os.OreCapacity : 0f);
+    }
+
+    // A rock's ore fill as an integer percent 0-100, meaningful ONLY for Helium3 rocks (the only
+    // harvestable class); every non-He3 rock holds no ore and reports 0. Shared by WriteRockStatic
+    // (statics on first sight) and BuildRockUpdates (live deltas) so both encode the same value.
+    private static byte RockOrePct(World world, ulong id)
+    {
+        if (world.RockOre.TryGetValue(id, out var s) && s.OreCapacity > 0f)
+            return (byte)Math.Clamp((int)MathF.Round(s.OreRemaining / s.OreCapacity * 100f), 0, 100);
+        return 0;
+    }
+
+    // Fixed serialized size of one live rock-update record (see BuildRockUpdates): u64 id | f32
+    // currentRadius | u8 orePct. Lets the client stride a MsgRockUpdate body.
+    public const int RockUpdateRecordSize = 8 + 4 + 1; // 13
+    // Max rock-update records per MsgRockUpdate frame — well under the u8 count prefix so a batch of
+    // changed rocks can never overflow it (chunked into successive frames, minefield-style).
+    public const int RockUpdateMaxPerFrame = 255;
+
+    // Live rock-shrink deltas (MsgRockUpdate): the set of rocks whose ore/radius changed this step,
+    // chunked so each frame's count fits the u8 prefix. Each record carries the CURRENT (shrunk)
+    // radius + orePct so the client eases its mesh/collision to the new size. Fog filtering is the
+    // caller's job (BuildRockUpdatesFor); this raw form is the fog-off broadcast. Empty `ids` ⇒ no
+    // frames. Mirrors the minefield builder style.
+    public static List<byte[]> BuildRockUpdates(World world, IReadOnlyList<ulong> ids)
+    {
+        var frames = new List<byte[]>();
+        for (int start = 0; start < ids.Count; start += RockUpdateMaxPerFrame)
+        {
+            int count = Math.Min(RockUpdateMaxPerFrame, ids.Count - start);
+            var buf = new byte[2 + count * RockUpdateRecordSize];
+            buf[0] = MsgRockUpdate;
+            buf[1] = (byte)count;
+            int o = 2;
+            for (int i = 0; i < count; i++)
+            {
+                ulong id = ids[start + i];
+                BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+                o += 8;
+                BitConverter.TryWriteBytes(buf.AsSpan(o), world.RockCurrentRadius(id));
+                o += 4;
+                buf[o++] = RockOrePct(world, id);
+            }
+            frames.Add(buf);
+        }
+        return frames;
+    }
+
+    // Fixed serialized size of one miner-target record (see BuildMinerTargets): u64 shipId | u64 rockId.
+    public const int MinerTargetRecordSize = 8 + 8; // 16
+
+    // Which rock each ACTIVELY-mining miner is harvesting (MsgMinerTargets), so the client's mining
+    // beam can aim at the exact rock the server chose rather than guessing the nearest He3. One record
+    // per miner whose ship is harvesting a live claim; there are at most a handful, so a single frame
+    // always suffices (capped at the u8 count). Returns null when nothing is mining (no frame to send).
+    // Broadcast to every client: a receiver that can't see the ship or the rock simply renders nothing,
+    // so this leaks no more than the already-streamed ShipFlagMining bit.
+    public static byte[]? BuildMinerTargets(Simulation sim)
+    {
+        List<(ulong ship, ulong rock)>? pairs = null;
+        foreach (var row in sim.MinerSlotsView())
+            if (row.Ship is { IsHarvesting: true } s && row.TargetRockId != 0)
+                (pairs ??= new()).Add((s.ShipId, row.TargetRockId));
+        if (pairs is null)
+            return null;
+        int count = Math.Min(pairs.Count, 255);
+        var buf = new byte[2 + count * MinerTargetRecordSize];
+        buf[0] = MsgMinerTargets;
+        buf[1] = (byte)count;
+        int o = 2;
+        for (int i = 0; i < count; i++)
+        {
+            BitConverter.TryWriteBytes(buf.AsSpan(o), pairs[i].ship);
+            o += 8;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), pairs[i].rock);
+            o += 8;
+        }
+        return buf;
+    }
+
+    // Fog-filtered rock-update frames for one team: only rocks the team has DISCOVERED, so an enemy
+    // mining an unscouted rock never leaks its shrink. A rock discovered LATER carries its current
+    // radius/orePct in the MsgReveal static record, so nothing is missed. vision == null (a NoTeam
+    // spectator) ⇒ no frames. Read on the quiescent sim thread (ClientHub.AfterStep), same as the
+    // other per-team fog builders. Kept next to BuildRockUpdates so the fog test can exercise it directly.
+    public static List<byte[]> BuildRockUpdatesFor(World world, Simulation.TeamVision? vision, IReadOnlyCollection<ulong> changedIds)
+    {
+        if (vision is null || changedIds.Count == 0)
+            return new List<byte[]>();
+        var ids = new List<ulong>();
+        foreach (var id in changedIds)
+            if (vision.DiscoveredRocks.Contains(id))
+                ids.Add(id);
+        return BuildRockUpdates(world, ids);
     }
 
     // One aleph static record (Welcome + MsgReveal). Layout: u64 id | u32 sector | u32 destSector | 3x f32 pos.
@@ -578,7 +697,7 @@ public static class Protocol
 
             w.Write((uint)world.Asteroids.Count);
             foreach (var a in world.Asteroids)
-                WriteRockStatic(w, a);
+                WriteRockStatic(w, world, a);
 
             w.Write((ushort)world.Alephs.Count);
             foreach (var g in world.Alephs)
@@ -633,7 +752,7 @@ public static class Protocol
                 w.Write((uint)rockCount);
                 foreach (var a in world.Asteroids)
                     if (vision.DiscoveredRocks.Contains(a.Id))
-                        WriteRockStatic(w, a);
+                        WriteRockStatic(w, world, a);
 
                 int alephCount = 0;
                 foreach (var g in world.Alephs)
@@ -736,7 +855,7 @@ public static class Protocol
         }
         w.Write((ushort)rockIdx.Count);
         foreach (int idx in rockIdx)
-            WriteRockStatic(w, world.Asteroids[idx]);
+            WriteRockStatic(w, world, world.Asteroids[idx]);
         w.Write((byte)alephIdx.Count);
         foreach (int idx in alephIdx)
             WriteAlephStatic(w, world.Alephs[idx]);
@@ -977,6 +1096,7 @@ public static class Protocol
             w.Write(s.RadarSignature);
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);
+            w.Write(s.OreCapacity); // mining ore hold (0 = not a miner); client tags MINER hulls + shows capacity
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
             // Default consumable hold (authored order): u8 count, then n x (u32 cargoId, u8 count).

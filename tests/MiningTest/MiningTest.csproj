@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The sim + content loader live server-side; the Allegiance.Factions set types come
+         transitively. Referencing SimServer pulls its assembly only — its Main is never invoked. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock bundle under test, copied next to the test binary preserving the
+         manifest/catalog/factions layout so CoreSerializer.Load resolves it. -->
+    <Content Include="../../server/content/core/**/*.yaml" Link="content/core/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -96,6 +96,10 @@ public partial class Lobby : Control
     private bool _selectionInit;
     private bool _wasVisible;
     private bool _bodyDirty = true;
+    // Previous-frame net phase, so we can edge-detect the Lobby → Active flip in _Process and
+    // auto-deploy every teamed pilot into the hangar at match start (not just the pilot who
+    // clicked LAUNCH). Starts at Lobby so a match already Active on first frame doesn't fire.
+    private MatchPhase _prevPhase = MatchPhase.Lobby;
     private double _clockSecs; // local match clock (placeholder — no clock on the wire)
 
     private const int Backlog = 60;
@@ -772,6 +776,16 @@ public partial class Lobby : Control
 
     public override void _Process(double delta)
     {
+        // On the Lobby → Active EDGE, every teamed pilot auto-enters the mandatory ship-select
+        // hangar — not just the one who clicked LAUNCH (that pilot already carried deploy intent
+        // through OnLaunch). Match-start is now triggered by the FIRST ready pilot, so teammates
+        // who never clicked still need to be pulled into the hangar. Edge-triggered only, so a
+        // mid-match joiner (already Active) presses LAUNCH themselves. Spectators/NOAT skip it.
+        var phaseNow = _world.Phase;
+        if (phaseNow == MatchPhase.Active && _prevPhase != MatchPhase.Active && !IsNoat(MyTeamNow()))
+            GetParent<Hud>()?.RequestDeploy();
+        _prevPhase = phaseNow;
+
         // The Lobby owns the screen whenever we're connected and not flying — pre-match,
         // post-match, and "joined but not yet deployed" mid-match. While flying, the flight HUD
         // and the ConnectLinkModal own it.

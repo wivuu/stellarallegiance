@@ -264,6 +264,10 @@
             "type": "number",
             "description": "Total payload budget the hull can carry: the summed Mass of mounted weapons plus the cargo hold (expendable Mass \u00D7 count). 0 = no hold (e.g. the pod). Runtime hulls with weapon hardpoints must author enough capacity for their default loadout \u2014 CoreValidator enforces this at load."
           },
+          "ore-capacity": {
+            "type": "number",
+            "description": "Ore hold size (helium-3 units) for a mining hull: the harvest capacity a miner fills at a rock and offloads at a friendly base. 0 = not a miner (no ore hold). Independent of PayloadCapacity (weapons/cargo budget) \u2014 an ore hull is typically unarmed. Omit-when-default; projected onto ShipClassDef.OreCapacity."
+          },
           "drift-yaw-deg": {
             "type": "number",
             "description": "Drift (turn-rate slop) knobs the game\u0027s flight model needs; no clean Core source."

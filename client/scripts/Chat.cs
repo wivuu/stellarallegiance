@@ -129,7 +129,11 @@ public partial class Chat : Control
     // The Game Lobby overlay owns the screen — and its own comms panel — whenever we're
     // connected and not flying, so this floating overlay steps aside then (it stays the in-flight
     // chat unchanged).
-    private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null;
+    // ...except while the F3 sector map is open pre-launch: the Lobby hides itself to uncover the
+    // overview camera (see Lobby._Process's `!SectorOverview.Active` show-gate), taking its comms
+    // panel with it. This floating overlay then takes over the comms role, mirroring in-flight F3.
+    private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null
+        && !SectorOverview.Active;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -213,13 +217,19 @@ public partial class Chat : Control
                         + "  /score — both teams' scores\n"
                         + "  /team — which team you're on\n"
                         + "  /server — server address & connection info\n"
-                        + "  /pigs on|off — toggle AI drone spawns (server-wide)"
+                        + "  /pigs on|off — toggle AI drone spawns (server-wide)\n"
+                        + "  /buyminer — buy a mining drone for your team\n"
+                        + "  /mine <sector> — authorize your miners to mine a sector\n"
+                        + "  /miners — your team's miner status"
                 );
                 break;
             case "/pigs":
-                // Server-side command: relay the raw text so the sim toggles PigsEnabled
-                // and broadcasts the result. Scope is irrelevant — the server intercepts
-                // '/'-prefixed chat before any relay.
+            case "/buyminer":
+            case "/mine":
+            case "/miners":
+                // Server-side commands: relay the raw text so the sim acts on it and answers
+                // via system chat. Scope is irrelevant — the server intercepts '/'-prefixed
+                // chat before any relay.
                 _net.SendChat(text, false);
                 break;
             case "/money":

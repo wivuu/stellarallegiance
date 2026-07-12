@@ -151,6 +151,11 @@ public partial class SectorOverview : Node3D
 
     public override void _Process(double delta)
     {
+        // Escape menu owns input while it's stacked over the map: freeze the F3 toggle and all
+        // orbit/zoom so the map just sits behind the menu until it's dismissed.
+        if (EscapeMenu.Active)
+            return;
+
         // F3 edge-detect (polled; F3 isn't used by flight input so no conflict).
         bool f3 = Input.IsPhysicalKeyPressed(Key.F3);
         if (f3 && !_f3Held)
@@ -243,13 +248,23 @@ public partial class SectorOverview : Node3D
             return; // no sector data yet — nothing to show
 
         BuildGrid(radius);
-        // Start viewing the local sector, centered on the player (fall back to the sector
-        // center while spectating), zoomed in close so they can spin around their own ship.
+        // Start viewing the local sector. Launched → frame the player, zoomed in close so they can spin
+        // around their own ship. Pre-launch / spectating (no own ship) → zoom-to-FIT the whole sector
+        // exactly like SwitchView's non-local branch, so a big home sector doesn't open zoomed-in (a
+        // fixed 700 on a large sector makes panning feel sluggish, since a drag covers little ground).
         _world.SetViewSector(null);
-        _target = _world.LocalShip?.GlobalPosition ?? _world.ViewSectorCenter;
+        if (_world.LocalShip is { } ship)
+        {
+            _target = ship.GlobalPosition;
+            _dist = Mathf.Min(700f, radius);
+        }
+        else
+        {
+            _target = _world.ViewSectorCenter;
+            _dist = Mathf.Clamp(radius * 1.5f, MinDist, radius * 3f);
+        }
         _yawDeg = DefaultYawDeg;
         _pitchDeg = DefaultPitchDeg;
-        _dist = Mathf.Min(700f, radius);
 
         Active = true;
         _grid.Visible = true;
@@ -311,11 +326,20 @@ public partial class SectorOverview : Node3D
     // the wheel/gesture events before they reach us.
     public override void _Input(InputEvent @event)
     {
-        if (!Active)
+        if (!Active || EscapeMenu.Active)
             return;
 
         switch (@event)
         {
+            // Esc from the map: pop the flight escape menu ON TOP of the map. ShipController's Esc
+            // handler is gated off while the map owns input, so we mirror it here. The map stays
+            // Active (and frozen — see _Process / the EscapeMenu.Active guard above), so closing the
+            // menu drops back into the map, not straight into flight. Cursor is already free.
+            case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
+                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                GetViewport().SetInputAsHandled();
+                break;
+
             case InputEventMouseButton mb:
                 switch (mb.ButtonIndex)
                 {

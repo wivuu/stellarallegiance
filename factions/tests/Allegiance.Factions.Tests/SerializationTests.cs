@@ -64,6 +64,27 @@ public class SerializationTests
     }
 
     [Fact]
+    public void OreCapacity_RoundTripsAsKebabCase()
+    {
+        var hull = new Hull { Id = "miner", Name = "Miner", ClassId = 4, OreCapacity = 2000 };
+
+        var yaml = CoreSerializer.Serialize(hull);
+        Assert.Contains("ore-capacity: 2000", yaml);          // kebab-cased key
+
+        var reloaded = CoreSerializer.Deserialize<Hull>(yaml);
+        Assert.Equal(2000, reloaded.OreCapacity);
+    }
+
+    [Fact]
+    public void OreCapacity_OmittedWhenDefault()
+    {
+        // Omit-when-default keeps non-mining hulls terse (no ore-capacity: 0 noise).
+        var hull = new Hull { Id = "scout", Name = "Scout", ClassId = 0 };
+
+        Assert.DoesNotContain("ore-capacity", CoreSerializer.Serialize(hull));
+    }
+
+    [Fact]
     public void Deserialize_TechSetIsCaseSensitiveSetOfStrings()
     {
         var hull = CoreSerializer.Deserialize<Hull>(

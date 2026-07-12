@@ -40,6 +40,7 @@ Simulation BootSim(ulong seed)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     // ShieldsEnabled left at its default (true) — this suite is exactly what exercises it.
     sim.StartMatch();
     return sim;

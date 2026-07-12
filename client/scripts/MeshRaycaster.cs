@@ -61,6 +61,32 @@ public sealed class MeshRaycaster
             Walk(child, world);
     }
 
+    // Segment [fromW, toW] against ONE MeshInstance3D read at its LIVE GlobalTransform — for meshes
+    // that move/scale/spin every frame (an asteroid), where the baked-once model above doesn't fit.
+    // The per-Mesh TriangleMesh BVH is still shared through _triCache (asteroid variants reuse a handful
+    // of Mesh resources across instances), so this is cheap to call per frame. Returns the nearest hit
+    // to `fromW`, or false on a miss. Asteroid node scale is uniform, so the normal maps back through
+    // the basis with a re-normalize (no inverse-transpose needed).
+    public static bool IntersectMeshInstance(MeshInstance3D mi, Vector3 fromW, Vector3 toW, out Vector3 hitW, out Vector3 normalW)
+    {
+        hitW = default;
+        normalW = default;
+        if (mi.Mesh is not Mesh mesh)
+            return false;
+        if (!_triCache.TryGetValue(mesh, out TriangleMesh? tri))
+            _triCache[mesh] = tri = mesh.GenerateTriangleMesh();
+        if (tri == null)
+            return false;
+        Transform3D world = mi.GlobalTransform;
+        Transform3D inv = world.AffineInverse();
+        Godot.Collections.Dictionary res = tri.IntersectSegment(inv * fromW, inv * toW);
+        if (res.Count == 0)
+            return false;
+        hitW = world * res["position"].AsVector3();
+        normalW = (world.Basis * res["normal"].AsVector3()).Normalized();
+        return true;
+    }
+
     // Nearest intersection of the world-space segment [fromW, toW] with any hull triangle. Each
     // mesh is queried in its own local frame (endpoints pushed through the baked inverse); the
     // winning hit is the one closest to `fromW`. Hull scale is uniform, so the surface normal maps

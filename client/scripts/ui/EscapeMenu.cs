@@ -132,8 +132,10 @@ public partial class EscapeMenu : Control
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
         // Mirror SectorOverview.Close(): the menu itself freed the cursor (ShipController's
         // Esc handler only releases it, never re-captures), so re-capture here whenever
-        // we're closing back into flight, or the ship coasts uncontrollable.
-        if (_ctx == Context.Flight && _world?.LocalShip != null)
+        // we're closing back into flight, or the ship coasts uncontrollable. But when the
+        // F3 map is still up behind us (menu was opened from the map), leave the cursor free
+        // for the map — SectorOverview.Close() will recapture when the pilot exits the map.
+        if (_ctx == Context.Flight && _world?.LocalShip != null && !SectorOverview.Active)
             Input.MouseMode = Input.MouseModeEnum.Captured;
         QueueFree();
     }

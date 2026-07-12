@@ -39,6 +39,20 @@
       ],
       "description": "Default sector radius (\u00D7 sector-scale) for any sector that omits its own radius; omitted inherits the world\u0027s sector-radius."
     },
+    "ore-capacity-min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Map-wide default for the per-He3-rock ore-capacity band floor; any sector may override it, and omitting it inherits the world\u0027s ore-capacity-min."
+    },
+    "ore-capacity-max": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Map-wide default for the per-He3-rock ore-capacity band ceiling; any sector may override it, and omitting it inherits the world\u0027s ore-capacity-max."
+    },
     "links": {
       "type": [
         "array",
@@ -111,6 +125,41 @@
               "null"
             ],
             "description": "Optional per-sector multiplier on the world asteroid density."
+          },
+          "he3-count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Optional per-sector pin of the guaranteed He3 rock count (replaces the retired he3-min/he3-max/he3-fraction-mult trio; world seeding default otherwise)."
+          },
+          "special-count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 \u2192 none, and an authored value bypasses the home-special-chance roll. World seeding default otherwise."
+          },
+          "ore-richness-mult": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector multiplier on the per-He3-rock ore capacity here."
+          },
+          "ore-capacity-min": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector override of the per-He3-rock ore-capacity band floor (wins over the map/world ore-capacity-min)."
+          },
+          "ore-capacity-max": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional per-sector override of the per-He3-rock ore-capacity band ceiling (wins over the map/world ore-capacity-max)."
           },
           "map-pos": {
             "type": [

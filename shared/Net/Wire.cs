@@ -16,7 +16,14 @@ public static class Wire
     // (-1 sentinel = client default). See Protocol.WriteSectorEnv / Sun.SetDiscSize.
     // v30: MsgSetAutopilot=11 (client->server engage/disengage) + ShipFlagAutopilot=16 in the ship
     // record flags byte (server-steered autopilot engaged). See server/Net/Protocol.cs.
-    public const byte ProtocolVersion = 30;
+    // v31: mining — every RockStatic (Welcome + MsgReveal) appends u8 rockClass | f32 currentRadius |
+    // u8 orePct (live shrink carried on first sight); new MsgRockUpdate=22 streams live rock shrink
+    // deltas; ShipFlagMiner=32 in the ship flags byte; ShipClassDef.OreCapacity added to MsgDefs.
+    // v32: miner brain — RockStatic appends f32 OreCapacity as its LAST field (47->51 bytes);
+    // ShipFlagMining=64 in the ship flags byte (set while a miner is actively moving ore).
+    // v33: MsgMinerTargets=23 (u8 count, count x u64 shipId + u64 rockId) — the exact rock each active
+    // miner is harvesting, so the client mining beam aims at the real target instead of guessing.
+    public const byte ProtocolVersion = 33;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

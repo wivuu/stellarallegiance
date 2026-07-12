@@ -64,6 +64,7 @@ Simulation BootSim(ulong seed)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
+    sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw missile/blast damage from shield absorption (ShieldTest covers shields)
     sim.FogEnabled = false; // isolate lock mechanics from the fog radar-visibility gate (FogTest covers fog); vision is a 2 Hz async pass this suite never waits on
 

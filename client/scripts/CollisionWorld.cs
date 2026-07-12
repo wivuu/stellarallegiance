@@ -28,6 +28,12 @@ public sealed class CollisionWorld
     private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
     private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
 
+    // Per-rock rebuild info so a live mining shrink (MsgRockUpdate) can rescale a rock's body ABSOLUTELY
+    // to the new radius (matching the server's absolute rescale), not by compounding a factor. Index is
+    // stable (rocks are only appended to _src until Clear). Model null ⇒ the sphere-fallback rock.
+    private readonly record struct RockRef(uint Sector, int Index, SimModel? Model, Vec3 Center, Quat Rot, Vec3 SpinAxis, float SpinSpeed);
+    private readonly Dictionary<ulong, RockRef> _rockRefs = new();
+
     // Deployed probes are DYNAMIC solid bodies (added/removed mid-match, unlike Welcome-time
     // asteroids/bases), so they live in their own sector→probeId map and merge into BodiesIn's output.
     // The local ship then predicts bouncing off a probe exactly as the server does (ResolveProbeCollisions);
@@ -82,24 +88,55 @@ public sealed class CollisionWorld
         _src.Clear();
         _live.Clear();
         _probes.Clear();
+        _rockRefs.Clear();
+        _shipHulls.Clear(); // a world rebuild may stream retuned defs (ModelName/ModelLength)
     }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)
     {
         var list = BodyList(row.SectorId);
         var center = new Vec3(row.PosX, row.PosY, row.PosZ);
+        // Build at the CURRENT (possibly already-mined) radius so a rock first seen shrunk collides at
+        // its true size; UpdateAsteroidRadius later rescales it absolutely as it is mined further.
+        float rad = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
         SimModel? model = string.IsNullOrEmpty(row.Variant) ? null : VariantModel(row.Variant);
+        int index = list.Count;
+        Quat rot = Collide.RockRotation(row.RotX, row.RotY, row.RotZ);
+        var (spinAxis, spinSpeed) = Collide.RockSpin(row.AsteroidId);
         if (model is null || model.Hull.BoundingRadius <= 1e-3f)
         {
             // Sphere fallback — matches the server's ResolveStaticCollision for a hull-less rock.
             // A sphere is rotation-invariant, so it carries no spin.
-            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, row.Radius * CollisionConfig.AsteroidCollisionScale), default, 0f));
+            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, rad * CollisionConfig.AsteroidCollisionScale), default, 0f));
+            _rockRefs[row.AsteroidId] = new RockRef(row.SectorId, index, null, center, rot, default, 0f);
             return;
         }
-        float scale = row.Radius * CollisionConfig.AsteroidCollisionScale / model.Hull.BoundingRadius;
-        Quat rot = Collide.RockRotation(row.RotX, row.RotY, row.RotZ);
-        var (spinAxis, spinSpeed) = Collide.RockSpin(row.AsteroidId);
+        float scale = rad * CollisionConfig.AsteroidCollisionScale / model.Hull.BoundingRadius;
         list.Add(new Entry(Collide.StaticBody.AsteroidHull(model.Hull, center, rot, scale), spinAxis, spinSpeed));
+        _rockRefs[row.AsteroidId] = new RockRef(row.SectorId, index, model, center, rot, spinAxis, spinSpeed);
+    }
+
+    // A rock was mined: rebuild its body at the new radius, ABSOLUTELY (radius → scale), the same way
+    // the server recomputes RockBody.Scale from its immutable spawn scale — so the predicted hull tracks
+    // the shrunk rock and the ship never bounces off empty space where the rock used to be. No-op for an
+    // unknown id (a rock this client never received, e.g. still fogged).
+    public void UpdateAsteroidRadius(ulong id, float newRadius)
+    {
+        if (!_rockRefs.TryGetValue(id, out var rr))
+            return;
+        if (!_src.TryGetValue(rr.Sector, out var list) || rr.Index >= list.Count)
+            return;
+        if (rr.Model is null || rr.Model.Hull.BoundingRadius <= 1e-3f)
+        {
+            list[rr.Index] = new Entry(
+                Collide.StaticBody.AsteroidSphere(rr.Center, newRadius * CollisionConfig.AsteroidCollisionScale), default, 0f);
+        }
+        else
+        {
+            float scale = newRadius * CollisionConfig.AsteroidCollisionScale / rr.Model.Hull.BoundingRadius;
+            list[rr.Index] = new Entry(
+                Collide.StaticBody.AsteroidHull(rr.Model.Hull, rr.Center, rr.Rot, scale), rr.SpinAxis, rr.SpinSpeed);
+        }
     }
 
     public void AddBase(StellarAllegiance.Net.Base row)
@@ -130,6 +167,35 @@ public sealed class CollisionWorld
         // server at the bay mouth (no rubber-banding). N doors supported (each a group of 5 markers).
         DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Log.Warn($"[CollisionWorld] {msg}"));
         list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, faces), default, 0f));
+    }
+
+    // Per-class ship collision hulls, mirroring server World.LoadShipBodies: each ship def's GLB
+    // pre-scaled to its authored ModelLength (the same length the renderer normalizes to), from the
+    // SAME GLB bytes → bit-identical hulls, so the local ship's predicted ship-ship bounce matches
+    // the server's Pass C. Keyed by the def actually flown (a pod uses the reserved Pod class id).
+    // A missing/degenerate GLB caches null → the caller falls back to the ShipRadius sphere, exactly
+    // like the server. A not-yet-streamed def returns null WITHOUT caching (it may still arrive).
+    private readonly Dictionary<byte, (ConvexHull Hull, float Bound)?> _shipHulls = new();
+
+    public (ConvexHull Hull, float Bound)? ShipHull(DefRegistry defs, byte cls, bool isPod)
+    {
+        byte key = isPod ? GameContent.PodClassId : cls;
+        if (_shipHulls.TryGetValue(key, out var cached))
+            return cached;
+        if (!defs.TryGetShipDef(key, out var def))
+            return null; // def not streamed yet — retry next query
+        (ConvexHull, float)? built = null;
+        if (!string.IsNullOrEmpty(def.ModelName) && def.ModelLength > 1e-3f)
+        {
+            SimModel? model = LoadGlb($"res://assets/ships/{def.ModelName}.glb");
+            if (model is not null && model.LongestAxis > 1e-3f)
+            {
+                float ws = def.ModelLength / model.LongestAxis;
+                built = (model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
+            }
+        }
+        _shipHulls[key] = built;
+        return built;
     }
 
     // First-entry time t of the ray (pos + vel·t) into any BASE hull in the sector, within [0, maxT].
