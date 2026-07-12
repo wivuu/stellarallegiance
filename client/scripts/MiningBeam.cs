@@ -24,9 +24,10 @@ public partial class MiningBeam : Node3D
     // (WorldRenderer.NewProjectileMesh) but pushed oranger so it reads as a cutting beam, not a bolt.
     private static readonly Color BeamColor = new(1f, 0.55f, 0.18f);
 
-    // Neutral rock-chip tint (asteroids render in a desaturated grey-brown); the chunks read as
-    // freshly-broken stone rather than glowing debris.
-    private static readonly Color DebrisColor = new(0.42f, 0.36f, 0.30f);
+    // He3 crystal tint: matches the He3 asteroid material texture (asteroid-gen shapefield.py
+    // "helium3" linear tone (0.30, 0.52, 0.57), converted to Godot sRGB space) so the debris
+    // reads as freshly-broken He3 crystal.
+    private static readonly Color DebrisColor = new(0.58f, 0.75f, 0.78f);
 
     private MeshInstance3D _beam = null!;
     private StandardMaterial3D _mat = null!;
