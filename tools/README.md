@@ -20,6 +20,12 @@ PBR materials. Outputs land in `ship-gen/build/` (gitignored) with a `manifest.j
 each ship's parts, hardpoints, and sha256; the canonical scout/fighter/bomber/pod feed
 `ShipModelLoader` in the client.
 
+### `coacd-experiment/` — CoACD convex decomposition experiment
+Standalone exploration of [CoACD](https://github.com/SarahWeiii/CoACD) as an alternative to
+`collision-hull`'s box/spheroid fitting: decomposes a mesh GLB into true convex hull parts and
+renders a matplotlib preview. Not wired into any production pipeline. See
+[`coacd-experiment/README.md`](coacd-experiment/README.md) for findings.
+
 ## Load testing
 
 ### `simbot/` — bot swarm
