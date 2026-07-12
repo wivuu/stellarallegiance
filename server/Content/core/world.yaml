@@ -139,18 +139,19 @@ seeding:
 
 # Mining + ore economy: how asteroids are classified into resource types at world-gen and how the AI
 # miner economy is tuned. A sector is OVERWHELMINGLY common rock (Regolith), sprinkled with a
-# fixed count of harvestable helium-3 (min == max == 4 → exactly 4 per sector) and at most one RARE
+# fixed count of harvestable helium-3 (4 per ordinary sector, 2 in a team's home/garrison sector) and at most one RARE
 # special rock (Carbonaceous/Silicon/Uranium). Maps override per-sector via he3-min/he3-max (set equal
 # to pin a count), he3-fraction-mult, special-count, ore-richness-mult. Per-rock He3 capacity scales
 # with the rock's volume. All server-side only (never streamed) — the client only sees the results.
 mining:
   max-miners-per-team: 4        # cap on live AI miners a team may field at once
   harvest-rate-per-second: 40   # ore units a miner pulls from a rock per second
-  credits-per-ore-unit: 0.5     # team credits granted per ore unit offloaded at base
+  credits-per-ore-unit: 1     # team credits granted per ore unit offloaded at base
   offload-delay-seconds: 5      # dwell after an offload before the miner relaunches
   he3-fraction: 0.12            # fraction of a sector's rocks made He3 (pre-clamp; pinned by min==max)
-  he3-per-sector-min: 4         # min==max pins the guaranteed He3 count at exactly 4 per sector
+  he3-per-sector-min: 4         # min==max pins ordinary (non-home) sectors at exactly 4 He3 rocks
   he3-per-sector-max: 4
+  he3-per-home-sector: 2        # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
   special-per-sector: 1         # RARE special rocks per sector; everything else is common Regolith
   ore-capacity-min: 8000        # per-He3-rock capacity range, before the radius/richness scaling.
   ore-capacity-max: 32000       # midpoint 20000 vs the 2000-unit miner hold ≈ 10 harvest runs/rock avg

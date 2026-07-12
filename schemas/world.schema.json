@@ -685,12 +685,26 @@
           ],
           "description": "World default maximum He3 rocks per sector (clamp ceiling)."
         },
+        "he3-per-home-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "World default He3 rocks in a team\u0027s HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-min/he3-max, so home fields stay leaner than contested space."
+        },
         "special-per-sector": {
           "type": [
             "integer",
             "null"
           ],
           "description": "World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith."
+        },
+        "special-rock-radius-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%."
         },
         "ore-capacity-min": {
           "type": [

@@ -453,7 +453,9 @@ public sealed class World
 
             // Guaranteed He3 count: fraction of the sector's rocks, clamped to [min, max] (sector
             // override ?? world default), then again to the actual rock count. Zero-rock sectors bailed
-            // above, so he3Count ∈ [0, n].
+            // above, so he3Count ∈ [0, n]. A team's HOME sector carries a leaner He3Min/He3Max stamped
+            // by MapLoader.ApplyTo (he3-per-home-sector), so the garrison case needs no special-casing
+            // here — it arrives as an ordinary per-sector override.
             float frac = Mining.He3Fraction * (sc?.He3FractionMult ?? 1f);
             int he3Min = sc?.He3Min ?? Mining.He3PerSectorMin;
             int he3Max = sc?.He3Max ?? Mining.He3PerSectorMax;

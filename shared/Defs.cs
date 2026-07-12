@@ -589,12 +589,19 @@ namespace StellarAllegiance.Shared
 
         // He3 selection: the fraction of a sector's rocks made harvestable helium-3, then clamped to
         // the guaranteed [min, max] count (and to the sector's actual rock count). A sector with no
-        // rocks gets zero He3. The STOCK content (world.yaml) pins min == max == 4 so every sector
-        // yields a fixed 4 He3 by default; maps override per-sector via He3Min/He3Max (set equal to
-        // pin a different exact count). Per-sector overrides (SectorConfig.He3Min/Max/FractionMult) win.
+        // rocks gets zero He3. min == max == 4 pins every ordinary sector at a fixed 4 He3. These
+        // compiled defaults MUST match the stock world.yaml so a build that fails to load the mining
+        // block still yields 4 rather than an over-rich field. Maps override per-sector via
+        // He3Min/He3Max (set equal to pin an exact count) — a per-sector override wins.
         public float He3Fraction = 0.12f;
-        public int He3PerSectorMin = 2;
-        public int He3PerSectorMax = 8;
+        public int He3PerSectorMin = 4;
+        public int He3PerSectorMax = 4;
+
+        // Guaranteed He3 count for a team's HOME sector (one that hosts a garrison). Home fields are
+        // deliberately leaner than contested space so teams must push out to mine. MapLoader.ApplyTo
+        // stamps this onto every garrison sector (as He3Min == He3Max) that doesn't author its own
+        // he3-min/he3-max, so it is enforced uniformly across all maps without per-map authoring.
+        public int He3PerHomeSector = 2;
 
         // RARE "special" rocks: after He3 selection, this many of the sector's remaining (top-ranked)
         // rocks become one of the cosmetic special classes (Carbonaceous/Silicon/Uranium); EVERY other

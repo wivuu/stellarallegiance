@@ -406,6 +406,9 @@ public sealed class WorldMiningDef
     /// <summary>World default maximum He3 rocks per sector (clamp ceiling).</summary>
     public int? He3PerSectorMax { get; set; }
 
+    /// <summary>World default He3 rocks in a team's HOME sector (garrison sector); stamped by MapLoader onto garrison sectors that omit their own he3-min/he3-max, so home fields stay leaner than contested space.</summary>
+    public int? He3PerHomeSector { get; set; }
+
     /// <summary>World default count of RARE special rocks (Carbonaceous/Silicon/Uranium) per sector; the rest are common Regolith.</summary>
     public int? SpecialPerSector { get; set; }
 
@@ -583,6 +586,7 @@ public static class WorldLoader
             t.He3Fraction = F(mi.He3Fraction, t.He3Fraction);
             t.He3PerSectorMin = mi.He3PerSectorMin ?? t.He3PerSectorMin;
             t.He3PerSectorMax = mi.He3PerSectorMax ?? t.He3PerSectorMax;
+            t.He3PerHomeSector = mi.He3PerHomeSector ?? t.He3PerHomeSector;
             t.SpecialPerSector = mi.SpecialPerSector ?? t.SpecialPerSector;
             t.SpecialRockRadiusMult = F(mi.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
             t.OreCapacityMin = F(mi.OreCapacityMin, t.OreCapacityMin);

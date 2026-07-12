@@ -211,9 +211,9 @@ hulls:
     drift-yaw-deg: 8
     drift-pitch-deg: 8
     ab-accel: 0
-    ab-on-rate: 2.0
+    ab-on-rate: 1.0
     ab-off-rate: 1.0
-    armor-hit-points: 160  # tougher than a fighter (120) — it soaks hits it can't shoot back at
+    armor-hit-points: 500  # tougher than a fighter (120) — it soaks hits it can't shoot back at
     shield-capacity: 40    # a modest regenerating shield over the hull
     shield-recharge: 6     # points/sec once the quiet delay elapses (~6.7 s to full)
     shield-delay: 3        # seconds after the last shield hit before recharge resumes

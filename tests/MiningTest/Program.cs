@@ -406,6 +406,49 @@ WorldConfig FieldConfig(WorldMiningTuning mining, float? he3FractionMult = null,
     Check(othersUnchanged, "He3 + common rocks keep their rolled radius (only specials oversize)", $"a non-special rock changed size: {detail}");
 }
 
+// ---- 7d. Home-sector economy: MapLoader stamps he3-per-home-sector (2) onto garrison sectors, a
+//          contested (non-garrison) sector keeps he3-per-sector (4), and a map's OWN he3-min/max wins. ----
+{
+    // Drive the REAL map seam: build a 3-sector map and apply it through MapLoader.ApplyTo onto a
+    // config carrying the stock mining tuning (per-sector 4, per-home 2). Sector 0 is a plain home,
+    // sector 1 contested, sector 2 a home that authors its own he3-min/max (author override must win).
+    var map = new MapDef
+    {
+        Name = "HomeEconTest",
+        Sectors = new List<MapSectorDef>
+        {
+            new() { Id = 0, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 0 } },
+            new() { Id = 1, Radius = 1500, Asteroids = "field" },
+            new() { Id = 2, Radius = 1500, Asteroids = "field", Garrison = new GarrisonDef { Team = 1 }, He3Min = 5, He3Max = 5 },
+        },
+        Links = new List<List<uint>> { new() { 0, 1 }, new() { 1, 2 } },
+    };
+    var cfg = new WorldConfig
+    {
+        SectorScale = 1f,
+        AsteroidDensity = 3f,
+        SectorRadius = 700f,
+        Seeding = stockCfg.Seeding,
+        Mining = stockCfg.Mining, // stock: He3PerSectorMin/Max == 4, He3PerHomeSector == 2
+    };
+    MapLoader.ApplyTo(map, cfg);
+    var w = MakeWorld(4242, cfg);
+    var n = RockCounts(w);
+    var he3 = He3Counts(w);
+    Check(cfg.Mining.He3PerHomeSector == 2 && cfg.Mining.He3PerSectorMin == 4 && cfg.Mining.He3PerSectorMax == 4,
+        $"stock mining tuning: per-home {cfg.Mining.He3PerHomeSector}, per-sector {cfg.Mining.He3PerSectorMin}..{cfg.Mining.He3PerSectorMax}",
+        $"stock mining He3 defaults drifted (home {cfg.Mining.He3PerHomeSector}, sector {cfg.Mining.He3PerSectorMin}..{cfg.Mining.He3PerSectorMax})");
+    Check(he3[0] == Math.Min(2, n[0]),
+        $"a team's HOME (garrison) sector gets he3-per-home-sector (2) — got {he3[0]} of {n[0]} rocks",
+        $"home sector He3 not stamped to 2: got {he3[0]} of {n[0]}");
+    Check(he3[1] == Math.Min(4, n[1]),
+        $"a contested (non-garrison) sector keeps he3-per-sector (4) — got {he3[1]} of {n[1]} rocks",
+        $"contested sector He3 not 4: got {he3[1]} of {n[1]}");
+    Check(he3[2] == Math.Min(5, n[2]),
+        $"a home sector's OWN he3-min/max override beats the home default — got {he3[2]} (want 5)",
+        $"map he3-min/max override lost to the home default: got {he3[2]} of {n[2]}");
+}
+
 // ---- 8. SetOreRemaining shrink helper: volume-proportional radius toward the floor. ----
 {
     var mining = new WorldMiningTuning { He3Fraction = 0.2f, He3PerSectorMin = 3, He3PerSectorMax = 30, ShrinkFloorFrac = 0.4f };

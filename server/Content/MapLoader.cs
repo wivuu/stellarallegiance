@@ -212,22 +212,35 @@ public static class MapLoader
     public static void ApplyTo(MapDef map, WorldConfig world)
     {
         world.Sectors = map.Sectors
-            .Select(s => new WorldSectorConfig
+            .Select(s =>
             {
-                Id = s.Id,
-                Radius = s.Radius.HasValue ? (float?)(float)s.Radius.Value : null,
-                Name = string.IsNullOrWhiteSpace(s.Name) ? null : s.Name!.Trim(),
-                Garrison = ProjectGarrison(s.Garrison, s.Id),
-                Asteroids = ParseAsteroidKind(s.Asteroids, s.Id),
-                AsteroidDensityMult = F(s.AsteroidDensity),
-                He3Min = s.He3Min,
-                He3Max = s.He3Max,
-                He3FractionMult = F(s.He3FractionMult),
-                SpecialCount = s.SpecialCount,
-                OreRichnessMult = F(s.OreRichnessMult),
-                MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
-                MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,
-                Env = ProjectEnv(s.Environment),
+                var garrison = ProjectGarrison(s.Garrison, s.Id);
+                // A team's HOME (garrison) sector defaults to the leaner world he3-per-home-sector count
+                // so home fields stay lean and teams must push out to mine — UNLESS the map authors its
+                // own he3-min/he3-max for that sector, which always wins. Ordinary (non-garrison) sectors
+                // leave He3Min/He3Max null and fall through to the world he3-per-sector default in
+                // AssignOre. This is the single seam that enforces the home-sector economy across every map.
+                int? he3Min = s.He3Min;
+                int? he3Max = s.He3Max;
+                if (garrison is not null && he3Min is null && he3Max is null)
+                    he3Min = he3Max = world.Mining.He3PerHomeSector;
+                return new WorldSectorConfig
+                {
+                    Id = s.Id,
+                    Radius = s.Radius.HasValue ? (float?)(float)s.Radius.Value : null,
+                    Name = string.IsNullOrWhiteSpace(s.Name) ? null : s.Name!.Trim(),
+                    Garrison = garrison,
+                    Asteroids = ParseAsteroidKind(s.Asteroids, s.Id),
+                    AsteroidDensityMult = F(s.AsteroidDensity),
+                    He3Min = he3Min,
+                    He3Max = he3Max,
+                    He3FractionMult = F(s.He3FractionMult),
+                    SpecialCount = s.SpecialCount,
+                    OreRichnessMult = F(s.OreRichnessMult),
+                    MapPosX = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[0] : null,
+                    MapPosY = s.MapPos is { Length: >= 2 } ? (float?)(float)s.MapPos[1] : null,
+                    Env = ProjectEnv(s.Environment),
+                };
             })
             .ToList();
         if (map.SectorScale.HasValue)
