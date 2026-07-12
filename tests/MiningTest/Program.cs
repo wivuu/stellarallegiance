@@ -1144,9 +1144,16 @@ content.World.FogOfWar = false;
     {
         var rock = w.RockById(sim.MinerSlotsView()[0].TargetRockId)!.Value;
         float hold = MinerHold();
-        // Park it ON the rock (proven dock-safe: it fills there WITHOUT docking) to fill, then keep it
-        // parked so it never reaches a base — we can watch the ToBase target flip as bases die.
-        void Park() { miner.SectorId = rock.SectorId; miner.State.Pos = rock.Pos; miner.State.Vel = default; }
+        // Park it at the rock's HOLD SHELL (inside HarvestStep's reach, clear of the hull — a bounce
+        // now disrupts the beam, so parking INSIDE the rock would starve the fill) to fill without
+        // docking, then keep it parked so it never reaches a base — we can watch the ToBase target
+        // flip as bases die.
+        void Park()
+        {
+            miner.SectorId = rock.SectorId;
+            miner.State.Pos = rock.Pos + new Vec3(0f, w.RockCurrentRadius(rock.Id) + 30f, 0f);
+            miner.State.Vel = default;
+        }
         int guard = 0;
         while (miner.Ore < hold - 1e-3f && guard++ < 600) { Park(); sim.Step(); }
         Check(miner.Ore >= hold - 1e-3f, "the miner filled its hold (reroute pre-condition)", "the miner never filled (reroute)");
@@ -1204,6 +1211,199 @@ content.World.FogOfWar = false;
     Check(summary && perMiner,
         "/miners reports a team summary line and a per-miner line",
         $"status report missing lines (summary={summary}, perMiner={perMiner})");
+}
+
+// ============================================================================================
+// Stream 7: miner collisions + damage retreat. Ship-ship collisions run between ALL ships
+// (the same-team skip is gone), any physical bump knocks a Harvesting miner back to ToRock
+// (beam reset, cargo kept), and a miner below retreat-health-frac of its hull abandons the
+// field and brings the cargo home (GoHome), relaunching at full health after the offload.
+// ============================================================================================
+
+float minerMaxHull = content.Ships.First(s => s.ClassId == 4).MaxHull;
+
+// Drive a fresh single-miner sim until its free miner is Harvesting with ore aboard; returns the
+// live drone + its claimed rock (ship null on timeout — the caller's Check reports it).
+(Simulation sim, World w, Simulation.ShipSim? ship, ulong rockId) HarvestingMiner(ulong seed)
+{
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(2), radius: 500f);
+    var w = MakeWorld(seed, cfg);
+    var sim = new Simulation(w, content);
+    sim.StartMatch();
+    for (int i = 0; i < 3000; i++)
+    {
+        sim.Step();
+        var row = sim.MinerSlotsView()[0];
+        if (row.State == "Harvesting" && row.Ship is { } s && s.Ore > 0f)
+            return (sim, w, s, row.TargetRockId);
+    }
+    return (sim, w, null, 0);
+}
+
+// ---- 29. Same-team ship-ship collision: friendly ships bounce AND take collision damage. ----
+{
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(2), radius: 500f);
+    var w = MakeWorld(29, cfg);
+    var sim = new Simulation(w, content);
+    sim.StartMatch();
+    w.TeamStates[0].Credits = 100_000;
+    sim.EnqueueMinerBuy(0);
+    Simulation.ShipSim? a = null, b = null;
+    for (int i = 0; i < 200 && (a is null || b is null); i++)
+    {
+        sim.Step();
+        var rows = sim.MinerSlotsView();
+        a = rows[0].Ship;
+        b = rows.Count > 1 ? rows[1].Ship : null;
+    }
+    Check(a is not null && b is not null, "two friendly miners are live (same-team collision pre-condition)",
+        "two friendly miners never launched (same-team collision)");
+    if (a is not null && b is not null)
+    {
+        // Head-on overlap at an empty spot (outside the 500-radius rock field, inside the 700 boundary).
+        var spot = new Vec3(0f, 0f, 600f);
+        a.SectorId = b.SectorId = 0;
+        a.State.Pos = spot - new Vec3(World.ShipRadius * 0.8f, 0f, 0f);
+        b.State.Pos = spot + new Vec3(World.ShipRadius * 0.8f, 0f, 0f);
+        a.State.Vel = new Vec3(30f, 0f, 0f);
+        b.State.Vel = new Vec3(-30f, 0f, 0f);
+        float hpA = a.Health, hpB = b.Health;
+        sim.Step();
+        Vec3 rel = a.State.Pos - b.State.Pos;
+        Vec3 relV = a.State.Vel - b.State.Vel;
+        bool separating = rel.X * relV.X + rel.Y * relV.Y + rel.Z * relV.Z >= 0f;
+        Check(separating, "a same-team head-on resolves to separating velocities (impulse applied)",
+            $"friendly pair still closing after the step (rel {rel.X:F1},{rel.Y:F1},{rel.Z:F1})");
+        Check(a.Health < hpA && b.Health < hpB,
+            $"both friendly ships took collision damage ({hpA:F1}→{a.Health:F1} / {hpB:F1}→{b.Health:F1})",
+            $"friendly collision dealt no damage ({hpA:F1}→{a.Health:F1} / {hpB:F1}→{b.Health:F1})");
+    }
+}
+
+// ---- 30. A ship bump knocks a Harvesting miner back to ToRock: beam reset, cargo + claim kept. ----
+{
+    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(2), radius: 500f);
+    var w = MakeWorld(30, cfg);
+    var sim = new Simulation(w, content);
+    sim.StartMatch();
+    w.TeamStates[0].Credits = 100_000;
+    sim.EnqueueMinerBuy(0);
+    Simulation.ShipSim? a = null, b = null;
+    ulong rockId = 0;
+    for (int i = 0; i < 3000; i++)
+    {
+        sim.Step();
+        var rows = sim.MinerSlotsView();
+        if (rows.Count > 1 && rows[1].Ship is { } s1 && rows[0].State == "Harvesting"
+            && rows[0].Ship is { } s0 && s0.Ore > 0f)
+        {
+            a = s0;
+            b = s1;
+            rockId = rows[0].TargetRockId;
+            break;
+        }
+    }
+    Check(a is not null && b is not null, "a Harvesting miner + a second friendly are live (bump pre-condition)",
+        "never reached Harvesting-with-ore alongside a second miner (bump)");
+    if (a is not null && b is not null)
+    {
+        float oreBefore = a.Ore;
+        // Park the friendly INSIDE the harvesting miner at matched velocity: zero closing speed ⇒ no
+        // damage, but the push-out is a resolved contact — ANY bump must reset the beam.
+        b.SectorId = a.SectorId;
+        b.State.Pos = a.State.Pos + new Vec3(World.ShipRadius * 0.5f, 0f, 0f);
+        b.State.Vel = a.State.Vel;
+        sim.Step();
+        var row = sim.MinerSlotsView()[0];
+        Check(row.State == "ToRock" && !a.IsHarvesting,
+            "a bumped Harvesting miner drops its beam and falls back to ToRock",
+            $"bump did not reset the beam (state {row.State}, harvesting {a.IsHarvesting})");
+        Check(a.Ore >= oreBefore - 1e-3f && row.TargetRockId == rockId,
+            "the bumped miner keeps its cargo and its rock claim",
+            $"cargo/claim lost on bump (ore {oreBefore:F1}→{a.Ore:F1}, target {row.TargetRockId} vs {rockId})");
+    }
+}
+
+// ---- 31. An asteroid bounce disrupts the beam too (same stamp seams as ship-ship). ----
+{
+    var (sim, w, ship, rockId) = HarvestingMiner(31);
+    Check(ship is not null, "a miner reached Harvesting (asteroid-bump pre-condition)",
+        "never reached Harvesting (asteroid bump)");
+    if (ship is not null)
+    {
+        var rock = w.RockById(rockId)!.Value;
+        ship.State.Pos = rock.Pos; // shoved inside its own rock ⇒ the hull bounce fires this step
+        ship.State.Vel = default;
+        sim.Step();
+        Check(sim.MinerSlotsView()[0].State == "ToRock",
+            "an asteroid bounce knocks the miner out of Harvesting (re-approach)",
+            $"asteroid bounce did not disrupt (state {sim.MinerSlotsView()[0].State})");
+    }
+}
+
+// ---- 32. Retreat: a miner under retreat-health-frac of max hull abandons mining and heads home. ----
+Simulation? retreatSim = null; // test 33 continues this sim through dock + relaunch
+{
+    noticesSeen.Clear();
+    var (sim, _, ship, _) = HarvestingMiner(32);
+    Check(ship is not null, "a miner reached Harvesting (retreat pre-condition)", "never reached Harvesting (retreat)");
+    if (ship is not null)
+    {
+        ship.Health = 0.5f * minerMaxHull; // well past the 20% loss threshold (any damage source)
+        for (int i = 0; i < 8; i++) // ≥ one 5 Hz brain tick
+            StepAndCollect(sim);
+        var row = sim.MinerSlotsView()[0];
+        int notices = noticesSeen.Count(t => t.Contains("Miner damaged"));
+        Check(row.State == "ToBase" && row.TargetBaseId != 0 && row.TargetRockId == 0,
+            "a damaged miner stops mining and retreats to base (ToBase, claim dropped)",
+            $"retreat wrong (state {row.State}, base {row.TargetBaseId}, rock {row.TargetRockId})");
+        Check(notices == 1, "the retreat is announced exactly once", $"retreat notice count {notices}");
+        retreatSim = sim;
+    }
+}
+
+// ---- 33. Retreat is sticky: no rock re-pick inbound; docking + relaunch restores full health. ----
+if (retreatSim is { } rsim)
+{
+    bool repicked = false, docked = false;
+    for (int i = 0; i < 12000 && !docked; i++)
+    {
+        rsim.Step();
+        var row = rsim.MinerSlotsView()[0];
+        if (row.Ship is null)
+            docked = true;
+        else if (row.TargetRockId != 0)
+            repicked = true; // still flying: a retreating miner must never re-claim a rock
+    }
+    Check(docked && !repicked, "the retreating miner flew home without re-picking a rock",
+        $"retreat stickiness wrong (docked={docked}, repicked={repicked})");
+    Simulation.ShipSim? relaunched = null;
+    for (int i = 0; i < 400 && relaunched is null; i++)
+    {
+        rsim.Step();
+        relaunched = rsim.MinerSlotsView()[0].Ship;
+    }
+    Check(relaunched is not null && MathF.Abs(relaunched.Health - minerMaxHull) < 1e-3f
+        && rsim.MinerSlotsView()[0].TargetRockId != 0,
+        "after docking the miner relaunches at FULL health with a fresh rock target",
+        $"relaunch wrong (health {relaunched?.Health:F1}/{minerMaxHull:F1}, rock {rsim.MinerSlotsView()[0].TargetRockId})");
+}
+
+// ---- 34. Sub-threshold damage does NOT retreat (hull above retreat-health-frac keeps mining). ----
+{
+    noticesSeen.Clear();
+    var (sim, _, ship, _) = HarvestingMiner(34);
+    Check(ship is not null, "a miner reached Harvesting (sub-threshold pre-condition)", "never reached Harvesting (sub-threshold)");
+    if (ship is not null)
+    {
+        ship.Health = 0.85f * minerMaxHull; // above the 0.8 retreat floor
+        for (int i = 0; i < 12; i++)
+            StepAndCollect(sim);
+        var row = sim.MinerSlotsView()[0];
+        Check(row.State != "ToBase" && !noticesSeen.Any(t => t.Contains("Miner damaged")),
+            "a lightly-damaged miner keeps working the field",
+            $"sub-threshold damage triggered a retreat (state {row.State})");
+    }
 }
 
 Console.WriteLine(failures == 0 ? "\nALL MINING TESTS PASSED" : $"\n{failures} MINING TEST(S) FAILED");

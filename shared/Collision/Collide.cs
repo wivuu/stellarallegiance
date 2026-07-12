@@ -296,6 +296,129 @@ public static class Collide
         return false;
     }
 
+    // ---- Ship-vs-ship (shared with client prediction) --------------------
+
+    // Ship-vs-ship contact (any pair). With hulls loaded the contact is each ship's center, as a
+    // shipRadius sphere, against the OTHER ship's convex hull — the deeper of the two contacts wins;
+    // with neither hull it falls back to the legacy equal-radius sphere overlap. `n` is oriented
+    // b → a so the caller's impulse pushes them apart. hullA/hullB are pre-scaled to world (the
+    // authored ModelLength); boundA/boundB are their bounding radii (shipRadius when hull-less).
+    // ONE kernel for the server's Pass C AND the client's local-ship prediction, so the predicted
+    // bounce matches the authoritative one.
+    public static bool ShipShipContact(
+        Vec3 posA,
+        Quat rotA,
+        ConvexHull? hullA,
+        float boundA,
+        Vec3 posB,
+        Quat rotB,
+        ConvexHull? hullB,
+        float boundB,
+        float shipRadius,
+        out Vec3 n,
+        out float pen
+    )
+    {
+        n = default;
+        pen = 0f;
+
+        if (hullA is null && hullB is null)
+        {
+            // Legacy equal-radius sphere overlap.
+            Vec3 d = posA - posB;
+            float dist2 = d.LengthSquared();
+            float minD = 2f * shipRadius;
+            if (dist2 >= minD * minD)
+                return false;
+            float dist = (float)System.Math.Sqrt(dist2);
+            n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+            pen = minD - dist;
+            return true;
+        }
+
+        // Broad-phase: the two world bounding spheres.
+        float bound = boundA + boundB;
+        if ((posA - posB).LengthSquared() >= bound * bound)
+            return false;
+
+        // a's center vs b's hull → normal already points out of b toward a (= b → a).
+        if (hullB is ConvexHull hb && SphereVsHull(posA, shipRadius, hb, posB, rotB, 1f, out Vec3 nB, out float pB))
+        {
+            n = nB;
+            pen = pB;
+        }
+        // b's center vs a's hull → normal points out of a toward b (a → b); negate to b → a.
+        if (
+            hullA is ConvexHull ha
+            && SphereVsHull(posB, shipRadius, ha, posA, rotA, 1f, out Vec3 nA, out float pA)
+            && pA > pen
+        )
+        {
+            n = nA * -1f;
+            pen = pA;
+        }
+        return pen > 0f;
+    }
+
+    // A ship the LOCAL predicted ship can bump into: a remote ship's interpolated pose + smoothed
+    // authoritative velocity, its mass off the Ship row, and its class hull (null = sphere fallback).
+    public readonly struct MovingShip
+    {
+        public readonly Vec3 Pos;
+        public readonly Quat Rot;
+        public readonly Vec3 Vel;
+        public readonly float Mass;
+        public readonly ConvexHull? Hull; // pre-scaled to world; null = shipRadius sphere
+        public readonly float BoundingRadius; // hull bound (shipRadius when Hull is null)
+
+        public MovingShip(Vec3 pos, Quat rot, Vec3 vel, float mass, ConvexHull? hull, float boundingRadius)
+        {
+            Pos = pos;
+            Rot = rot;
+            Vel = vel;
+            Mass = mass;
+            Hull = hull;
+            BoundingRadius = boundingRadius;
+        }
+    }
+
+    // Resolve the LOCAL predicted ship against the other ships it can see, applying ONLY the local
+    // ship's mass-weighted share of the server's Pass C response (restitution impulse + push-out
+    // split by inverse mass). The other ship is authority-owned — the client can't move it; its
+    // share of the separation arrives with the next authoritative snapshot. KINEMATIC only (the
+    // server owns collision damage). Returns true on any contact and the last contact position
+    // (for the collision thud).
+    public static bool ResolveShipsLocal(
+        ref ShipState s,
+        float shipRadius,
+        ConvexHull? localHull,
+        float localBound,
+        System.Collections.Generic.IReadOnlyList<MovingShip> ships,
+        float restitution,
+        out Vec3 hitPos
+    )
+    {
+        bool hit = false;
+        hitPos = default;
+        for (int i = 0; i < ships.Count; i++)
+        {
+            MovingShip o = ships[i];
+            if (!ShipShipContact(s.Pos, s.Rot, localHull, localBound, o.Pos, o.Rot, o.Hull, o.BoundingRadius, shipRadius, out Vec3 n, out float pen))
+                continue;
+            // The local half of the server's ResolveShipImpulse (n points other → local).
+            float iA = s.Mass > 0f ? 1f / s.Mass : 1f;
+            float iB = o.Mass > 0f ? 1f / o.Mass : 1f;
+            float invSum = iA + iB;
+            float relVn = Dot(s.Vel - o.Vel, n);
+            if (relVn < 0f)
+                s.Vel += n * (-(1f + restitution) * relVn / invSum * iA);
+            s.Pos += n * (pen * (iA / invSum));
+            hit = true;
+            hitPos = s.Pos;
+        }
+        return hit;
+    }
+
     // True when a ship sphere intersects one of a base's bounded rectangular docking FACES (doors):
     // the ship center is inside the door rectangle laterally (± the axis half-extents + shipRadius
     // slop) AND within a depth window along the face's inward normal. `d` is the ship position

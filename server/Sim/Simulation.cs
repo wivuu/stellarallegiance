@@ -209,6 +209,11 @@ public sealed partial class Simulation
         // clients can tag the drone as actively harvesting). Set/cleared per tick in MinerExecute.
         public bool IsHarvesting;
 
+        // Tick of the most recent resolved physical contact (ship, asteroid, or base bounce) —
+        // stamped by every bounce seam, damaging or not. Consumed by DisruptCollidedMiners: a
+        // Harvesting miner bumped this tick drops its beam and re-approaches the rock.
+        public uint LastCollisionTick;
+
         // Server-side autopilot engaged on this ship (player-requested navigation, WP1). While set,
         // InputFor synthesizes steering instead of using the client's held input, and WriteShip raises
         // ShipFlagAutopilot so the owning client suspends its own-ship prediction. The target is one of
@@ -699,15 +704,15 @@ public sealed partial class Simulation
         // Recon probes: expire past their lifespan (passive — no per-tick effect otherwise).
         StepProbes(tick); // Simulation.Probes.cs
 
-        // Pass C: enemy ship-vs-ship collisions (mass-weighted impulse, module-identical),
-        // O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
+        // Pass C: ship-vs-ship collisions between ALL ships regardless of team (mass-weighted
+        // impulse, module-identical), O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
         for (int i = 0; i < _order.Count; i++)
         {
             var a = _order[i];
             for (int j = i + 1; j < _order.Count; j++)
             {
                 var b = _order[j];
-                if (a.Team == b.Team || a.SectorId != b.SectorId)
+                if (a.SectorId != b.SectorId)
                     continue;
                 CollideShips(a, b);
             }
@@ -784,6 +789,10 @@ public sealed partial class Simulation
                 ResolveDeath(s, tick);
         }
         ApplyStructural();
+
+        // Miner beam disruption: runs after Pass C and the structural loop so every bounce seam
+        // has stamped LastCollisionTick, and after ApplyStructural so killed miners' slots are gone.
+        DisruptCollidedMiners(tick);
 
         // Rescue pass: a pod in DIRECT hull contact with a friendly non-pod ship (same
         // sector) is rescued — same resolution as docking. Runs over the post-death set.
@@ -2655,115 +2664,43 @@ public sealed partial class Simulation
 
     // ---- Collisions (module Pass C, mass-weighted) ------------------------
 
-    // Enemy ship-vs-ship contact. With both ships' GLB hulls loaded the contact is resolved as a
+    // Ship-vs-ship contact (any pair, friend or foe). With both ships' GLB hulls loaded the contact is resolved as a
     // ShipRadius sphere against the OTHER ship's convex hull (the same kernel asteroids/bases use),
     // so a long bomber or a wide fighter collides on its real silhouette; without hulls it falls
-    // back to the legacy equal-radius sphere overlap. Either way the resolution is the module's
-    // mass-weighted impulse + inverse-mass-split push-out along the contact normal n (b → a).
+    // back to the legacy equal-radius sphere overlap. The contact math lives in the SHARED
+    // Collide.ShipShipContact so the client's local-ship prediction resolves the identical bounce.
+    // The resolution is the module's mass-weighted impulse + inverse-mass-split push-out along the
+    // contact normal n (b → a).
     private void CollideShips(ShipSim a, ShipSim b)
     {
         var ha = World.ShipHull(a.Class, a.IsPod);
         var hb = World.ShipHull(b.Class, b.IsPod);
 
-        Vec3 n;
-        float pen;
-        if (ha is null && hb is null)
-        {
-            if (!ShipSphereContact(a, b, out n, out pen))
-                return;
-        }
-        else if (!ShipHullContact(a, b, ha, hb, out n, out pen))
-        {
-            return;
-        }
-
-        ResolveShipImpulse(a, b, n, pen);
-    }
-
-    // Legacy equal-radius sphere overlap. n points b → a (the separation axis), pen is the overlap.
-    private static bool ShipSphereContact(ShipSim a, ShipSim b, out Vec3 n, out float pen)
-    {
-        Vec3 d = a.State.Pos - b.State.Pos;
-        float dist2 = d.LengthSquared();
-        float minD = 2f * World.ShipRadius;
-        if (dist2 >= minD * minD)
-        {
-            n = default;
-            pen = 0f;
-            return false;
-        }
-        float dist = MathF.Sqrt(dist2);
-        n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
-        pen = minD - dist;
-        return true;
-    }
-
-    // Hull-aware contact: each ship's center, as a ShipRadius sphere, tested against the other's
-    // hull; the deeper of the two contacts wins (the convex analogue of the sphere overlap). n is
-    // oriented b → a so the shared impulse step pushes them apart correctly.
-    private static bool ShipHullContact(
-        ShipSim a,
-        ShipSim b,
-        World.ShipBody? ha,
-        World.ShipBody? hb,
-        out Vec3 n,
-        out float pen
-    )
-    {
-        n = default;
-        pen = 0f;
-
-        // Broad-phase: the two world bounding spheres (hull bound, or ShipRadius without a hull).
-        float ra = ha?.BoundingRadius ?? World.ShipRadius;
-        float rb = hb?.BoundingRadius ?? World.ShipRadius;
-        float bound = ra + rb;
-        if ((a.State.Pos - b.State.Pos).LengthSquared() >= bound * bound)
-            return false;
-
-        // a's center vs b's hull → normal already points out of b toward a (= b → a).
         if (
-            hb is World.ShipBody bbody
-            && Collide.SphereVsHull(
-                a.State.Pos,
-                World.ShipRadius,
-                bbody.Hull,
-                b.State.Pos,
-                b.State.Rot,
-                1f,
-                out Vec3 nB,
-                out float pB
-            )
-        )
-        {
-            n = nB;
-            pen = pB;
-        }
-        // b's center vs a's hull → normal points out of a toward b (a → b); negate to b → a.
-        if (
-            ha is World.ShipBody abody
-            && Collide.SphereVsHull(
-                b.State.Pos,
-                World.ShipRadius,
-                abody.Hull,
+            !Collide.ShipShipContact(
                 a.State.Pos,
                 a.State.Rot,
-                1f,
-                out Vec3 nA,
-                out float pA
+                ha?.Hull,
+                ha?.BoundingRadius ?? World.ShipRadius,
+                b.State.Pos,
+                b.State.Rot,
+                hb?.Hull,
+                hb?.BoundingRadius ?? World.ShipRadius,
+                World.ShipRadius,
+                out Vec3 n,
+                out float pen
             )
-            && pA > pen
         )
-        {
-            n = nA * -1f;
-            pen = pA;
-        }
-        return pen > 0f;
+            return;
+
+        ResolveShipImpulse(a, b, n, pen);
     }
 
     // Module-identical mass-weighted bounce: restitution impulse + collision damage when closing,
     // and an inverse-mass-split positional correction along n (which points b → a).
     private void ResolveShipImpulse(ShipSim a, ShipSim b, Vec3 n, float pen)
     {
+        a.LastCollisionTick = b.LastCollisionTick = _tick; // any resolved contact, closing or not
         float iA = a.State.Mass > 0f ? 1f / a.State.Mass : 1f;
         float iB = b.State.Mass > 0f ? 1f / b.State.Mass : 1f;
         float invSum = iA + iB;
@@ -2922,6 +2859,7 @@ public sealed partial class Simulation
     // client runs Collide.Bounce too (no damage — health is server-authoritative).
     private void BounceShip(ShipSim s, Vec3 worldNormal, float worldPenetration)
     {
+        s.LastCollisionTick = _tick;
         Collide.Bounce(ref s.State, worldNormal, worldPenetration, World.CollisionRestitution, out float vn);
         if (vn < 0f)
             ApplyDamage(s, CollisionDamage(-vn, _combat.CollisionDamageScale), _tick);
@@ -2955,10 +2893,10 @@ public sealed partial class Simulation
     // shared kinematic (Collide.ResolveStaticSphere) + server-only collision damage.
     private void ResolveStaticCollision(ShipSim s, Vec3 center, float radius)
     {
-        if (
-            Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
-            && vn < 0f
-        )
+        if (!Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn))
+            return;
+        s.LastCollisionTick = _tick;
+        if (vn < 0f)
             ApplyDamage(s, CollisionDamage(-vn, _combat.CollisionDamageScale), _tick);
     }
 

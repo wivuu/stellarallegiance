@@ -637,6 +637,10 @@ namespace StellarAllegiance.Shared
 
         // Distance from a target rock's surface within which a miner harvests, world units.
         public float MinerStandoff = 60f;
+
+        // A miner whose hull drops below this fraction of its max abandons mining and returns to
+        // base (it relaunches at full health after docking). 0 disables the retreat.
+        public float RetreatHealthFrac = 0.8f;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

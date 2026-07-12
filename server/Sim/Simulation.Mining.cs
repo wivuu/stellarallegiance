@@ -410,6 +410,16 @@ public sealed partial class Simulation
                 case MinerState.ToRock:
                 case MinerState.Harvesting:
                 {
+                    // Under attack: enough hull lost (any source — weapons, collisions, mines,
+                    // boundary; shields absorb first) → abandon the field and bring the cargo home.
+                    // Fires once per sortie: GoHome leaves this case, and ToBase never re-enters
+                    // mining. Docking despawns the drone; the relaunch spawns at full health.
+                    if (s.Health < _mining.RetreatHealthFrac * HullFor(s.Class))
+                    {
+                        MinerNoticesThisStep.Add((slot.Team, "Miner damaged — returning to base."));
+                        GoHome(slot, s, remember: true);
+                        break;
+                    }
                     if (full)
                     {
                         GoHome(slot, s, remember: true);
@@ -444,6 +454,24 @@ public sealed partial class Simulation
                     slot.TargetBaseId = NearestFriendlyBase(s)?.Id ?? 0;
                     break;
                 }
+            }
+        }
+    }
+
+    // Collision disruption sweep (every tick, after all bounce seams have run): a Harvesting miner
+    // physically bumped this tick — by any ship, asteroid, or base, damaging or not — drops its beam
+    // and falls back to ToRock, re-approaching the same rock before ore flows again. Cargo is kept
+    // (there is no separate progress accumulator — ore commits straight to the hold). A graze that
+    // doesn't push it out of harvest reach costs only ≥1 tick of beam (MinerExecute flips ToRock
+    // back to Harvesting once in reach). No team notice: repeated bumps would spam chat.
+    private void DisruptCollidedMiners(uint tick)
+    {
+        foreach (var slot in _miners)
+        {
+            if (slot.Ship is ShipSim s && slot.State == MinerState.Harvesting && s.LastCollisionTick == tick)
+            {
+                slot.State = MinerState.ToRock; // TargetRockId kept — re-approach the same claim
+                s.IsHarvesting = false;
             }
         }
     }

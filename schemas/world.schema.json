@@ -726,6 +726,13 @@
             "null"
           ],
           "description": "Distance from a target rock\u0027s surface within which a miner harvests, world units."
+        },
+        "retreat-health-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Hull fraction below which a miner abandons mining and returns to base (0 disables)."
         }
       },
       "description": "Mining/ore economy tuning (server-side only \u2014 never streamed). Null -\u003E stock.",

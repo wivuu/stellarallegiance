@@ -163,3 +163,4 @@ mining:
   ore-capacity-max: 32000       # per-He3-rock capacity CEILING (a max-size rock); midpoint ~20000 vs the 2000-unit miner hold
   shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
   miner-standoff: 50            # harvest range from a target rock's surface, world units
+  retreat-health-frac: 0.8      # hull fraction below which a miner abandons mining and returns to base

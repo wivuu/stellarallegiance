@@ -90,8 +90,42 @@ public partial class PredictionController : Node3D
 
     public void SetCollisionProvider(System.Func<IReadOnlyList<Collide.StaticBody>> bodies) => _bodies = bodies;
 
+    // Supplies the other ships in the local sector (interpolated remote poses) plus this hull's own
+    // collision hull, so the predicted ship also bounces off SHIPS with the local share of the
+    // server's mass-weighted Pass C impulse — instead of flying through a hull until the
+    // authoritative push-out snaps it back. The remote poses are the client's best estimate
+    // (interp delay ≈ a few ticks behind authority), so a hard bump may still reconcile — the
+    // spring absorbs that; the win is never visibly interpenetrating another ship.
+    private System.Func<IReadOnlyList<Collide.MovingShip>>? _shipObstacles;
+    private System.Func<(ConvexHull Hull, float Bound)?>? _localHull;
+
+    public void SetShipCollisionProvider(
+        System.Func<IReadOnlyList<Collide.MovingShip>> ships,
+        System.Func<(ConvexHull Hull, float Bound)?> localHull
+    )
+    {
+        _shipObstacles = ships;
+        _localHull = localHull;
+    }
+
     private void ResolveCollisions(ref ShipState st)
     {
+        // Ships first, then statics — the server's per-tick order (Pass C, then the asteroid/base pass).
+        var ships = _shipObstacles?.Invoke();
+        if (ships is { Count: > 0 })
+        {
+            var lh = _localHull?.Invoke();
+            Collide.ResolveShipsLocal(
+                ref st,
+                CollisionConfig.ShipRadius,
+                lh?.Hull,
+                lh?.Bound ?? CollisionConfig.ShipRadius,
+                ships,
+                CollisionConfig.CollisionRestitution,
+                out _
+            );
+        }
+
         if (_bodies is null)
             return;
         var bodies = _bodies();

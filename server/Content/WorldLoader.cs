@@ -425,6 +425,9 @@ public sealed class WorldMiningDef
 
     /// <summary>Distance from a target rock's surface within which a miner harvests, world units.</summary>
     public double? MinerStandoff { get; set; }
+
+    /// <summary>Hull fraction below which a miner abandons mining and returns to base (0 disables).</summary>
+    public double? RetreatHealthFrac { get; set; }
 }
 
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
@@ -591,6 +594,7 @@ public static class WorldLoader
             t.OreCapacityMax = F(mi.OreCapacityMax, t.OreCapacityMax);
             t.ShrinkFloorFrac = F(mi.ShrinkFloorFrac, t.ShrinkFloorFrac);
             t.MinerStandoff = F(mi.MinerStandoff, t.MinerStandoff);
+            t.RetreatHealthFrac = F(mi.RetreatHealthFrac, t.RetreatHealthFrac);
         }
         return cfg;
     }

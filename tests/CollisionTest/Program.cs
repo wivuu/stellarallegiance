@@ -312,5 +312,69 @@ else
     Check($"multi-door: 6 markers ⇒ 1 door + 1 legacy disc (got {faces3.Length} faces)", faces3.Length == 2);
 }
 
+// ---------------------------------------------------------------------------------------------
+// SHIP-VS-SHIP (shared Pass C kernel + the client's local-share resolver). ShipShipContact is the
+// contact math the server's CollideShips and the client's prediction both call; ResolveShipsLocal
+// applies only the LOCAL ship's mass-weighted share of the server's impulse + push-out.
+// ---------------------------------------------------------------------------------------------
+{
+    // (a) Hull-less pair: legacy equal-radius sphere overlap. A at x=0.8, B at origin, shipR 0.5
+    //     ⇒ minD 1.0, dist 0.8, n = +X (b → a), pen = 0.2.
+    bool ssHit = Collide.ShipShipContact(
+        new Vec3(0.8f, 0, 0), Quat.Identity, null, shipR,
+        new Vec3(0, 0, 0), Quat.Identity, null, shipR,
+        shipR, out var ssN, out var ssPen);
+    Check("ship-ship: sphere pair contacts with n = b→a (+X)", ssHit && Near(ssN.X, 1f) && Near(ssPen, 0.2f));
+    bool ssClear = !Collide.ShipShipContact(
+        new Vec3(1.2f, 0, 0), Quat.Identity, null, shipR,
+        new Vec3(0, 0, 0), Quat.Identity, null, shipR,
+        shipR, out _, out _);
+    Check("ship-ship: separated sphere pair reports none", ssClear);
+
+    // (b) Hull-aware: A's center (a shipR sphere) vs B's cube hull — same +X face contact as test 1.
+    bool hullHit = Collide.ShipShipContact(
+        new Vec3(1.4f, 0, 0), Quat.Identity, null, shipR,
+        new Vec3(0, 0, 0), Quat.Identity, cube, cube.BoundingRadius,
+        shipR, out var hn, out var hp);
+    Check("ship-ship: sphere vs other's hull (+X face)", hullHit && Near(hn.X, 1f) && Near(hp, 0.1f));
+
+    // (c) The mirrored case: A carries the hull, B is the sphere — the normal is negated to b → a.
+    bool mirHit = Collide.ShipShipContact(
+        new Vec3(0, 0, 0), Quat.Identity, cube, cube.BoundingRadius,
+        new Vec3(1.4f, 0, 0), Quat.Identity, null, shipR,
+        shipR, out var mn, out var mp);
+    Check("ship-ship: own hull contact negates n to b→a (−X)", mirHit && Near(mn.X, -1f) && Near(mp, 0.1f));
+
+    // (d) ResolveShipsLocal, equal masses (1 vs 1): the local ship takes HALF the push-out and half
+    //     the restitution impulse. n = +X, pen 0.2, relVn = −1 ⇒ Δv = (1+0.3)·1/2 = 0.65,
+    //     Δpos = 0.2·(1/2) = 0.1.
+    var others = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(0, 0, 0), 1f, null, shipR) };
+    var loc = new ShipState { Pos = new Vec3(0.8f, 0, 0), Vel = new Vec3(-1, 0, 0), Mass = 1f };
+    bool locHit = Collide.ResolveShipsLocal(ref loc, shipR, null, shipR, others, rest, out _);
+    Check("ship-ship local: half push-out (x = 0.9)", locHit && Near(loc.Pos.X, 0.9f));
+    Check("ship-ship local: half impulse (vx = −0.35)", Near(loc.Vel.X, -0.35f));
+
+    // (e) Mass weighting: a 3× heavier other ship ⇒ iA=1, iB=1/3, invSum=4/3. The light local ship
+    //     absorbs more: Δv = 1.3·1/(4/3) = 0.975 ⇒ vx = −0.025; Δpos = 0.2·(1/(4/3)) = 0.15 ⇒ 0.95.
+    var heavy = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(0, 0, 0), 3f, null, shipR) };
+    var loc2 = new ShipState { Pos = new Vec3(0.8f, 0, 0), Vel = new Vec3(-1, 0, 0), Mass = 1f };
+    Collide.ResolveShipsLocal(ref loc2, shipR, null, shipR, heavy, rest, out _);
+    Check("ship-ship local: heavy other ⇒ larger local share (x = 0.95)", Near(loc2.Pos.X, 0.95f));
+    Check("ship-ship local: heavy other ⇒ vx = −0.025", Near(loc2.Vel.X, -0.025f));
+
+    // (f) Separating contact (relVn ≥ 0): overlap still pushes out, but NO impulse (same gate as the
+    //     server's ResolveShipImpulse).
+    var loc3 = new ShipState { Pos = new Vec3(0.8f, 0, 0), Vel = new Vec3(1, 0, 0), Mass = 1f };
+    Collide.ResolveShipsLocal(ref loc3, shipR, null, shipR, others, rest, out _);
+    Check("ship-ship local: separating contact pushes out, keeps velocity", Near(loc3.Pos.X, 0.9f) && Near(loc3.Vel.X, 1f));
+
+    // (g) The other ship's velocity feeds the relative-velocity gate: local drifting +X at 1 while a
+    //     faster other chases at +2 ⇒ relVn = −1 (closing) despite the local ship moving away.
+    var chasing = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(2, 0, 0), 1f, null, shipR) };
+    var loc4 = new ShipState { Pos = new Vec3(0.8f, 0, 0), Vel = new Vec3(1, 0, 0), Mass = 1f };
+    Collide.ResolveShipsLocal(ref loc4, shipR, null, shipR, chasing, rest, out _);
+    Check("ship-ship local: chased from behind ⇒ knocked forward (vx = 1.65)", Near(loc4.Vel.X, 1.65f));
+}
+
 Console.WriteLine(failures == 0 ? "ALL TESTS PASSED" : $"{failures} TEST(S) FAILED");
 return failures == 0 ? 0 : 1;

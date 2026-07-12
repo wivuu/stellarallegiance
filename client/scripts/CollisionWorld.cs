@@ -89,6 +89,7 @@ public sealed class CollisionWorld
         _live.Clear();
         _probes.Clear();
         _rockRefs.Clear();
+        _shipHulls.Clear(); // a world rebuild may stream retuned defs (ModelName/ModelLength)
     }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)
@@ -166,6 +167,35 @@ public sealed class CollisionWorld
         // server at the bay mouth (no rubber-banding). N doors supported (each a group of 5 markers).
         DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Log.Warn($"[CollisionWorld] {msg}"));
         list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, faces), default, 0f));
+    }
+
+    // Per-class ship collision hulls, mirroring server World.LoadShipBodies: each ship def's GLB
+    // pre-scaled to its authored ModelLength (the same length the renderer normalizes to), from the
+    // SAME GLB bytes → bit-identical hulls, so the local ship's predicted ship-ship bounce matches
+    // the server's Pass C. Keyed by the def actually flown (a pod uses the reserved Pod class id).
+    // A missing/degenerate GLB caches null → the caller falls back to the ShipRadius sphere, exactly
+    // like the server. A not-yet-streamed def returns null WITHOUT caching (it may still arrive).
+    private readonly Dictionary<byte, (ConvexHull Hull, float Bound)?> _shipHulls = new();
+
+    public (ConvexHull Hull, float Bound)? ShipHull(DefRegistry defs, byte cls, bool isPod)
+    {
+        byte key = isPod ? GameContent.PodClassId : cls;
+        if (_shipHulls.TryGetValue(key, out var cached))
+            return cached;
+        if (!defs.TryGetShipDef(key, out var def))
+            return null; // def not streamed yet — retry next query
+        (ConvexHull, float)? built = null;
+        if (!string.IsNullOrEmpty(def.ModelName) && def.ModelLength > 1e-3f)
+        {
+            SimModel? model = LoadGlb($"res://assets/ships/{def.ModelName}.glb");
+            if (model is not null && model.LongestAxis > 1e-3f)
+            {
+                float ws = def.ModelLength / model.LongestAxis;
+                built = (model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
+            }
+        }
+        _shipHulls[key] = built;
+        return built;
     }
 
     // First-entry time t of the ray (pos + vel·t) into any BASE hull in the sector, within [0, maxT].

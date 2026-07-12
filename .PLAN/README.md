@@ -21,11 +21,10 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
-- "esc" doesnt work from F3 screen once your ship is launched, it should also pop open the menu
-- Miners
-  - Add collisions for miners -- collisions should always be active between all ships, so no reason to distinguish
-  - When a miner is mining, ensure collisions disrupt a miner from collecting resources, make it reset its mining progress
-  - If a miner comes under attack and loses 20% of its health, it should stop mining and retreat to base
+- Instead of an 'IsMiner' flag, we should extend the Kind enum to include 'Miner' (and Constructor)
+- Add a mining sound effect, when the miner is actively mining (pick-assets/sound-effects/miningsound.ogg)
+- Find places in the game there probably should be a sound effect and list them out - put the list into the .PLAN folder
+  - i.e. landed ogg when own ship docks at a base
 ---
 
 ## Content philosophy (the through-line)

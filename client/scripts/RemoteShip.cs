@@ -62,6 +62,10 @@ public partial class RemoteShip : Node3D
     // then. MaxShield is 0 for a hull that carries no shield, so no shield band is drawn.
     public float Health { get; private set; }
     public float Shield { get; private set; }
+
+    // Authoritative instance mass off the Ship row — the local ship's ship-ship collision
+    // prediction weights its impulse share by it, matching the server's ResolveShipImpulse.
+    public float Mass { get; private set; }
     public float MaxHealth =>
         _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
     public float MaxShield =>
@@ -171,6 +175,7 @@ public partial class RemoteShip : Node3D
         // Latest authoritative hull/shield for the focused-target HP arc (no interpolation needed).
         Health = row.Health;
         Shield = row.Shield;
+        Mass = row.Mass;
         IsMining = row.IsMining; // per-tick mining flag → drives the beam (WorldRenderer) + model roll (_Process)
 
         if (first)

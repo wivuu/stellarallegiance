@@ -318,6 +318,9 @@ public partial class WorldRenderer : Node3D
     // ENTRY rather than every frame while grinding against a hull. Mirrors _shipNodes' lifetime.
     private readonly HashSet<ulong> _collidingShips = new();
 
+    // Ship-PAIR thud debounce (id-ordered key), mirroring _collidingShips for ship-vs-ship contacts.
+    private readonly HashSet<(ulong, ulong)> _collidingPairs = new();
+
     // Sector partitioning. The world is split into sectors (see module Sector/Aleph
     // tables); the client subscribes to everything but only SHOWS objects in the
     // player's current sector, toggled by node visibility (each node stashes its
@@ -1295,6 +1298,7 @@ public partial class WorldRenderer : Node3D
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
         _collidingShips.Clear();
+        _collidingPairs.Clear();
         _alephNodes.Clear();
         _ghosts.Clear();
         _radarVisible.Clear();
@@ -1459,27 +1463,114 @@ public partial class WorldRenderer : Node3D
     // (_collidingShips debounce) so grinding a hull doesn't machine-gun the sound.
     private void CheckCollisions()
     {
-        var bodies = _collisionWorld.BodiesIn(_localSector, SimSeconds);
-        if (_shipNodes.Count == 0 || bodies.Count == 0)
+        if (_shipNodes.Count == 0)
             return;
+        var bodies = _collisionWorld.BodiesIn(_localSector, SimSeconds);
 
+        _pairScratch.Clear();
         foreach (var (shipId, ship) in _shipNodes)
         {
             if (!ship.Visible)
                 continue;
             Vector3 c = ship.GlobalPosition;
-            bool now = Collide.Touches(
-                new Vec3(c.X, c.Y, c.Z),
-                CollisionConfig.ShipRadius,
-                bodies,
-                ShipTeamOf(ship),
-                CollisionConfig.DockFaceDepth
-            );
-            if (now && _collidingShips.Add(shipId))
-                PlayCollisionSfx(c);
-            else if (!now)
-                _collidingShips.Remove(shipId);
+            if (bodies.Count > 0)
+            {
+                bool now = Collide.Touches(
+                    new Vec3(c.X, c.Y, c.Z),
+                    CollisionConfig.ShipRadius,
+                    bodies,
+                    ShipTeamOf(ship),
+                    CollisionConfig.DockFaceDepth
+                );
+                if (now && _collidingShips.Add(shipId))
+                    PlayCollisionSfx(c);
+                else if (!now)
+                    _collidingShips.Remove(shipId);
+            }
+            _pairScratch.Add((shipId, ship));
         }
+
+        // Ship-vs-ship thud: same hull-aware contact the sim resolves (shared kernel), over the
+        // visible local-sector ships — few enough that the O(n²) pair sweep is trivial. Entry-edge
+        // debounce per id-ordered pair, exactly like the static _collidingShips gate above.
+        for (int i = 0; i < _pairScratch.Count; i++)
+            for (int j = i + 1; j < _pairScratch.Count; j++)
+            {
+                var (idA, a) = _pairScratch[i];
+                var (idB, b) = _pairScratch[j];
+                var (clsA, podA) = ShipClassOf(a);
+                var (clsB, podB) = ShipClassOf(b);
+                var ha = _collisionWorld.ShipHull(_defs, clsA, podA);
+                var hb = _collisionWorld.ShipHull(_defs, clsB, podB);
+                Vector3 pa = a.GlobalPosition,
+                    pb = b.GlobalPosition;
+                Quaternion qa = a.Quaternion,
+                    qb = b.Quaternion;
+                bool now = Collide.ShipShipContact(
+                    new Vec3(pa.X, pa.Y, pa.Z),
+                    new Quat(qa.X, qa.Y, qa.Z, qa.W),
+                    ha?.Hull,
+                    ha?.Bound ?? CollisionConfig.ShipRadius,
+                    new Vec3(pb.X, pb.Y, pb.Z),
+                    new Quat(qb.X, qb.Y, qb.Z, qb.W),
+                    hb?.Hull,
+                    hb?.Bound ?? CollisionConfig.ShipRadius,
+                    CollisionConfig.ShipRadius,
+                    out _,
+                    out _
+                );
+                var key = idA < idB ? (idA, idB) : (idB, idA);
+                if (now && _collidingPairs.Add(key))
+                    PlayCollisionSfx((pa + pb) * 0.5f);
+                else if (!now)
+                    _collidingPairs.Remove(key);
+            }
+    }
+
+    // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
+    private readonly List<(ulong Id, Node3D Node)> _pairScratch = new();
+
+    // Class + pod flag of a ship node, for the per-class collision-hull lookup.
+    private static (byte Cls, bool IsPod) ShipClassOf(Node3D ship) =>
+        ship switch
+        {
+            PredictionController pc => ((byte)pc.Class, pc.IsPod),
+            RemoteShip rs => ((byte)rs.Class, rs.IsPod),
+            _ => ((byte)0, false),
+        };
+
+    // The other ships the LOCAL predicted ship can bump into: every visible remote ship in the
+    // local sector, as shared MovingShip obstacles (interpolated pose, smoothed authoritative
+    // velocity, row mass, class hull). Fogged / other-sector ships aren't included — a small
+    // predict-miss the server reconciles, same tradeoff as fogged probes. One reusable buffer;
+    // PredictionController consumes it synchronously each predicted tick.
+    private readonly List<Collide.MovingShip> _shipObstacleScratch = new();
+
+    private IReadOnlyList<Collide.MovingShip> ShipObstacles()
+    {
+        _shipObstacleScratch.Clear();
+        foreach (var node in _shipNodes.Values)
+        {
+            if (node is not RemoteShip rs || !rs.Visible)
+                continue;
+            if (!rs.HasMeta("sector") || (int)rs.GetMeta("sector") != (int)_localSector)
+                continue;
+            var hull = _collisionWorld.ShipHull(_defs, (byte)rs.Class, rs.IsPod);
+            Vector3 p = rs.Position;
+            Quaternion q = rs.Quaternion;
+            Vector3 v = rs.Velocity;
+            _shipObstacleScratch.Add(
+                new Collide.MovingShip(
+                    new Vec3(p.X, p.Y, p.Z),
+                    new Quat(q.X, q.Y, q.Z, q.W),
+                    new Vec3(v.X, v.Y, v.Z),
+                    rs.Mass,
+                    hull?.Hull,
+                    hull?.Bound ?? CollisionConfig.ShipRadius
+                )
+            );
+        }
+        return _shipObstacleScratch;
     }
 
     // Team of a ship node (for the own-base dock-disc carve-out). -1 if unknown.
@@ -1776,6 +1867,12 @@ public partial class WorldRenderer : Node3D
                 pc.SetMeta("Launched", true);
             // Predict collisions against the local sector's hulls (sector follows the ship on warp).
             pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector, SimSeconds));
+            // ... and against the other SHIPS in the local sector (interpolated remote poses), with
+            // this hull's own collision hull for the hull-aware contact — mirroring server Pass C.
+            pc.SetShipCollisionProvider(
+                ShipObstacles,
+                () => _collisionWorld.ShipHull(_defs, (byte)pc.Class, pc.IsPod)
+            );
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
