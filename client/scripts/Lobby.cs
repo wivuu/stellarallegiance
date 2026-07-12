@@ -1067,7 +1067,8 @@ public partial class Lobby : Control
         string who = string.IsNullOrEmpty(p.Name) ? $"Pilot{p.Id}" : p.Name;
         nameCell.AddChild(UiKit.MakeLabel(who, UiKit.TextStyle.Body, isMe ? team : DesignTokens.TextHi));
         if (!IsNoat(p.Team) && p.Id == _net.CommanderIdOf(p.Team))
-            nameCell.AddChild(Badge("CMDR", DesignTokens.CmdrGold));
+            nameCell.AddChild(UiKit.MakeLabel("★", UiKit.TextStyle.Body, DesignTokens.CmdrGold)
+                .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
         if (isMe)
             nameCell.AddChild(Badge("YOU", team));
         row.AddChild(nameCell);

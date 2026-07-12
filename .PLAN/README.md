@@ -21,6 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
+- Unable to hit 'enter' to talk form the hangar screen - this should be available on ALL screens once on a game-server
 ---
 
 ## Content philosophy (the through-line)
