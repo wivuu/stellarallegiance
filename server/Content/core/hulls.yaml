@@ -201,8 +201,8 @@ hulls:
     model-length: 6.5   # loader normalizes the longest mesh axis (4.71) to this length
     class-id: 4
     mass: 60
-    speed: 70
-    thrust: 14
+    speed: 50
+    thrust: 10
     # Pod-class agility: still heavy next to a fighter (60), but tight enough for the AI to thread
     # aleph triggers and dock doors — at 18°/s its turning circle out-radiused both and it orbited.
     max-turn-rates: { yaw: 40, pitch: 40, roll: 40 }
