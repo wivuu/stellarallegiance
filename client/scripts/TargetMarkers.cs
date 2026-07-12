@@ -1059,20 +1059,22 @@ public partial class TargetMarkers : Control
         DrawArrow(edge, dir, c);
     }
 
-    // Map a ship to its HUD glyph: a pod uses the pod symbol regardless of hull class; an AI miner
-    // gets its own pentagon (the miner hull carries no distinct ShipClass enum value — its class byte
-    // resolves to the default below — so IsMiner is the identity that gives it a distinct marker).
+    // Map a ship to its HUD glyph. The ship's ROLE (ShipKind) wins first: a pod uses the pod symbol
+    // and a miner its own pentagon (the miner hull carries no distinct ShipClass value — its class
+    // byte resolves to the Fighter default below — so the role is what gives it a distinct marker).
+    // A combat hull falls through to a per-ShipClass glyph. (Constructor has no glyph yet — reserved.)
     private static Kind KindOf(RemoteShip s) =>
-        s.IsPod
-            ? Kind.Pod
-            : s.IsMiner
-                ? Kind.Miner
-                : s.Class switch
-                {
-                    ShipClass.Scout => Kind.Scout,
-                    ShipClass.Bomber => Kind.Bomber,
-                    _ => Kind.Fighter,
-                };
+        s.Kind switch
+        {
+            ShipKind.Pod => Kind.Pod,
+            ShipKind.Miner => Kind.Miner,
+            _ => s.Class switch
+            {
+                ShipClass.Scout => Kind.Scout,
+                ShipClass.Bomber => Kind.Bomber,
+                _ => Kind.Fighter,
+            },
+        };
 
     // The hull's authored marker glyph (ShipClassDef.Glyph), rendered as text by DrawClassGlyph.
     // Empty for a pod (keeps the drawn circle) or a hull that authored none (drawn silhouette).

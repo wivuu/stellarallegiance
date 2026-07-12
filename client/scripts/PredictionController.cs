@@ -164,9 +164,13 @@ public partial class PredictionController : Node3D
     public ulong ShipId { get; private set; }
     public byte Team { get; private set; }
 
-    // Escape pod (Ship.IsPod): slow, unarmed lifeboat. Drives pod-aware flight stats and
-    // lets ShipController suppress firing (a pod can't shoot).
-    public bool IsPod { get; private set; }
+    // The local ship's ROLE (Ship.Kind) — only ever Combat or Pod for a player. Single source of
+    // truth for the pod check below.
+    public ShipKind Kind { get; private set; }
+
+    // Escape pod (Kind.Pod): slow, unarmed lifeboat. Drives pod-aware flight stats and lets
+    // ShipController suppress firing (a pod can't shoot).
+    public bool IsPod => Kind == ShipKind.Pod;
 
     // Hull class (for the HUD's missile-mount / ammo lookup). Set from the authoritative row.
     public ShipClass Class => _class;
@@ -284,7 +288,7 @@ public partial class PredictionController : Node3D
     {
         ShipId = row.ShipId;
         Team = row.Team;
-        IsPod = row.IsPod;
+        Kind = row.Kind;
         Health = row.Health;
         MaxHealth = row.Health;
         Shield = row.Shield;

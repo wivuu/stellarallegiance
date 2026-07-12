@@ -21,9 +21,6 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
-- Instead of an 'IsMiner' flag, we should extend the Kind enum to include 'Miner' (and Constructor)
-- ~~Find places in the game there probably should be a sound effect and list them out - put the list into the .PLAN folder~~ ✅ see [`sfx-gaps.md`](sfx-gaps.md)
-  - i.e. landed ogg when own ship docks at a base
 ---
 
 ## Content philosophy (the through-line)

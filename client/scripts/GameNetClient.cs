@@ -1663,9 +1663,14 @@ public partial class GameNetClient : Node
                 Team = team,
                 Class = (ShipClass)cls,
                 IsPig = (flags & 1) != 0,
-                IsPod = (flags & 2) != 0,
                 Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
-                IsMiner = (flags & 32) != 0, // ShipFlagMiner — AI mining ship
+                // Role bits are mutually exclusive; Combat (no bit) is the default. Order mirrors the
+                // server's WriteShip switch (ShipFlagConstructor=128, Miner=32, Pod=2).
+                Kind =
+                    (flags & 128) != 0 ? ShipKind.Constructor
+                    : (flags & 32) != 0 ? ShipKind.Miner
+                    : (flags & 2) != 0 ? ShipKind.Pod
+                    : ShipKind.Combat,
                 IsMining = (flags & 64) != 0, // ShipFlagMining — actively transferring ore (drives beam/roll VFX)
 
                 ChaffAmmo = chaffAmmo,

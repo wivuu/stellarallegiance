@@ -16,6 +16,8 @@
 //  since the server and client compile the same source for them.
 // =====================================================================
 
+using StellarAllegiance.Shared;
+
 namespace StellarAllegiance.Net
 {
     // Ship class id. Order fixes the byte values on the wire: Scout=0, Fighter=1, Bomber=2.
@@ -67,11 +69,15 @@ namespace StellarAllegiance.Net
         public byte MineAmmo; // mine fields left in the dispenser
         public byte ProbeAmmo; // recon probes left in the dispenser
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
-        public bool IsPig; // AI combat drone
-        public bool IsPod; // escape pod
+        public bool IsPig; // AI combat drone (orthogonal to Kind — a PIG pod is IsPig && Kind.Pod)
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
-        public bool IsMiner; // AI mining ship (ShipFlagMiner) — HUD tags it MINER
+        public ShipKind Kind; // the ship's ROLE (Combat/Pod/Miner/Constructor), decoded from the flags byte
         public bool IsMining; // actively transferring ore (ShipFlagMining) — toggles per tick, drives the mining beam/roll VFX
+
+        // Derived role reads — Kind is the single source of truth, so the many pod/miner-aware call
+        // sites keep working and can never disagree with it.
+        public bool IsPod => Kind == ShipKind.Pod; // ejected escape pod
+        public bool IsMiner => Kind == ShipKind.Miner; // AI mining ship — HUD tags it MINER
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The

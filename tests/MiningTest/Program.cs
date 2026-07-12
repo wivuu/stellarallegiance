@@ -553,7 +553,7 @@ WorldConfig HarvestConfig(float rate = 40f, float floorFrac = 0.4f, float stando
     }, seeding: new WorldSeedingTuning { He3PerSector = 8 });
 
 Simulation.ShipSim MinerAt(Vec3 pos, uint sector, float ore = 0f) =>
-    new() { Class = 4, SectorId = sector, IsMiner = true, Ore = ore, State = { Pos = pos } };
+    new() { Class = 4, SectorId = sector, Kind = ShipKind.Miner, Ore = ore, State = { Pos = pos } };
 
 // ---- 9. HarvestStep moves rate·dt per tick exactly; ore is conserved (rock loses what the hold gains). ----
 {

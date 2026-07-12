@@ -113,8 +113,9 @@ public static class Protocol
     public const byte ShipFlagLockingMe = 4; // a missile-armed enemy is locking THIS ship (ThreatLockState >= 1)
     public const byte ShipFlagLockedMe = 8; // that lock completed — a launch can come any moment (ThreatLockState == 2)
     public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
-    public const byte ShipFlagMiner = 32; // AI mining ship (ShipSim.IsMiner) — HUD tags it a MINER; PIG brain never touches it (distinct flag)
+    public const byte ShipFlagMiner = 32; // AI mining ship (ShipKind.Miner) — HUD tags it a MINER; PIG brain never touches it
     public const byte ShipFlagMining = 64; // that miner is actively moving ore this tick (ShipSim.IsHarvesting) — HUD "MINING" state
+    public const byte ShipFlagConstructor = 128; // RESERVED (ShipKind.Constructor) — never emitted yet; kept so the role round-trips end-to-end
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -137,16 +138,21 @@ public static class Protocol
         byte flags = 0;
         if (s.IsPig)
             flags |= ShipFlagPig;
-        if (s.IsPod)
-            flags |= ShipFlagPod;
+        // The ship's ROLE (ShipKind) maps to at most one role bit; Combat sets none. Pod/Miner keep
+        // their historical bits so the wire stays byte-identical for existing entities.
+        flags |= s.Kind switch
+        {
+            ShipKind.Pod => ShipFlagPod,
+            ShipKind.Miner => ShipFlagMiner,
+            ShipKind.Constructor => ShipFlagConstructor,
+            _ => (byte)0,
+        };
         if (s.ThreatLockState >= 1)
             flags |= ShipFlagLockingMe;
         if (s.ThreatLockState >= 2)
             flags |= ShipFlagLockedMe;
         if (s.ApEngaged)
             flags |= ShipFlagAutopilot;
-        if (s.IsMiner)
-            flags |= ShipFlagMiner;
         if (s.IsHarvesting)
             flags |= ShipFlagMining;
 

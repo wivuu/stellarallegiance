@@ -666,7 +666,7 @@ public sealed partial class Simulation
             OwnerClientId = -1,
             Team = slot.Team,
             Class = (byte)cls,
-            IsMiner = true,
+            Kind = ShipKind.Miner,
             Alive = true,
         };
         PlaceAtBase(s, World.ShipRadius + 6f, tick, RelaunchBase(slot));

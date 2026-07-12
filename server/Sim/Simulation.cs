@@ -193,17 +193,25 @@ public sealed partial class Simulation
         public bool Alive;
         public uint RespawnAtTick; // when !Alive
 
-        // AI combat drone — server-driven via the PIG brain (Simulation.Pig.cs), not client
-        // input. An escape pod ejected on death — slow, unarmed, flown by its owner (player
-        // pod) or auto-flown home by PodThink (PIG pod). A ship is at most one of these.
+        // AI combat drone — server-driven via the PIG brain (Simulation.Pig.cs), not client input.
+        // Orthogonal to Kind: a PIG escape pod is BOTH IsPig and Kind.Pod (IsPig = AI-controlled, Kind
+        // = role/form). A player pod carries IsPig=false; MakePod carries the dead ship's IsPig over.
         public bool IsPig;
-        public bool IsPod;
 
-        // AI ore miner — a non-combat drone (hull class 4) that harvests He3 rocks and offloads at a
-        // friendly base for team credits. Ore is its live hold (He3 units, 0..the class def's
-        // OreCapacity); HarvestStep fills it, an offload drains it. Nothing sets IsMiner yet — the
-        // miner spawn/brain lands in a later stream; the PIG brain skips IsMiner ships (distinct flag).
-        public bool IsMiner;
+        // The ship's mutually-exclusive ROLE (combat hull / ejected pod / ore miner / constructor).
+        // Replaces the old IsPod/IsMiner bools — Kind == ShipKind.Pod is an ejected pod (slow, unarmed,
+        // flown by its owner or auto-flown home by PodThink), Kind == ShipKind.Miner is an AI ore
+        // harvester. The PIG brain skips miner ships. See shared/ShipKind.cs for the full axis notes.
+        public ShipKind Kind;
+
+        // Derived role accessors — Kind is the single source of truth, so these can never drift from
+        // it. Reads only; to change a ship's role, assign Kind. Keeps the many pod/miner read sites
+        // (incl. negations like !s.IsPod) terse without a second stored flag.
+        public bool IsPod => Kind == ShipKind.Pod;
+        public bool IsMiner => Kind == ShipKind.Miner;
+
+        // AI ore miner (Kind == ShipKind.Miner) live hold: He3 units, 0..the class def's OreCapacity.
+        // HarvestStep fills it, an offload drains it.
         public float Ore;
         // True on the ticks a miner actually moved ore this step (drives ShipFlagMining on the wire so
         // clients can tag the drone as actively harvesting). Set/cleared per tick in MinerExecute.
@@ -1750,7 +1758,7 @@ public sealed partial class Simulation
             Team = dead.Team,
             Class = dead.Class,
             SectorId = dead.SectorId,
-            IsPod = true,
+            Kind = ShipKind.Pod,
             IsPig = dead.IsPig,
             Alive = true,
             Health = HullFor(GameContent.PodClassId),

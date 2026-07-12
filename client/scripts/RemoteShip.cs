@@ -26,17 +26,20 @@ public partial class RemoteShip : Node3D
     // the per-class HUD glyph; a pod (IsPod) overrides this with the pod symbol.
     public ShipClass Class { get; private set; }
 
-    // AI combat drone (PIG) rather than a player ship — read straight off the row.
-    // TargetMarkers uses it to highlight drones distinctly on the HUD.
+    // AI combat drone (PIG) rather than a player ship — read straight off the row. Orthogonal to
+    // Kind (a PIG pod is IsPig && Kind.Pod). TargetMarkers uses it to highlight drones distinctly.
     public bool IsPig { get; private set; }
 
-    // Escape pod (Ship.IsPod): harmless, unarmed. Excluded from the enemy target set
-    // (no marker, no Tab focus) so you don't waste a lock on a drifting opponent's pod.
-    public bool IsPod { get; private set; }
+    // The ship's ROLE (Ship.Kind): Combat / Pod / Miner / Constructor. Single source of truth for the
+    // derived reads below; TargetMarkers switches on it to pick the HUD glyph.
+    public ShipKind Kind { get; private set; }
 
-    // AI mining ship (Ship.IsMiner): a non-combat harvester. TargetMarkers tags a focused
-    // one "MINER" so its role reads at a glance.
-    public bool IsMiner { get; private set; }
+    // Escape pod (Kind.Pod): harmless, unarmed. Excluded from the enemy target set (no marker, no Tab
+    // focus) so you don't waste a lock on a drifting opponent's pod.
+    public bool IsPod => Kind == ShipKind.Pod;
+
+    // AI mining ship (Kind.Miner): a non-combat harvester. TargetMarkers tags a focused one "MINER".
+    public bool IsMiner => Kind == ShipKind.Miner;
 
     // Actively transferring ore (Ship.IsMining / ShipFlagMining): toggles per tick as the server's
     // miner grinds a rock. WorldRenderer reads this to attach/detach the mining beam; _Process rolls
@@ -139,8 +142,7 @@ public partial class RemoteShip : Node3D
         Team = row.Team;
         Class = row.Class;
         IsPig = row.IsPig;
-        IsPod = row.IsPod;
-        IsMiner = row.IsMiner;
+        Kind = row.Kind;
         _defs = defs; // kept so MaxHealth/MaxShield can resolve the class def live (it may stream in later)
         // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
         // leaves the harmless 1f default until the row lands — no baked tuning on the
