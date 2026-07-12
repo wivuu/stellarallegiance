@@ -218,15 +218,17 @@ public partial class Chat : Control
                         + "  /team — which team you're on\n"
                         + "  /server — server address & connection info\n"
                         + "  /pigs on|off — toggle AI drone spawns (server-wide)\n"
-                        + "  /buyminer — buy a mining drone for your team\n"
-                        + "  /mine <sector> — authorize your miners to mine a sector\n"
-                        + "  /miners — your team's miner status"
+                        + "  /buyminer — buy a mining drone for your team (commander only)\n"
+                        + "  /mine <sector> — authorize your miners to mine a sector (commander only)\n"
+                        + "  /miners — your team's miner status\n"
+                        + "  /commander [name] — show the team commander / hand off command"
                 );
                 break;
             case "/pigs":
             case "/buyminer":
             case "/mine":
             case "/miners":
+            case "/commander":
                 // Server-side commands: relay the raw text so the sim acts on it and answers
                 // via system chat. Scope is irrelevant — the server intercepts '/'-prefixed
                 // chat before any relay.
@@ -317,6 +319,7 @@ public partial class Chat : Control
 
     private static readonly string DimHex = DesignTokens.TextDim.ToHtml(false);
     private static readonly string MuteHex = DesignTokens.Text2.ToHtml(false);
+    private static readonly string GoldHex = DesignTokens.CmdrGold.ToHtml(false);
 
     private static string FormatLine(ChatLine line, string time, bool system)
     {
@@ -324,6 +327,10 @@ public partial class Chat : Control
         // System lines (slash-command output): a muted diamond-prefixed note, no team-name coloring.
         if (system)
             return $"{stamp} [color=#{MuteHex}]◆ {Escape(line.Text)}[/color]";
+        // Scope 2 = commander order directive (v34): the whole line gold so an order reads as an
+        // order, not chatter. Name = the issuing commander.
+        if (line.Scope == 2)
+            return $"{stamp} [color=#{GoldHex}]★ CMDR {Escape(line.Name)} ▸ {Escape(line.Text)}[/color]";
         Color nameColor = line.FromTeam == 0 ? Team0 : Team1;
         string tag = line.Scope == 1 ? $"[color=#{MuteHex}]\\[team][/color] " : "";
         string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";

@@ -23,7 +23,10 @@ public static class Wire
     // ShipFlagMining=64 in the ship flags byte (set while a miner is actively moving ore).
     // v33: MsgMinerTargets=23 (u8 count, count x u64 shipId + u64 rockId) — the exact rock each active
     // miner is harvesting, so the client mining beam aims at the real target instead of guessing.
-    public const byte ProtocolVersion = 33;
+    // v34: commander — MsgOrder=12 (client->server: u64 subjectShipId, u8 targetKind, u64 targetId,
+    // u32 sector, 3x f32 pos); MsgChatRelay scope 2 = commander order directive (gold on the client);
+    // MsgLobbyState tail appends i32 commander0 + i32 commander1 after selectedMap.
+    public const byte ProtocolVersion = 34;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

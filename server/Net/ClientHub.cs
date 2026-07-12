@@ -270,6 +270,9 @@ public sealed class ClientHub
         _selectedMap = selectedMap;
         _mapCatalog = mapCatalog;
         _log = log ?? NullLogger.Instance;
+        // Order directives name player attack-targets by pilot; the directory is concurrent, so
+        // the sim thread may read it directly.
+        _sim.PlayerNameOf = players.NameOf;
 
         if (SnapshotWorkers > 0)
         {
@@ -348,7 +351,8 @@ public sealed class ClientHub
     {
         var frame = Protocol.BuildLobbyState(
             _sim.Phase, _sim.Winner, _lobby.Snapshot(id => _sim.ShipIdOf(id)),
-            _teamNames[0], _teamNames[1], _hostId, _selectedMap);
+            _teamNames[0], _teamNames[1], _hostId, _selectedMap,
+            _lobby.CommanderOf(0), _lobby.CommanderOf(1));
         foreach (var c in _clients.Values)
             c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
     }
@@ -722,6 +726,22 @@ public sealed class ClientHub
                     _sim.EnqueueSetAutopilot(client.Id, mode, kind, id, sector, pos);
                     break;
                 }
+                case Protocol.MsgOrder when count >= 34:
+                {
+                    // Command a friendly ship (F3 map right-click). Routed by subject: a human
+                    // teammate's ship becomes an advisory chat directive; an AI vessel is
+                    // commander-gated here and validated/executed on the sim thread.
+                    ulong subject = BitConverter.ToUInt64(buffer, 1);
+                    byte targetKind = buffer[9];
+                    ulong targetId = BitConverter.ToUInt64(buffer, 10);
+                    uint sector = BitConverter.ToUInt32(buffer, 18);
+                    var pos = new Vec3(
+                        BitConverter.ToSingle(buffer, 22),
+                        BitConverter.ToSingle(buffer, 26),
+                        BitConverter.ToSingle(buffer, 30));
+                    HandleOrder(client, subject, targetKind, targetId, sector, pos);
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
@@ -760,13 +780,13 @@ public sealed class ClientHub
             }
             case "buyminer":
             {
-                if (TeamOrWarn(client) is byte team)
+                if (CommanderOrWarn(client) is byte team)
                     _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
                 break;
             }
             case "mine":
             {
-                if (TeamOrWarn(client) is not byte team)
+                if (CommanderOrWarn(client) is not byte team)
                     break;
                 if (arg.Length == 0)
                 {
@@ -779,6 +799,35 @@ public sealed class ClientHub
                     break;
                 }
                 _sim.EnqueueMineOrder(team, sector);
+                break;
+            }
+            case "commander":
+            {
+                if (TeamOrWarn(client) is not byte team)
+                    break;
+                int cur = _lobby.CommanderOf(team);
+                if (arg.Length == 0)
+                {
+                    SystemTo(client, cur >= 0 ? $"Team commander: {_players.NameOf(cur)}." : "Your team has no commander.");
+                    break;
+                }
+                // Hand-off authority: the sitting commander, or the host as arbiter (covers the
+                // "commander dropped, wrong pilot auto-promoted" case without any UI).
+                if (client.Id != cur && client.Id != _hostId)
+                {
+                    SystemTo(client, "Only the current commander (or the host) can hand off command.");
+                    break;
+                }
+                if (ResolveTeammate(team, arg, out string errT) is not int targetId)
+                {
+                    SystemTo(client, errT);
+                    break;
+                }
+                if (_lobby.SetCommander(team, targetId))
+                {
+                    BroadcastLobby(); // CMDR badge + IsCommander flip everywhere
+                    SystemToTeam(team, $"{_players.NameOf(targetId)} now commands the team (handed off by {_players.NameOf(client.Id)}).");
+                }
                 break;
             }
             case "miners":
@@ -800,6 +849,129 @@ public sealed class ClientHub
             return team;
         SystemTo(client, "Pick a team first.");
         return null;
+    }
+
+    // The sender's team when they are its COMMANDER, or null + a warn naming who is. Gates the
+    // AI-authority seams (/mine, /buyminer, MsgOrder with an AI subject).
+    private byte? CommanderOrWarn(Client client)
+    {
+        if (TeamOrWarn(client) is not byte team)
+            return null;
+        int cmdr = _lobby.CommanderOf(team);
+        if (cmdr == client.Id)
+            return team;
+        SystemTo(client, cmdr >= 0
+            ? $"Only the commander can direct AI vessels — ask {_players.NameOf(cmdr)}."
+            : "Only the commander can direct AI vessels.");
+        return null;
+    }
+
+    // Resolve a /commander argument to a TEAMMATE's client id: exact (case-insensitive) pilot name,
+    // else a unique name prefix. Mirrors ResolveSector's contract (null + error text on miss).
+    private int? ResolveTeammate(byte team, string arg, out string error)
+    {
+        int? hit = null;
+        bool ambiguous = false;
+        var names = new List<string>();
+        foreach (var e in _lobby.Snapshot())
+        {
+            if (e.Team != team)
+                continue;
+            names.Add(e.Name);
+            if (string.Equals(e.Name, arg, StringComparison.OrdinalIgnoreCase))
+            {
+                error = "";
+                return e.Id; // exact name wins outright
+            }
+            if (e.Name.StartsWith(arg, StringComparison.OrdinalIgnoreCase))
+            {
+                if (hit is null)
+                    hit = e.Id;
+                else
+                    ambiguous = true;
+            }
+        }
+        if (ambiguous)
+        {
+            error = $"'{arg}' matches several teammates: {string.Join(", ", names)}";
+            return null;
+        }
+        if (hit is int id)
+        {
+            error = "";
+            return id;
+        }
+        error = $"No teammate named '{arg}'. Teammates: {string.Join(", ", names)}";
+        return null;
+    }
+
+    // MsgOrder routing. Human subject → advisory chat directive (gold scope-2 when the issuer is
+    // the commander, plain team chat otherwise) — the pilot keeps control, nothing reaches the
+    // sim. AI subject → commander-only, enqueued for sim-thread validation; accept/reject answers
+    // come back through OrderNoticesThisStep / OrderDirectivesThisStep in AfterStep.
+    private void HandleOrder(Client client, ulong subject, byte targetKind, ulong targetId, uint sector, Vec3 pos)
+    {
+        if (subject == 0 || TeamOrWarn(client) is not byte team)
+            return;
+
+        foreach (var e in _lobby.Snapshot(id => _sim.ShipIdOf(id)))
+        {
+            if (!e.HasShip || e.ShipId != subject)
+                continue;
+            if (e.Team != team || e.Id == client.Id)
+                return; // enemy pilots aren't commandable; self-orders are the autopilot's job
+            string text = $"{e.Name}: {DescribeOrderTarget(team, targetKind, targetId, sector)}";
+            bool gold = _lobby.CommanderOf(team) == client.Id;
+            var frame = Protocol.BuildChatRelay(gold ? (byte)2 : (byte)1, team, _players.NameOf(client.Id), text);
+            foreach (var c in _clients.Values)
+                if (_lobby.TeamOf(c.Id) == team)
+                    c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+            return;
+        }
+
+        if (_lobby.CommanderOf(team) != client.Id)
+        {
+            int cmdr = _lobby.CommanderOf(team);
+            SystemTo(client, cmdr >= 0
+                ? $"Only the commander can command AI vessels — ask {_players.NameOf(cmdr)}."
+                : "Only the commander can command AI vessels.");
+            return;
+        }
+        _sim.EnqueueCommandOrder(client.Id, _players.NameOf(client.Id), team, subject, targetKind, targetId, sector, pos);
+    }
+
+    // Advisory-directive verb+target for a HUMAN subject, composed from connection-layer data only:
+    // the roster names player targets, and World statics (immutable after worldgen) name bases/
+    // rocks/sectors. An AI target ship can't be safely inspected off the sim thread → generic text.
+    private string DescribeOrderTarget(byte team, byte targetKind, ulong targetId, uint sector)
+    {
+        var world = _sim.World;
+        switch (targetKind)
+        {
+            case 0: // ship
+                foreach (var e in _lobby.Snapshot(id => _sim.ShipIdOf(id)))
+                    if (e.HasShip && e.ShipId == targetId)
+                        return e.Team == team ? $"form up on {e.Name}" : $"attack {e.Name}";
+                return "engage the marked contact";
+            case 1: // base
+                foreach (var b in world.Bases)
+                    if (b.Id == targetId)
+                        return b.Team == team
+                            ? $"hold at the {world.SectorName(b.SectorId)} base"
+                            : $"attack the {world.SectorName(b.SectorId)} base";
+                return "attack the marked base";
+            case 2: // rock — linear scan; World.RockById's lazy cache is sim-thread-only
+                foreach (var r in world.Asteroids)
+                    if (r.Id == targetId)
+                        return $"hold near the asteroid in {world.SectorName(r.SectorId)}";
+                return "hold near the marked asteroid";
+            case 3: // point
+                return $"move to {world.SectorName(sector)}";
+            case 255:
+                return "disregard previous orders";
+            default:
+                return "follow the marked order";
+        }
     }
 
     // Resolve a /mine argument to a sector id against the CURRENT world: a bare numeric id, an exact
@@ -924,6 +1096,23 @@ public sealed class ClientHub
         // accumulated by the sim during Step and cleared at the top of the next one.
         foreach (var (team, msg) in _sim.MinerNoticesThisStep)
             SystemToTeam(team, msg);
+
+        // Commander-order feedback (same accumulate-in-Step contract): issuer-only rejections/acks
+        // as system lines, and team-wide GOLD directives (MsgChatRelay scope 2) once the sim has
+        // validated an order — so a fog-rejected order never announces to the team.
+        foreach (var (cid, msg) in _sim.OrderNoticesThisStep)
+            if (_clients.TryGetValue(cid, out var oc))
+                SystemTo(oc, msg);
+        foreach (var (team, issuer, msg) in _sim.OrderDirectivesThisStep)
+        {
+            byte[]? frame = null;
+            foreach (var c in _clients.Values)
+                if (_lobby.TeamOf(c.Id) == team)
+                {
+                    frame ??= Protocol.BuildChatRelay(2, team, issuer, msg);
+                    c.Outbound.Writer.TryWrite(OutFrame.Whole(frame));
+                }
+        }
 
         SerializeRecords(ships);
 

@@ -70,6 +70,7 @@ public static class Protocol
     public const byte MsgSetTeamName = 9; // u8 team, u16 len, utf8 name — rename a team you're on (server validates membership)
     public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
     public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
+    public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only).
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -80,7 +81,7 @@ public static class Protocol
     public const byte MsgPong = 6; // u32 nonce (echo of the client's MsgPing)
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
-    public const byte MsgChatRelay = 9; // u8 scope, u8 fromTeam, str name, str text
+    public const byte MsgChatRelay = 9; // u8 scope (0 all, 1 team, 2 commander order directive — team-scoped, gold on the client), u8 fromTeam, str name, str text
     public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
@@ -1208,7 +1209,9 @@ public static class Protocol
         string team0Name,
         string team1Name,
         int hostId,
-        string selectedMap
+        string selectedMap,
+        int commander0,
+        int commander1
     )
     {
         using var ms = new MemoryStream();
@@ -1232,6 +1235,8 @@ public static class Protocol
         WriteString(w, team1Name);
         w.Write(hostId); // i32 host client id; -1 when the server is empty
         WriteString(w, selectedMap);
+        w.Write(commander0); // i32 per-team commander client ids; -1 when the side is empty (v34)
+        w.Write(commander1);
         w.Flush();
         return ms.ToArray();
     }

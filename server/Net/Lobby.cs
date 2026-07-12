@@ -22,6 +22,13 @@ public sealed class Lobby
     private readonly object _lock = new();
     private readonly Dictionary<int, Rec> _players = new();
 
+    // Per-team commander client id (-1 = none). Explicit STATE, not derived like LeaderOf: the
+    // commander can be manually reassigned (/commander), so it can't be recomputed from the
+    // roster. Seeded to the first pilot to join the side; when the commander leaves the side it
+    // falls to the next-lowest id (FixCommanderLocked). A dropped commander who reconnects gets a
+    // fresh client id and simply lost rank — re-promotion is manual.
+    private readonly int[] _commander = { -1, -1 };
+
     public void Add(int clientId, string name)
     {
         lock (_lock)
@@ -40,7 +47,11 @@ public sealed class Lobby
     public void Remove(int clientId)
     {
         lock (_lock)
+        {
             _players.Remove(clientId);
+            FixCommanderLocked(0);
+            FixCommanderLocked(1);
+        }
     }
 
     public void SetTeam(int clientId, byte team)
@@ -50,8 +61,12 @@ public sealed class Lobby
         if (team != 0 && team != 1 && team != Protocol.NoTeam)
             return;
         lock (_lock)
+        {
             if (_players.TryGetValue(clientId, out var r))
                 r.Team = team;
+            FixCommanderLocked(0);
+            FixCommanderLocked(1);
+        }
     }
 
     public void SetReady(int clientId, bool ready)
@@ -80,6 +95,46 @@ public sealed class Lobby
                     leader = kv.Key;
             return leader;
         }
+    }
+
+    // The team's commander (-1 when the side is empty). AI vessels obey only this pilot's orders;
+    // /mine and /buyminer are gated on it (ClientHub).
+    public int CommanderOf(byte team)
+    {
+        if (team > 1)
+            return -1;
+        lock (_lock)
+            return _commander[team];
+    }
+
+    // Manual reassignment (/commander <name> — issued by the current commander or the host).
+    // Refuses a client that isn't currently on the team, so command can't be handed off-side.
+    public bool SetCommander(byte team, int clientId)
+    {
+        if (team > 1)
+            return false;
+        lock (_lock)
+        {
+            if (!_players.TryGetValue(clientId, out var r) || r.Team != team)
+                return false;
+            _commander[team] = clientId;
+            return true;
+        }
+    }
+
+    // Re-derive a side's commander after any membership change: keep a still-valid manual
+    // assignment, otherwise fall to the earliest-joined (lowest-id) pilot on the side — which also
+    // seeds the first joiner. Caller must hold _lock.
+    private void FixCommanderLocked(byte team)
+    {
+        int cur = _commander[team];
+        if (cur != -1 && _players.TryGetValue(cur, out var r) && r.Team == team)
+            return; // manual assignment (or seed) still valid
+        int fallback = -1;
+        foreach (var kv in _players)
+            if (kv.Value.Team == team && (fallback == -1 || kv.Key < fallback))
+                fallback = kv.Key;
+        _commander[team] = fallback;
     }
 
     // Drop everyone's ready flag — called when a match ends and the server returns to lobby,

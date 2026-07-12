@@ -45,6 +45,13 @@ public partial class GameNetClient : Node
     public bool IsHost => HostId >= 0 && HostId == LocalClientId;
     public string SelectedMap { get; private set; } = "";
 
+    // Per-team commanders (v34, MsgLobbyState tail). -1 = side empty/unknown. The commander is the
+    // only pilot whose orders AI vessels execute; everyone else's are advisory.
+    public int Commander0Id { get; private set; } = -1;
+    public int Commander1Id { get; private set; } = -1;
+    public int CommanderIdOf(byte team) => team == 0 ? Commander0Id : team == 1 ? Commander1Id : -1;
+    public bool IsCommander => MyTeam is 0 or 1 && CommanderIdOf(MyTeam) == LocalClientId;
+
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
     // picker; MapListChanged fires when it arrives.
     public IReadOnlyList<MapInfo> Maps { get; private set; } = Array.Empty<MapInfo>();
@@ -395,6 +402,26 @@ public partial class GameNetClient : Node
         BitConverter.TryWriteBytes(f.AsSpan(15), pos.X);
         BitConverter.TryWriteBytes(f.AsSpan(19), pos.Y);
         BitConverter.TryWriteBytes(f.AsSpan(23), pos.Z);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
+    // targetKind: 0 ship, 1 base, 2 rock, 3 point, 255 clear (release to autonomy). targetId is
+    // the UNENCODED entity id (strip BaseLock/AsteroidFocus flags before calling; 0 for a point).
+    // The server infers the verb (attack vs go-to-idle) from the target's kind+team, gates AI
+    // subjects on commander status, and turns human subjects into advisory chat directives.
+    // 34-byte little-endian frame (MsgOrder = 12).
+    public void SendOrder(ulong subjectShipId, byte targetKind, ulong targetId, uint sector, Vector3 pos)
+    {
+        var f = new byte[34];
+        f[0] = 12; // MsgOrder
+        BitConverter.TryWriteBytes(f.AsSpan(1), subjectShipId);
+        f[9] = targetKind;
+        BitConverter.TryWriteBytes(f.AsSpan(10), targetId);
+        BitConverter.TryWriteBytes(f.AsSpan(18), sector);
+        BitConverter.TryWriteBytes(f.AsSpan(22), pos.X);
+        BitConverter.TryWriteBytes(f.AsSpan(26), pos.Y);
+        BitConverter.TryWriteBytes(f.AsSpan(30), pos.Z);
         _tx.Writer.TryWrite(f);
     }
 
@@ -1534,6 +1561,8 @@ public partial class GameNetClient : Node
         Team1Name = ReadStr(r);
         HostId = r.ReadInt32();
         SelectedMap = ReadStr(r);
+        Commander0Id = r.ReadInt32();
+        Commander1Id = r.ReadInt32();
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).

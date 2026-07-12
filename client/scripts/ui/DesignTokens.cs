@@ -30,6 +30,7 @@ public static class DesignTokens
     public static Color TeamAccent = Color.FromHtml("37E0FF");
     public static readonly Color TeamAccentBase = Color.FromHtml("37E0FF");
     public static readonly Color Secondary = Color.FromHtml("FF9D4D"); // highlight / credits
+    public static readonly Color CmdrGold = Color.FromHtml("FFD24D"); // commander authority: CMDR badge, order directives, F3 command selection
 
     // ---- Text tiers ----------------------------------------------------------
     public static readonly Color TextHi = Color.FromHtml("CFE6F5"); // primary

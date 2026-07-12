@@ -291,9 +291,31 @@ Stage-1 YAML pipeline.
   occlusion/signature/eyeball/ghost-lifecycle/base-vision/probe/determinism. *Deferred: shootable
   probes (combat fields dormant), PIG auto-probe usage, `MsgMissiles` team-filtering (accepted
   incoming-warning leak), vision-cone HUD rendering, eyeball-tier occlusion (unoccluded in v1).*
-- ☐ **[M]** **Commander** — the richer decision authority for tech/build: the lobby-leader / first player
-  to join a team (or promoted). **No accounts required.**
-- ☐ **[L]** **Commander / RTS map view** — the "rich UI": a strategic overlay across all sectors exists; allow the commander to select units in F3 view and issue them orders. Allow other players to issue orders as well, but AI will only follow the commander's orders.
+- ✅ **[M]** **Commander** — shipped (proto 34): explicit per-team commander STATE in the
+  connection-layer `Lobby` (seeded to the first pilot to join the side, falls to the next-lowest
+  client id on leave/drop, manually reassignable via `/commander <name>` by the sitting commander
+  or the host — so it can't be purely derived). Streamed on the `MsgLobbyState` tail
+  (`commander0/commander1`); client exposes `CommanderIdOf`/`IsCommander` and renders a gold
+  **CMDR badge** in the lobby roster. The commander is the single AI authority: `/mine` and
+  `/buyminer` are now commander-gated (`ClientHub.CommanderOrWarn` — closes the mining deferred
+  item). **No accounts required.** `tests/LobbyTest` covers seed/fall-through/manual-set.
+  *Deferred: lobby "MAKE CMDR" button (chat command only), commander persistence across reconnect
+  (rank falls to next senior; re-promote manually).*
+- ✅ **[L]** **Commander orders / F3 select-and-command** — shipped (proto 34): left-click on the
+  F3 map SELECTS any entity (friendly/enemy ship, base, rock — new `SectorOverview.SelectedId`,
+  separate from Tab focus; click-away deselects; gold brackets = commandable friendly ship). With
+  a friendly ship selected, right-click sends **`MsgOrder`** naming the clicked target; the server
+  infers the verb (enemy ship → attack, enemy base → attack/`AttackPoint`, anything else → go to
+  and idle near; right-click the selected ship itself = release to autonomy). **Anyone may issue
+  orders; AI obeys only the commander's** (hub-gated) — orders to a HUMAN teammate relay as a
+  gold team-chat directive (`MsgChatRelay` scope 2) instead. AI orders live in
+  `Simulation.Orders.cs` (`_pigOrders` keyed by ShipId) and are consumed by `TryObeyOrder`, a
+  top-priority goal in the `PigDecide` chain (below rescue) emitting only existing plan kinds —
+  orders complete-and-revert (target dies / radar contact lost under fog / base destroyed), and a
+  holding pig defends its point. Miner subjects map onto mining state (rock order pins the claim +
+  authorizes the sector; point = per-miner `/mine`; friendly base = pinned offload).
+  `tests/CommanderTest` (9 scenarios). *Deferred: multi-select / order queueing, order markers on
+  the F3 map, PIG order-status HUD.*
 - ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;

@@ -636,6 +636,8 @@ public sealed partial class Simulation
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
         MinerNoticesThisStep.Clear();
+        OrderNoticesThisStep.Clear();
+        OrderDirectivesThisStep.Clear();
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -934,6 +936,7 @@ public sealed partial class Simulation
                 ship.ApDockPhaseTick = tick;
             }
             DrainMinerQueues(tick); // miner buys + /mine sector orders (Simulation.Mining.cs)
+            DrainCommandOrders(); // commander orders for AI vessels (Simulation.Orders.cs)
         }
     }
 
@@ -1253,7 +1256,8 @@ public sealed partial class Simulation
     // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
     // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
     // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
-    // Authority is bootstrap-simple (any-player-spends / auto) — no commander.
+    // Authority for a PLAYER's own hull stays any-player-spends; team-drone buys (/buyminer) are
+    // commander-gated upstream at the hub (ClientHub.CommanderOrWarn) before they reach this seam.
     public SpawnDecision TryReserveSpawn(byte team, byte cls)
     {
         if (!World.TeamStates.TryGetValue(team, out var ts))

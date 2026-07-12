@@ -1059,12 +1059,15 @@ public partial class Lobby : Control
 
         row.AddChild(Mono(isMe ? "◆" : "▸", isMe ? team : DesignTokens.TextDim).With(l => l.CustomMinimumSize = new Vector2(20, 0)));
 
-        // CALLSIGN (+ YOU badge). PLACEHOLDER: commander/CMDR badge omitted (no such state on the wire).
+        // CALLSIGN (+ CMDR / YOU badges). Commander = the server-streamed per-team authority
+        // (MsgLobbyState tail, v34) — the only pilot whose orders AI vessels execute.
         var nameCell = new HBoxContainer();
         nameCell.AddThemeConstantOverride("separation", 8);
         Cell(nameCell, 1.6f);
         string who = string.IsNullOrEmpty(p.Name) ? $"Pilot{p.Id}" : p.Name;
         nameCell.AddChild(UiKit.MakeLabel(who, UiKit.TextStyle.Body, isMe ? team : DesignTokens.TextHi));
+        if (!IsNoat(p.Team) && p.Id == _net.CommanderIdOf(p.Team))
+            nameCell.AddChild(Badge("CMDR", DesignTokens.CmdrGold));
         if (isMe)
             nameCell.AddChild(Badge("YOU", team));
         row.AddChild(nameCell);
@@ -1149,6 +1152,13 @@ public partial class Lobby : Control
                 sb.Append($"{stamp} [color=#{DesignTokens.Text2.ToHtml(false)}]◆ {Escape(line.Text)}[/color]\n");
                 continue;
             }
+            // Scope 2 = commander order directive (v34): whole line gold, mirroring the in-flight
+            // chat overlay's styling, so orders read as orders in the lobby comms too.
+            if (line.Scope == 2)
+            {
+                sb.Append($"{stamp} [color=#{DesignTokens.CmdrGold.ToHtml(false)}]★ CMDR {Escape(line.Name)} ▸ {Escape(line.Text)}[/color]\n");
+                continue;
+            }
             Color nameCol = TeamColor(line.FromTeam);
             string tag = line.Scope == 1
                 ? $"[color=#{DesignTokens.Text2.ToHtml(false)}]\\[{(IsNoat(line.FromTeam) ? "noat" : "team")}][/color] "
@@ -1159,9 +1169,10 @@ public partial class Lobby : Control
     }
 
     // Which log lines the active channel shows. ALL shows everything; the group channel shows
-    // scope-1 lines (your teammates / fellow NOAT pilots) plus locally-generated system lines.
+    // scope-1 lines (your teammates / fellow NOAT pilots), scope-2 commander directives (already
+    // team-filtered by the server), plus locally-generated system lines.
     private bool ChannelShows(ChatLine line) =>
-        _chatChannel == 1 ? line.Scope == 1 || string.IsNullOrEmpty(line.Name) : true;
+        _chatChannel == 1 ? line.Scope is 1 or 2 || string.IsNullOrEmpty(line.Name) : true;
 
     // ---- small helpers ------------------------------------------------------
 

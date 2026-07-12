@@ -80,6 +80,7 @@ public sealed partial class Simulation
         public ulong TargetRockId; // current claim (0 = none); other friendly miners avoid it
         public ulong LastRockId; // the rock it was working before filling — preferred on relaunch
         public ulong TargetBaseId; // offload destination while ToBase
+        public bool BasePinned; // commander-ordered offload base: holds against the ToBase nearest-base re-pick while it stands
         public ulong DockBaseId; // base it last docked at (relaunch site; 0 = team's first base)
         public uint LaunchAtTick; // docked: earliest relaunch tick (offload delay)
         public bool Idle; // docked with no eligible work; still re-scans every brain tick — this only gates the one-time notice
@@ -237,8 +238,8 @@ public sealed partial class Simulation
             MinerNoticesThisStep.Add((team, $"Miner cap reached ({_mining.MaxMinersPerTeam})."));
             return;
         }
-        // Same authoritative unlock + charge seam as a player hull buy (any-teammate authority,
-        // matching the Stage-2 spawn gate — no commander yet).
+        // Same authoritative unlock + charge seam as a player hull buy. Buy AUTHORITY is
+        // commander-gated at the connection layer (ClientHub.CommanderOrWarn) before the enqueue.
         switch (TryReserveSpawn(team, (byte)cls))
         {
             case SpawnDecision.Locked:
@@ -361,6 +362,7 @@ public sealed partial class Simulation
                 slot.Ship = null;
                 slot.State = MinerState.ToRock;
                 slot.TargetRockId = 0; // claim released while docked; LastRockId keeps the preference
+                slot.BasePinned = false; // a commander-ordered offload is fulfilled by docking
                 slot.DockBaseId = b.Id;
                 slot.LaunchAtTick = tick + (uint)MathF.Round(_mining.OffloadDelaySeconds * FlightModel.TickRate);
                 slot.Idle = false;
@@ -451,6 +453,10 @@ public sealed partial class Simulation
                 case MinerState.ToBase:
                 {
                     // Re-pick every decide tick: the destination may have been destroyed inbound.
+                    // A commander-pinned base holds while it stands (Simulation.Orders.cs).
+                    if (slot.BasePinned && BaseIsAlive(slot.TargetBaseId))
+                        break;
+                    slot.BasePinned = false;
                     slot.TargetBaseId = NearestFriendlyBase(s)?.Id ?? 0;
                     break;
                 }

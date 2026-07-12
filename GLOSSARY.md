@@ -728,8 +728,30 @@ Server-side AI decision system: 5 Hz decision tick, evaluates targets/actions, s
   - `server/Sim/Simulation.Pig.cs` — PigBrainTick and decision logic
   - `server/Sim/PigDecision.cs` — steering action encoding
   - `server/Sim/Simulation.cs` — decision caching and re-steering
-- **Related:** [[SimTick]], [[Flight Model]]
+- **Related:** [[SimTick]], [[Flight Model]], [[Commander Order]]
 - **Notes:** Decoupled from SimTick (20 Hz vs 5 Hz); PigBrainTick evaluates fresh targets; SimTick re-steers from cache; safe to hot-swap scheduled table
+
+### Commander
+Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels execute; also gates `/mine` and `/buyminer`. Explicit STATE (not derived like the rename-gating LeaderOf): seeded to the first pilot to join the side, falls to the next-lowest client id when the commander leaves, manually handed off via `/commander <name>` (sitting commander or host). Streamed on the `MsgLobbyState` tail; gold CMDR badge in the roster.
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Net/Lobby.cs` — `CommanderOf` / `SetCommander` / `FixCommanderLocked` state
+  - `server/Net/ClientHub.cs` — `CommanderOrWarn` gate, `/commander` hand-off
+  - `client/scripts/GameNetClient.cs` — `CommanderIdOf` / `IsCommander`
+  - `tests/LobbyTest/` — seed / fall-through / manual-set coverage
+- **Related:** [[Commander Order]], [[Lobby]], [[Team]]
+- **Notes:** Does NOT survive reconnect (new client id → rank falls to next senior; re-promote manually); host is a separate server-wide role
+
+### Commander Order
+An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS any entity (`SectorOverview.SelectedId`, separate from Tab focus), right-click names a target; the SERVER infers the verb — enemy ship/base → attack, anything else → go-to-and-idle, targetKind 255 = release. Anyone may issue; AI executes only the commander's (hub-gated) — orders to human teammates relay as gold advisory chat directives (`MsgChatRelay` scope 2, `DesignTokens.CmdrGold`).
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Sim/Simulation.Orders.cs` — `_pigOrders`, `ApplyCommandOrder` verb inference, `TryObeyOrder`
+  - `server/Net/ClientHub.cs` — `HandleOrder` routing/authorization
+  - `client/scripts/SectorOverview.cs` — selection + right-click dispatch
+  - `tests/CommanderTest/` — 9 sim-level scenarios
+- **Related:** [[Commander]], [[PigBrain]], [[Fog of War]]
+- **Notes:** Orders complete-and-revert (target dead / radar contact lost / base destroyed → autonomy); rescue outranks orders; fog-gated at issue AND execution (no wallhack); keyed by ShipId so respawned drones never inherit; miner subjects map onto mining state (rock pins claim, point = per-miner `/mine`, friendly base = pinned offload)
 
 ---
 
