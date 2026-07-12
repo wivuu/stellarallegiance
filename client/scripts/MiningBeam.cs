@@ -14,7 +14,7 @@ using Godot;
 // then only Emitting while in range — so a miner grinding away across the map costs nothing.
 public partial class MiningBeam : Node3D
 {
-    private const float BeamThickness = 0.3f; // beam diameter (world units)
+    private const float BeamThickness = 0.15f; // beam diameter (world units)
     private const float DebrisRange = 500f; // only spawn/emit debris within this camera distance
     private const float PulseHz = 6f; // emission-energy sine pulse rate
     private const float BaseEnergy = 3.0f; // HDR emission floor (blooms past the glow threshold)
@@ -68,10 +68,14 @@ public partial class MiningBeam : Node3D
 
     // Point the beam from the miner (`from`) at the rock. The beam runs all the way to the rock's
     // CENTER (letting the cylinder clip into the mesh) so the laser visibly bites into the rock rather
-    // than stopping short of it; the debris/chips, however, spray from the rock SURFACE (center pulled
-    // back by the rock's current radius) where the cut physically happens. Called every frame by
-    // WorldRenderer while the ship's ShipFlagMining is set. `cameraPos` gates the proximity-only debris.
-    public void UpdateBeam(Vector3 from, Vector3 rockCenter, float rockRadius, Vector3 cameraPos)
+    // than stopping short of it; the debris/chips, however, spray from the rock SURFACE where the cut
+    // physically happens. When the camera is close enough to actually see the chips, the surface point
+    // is found by ray-casting the beam against the rock's ACTUAL visible mesh (`rockMesh`) — an
+    // irregular asteroid rarely matches its bounding sphere, so the old `center - dir*radius` sphere
+    // point left the debris hanging in empty space off the silhouette. Falls back to that sphere point
+    // when out of debris range (no cast) or on a mesh miss. Called every frame by WorldRenderer while
+    // the ship's ShipFlagMining is set. `cameraPos` gates the proximity-only debris + mesh cast.
+    public void UpdateBeam(Vector3 from, Vector3 rockCenter, float rockRadius, MeshInstance3D? rockMesh, Vector3 cameraPos)
     {
         Vector3 toRock = rockCenter - from;
         float dist = toRock.Length();
@@ -84,7 +88,8 @@ public partial class MiningBeam : Node3D
         }
         Vector3 dir = toRock / dist;
         Vector3 beamEnd = rockCenter; // run into the center; the mesh clips the cylinder
-        Vector3 surface = rockCenter - dir * rockRadius; // where the chips fly off
+        Vector3 surface = rockCenter - dir * rockRadius; // sphere-approx cut point (refined below)
+        Vector3 surfaceNormal = -dir; // outward face normal (rock → miner); refined by the mesh cast
 
         // Orient + scale the unit +Y cylinder to span [from, beamEnd] in world space.
         Vector3 seg = beamEnd - from;
@@ -117,11 +122,21 @@ public partial class MiningBeam : Node3D
         bool inRange = cameraPos.DistanceSquaredTo(surface) <= DebrisRange * DebrisRange;
         if (inRange)
         {
+            // Only worth the per-frame mesh cast when the chips are actually on screen. Ray the beam
+            // against the rock's real triangles (segment extended a little past center so a near-side
+            // face is always caught) and pin the emitter to the true hit + face normal; a miss keeps
+            // the sphere fallback. Ensure the normal faces back toward the miner (rock → miner).
+            if (rockMesh != null
+                && MeshRaycaster.IntersectMeshInstance(rockMesh, from, rockCenter + dir * rockRadius, out Vector3 hit, out Vector3 nrm))
+            {
+                surface = hit;
+                surfaceNormal = nrm.Dot(-dir) >= 0f ? nrm : -nrm;
+            }
             _debris ??= BuildDebris();
             _debris.Emitting = true;
             // Position the emitter at the surface cut point and orient +Y along the outward surface
-            // normal (rock → miner) so the chunks spray outward + tangentially off the face.
-            _debris.GlobalTransform = new Transform3D(new Basis(AlignUp(-dir)), surface);
+            // normal so the chunks spray outward + tangentially off the face.
+            _debris.GlobalTransform = new Transform3D(new Basis(AlignUp(surfaceNormal)), surface);
         }
         else if (_debris != null)
         {

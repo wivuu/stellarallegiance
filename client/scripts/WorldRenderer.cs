@@ -2383,7 +2383,7 @@ public partial class WorldRenderer : Node3D
         {
             if (node is not RemoteShip rs || !rs.IsMining || !rs.Visible)
                 continue;
-            if (MiningTargetRock(id, rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius))
+            if (MiningTargetRock(id, rs.GlobalPosition) is not (Vector3 rockCenter, float rockRadius, var rockMesh))
                 continue; // no known/visible rock — hold off (drop any stale beam in the prune below)
 
             if (!_miningBeams.TryGetValue(id, out var beam))
@@ -2392,7 +2392,9 @@ public partial class WorldRenderer : Node3D
                 rs.AddChild(beam);
                 _miningBeams[id] = beam;
             }
-            beam.UpdateBeam(rs.GlobalPosition, rockCenter, rockRadius, camPos);
+            // Fire from the ship's weapon-hardpoint muzzle (not the hull centre); debris chips off the
+            // rock's real mesh surface via rockMesh.
+            beam.UpdateBeam(rs.MiningMuzzleWorld(), rockCenter, rockRadius, rockMesh, camPos);
         }
 
         // Prune beams whose ship stopped mining, hid, left, or lost its target rock.
@@ -2418,20 +2420,21 @@ public partial class WorldRenderer : Node3D
     // The rock a mining ship is aiming at, as (center, current radius). Prefer the server-streamed
     // exact target (MsgMinerTargets) when that rock is known + in view; otherwise fall back to the
     // nearest in-view He3 rock so a pre-v33 server (or a not-yet-arrived frame) still shows a beam.
-    private (Vector3 Center, float Radius)? MiningTargetRock(ulong shipId, Vector3 fromPos)
+    private (Vector3 Center, float Radius, MeshInstance3D? Node)? MiningTargetRock(ulong shipId, Vector3 fromPos)
     {
         if (_minerTargetRock.TryGetValue(shipId, out ulong rockId)
             && _asteroidNodes.TryGetValue(rockId, out var node)
             && GetAsteroid(rockId) is { } rock)
-            return (node.GlobalPosition, rock.CurrentRadius);
+            return (node.GlobalPosition, rock.CurrentRadius, node as MeshInstance3D);
         return NearestHe3Rock(fromPos);
     }
 
-    // The nearest visible He3 rock (with ore remaining) to `from`, as (center, current radius), or
-    // null if none is in view. The fallback aim when the streamed target rock isn't known/visible.
-    private (Vector3 Center, float Radius)? NearestHe3Rock(Vector3 from)
+    // The nearest visible He3 rock (with ore remaining) to `from`, as (center, current radius, node),
+    // or null if none is in view. The fallback aim when the streamed target rock isn't known/visible.
+    // The node is handed to the beam so its chips ray off the rock's real mesh surface.
+    private (Vector3 Center, float Radius, MeshInstance3D? Node)? NearestHe3Rock(Vector3 from)
     {
-        (Vector3, float)? best = null;
+        (Vector3, float, MeshInstance3D?)? best = null;
         float bestSq = float.MaxValue;
         foreach (var (id, node) in AsteroidsInView())
         {
@@ -2443,7 +2446,7 @@ public partial class WorldRenderer : Node3D
             if (dSq < bestSq)
             {
                 bestSq = dSq;
-                best = (node.GlobalPosition, rock.CurrentRadius);
+                best = (node.GlobalPosition, rock.CurrentRadius, node as MeshInstance3D);
             }
         }
         return best;

@@ -417,6 +417,24 @@ public partial class RemoteShip : Node3D
         return _shipModel;
     }
 
+    // The mining muzzle: the ship's first weapon hardpoint (HP_Weapon_0). The miner hull is unarmed
+    // in YAML, but its GLB still carries an HP_Weapon_0 node (merged as an empty mount), so the beam
+    // can emanate from the actual muzzle geometry instead of the hull origin. The node lives under the
+    // (barrel-rolling) ShipModel, so its GlobalPosition already tracks the cosmetic mining roll.
+    // Resolved once and cached (even when absent → fall back to the hull centre).
+    private Node3D? _miningMuzzle;
+    private bool _lookedUpMuzzle;
+
+    public Vector3 MiningMuzzleWorld()
+    {
+        if (!_lookedUpMuzzle)
+        {
+            _lookedUpMuzzle = true;
+            _miningMuzzle = ResolveShipModel()?.FindChild("HP_Weapon_*", recursive: true, owned: false) as Node3D;
+        }
+        return _miningMuzzle is { } m ? m.GlobalPosition : GlobalPosition;
+    }
+
     // Synthesized PIG afterburner. Tracks the drone's travel direction (from the
     // smoothed velocity) and, on a periodic roll, fires a short burst when it's
     // actually swinging onto a new heading — so drones occasionally light the
