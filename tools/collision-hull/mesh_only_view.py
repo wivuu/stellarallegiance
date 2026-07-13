@@ -5,11 +5,10 @@ kind-coloured marker + forward-direction arrow. Reuses bake.py's GLB readers so 
 from the merged-hull ground truth.
 
 Usage:
-    uv run mesh_only_view.py [--glb PATH] [--save PATH.png] [--kinds Dock,Light,...]
+    uv run mesh_only_view.py --glb PATH [--save PATH.png] [--kinds Dock,Light,...]
 
-Defaults to client/assets/bases/base.glb (repo-relative), same as bake.py --kind base, and to
---kinds Dock (docking entrance/exit only). Pass --kinds all to show every hardpoint kind.
-Scroll wheel zooms in/out; left-drag rotates (standard mplot3d navigation).
+Defaults to --kinds Dock (docking entrance/exit only). Pass --kinds all to show every hardpoint
+kind. Scroll wheel zooms in/out; left-drag rotates (standard mplot3d navigation).
 """
 import argparse
 import sys
@@ -35,7 +34,7 @@ _HP_STYLE = {
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", type=Path, default=None, help="mesh GLB (default: client/assets/bases/base.glb)")
+    ap.add_argument("--glb", type=Path, required=True, help="mesh GLB to view")
     ap.add_argument("--save", type=Path, default=None, help="also save a PNG instead of/besides showing")
     ap.add_argument("--no-show", action="store_true", help="skip the interactive window (save only)")
     ap.add_argument("--kinds", default="Dock",
@@ -43,7 +42,7 @@ def main():
     args = ap.parse_args()
     want_kinds = None if args.kinds.strip().lower() == "all" else {k.strip() for k in args.kinds.split(",") if k.strip()}
 
-    glb_path = args.glb or (Path(__file__).parent.parent.parent / "client/assets/bases/base.glb")
+    glb_path = args.glb
     gltf, blob = bake.load_glb(glb_path) if hasattr(bake, "load_glb") else (None, None)
     if gltf is None:
         import pygltflib

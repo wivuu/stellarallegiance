@@ -20,8 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
 - When going to another sector, don't "fade out" the old rocks, they should never be visible in the new sector
+- I dropped mines in 1 sector, navigated to another sector, and the mines were still there. We need to treat sectors as actually different places, not just remove things and add other things to the same "game board"
 - F3 Selection should not exclude your own ship or any other friendly ships
 ---
 
@@ -339,14 +339,20 @@ Stage-1 YAML pipeline.
   - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.
   - If the nearest base is not in the same sector, the miner will navigate to the base across sectors, potentially taking longer to offload resources before resuming harvesting.
   - A miner will not enter a new sector to mine unless the commander tells him to go to that sector to mine (at least once)
-- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
-- ☐ **[L]** **Base building + constructors** — deployable structures for resource processing; ships land,
+- ☐ **[XL]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
+  - Generalize bases, so that the mesh to be used is determined by the YAML configuration, similar to hulls for ships
+  - Create multiple base types, defined by yaml: Garrison (default), Outpost, Shipyard, Supremacy Center, Tactical Laboratory, and Expansion Complex, Teleport Receiver, Refinery. Some bases unlock tech tree paths (configurable).
   - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
+  - Constructors are ships (utl11.glb in pick_assets - but dont hardcode the usage of this mesh; there will be many configurable models) which are AI controlled like miners. They launch from a garrison only (not outposts), and the types of rock (regolith, uranium, etc) they can build on is configurable based on the type of base bought.
+  - When a constructor is ordered to a compatible asteroid, it navigates there, and will reach a standoff point (similar to a miner), once at the standoff point, it will align itself for a few seconds (configurable), before beginning to *sink into the rock* slowly (fly towards until the constructor is partially embedded into the rock)
+  - From here, a spinning greenish/bluish glowing sphere, with multiple translucent textured layers, will gradually envelop the entire asteroid (for a configurable number of seconds), and the constructor mesh disappears completely
+  - Once the build sphere is done, the configured base appears on the asteroid, fully constructed, and the build effect is removed, leaving the base ready for use, and potentially tech trees unlocked
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream

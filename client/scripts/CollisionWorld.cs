@@ -255,7 +255,7 @@ public sealed class CollisionWorld
             // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
             // bakes (World.LoadBase) and the visual renders (BaseModelLoader), so the predicted hull +
             // docking faces stay bit-identical to the server's and aligned with the rendered base.
-            _baseModel = LoadGlb("res://assets/bases/Outpost.glb", CollisionConfig.BaseModelRotation);
+            _baseModel = LoadGlb("res://assets/bases/garrison.glb", CollisionConfig.BaseModelRotation);
             _baseLoaded = true;
         }
         return _baseModel;

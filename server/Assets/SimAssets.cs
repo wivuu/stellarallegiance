@@ -106,5 +106,5 @@ public static class SimAssets
         return null;
     }
 
-    private static bool IsAssetsDir(string dir) => File.Exists(Path.Combine(dir, "bases", "Outpost.glb"));
+    private static bool IsAssetsDir(string dir) => File.Exists(Path.Combine(dir, "bases", "garrison.glb"));
 }

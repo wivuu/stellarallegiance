@@ -9,10 +9,17 @@ namespace StellarAllegiance.Shared;
 //  they come in GROUPS OF FIVE (in ascending index order), each group defining ONE bounded
 //  rectangular docking face ("door"):
 //
-//    • the FIRST marker of a group is the face plane — its position is the face reference point
+//    • ONE marker of the group is the face marker — its position is the face reference point
 //      and its forward (+Z node axis = the parsed `Forward`) is the INWARD normal, the direction
 //      a ship travels when entering. A ship docks by intersecting this bounded virtual plane.
-//    • the NEXT FOUR markers mark the door boundary — nominally bottom/top/left/right side
+//      The face marker is detected by ORIENTATION, not by its slot in the group: source art
+//      (ss27) authors it at an arbitrary position among the five (door 0: 5th, door 1: 2nd),
+//      with the rim markers' forwards pointing outward IN the face plane and only the face
+//      marker's forward perpendicular to it. We score each marker by how strongly its forward
+//      points at/away from its siblings and take the least-aligned one; when every marker
+//      shares the same forward (legacy authoring: face first, boundary after) all scores tie
+//      at ~0 and the lowest index wins — the old first-is-face rule.
+//    • the OTHER FOUR markers mark the door boundary — nominally bottom/top/left/right side
 //      midpoints of the rectangle. Parsed ORDER-AGNOSTICALLY: each is projected onto the face
 //      plane and their projections define the two in-plane axes + half-extents (we never assume
 //      which of the four is which side).
@@ -92,19 +99,24 @@ public static class DockFaceParser
         return faces.ToArray();
     }
 
-    // Build one door from a 5-marker group: [start] = face plane, [start+1 .. start+4] = boundary.
+    // Build one door from a 5-marker group: the orientation-detected face marker supplies the
+    // plane, the remaining four the boundary.
     private static DockFace BuildFace(List<(int Idx, Vec3 Pos, Vec3 Fwd)> ent, int start, float ws)
     {
-        Vec3 center = ent[start].Pos * ws;
-        Vec3 n = Normalize(ent[start].Fwd);
+        int face = FaceMarker(ent, start);
+        Vec3 center = ent[face].Pos * ws;
+        Vec3 n = Normalize(ent[face].Fwd);
 
         // Project the 4 boundary points onto the face plane (don't require exact coplanarity —
-        // in base.glb they sit slightly off the face marker's plane).
+        // source art authors them slightly off the face marker's plane).
         var proj = new Vec3[4];
-        for (int i = 0; i < 4; i++)
+        int bi = 0;
+        for (int i = start; i < start + 5; i++)
         {
-            Vec3 rel = ent[start + 1 + i].Pos * ws - center;
-            proj[i] = rel - n * Dot(rel, n);
+            if (i == face)
+                continue;
+            Vec3 rel = ent[i].Pos * ws - center;
+            proj[bi++] = rel - n * Dot(rel, n);
         }
 
         // U = the first non-degenerate in-plane projection; V = N × U (right-handed, unit).
@@ -130,6 +142,41 @@ public static class DockFaceParser
             ev = MathF.Max(ev, MathF.Abs(Dot(proj[i], v)));
         }
         return new DockFace(center, n, u, v, eu, ev);
+    }
+
+    // Which of the 5 markers [start, start+5) is the FACE marker. Rim markers' forwards point
+    // outward along the face plane — i.e. straight at/away from their opposite rim sibling — so
+    // they align strongly with at least one sibling direction; the face marker's forward is
+    // perpendicular to the whole in-plane spread and aligns with none. Score = worst (largest)
+    // |cos| against any sibling direction; the strictly-lowest score wins, and on a tie (e.g.
+    // legacy art where all five share the face normal — every score ~0) the LOWEST index wins,
+    // reproducing the old first-is-face convention. Pure deterministic float math, no engine.
+    private static int FaceMarker(List<(int Idx, Vec3 Pos, Vec3 Fwd)> ent, int start)
+    {
+        int best = start;
+        float bestScore = float.MaxValue;
+        for (int i = start; i < start + 5; i++)
+        {
+            Vec3 f = Normalize(ent[i].Fwd);
+            if (f.LengthSquared() < 0.5f)
+                continue; // degenerate forward can't be scored — never the face marker
+            float score = 0f;
+            for (int j = start; j < start + 5; j++)
+            {
+                if (j == i)
+                    continue;
+                Vec3 d = Normalize(ent[j].Pos - ent[i].Pos);
+                if (d.LengthSquared() < 0.5f)
+                    continue; // coincident markers carry no direction
+                score = MathF.Max(score, MathF.Abs(Dot(f, d)));
+            }
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = i;
+            }
+        }
+        return best;
     }
 
     // Legacy fallback: a leftover marker becomes a small square "door" facing inward (−radial), so

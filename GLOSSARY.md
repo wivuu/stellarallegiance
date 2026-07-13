@@ -58,7 +58,7 @@ Distance-based visibility culling: server only streams entities within fixed dis
 - **Notes:** Fixed nearest-60 replaced by distance tiers + environment knobs (SIM_NEAR_RADIUS, SIM_FAR_RADIUS, SIM_FAR_EVERY)
 
 ### Compound Base Hull (COL_ parts)
-Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into `base.glb` each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill + greedy box merge) by `tools/collision-hull/bake.py --kind base` — never hand-placed.
+Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `tools/collision-hull/` — args-driven bake tool for any mesh GLB (per-kind presets, hull-containment / dock-corridor / reachability validations)
@@ -263,8 +263,9 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
 
 ### Docking Door
 Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fives** into one bounded
-**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints); a base
-may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
+**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints; the
+face marker is detected by ORIENTATION within its five — rim forwards point outward in-plane — not
+assumed first); a base may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
 rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]` along the inward normal
 (no facing/velocity gate). The rest of the base is a solid hull; the same test carves the no-bounce
 carve-out so client prediction and server agree. `HP_DockingExit_*` (one = one exit) is the launch

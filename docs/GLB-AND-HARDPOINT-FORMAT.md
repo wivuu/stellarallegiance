@@ -112,13 +112,20 @@ in ascending index order**, each group defining ONE bounded **rectangular dockin
 Sort every `HP_DockingEntrance_*` by its trailing index and chunk into consecutive fives — a base may
 author **any number of doors** (the current `base.glb` has exactly one, indices `0..4`):
 
-- The **first** marker of a group is the **face plane**: its position is the face reference point and
+- **ONE** marker of the group is the **face marker**: its position is the face reference point and
   its forward (local +Z node axis = the parsed `Dir`) is the **INWARD normal** — the direction a ship
-  travels when entering. A ship docks when it intersects this bounded virtual plane.
-- The **next four** markers mark the door **boundary** — nominally the bottom / top / left / right
+  travels when entering. A ship docks when it intersects this bounded virtual plane. The face marker
+  is detected by **ORIENTATION**, not by its slot in the group: source art (ss27/garrison) authors it
+  at an arbitrary position among the five, with the four rim markers' forwards pointing **outward in
+  the face plane** (at/away from their opposite sibling) and only the face marker's forward
+  perpendicular to the spread. `DockFaceParser.FaceMarker` scores each marker by its worst |cos|
+  against any sibling direction and takes the least-aligned; when all five share one forward (legacy
+  authoring: face first) every score ties at ~0 and the lowest index wins — the old first-is-face
+  rule falls out as the tiebreak.
+- The **other four** markers mark the door **boundary** — nominally the bottom / top / left / right
   side midpoints of the rectangle. They are parsed **order-agnostically**: each is projected onto the
   face plane and their projections define the two in-plane axes and half-extents (never assume which
-  of the four is which side; in `base.glb` they happen to be the ±X and ±Z side midpoints).
+  of the four is which side).
 
 Docking triggers on pure geometry — no facing/velocity gate. A ship (a sphere of
 `CollisionConfig.ShipRadius`) docks when it is within the rectangle laterally (± the half-extents +
@@ -129,11 +136,12 @@ the thin plane between ticks). The rest of the base is a solid hull.
 **Multi-door example** — a station with two docking bays authors ten entrance markers:
 
 ```
-HP_DockingEntrance_0   door A face   (pos = face point, +Z = inward)
-HP_DockingEntrance_1..4              (door A: 4 boundary side-midpoints)
-HP_DockingEntrance_5   door B face
-HP_DockingEntrance_6..9              (door B: 4 boundary side-midpoints)
+HP_DockingEntrance_0..4   door A (1 face marker + 4 boundary side-midpoints,
+HP_DockingEntrance_5..9   door B  in ANY order within the group — orientation decides)
 ```
+
+In the shipping `garrison.glb` (pristine ss27 art) door A's face marker is `Entrance_4` and door
+B's is `Entrance_6` — the face marker's slot within its five is arbitrary.
 
 Indices need not restart at multiples of five — they are sorted then chunked. If the total entrance
 count is **not** a multiple of five, the leftover markers fall back to legacy single-point discs

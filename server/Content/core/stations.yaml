@@ -2,17 +2,18 @@
 # explicit runtime extension. The faction's initial station MUST carry the 'restart' ability
 # (CoreValidator). Reproduces stock.yaml's Garrison.
 #
-# Hardpoints are GLB-authoritative (HardpointGeometryMerge): model-name binds base.glb, whose
-# HP_DockingEntrance_* / HP_DockingExit_0 / HP_Light_* nodes supply the docking discs + nav lights
-# in the exact frame World.LoadBase already uses for the server dock geometry — so the streamed
-# client markers and the server dock discs come from one source. No YAML hardpoints authored: every
-# mesh node appends (by kind byte, then index) → 12 lights, 5 docking entrances, 1 docking exit = 18.
+# Hardpoints are GLB-authoritative (HardpointGeometryMerge): model-name binds the base GLB, whose
+# HP_DockingEntrance_* / HP_DockingExit_* / HP_Light_* / HP_Turret_* nodes supply the docking doors
+# + nav lights in the exact frame World.LoadBase already uses for the server dock geometry — so the
+# streamed client markers and the server dock discs come from one source. No YAML hardpoints
+# authored: every mesh node appends (by kind byte, then index) → garrison.glb carries 44 lights,
+# 10 docking entrances (2 doors), 2 docking exits, 4 turrets = 60.
 stations:
   - id: garrison
     name: Garrison
     base-type-id: 0
     class: garrison
-    model-name: Outpost    # res://assets/bases/<model-name>.glb — supplies all hardpoints via merge
+    model-name: garrison   # res://assets/bases/<model-name>.glb — supplies all hardpoints via merge
     radius: 90
     max-armor: 2000
     # Fog-of-war vision: an unoccluded sphere the garrison contributes to its team from tick 0.

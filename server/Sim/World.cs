@@ -746,7 +746,7 @@ public sealed class World
     private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
     {
         var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
-        var model = SimAssets.TryLoad("bases/Outpost.glb", CollisionConfig.BaseModelRotation);
+        var model = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation);
         if (model is null)
             return (null, null, [], fallbackExits, default, default, []);
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);

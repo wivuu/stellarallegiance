@@ -20,11 +20,13 @@ PBR materials. Outputs land in `ship-gen/build/` (gitignored) with a `manifest.j
 each ship's parts, hardpoints, and sha256; the canonical scout/fighter/bomber/pod feed
 `ShipModelLoader` in the client.
 
-### `coacd-experiment/` — CoACD convex decomposition experiment
-Standalone exploration of [CoACD](https://github.com/SarahWeiii/CoACD) as an alternative to
-`collision-hull`'s box/spheroid fitting: decomposes a mesh GLB into true convex hull parts and
-renders a matplotlib preview. Not wired into any production pipeline. See
-[`coacd-experiment/README.md`](coacd-experiment/README.md) for findings.
+### `collision-hull/` — compound collision baker
+Generates and bakes compound `COL_` convex collision parts into any mesh GLB from its visual
+volume: voxel solid-fill → seal interior → carve dock corridors → marching cubes →
+[CoACD](https://github.com/SarahWeiii/CoACD) convex decomposition → strict visual-hull clamp,
+with hard containment/corridor/reachability validations and a deterministic (byte-identical
+re-bake) output. See [`collision-hull/README.md`](collision-hull/README.md) and the
+`base-collision` / `collision-hull-generator` skills.
 
 ## Load testing
 
