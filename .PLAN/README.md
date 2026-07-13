@@ -21,10 +21,8 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Switch convex hull generator from custom to V-HACD or https://github.com/SarahWeiii/CoACD
-- Unable to hit 'enter' to talk form the hangar screen - this should be available on ALL screens once on a game-server
 - When going to another sector, don't "fade out" the old rocks, they should never be visible in the new sector
 - F3 Selection should not exclude your own ship or any other friendly ships
-- All base meshes are rotated incorrectly in their design, so we have to correct their orientation in-code. Rotate it by +90 degrees around the **X-axis**.
 ---
 
 ## Content philosophy (the through-line)
