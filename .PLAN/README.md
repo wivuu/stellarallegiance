@@ -20,8 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- When going to another sector, don't "fade out" the old rocks, they should never be visible in the new sector
-- I dropped mines in 1 sector, navigated to another sector, and the mines were still there. We need to treat sectors as actually different places, not just remove things and add other things to the same "game board"
 - F3 Selection should not exclude your own ship or any other friendly ships
 ---
 

@@ -26,7 +26,12 @@ public static class Wire
     // v34: commander — MsgOrder=12 (client->server: u64 subjectShipId, u8 targetKind, u64 targetId,
     // u32 sector, 3x f32 pos); MsgChatRelay scope 2 = commander order directive (gold on the client);
     // MsgLobbyState tail appends i32 commander0 + i32 commander1 after selectedMap.
-    public const byte ProtocolVersion = 34;
+    // v35: MsgMinefields=13 frame gains a u16 anchor-sector header BEFORE the u8 count
+    // ([13][u16 anchorSector][u8 count] + count x 41-B records). Per-record sector is unchanged. The
+    // header lets the client prune stale fields even from an empty (count==0) frame, and the server now
+    // also emits a frame whenever a client's anchor sector changes (warp) so mines never leak across
+    // sectors. See server/Net/ClientHub.BuildMinefieldsFor + client GameNetClient.ApplyMinefields.
+    public const byte ProtocolVersion = 35;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

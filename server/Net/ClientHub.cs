@@ -126,6 +126,14 @@ public sealed class ClientHub
             RevealRockCur,
             RevealAlephCur,
             RevealSectorCur;
+
+        // The anchor sector the client's last MsgMinefields frame was built for (uint.MaxValue = never
+        // sent). Minefields only ever stream for the client's own anchor sector, so when this diverges
+        // from AnchorSector the client is looking at a different sector's fields (a warp) and must get a
+        // fresh frame — even on a plain, no-change tick. The sentinel makes the first AfterStep after
+        // Hello always send, so a fresh join gets its field set immediately instead of waiting up to a
+        // full coarse interval. Advanced only on a successful enqueue (the reveal-cursor convention).
+        public uint LastMinefieldAnchor = uint.MaxValue;
     }
 
     // Per-tick record scratch (sim thread only): every alive ship's quantized record is
@@ -1226,31 +1234,39 @@ public sealed class ClientHub
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
         byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
 
-        // Fog point-visibility precompute (F10): the enemy-visibility of a minefield or a chaff pop
-        // depends only on (target, team), NOT on the individual client — so compute it ONCE per team
-        // here instead of per client (and, for minefields, twice per field inside BuildMinefieldsFor's
-        // count+write passes). Only the two real teams have vision; a NoTeam client sees no enemy hazard
-        // (its team never keys these maps). Keyed by team → visible enemy field ids / chaff-spawn indices.
-        Dictionary<byte, HashSet<ulong>>? mineVisByTeam = null;
-        if (fog && sendMinefields)
+        // Fog point-visibility for minefields (F10): the enemy-visibility of a field depends only on
+        // (field, team), NOT the individual client — so compute it ONCE per team, then reuse for every
+        // client on that team (and for both the count + write passes inside BuildMinefieldsFor). Built
+        // LAZILY per team (cache dict, like baseFramesByTeam) rather than eagerly under sendMinefields:
+        // a minefields frame can now be triggered by a single client's anchor-sector change on a plain,
+        // no-global-change tick, and an eager "only when sendMinefields" precompute would hand that path
+        // a null set and silently drop revealed enemy fields. Only the two real teams have vision; a
+        // NoTeam client's team never keys the cache (MineVisFor returns null). Runs post-Step on the sim
+        // thread inside the sequential pre-pass, so the TeamVision reads/point-visibility stay safe.
+        Dictionary<byte, HashSet<ulong>>? mineVisCache = fog ? new() : null;
+        HashSet<ulong>? MineVisFor(byte team)
         {
+            if (!fog || team > 1)
+                return null;
+            if (mineVisCache!.TryGetValue(team, out var cached))
+                return cached;
             var fields = _sim.Minefields;
-            mineVisByTeam = new();
-            for (byte t = 0; t <= 1; t++)
-            {
-                // Radar detections (VisibleEnemyMines, swapped whole at the vision apply — quiescent
-                // here) seed the set; direct LOS then unions in. Radar gives at-range discovery of an
-                // armed field without line of sight; LOS still reveals immediately through a window.
-                var tv = _sim.VisionFor(t);
-                HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
-                    ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
-                for (int i = 0; i < fields.Count; i++)
-                    if (fields[i].Team != t && _sim.IsPointVisibleToTeam(t, fields[i].SectorId, fields[i].Center))
-                        (vis ??= new()).Add(fields[i].FieldId);
-                if (vis != null)
-                    mineVisByTeam[t] = vis;
-            }
+            // Radar detections (VisibleEnemyMines, swapped whole at the vision apply — quiescent here)
+            // seed the set; direct LOS then unions in. Radar gives at-range discovery of an armed field
+            // without line of sight; LOS still reveals immediately through a window.
+            var tv = _sim.VisionFor(team);
+            HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
+                ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
+            for (int i = 0; i < fields.Count; i++)
+                if (fields[i].Team != team && _sim.IsPointVisibleToTeam(team, fields[i].SectorId, fields[i].Center))
+                    (vis ??= new()).Add(fields[i].FieldId);
+            vis ??= new(); // cache an empty set so a second client on this team doesn't recompute
+            mineVisCache[team] = vis;
+            return vis;
         }
+
+        // Fog point-visibility for chaff pops (F10): same (target, team) precompute, still eager — a
+        // chaff pop is a one-shot event tied to this exact tick, not a per-client anchor query.
         Dictionary<byte, HashSet<int>>? chaffVisByTeam = null;
         if (fog && _sim.ChaffSpawnedThisStep.Count > 0)
         {
@@ -1453,13 +1469,18 @@ public sealed class ClientHub
                 client.Outbound.Writer.TryWrite(OutFrame.Whole(pf));
             }
 
-            // Minefield frame for this client's anchor sector (change + coarse keepalive). Always
-            // sent when flagged — an empty frame is how a removal propagates. Fog on: own-team fields
-            // always, enemy fields only while their anchor point is visible to this team.
-            if (sendMinefields)
-                client.Outbound.Writer.TryWrite(
+            // Minefield frame for this client's anchor sector (change + coarse keepalive + anchor-sector
+            // change). Always sent when flagged — an empty frame is how a removal propagates. A warp
+            // changes AnchorSector (refreshed in the pre-pass above) without a global minefield change,
+            // so trigger on that too or the new sector's fields never stream in (and the old sector's
+            // never prune). Fog on: own-team fields always, enemy fields only while their anchor point is
+            // visible to this team. Advance LastMinefieldAnchor only on a successful enqueue.
+            bool wantMinefields = sendMinefields || client.AnchorSector != client.LastMinefieldAnchor;
+            if (wantMinefields
+                && client.Outbound.Writer.TryWrite(
                     OutFrame.Whole(BuildMinefieldsFor(
-                        client.AnchorSector, client.Team, mineVisByTeam is null ? null : mineVisByTeam.GetValueOrDefault(client.Team))));
+                        client.AnchorSector, client.Team, MineVisFor(client.Team)))))
+                client.LastMinefieldAnchor = client.AnchorSector;
 
             // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
             // discovered-only frames, built once per team (lazily) — a NoTeam spectator's null vision
@@ -1678,12 +1699,13 @@ public sealed class ClientHub
         return buf;
     }
 
-    // Build the MsgMinefields frame for one anchor sector: [13][u8 count] + count x 41-B records.
-    // Always returns a frame (an empty one when the sector has no fields) so a removal propagates.
-    // Fog on: own-team fields always stream; an enemy field streams only while its anchor (center)
-    // point is visible to `team` — hidden minefields are the feature (collisions stay server-side).
-    // `enemyVisible` (fog on) is the precomputed set of enemy field ids visible to `team` this tick
-    // (F10) — reused for both the count and write passes instead of recomputing point-visibility.
+    // Build the MsgMinefields frame for one anchor sector: [13][u16 anchorSector][u8 count] + count x
+    // 41-B records (v35). Always returns a frame (an empty one when the sector has no fields) so a
+    // removal propagates; the u16 header names the sector even for an empty frame so the client can
+    // prune stale rows on an anchor change. Fog on: own-team fields always stream; an enemy field
+    // streams only while its anchor (center) point is visible to `team` — hidden minefields are the
+    // feature (collisions stay server-side). `enemyVisible` (fog on) is the precomputed set of enemy
+    // field ids visible to `team` this tick (F10) — reused for both the count and write passes.
     private byte[] BuildMinefieldsFor(uint sector, byte team, HashSet<ulong>? enemyVisible)
     {
         var fields = _sim.Minefields;
@@ -1695,10 +1717,11 @@ public sealed class ClientHub
         for (int i = 0; i < fields.Count; i++)
             if (fields[i].SectorId == sector && Visible(fields[i]))
                 cnt++;
-        byte[] buf = new byte[2 + cnt * Protocol.MinefieldRecordSize];
+        byte[] buf = new byte[4 + cnt * Protocol.MinefieldRecordSize];
         buf[0] = Protocol.MsgMinefields;
-        buf[1] = (byte)Math.Min(cnt, 255);
-        int dst = 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), (ushort)sector);
+        buf[3] = (byte)Math.Min(cnt, 255);
+        int dst = 4;
         for (int i = 0; i < fields.Count; i++)
             if (fields[i].SectorId == sector && Visible(fields[i]))
             {

@@ -40,7 +40,8 @@ public static class Protocol
     public const int MissileRecordSize = 35;
 
     // Fixed serialized size of one minefield record (see WriteMinefield). The hub assembles a
-    // MsgMinefields frame as [13][u8 count] + count x MinefieldRecordSize.
+    // MsgMinefields frame as [13][u16 anchorSector][u8 count] + count x MinefieldRecordSize (v35 —
+    // the u16 header lets the client prune stale fields from an empty frame and identify the anchor).
     public const int MinefieldRecordSize = 41;
 
     // Fixed serialized size of one MsgContacts ghost record (see BuildContacts). Layout:
@@ -85,7 +86,7 @@ public static class Protocol
     public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
-    public const byte MsgMinefields = 13; // u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change + coarse keepalive)
+    public const byte MsgMinefields = 13; // u16 anchorSector, u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change, coarse keepalive, or anchor-sector change)
     public const byte MsgMineGone = 14; // u64 fieldId, u8 mineIndex, u8 reason, u16 sector, 3x i16 pos — per-mine pop FX
     public const byte MsgChaff = 15; // u64 id, u8 team, u16 sector, 3x i16 pos, 3x f16 vel, u32 weaponId — one-shot chaff spawn broadcast
     // Fog of war (WP3), per-team. MsgReveal streams newly-scouted statics (same record encodings as

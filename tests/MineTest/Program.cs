@@ -28,9 +28,18 @@
 //      timelines, and ship-health timelines. Plus: MinefieldLayout.Positions is a pure function.
 
 using System.Linq;
+using System.Text;
 using SimServer.Content;
+using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+
+// Coarse/mid cadences are read into ClientHub's static readonly fields on first access; pin them to the
+// stock defaults up front so the hub-level tests below can reason about "coarse vs non-coarse" ticks
+// deterministically regardless of the ambient environment.
+Environment.SetEnvironmentVariable("SIM_COARSE_EVERY", "10");
+Environment.SetEnvironmentVariable("SIM_MID_EVERY", "3");
+const int CoarseEvery = 10;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -432,5 +441,268 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     Check(pure, "MinefieldLayout.Positions is pure (same seed → identical array twice)", "MinefieldLayout.Positions returned different arrays for the same seed");
 }
 
+// ================================================================================================
+// 7. Hub-level: MsgMinefields frame header + anchor-change trigger (proto 35). Drives the REAL
+//    ClientHub over an in-memory transport (FakeHubTransport, copied from FogTest #18/#19): joins via
+//    MsgHello and pumps the real sim-loop pair (sim.Step() + hub.AfterStep()). Guards the +2 header
+//    shift, the warp anchor-change frame, the uint.MaxValue sentinel, and the lazy fog mineVisByTeam.
+// ================================================================================================
+
+// Boot a sim wired the same way the real server drives it (PIGs/miners off, vision synchronous).
+Simulation BootHubSim(ulong seed, bool fog)
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    return new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = fog, VisionSynchronous = true };
+}
+
+ClientHub MakeHub(Simulation sim, bool autoStart) =>
+    new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(autoStart),
+        "Test Arena", System.Array.Empty<MapCatalogEntry>());
+
+// Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
+void FeedHello(FakeHubTransport ft)
+{
+    var name = Encoding.UTF8.GetBytes("mine");
+    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
+    hello.AddRange(name);
+    hello.Add(0);
+    ft.Feed(hello.ToArray());
+}
+
+// The latest MsgMinefields frame the server sent this client (FIFO enumeration of the transport).
+byte[]? LastMinefields(FakeHubTransport ft) =>
+    ft.Sent.Where(f => f.Length > 0 && f[0] == Protocol.MsgMinefields).LastOrDefault();
+
+// AfterStep enqueues frames to the client's channel; the async SendLoop flushes them to the transport
+// a moment later. Poll (bounded) for the frame the measured AfterStep produced instead of racing it.
+byte[]? WaitMinefields(FakeHubTransport ft)
+{
+    var deadline = DateTime.UtcNow.AddSeconds(2);
+    while (DateTime.UtcNow < deadline)
+    {
+        var f = LastMinefields(ft);
+        if (f is not null)
+            return f;
+        System.Threading.Thread.Sleep(5);
+    }
+    return null;
+}
+
+// v35 frame header: [13][u16 anchorSector][u8 count] + count x 41-B records.
+(ushort sector, int count) MineHeader(byte[] f) => (BitConverter.ToUInt16(f, 1), f[3]);
+
+// Does the frame carry `id`? Records start at byte 4; fieldId is the record's first u64.
+bool MineFrameHas(byte[] f, ulong id)
+{
+    int count = f[3];
+    for (int i = 0; i < count; i++)
+        if (BitConverter.ToUInt64(f, 4 + i * Protocol.MinefieldRecordSize) == id)
+            return true;
+    return false;
+}
+
+// The anchor sector the server computes for a shipless client on `team` (its garrison, else default) —
+// mirrors ClientHub's AfterStep pre-pass so the sentinel test can predict the header.
+uint ExpectedAnchor(Simulation sim, byte team)
+{
+    foreach (var b in sim.World.Bases)
+        if (b.Team == team)
+            return b.SectorId;
+    return sim.World.DefaultSector;
+}
+
+// ---- 7a/7b. Deploy in sector A → header-A count-1 frame; then warp to B → immediate header-B count-0 ----
+{
+    var sim = BootHubSim(701, fog: false);
+    var hub = MakeHub(sim, autoStart: true);
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    var ft = new FakeHubTransport();
+    var cts = new System.Threading.CancellationTokenSource();
+    var conn = hub.HandleConnection(ft, cts.Token);
+
+    FeedHello(ft);
+    System.Threading.Thread.Sleep(50);
+    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    System.Threading.Thread.Sleep(50);
+
+    void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
+    Pump(20); // matchmaker auto-starts the match
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber });
+    System.Threading.Thread.Sleep(50);
+    Pump(5); // let the spawn resolve into a controlled ship
+
+    var layer = sim.Ships.First(s => s.OwnerClientId == 1);
+    uint sectorA = layer.SectorId;
+
+    // Drop one enemy-free field in sector A by driving the ship's dispenser directly (bypass the client
+    // input path — the deploy sim itself is covered by tests 1-6; here we exercise the FRAME).
+    var mineW = sim.Content.Weapons.First(w => w.WeaponId == 7);
+    layer.MineAmmo = 1;
+    layer.MineWeaponId = mineW.WeaponId;
+    layer.HeldInput = new ShipInputState { DropMine = true };
+    sim.Step();
+    layer.HeldInput = new ShipInputState();
+    Check(sim.Minefields.Count == 1, "hub: one field deployed in sector A (pre-condition)", $"expected 1 field, got {sim.Minefields.Count}");
+    ulong fieldId = sim.Minefields[0].FieldId;
+
+    ft.Sent.Clear();
+    hub.AfterStep(); // MinefieldsChangedThisStep → a frame goes out
+    var f1 = WaitMinefields(ft);
+    bool okHeader = f1 is not null
+        && MineHeader(f1).sector == (ushort)sectorA
+        && MineHeader(f1).count == 1
+        && f1.Length == 4 + Protocol.MinefieldRecordSize
+        && BitConverter.ToUInt64(f1, 4) == fieldId          // record fieldId (guards the +2 header shift)
+        && BitConverter.ToUInt16(f1, 4 + 13) == (ushort)sectorA; // record's own sector field
+    Check(okHeader,
+        $"hub: deploy in sector A yields a MsgMinefields frame with u16 header sector {sectorA}, count 1, correct record offsets",
+        $"the deploy frame header/offsets are wrong (frame={(f1 is null ? "none" : $"sector {MineHeader(f1).sector}, count {MineHeader(f1).count}, len {f1.Length}")})");
+
+    // ---- warp to sector B on a NON-COARSE, no-mine-change tick → an immediate count-0 frame for B ----
+    uint sectorB = EmptySector; // distinct from the garrison sector A; the field stays behind in A
+    // Advance (ship still in A) until the NEXT step lands on a non-coarse tick, so the frame below is
+    // emitted PURELY by the anchor-change trigger — not the coarse keepalive.
+    while ((sim.Tick + 1) % CoarseEvery == 0) { sim.Step(); hub.AfterStep(); }
+    ft.Sent.Clear();
+    layer.SectorId = sectorB;
+    sim.Step();
+    hub.AfterStep();
+    var f2 = WaitMinefields(ft);
+    Check(sim.Tick % CoarseEvery != 0, "hub: the warp frame was measured on a non-coarse tick (premise)", $"the measured tick {sim.Tick} was coarse — anchor-change trigger not isolated");
+    Check(f2 is not null && MineHeader(f2).sector == (ushort)sectorB && MineHeader(f2).count == 0,
+        $"hub: an anchor-sector change (warp A→B) emits an immediate empty frame for sector B (count 0)",
+        $"the warp did not trigger a fresh minefields frame for B (frame={(f2 is null ? "none" : $"sector {MineHeader(f2).sector}, count {MineHeader(f2).count}")})");
+
+    cts.Cancel();
+    try { conn.Wait(2000); } catch { /* teardown */ }
+}
+
+// ---- 7c. Sentinel: the FIRST AfterStep after Hello sends a frame even on a plain tick (no coarse wait) ----
+{
+    var sim = BootHubSim(703, fog: false);
+    var hub = MakeHub(sim, autoStart: false); // stay in lobby (no ship) so sendMinefields is false on a plain tick
+    var ft = new FakeHubTransport();
+    var cts = new System.Threading.CancellationTokenSource();
+    var conn = hub.HandleConnection(ft, cts.Token);
+
+    FeedHello(ft);
+    System.Threading.Thread.Sleep(50);
+    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    System.Threading.Thread.Sleep(50);
+
+    // The client is registered but NO AfterStep has run yet (LastMinefieldAnchor == uint.MaxValue).
+    // Step the sim (WITHOUT AfterStep) to a non-coarse tick, then run the FIRST AfterStep there: the
+    // sentinel must force a frame even though sendMinefields is false on this plain lobby tick.
+    while (sim.Tick % CoarseEvery == 0) sim.Step();
+    ft.Sent.Clear();
+    hub.AfterStep();
+    var f = WaitMinefields(ft);
+    uint expected = ExpectedAnchor(sim, 0);
+    Check(sim.Tick % CoarseEvery != 0 && f is not null && MineHeader(f).sector == (ushort)expected && MineHeader(f).count == 0,
+        $"hub: the first AfterStep after Hello sends a frame via the uint.MaxValue sentinel (garrison anchor {expected}, no coarse wait)",
+        $"the fresh join got no immediate minefields frame (tick {sim.Tick}, frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")}, expected sector {expected})");
+
+    cts.Cancel();
+    try { conn.Wait(2000); } catch { /* teardown */ }
+}
+
+// ---- 7d. Fog on: an LOS-revealed enemy field still appears in an ANCHOR-CHANGE frame (lazy mineVisByTeam) ----
+{
+    var sim = BootHubSim(704, fog: true);
+    var hub = MakeHub(sim, autoStart: true);
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    var ft = new FakeHubTransport();
+    var cts = new System.Threading.CancellationTokenSource();
+    var conn = hub.HandleConnection(ft, cts.Token);
+
+    FeedHello(ft);
+    System.Threading.Thread.Sleep(50);
+    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    System.Threading.Thread.Sleep(50);
+
+    void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
+    Pump(20); // auto-start
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout });
+    System.Threading.Thread.Sleep(50);
+    Pump(5);
+    var viewer = sim.Ships.First(s => s.OwnerClientId == 1);
+
+    // Lay an ENEMY (team 1) field in sector B via a bare sim ship (not a hub client).
+    uint sectorB = EmptySector;
+    sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassBomber);
+    sim.Step(); hub.AfterStep();
+    var enemyLayer = sim.Ships.First(s => s.OwnerClientId == 2);
+    var mineW = sim.Content.Weapons.First(w => w.WeaponId == 7);
+    enemyLayer.SectorId = sectorB;
+    enemyLayer.State.Pos = new Vec3(0f, 0f, 0f);
+    enemyLayer.State.Vel = new Vec3(0f, 0f, 0f);
+    enemyLayer.MineAmmo = 1;
+    enemyLayer.MineWeaponId = mineW.WeaponId;
+    enemyLayer.HeldInput = new ShipInputState { DropMine = true };
+    sim.Step(); hub.AfterStep();
+    enemyLayer.HeldInput = new ShipInputState();
+    var enemyField = sim.Minefields.First(mf => mf.Team == 1);
+    ulong enemyFieldId = enemyField.FieldId;
+    Vec3 fieldCenter = enemyField.Center;
+    // Push the enemy layer far away so it can't be what grants the viewer its vision.
+    enemyLayer.SectorId = EmptySector + 5;
+    enemyLayer.State.Pos = new Vec3(50000f, 0f, 0f);
+
+    // Warp the viewer onto the field in sector B on a non-coarse, no-mine-change tick: the frame is
+    // emitted only by the anchor-change trigger, and its enemy-visibility comes from the LAZILY-computed
+    // mineVisByTeam (IsPointVisibleToTeam reads the viewer's live pos → LOS at distance 0).
+    while ((sim.Tick + 1) % CoarseEvery == 0) { sim.Step(); hub.AfterStep(); }
+    ft.Sent.Clear();
+    viewer.SectorId = sectorB;
+    viewer.State.Pos = fieldCenter;
+    viewer.State.Vel = new Vec3(0f, 0f, 0f);
+    sim.Step();
+    hub.AfterStep();
+    var f = WaitMinefields(ft);
+    Check(sim.Tick % CoarseEvery != 0, "hub (fog): LOS frame measured on a non-coarse tick (premise)", $"the measured tick {sim.Tick} was coarse");
+    Check(f is not null && MineHeader(f).sector == (ushort)sectorB && MineFrameHas(f, enemyFieldId),
+        "hub (fog): an LOS-revealed enemy field appears in an anchor-change frame (lazy mineVisByTeam holds)",
+        $"the anchor-change frame dropped the LOS-visible enemy field (frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")})");
+
+    cts.Cancel();
+    try { conn.Wait(2000); } catch { /* teardown */ }
+}
+
 Console.WriteLine(failures == 0 ? "\nALL MINE TESTS PASSED" : $"\n{failures} MINE TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
+
+// In-memory IClientTransport for the hub-level tests: feed client->server frames, capture server->client
+// (copied verbatim from tests/FogTest/Program.cs — the shared hub-harness pattern).
+sealed class FakeHubTransport : SimServer.Net.IClientTransport
+{
+    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
+    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
+
+    public void Feed(byte[] frame) => _in.Add(frame);
+
+    public async ValueTask<int> ReceiveAsync(byte[] buffer, System.Threading.CancellationToken ct)
+    {
+        try
+        {
+            byte[] f = await Task.Run(() => _in.Take(ct), ct);
+            Array.Copy(f, buffer, f.Length);
+            return f.Length;
+        }
+        catch (OperationCanceledException)
+        {
+            return -1; // transport closed
+        }
+    }
+
+    public ValueTask SendAsync(ReadOnlyMemory<byte> data, System.Threading.CancellationToken ct)
+    {
+        Sent.Enqueue(data.ToArray());
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask CloseAsync(string reason, System.Threading.CancellationToken ct) => ValueTask.CompletedTask;
+}

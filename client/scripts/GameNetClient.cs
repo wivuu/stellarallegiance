@@ -958,15 +958,18 @@ public partial class GameNetClient : Node
         _world.NetProbeGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
-    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). The full
-    // set for the sector is (re)sent on change + coarse keepalive, so a field that stops appearing has
-    // been removed — reconcile the cache + hand each field to the renderer to regenerate its cloud.
+    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). Minefields
+    // only ever stream for the client's OWN anchor sector, so every frame is the authoritative FULL set
+    // for that sector: it is (re)sent on change, coarse keepalive, AND whenever the anchor sector changes
+    // (a warp). The v35 u16 header names the frame's sector even when it carries zero records, so an
+    // empty frame from a warp still identifies which sector to purge. Any cached field the frame no
+    // longer lists has been removed (expired, cleared, or left behind in the old sector) — drop it and
+    // tell the renderer to free its cloud.
     private void ApplyMinefields(BinaryReader r)
     {
+        r.ReadUInt16(); // v35 anchor-sector header — read to advance the stream; prune-all needs no per-frame sector
         byte count = r.ReadByte();
         var seen = new HashSet<ulong>();
-        uint frameSector = 0;
-        bool haveSector = false;
         for (int i = 0; i < count; i++)
         {
             ulong fieldId = r.ReadUInt64();
@@ -997,25 +1000,24 @@ public partial class GameNetClient : Node
             };
             _minefieldRows[fieldId] = row;
             seen.Add(fieldId);
-            frameSector = sector;
-            haveSector = true;
             _world.NetUpsertMinefield(row);
         }
 
-        // Reconcile the cache: any cached field in this frame's sector the frame no longer lists has
-        // expired/been cleared — drop it from the cache. (When the frame is empty we can't know its
-        // sector, so this only prunes when the frame carried at least one field.) The renderer's
-        // MinefieldViews frees its own nodes on expiry/reconcile — no separate removal delegate.
-        if (haveSector)
-        {
-            List<ulong>? gone = null;
-            foreach (var kv in _minefieldRows)
-                if (kv.Value.SectorId == frameSector && !seen.Contains(kv.Key))
-                    (gone ??= new()).Add(kv.Key);
-            if (gone is not null)
-                foreach (var id in gone)
-                    _minefieldRows.Remove(id);
-        }
+        // Reconcile the cache against the authoritative full set: any cached field the frame no longer
+        // lists has been removed (expired, cleared, or is in a sector we just warped out of). Drop it and
+        // tell the renderer to free its cloud (NetMinefieldGone), so mines never linger across a sector
+        // change. An empty frame purges everything not currently visible — its u16 header made the frame
+        // self-describing even at count 0.
+        List<ulong>? gone = null;
+        foreach (var kv in _minefieldRows)
+            if (!seen.Contains(kv.Key))
+                (gone ??= new()).Add(kv.Key);
+        if (gone is not null)
+            foreach (var id in gone)
+            {
+                _minefieldRows.Remove(id);
+                _world.NetMinefieldGone(id);
+            }
     }
 
     // A single mine popped (mirrors Protocol.BuildMineGone): reconcile the field's aliveMask and let

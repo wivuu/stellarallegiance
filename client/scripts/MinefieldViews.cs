@@ -42,6 +42,7 @@ public partial class MinefieldViews : Node3D
     {
         public MultiMeshInstance3D Node = null!;
         public byte Team;
+        public int Sector; // the field's sector; _Process gates Node.Visible on it matching the view sector
         public float SecondsLeft; // TTL to self-free at ExpireAtTick (refreshed on each Upsert)
 
         // Per-instance final transforms (origin + rotation×scale basis), retained so _Process can
@@ -67,6 +68,7 @@ public partial class MinefieldViews : Node3D
         {
             // Live field: just refresh the self-free countdown (fields stream on a coarse keepalive).
             existing.SecondsLeft = row.ExpireAtTick > serverTick ? (row.ExpireAtTick - serverTick) * FlightModel.Dt : 0f;
+            existing.Sector = (int)row.SectorId; // stays constant for a field's life, but keep it authoritative
             return;
         }
 
@@ -83,12 +85,17 @@ public partial class MinefieldViews : Node3D
         {
             Node = node,
             Team = row.Team,
+            Sector = (int)row.SectorId,
             SecondsLeft = row.ExpireAtTick > serverTick ? (row.ExpireAtTick - serverTick) * FlightModel.Dt : 0f,
             FinalOrigins = finalOrigins,
             Bases = bases,
             DeployElapsed = armed ? -1f : 0f, // only a freshly-laid (un-armed) field animates open
         };
         _fields[row.FieldId] = fv;
+
+        // Sector-gate from the first frame: a field laid in another sector (or one we've warped out of)
+        // must never flash on screen for the frame before _Process runs its per-frame visibility pass.
+        node.Visible = SectorVisible(fv.Sector);
 
         // Freshly laid: collapse every instance to the center so _Process expands it out to the layout.
         if (!armed)
@@ -147,8 +154,13 @@ public partial class MinefieldViews : Node3D
 
     // A hit-FX ping (reason 2): a ship is taking damage inside this field. Play a small explosion +
     // pop at the reported world position. Depletes nothing — the meshes are cosmetic and persistent.
-    public void MineGone(ulong fieldId, byte mineIndex, byte reason, Vector3 pos)
+    // Sector-gated: a ping for a field in a sector we're not viewing plays no blast/SFX (a warp must
+    // not carry a phantom explosion at the old sector's coordinates into the new view).
+    public void MineGone(ulong fieldId, byte mineIndex, byte reason, uint sector, Vector3 pos)
     {
+        if (!SectorVisible((int)sector))
+            return;
+
         byte team = _fields.TryGetValue(fieldId, out var fv) ? fv.Team : (byte)0;
 
         // Small blast (well under the field's damage radius) + a quiet pop, tinted to the owning team.
@@ -176,10 +188,15 @@ public partial class MinefieldViews : Node3D
                 fv.DeployElapsed = -1f; // settled at finals (k==1 wrote them above)
         }
 
+        // TTL countdown + per-frame sector gating. Resolve the view sector ONCE per frame (not per
+        // field). TTL keeps ticking regardless of visibility; only Node.Visible is sector-gated, so a
+        // field laid in another sector (or one we've warped out of) is instantly hidden without popping.
         // Iterate over a snapshot so a self-free during expiry doesn't mutate mid-enumeration.
+        int viewSector = SectorOf();
         List<ulong>? expired = null;
         foreach (var (id, fv) in _fields)
         {
+            fv.Node.Visible = viewSector < 0 || viewSector == fv.Sector;
             fv.SecondsLeft -= (float)delta;
             if (fv.SecondsLeft <= 0f)
                 (expired ??= new()).Add(id);
@@ -197,7 +214,8 @@ public partial class MinefieldViews : Node3D
     {
         _visibleScratch.Clear();
         foreach (var fv in _fields.Values)
-            _visibleScratch.Add((fv.Node.Position, fv.Team));
+            if (SectorVisible(fv.Sector)) // skip fields in another sector so HUD glyphs don't leak
+                _visibleScratch.Add((fv.Node.Position, fv.Team));
         return _visibleScratch;
     }
 
@@ -208,6 +226,22 @@ public partial class MinefieldViews : Node3D
             fv.Node.QueueFree();
         _fields.Clear();
     }
+
+    // Free one field by id (client cache reconcile: GameNetClient.ApplyMinefields drops a field the
+    // authoritative frame no longer lists — expired, cleared, or left behind in a sector we warped out
+    // of — and forwards it here so its cloud is torn down at once). No-op on an unknown id.
+    public void Remove(ulong fieldId)
+    {
+        if (_fields.TryGetValue(fieldId, out var fv))
+            FreeField(fieldId, fv);
+    }
+
+    // The sector the local view is showing (F3 overview / warp aware), read from the parent
+    // WorldRenderer. Falls back to "show everything" (-1) if the parent isn't resolvable yet. Mirrors
+    // ChaffFx's identical gate — MinefieldViews is likewise a direct child of WorldRenderer.
+    private int SectorOf() => GetParentOrNull<WorldRenderer>() is { } w ? (int)w.ViewSector : -1;
+
+    private bool SectorVisible(int sector) => SectorOf() is var v && (v < 0 || v == sector);
 
     private void FreeField(ulong fieldId, FieldView fv)
     {
