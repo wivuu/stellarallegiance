@@ -35,6 +35,10 @@ public partial class Hud : CanvasLayer
     // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
     private ShipLoadout? _hangar;
 
+    // The floating chat overlay (created in _Ready). Kept as a field so OpenHangar can raise it
+    // above the full-screen hangar, which is added as a later Hud child and would otherwise cover it.
+    private Chat? _chat;
+
     // Deploy intent, raised by the Lobby's LAUNCH. The mandatory ship-select hangar only opens
     // once the pilot asks to deploy — until then the Lobby overlay owns the not-flying screen
     // (even mid-match), so a joiner can pick a team and read the roster first. Sticky through the
@@ -152,9 +156,9 @@ public partial class Hud : CanvasLayer
 
         // Chat overlay (added after the lobby so its log/input draw above the lobby
         // backdrop). Owns Enter-to-type, the team/all channel, and dev commands.
-        var chat = new Chat { Name = "Chat" };
-        AddChild(chat);
-        chat.Init(_cm, _world);
+        _chat = new Chat { Name = "Chat" };
+        AddChild(_chat);
+        _chat.Init(_cm, _world);
 
         // Connecting modal on its own high CanvasLayer so it draws above the server
         // browser (ServerInputLayer, layer 100) — the browser stays visible underneath
@@ -243,6 +247,9 @@ public partial class Hud : CanvasLayer
         _hangar = new ShipLoadout { OpenedForSpawn = forSpawn };
         _hangar.Init(_defs, _ship, _world, _net);
         AddChild(_hangar);
+        // The hangar is a later Hud sibling than Chat, so it draws on top by default. Raise the
+        // chat overlay back to the front so Enter-to-talk stays visible/usable over the hangar.
+        _chat?.MoveToFront();
     }
 
     // The Lobby's LAUNCH expresses intent to deploy. While a match is Active this promotes the

@@ -129,11 +129,15 @@ public partial class Chat : Control
     // The Game Lobby overlay owns the screen — and its own comms panel — whenever we're
     // connected and not flying, so this floating overlay steps aside then (it stays the in-flight
     // chat unchanged).
-    // ...except while the F3 sector map is open pre-launch: the Lobby hides itself to uncover the
-    // overview camera (see Lobby._Process's `!SectorOverview.Active` show-gate), taking its comms
-    // panel with it. This floating overlay then takes over the comms role, mirroring in-flight F3.
+    // ...except when a full-screen overlay covers/hides the Lobby (and its comms panel), leaving no
+    // live chat handler underneath. Then this floating overlay takes over the comms role so Enter-
+    // to-talk stays available on every connected screen:
+    //   - F3 sector map pre-launch: the Lobby hides itself to uncover the overview camera (see
+    //     Lobby._Process's `!SectorOverview.Active` show-gate).
+    //   - the hangar / ship-loadout: it covers the Lobby (hidden when the spawn hangar is committed,
+    //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
     private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null
-        && !SectorOverview.Active;
+        && !SectorOverview.Active && !ShipLoadout.Active;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -273,7 +277,8 @@ public partial class Chat : Control
 
     public override void _Process(double delta)
     {
-        // Hidden while the Game Lobby is up (it hosts its own comms panel).
+        // Hidden while the Game Lobby is up (it hosts its own comms panel); shown when a full-screen
+        // overlay hides the Lobby (F3 map / hangar), so this floating chat carries comms there.
         if (LobbyOwnsScreen)
         {
             if (_inputRow.Visible)
