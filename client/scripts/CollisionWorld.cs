@@ -252,7 +252,10 @@ public sealed class CollisionWorld
     {
         if (!_baseLoaded)
         {
-            _baseModel = LoadGlb("res://assets/bases/base.glb");
+            // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
+            // bakes (World.LoadBase) and the visual renders (BaseModelLoader), so the predicted hull +
+            // docking faces stay bit-identical to the server's and aligned with the rendered base.
+            _baseModel = LoadGlb("res://assets/bases/base.glb", CollisionConfig.BaseModelRotation);
             _baseLoaded = true;
         }
         return _baseModel;
@@ -262,7 +265,7 @@ public sealed class CollisionWorld
     // from disk). Returns null if the file can't be read so the caller falls back to a sphere.
     // ponytail: needs the raw .glb included in exported builds (export filter); editor reads it from
     // disk fine. If a build ships without it, collision degrades to spheres, not a crash.
-    private static SimModel? LoadGlb(string resPath)
+    private static SimModel? LoadGlb(string resPath, Quat pre = default)
     {
         byte[] bytes = FileAccess.GetFileAsBytes(resPath);
         if (bytes is null || bytes.Length == 0)
@@ -272,7 +275,7 @@ public sealed class CollisionWorld
         }
         try
         {
-            return SimModel.FromGlb(bytes, resPath);
+            return SimModel.FromGlb(bytes, resPath, pre);
         }
         catch (System.Exception e)
         {

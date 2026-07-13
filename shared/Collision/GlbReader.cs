@@ -48,10 +48,15 @@ public static class GlbReader
     private const uint ChunkBin = 0x004E4942; // "BIN\0"
 
     // Server path: read the .glb from disk and parse. The client uses Parse() directly with bytes
-    // it pulls from res:// via Godot FileAccess (same bytes → same hull).
-    public static GlbModel Read(string path) => Parse(File.ReadAllBytes(path), path);
+    // it pulls from res:// via Godot FileAccess (same bytes → same hull). `pre` is an optional rigid
+    // pre-rotation applied to every vertex + hardpoint (used to correct the base mesh's authored
+    // orientation — see CollisionConfig.BaseModelRotation); default (zero quat) is identity.
+    public static GlbModel Read(string path, Quat pre = default) => Parse(File.ReadAllBytes(path), path, pre);
 
-    public static GlbModel Parse(byte[] bytes, string label = "<glb>")
+    // `pre` rigidly pre-rotates the whole model about the mesh origin before hull/hardpoint extraction,
+    // so the caller gets a re-oriented model with its geometry AND hardpoints rotated together. The
+    // default (zero quat) seeds an exact identity, keeping un-rotated callers bit-for-bit unchanged.
+    public static GlbModel Parse(byte[] bytes, string label = "<glb>", Quat pre = default)
     {
         if (bytes.Length < 12 || BitConverter.ToUInt32(bytes, 0) != GlbMagic)
             throw new InvalidDataException($"{label}: not a GLB file");
@@ -95,9 +100,12 @@ public static class GlbReader
                 if (c >= 0 && c < nodeCount)
                     isChild[c] = true;
 
+        // Seed the roots with the pre-rotation (identity for the default zero quat, so un-rotated
+        // callers walk from a literal identity exactly as before — bit-for-bit stable hulls).
+        Mat4 rootXform = IsIdentity(pre) ? Mat4.Identity : Mat4.Trs(new Vec3(0f, 0f, 0f), pre, new Vec3(1f, 1f, 1f));
         for (int i = 0; i < nodeCount; i++)
             if (!isChild[i])
-                Walk(i, Mat4.Identity, nodes, meshes, accessors, views, bin, model, null);
+                Walk(i, rootXform, nodes, meshes, accessors, views, bin, model, null);
 
         return model;
     }
@@ -193,6 +201,11 @@ public static class GlbReader
             }
         }
     }
+
+    // A default (unpassed) Quat is the zero quat, and Quat.Identity is our explicit no-op — either
+    // means "no pre-rotation", so the root walk starts from a literal Mat4.Identity.
+    private static bool IsIdentity(Quat q) =>
+        q.X == 0f && q.Y == 0f && q.Z == 0f && (q.W == 0f || q.W == 1f);
 
     // ---- glTF node local transform ----
 

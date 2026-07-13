@@ -68,10 +68,12 @@ public sealed class SimModel
         return null;
     }
 
-    // Build a SimModel straight from GLB bytes (the client path: no disk cache).
-    public static SimModel FromGlb(byte[] glbBytes, string label = "<glb>")
+    // Build a SimModel straight from GLB bytes (the client path: no disk cache). `pre` is an optional
+    // rigid pre-rotation (e.g. CollisionConfig.BaseModelRotation to correct the base mesh's authored
+    // orientation) applied to the geometry AND hardpoints together; default is identity.
+    public static SimModel FromGlb(byte[] glbBytes, string label = "<glb>", Quat pre = default)
     {
-        var glb = GlbReader.Parse(glbBytes, label);
+        var glb = GlbReader.Parse(glbBytes, label, pre);
         return new SimModel(ConvexHull.Build(glb.Vertices), glb.Hardpoints, glb.CollisionParts);
     }
 

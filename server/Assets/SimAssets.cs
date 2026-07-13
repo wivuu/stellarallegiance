@@ -55,8 +55,10 @@ public static class SimAssets
     }
 
     // Load+cache the SimModel for an asset relative to the dir (e.g. "bases/base.glb"),
-    // or null if the dir/file is missing or the GLB fails to parse.
-    public static SimModel? TryLoad(string relPath)
+    // or null if the dir/file is missing or the GLB fails to parse. `pre` is an optional rigid
+    // pre-rotation baked into the model (bases pass CollisionConfig.BaseModelRotation to correct
+    // their authored orientation; ships/asteroids pass the default identity).
+    public static SimModel? TryLoad(string relPath, Quat pre = default)
     {
         string? dir = AssetsDir;
         if (dir is null)
@@ -66,7 +68,7 @@ public static class SimAssets
             return null;
         try
         {
-            return SimModelCache.Load(full, CacheDir);
+            return SimModelCache.Load(full, CacheDir, pre);
         }
         catch (Exception e)
         {
