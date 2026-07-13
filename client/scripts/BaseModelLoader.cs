@@ -152,7 +152,7 @@ public static class BaseModelLoader
     // so Build falls back to the procedural sphere.
     private static Node3D? LoadHull(float radius)
     {
-        Node3D? hull = GlbLoader.Load("res://assets/bases/base.glb");
+        Node3D? hull = GlbLoader.Load("res://assets/bases/Outpost.glb");
         if (hull == null)
             return null;
         GlbLoader.NormalizeLongestAxis(hull, radius * 2f);

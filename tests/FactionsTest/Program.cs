@@ -199,10 +199,10 @@ Check(
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");
 Check(
-    // RAW (pre-merge): the garrison authors NO hardpoints — base.glb supplies all 18 (docking
-    // entrances/exit + nav lights) via the server-side merge. It binds the GLB by model-name.
+    // RAW (pre-merge): the garrison authors NO hardpoints — Outpost.glb supplies them all (docking
+    // entrances/exits + nav lights + turrets) via the server-side merge. It binds the GLB by model-name.
     garrison.BaseTypeId == 0 && garrison.Radius == 90 && garrison.MaxArmor == 2000
-        && garrison.ModelName == "base" && garrison.Hardpoints.Count == 0,
+        && garrison.ModelName == "Outpost" && garrison.Hardpoints.Count == 0,
     "stock garrison carries base-type-id + radius/armor + model-name (hardpoints come from the GLB)",
     $"stock garrison wrong (id {garrison.BaseTypeId}, r {garrison.Radius}, hp {garrison.MaxArmor}, model {garrison.ModelName}, hardpoints {garrison.Hardpoints.Count})"
 );

@@ -13,14 +13,14 @@ public static class CollisionConfig
     public const float ShipRadius = 3f; // every ship is this sphere vs static geometry (matches server)
     public const float BaseRadius = 90f; // base sphere-collision fallback radius (no hull)
 
-    // Base meshes are authored with a +90° pitch error about their local X axis. Correct it uniformly
+    // Base meshes are authored with a -90° pitch error about their local X axis. Correct it uniformly
     // at EVERY consumer of the base GLB — the client's rendered hull (BaseModelLoader), the client's
     // prediction hull + the server sim's hull/docking (the shared GlbReader, via SimModel) — so the
     // visible superstructure, its convex collision shape, and its docking hardpoints all rotate as one
     // rigid body and stay aligned. This single angle is the source of truth: the Godot visual pitches
     // its node by it (Node3D.RotateX), and the collision reader seeds its GLB walk with the matching
     // quaternion below (rotating every vertex + hardpoint about the mesh origin).
-    public const float BaseModelPitchRadians = 1.5707963268f; // +90° about +X
+    public const float BaseModelPitchRadians = -1.5707963268f; // -90° about +X
 
     // The pitch correction as a shared-math quaternion for the collision reader. Deterministic
     // (MathDet sin/cos) so the client-prediction and server-sim hulls stay bit-identical.

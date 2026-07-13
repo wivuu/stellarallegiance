@@ -12,7 +12,7 @@ stations:
     name: Garrison
     base-type-id: 0
     class: garrison
-    model-name: base    # res://assets/bases/<model-name>.glb — supplies all hardpoints via merge
+    model-name: Outpost    # res://assets/bases/<model-name>.glb — supplies all hardpoints via merge
     radius: 90
     max-armor: 2000
     # Fog-of-war vision: an unoccluded sphere the garrison contributes to its team from tick 0.
