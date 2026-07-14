@@ -604,8 +604,23 @@ public partial class SectorOverview : Node3D
     // the wheel/gesture events before they reach us.
     public override void _Input(InputEvent @event)
     {
-        if (!Active || EscapeMenu.Active)
+        if (EscapeMenu.Active)
             return;
+
+        // Not in the F3 map: a right-click while FLYING with the cursor freed (Esc, but no escape
+        // menu) orders our OWN ship to whatever's clicked — the in-cockpit analog of the map's
+        // right-click. Own-ship only (autopilot); never the commander fan-out (that stays F3). RMB
+        // while the cursor is free is otherwise unused in flight, so there's no collision.
+        if (!Active)
+        {
+            if (FlightCommandContext
+                && @event is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } fmb)
+            {
+                HandleFlightRightClick(fmb.Position);
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
 
         switch (@event)
         {
@@ -798,7 +813,7 @@ public partial class SectorOverview : Node3D
             return;
         }
 
-        bool picked = TryPickEntity(point, out ulong encoded);
+        bool picked = TryPickEntity(_cam, point, out ulong encoded);
 
         // A right-click that lands on a ship already in the selection (our own or a selected
         // teammate) is a MOVE, not a target — it redirects the group to that spot. Without this,
@@ -904,6 +919,34 @@ public partial class SectorOverview : Node3D
         _shipController?.EngageAutopilot(); // no-op unless launched
     }
 
+    // Whether a flight right-click should command our own ship: launched, the cursor freed via Esc
+    // (but no escape menu — that's guarded at the call site), and no other overlay owning the cursor.
+    // The F3 map (!Active) and EscapeMenu are excluded by the _Input call site.
+    private bool FlightCommandContext =>
+        _world.LocalShip != null
+        && Input.MouseMode == Input.MouseModeEnum.Visible
+        && !Chat.Capturing
+        && !ShipLoadout.Active
+        && !SettingsDialog.Active
+        && !ZoomView.Active;
+
+    // In-cockpit right-click order (cursor freed, not in F3): send our OWN ship to whatever's under
+    // the cursor — a minimap sector node (cross-sector nav) or a picked 3D entity (fly-to). Projects
+    // the flight CHASE camera, not the overview cam. Empty-space clicks are ignored (no waypoint
+    // drop in flight); own ship is excluded as a target so we never autopilot toward ourselves.
+    private void HandleFlightRightClick(Vector2 point)
+    {
+        _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
+        if (_minimap != null && _minimap.TryClickSector(point, out uint sector))
+        {
+            OrderOwnShipToSector(sector); // NOT SwitchView — flight orders, doesn't retarget an F3 view
+            return;
+        }
+        ulong ownId = _world.LocalShip?.ShipId ?? 0;
+        if (TryPickEntity(_chaseCam, point, out ulong encoded) && encoded != ownId)
+            ApplyOwnShipRightClick(picked: true, encoded, point); // focus + engage autopilot
+    }
+
     // Box select: replace the selection with every friendly ship (INCLUDING our own) whose screen
     // position falls inside the drag rectangle (empty box = clear, matching click-away). The own
     // ship rides along as part of the group but is never an order subject (see IsLiveCommandable).
@@ -928,25 +971,25 @@ public partial class SectorOverview : Node3D
     // team — a friendly base is a valid dock destination), asteroids} in the viewed sector, by
     // screen distance from the click, within PickRadiusPx and in front of the camera. Returns the
     // FocusedId-encoded id (raw ship / BaseLockId / AsteroidFocusId).
-    private bool TryPickEntity(Vector2 point, out ulong encoded)
+    private bool TryPickEntity(Camera3D cam, Vector2 point, out ulong encoded)
     {
         encoded = 0;
         float bestD2 = PickRadiusPx * PickRadiusPx;
 
         foreach (var e in _world.FriendlyShips())
         {
-            if (_cam.IsPositionBehind(e.GlobalPosition))
+            if (cam.IsPositionBehind(e.GlobalPosition))
                 continue;
-            float d2 = (_cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
+            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
             if (d2 < bestD2)
             {
                 bestD2 = d2;
                 encoded = e.ShipId;
             }
         }
-        if (TryLocalShip(out ulong localId, out Vector3 localPos) && !_cam.IsPositionBehind(localPos))
+        if (TryLocalShip(out ulong localId, out Vector3 localPos) && !cam.IsPositionBehind(localPos))
         {
-            float d2 = (_cam.UnprojectPosition(localPos) - point).LengthSquared();
+            float d2 = (cam.UnprojectPosition(localPos) - point).LengthSquared();
             if (d2 < bestD2)
             {
                 bestD2 = d2;
@@ -955,9 +998,9 @@ public partial class SectorOverview : Node3D
         }
         foreach (var e in _world.EnemyShips())
         {
-            if (_cam.IsPositionBehind(e.GlobalPosition))
+            if (cam.IsPositionBehind(e.GlobalPosition))
                 continue;
-            float d2 = (_cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
+            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
             if (d2 < bestD2)
             {
                 bestD2 = d2;
@@ -966,9 +1009,9 @@ public partial class SectorOverview : Node3D
         }
         foreach (var (id, pos, _) in _world.AllVisibleBases())
         {
-            if (_cam.IsPositionBehind(pos))
+            if (cam.IsPositionBehind(pos))
                 continue;
-            float d2 = (_cam.UnprojectPosition(pos) - point).LengthSquared();
+            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
             if (d2 < bestD2)
             {
                 bestD2 = d2;
@@ -978,9 +1021,9 @@ public partial class SectorOverview : Node3D
         foreach (var (id, node) in _world.AsteroidsInView())
         {
             Vector3 pos = node.GlobalPosition;
-            if (_cam.IsPositionBehind(pos))
+            if (cam.IsPositionBehind(pos))
                 continue;
-            float d2 = (_cam.UnprojectPosition(pos) - point).LengthSquared();
+            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
             if (d2 < bestD2)
             {
                 bestD2 = d2;

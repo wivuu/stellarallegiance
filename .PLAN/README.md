@@ -21,7 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Sometimes server or client appears to get stuck allowing a launch on subsequent launches
-- Right click while flying and NOT being in F3 should order your ship to a clicked target. Also include navigation via minimap
+- Right click while flying and NOT being in F3, but after having hit esc to unlock the cursor, should order your ship to a clicked target. Also include navigation via minimap
 ---
 
 ## Content philosophy (the through-line)
