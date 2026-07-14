@@ -1,0 +1,46 @@
+# Developments — team research orders. Each is bought + built-over-time at a research-capable base
+# (Simulation.Research); on completion it grants its techs to the whole team. These are v1
+# UNLOCK-ONLY developments: tech-only: true, no `attributes:` block (no stat modifiers yet), so they
+# exist purely to flip techs on. `group:` clusters them in the client Research tab.
+#   dev-heavy-ordnance -> dev-cannon-tier-2 is a two-step chain (the tier-2 cannon doctrine requires
+#   the heavy-ordnance certification first).
+developments:
+  - id: dev-heavy-ordnance
+    name: Heavy Ordnance
+    description: "Certify the team for siege weapons and assault hulls."
+    group: WEAPONS
+    price: 400
+    build-time-seconds: 90
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [heavy-ordnance]
+
+  - id: dev-cannon-tier-2
+    name: Class-2 Cannons
+    description: "Uprate the cannon line to class-2 fire-control."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [heavy-ordnance]
+    granted-techs: [cannon-tier-2]
+
+  - id: dev-expansion
+    name: Expansion Doctrine
+    description: "Authorize building out beyond the home garrison."
+    group: EXPANSION
+    price: 500
+    build-time-seconds: 120
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [expansion-1]
+
+  - id: dev-tactical
+    name: Tactical Doctrine
+    description: "Open the tactical station and ordnance tree."
+    group: TACTICAL
+    price: 500
+    build-time-seconds: 120
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [tactical-1]

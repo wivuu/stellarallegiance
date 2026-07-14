@@ -62,6 +62,9 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2) is tech-gated behind heavy-ordnance at match start (StrategyTest's
+    // subject); this suite lays mines from bombers, so seed the tech so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("heavy-ordnance");
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
@@ -452,6 +455,9 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 Simulation BootHubSim(ulong seed, bool fog)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // Seed heavy-ordnance so the matchmaker's StartMatch unlocks the tech-gated bomber (class 2)
+    // this harness spawns (gating is StrategyTest's subject, not this one).
+    content.Start.BaseTechs.Add("heavy-ordnance");
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     return new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = fog, VisionSynchronous = true };
 }
@@ -530,7 +536,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
     Pump(20); // matchmaker auto-starts the match
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
     Pump(5); // let the spawn resolve into a controlled ship
 
@@ -626,7 +632,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
     Pump(20); // auto-start
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
     Pump(5);
     var viewer = sim.Ships.First(s => s.OwnerClientId == 1);

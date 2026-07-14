@@ -63,7 +63,7 @@ public static class Protocol
     public const byte MsgHello = 1;
     public const byte MsgInput = 2; // u32 tick, f32 thrust/strafeX/strafeY/yaw/pitch/roll, u8 flags
     public const byte MsgPing = 3; // u32 nonce (echoed back as MsgPong for RTT/adaptive-lead)
-    public const byte MsgSpawn = 4; // u8 cls — request to spawn this class (honored only while Active)
+    public const byte MsgSpawn = 4; // u8 cls, u64 launchBaseId (0 = server default; v36), u8 nCargo, nCargo x (u32 cargoId, u8 count) — request to spawn this class (honored only while Active)
     public const byte MsgSetTeam = 5; // u8 team — pick a side in the lobby
     public const byte MsgSetReady = 6; // u8 ready (0/1) — toggle ready in the lobby
     public const byte MsgChat = 7; // u8 scope (0 all, 1 team), u16 len, utf8 text
@@ -72,6 +72,7 @@ public static class Protocol
     public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
     public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
     public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/4 sector/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only). Kind 4 ignores pos: pigs hold just inside the entry aleph, miners prospect-patrol the sector until helium-3 is found.
+    public const byte MsgResearch = 13; // u8 op (0 start-or-queue, 1 cancel-active, 2 cancel-on-deck), u64 baseId, u16 devIndex — commander research order at a friendly base (12-byte frame incl. type byte; v36). Hub-gated by CommanderOrWarn; results come back as system chat + the next MsgResearchState.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -83,7 +84,7 @@ public static class Protocol
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope (0 all, 1 team, 2 commander order directive — team-scoped, gold on the client), u8 fromTeam, str name, str text
-    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap) — low-rate per-team economy (+ owned techs/caps, v36)
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
     public const byte MsgMinefields = 13; // u16 anchorSector, u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change, coarse keepalive, or anchor-sector change)
@@ -101,6 +102,7 @@ public static class Protocol
     public const byte MsgReject = 21; // u8 code (1 = bad secret) — join refused; sent right before the transport closes so the client learns WHY across BOTH transports (a WebRTC DataChannel close carries no reason)
     public const byte MsgRockUpdate = 22; // u8 count, count x (u64 id, f32 currentRadius, u8 orePct) — live rock shrink deltas (mining), on-change; fog-on = discovered rocks only. See BuildRockUpdates.
     public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
+    public const byte MsgResearchState = 24; // u8 nBases, n x (u64 baseId, u8 nActive x (u16 devIdx, u32 startTick, u32 durationTicks), u8 hasOnDeck, ?u16 onDeckDevIdx) — PER-TEAM research orders at the team's bases (v36). Progress derives client-side from startTick+duration vs the live tick, so the frame only changes on start/complete/cancel/promote (sent on change + coarse keepalive). See BuildResearchStateFor.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -976,34 +978,84 @@ public static class Protocol
         return buf;
     }
 
-    // Broadcast per-team economy (credits + score + the per-team unlocked-hull snapshot), same bytes
-    // to every client. Low-rate: built on coarse ticks / on change, NOT in the per-tick snapshot hot
-    // path (see ClientHub.AfterStep). Variable-length — each team appends a count-prefixed list of the
-    // ClassIds it may currently build (Stage-2 unlock gating), which the client reads to predict locks.
-    public static byte[] BuildTeamState(World world)
+    // Broadcast per-team economy (credits + score + the per-team unlocked-hull snapshot + owned
+    // techs/capabilities), same bytes to every client. Low-rate: built on coarse ticks / on change,
+    // NOT in the per-tick snapshot hot path (see ClientHub.AfterStep). Variable-length — each team
+    // appends count-prefixed lists of the ClassIds it may build (Stage-2 unlock gating) and, v36,
+    // the tech indices + CapabilityId bytes it owns (Stage-4 research state on the client).
+    // HashSets are unordered — every list is SORTED here so the frame is byte-deterministic.
+    public static byte[] BuildTeamState(World world, SimServer.Content.ContentSet content)
     {
         var teams = world.TeamStates;
-        int size = 2;
-        foreach (var kv in teams)
-            size += 9 + 1 + kv.Value.UnlockedClasses.Count; // team + credits + score + nUnlocked + classIds
-        var buf = new byte[size];
-        buf[0] = MsgTeamState;
-        buf[1] = (byte)teams.Count;
-        int o = 2;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgTeamState);
+        w.Write((byte)teams.Count);
         foreach (var kv in teams)
         {
-            buf[o] = kv.Key;
-            o += 1;
-            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Credits);
-            o += 4;
-            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Score);
-            o += 4;
-            var unlocked = kv.Value.UnlockedClasses;
-            buf[o] = (byte)unlocked.Count;
-            o += 1;
+            w.Write(kv.Key);
+            w.Write(kv.Value.Credits);
+            w.Write(kv.Value.Score);
+            var unlocked = kv.Value.UnlockedClasses.ToList();
+            unlocked.Sort();
+            w.Write((byte)unlocked.Count);
             foreach (byte cls in unlocked)
-                buf[o++] = cls;
+                w.Write(cls);
+            // Owned techs as catalog indices (a tech string the catalog doesn't know is skipped —
+            // defensive; CoreValidator makes it impossible for authored content).
+            var owned = new List<ushort>();
+            foreach (string id in kv.Value.OwnedTechs)
+                if (content.TechIndexById.TryGetValue(id, out ushort idx))
+                    owned.Add(idx);
+            owned.Sort();
+            w.Write((ushort)owned.Count);
+            foreach (ushort idx in owned)
+                w.Write(idx);
+            var caps = kv.Value.OwnedCapabilities.Select(c => (byte)c).ToList();
+            caps.Sort();
+            w.Write((byte)caps.Count);
+            foreach (byte c in caps)
+                w.Write(c);
         }
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // PER-TEAM research orders at the team's bases (MsgResearchState, v36). Only bases that HAVE
+    // research (active or on-deck) are included — an omitted base means "idle" and the client
+    // reconciles by omission. Progress is encoded as startTick+durationTicks (not remaining), so
+    // the frame is stable between state changes and rides the on-change + coarse cadence.
+    public static byte[] BuildResearchStateFor(World world, byte team)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgResearchState);
+        int countPos = (int)ms.Position;
+        w.Write((byte)0); // patched below
+        byte n = 0;
+        for (int i = 0; i < world.Bases.Count && n < 255; i++)
+        {
+            if (world.Bases[i].Team != team)
+                continue;
+            var rs = world.ResearchByBase[i];
+            if (rs.Active.Count == 0 && rs.OnDeck is null)
+                continue;
+            w.Write(world.Bases[i].Id);
+            w.Write((byte)Math.Min(rs.Active.Count, 255));
+            foreach (var (devIdx, start, dur) in rs.Active)
+            {
+                w.Write(devIdx);
+                w.Write(start);
+                w.Write(dur);
+            }
+            w.Write((byte)(rs.OnDeck is null ? 0 : 1));
+            if (rs.OnDeck is ushort queued)
+                w.Write(queued);
+            n++;
+        }
+        w.Flush();
+        var buf = ms.ToArray();
+        buf[countPos] = n;
         return buf;
     }
 
@@ -1159,6 +1211,8 @@ public static class Protocol
             // ProbeHitPoints/ProbeSignature stay server-only (deliberately not written).
             w.Write(wp.ProbeHitRadius);
             w.Write(wp.ProbeModelSize);
+            // Tech-path lock state (v36), streamed after ProbeModelSize (append-only convention).
+            WriteTechList(w, wp.RequiredTechIdx);
         }
 
         var cargoItems = content.CargoItems;
@@ -1185,6 +1239,8 @@ public static class Protocol
             w.Write(b.VisionSphereRadius);
             w.Write(b.RadarSignature);
             WriteHardpoints(w, b.Hardpoints);
+            // Research slots (v36), streamed after Hardpoints (append-only convention).
+            w.Write(b.ResearchSlots);
         }
 
         var cfg = content.World;
@@ -1197,8 +1253,71 @@ public static class Protocol
         // stays server-side only — deliberately NOT written here.
         w.Write(cfg.FogOfWar);
 
+        // ---- Tech-path catalog (v36), appended LAST so every block above stays byte-stable. ----
+        // Techs stream FIRST and fix the u16 index space every TechList below (and MsgTeamState /
+        // MsgResearchState) references. Reader: GameNetClient.ApplyDefs mirrors this order exactly.
+        var techs = content.Techs;
+        w.Write((ushort)techs.Count);
+        foreach (var t in techs)
+        {
+            WriteString(w, t.Id);
+            WriteString(w, t.Name);
+            WriteString(w, t.Description);
+        }
+        var devs = content.Developments;
+        w.Write((ushort)devs.Count);
+        foreach (var d in devs)
+        {
+            WriteString(w, d.Id);
+            WriteString(w, d.Name);
+            WriteString(w, d.Description);
+            WriteString(w, d.Group);
+            w.Write(d.Price);
+            w.Write(d.BuildTimeSeconds);
+            w.Write(d.TechOnly);
+            WriteTechList(w, d.RequiredTechIdx);
+            WriteTechList(w, d.GrantedTechIdx);
+            WriteTechList(w, d.ObsoletedByTechIdx);
+            WriteCapList(w, d.RequiredCaps);
+            WriteCapList(w, d.GrantedCaps);
+        }
+        var stations = content.StationCatalog;
+        w.Write((ushort)stations.Count);
+        foreach (var s in stations)
+        {
+            WriteString(w, s.Id);
+            WriteString(w, s.Name);
+            WriteString(w, s.Description);
+            w.Write(s.Price);
+            w.Write(s.BuildTimeSeconds);
+            w.Write(s.StationClass);
+            w.Write(s.BaseTypeId); // i16; -1 = catalog-only (Build-tab placeholder)
+            w.Write(s.ResearchSlots);
+            WriteTechList(w, s.RequiredTechIdx);
+            WriteTechList(w, s.GrantedTechIdx);
+            WriteTechList(w, s.ObsoletedByTechIdx);
+            WriteCapList(w, s.RequiredCaps);
+            WriteCapList(w, s.GrantedCaps);
+        }
+
         w.Flush();
         return ms.ToArray();
+    }
+
+    // A count-prefixed tech-index list: u8 n, then n x u16 index into the streamed tech catalog.
+    private static void WriteTechList(BinaryWriter w, ushort[] idx)
+    {
+        w.Write((byte)idx.Length);
+        foreach (ushort i in idx)
+            w.Write(i);
+    }
+
+    // A count-prefixed capability list: u8 n, then n x u8 CapabilityId byte.
+    private static void WriteCapList(BinaryWriter w, byte[] caps)
+    {
+        w.Write((byte)caps.Length);
+        foreach (byte c in caps)
+            w.Write(c);
     }
 
     // The lobby roster + match phase, broadcast whenever it changes (join/leave/team/ready/

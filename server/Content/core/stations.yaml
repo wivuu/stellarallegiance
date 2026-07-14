@@ -20,4 +20,80 @@ stations:
     vision-sphere-radius: 3600
     radar-signature: 2.5   # a base is seen from far away
     abilities: [start, restart]
+    research-slots: 1      # concurrent research orders this base can run (0 => 1 at projection)
     required-capabilities: [base]
+
+  # ---- Catalog-only future stations (NO base-type-id => never projected to a runtime BaseDef; see
+  # FactionsContentProjection.cs `Where(s => s.BaseTypeId is not null)`). These populate the docked
+  # Build tab as buildable cards with tech/capability lock states, but have no in-world effect yet
+  # (base building lands in a later phase). Gating uses the closed Capability enum for granted-*, and
+  # required-techs (from developments.yaml) where the tree is research-gated.
+  - id: outpost
+    name: Outpost
+    class: garrison
+    description: "A light forward garrison — eyes and a foothold in a contested sector."
+    price: 300
+    build-time-seconds: 45
+    abilities: [land, repair, capture]
+    required-capabilities: [expansion-allowed]
+
+  - id: shipyard
+    name: Shipyard
+    class: shipyard
+    description: "Builds and services ships away from the home garrison."
+    price: 600
+    build-time-seconds: 90
+    abilities: [land, repair, capture]
+    required-capabilities: [expansion-allowed]
+    granted-capabilities: [shipyard-allowed]
+
+  - id: refinery
+    name: Refinery
+    class: mining
+    description: "Processes mined helium-3 on-site, shortening the haul back to base."
+    price: 400
+    build-time-seconds: 60
+    income: 50
+    abilities: [unload, capture]
+    required-capabilities: [expansion-allowed]
+
+  - id: tech-lab
+    name: Technology Lab
+    class: research
+    description: "Hosts advanced research and unlocks the tactical doctrine tree."
+    price: 500
+    build-time-seconds: 75
+    research-slots: 2
+    abilities: [land, capture]
+    required-techs: [tactical-1]
+    granted-capabilities: [tactical-allowed]
+
+  - id: supremacy-center
+    name: Supremacy Center
+    class: starbase
+    description: "The team's supremacy fortress — raising it unlocks the supremacy victory path."
+    price: 1500
+    build-time-seconds: 150
+    abilities: [land, repair, capture]
+    required-capabilities: [shipyard-allowed]
+    required-techs: [heavy-ordnance]
+    granted-capabilities: [supremacy-allowed]
+
+  - id: expansion-complex
+    name: Expansion Complex
+    class: garrison
+    description: "Command-and-logistics hub that authorizes the team to expand into new sectors."
+    price: 450
+    build-time-seconds: 70
+    abilities: [land, repair, capture]
+    required-techs: [expansion-1]
+    granted-capabilities: [expansion-allowed]
+
+  - id: teleport-receiver
+    name: Teleport Receiver
+    class: ripcord
+    description: "A ripcord waypoint that pulls friendly ships across the map to a forward line."
+    price: 350
+    build-time-seconds: 60
+    abilities: [ripcord, land]
+    required-capabilities: [expansion-allowed]

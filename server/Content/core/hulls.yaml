@@ -167,6 +167,11 @@ hulls:
     price: 350
     payload-capacity: 37 # twin cannons 2x11 + missile rack 4 = 26 -> 11 free for cargo; the payload hull carries the most
     required-capabilities: [base]
+    # Tech gate (Stage-4 tech paths): the assault hull is LOCKED at match start by design — a team
+    # must complete the Heavy Ordnance development (dev-heavy-ordnance grants heavy-ordnance) before
+    # the bomber (class-id 2) enters its buildable set. Scout/Fighter carry no required-techs and stay
+    # available from tick 0.
+    required-techs: [heavy-ordnance]
     # GLB-authoritative geometry (HardpointGeometryMerge). Twin main cannons BIND mesh HP_Weapon_0
     # (right barrel) and HP_Weapon_1 (left barrel), inheriting mesh position/direction as-is — a
     # symmetric forward gun pair, no authored override. The missile rack keeps weapon-index 2 (AFTER

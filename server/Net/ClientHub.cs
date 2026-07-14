@@ -579,20 +579,25 @@ public sealed class ClientHub
                         _sim.EnqueueReclaim(client.Id, reconnectToken);
                     break;
                 }
-                case Protocol.MsgSpawn when count >= 2:
+                case Protocol.MsgSpawn when count >= 10:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team
-                    // comes from the lobby (authoritative), not the client. The optional consumable
-                    // hold rides after the class: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)].
-                    // A bare length-2 frame carries no cargo (the sim seeds the hull default).
+                    // comes from the lobby (authoritative), not the client. v36 layout:
+                    // [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)].
+                    // launchBaseId 0 = server default base; the sim validates friendly+alive and
+                    // falls back silently. A bare length-10 frame carries no cargo (hull default).
                     byte cls = buffer[1];
-                    if (cls > 2)
+                    // Def-driven class gate (was a hardcoded `cls > 2 -> scout` clamp): unknown
+                    // hulls, the pod, and miner drones are dropped to scout; the lock/cost gate
+                    // (TryReserveSpawn) still decides whether the spawn actually happens.
+                    if (!_sim.IsPlayerSpawnableClass(cls))
                         cls = 0;
+                    ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
                     (uint cargoId, byte count)[] cargo = System.Array.Empty<(uint, byte)>();
-                    if (count >= 3)
+                    if (count >= 11)
                     {
-                        int nCargo = buffer[2];
-                        int o = 3;
+                        int nCargo = buffer[10];
+                        int o = 11;
                         if (nCargo > 0 && count >= o + nCargo * 5)
                         {
                             cargo = new (uint, byte)[nCargo];
@@ -616,7 +621,7 @@ public sealed class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls, cargo);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo, launchBaseId);
                     }
                     break;
                 }
@@ -768,6 +773,21 @@ public sealed class ClientHub
                     HandleOrder(client, subject, targetKind, targetId, sector, pos);
                     break;
                 }
+                case Protocol.MsgResearch when count >= 12:
+                {
+                    // Commander research order: [13][u8 op][u64 baseId][u16 devIndex] (v36).
+                    // Commander-gated HERE (the /buyminer pattern); validated + applied on the
+                    // sim thread (Simulation.Research). Results come back as system chat + the
+                    // next MsgResearchState frame.
+                    if (CommanderOrWarn(client) is byte cmdTeam)
+                    {
+                        byte op = buffer[1];
+                        ulong baseId = BitConverter.ToUInt64(buffer, 2);
+                        ushort devIndex = BitConverter.ToUInt16(buffer, 10);
+                        _sim.EnqueueResearchOp(client.Id, cmdTeam, op, baseId, devIndex);
+                    }
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
@@ -808,6 +828,50 @@ public sealed class ClientHub
             {
                 if (CommanderOrWarn(client) is byte team)
                     _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
+                break;
+            }
+            case "research":
+            {
+                // Commander research by development id (the chat seam mirroring /buyminer; the
+                // Research tab UI sends MsgResearch directly). Bare /research lists the catalog.
+                // The order targets the team's FIRST alive base — base-specific starts come from
+                // the UI, where the sidebar picks the base.
+                if (arg.Length == 0)
+                {
+                    var names = _sim.Content.Developments.Select(d => d.Id);
+                    SystemTo(client, _sim.Content.Developments.Count == 0
+                        ? "No developments in this server's catalog."
+                        : $"Usage: /research <id>. Catalog: {string.Join(", ", names)}");
+                    break;
+                }
+                if (CommanderOrWarn(client) is not byte rTeam)
+                    break;
+                int devIdx = -1;
+                for (int i = 0; i < _sim.Content.Developments.Count; i++)
+                    if (string.Equals(_sim.Content.Developments[i].Id, arg, StringComparison.OrdinalIgnoreCase))
+                    {
+                        devIdx = i;
+                        break;
+                    }
+                if (devIdx < 0)
+                {
+                    SystemTo(client, $"Unknown development '{arg}' — /research lists the catalog.");
+                    break;
+                }
+                ulong baseId = 0;
+                var world = _sim.World;
+                for (int i = 0; i < world.Bases.Count; i++)
+                    if (world.Bases[i].Team == rTeam && world.BaseHealth[i] > 0f)
+                    {
+                        baseId = world.Bases[i].Id;
+                        break;
+                    }
+                if (baseId == 0)
+                {
+                    SystemTo(client, "Your team has no base to research at.");
+                    break;
+                }
+                _sim.EnqueueResearchOp(client.Id, rTeam, Simulation.ResearchOpStart, baseId, (ushort)devIdx);
                 break;
             }
             case "commander":
@@ -1105,6 +1169,14 @@ public sealed class ClientHub
         foreach (var (team, msg) in _sim.MinerNoticesThisStep)
             SystemToTeam(team, msg);
 
+        // Research notices (same accumulate-in-Step contract): team-wide announcements
+        // (started/complete/cancelled) + issuer-only rejections.
+        foreach (var (team, msg) in _sim.ResearchTeamNoticesThisStep)
+            SystemToTeam(team, msg);
+        foreach (var (cid, msg) in _sim.ResearchNoticesThisStep)
+            if (_clients.TryGetValue(cid, out var rc))
+                SystemTo(rc, msg);
+
         // Commander-order feedback (same accumulate-in-Step contract): issuer-only rejections/acks
         // as system lines, and team-wide GOLD directives (MsgChatRelay scope 2) once the sim has
         // validated an order — so a fog-rejected order never announces to the team.
@@ -1230,9 +1302,14 @@ public sealed class ClientHub
             }
         }
 
-        // Per-team economy (credits/score): same low-rate cadence as bases — on change or coarse
+        // Per-team economy (credits/score/techs): same low-rate cadence as bases — on change or coarse
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
-        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
+        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World, _sim.Content) : null;
+
+        // Per-base research orders (v36): PER-TEAM (a team sees only its own bases' research — the
+        // fog-safe choice), on the same on-change + coarse cadence. Built lazily once per team.
+        bool sendResearch = _sim.ResearchChangedThisStep || coarse;
+        Dictionary<byte, byte[]>? researchFramesByTeam = sendResearch ? new() : null;
 
         // Fog point-visibility for minefields (F10): the enemy-visibility of a field depends only on
         // (field, team), NOT the individual client — so compute it ONCE per team, then reuse for every
@@ -1382,6 +1459,14 @@ public sealed class ClientHub
 
             if (teamStateFrame is not null)
                 SendLossy(client, OutFrame.Whole(teamStateFrame));
+
+            // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
+            if (sendResearch && client.Team <= 1)
+            {
+                if (!researchFramesByTeam!.TryGetValue(client.Team, out var rf))
+                    researchFramesByTeam[client.Team] = rf = Protocol.BuildResearchStateFor(_sim.World, client.Team);
+                SendLossy(client, OutFrame.Whole(rf));
+            }
 
             if (minerTargetsFrame is not null)
                 SendLossy(client, OutFrame.Whole(minerTargetsFrame));

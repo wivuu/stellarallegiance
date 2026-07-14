@@ -515,6 +515,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A ship chassis. Mirrors the C\u002B\u002B DataHullTypeIGC (igc.h:1767). Sound ids and the trailing hardpoint data from the original struct are intentionally omitted here \u2014 model geometry / hardpoints are covered separately (GLB-AND-HARDPOINT-FORMAT.md).",
@@ -711,6 +721,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A gun. Mirrors the C\u002B\u002B DataWeaponTypeIGC (igc.h:1833).",
@@ -867,6 +887,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A shield generator. Mirrors the C\u002B\u002B DataShieldTypeIGC (igc.h:1846).",
@@ -1024,6 +1054,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A cloaking device. Mirrors the C\u002B\u002B DataCloakTypeIGC (igc.h:1855).",
@@ -1181,6 +1221,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "An afterburner. Mirrors the C\u002B\u002B DataAfterburnerTypeIGC (igc.h:1865).",
@@ -1330,6 +1380,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A consumable booster pack. Mirrors the C\u002B\u002B DataPackTypeIGC (igc.h:1875).",
@@ -1497,6 +1557,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A launcher that carries and fires expendables (a magazine, dispenser, or chaff launcher). Mirrors the C\u002B\u002B DataLauncherTypeIGC (igc.h:1881); its Slot selects which kind it is (Magazine / Dispenser / ChaffLauncher).",
@@ -1659,6 +1729,10 @@
             "type": "number",
             "description": "Detection-range multiplier applied to every viewer\u0027s range against this base (omitted/0 resolves to 1.0)."
           },
+          "research-slots": {
+            "type": "integer",
+            "description": "How many research orders this station may run concurrently. Omit-when-default (serialized kebab-case as research-slots); 0 means \u0022default (1)\u0022 and is resolved to a single slot at projection. Only meaningful for stations that project to a runtime base."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."
@@ -1750,6 +1824,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A building / station. Mirrors the C\u002B\u002B DataStationTypeIGC (igc.h:2649).",
@@ -1867,6 +1951,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A research / tech purchase. Mirrors the C\u002B\u002B DataDevelopmentIGC (igc.h:2691). Besides flipping GrantedTechs, it can apply team-wide stat modifiers.",
@@ -2005,6 +2099,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "An AI-piloted ship (miner, constructor, turret, bot). Mirrors DataDroneTypeIGC (igc.h:2698).",

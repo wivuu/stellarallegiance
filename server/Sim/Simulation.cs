@@ -357,7 +357,7 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
     // Player autopilot engage/disengage requests (MsgSetAutopilot), drained alongside the input queue.
     private readonly Queue<(int clientId, byte mode, byte kind, ulong id, uint sector, Vec3 pos)> _autopilotQueue = new();
-    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)> _joinQueue = new();
+    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
     // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
     // back to the returning connection), both keyed by the connection's reconnect token.
@@ -383,7 +383,7 @@ public sealed partial class Simulation
 
     // Remembered join class/team/cargo per connected client, so a respawn re-creates the same ship
     // with the same validated consumable hold.
-    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo)> _clientInfo = new();
+    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId)> _clientInfo = new();
 
     // Chaff/mine dispenser WeaponDefs keyed by the cargo id they consume (D8 — dispensers are not
     // hardpoint-mounted; a spawn's cargo id names which dispenser its ammo feeds). Cargo item mass
@@ -555,11 +555,12 @@ public sealed partial class Simulation
     // ---- Thread-safe intake (called from socket tasks) -------------------
 
     // Join with an explicit consumable hold (chaff/mine counts from MsgSpawn). Empty cargo ⇒ the
-    // hull's authored DefaultCargo is seeded at spawn.
-    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)
+    // hull's authored DefaultCargo is seeded at spawn. launchBaseId picks the friendly base to
+    // launch from (v36 hangar sidebar); 0/invalid ⇒ the first team base (legacy behavior).
+    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0)
     {
         lock (_qLock)
-            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>()));
+            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>(), launchBaseId));
     }
 
     // Compat overload (no cargo): the hull's DefaultCargo is used. Kept for tests / callers that
@@ -638,6 +639,9 @@ public sealed partial class Simulation
         MinerNoticesThisStep.Clear();
         OrderNoticesThisStep.Clear();
         OrderDirectivesThisStep.Clear();
+        ResearchChangedThisStep = false;
+        ResearchNoticesThisStep.Clear();
+        ResearchTeamNoticesThisStep.Clear();
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -660,6 +664,7 @@ public sealed partial class Simulation
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             MinerBrainStep(tick); // 5 Hz miner lifecycle + rock/base targeting (Simulation.Mining.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+            ResearchStep(tick); // Stage-4: per-base research progress + on-deck promotion (Simulation.Research.cs)
             // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
             // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
             if (FogEnabled && tick % VisionEvery == 0)
@@ -845,9 +850,10 @@ public sealed partial class Simulation
         {
             while (_joinQueue.Count > 0)
             {
-                var (cid, team, cls, cargo) = _joinQueue.Dequeue();
-                // Remember the slot (team/cls/hold) and spawn this very step (ProcessRespawns, tick now).
-                _clientInfo[cid] = (team, cls, cargo);
+                var (cid, team, cls, cargo, launchBase) = _joinQueue.Dequeue();
+                // Remember the slot (team/cls/hold/launch base) and spawn this very step
+                // (ProcessRespawns, tick now).
+                _clientInfo[cid] = (team, cls, cargo, launchBase);
                 _clientRespawn[cid] = tick;
             }
             while (_leaveQueue.Count > 0)
@@ -937,6 +943,7 @@ public sealed partial class Simulation
             }
             DrainMinerQueues(tick); // miner buys (Simulation.Mining.cs)
             DrainCommandOrders(); // commander orders for AI vessels (Simulation.Orders.cs)
+            DrainResearchOps(tick); // commander research start/cancel/queue (Simulation.Research.cs)
         }
     }
 
@@ -980,6 +987,15 @@ public sealed partial class Simulation
             ring.Clear();
         // Fresh economy each match: reset every team to its starting credits + base unlocks.
         World.SeedEconomy(Content.Start);
+        // Fresh research slate too. A map swap already brought a fresh World (fresh ResearchByBase),
+        // but StartMatch may REUSE the world (BuildMatchWorld null / same map in tests) — clear
+        // explicitly so a previous match's in-flight research never bleeds into the new one.
+        foreach (var rs in World.ResearchByBase)
+        {
+            rs.Active.Clear();
+            rs.OnDeck = null;
+        }
+        ResearchChangedThisStep = true;
         ResolveTeamUnlocks();
         SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
@@ -992,9 +1008,9 @@ public sealed partial class Simulation
     }
 
     // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,
-    // riding the library's forward-closure so it stays correct when Stage-4 grants techs mid-match).
-    // Runs at match start — Stage-2 teams don't gain techs mid-match and spawns only happen while
-    // Active. The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
+    // riding the library's forward-closure). Runs at match start AND whenever research completes
+    // (Simulation.Research.CompleteResearch) — teams DO gain techs mid-match now (Stage 4).
+    // The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
     private void ResolveTeamUnlocks()
     {
         foreach (var ts in World.TeamStates.Values)
@@ -1056,7 +1072,7 @@ public sealed partial class Simulation
 
     // Spawn a combat ship for a connected client at its team base, facing the sector center
     // and launched clear of the base sphere (mirrors the module's SpawnShip).
-    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo)
+    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0)
     {
         var s = new ShipSim
         {
@@ -1066,7 +1082,7 @@ public sealed partial class Simulation
             Class = cls,
             Alive = true,
         };
-        PlaceAtBase(s, World.ShipRadius, tick);
+        PlaceAtBase(s, World.ShipRadius, tick, ResolveLaunchBase(team, launchBaseId));
         s.State.Mass = StatsFor(cls, false).Mass;
         s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
@@ -1247,9 +1263,31 @@ public sealed partial class Simulation
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, info.launchBaseId);
         }
     }
+
+    // Resolve a client-picked launch base id to a validated friendly, alive base site — anything
+    // else (0, unknown id, enemy base, dead base) silently falls back to the default first-team-base
+    // pick inside PlaceAtBase (null).
+    private World.BaseSite? ResolveLaunchBase(byte team, ulong launchBaseId)
+    {
+        if (launchBaseId == 0)
+            return null;
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            var b = World.Bases[i];
+            if (b.Id == launchBaseId)
+                return (b.Team == team && World.BaseHealth[i] > 0f) ? b : null;
+        }
+        return null;
+    }
+
+    // A class id a PLAYER may request via MsgSpawn: a known hull def that isn't the pod or a miner
+    // drone. Replaces the hub's old hardcoded `cls > 2 -> scout` clamp (v36), so researched hulls
+    // with any class id can spawn once unlocked (TryReserveSpawn still gates lock/cost).
+    public bool IsPlayerSpawnableClass(byte cls) =>
+        cls != GameContent.PodClassId && !IsMinerClass(cls) && ShipDefs.ContainsKey(cls);
 
     public enum SpawnDecision { Allowed, Locked, TooPoor }
 

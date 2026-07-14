@@ -39,6 +39,9 @@ const int Settle = 30; // ticks to hold a configuration so the 2 Hz apply reflec
 Simulation BootSim(ulong seed, bool sync = true)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2) is tech-gated behind heavy-ordnance at match start (StrategyTest's subject);
+    // this suite reads a bomber's signature, so seed the tech so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("heavy-ordnance");
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
@@ -1297,7 +1300,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     Pump(20); // matchmaker auto-starts the match while in lobby
     Check(crash is null && sim.IsActive, "the hub-driven match auto-starts fog-on without exceptions", $"the match did not start cleanly ({crash?.GetType().Name}: {crash?.Message})");
 
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     Thread.Sleep(50);
     Pump(300); // fly the async vision worker across ~30 boundaries with a live ship
 

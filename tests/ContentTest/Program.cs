@@ -175,9 +175,9 @@ Check(
 // Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 9,
-    "loader projected guns + missile launchers + dispensers (3 guns + 3 racks + chaff + mine + probe)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 9)"
+    stock.Weapons.Count == 10,
+    "loader projected guns + missile launchers + dispensers (4 guns [+ tech-gated heavy-cannon] + 3 racks + chaff + mine + probe)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 10)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
@@ -350,6 +350,61 @@ Check(
     $"world.yaml parse wrong (brain-hz {worldDef.Ai?.BrainHz}, dmg-scale {worldDef.Combat?.CollisionDamageScale}, "
         + $"paycheck {worldDef.Mechanics?.PaycheckSeconds}, field-density {worldDef.Seeding?.FieldAreaDensity}, "
         + $"aleph-sig {worldDef.AlephRadarSignature})"
+);
+
+// 2h. Tech-path catalog (Stage-4): techs / developments / station catalog project in authored order
+// and stream in MsgDefs. Tech references ride the wire as u16 INDICES into the tech list, so resolve
+// them via TechIndexById rather than hardcoding an index.
+Check(
+    stock.Techs.Count == 4 && stock.TechIndexById.Count == 4,
+    "loader projected 4 techs (TechIndexById has 4 entries)",
+    $"tech count wrong (techs {stock.Techs.Count}, index {stock.TechIndexById.Count})"
+);
+ushort heavyIdx = stock.TechIndexById["heavy-ordnance"];
+var devCannonTier2 = stock.Developments.First(d => d.Id == "dev-cannon-tier-2");
+Check(
+    devCannonTier2.RequiredTechIdx.Length == 1
+        && devCannonTier2.RequiredTechIdx[0] == heavyIdx
+        && stock.Techs[heavyIdx].Id == "heavy-ordnance",
+    "dev-cannon-tier-2 RequiredTechIdx resolves (by index) to the heavy-ordnance tech",
+    $"cannon-tier-2 required-tech wrong (idx [{string.Join(",", devCannonTier2.RequiredTechIdx)}], heavy-ordnance idx {heavyIdx})"
+);
+Check(
+    stock.Developments.Count == 4 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
+    "loader projected 4 developments, all with positive price + build-time",
+    $"development projection wrong (count {stock.Developments.Count}, "
+        + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
+);
+// Station catalog: 8 entries, exactly ONE with a runtime BaseTypeId (the garrison, ResearchSlots 1);
+// every other entry is catalog-only (BaseTypeId -1 => never projected to a runtime BaseDef).
+var runtimeStations = stock.StationCatalog.Where(s => s.BaseTypeId >= 0).ToList();
+Check(
+    stock.StationCatalog.Count == 8 && runtimeStations.Count == 1 && runtimeStations[0].ResearchSlots == 1,
+    "station catalog has 8 entries, exactly one runtime station (garrison, ResearchSlots 1)",
+    $"station catalog wrong (count {stock.StationCatalog.Count}, runtime {runtimeStations.Count}, "
+        + $"slots {(runtimeStations.Count > 0 ? runtimeStations[0].ResearchSlots : -1)})"
+);
+var techLab = stock.StationCatalog.First(s => s.Id == "tech-lab");
+Check(
+    techLab.BaseTypeId < 0 && techLab.ResearchSlots == 2,
+    "the catalog-only tech-lab station carries ResearchSlots == 2",
+    $"tech-lab wrong (baseTypeId {techLab.BaseTypeId}, slots {techLab.ResearchSlots})"
+);
+// The bomber ShipClassDef still PROJECTS — tech gating is availability (UnlockedClasses), not
+// projection: the def must exist so a researched hull can spawn/render once its tech lands.
+Check(
+    stock.Ships.Any(s => s.ClassId == FlightModel.ClassBomber),
+    "the tech-gated bomber still projects to a ShipClassDef (gating is availability, not projection)",
+    "bomber ShipClassDef missing — tech gating wrongly dropped it from projection"
+);
+// heavy-cannon (weapon-id 9): projects with a non-empty RequiredTechIdx (the hangar arsenal lock,
+// Phase D). Not mounted by any hull — it exists purely for the tech-locked arsenal display.
+var heavyCannon = stock.Weapons.First(w => w.WeaponId == 9);
+ushort cannonTier2Idx = stock.TechIndexById["cannon-tier-2"];
+Check(
+    heavyCannon.RequiredTechIdx.Length == 1 && heavyCannon.RequiredTechIdx[0] == cannonTier2Idx,
+    "heavy-cannon WeaponDef projects with RequiredTechIdx = [cannon-tier-2]",
+    $"heavy-cannon required-tech wrong (idx [{string.Join(",", heavyCannon.RequiredTechIdx)}], cannon-tier-2 idx {cannonTier2Idx})"
 );
 
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the

@@ -181,7 +181,9 @@ catch (Exception ex)
     Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}");
     return;
 }
-var contentErrors = ContentValidator.Validate(content.Ships, content.Weapons, content.Bases, content.CargoItems);
+var contentErrors = ContentValidator.Validate(
+    content.Ships, content.Weapons, content.Bases, content.CargoItems,
+    content.Techs, content.Developments, content.StationCatalog);
 if (contentErrors.Count > 0)
 {
     Console.Error.WriteLine($"[SimServer] FATAL: content validation failed ({contentErrors.Count} error(s)):");

@@ -27,7 +27,10 @@ namespace StellarAllegiance.Shared
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
             IReadOnlyList<BaseDef> bases,
-            IReadOnlyList<CargoItemDef>? cargoItems = null
+            IReadOnlyList<CargoItemDef>? cargoItems = null,
+            IReadOnlyList<TechDef>? techs = null,
+            IReadOnlyList<DevelopmentDef>? developments = null,
+            IReadOnlyList<StationCatalogDef>? stationCatalog = null
         )
         {
             var errors = new List<string>();
@@ -163,7 +166,59 @@ namespace StellarAllegiance.Shared
                 ValidateBaseVision(b, errors);
             }
 
+            // ---- Tech-path catalog (Stage 4): the projected research defs the wire streams. ----
+            // CoreValidator already proved the STRING refs resolve; these rules guard the projected
+            // INDEX space + the research engine's assumptions (positive research time, unique ids).
+            int nTechs = techs?.Count ?? 0;
+            if (techs is not null)
+            {
+                var techIds = new HashSet<string>();
+                foreach (var t in techs)
+                    if (string.IsNullOrEmpty(t.Id) || !techIds.Add(t.Id))
+                        errors.Add($"tech catalog: duplicate/empty tech id \"{t.Id}\"");
+            }
+            if (developments is not null)
+            {
+                var devIds = new HashSet<string>();
+                foreach (var d in developments)
+                {
+                    if (string.IsNullOrEmpty(d.Id) || !devIds.Add(d.Id))
+                        errors.Add($"tech catalog: duplicate/empty development id \"{d.Id}\"");
+                    if (d.BuildTimeSeconds <= 0)
+                        errors.Add($"development \"{d.Id}\" has non-positive build-time-seconds {d.BuildTimeSeconds} — research would never complete");
+                    if (d.Price < 0)
+                        errors.Add($"development \"{d.Id}\" has negative price {d.Price}");
+                    ValidateTechIdx(d.Id, d.RequiredTechIdx, nTechs, errors);
+                    ValidateTechIdx(d.Id, d.GrantedTechIdx, nTechs, errors);
+                    ValidateTechIdx(d.Id, d.ObsoletedByTechIdx, nTechs, errors);
+                }
+            }
+            if (stationCatalog is not null)
+            {
+                var stationIds = new HashSet<string>();
+                foreach (var s in stationCatalog)
+                {
+                    if (string.IsNullOrEmpty(s.Id) || !stationIds.Add(s.Id))
+                        errors.Add($"tech catalog: duplicate/empty station id \"{s.Id}\"");
+                    // A runtime station's catalog entry must reference a projected BaseDef.
+                    if (s.BaseTypeId >= 0 && !baseIds.Contains((byte)s.BaseTypeId))
+                        errors.Add($"station catalog \"{s.Id}\" names BaseTypeId {s.BaseTypeId} with no runtime BaseDef");
+                    ValidateTechIdx(s.Id, s.RequiredTechIdx, nTechs, errors);
+                    ValidateTechIdx(s.Id, s.GrantedTechIdx, nTechs, errors);
+                    ValidateTechIdx(s.Id, s.ObsoletedByTechIdx, nTechs, errors);
+                }
+            }
+
             return errors;
+        }
+
+        // Every projected tech index must land inside the streamed tech catalog — an out-of-range
+        // index would silently mis-gate on the client (it indexes the same array).
+        private static void ValidateTechIdx(string owner, ushort[] idx, int nTechs, List<string> errors)
+        {
+            foreach (ushort i in idx)
+                if (i >= nTechs)
+                    errors.Add($"\"{owner}\" references tech index {i} outside the {nTechs}-entry tech catalog");
         }
 
         // The hangar blocks launch when a loadout exceeds PayloadCapacity, so a def set whose

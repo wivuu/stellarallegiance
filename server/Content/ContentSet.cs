@@ -17,6 +17,15 @@ public sealed class ContentSet
     public IReadOnlyList<CargoItemDef> CargoItems { get; }
     public WorldConfig World { get; }
 
+    // Stage-4 tech paths: the projected research catalog, streamed in MsgDefs (Protocol.BuildDefs)
+    // and indexed by the sim's research engine (Simulation.Research). Tech WIRE INDICES are the
+    // positions in Techs (authored Core list order — deterministic); TechIndexById maps the
+    // library's string ids onto them (e.g. for encoding a team's OwnedTechs).
+    public IReadOnlyList<TechDef> Techs { get; }
+    public IReadOnlyList<DevelopmentDef> Developments { get; }
+    public IReadOnlyList<StationCatalogDef> StationCatalog { get; }
+    public IReadOnlyDictionary<string, ushort> TechIndexById { get; }
+
     // Stage-2 strategy spine: the team's per-match STARTING state (credits/income + tech/capability
     // seed) projected from the faction. Server-only — NOT part of the wire defs (Protocol.BuildDefs
     // encodes only Ships/Weapons/CargoItems/Bases/World).
@@ -34,7 +43,11 @@ public sealed class ContentSet
         IReadOnlyList<CargoItemDef> cargoItems,
         WorldConfig world,
         FactionStart start,
-        Factions.Core catalog
+        Factions.Core catalog,
+        IReadOnlyList<TechDef>? techs = null,
+        IReadOnlyList<DevelopmentDef>? developments = null,
+        IReadOnlyList<StationCatalogDef>? stationCatalog = null,
+        IReadOnlyDictionary<string, ushort>? techIndexById = null
     )
     {
         Ships = ships;
@@ -44,5 +57,9 @@ public sealed class ContentSet
         World = world;
         Start = start;
         Catalog = catalog;
+        Techs = techs ?? System.Array.Empty<TechDef>();
+        Developments = developments ?? System.Array.Empty<DevelopmentDef>();
+        StationCatalog = stationCatalog ?? System.Array.Empty<StationCatalogDef>();
+        TechIndexById = techIndexById ?? new Dictionary<string, ushort>();
     }
 }

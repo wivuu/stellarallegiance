@@ -32,6 +32,35 @@ public class ValidationTests
     }
 
     [Fact]
+    public void UnknownObsoletedByTechReference_IsReported()
+    {
+        var core = new Core
+        {
+            Techs = { new Tech { Id = "base", Name = "Base" } },
+            Weapons = { new Weapon { Id = "gun", Name = "Gun", ObsoletedByTechs = new TechSet(new[] { "ghost-tech" }) } },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("obsoleted-by-techs") && e.Contains("ghost-tech"));
+    }
+
+    [Fact]
+    public void NegativeResearchSlots_IsReported()
+    {
+        var core = new Core
+        {
+            Stations = { new Station { Id = "lab", Name = "Lab", ResearchSlots = -1 } },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("research-slots") && e.Contains("lab"));
+    }
+
+    [Fact]
     public void MissingFactionStartStation_IsReported()
     {
         var core = new Core

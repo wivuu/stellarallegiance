@@ -24,3 +24,13 @@ projectiles:
     width: 1
     bolt-radius: 0.3
     bolt-length: 2.8
+  # Heavy-bolt: the class-2 cannon round (fired by heavy-cannon, weapon-id 9, tech-gated behind
+  # cannon-tier-2). Hits noticeably harder than the bomber bolt (40 vs 22) but flies slightly slower
+  # (180 vs 200) — a heavier, more punishing slug. Not mounted by any stock hull (arsenal display only).
+  - id: heavy-bolt
+    name: Heavy Bolt
+    power: 40
+    speed: 180
+    width: 1
+    bolt-radius: 0.34
+    bolt-length: 3.2

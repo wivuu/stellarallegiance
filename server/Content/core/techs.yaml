@@ -1,0 +1,17 @@
+# Techs — named research-tree nodes a team can OWN (distinct from the closed Capability enum the
+# engine branches on). A tech is flipped on by completing a Development that grants it (see
+# developments.yaml); items then gate on it via required-techs. These are v1 unlock-only nodes:
+# owning the tech opens buildables, it carries no stat modifier of its own.
+techs:
+  - id: heavy-ordnance
+    name: Heavy Ordnance Certification
+    description: "Clears the team to field siege-grade weapons and the assault hulls that carry them."
+  - id: cannon-tier-2
+    name: Class-2 Cannon Doctrine
+    description: "Uprated cannon fire-control, unlocking the heavier class-2 gun line."
+  - id: expansion-1
+    name: Expansion Doctrine
+    description: "Logistics and survey training that authorizes building out beyond the home garrison."
+  - id: tactical-1
+    name: Tactical Doctrine
+    description: "Advanced electronics and ordnance protocols that open the tactical station tree."

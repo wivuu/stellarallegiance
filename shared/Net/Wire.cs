@@ -31,7 +31,15 @@ public static class Wire
     // header lets the client prune stale fields even from an empty (count==0) frame, and the server now
     // also emits a frame whenever a client's anchor sector changes (warp) so mines never leak across
     // sectors. See server/Net/ClientHub.BuildMinefieldsFor + client GameNetClient.ApplyMinefields.
-    public const byte ProtocolVersion = 35;
+    // v36: tech paths — MsgSpawn gains u64 launchBaseId after cls (0 = server default base);
+    // MsgDefs appends the tech catalog (u16-counted techs/developments/station-catalog) after the
+    // world config, plus BaseDef +u8 researchSlots (after hardpoints) and WeaponDef +TechList
+    // requiredTechs (after probeModelSize); MsgTeamState appends per-team owned tech indices +
+    // capability bytes after the unlocked-class list; NEW MsgResearch=13 (client->server commander
+    // research op: u8 op, u64 baseId, u16 devIndex) + NEW MsgResearchState=24 (server->client
+    // per-team per-base research orders, startTick+duration encoded). TechList = u8 n x u16 index
+    // into the streamed tech catalog. See Protocol.BuildDefs/BuildTeamState/BuildResearchStateFor.
+    public const byte ProtocolVersion = 36;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

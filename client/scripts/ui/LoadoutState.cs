@@ -21,6 +21,10 @@ public sealed class LoadoutState
     // one instance covers every hull.
     public static readonly LoadoutState Shared = new();
 
+    // The base the pilot has picked to launch from in the docked screen's CommandSidebar. 0 = server
+    // default (Phase A is display-only — RequestSpawn still ignores this; Phase B wires it into MsgSpawn).
+    public ulong SelectedBaseId;
+
     // Classes whose default hold has been seeded from ShipClassDef.DefaultCargo (once each, so a
     // later edit isn't stomped by a re-seed).
     private readonly HashSet<byte> _seeded = new();

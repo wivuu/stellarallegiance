@@ -43,6 +43,14 @@ public abstract record Buildable
 
     /// <summary>Research techs granted to the team once this is owned/completed.</summary>
     public TechSet GrantedTechs { get; set; } = new();
+
+    /// <summary>
+    /// Successor semantics: once the owning team possesses ANY of these techs, this item is no longer
+    /// offered (e.g. a tier-2 gun's granted tech retires the tier-1 gun). Distinct from
+    /// <see cref="RequiredTechs"/> (which gate availability) — this is a "made obsolete by" retirement
+    /// set. Serialized kebab-case as <c>obsoleted-by-techs</c>; omitted when empty.
+    /// </summary>
+    public TechSet ObsoletedByTechs { get; set; } = new();
 }
 
 /// <summary>Yaw/pitch/roll triple. Replaces the C++ <c>float[3]</c> turn-rate arrays.</summary>

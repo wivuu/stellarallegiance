@@ -20,7 +20,7 @@
 #  loaded separately at boot (SIM_WORLD / --world overrides it).
 # =====================================================================
 
-version: "2026.07.07-world-tuning-blocks"
+version: "2026.07.14-tech-tree"
 
 catalog:
   - hulls.yaml
@@ -29,6 +29,8 @@ catalog:
   - expendables.yaml
   - launchers.yaml
   - stations.yaml
+  - techs.yaml
+  - developments.yaml
 
 factions:
   - factions/stock.yaml

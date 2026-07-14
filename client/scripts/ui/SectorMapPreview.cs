@@ -32,10 +32,37 @@ public sealed partial class SectorMapPreview : Control
 
     private MapModel? _map;
 
+    // When set, the matching sector node gets a pulsing highlight ring (the docked-screen
+    // CommandSidebar sets this to the selected base's sector). The pulse animates in _Process, but
+    // only while this control is on-screen so an off-tab sidebar costs nothing.
+    private uint? _highlight;
+    public uint? HighlightSector
+    {
+        get => _highlight;
+        set
+        {
+            if (_highlight == value)
+                return;
+            _highlight = value;
+            QueueRedraw();
+        }
+    }
+
+    private float _pulse; // 0..Tau phase for the highlight ring
+
     public SectorMapPreview()
     {
         UiFonts.EnsureLoaded();
         MouseFilter = MouseFilterEnum.Ignore;
+    }
+
+    public override void _Process(double delta)
+    {
+        // Only spend a redraw when there's a highlight ring to animate AND we're actually visible.
+        if (_highlight is null || !IsVisibleInTree())
+            return;
+        _pulse = (_pulse + (float)delta * 3f) % Mathf.Tau;
+        QueueRedraw();
     }
 
     public void SetMap(MapModel? map)
@@ -118,6 +145,15 @@ public sealed partial class SectorMapPreview : Control
             if (team is not null)
                 DrawCircle(center, circleR, ring with { A = 0.07f });
             DrawArc(center, circleR, 0, Mathf.Tau, 48, ring, team is null ? 1f : 1.5f, antialiased: true);
+
+            // Selected-base highlight: a cyan pulsing ring outside the sector node (chrome accent —
+            // the selection cursor is UI chrome, not team identity).
+            if (_highlight == s.Id)
+            {
+                float p = 0.5f + 0.5f * Mathf.Sin(_pulse);
+                float rr = circleR + 5f + p * 4f;
+                DrawArc(center, rr, 0, Mathf.Tau, 48, DesignTokens.TeamAccent with { A = 0.35f + 0.45f * p }, 2f, antialiased: true);
+            }
 
             foreach (var g in s.Gates)
             {

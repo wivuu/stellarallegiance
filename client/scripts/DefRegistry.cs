@@ -48,7 +48,10 @@ public partial class DefRegistry : Node
         IReadOnlyList<WeaponDef> weapons,
         IReadOnlyList<BaseDef> bases,
         IReadOnlyList<CargoItemDef> cargoItems,
-        WorldConfig world
+        WorldConfig world,
+        IReadOnlyList<TechDef>? techs = null,
+        IReadOnlyList<DevelopmentDef>? developments = null,
+        IReadOnlyList<StationCatalogDef>? stationCatalog = null
     )
     {
         _world = world;
@@ -66,7 +69,25 @@ public partial class DefRegistry : Node
             _bases[b.BaseTypeId] = b;
         foreach (var c in cargoItems)
             _cargo[c.CargoId] = c;
+        // Tech-path catalog (v36). LIST ORDER IS THE WIRE INDEX SPACE — never reorder.
+        _techs = techs ?? System.Array.Empty<TechDef>();
+        _developments = developments ?? System.Array.Empty<DevelopmentDef>();
+        _stationCatalog = stationCatalog ?? System.Array.Empty<StationCatalogDef>();
     }
+
+    // ---- Tech-path catalog (Stage-4 research; empty until MsgDefs lands — callers guard) ----
+
+    private IReadOnlyList<TechDef> _techs = System.Array.Empty<TechDef>();
+    private IReadOnlyList<DevelopmentDef> _developments = System.Array.Empty<DevelopmentDef>();
+    private IReadOnlyList<StationCatalogDef> _stationCatalog = System.Array.Empty<StationCatalogDef>();
+
+    // Streamed catalog lists in wire-index order (u16 indices on the wire index THESE lists).
+    public IReadOnlyList<TechDef> AllTechs() => _techs;
+    public IReadOnlyList<DevelopmentDef> AllDevelopments() => _developments;
+    public IReadOnlyList<StationCatalogDef> AllStationCatalog() => _stationCatalog;
+
+    public TechDef? GetTech(ushort idx) => idx < _techs.Count ? _techs[idx] : null;
+    public DevelopmentDef? GetDevelopment(ushort idx) => idx < _developments.Count ? _developments[idx] : null;
 
     // ---- Ship flight stats ------------------------------------------------
 

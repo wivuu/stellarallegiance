@@ -217,6 +217,11 @@ namespace StellarAllegiance.Shared
         public float ProbeSignature; // radar signature of the deployed probe (0 authored -> 1.0 at projection)
         public float ProbeHitRadius; // server hit-sphere radius for bolts/blasts vs the probe, u
         public float ProbeModelSize; // client visual normalization length, u (0 = client guard default)
+
+        // Techs (indices into the streamed tech catalog) a team must own before this weapon may be
+        // equipped/bought — the hangar arsenal's lock state (Stage-4 tech paths). Streamed LAST
+        // (after ProbeModelSize) so every block above stays byte-stable (v36).
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -255,6 +260,75 @@ namespace StellarAllegiance.Shared
         public float RadarSignature;
 
         public List<HardpointDef> Hardpoints = new();
+
+        // Concurrent research orders a base of this type can run at once (Stage-4 tech paths).
+        // Authored per station (`research-slots`), resolved to >= 1 at projection. Streamed LAST
+        // in the BaseDef block (after Hardpoints) so the fields above stay byte-stable (v36).
+        public byte ResearchSlots = 1;
+    }
+
+    // ---- Tech-path catalog defs (Stage-4 research), streamed in MsgDefs after the world config ----
+    //
+    // Techs are referenced BY INDEX into the streamed tech list (u16), not by string id, everywhere
+    // a requirement/grant list rides the wire (defs, team state, research state). The index order is
+    // the authored Core.Techs list order — deterministic on both peers by construction.
+
+    // Mirror of the factions library's closed Capability enum (Allegiance.Factions.Model.Capability),
+    // as the wire byte. APPEND-ONLY and must match the library's declaration order — the projection
+    // casts between them (shared/ deliberately does not reference the authoring library).
+    public enum CapabilityId : byte
+    {
+        Base = 0,
+        ShipyardAllowed = 1,
+        ExpansionAllowed = 2,
+        TacticalAllowed = 3,
+        SupremacyAllowed = 4,
+    }
+
+    // One research-tree tech node (a pure catalog identity techs/developments reference).
+    public sealed class TechDef
+    {
+        public string Id = ""; // stable authored id ("heavy-ordnance")
+        public string Name = "";
+        public string Description = "";
+    }
+
+    // One researchable development (the research-tree PURCHASE: price + wall-clock time + grants).
+    public sealed class DevelopmentDef
+    {
+        public string Id = "";
+        public string Name = "";
+        public string Description = "";
+        public string Group = ""; // research-tab cluster label ("WEAPONS"); empty = client bucket fallback
+        public int Price; // credits, deducted when research starts (or is queued — reservation)
+        public int BuildTimeSeconds; // wall seconds to complete (sim runs it in ticks)
+        public bool TechOnly; // obsolete once its grants are owned (never shows as "done" inventory)
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+        public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+        public byte[] RequiredCaps = System.Array.Empty<byte>(); // CapabilityId bytes
+        public byte[] GrantedCaps = System.Array.Empty<byte>();
+    }
+
+    // One station CATALOG entry — every authored station, including future structures that have no
+    // runtime base projection yet (BaseTypeId -1). The Build tab renders these; the Research tab
+    // reads their grants for "what unlocks this" displays. Distinct from BaseDef (the runtime
+    // sim/wire base model): a catalog entry is presentation + gating data only.
+    public sealed class StationCatalogDef
+    {
+        public string Id = "";
+        public string Name = "";
+        public string Description = "";
+        public int Price;
+        public int BuildTimeSeconds;
+        public byte StationClass; // factions StationClass enum byte (Starbase=0, Garrison=1, Shipyard=2, ...)
+        public short BaseTypeId = -1; // runtime wire base-type id; -1 = catalog-only (not buildable/spawnable)
+        public byte ResearchSlots; // resolved (>= 1) for runtime bases; authored raw otherwise
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+        public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+        public byte[] RequiredCaps = System.Array.Empty<byte>();
+        public byte[] GrantedCaps = System.Array.Empty<byte>();
     }
 
     // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;

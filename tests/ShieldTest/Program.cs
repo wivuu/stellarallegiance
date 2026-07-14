@@ -37,6 +37,9 @@ const uint EmptySector = 999; // unregistered → boundless, asteroid-free (see 
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2) is tech-gated behind heavy-ordnance at match start (StrategyTest's subject);
+    // this suite duels bombers, so seed the tech into the faction base so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("heavy-ordnance");
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;

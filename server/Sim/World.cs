@@ -85,6 +85,22 @@ public sealed class World
     public readonly List<Sector> Sectors = new();
     public readonly List<BaseSite> Bases = new();
     public readonly float[] BaseHealth; // indexed like Bases
+
+    // Stage-4 research: one mutable research-order state per base, indexed like Bases. Lives on
+    // World so a match-start world swap resets it for free (StartMatch builds a fresh World).
+    // Mutated ONLY on the sim thread (Simulation.Research.cs).
+    public sealed class BaseResearchState
+    {
+        // In-flight research orders at this base: catalog development index + integer tick window.
+        // Count is capped at the base type's ResearchSlots by the start validation.
+        public readonly List<(ushort DevIndex, uint StartTick, uint DurationTicks)> Active = new();
+
+        // The single on-deck queue slot: starts automatically when an active slot frees. Credits
+        // were already deducted at queue time (reservation), so promotion can never fail on funds.
+        public ushort? OnDeck;
+    }
+
+    public readonly BaseResearchState[] ResearchByBase; // indexed like Bases
     public readonly List<Rock> Asteroids = new();
     public readonly List<DustCloud> DustClouds = new();
     public readonly List<Gate> Alephs = new();
@@ -305,6 +321,9 @@ public sealed class World
                     + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
         BaseHealth = new float[Bases.Count];
         Array.Fill(BaseHealth, BaseMaxHealth);
+        ResearchByBase = new BaseResearchState[Bases.Count];
+        for (int i = 0; i < ResearchByBase.Length; i++)
+            ResearchByBase[i] = new BaseResearchState();
 
         // One economy state per team (Stage-1 = every team seeds from the single stock faction).
         foreach (var b in Bases)

@@ -28,6 +28,7 @@ public static class CoreValidator
         {
             CheckTechs(result, techIds, buildable.RequiredTechs, $"{Describe(buildable)} required-techs");
             CheckTechs(result, techIds, buildable.GrantedTechs, $"{Describe(buildable)} granted-techs");
+            CheckTechs(result, techIds, buildable.ObsoletedByTechs, $"{Describe(buildable)} obsoleted-by-techs");
         }
 
         // Hulls.
@@ -222,6 +223,8 @@ public static class CoreValidator
             CheckTechs(result, techIds, station.LocalTechs, $"station '{station.Id}' local-techs");
             CheckRef(result, stationIds, station.SuccessorStationId, $"station '{station.Id}' successor-station-id");
             CheckRef(result, droneIds, station.ConstructionDroneId, $"station '{station.Id}' construction-drone-id");
+            if (station.ResearchSlots < 0)
+                result.Error($"station '{station.Id}' research-slots must be >= 0 (got {station.ResearchSlots}).");
         }
 
         // Drones.

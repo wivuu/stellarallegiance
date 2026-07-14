@@ -68,4 +68,11 @@ public record Station : Buildable
     public double VisionSphereRadius { get; set; }
     /// <summary>Detection-range multiplier applied to every viewer's range against this base (omitted/0 resolves to 1.0).</summary>
     public double RadarSignature { get; set; }
+
+    /// <summary>
+    /// How many research orders this station may run concurrently. Omit-when-default (serialized
+    /// kebab-case as <c>research-slots</c>); 0 means "default (1)" and is resolved to a single slot at
+    /// projection. Only meaningful for stations that project to a runtime base.
+    /// </summary>
+    public int ResearchSlots { get; set; }
 }

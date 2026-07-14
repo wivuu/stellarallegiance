@@ -327,15 +327,18 @@ public partial class GameNetClient : Node
     }
 
     // Request to spawn the chosen class with a consumable hold (honored server-side only while a
-    // match is Active). Wire: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)]; a bare [4][cls]
-    // (empty cargo) makes the server seed the hull's default hold.
-    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null)
+    // match is Active). Wire (v36): [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId,
+    // u8 count)]. launchBaseId picks the hangar sidebar's launch base (0 = server default; the
+    // server validates friendly+alive and silently falls back).
+    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null, ulong launchBaseId = 0)
     {
         cargo ??= Array.Empty<(uint, byte)>();
-        var f = new byte[3 + cargo.Length * 5];
+        var f = new byte[11 + cargo.Length * 5];
         int o = 0;
         f[o++] = 4; // MsgSpawn
         f[o++] = shipClass;
+        BitConverter.TryWriteBytes(f.AsSpan(o), launchBaseId);
+        o += 8;
         f[o++] = (byte)cargo.Length;
         foreach (var (cargoId, count) in cargo)
         {
@@ -343,6 +346,19 @@ public partial class GameNetClient : Node
             o += 4;
             f[o++] = count;
         }
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander research order (MsgResearch=13, v36): op 0 start-or-queue, 1 cancel-active,
+    // 2 cancel-on-deck. Server-side commander gate; feedback returns as system chat + the next
+    // MsgResearchState frame.
+    public void SendResearch(byte op, ulong baseId, ushort devIndex)
+    {
+        var f = new byte[12];
+        f[0] = 13; // MsgResearch
+        f[1] = op;
+        BitConverter.TryWriteBytes(f.AsSpan(2), baseId);
+        BitConverter.TryWriteBytes(f.AsSpan(10), devIndex);
         _tx.Writer.TryWrite(f);
     }
 
@@ -807,6 +823,9 @@ public partial class GameNetClient : Node
             case 23:
                 ApplyMinerTargets(r);
                 break;
+            case 24:
+                ApplyResearchState(r);
+                break;
         }
     }
 
@@ -1096,8 +1115,38 @@ public partial class GameNetClient : Node
             var unlocked = new byte[nUnlocked];
             for (int j = 0; j < nUnlocked; j++)
                 unlocked[j] = r.ReadByte();
-            _world.NetUpdateTeamState(team, credits, score, unlocked);
+            // Owned techs (catalog indices) + capabilities (v36; mirror of BuildTeamState).
+            ushort nTechs = r.ReadUInt16();
+            var ownedTechs = new ushort[nTechs];
+            for (int j = 0; j < nTechs; j++)
+                ownedTechs[j] = r.ReadUInt16();
+            byte nCaps = r.ReadByte();
+            var ownedCaps = new byte[nCaps];
+            for (int j = 0; j < nCaps; j++)
+                ownedCaps[j] = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps);
         }
+    }
+
+    // MsgResearchState (v36): PER-TEAM research orders at our team's bases. Bases absent from the
+    // frame are idle — reconcile by omission (replace the whole map each frame).
+    private void ApplyResearchState(BinaryReader r)
+    {
+        byte nBases = r.ReadByte();
+        var map = new Dictionary<ulong, WorldRenderer.BaseResearch>();
+        for (int i = 0; i < nBases; i++)
+        {
+            ulong baseId = r.ReadUInt64();
+            byte nActive = r.ReadByte();
+            var active = new (ushort DevIndex, uint StartTick, uint DurationTicks)[nActive];
+            for (int a = 0; a < nActive; a++)
+                active[a] = (r.ReadUInt16(), r.ReadUInt32(), r.ReadUInt32());
+            ushort? onDeck = null;
+            if (r.ReadByte() != 0)
+                onDeck = r.ReadUInt16();
+            map[baseId] = new WorldRenderer.BaseResearch(active, onDeck);
+        }
+        _world.NetUpdateResearch(map);
     }
 
     // Single source: shared/Net/Wire.cs (the server's Protocol.Version aliases the same
@@ -1513,6 +1562,8 @@ public partial class GameNetClient : Node
                     // are server-only and never ride the wire).
                     ProbeHitRadius = r.ReadSingle(),
                     ProbeModelSize = r.ReadSingle(),
+                    // Tech-path lock state (v36; mirror of BuildDefs — streamed after ProbeModelSize).
+                    RequiredTechIdx = ReadTechList(r),
                 }
             );
 
@@ -1546,6 +1597,8 @@ public partial class GameNetClient : Node
                 RadarSignature = r.ReadSingle(),
             };
             b.Hardpoints = ReadHardpoints(r);
+            // Research slots (v36; mirror of BuildDefs — streamed after Hardpoints).
+            b.ResearchSlots = r.ReadByte();
             bases.Add(b);
         }
 
@@ -1560,9 +1613,78 @@ public partial class GameNetClient : Node
             FogOfWar = r.ReadBoolean(),
         };
 
-        _defs.Load(ships, weapons, bases, cargoItems, cfg);
-        Log.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
+        // ---- Tech-path catalog (v36; mirror of BuildDefs — appended after the world config). ----
+        // Techs come first and fix the u16 index space every TechList (and MsgTeamState /
+        // MsgResearchState) references.
+        var techs = new List<TechDef>();
+        ushort techCount = r.ReadUInt16();
+        for (int i = 0; i < techCount; i++)
+            techs.Add(new TechDef { Id = ReadStr(r), Name = ReadStr(r), Description = ReadStr(r) });
+        var developments = new List<DevelopmentDef>();
+        ushort devCount = r.ReadUInt16();
+        for (int i = 0; i < devCount; i++)
+            developments.Add(
+                new DevelopmentDef
+                {
+                    Id = ReadStr(r),
+                    Name = ReadStr(r),
+                    Description = ReadStr(r),
+                    Group = ReadStr(r),
+                    Price = r.ReadInt32(),
+                    BuildTimeSeconds = r.ReadInt32(),
+                    TechOnly = r.ReadBoolean(),
+                    RequiredTechIdx = ReadTechList(r),
+                    GrantedTechIdx = ReadTechList(r),
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    RequiredCaps = ReadCapList(r),
+                    GrantedCaps = ReadCapList(r),
+                }
+            );
+        var stationCatalog = new List<StationCatalogDef>();
+        ushort stationCount = r.ReadUInt16();
+        for (int i = 0; i < stationCount; i++)
+            stationCatalog.Add(
+                new StationCatalogDef
+                {
+                    Id = ReadStr(r),
+                    Name = ReadStr(r),
+                    Description = ReadStr(r),
+                    Price = r.ReadInt32(),
+                    BuildTimeSeconds = r.ReadInt32(),
+                    StationClass = r.ReadByte(),
+                    BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
+                    ResearchSlots = r.ReadByte(),
+                    RequiredTechIdx = ReadTechList(r),
+                    GrantedTechIdx = ReadTechList(r),
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    RequiredCaps = ReadCapList(r),
+                    GrantedCaps = ReadCapList(r),
+                }
+            );
+
+        _defs.Load(ships, weapons, bases, cargoItems, cfg, techs, developments, stationCatalog);
+        Log.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases, {techs.Count} techs, {developments.Count} developments, {stationCatalog.Count} stations");
         DefsReceived?.Invoke();
+    }
+
+    // A count-prefixed tech-index list (u8 n, n x u16) — mirror of Protocol.WriteTechList.
+    private static ushort[] ReadTechList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var idx = new ushort[n];
+        for (int i = 0; i < n; i++)
+            idx[i] = r.ReadUInt16();
+        return idx;
+    }
+
+    // A count-prefixed capability list (u8 n, n x u8) — mirror of Protocol.WriteCapList.
+    private static byte[] ReadCapList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var caps = new byte[n];
+        for (int i = 0; i < n; i++)
+            caps[i] = r.ReadByte();
+        return caps;
     }
 
     private void ApplyLobbyState(BinaryReader r)

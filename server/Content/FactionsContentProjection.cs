@@ -41,6 +41,19 @@ public static class FactionsContentProjection
         // Iterates every mountable part collection; CoreValidator already proves ids are unique.
         var partSigById = core.AllParts().ToDictionary(p => p.Id, p => p.Signature);
 
+        // Stage-4 tech paths: the authored Core.Techs LIST ORDER fixes the u16 wire index of every
+        // tech (deterministic — CoreSerializer.Load fixes manifest+file order). Built first so the
+        // weapon/development/station projections below can resolve their tech-ref lists onto indices.
+        var techIdx = new Dictionary<string, ushort>();
+        for (int i = 0; i < core.Techs.Count; i++)
+            techIdx[core.Techs[i].Id] = (ushort)i;
+        var techs = core.Techs
+            .Select(t => new TechDef { Id = t.Id, Name = t.Name, Description = t.Description ?? "" })
+            .ToList();
+        var developments = core.Developments.Select(d => ProjectDevelopment(d, techIdx)).ToList();
+        // Station CATALOG = every authored station, runtime AND catalog-only (Build-tab placeholders).
+        var stationCatalog = core.Stations.Select(s => ProjectStationCatalog(s, techIdx)).ToList();
+
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
             .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById))
@@ -51,10 +64,10 @@ public static class FactionsContentProjection
         // catches a duplicate weapon id shared between the two).
         var weapons = core.Weapons
             .Where(w => w.WeaponId is not null)
-            .Select(w => ProjectWeapon(w, projectileById))
+            .Select(w => ProjectWeapon(w, projectileById, techIdx))
             .Concat(core.Launchers
                 .Where(l => l.WeaponId is not null)
-                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById)))
+                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx)))
             .ToList();
 
         var bases = core.Stations
@@ -70,8 +83,56 @@ public static class FactionsContentProjection
 
         var start = ProjectFactionStart(core);
 
-        return new ContentSet(ships, weapons, bases, cargoItems, world, start, core);
+        return new ContentSet(
+            ships, weapons, bases, cargoItems, world, start, core,
+            techs, developments, stationCatalog, techIdx);
     }
+
+    // ---- Tech-path catalog projection (Stage 4) --------------------------------------------
+
+    // A TechSet/CapabilitySet is a HashSet (unordered) — SORT the projected index/byte arrays so
+    // two loads of the same bundle project byte-identical defs (ContentTest determinism guard).
+    private static ushort[] TechIdxArray(Allegiance.Factions.Model.TechSet set, IReadOnlyDictionary<string, ushort> techIdx) =>
+        set.Select(id => techIdx[id]).OrderBy(x => x).ToArray();
+
+    private static byte[] CapArray(Factions.CapabilitySet set) =>
+        set.Select(c => (byte)c).OrderBy(b => b).ToArray();
+
+    private static DevelopmentDef ProjectDevelopment(Factions.Development d, IReadOnlyDictionary<string, ushort> techIdx) =>
+        new()
+        {
+            Id = d.Id,
+            Name = d.Name,
+            Description = d.Description ?? "",
+            Group = d.Group ?? "",
+            Price = d.Price,
+            BuildTimeSeconds = d.BuildTimeSeconds,
+            TechOnly = d.TechOnly,
+            RequiredTechIdx = TechIdxArray(d.RequiredTechs, techIdx),
+            GrantedTechIdx = TechIdxArray(d.GrantedTechs, techIdx),
+            ObsoletedByTechIdx = TechIdxArray(d.ObsoletedByTechs, techIdx),
+            RequiredCaps = CapArray(d.RequiredCapabilities),
+            GrantedCaps = CapArray(d.GrantedCapabilities),
+        };
+
+    private static StationCatalogDef ProjectStationCatalog(Factions.Station s, IReadOnlyDictionary<string, ushort> techIdx) =>
+        new()
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Description = s.Description ?? "",
+            Price = s.Price,
+            BuildTimeSeconds = s.BuildTimeSeconds,
+            StationClass = (byte)s.Class,
+            BaseTypeId = s.BaseTypeId is byte b ? (short)b : (short)-1,
+            // Authored 0/omitted resolves to the default single slot (same rule as BaseDef below).
+            ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
+            RequiredTechIdx = TechIdxArray(s.RequiredTechs, techIdx),
+            GrantedTechIdx = TechIdxArray(s.GrantedTechs, techIdx),
+            ObsoletedByTechIdx = TechIdxArray(s.ObsoletedByTechs, techIdx),
+            RequiredCaps = CapArray(s.RequiredCapabilities),
+            GrantedCaps = CapArray(s.GrantedCapabilities),
+        };
 
     // Stage-2: the single stock faction's per-match starting state (credits/income + tech/capability
     // seed). Money is authored as a double but carried as whole-credit int (the wire type in P4); the
@@ -155,7 +216,11 @@ public static class FactionsContentProjection
                 .ToList(),
         };
 
-    private static WeaponDef ProjectWeapon(Factions.Weapon w, IReadOnlyDictionary<string, Factions.Projectile> projectileById)
+    private static WeaponDef ProjectWeapon(
+        Factions.Weapon w,
+        IReadOnlyDictionary<string, Factions.Projectile> projectileById,
+        IReadOnlyDictionary<string, ushort> techIdx
+    )
     {
         // damage/speed/radius derive from the referenced projectile; spread from the weapon's
         // dispersion; the tick-domain ballistics are explicit extend-fields. A runtime weapon must
@@ -180,6 +245,8 @@ public static class FactionsContentProjection
             // Client bolt-mesh dims come from the referenced projectile (0 = client default).
             BoltRadius = (float)proj.BoltRadius,
             BoltLength = (float)proj.BoltLength,
+            // Stage-4 tech paths: the hangar arsenal's lock state (indices into the tech catalog).
+            RequiredTechIdx = TechIdxArray(w.RequiredTechs, techIdx),
         };
     }
 
@@ -197,12 +264,16 @@ public static class FactionsContentProjection
         IReadOnlyDictionary<string, Factions.Missile> missileById,
         IReadOnlyDictionary<string, Factions.Mine> mineById,
         IReadOnlyDictionary<string, Factions.Chaff> chaffById,
-        IReadOnlyDictionary<string, Factions.Probe> probeById
+        IReadOnlyDictionary<string, Factions.Probe> probeById,
+        IReadOnlyDictionary<string, ushort> techIdx
     )
     {
+        // Stage-4 tech paths: launcher lock state, same rule as guns (indices into the tech catalog).
+        ushort[] reqTechs = TechIdxArray(l.RequiredTechs, techIdx);
         if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
             return new WeaponDef
             {
+                RequiredTechIdx = reqTechs,
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Missile,
@@ -240,6 +311,7 @@ public static class FactionsContentProjection
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Mine,
+                RequiredTechIdx = reqTechs,
                 // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
                 // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
                 ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0), // field lifespan
@@ -263,6 +335,7 @@ public static class FactionsContentProjection
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Chaff,
+                RequiredTechIdx = reqTechs,
                 ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0), // puff lifespan
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks, // eject cadence
@@ -279,6 +352,7 @@ public static class FactionsContentProjection
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Probe,
+                RequiredTechIdx = reqTechs,
                 ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0), // deployed-probe lifespan
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
@@ -332,6 +406,8 @@ public static class FactionsContentProjection
             VisionSphereRadius = (float)s.VisionSphereRadius,
             RadarSignature = s.RadarSignature <= 0 ? 1f : (float)s.RadarSignature,
             Hardpoints = s.Hardpoints.Select(ProjectHardpoint).ToList(),
+            // Stage-4 research: authored 0/omitted resolves to the default single slot.
+            ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
         };
 
     private static HardpointDef ProjectHardpoint(Factions.Hardpoint h) =>

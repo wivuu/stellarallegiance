@@ -33,3 +33,18 @@ weapons:
     projectile-id: bomber-bolt
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, only half-effective vs shields
     required-capabilities: [base]
+  # Heavy Cannon (weapon-id 9 — the next free id after the launchers claim 3-8). The class-2 gun,
+  # tech-gated behind cannon-tier-2 (dev-cannon-tier-2). NOT mounted by any stock hull hardpoint or
+  # default loadout: it exists only so the hangar arsenal can show a tech-locked entry (Phase D).
+  # Heavier + slower-firing than the bomber cannon, firing the harder-hitting heavy-bolt.
+  - id: heavy-cannon
+    name: Heavy Cannon
+    weapon-id: 9
+    mass: 14
+    dispersion: 0.010
+    fire-interval-ticks: 18
+    projectile-life-ticks: 16
+    projectile-id: heavy-bolt
+    shield-damage-multiplier: 0.5 # class-2 AP round: hull-focused, half-effective vs shields
+    required-capabilities: [base]
+    required-techs: [cannon-tier-2]

@@ -444,6 +444,45 @@ Unlock progression system: techs gate hull/weapon/payload availability; advancin
 
 ---
 
+### Tech Paths / Research
+The team investment tree: a commander spends credits at a friendly base to research a YAML-authored
+**development** over wall-clock time; on completion the whole team gains its granted **techs** and
+**capabilities**, and the unlock set re-resolves mid-match (e.g. the bomber unlocks once
+`heavy-ordnance` is researched). Per-base research runs in configurable slots plus one on-deck queue
+slot; credits deduct at start and at queue-reservation; cancel refunds 100%. State encodes
+startTick+duration — the client derives live progress from ServerTick.
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Sim/Simulation.Research.cs` — the sim engine (enqueue/step/complete, on-deck promotion)
+  - `server/Content/core/techs.yaml`, `developments.yaml` — the authored tech + development catalog
+  - `client/scripts/ui/ResearchTab.cs` — the RESEARCH docked-screen tab (clusters, rail-line nodes, banners)
+  - `client/scripts/ui/TechDetailPanel.cs` — shared right-hand detail column (schematic / cost-time-at / prereqs / unlocks / action footer), reused by RESEARCH and BUILD
+  - `shared/Net/Wire.cs`, `server/Net/Protocol.cs`, `client/scripts/GameNetClient.cs` — `MsgResearch` (13, c→s: start/queue/cancel) + `MsgResearchState` (24, s→c: per-team live progress)
+- **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab (Construction Placeholder)]]
+- **Notes:** Client status is derived from streamed data only (owned techs/caps + per-base research),
+  never baked; non-commanders see a disabled affordance. Protocol v36 introduced the wire.
+
+---
+
+### Build Tab (Construction Placeholder)
+The BUILD docked-screen tab: a responsive card grid of the **station catalog** — future structures
+(outpost, shipyard, refinery, tech-lab, supremacy-center, expansion-complex, teleport-receiver)
+authored with `base-type-id` omitted, so they never project to a runtime base (`BaseTypeId == -1`).
+Cards show availability from the same owned-tech/cap rules as research (available = cyan, locked =
+dim). It reuses `TechDetailPanel`. Construction is **not wired** — the action footer is always
+disabled ("CONSTRUCTORS OFFLINE"); base-building lands in a later phase. No frames are sent from this tab.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/ui/BuildTab.cs` — the tab + `StationCard` grid cell
+  - `client/scripts/ui/TechDetailPanel.cs` — shared detail column
+  - `server/Content/core/stations.yaml` — catalog-only station entries (below the runtime garrison)
+  - `shared/Defs.cs` — `StationCatalogDef` (streamed catalog tail of `MsgDefs`)
+- **Related:** [[Tech Paths / Research]], [[YAML Content Pipeline]], [[Def]]
+- **Notes:** `DefRegistry.AllStationCatalog()` filtered to `BaseTypeId == -1`; empty catalog shows an
+  awaiting-uplink guard (no baked data).
+
+---
+
 ## Networking & Protocol
 
 ### Protocol

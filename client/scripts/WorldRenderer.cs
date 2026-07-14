@@ -42,7 +42,7 @@ public partial class WorldRenderer : Node3D
     // Parallel list of (base node, team, id) for the HUD off-screen indicators — VisibleBases()
     // walks it and filters by Node.Visible (sector visibility), so it allocates nothing. Id is
     // also read by LockableEnemyBases() to offer a base as a Tab-cycle lock target.
-    private readonly List<(Node3D Node, byte Team, ulong Id)> _baseList = new();
+    private readonly List<(Node3D Node, byte Team, ulong Id, uint Sector)> _baseList = new();
 
     // Per-base health fraction (0..1), keyed by BaseId. Drives the screen-space damage bar
     // TargetMarkers draws over each base; full-health (>= ~1) bases are skipped so the bar
@@ -120,6 +120,22 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyCollection<Sector> MapSectors => _sectors.Values;
     public IReadOnlyList<(uint Sector, uint Dest)> MapAlephLinks => _alephLinks;
     public IReadOnlyList<(uint Sector, byte Team)> MapBaseTeams => _baseTeams;
+
+    // Every base currently streamed to this client, as (id, sector, team, alive). Feeds the docked
+    // screen's CommandSidebar "YOUR BASES" list (the sidebar filters to the local team). Alive = the
+    // base still has hull (see _baseHealthFrac, updated from MsgBases); a base whose health frame
+    // hasn't landed yet reads alive so a freshly-inserted garrison isn't shown DESTROYED. This exposes
+    // only what MsgBases already streams — no secret sector-local base positions.
+    public IReadOnlyList<(ulong Id, uint Sector, byte Team, bool Alive)> KnownBases()
+    {
+        var list = new List<(ulong, uint, byte, bool)>(_baseList.Count);
+        foreach (var (_, team, id, sector) in _baseList)
+        {
+            bool alive = !_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f;
+            list.Add((id, sector, team, alive));
+        }
+        return list;
+    }
 
     // ---- Fog of war (WP3 stores; WP4 renders) --------------------------
     // A last-known enemy contact (from MsgContacts). HUD/radar glyph only — never a 3D node. Pos is
@@ -465,7 +481,7 @@ public partial class WorldRenderer : Node3D
     private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
     {
         _occluderScratch.Clear();
-        foreach (var (node, _, _) in _baseList)
+        foreach (var (node, _, _, _) in _baseList)
             if (InSector(node, sector))
                 _occluderScratch.Add((node, 0f)); // bases always cast: sort ahead of every rock
         foreach (var n in _asteroidNodes.Values)
@@ -685,7 +701,7 @@ public partial class WorldRenderer : Node3D
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked)
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null)
     {
         _teamEconomy[team] = (credits, score);
         if (!_teamUnlocks.TryGetValue(team, out var set))
@@ -693,7 +709,54 @@ public partial class WorldRenderer : Node3D
         set.Clear();
         foreach (byte cls in unlocked)
             set.Add(cls);
+        // Owned techs (wire indices into DefRegistry.AllTechs) + capabilities (v36 research state).
+        if (!_teamOwnedTechs.TryGetValue(team, out var techSet))
+            _teamOwnedTechs[team] = techSet = new HashSet<ushort>();
+        techSet.Clear();
+        if (ownedTechs is not null)
+            foreach (ushort t in ownedTechs)
+                techSet.Add(t);
+        if (!_teamOwnedCaps.TryGetValue(team, out var capSet))
+            _teamOwnedCaps[team] = capSet = new HashSet<byte>();
+        capSet.Clear();
+        if (ownedCaps is not null)
+            foreach (byte c in ownedCaps)
+                capSet.Add(c);
     }
+
+    // ---- Stage-4 research state (v36) ------------------------------------------------------
+
+    private readonly Dictionary<byte, HashSet<ushort>> _teamOwnedTechs = new();
+    private readonly Dictionary<byte, HashSet<byte>> _teamOwnedCaps = new();
+
+    public bool TeamOwnsTech(byte team, ushort techIdx) =>
+        _teamOwnedTechs.TryGetValue(team, out var s) && s.Contains(techIdx);
+
+    public bool TeamOwnsCap(byte team, byte cap) =>
+        _teamOwnedCaps.TryGetValue(team, out var s) && s.Contains(cap);
+
+    public IReadOnlyCollection<ushort> TeamOwnedTechs(byte team) =>
+        _teamOwnedTechs.TryGetValue(team, out var s) ? s : System.Array.Empty<ushort>();
+
+    // Per-base research orders at OUR team's bases (MsgResearchState reconciles by omission — an
+    // absent base is idle). Progress derives from StartTick/DurationTicks vs the live ServerTick.
+    public readonly record struct BaseResearch(
+        (ushort DevIndex, uint StartTick, uint DurationTicks)[] Active,
+        ushort? OnDeck
+    );
+
+    private Dictionary<ulong, BaseResearch> _baseResearch = new();
+
+    public void NetUpdateResearch(Dictionary<ulong, BaseResearch> map) => _baseResearch = map;
+
+    public BaseResearch? ResearchAt(ulong baseId) =>
+        _baseResearch.TryGetValue(baseId, out var r) ? r : null;
+
+    public IReadOnlyDictionary<ulong, BaseResearch> AllResearch() => _baseResearch;
+
+    // 0..1 progress of a research order at the live server tick (clamped; 1 = due to complete).
+    public float ResearchProgress(uint startTick, uint durationTicks) =>
+        durationTicks == 0 ? 1f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
 
     public int TeamCredits(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Credits : 0;
 
@@ -788,7 +851,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(Vector3 Pos, byte Team, bool Dead)> VisibleBases()
     {
         _baseScratch.Clear();
-        foreach (var (node, team, id) in _baseList)
+        foreach (var (node, team, id, _) in _baseList)
             if (node.Visible)
                 _baseScratch.Add((node.GlobalPosition, team, BaseIsDead(id)));
         return _baseScratch;
@@ -808,7 +871,7 @@ public partial class WorldRenderer : Node3D
         if (!FogActive)
             return false; // stale memory is a fog-only mechanic — fog off renders as pre-fog (F9)
         bool any = false;
-        foreach (var (node, t, id) in _baseList)
+        foreach (var (node, t, id, _) in _baseList)
         {
             if (t != team || !node.HasMeta("sector") || (int)node.GetMeta("sector") != (int)sector)
                 continue;
@@ -830,7 +893,7 @@ public partial class WorldRenderer : Node3D
     {
         _lockableBaseScratch.Clear();
         if (_localTeam is byte lt)
-            foreach (var (node, team, id) in _baseList)
+            foreach (var (node, team, id, _) in _baseList)
                 if (node.Visible && team != lt && (!_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f))
                     _lockableBaseScratch.Add((id, node.GlobalPosition));
         return _lockableBaseScratch;
@@ -847,7 +910,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(ulong Id, Vector3 Pos, byte Team)> AllVisibleBases()
     {
         _pickBaseScratch.Clear();
-        foreach (var (node, team, id) in _baseList)
+        foreach (var (node, team, id, _) in _baseList)
             if (node.Visible)
                 _pickBaseScratch.Add((id, node.GlobalPosition, team));
         return _pickBaseScratch;
@@ -1058,7 +1121,7 @@ public partial class WorldRenderer : Node3D
     // destroyed-but-remembered base so a re-scout fade settles at the ghostly dim rather than solid.
     private float RestTransparencyFor(Node3D node)
     {
-        foreach (var (bn, _, id) in _baseList)
+        foreach (var (bn, _, id, _) in _baseList)
             if (bn == node)
                 return FogActive && _baseHealthFrac.TryGetValue(id, out float f) && f <= 0.001f
                     ? StaleBaseTransparency
@@ -1701,7 +1764,7 @@ public partial class WorldRenderer : Node3D
         node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
-        _baseList.Add((node, row.Team, row.BaseId));
+        _baseList.Add((node, row.Team, row.BaseId, row.SectorId));
         NetUpdateBaseHealth(row.BaseId, row.Health);
         // Bake a visible-mesh ray-caster from the authored GLB hull child (null when the base fell
         // back to the procedural sphere). node.Transform is already the base's world placement, so
