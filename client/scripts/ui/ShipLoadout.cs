@@ -203,7 +203,8 @@ public partial class ShipLoadout : Control
 
         // Real tab strip — HANGAR live; BUILD / RESEARCH are server-catalog guards this phase.
         var tabs = UiKit.MakeSegmented(["HANGAR", "BUILD", "RESEARCH"], 0, OnTabSelected);
-        tabs.CustomMinimumSize = new Vector2(340, 0);
+        tabs.AddThemeConstantOverride("separation", 12); // wider gap between the three docked-screen tabs
+        tabs.CustomMinimumSize = new Vector2(380, 0);
         row.AddChild(tabs);
 
         // Launch-base readout (display-only Phase A) — the base the CommandSidebar has selected.
