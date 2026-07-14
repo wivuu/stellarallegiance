@@ -339,6 +339,23 @@ Stage-1 YAML pipeline.
 - ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
   the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
   already exist from Stage 2.
+  Using a phased approach, implement the following items with as few delegated sub-agent(s) as possible, keep this agent context clear enough. At the end of each phase, write summaries of what to do next into a .PLAN/ document to handoff to another colleague.
+  - UI Changes to the in-game docked screen to accommodate the new 'Build' tab and the renamed 'Research' tab alongside the 'Hangar':
+    - Use the claude_design MCP (https://api.anthropic.com/v1/design/mcp, auth via /design-login) to import this project: https://claude.ai/design/p/28bf0d21-5959-4554-8bfc-a1f92113ea28?file=Ship+Loadout.dc.html
+    - Implement the remaining parts of `Ship Loadout.dc.html` using the imported design:
+      - Add a new 'Build' tab at top of in-game docked screen, rename 'Tech Tree' to 'Research'.
+      - Built a shared sidebar component (Command Network map + Your Bases) used by Hangar, Build, and Research pages
+      - On Hangar, the sidebar picks the launch base (flows into the top bar and launch footer), and the ship-class picker moved to a horizontal scrolling bar above the ship preview.
+      - On Hangar, move ship selection into a horizontal scrolling list of cards above the preview
+  - Wire up tech tree screen
+    - Show list of all buildable structures and research available based on the bases built and research already done.
+    - Allow a commander to start researching a technology from the tech tree
+    - Tech tree should be fully configurable in existing or modified yaml/schema.
+    - Each base can research a configurable number of technologies at a time
+    - Each research task takes a configurable amount of time to complete (measured in seconds), and takes a configurable amount of credits to start.
+    - Some research items may unlock other research items or buildable structures, as defined in the YAML/schema configuration.
+  - Build out build screen
+    - On build screen, we have not implemented constructor logic yet, so we will leave placeholders only; load placeholders from actual YAML but just dont allow us to buy anything yet
 - ☐ **[XL]** **Base building + constructors** — deployable structures for resource processing; ships land,
   repair, and rearm at bases.
   - Generalize bases, so that the mesh to be used is determined by the YAML configuration, similar to hulls for ships
