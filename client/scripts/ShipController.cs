@@ -638,7 +638,15 @@ public partial class ShipController : Node
                 return; // the scope owns Esc while open (its own handler closes it) — don't release/menu
             if (Input.MouseMode == Input.MouseModeEnum.Captured)
             {
-                Input.MouseMode = Input.MouseModeEnum.Visible;
+                Input.MouseMode = Input.MouseModeEnum.Visible; // first Esc frees the cursor (command mode)
+            }
+            else if (TargetMarkers.FocusedId != 0 || SectorOverview.SelectionCount > 0)
+            {
+                // Cursor already free with a target / command group: Esc backs out one level — clear the
+                // combat target and the group first; only the next press (with nothing selected) opens
+                // the escape menu.
+                TargetMarkers.SetFocus(0);
+                SectorOverview.ClearFlightSelection();
             }
             else
             {
@@ -649,11 +657,22 @@ public partial class ShipController : Node
         else if (
             @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }
             && Input.MouseMode != Input.MouseModeEnum.Captured
+            // In cursor-free flight command mode SectorOverview owns the left button (box-select and
+            // the plain-click re-lock, which calls RecaptureCursor below), so don't recapture on press.
+            && !SectorOverview.FlightCommandActive
         )
         {
-            Input.MouseMode = Input.MouseModeEnum.Captured;
-            _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
+            RecaptureCursor();
         }
+    }
+
+    // Re-lock the cursor for mouse-look and drop any stale accumulated motion so recapture doesn't
+    // snap the view. Public so SectorOverview's cursor-free plain-click re-lock routes through the
+    // same seam (it owns the left button while the flight command gestures are live).
+    public void RecaptureCursor()
+    {
+        Input.MouseMode = Input.MouseModeEnum.Captured;
+        _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
     }
 
     // Release the cursor for the spawn menu (dead / not yet spawned). The flying-state

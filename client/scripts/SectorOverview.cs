@@ -39,6 +39,22 @@ public partial class SectorOverview : Node3D
     private static readonly System.Collections.Generic.List<ulong> _selection = new();
     public static ulong SelectedId => _selection.Count == 0 ? 0 : _selection[^1];
 
+    // Cross-node seams for the cursor-free flight command mode, read by ShipController: whether the
+    // in-cockpit command gestures are live (so it defers cursor recapture to us), the current group
+    // size (so Esc can "back out one level" by clearing it), and a way to drop the group.
+    public static bool FlightCommandActive => _instance?.FlightCommandContext ?? false;
+    public static int SelectionCount => _selection.Count;
+
+    public static void ClearFlightSelection()
+    {
+        _selection.Clear();
+        if (_instance != null)
+        {
+            _instance._selMarker.Visible = false;
+            _instance._selBox.Visible = false;
+        }
+    }
+
     private const float Fov = 50f; // perspective FOV (deg); perspective avoids the
 
     // sky-shader pinch an ortho camera causes
@@ -95,6 +111,7 @@ public partial class SectorOverview : Node3D
     private Vector2 _leftPressPos,
         _rightPressPos;
     private bool _leftMinimap; // the left press landed on the minimap → no target pick on release
+    private bool _leftShift; // shift held at the left press (flight: box-add / toggle vs replace)
 
     private Vector3 _target; // orbit focus point
     private float _yawDeg,
@@ -254,7 +271,21 @@ public partial class SectorOverview : Node3D
         _f3Held = f3;
 
         if (!Active)
+        {
+            // Cursor-free flight (Esc released the cursor): the same selection machinery runs, but
+            // reprojected through the flight CHASE camera so box-selected units get their gold
+            // brackets on the HUD. When the cursor is re-captured / a modal takes over, hide the
+            // markers (the transient group is collapsed on re-capture — see RecaptureFromFlight).
+            if (FlightCommandContext)
+                UpdateSelectionMarker(_chaseCam);
+            else
+            {
+                _boxSelecting = _boxDragging = false;
+                _selMarker.Visible = false;
+                _selBox.Visible = false;
+            }
             return;
+        }
 
         // View sector changed (warp, or a minimap click): rebuild the grid to its size.
         float radius = _world.ViewSectorRadius;
@@ -268,7 +299,7 @@ public partial class SectorOverview : Node3D
         PlaceCamera();
         UpdateGridLod();
         RebuildStems();
-        UpdateSelectionMarker();
+        UpdateSelectionMarker(_cam);
     }
 
     // Revalidate the selection each frame and reproject a bracket marker over each entity. Gold =
@@ -278,7 +309,7 @@ public partial class SectorOverview : Node3D
     // sectors (that's how cross-sector orders are issued: select, view a sector, right-click) —
     // they just don't draw until their sector is on screen. Only genuinely-despawned ships and
     // out-of-view informational entities (bases/rocks/enemies) are pruned.
-    private void UpdateSelectionMarker()
+    private void UpdateSelectionMarker(Camera3D cam)
     {
         // Dismiss commander goto markers on arrival: once the unit reaches its mark (the shared
         // waypoint arrive band) the marker's job is done (miners then swing off to a rock, pigs
@@ -304,17 +335,17 @@ public partial class SectorOverview : Node3D
                 _selection.RemoveAt(i); // despawned ship / out-of-view informational entity
                 continue;
             }
-            bool shipDrawable = inView && !_cam.IsPositionBehind(pos);
+            bool shipDrawable = inView && !cam.IsPositionBehind(pos);
             // Ordered destination for this unit (pigs AND miners): drawn while it's selected and
             // its destination sector is the one on screen — INDEPENDENT of where the unit itself
             // currently is (a cross-sector order shows its mark before the unit gets there).
             // Points are sector-local == render coords (sectors are origin-centered).
             if (_orderedPoints.TryGetValue(id, out var dest)
                 && dest.Sector == _world.ViewSector
-                && !_cam.IsPositionBehind(dest.Pos))
+                && !cam.IsPositionBehind(dest.Pos))
                 _orderMarkerDraws.Add((
-                    shipDrawable ? _cam.UnprojectPosition(pos) : Vector2.Zero,
-                    _cam.UnprojectPosition(dest.Pos),
+                    shipDrawable ? cam.UnprojectPosition(pos) : Vector2.Zero,
+                    cam.UnprojectPosition(dest.Pos),
                     shipDrawable,
                     true));
             // Own ship: its F3 waypoint is the analog of a commander goto — draw the SAME gold
@@ -322,15 +353,15 @@ public partial class SectorOverview : Node3D
             else if (id == ownId && ownId != 0 && shipDrawable
                 && TargetMarkers.Waypoint is (true, var wSector, var wPos)
                 && wSector == _world.ViewSector
-                && !_cam.IsPositionBehind(wPos))
+                && !cam.IsPositionBehind(wPos))
                 _orderMarkerDraws.Add((
-                    _cam.UnprojectPosition(pos),
-                    _cam.UnprojectPosition(wPos),
+                    cam.UnprojectPosition(pos),
+                    cam.UnprojectPosition(wPos),
                     true,
                     false));
             if (!shipDrawable)
                 continue; // still selected, just not drawable this frame
-            _selMarkerDraws.Add((_cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
+            _selMarkerDraws.Add((cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
         }
         _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0;
         if (_selMarker.Visible)
@@ -607,18 +638,14 @@ public partial class SectorOverview : Node3D
         if (EscapeMenu.Active)
             return;
 
-        // Not in the F3 map: a right-click while FLYING with the cursor freed (Esc, but no escape
-        // menu) orders our OWN ship to whatever's clicked — the in-cockpit analog of the map's
-        // right-click. Own-ship only (autopilot); never the commander fan-out (that stays F3). RMB
-        // while the cursor is free is otherwise unused in flight, so there's no collision.
+        // Not in the F3 map: with the cursor freed (Esc, but no escape menu) the same select/command
+        // gestures run in the cockpit — left-drag box-select, shift-click toggle, right-click order —
+        // projected through the flight chase camera. A plain left-click re-locks the cursor. See
+        // HandleFlightInput. While the cursor is captured (normal mouse-look) none of this fires.
         if (!Active)
         {
-            if (FlightCommandContext
-                && @event is InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } fmb)
-            {
-                HandleFlightRightClick(fmb.Position);
-                GetViewport().SetInputAsHandled();
-            }
+            if (FlightCommandContext)
+                HandleFlightInput(@event);
             return;
         }
 
@@ -670,12 +697,12 @@ public partial class SectorOverview : Node3D
                             _selBox.Visible = false;
                             if (wasBox)
                                 // Drag past the click threshold = box select the friendlies inside.
-                                FinalizeBoxSelect(_leftPressPos, mb.Position);
+                                FinalizeBoxSelect(_cam, _leftPressPos, mb.Position);
                             // Release close to the press (and not a minimap click) = a click:
                             // select a target / drop a waypoint (LEFT = no engage); with shift,
                             // toggle a ship in/out of the multi-selection.
                             else if (!_leftMinimap && (mb.Position - _leftPressPos).Length() < ClickMovePx)
-                                HandleMapClick(mb.Position, engage: false, additive: mb.ShiftPressed);
+                                HandleMapClick(_cam, mb.Position, engage: false, additive: mb.ShiftPressed);
                         }
                         break;
                     case MouseButton.Middle:
@@ -687,7 +714,7 @@ public partial class SectorOverview : Node3D
                             _rightPressPos = mb.Position;
                         else if ((mb.Position - _rightPressPos).Length() < ClickMovePx)
                             // RIGHT click (not an orbit drag): same resolution as left, then engage.
-                            HandleMapClick(mb.Position, engage: true);
+                            HandleMapClick(_cam, mb.Position, engage: true);
                         break;
                 }
                 break;
@@ -776,7 +803,7 @@ public partial class SectorOverview : Node3D
     // target in parallel (ApplyOwnShipRightClick) — a mixed "me + teammates" order moves everyone
     // together. With nothing (or only our own ship) selected this reduces to the legacy
     // focus/waypoint + engage-own-autopilot path.
-    private void HandleMapClick(Vector2 point, bool engage, bool additive = false)
+    private void HandleMapClick(Camera3D cam, Vector2 point, bool engage, bool additive = false)
     {
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
 
@@ -809,11 +836,14 @@ public partial class SectorOverview : Node3D
                     return;
                 }
             }
-            SwitchView(mapSector);
+            // A non-engage minimap click only retargets the F3 view; in cursor-free flight the map
+            // isn't open, so a left-click there does nothing (orders go through the engage path above).
+            if (Active)
+                SwitchView(mapSector);
             return;
         }
 
-        bool picked = TryPickEntity(_cam, point, out ulong encoded);
+        bool picked = TryPickEntity(cam, point, out ulong encoded);
 
         // A right-click that lands on a ship already in the selection (our own or a selected
         // teammate) is a MOVE, not a target — it redirects the group to that spot. Without this,
@@ -865,7 +895,7 @@ public partial class SectorOverview : Node3D
                     _orderedPoints.Remove(subject); // an entity target supersedes any goto point
                 }
             }
-            else if (TryGridPoint(point, out Vector3 world))
+            else if (TryGridPoint(cam, point, out Vector3 world))
                 foreach (ulong subject in subjects)
                 {
                     _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
@@ -873,19 +903,19 @@ public partial class SectorOverview : Node3D
                 }
             // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along.
             if (ownId != 0 && _selection.Contains(ownId))
-                ApplyOwnShipRightClick(pickedTarget, encoded, point);
+                ApplyOwnShipRightClick(cam, pickedTarget, encoded, point);
             return;
         }
 
         // Nothing (or only our own ship) selected: the legacy focus/waypoint + engage-own-autopilot.
-        ApplyOwnShipRightClick(pickedTarget, encoded, point);
+        ApplyOwnShipRightClick(cam, pickedTarget, encoded, point);
     }
 
     // Apply the local-ship half of a right-click to our OWN ship — it's never a MsgOrder subject,
     // we steer it with autopilot. Mirrors the legacy right-click: an entity becomes the focus, an
     // empty-grid point becomes a waypoint, then autopilot engages toward it. EngageAutopilot is a
     // no-op until we're actually launched, so this is safe to call pre-launch too.
-    private void ApplyOwnShipRightClick(bool picked, ulong encoded, Vector2 point)
+    private void ApplyOwnShipRightClick(Camera3D cam, bool picked, ulong encoded, Vector2 point)
     {
         _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
         if (picked)
@@ -893,7 +923,7 @@ public partial class SectorOverview : Node3D
             TargetMarkers.SetFocus(encoded);
             TargetMarkers.ClearWaypoint();
         }
-        else if (TryGridPoint(point, out Vector3 world))
+        else if (TryGridPoint(cam, point, out Vector3 world))
         {
             TargetMarkers.SetWaypoint(_world.ViewSector, world);
             TargetMarkers.SetFocus(0);
@@ -936,34 +966,127 @@ public partial class SectorOverview : Node3D
     // drop in flight); own ship is excluded as a target so we never autopilot toward ourselves.
     private void HandleFlightRightClick(Vector2 point)
     {
+        ulong ownId = _world.LocalShip?.ShipId ?? 0;
+        bool ownSelected = ownId != 0 && _selection.Contains(ownId);
+
+        // With a command GROUP selected (box / shift-click), a right-click issues the full commander
+        // order — minimap sector, entity target, or a move to an empty grid point — fanning out to the
+        // teammates and folding our own ship in, exactly like the F3 map. Reuses HandleMapClick.
+        if (CommandableSelection().Count > 0 || ownSelected)
+        {
+            HandleMapClick(_chaseCam, point, engage: true);
+            return;
+        }
+
+        // No group: a single own-ship order. A minimap sector node or a picked entity engages
+        // autopilot; empty-space clicks are ignored (no waypoint drop in flight, per the design).
         _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
         if (_minimap != null && _minimap.TryClickSector(point, out uint sector))
         {
             OrderOwnShipToSector(sector); // NOT SwitchView — flight orders, doesn't retarget an F3 view
             return;
         }
-        ulong ownId = _world.LocalShip?.ShipId ?? 0;
         if (TryPickEntity(_chaseCam, point, out ulong encoded) && encoded != ownId)
-            ApplyOwnShipRightClick(picked: true, encoded, point); // focus + engage autopilot
+            ApplyOwnShipRightClick(_chaseCam, picked: true, encoded, point); // focus + engage autopilot
+    }
+
+    // The cursor-free flight mouse gestures (called only while FlightCommandContext). Mirrors the F3
+    // map's left/right handling minus orbit/pan/zoom, projecting the flight chase camera:
+    //   • left-drag  → box-select friendlies (shift = add to the set)
+    //   • shift-click → toggle one friendly in/out of the group
+    //   • plain click → re-lock the cursor for mouse-look (collapses the transient group)
+    //   • right-click → order the group / own ship (HandleFlightRightClick)
+    private void HandleFlightInput(InputEvent @event)
+    {
+        switch (@event)
+        {
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
+                if (mb.Pressed)
+                {
+                    _leftPressPos = mb.Position;
+                    _boxEnd = mb.Position;
+                    _leftShift = mb.ShiftPressed;
+                    // A left interaction over the minimap panel is a no-op in flight (the minimap only
+                    // takes right-click orders here) — don't box-select or recapture through it.
+                    _leftMinimap = MinimapHit(mb.Position);
+                    _boxSelecting = !_leftMinimap;
+                }
+                else
+                {
+                    bool wasBox = _boxDragging;
+                    _boxSelecting = _boxDragging = false;
+                    _selBox.Visible = false;
+                    if (wasBox)
+                        FinalizeBoxSelect(_chaseCam, _leftPressPos, mb.Position, additive: _leftShift);
+                    else if (_leftMinimap)
+                    {
+                        /* left-click on the minimap in flight: nothing */
+                    }
+                    else if (_leftShift)
+                        HandleMapClick(_chaseCam, mb.Position, engage: false, additive: true);
+                    else
+                        RecaptureFromFlight();
+                }
+                break;
+
+            case InputEventMouseButton { ButtonIndex: MouseButton.Right, Pressed: true } rmb:
+                HandleFlightRightClick(rmb.Position);
+                GetViewport().SetInputAsHandled();
+                break;
+
+            case InputEventMouseMotion motion when _boxSelecting:
+                _boxEnd = motion.Position;
+                if (!_boxDragging && (_boxEnd - _leftPressPos).Length() >= ClickMovePx)
+                {
+                    _boxDragging = true;
+                    _selBox.Visible = true;
+                }
+                if (_boxDragging)
+                    _selBox.QueueRedraw();
+                break;
+        }
+    }
+
+    // Plain-click re-lock: hand the cursor back to ShipController for mouse-look and collapse the
+    // transient command group. The single combat target (TargetMarkers.FocusedId) is independent of
+    // _selection, so it "remains as target" (or none) — exactly the requested collapse behaviour.
+    private void RecaptureFromFlight()
+    {
+        _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
+        _shipController?.RecaptureCursor();
+        _selection.Clear();
+        _selMarker.Visible = false;
+        _selBox.Visible = false;
+    }
+
+    // Whether a screen point falls on a minimap sector node (used to keep left gestures off it).
+    private bool MinimapHit(Vector2 point)
+    {
+        _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
+        return _minimap != null && _minimap.TryClickSector(point, out _);
     }
 
     // Box select: replace the selection with every friendly ship (INCLUDING our own) whose screen
     // position falls inside the drag rectangle (empty box = clear, matching click-away). The own
     // ship rides along as part of the group but is never an order subject (see IsLiveCommandable).
-    private void FinalizeBoxSelect(Vector2 a, Vector2 b)
+    // `additive` (shift-drag) keeps the existing set and adds to it instead of replacing. Projects
+    // whichever camera is driving the current mode (overview in F3, chase in cursor-free flight).
+    private void FinalizeBoxSelect(Camera3D cam, Vector2 a, Vector2 b, bool additive = false)
     {
         var rect = new Rect2(a, b - a).Abs();
-        _selection.Clear();
+        if (!additive)
+            _selection.Clear();
         foreach (var s in _world.FriendlyShips())
         {
-            if (_cam.IsPositionBehind(s.GlobalPosition))
+            if (cam.IsPositionBehind(s.GlobalPosition))
                 continue;
-            if (rect.HasPoint(_cam.UnprojectPosition(s.GlobalPosition)))
+            if (rect.HasPoint(cam.UnprojectPosition(s.GlobalPosition)) && !_selection.Contains(s.ShipId))
                 _selection.Add(s.ShipId);
         }
         if (TryLocalShip(out ulong localId, out Vector3 localPos)
-            && !_cam.IsPositionBehind(localPos)
-            && rect.HasPoint(_cam.UnprojectPosition(localPos)))
+            && !cam.IsPositionBehind(localPos)
+            && rect.HasPoint(cam.UnprojectPosition(localPos))
+            && !_selection.Contains(localId))
             _selection.Add(localId);
     }
 
@@ -1036,11 +1159,11 @@ public partial class SectorOverview : Node3D
     // Intersect the camera ray through the click point with the sector's grid plane (Y = sector
     // center Y, where the reference grid and altitude stems sit) → the waypoint world position.
     // Returns false if the ray runs parallel to the plane or would hit it behind the camera.
-    private bool TryGridPoint(Vector2 point, out Vector3 world)
+    private bool TryGridPoint(Camera3D cam, Vector2 point, out Vector3 world)
     {
         world = Vector3.Zero;
-        Vector3 origin = _cam.ProjectRayOrigin(point);
-        Vector3 dir = _cam.ProjectRayNormal(point);
+        Vector3 origin = cam.ProjectRayOrigin(point);
+        Vector3 dir = cam.ProjectRayNormal(point);
         if (Mathf.Abs(dir.Y) < 1e-5f)
             return false;
         float planeY = _world.ViewSectorCenter.Y;
