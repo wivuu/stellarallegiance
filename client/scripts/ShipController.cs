@@ -388,6 +388,13 @@ public partial class ShipController : Node
             _spawnPending = false;
             _spawnRequest = null;
             SpawnHint = null;
+            // Clear the NAV waypoint on arrival — but only once autopilot has DISENGAGED (the server
+            // drops ShipFlagAutopilot when the ship reaches its mark). Gating on !ApEngagedLocal keeps
+            // the line up for the whole trip no matter how near the waypoint was dropped; a bare
+            // distance check would wipe any waypoint set within the arrive band before the line ever
+            // drew. (A manual takeover far from the mark leaves the waypoint so T can re-engage it.)
+            if (!ApEngagedLocal)
+                TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.LocalShip!.GlobalPosition);
         }
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {

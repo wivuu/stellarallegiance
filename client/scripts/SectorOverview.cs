@@ -80,14 +80,11 @@ public partial class SectorOverview : Node3D
     // Ordered goto destinations (subject raw ship id → sector + sector-local point), recorded when
     // a point order is SENT so the map can show where a selected unit was told to go (gold diamond
     // + leader line, drawn only while the subject is selected and its destination sector is the one
-    // being viewed). Entries are superseded by entity-target orders and removed on release; the sim
-    // side of the order isn't echoed back, so this is client-side bookkeeping of intent.
+    // being viewed). Entries are superseded by entity-target orders and dismissed on arrival; the
+    // sim side of the order isn't echoed back, so this is client-side bookkeeping of intent.
     private readonly System.Collections.Generic.Dictionary<ulong, (uint Sector, Vector3 Pos)> _orderedPoints = new();
-    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 point, bool line)> _orderMarkerDraws = new();
+    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 point, bool line, bool glyph)> _orderMarkerDraws = new();
 
-    // Matches the server's arrive bands (miner ProspectArriveRange 300, pig patrol-arrive +
-    // wobble): inside this of the mark the unit has arrived and its waypoint marker is dismissed.
-    private const float OrderedPointDismissRange = 300f;
     private Control _selBox = null!; // rubber-band selection rectangle while left-dragging
     private Vector2 _boxEnd; // current cursor corner of the box (anchor = _leftPressPos)
 
@@ -197,15 +194,19 @@ public partial class SectorOverview : Node3D
                 _selMarker.DrawLine(corner, corner + new Vector2(0f, -sy * arm), col, w);
             }
 
-        // Ordered-destination glyphs: the SAME hollow diamond + center dot + tag the nav waypoint
+        // Ordered-destination glyphs: the SAME hollow diamond + center dot + tag the waypoint
         // uses (TargetMarkers.DrawWaypoint), recolored commander-gold with a CMD tag, plus a faint
         // leader line from the unit so multi-unit orders read as "who goes where".
         const float r = 9.2f; // TargetMarkers: GlyphSize (8) * 1.15
         Color gold = DesignTokens.CmdrGold;
-        foreach (var (ship, point, line) in _orderMarkerDraws)
+        foreach (var (ship, point, line, glyph) in _orderMarkerDraws)
         {
             if (line)
                 _selMarker.DrawLine(ship, point, new Color(gold, 0.35f), 1f);
+            // Own-ship waypoint entries draw the leader line only: their destination is already
+            // marked by the cyan waypoint diamond (TargetMarkers.DrawWaypoint).
+            if (!glyph)
+                continue;
             var top = point + new Vector2(0f, -r);
             var right = point + new Vector2(r, 0f);
             var bottom = point + new Vector2(0f, r);
@@ -271,31 +272,33 @@ public partial class SectorOverview : Node3D
     }
 
     // Revalidate the selection each frame and reproject a bracket marker over each entity. Gold =
-    // a friendly non-local ship (a right-click will command it); chrome cyan = anything else
-    // (informational selection). Friendly SHIPS stay selected while the commander views OTHER
+    // a friendly ship, ours included (a right-click commands teammates, or engages our own
+    // autopilot); chrome cyan = anything else (informational selection). Friendly SHIPS stay
+    // selected while the commander views OTHER
     // sectors (that's how cross-sector orders are issued: select, view a sector, right-click) —
     // they just don't draw until their sector is on screen. Only genuinely-despawned ships and
     // out-of-view informational entities (bases/rocks/enemies) are pruned.
     private void UpdateSelectionMarker()
     {
-        // Dismiss ordered waypoints on arrival: once the unit is within the server's arrive band
-        // of its mark the marker's job is done (miners then swing off to a rock, pigs hold — the
-        // stale diamond would otherwise linger forever). Only measurable while the destination
-        // sector is the one being viewed, which is also the only time it draws.
+        // Dismiss commander goto markers on arrival: once the unit reaches its mark (the shared
+        // waypoint arrive band) the marker's job is done (miners then swing off to a rock, pigs
+        // hold — the stale diamond would otherwise linger forever). Only measurable while the
+        // destination sector is the one being viewed, which is also the only time it draws.
         if (_orderedPoints.Count > 0)
             foreach (var s in _world.FriendlyShips())
                 if (_orderedPoints.TryGetValue(s.ShipId, out var d)
                     && d.Sector == _world.ViewSector
-                    && s.GlobalPosition.DistanceSquaredTo(d.Pos) <= OrderedPointDismissRange * OrderedPointDismissRange)
+                    && TargetMarkers.ReachedWaypoint(s.GlobalPosition, d.Pos))
                     _orderedPoints.Remove(s.ShipId);
 
         _selMarkerDraws.Clear();
         _orderMarkerDraws.Clear();
+        ulong ownId = _world.LocalShip?.ShipId ?? 0;
         for (int i = _selection.Count - 1; i >= 0; i--)
         {
             ulong id = _selection[i];
             bool inView = TryResolveEntity(id, out Vector3 pos, out bool commandable);
-            bool liveShip = IsLiveCommandable(id);
+            bool liveShip = IsLiveShip(id);
             if (!inView && !liveShip)
             {
                 _selection.RemoveAt(i); // despawned ship / out-of-view informational entity
@@ -306,14 +309,25 @@ public partial class SectorOverview : Node3D
             // its destination sector is the one on screen — INDEPENDENT of where the unit itself
             // currently is (a cross-sector order shows its mark before the unit gets there).
             // Points are sector-local == render coords (sectors are origin-centered).
-            if (liveShip
-                && _orderedPoints.TryGetValue(id, out var dest)
+            if (_orderedPoints.TryGetValue(id, out var dest)
                 && dest.Sector == _world.ViewSector
                 && !_cam.IsPositionBehind(dest.Pos))
                 _orderMarkerDraws.Add((
                     shipDrawable ? _cam.UnprojectPosition(pos) : Vector2.Zero,
                     _cam.UnprojectPosition(dest.Pos),
-                    shipDrawable));
+                    shipDrawable,
+                    true));
+            // Own ship: its F3 waypoint is the analog of a commander goto — draw the SAME gold
+            // leader line to it (the cyan waypoint diamond already marks the endpoint, so no glyph).
+            else if (id == ownId && ownId != 0 && shipDrawable
+                && TargetMarkers.Waypoint is (true, var wSector, var wPos)
+                && wSector == _world.ViewSector
+                && !_cam.IsPositionBehind(wPos))
+                _orderMarkerDraws.Add((
+                    _cam.UnprojectPosition(pos),
+                    _cam.UnprojectPosition(wPos),
+                    true,
+                    false));
             if (!shipDrawable)
                 continue; // still selected, just not drawable this frame
             _selMarkerDraws.Add((_cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
@@ -337,7 +351,7 @@ public partial class SectorOverview : Node3D
     {
         if (_selection.Remove(encoded))
             return;
-        _selection.RemoveAll(id => !IsLiveCommandable(id));
+        _selection.RemoveAll(id => !IsLiveShip(id));
         _selection.Add(encoded);
     }
 
@@ -351,7 +365,7 @@ public partial class SectorOverview : Node3D
         {
             if (IsLiveCommandable(_selection[i]))
                 subjects.Add(_selection[i]);
-            else if (!TryResolveEntity(_selection[i], out _, out _))
+            else if (!IsLiveShip(_selection[i]) && !TryResolveEntity(_selection[i], out _, out _))
                 _selection.RemoveAt(i); // neither a live ship nor a view-resolvable entity — gone
         }
         subjects.Reverse();
@@ -359,11 +373,34 @@ public partial class SectorOverview : Node3D
     }
 
     // A live friendly SHIP anywhere in the world (not view-filtered) — the cross-sector order
-    // subject test. Base/rock flag bits are never ships; the local ship is naturally excluded.
+    // SUBJECT test. Base/rock flag bits are never ships; the local ship is naturally excluded
+    // (you command your own ship via autopilot, never a MsgOrder), so it never joins the fan-out.
     private bool IsLiveCommandable(ulong encoded) =>
         !GameContent.IsBaseLock(encoded)
         && !GameContent.IsAsteroidFocus(encoded)
         && _world.FriendlyShipById(encoded) != null;
+
+    // A selection-surviving friendly ship: an order subject OR our own ship. Broader than
+    // IsLiveCommandable — the own ship is kept in a mixed selection and across sector views (so it
+    // reads as part of the group), but stays OUT of the order fan-out via IsLiveCommandable above.
+    private bool IsLiveShip(ulong encoded) =>
+        IsLiveCommandable(encoded) || (_world.LocalShip is { } ls && ls.ShipId == encoded);
+
+    // The local (own) ship as an F3-selectable entity: id + world position, but only while its
+    // sector is the one on screen. Every sector is origin-centered, so projecting the own ship
+    // against a different sector's grid would misplace it — the same gate FriendlyShips applies via
+    // node visibility. The own ship is a PredictionController, absent from FriendlyShips/-ById, so
+    // the commander selection paths must fold it in explicitly.
+    private bool TryLocalShip(out ulong id, out Vector3 pos)
+    {
+        id = 0;
+        pos = default;
+        if (_world.LocalShip is not { } local || _world.ViewSector != _world.LocalSector)
+            return false;
+        id = local.ShipId;
+        pos = local.GlobalPosition;
+        return true;
+    }
 
     // Resolve an encoded id to its live world position via the same sector-filtered accessors the
     // pick uses. `commandable` = a friendly ship that is not our own (an order subject).
@@ -400,6 +437,14 @@ public partial class SectorOverview : Node3D
                 commandable = true; // FriendlyShips never contains the local ship
                 return true;
             }
+        // The own ship (a PredictionController) resolves here — gold bracket like a friendly, but
+        // NOT an order subject (IsLiveCommandable stays false for it; right-click falls to autopilot).
+        if (TryLocalShip(out ulong localId, out Vector3 localPos) && localId == encoded)
+        {
+            pos = localPos;
+            commandable = true;
+            return true;
+        }
         foreach (var s in _world.EnemyShips())
             if (s.ShipId == encoded)
             {
@@ -709,34 +754,43 @@ public partial class SectorOverview : Node3D
     // (additive), toggle a friendly ship in/out of the multi-selection instead — never touching
     // focus, and a miss keeps the set intact.
     //
-    // RIGHT click: with friendly non-local ships SELECTED, command them — send each a MsgOrder
-    // naming whatever was right-clicked (the server infers attack vs go-to-idle; right-clicking
-    // any selected ship releases them all to autonomy). Otherwise the legacy path: focus/waypoint
-    // + engage our own autopilot.
+    // RIGHT click: with friendly ships SELECTED, command them — send each teammate a MsgOrder
+    // naming whatever was right-clicked (the server infers attack vs go-to). A click that lands on a
+    // ship already in the selection is a MOVE to that spot, not a target. The OWN ship rides in the
+    // same selection but is steered by autopilot rather than a MsgOrder, so it's sent to the same
+    // target in parallel (ApplyOwnShipRightClick) — a mixed "me + teammates" order moves everyone
+    // together. With nothing (or only our own ship) selected this reduces to the legacy
+    // focus/waypoint + engage-own-autopilot path.
     private void HandleMapClick(Vector2 point, bool engage, bool additive = false)
     {
+        ulong ownId = _world.LocalShip?.ShipId ?? 0;
+
         // Minimap precedence (covers the right-click path; left already gated on press).
-        // LEFT click on a sector node views it; RIGHT click with a command group sends the group
-        // there instead — a SECTOR order (targetKind 4): combat drones go through the aleph and
-        // hold just inside (never a run at the sector center), miners prospect-patrol the sector
-        // until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
-        // server-side (wherever the unit enters), so any client-drawn diamond would lie.
+        // LEFT click on a sector node views it; RIGHT click with a selection sends it there:
+        //   - teammates get a SECTOR order (targetKind 4): combat drones go through the aleph and
+        //     hold just inside (never a run at the sector center), miners prospect-patrol the sector
+        //     until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
+        //     server-side (wherever the unit enters), so any client-drawn diamond would lie.
+        //   - our own ship gets the autopilot analog (OrderOwnShipToSector): a cross-sector nav
+        //     waypoint that multi-hops the gates there and warps through.
         _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
         if (_minimap != null && _minimap.TryClickSector(point, out uint mapSector))
         {
             if (engage)
             {
+                bool ownSelected = ownId != 0 && _selection.Contains(ownId);
                 var group = CommandableSelection();
-                if (group.Count > 0)
+                if (group.Count > 0 || ownSelected)
                 {
                     _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
-                    if (_net is null)
-                        return;
-                    foreach (ulong subject in group)
-                    {
-                        _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
-                        _orderedPoints.Remove(subject); // supersedes any earlier point order
-                    }
+                    if (_net != null)
+                        foreach (ulong subject in group)
+                        {
+                            _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
+                            _orderedPoints.Remove(subject); // supersedes any earlier point order
+                        }
+                    if (ownSelected)
+                        OrderOwnShipToSector(mapSector);
                     return;
                 }
             }
@@ -745,6 +799,13 @@ public partial class SectorOverview : Node3D
         }
 
         bool picked = TryPickEntity(point, out ulong encoded);
+
+        // A right-click that lands on a ship already in the selection (our own or a selected
+        // teammate) is a MOVE, not a target — it redirects the group to that spot. Without this,
+        // ships clustering on a shared waypoint make the next right-click land on one of their hulls
+        // inside the pick radius, which would otherwise read as "retarget onto that unit". Left-click
+        // selection still uses the raw pick, so ships stay box-/shift-selectable.
+        bool pickedTarget = picked && encoded != ownId && !_selection.Contains(encoded);
 
         if (!engage)
         {
@@ -775,13 +836,7 @@ public partial class SectorOverview : Node3D
             _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
             if (_net is null)
                 return;
-            if (picked && _selection.Contains(encoded))
-                foreach (ulong subject in subjects) // clicked a selected ship: release them ALL
-                {
-                    _net.SendOrder(subject, targetKind: 255, targetId: 0, sector: 0, pos: Vector3.Zero);
-                    _orderedPoints.Remove(subject);
-                }
-            else if (picked)
+            if (pickedTarget)
             {
                 // Strip the entity-kind flags into the wire's (kind, raw id) pair — same contract
                 // as SetAutopilot (the server disambiguates by kind, never by flag bits).
@@ -801,10 +856,23 @@ public partial class SectorOverview : Node3D
                     _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
                     _orderedPoints[subject] = (_world.ViewSector, world);
                 }
+            // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along.
+            if (ownId != 0 && _selection.Contains(ownId))
+                ApplyOwnShipRightClick(pickedTarget, encoded, point);
             return;
         }
 
-        // Legacy right-click: focus/waypoint + engage own autopilot toward it.
+        // Nothing (or only our own ship) selected: the legacy focus/waypoint + engage-own-autopilot.
+        ApplyOwnShipRightClick(pickedTarget, encoded, point);
+    }
+
+    // Apply the local-ship half of a right-click to our OWN ship — it's never a MsgOrder subject,
+    // we steer it with autopilot. Mirrors the legacy right-click: an entity becomes the focus, an
+    // empty-grid point becomes a waypoint, then autopilot engages toward it. EngageAutopilot is a
+    // no-op until we're actually launched, so this is safe to call pre-launch too.
+    private void ApplyOwnShipRightClick(bool picked, ulong encoded, Vector2 point)
+    {
+        _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
         if (picked)
         {
             TargetMarkers.SetFocus(encoded);
@@ -819,13 +887,26 @@ public partial class SectorOverview : Node3D
         {
             return; // click missed both an entity and the grid plane — nothing to do
         }
+        _shipController?.EngageAutopilot(); // no-op unless launched
+    }
+
+    // Send our OWN ship to a sector (the minimap right-click) — the autopilot analog of the
+    // teammate kind-4 sector order. Implemented as a cross-sector waypoint at the target
+    // sector's centre: every sector is origin-centred, so the sector-local destination is
+    // Vector3.Zero. The existing kind-3 waypoint autopilot multi-hops gate-by-gate to that sector
+    // (Simulation.AutopilotStep.CrossSector → World.NextGateTo) and TryWarp carries the transit,
+    // then it arrives at the centre and disengages — no new autopilot/protocol kind required.
+    private void OrderOwnShipToSector(uint sector)
+    {
+        TargetMarkers.SetWaypoint(sector, Vector3.Zero);
+        TargetMarkers.SetFocus(0);
         _shipController ??= GetNodeOrNull<ShipController>("../ShipController");
         _shipController?.EngageAutopilot(); // no-op unless launched
     }
 
-    // Box select: replace the selection with every friendly non-local ship whose screen position
-    // falls inside the drag rectangle (empty box = clear, matching click-away). Friendlies only —
-    // the multi-selection is an order group, and only friendly ships are order subjects.
+    // Box select: replace the selection with every friendly ship (INCLUDING our own) whose screen
+    // position falls inside the drag rectangle (empty box = clear, matching click-away). The own
+    // ship rides along as part of the group but is never an order subject (see IsLiveCommandable).
     private void FinalizeBoxSelect(Vector2 a, Vector2 b)
     {
         var rect = new Rect2(a, b - a).Abs();
@@ -837,6 +918,10 @@ public partial class SectorOverview : Node3D
             if (rect.HasPoint(_cam.UnprojectPosition(s.GlobalPosition)))
                 _selection.Add(s.ShipId);
         }
+        if (TryLocalShip(out ulong localId, out Vector3 localPos)
+            && !_cam.IsPositionBehind(localPos)
+            && rect.HasPoint(_cam.UnprojectPosition(localPos)))
+            _selection.Add(localId);
     }
 
     // Nearest of {friendly ships (order subjects — commander selection), enemy ships, bases (ANY
@@ -857,6 +942,15 @@ public partial class SectorOverview : Node3D
             {
                 bestD2 = d2;
                 encoded = e.ShipId;
+            }
+        }
+        if (TryLocalShip(out ulong localId, out Vector3 localPos) && !_cam.IsPositionBehind(localPos))
+        {
+            float d2 = (_cam.UnprojectPosition(localPos) - point).LengthSquared();
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                encoded = localId;
             }
         }
         foreach (var e in _world.EnemyShips())

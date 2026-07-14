@@ -150,13 +150,33 @@ public partial class TargetMarkers : Control
     // Navigation waypoint dropped from the F3 sector map (Has, its sector, and world position). A
     // static so SectorOverview can set it and ShipController can resolve it for an autopilot engage
     // without a node reference — the same cross-overlay idiom as FocusedId. Drawn as a diamond marker
-    // (below) only while its sector matches the viewed/local sector.
+    // tagged "NAV" (below) only while its sector matches the viewed/local sector.
     public static (bool Has, uint Sector, Vector3 Pos) Waypoint { get; private set; }
+
+    // Arrive band shared by every waypoint dismissal (own-ship NAV here, commander goto markers in
+    // SectorOverview): inside this of the mark, the unit has reached it. Matches the server's arrive
+    // bands (miner ProspectArriveRange 50, pig patrol-arrive + wobble) so the marker clears exactly
+    // when the ship stops there.
+    public const float WaypointArriveRange = 50;
+
+    // Whether `shipPos` has reached `pointPos` (within the shared arrive band). One place so the
+    // own-ship waypoint and commander goto markers dismiss on the same rule.
+    public static bool ReachedWaypoint(Vector3 shipPos, Vector3 pointPos) =>
+        shipPos.DistanceSquaredTo(pointPos) <= WaypointArriveRange * WaypointArriveRange;
 
     // Set / clear the navigation waypoint (called by SectorOverview on an F3 empty-space click).
     public static void SetWaypoint(uint sector, Vector3 pos) => Waypoint = (true, sector, pos);
 
     public static void ClearWaypoint() => Waypoint = (false, 0, Vector3.Zero);
+
+    // Drop the own-ship waypoint once the ship reaches it — same arrive rule the commander goto
+    // markers use. Called every frame by ShipController with the live own-ship sector + position so
+    // the "NAV" diamond vanishes on arrival whether or not the F3 map is open.
+    public static void DismissWaypointIfReached(uint shipSector, Vector3 shipPos)
+    {
+        if (Waypoint.Has && Waypoint.Sector == shipSector && ReachedWaypoint(shipPos, Waypoint.Pos))
+            ClearWaypoint();
+    }
 
     // Set the Tab focus directly from another overlay (SectorOverview's F3 pick). `encodedId` is the
     // same encoding as FocusedId (raw ship / BaseLockId / AsteroidFocusId); 0 clears it. Persists
