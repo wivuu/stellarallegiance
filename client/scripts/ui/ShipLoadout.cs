@@ -86,7 +86,6 @@ public partial class ShipLoadout : Control
 
     // -- top / launch bars ---------------------------------------------------
     private Label _topReadout = null!;
-    private Label _baseReadout = null!;
     private StatReadout _costReadout = null!;
     private StatReadout _payloadReadout = null!;
     private StatReadout _fromReadout = null!;
@@ -207,11 +206,8 @@ public partial class ShipLoadout : Control
         tabs.CustomMinimumSize = new Vector2(380, 0);
         row.AddChild(tabs);
 
-        // Launch-base readout (display-only Phase A) — the base the CommandSidebar has selected.
-        _baseReadout = UiKit.MakeLabel("LAUNCH BASE: —", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _baseReadout.VerticalAlignment = VerticalAlignment.Center;
-        row.AddChild(_baseReadout);
-
+        // (Launch base is shown in the bottom launch footer's FROM readout, not up here — the top
+        // bar's left region overlaps the in-game chat comms.)
         var spacer = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         row.AddChild(spacer);
 
@@ -336,11 +332,9 @@ public partial class ShipLoadout : Control
         string title = _sidebar.SelectedTitle;
         if (string.IsNullOrEmpty(title))
         {
-            _baseReadout.Text = "LAUNCH BASE: —";
             _fromReadout.Set("—", "FROM");
             return;
         }
-        _baseReadout.Text = $"LAUNCH BASE: {title} · {_sidebar.SelectedSectorName}";
         _fromReadout.Set(title, "FROM");
     }
 
