@@ -53,9 +53,12 @@ public static class HardpointGeometryMerge
 
         foreach (var station in core.Stations)
         {
+            // Bases are authored +90° off about X; bake the same orientation correction the sim hull
+            // (World.LoadBase) and the visual (BaseModelLoader) apply, so the streamed hardpoints
+            // (base turret muzzles, nav lights, dock markers) stay attached to the corrected mesh.
             SimModel? glb = string.IsNullOrEmpty(station.ModelName)
                 ? null
-                : SimAssets.TryLoad($"bases/{station.ModelName}.glb");
+                : SimAssets.TryLoad($"bases/{station.ModelName}.glb", CollisionConfig.BaseModelRotation);
             float ws = StationScale(station, glb);
             Merge($"station '{station.Id}'", station.Hardpoints, glb, ws);
         }

@@ -152,10 +152,16 @@ public static class BaseModelLoader
     // so Build falls back to the procedural sphere.
     private static Node3D? LoadHull(float radius)
     {
-        Node3D? hull = GlbLoader.Load("res://assets/bases/base.glb");
+        Node3D? hull = GlbLoader.Load("res://assets/bases/garrison.glb");
         if (hull == null)
             return null;
         GlbLoader.NormalizeLongestAxis(hull, radius * 2f);
+        // Base meshes are authored +90° off about X; pitch the rendered hull upright with the SAME
+        // correction the collision reader bakes (CollisionConfig.BaseModelRotation via GlbReader), so
+        // the visible superstructure, its HP_ beacons/markers, and the server-parity collision hull all
+        // agree. Uniform scale commutes with rotation, so this composes cleanly after NormalizeLongestAxis;
+        // the beacons/dock markers read `hull.Transform * local`, so they inherit the pitch automatically.
+        hull.RotateX(CollisionConfig.BaseModelPitchRadians);
         return hull;
     }
 

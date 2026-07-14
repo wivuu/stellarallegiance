@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The sim (Simulation/World) + shared steering live server/shared-side. Referencing
+         SimServer pulls its assembly only — its Main is never invoked (mirrors tests/AutopilotTest). -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock content bundle under test, copied next to the test binary so ContentLoader resolves it. -->
+    <Content Include="../../server/content/core/**/*.yaml" Link="content/core/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

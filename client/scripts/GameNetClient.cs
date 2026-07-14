@@ -45,6 +45,13 @@ public partial class GameNetClient : Node
     public bool IsHost => HostId >= 0 && HostId == LocalClientId;
     public string SelectedMap { get; private set; } = "";
 
+    // Per-team commanders (v34, MsgLobbyState tail). -1 = side empty/unknown. The commander is the
+    // only pilot whose orders AI vessels execute; everyone else's are advisory.
+    public int Commander0Id { get; private set; } = -1;
+    public int Commander1Id { get; private set; } = -1;
+    public int CommanderIdOf(byte team) => team == 0 ? Commander0Id : team == 1 ? Commander1Id : -1;
+    public bool IsCommander => MyTeam is 0 or 1 && CommanderIdOf(MyTeam) == LocalClientId;
+
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
     // picker; MapListChanged fires when it arrives.
     public IReadOnlyList<MapInfo> Maps { get; private set; } = Array.Empty<MapInfo>();
@@ -75,6 +82,13 @@ public partial class GameNetClient : Node
     // LastFireTick bolt-synthesis and warp detection key off.
     private readonly Dictionary<ulong, Ship> _rows = [];
     private readonly HashSet<ulong> _seenThisSnapshot = [];
+
+    // Ghost-ship heal deadline (0 = disarmed). Armed when a lobby roster claims we have NO ship
+    // while a local ship row still exists — the normal explanation is a ShipGone still in flight
+    // (roster broadcasts can race ahead of the per-tick gone drain), so wait a grace beat before
+    // treating the local ship as a ghost and despawning it. A YouAre or a has-ship roster disarms.
+    private double _ghostShipDeadline;
+    private const double GhostShipGraceSec = 1.0;
 
     // Last-decoded in-flight missile per id (from MsgMissiles). Maintained by ApplyMissiles /
     // ApplyMissileGone and read by the HUD (incoming-missile warning) and render layer. Cleared
@@ -398,6 +412,27 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
+    // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
+    // targetKind: 0 ship, 1 base, 2 rock, 3 point, 4 sector (pos ignored — pigs hold just inside
+    // the entry aleph, miners prospect-patrol), 255 clear (release to autonomy). targetId is
+    // the UNENCODED entity id (strip BaseLock/AsteroidFocus flags before calling; 0 for a point).
+    // The server infers the verb (attack vs go-to-idle) from the target's kind+team, gates AI
+    // subjects on commander status, and turns human subjects into advisory chat directives.
+    // 34-byte little-endian frame (MsgOrder = 12).
+    public void SendOrder(ulong subjectShipId, byte targetKind, ulong targetId, uint sector, Vector3 pos)
+    {
+        var f = new byte[34];
+        f[0] = 12; // MsgOrder
+        BitConverter.TryWriteBytes(f.AsSpan(1), subjectShipId);
+        f[9] = targetKind;
+        BitConverter.TryWriteBytes(f.AsSpan(10), targetId);
+        BitConverter.TryWriteBytes(f.AsSpan(18), sector);
+        BitConverter.TryWriteBytes(f.AsSpan(22), pos.X);
+        BitConverter.TryWriteBytes(f.AsSpan(26), pos.Y);
+        BitConverter.TryWriteBytes(f.AsSpan(30), pos.Z);
+        _tx.Writer.TryWrite(f);
+    }
+
     public void SendInput(uint tick, in ShipInputState input)
     {
         Span<byte> f = stackalloc byte[38];
@@ -677,6 +712,20 @@ public partial class GameNetClient : Node
     {
         while (_rx.TryDequeue(out var frame))
             Apply(frame);
+
+        // Ghost-ship heal: the roster said we have no ship, the grace beat elapsed, and no
+        // ShipGone/YouAre arrived to resolve it — drop the ghost like a clean despawn so the
+        // spawn hangar reopens instead of the client being stuck "IN FLIGHT" forever.
+        if (_ghostShipDeadline > 0 && Time.GetTicksMsec() / 1000.0 >= _ghostShipDeadline)
+        {
+            _ghostShipDeadline = 0;
+            if (LocalShipId != 0 && _rows.ContainsKey(LocalShipId))
+            {
+                Log.Print($"[GameNet] dropping ghost local ship {LocalShipId} (roster says no ship; ShipGone missed?)");
+                ApplyShipGone(LocalShipId, 1);
+                LocalShipId = 0;
+            }
+        }
     }
 
     private void Apply(byte[] f)
@@ -689,6 +738,7 @@ public partial class GameNetClient : Node
                 break;
             case 2:
                 LocalShipId = r.ReadUInt64();
+                _ghostShipDeadline = 0; // a fresh binding supersedes any armed ghost heal
                 // Make this YouAre authoritative about which node is local: forget any prior row
                 // and drop a stale remote node for the same id (possible on a reconnect reclaim
                 // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
@@ -930,15 +980,18 @@ public partial class GameNetClient : Node
         _world.NetProbeGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
     }
 
-    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). The full
-    // set for the sector is (re)sent on change + coarse keepalive, so a field that stops appearing has
-    // been removed — reconcile the cache + hand each field to the renderer to regenerate its cloud.
+    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). Minefields
+    // only ever stream for the client's OWN anchor sector, so every frame is the authoritative FULL set
+    // for that sector: it is (re)sent on change, coarse keepalive, AND whenever the anchor sector changes
+    // (a warp). The v35 u16 header names the frame's sector even when it carries zero records, so an
+    // empty frame from a warp still identifies which sector to purge. Any cached field the frame no
+    // longer lists has been removed (expired, cleared, or left behind in the old sector) — drop it and
+    // tell the renderer to free its cloud.
     private void ApplyMinefields(BinaryReader r)
     {
+        r.ReadUInt16(); // v35 anchor-sector header — read to advance the stream; prune-all needs no per-frame sector
         byte count = r.ReadByte();
         var seen = new HashSet<ulong>();
-        uint frameSector = 0;
-        bool haveSector = false;
         for (int i = 0; i < count; i++)
         {
             ulong fieldId = r.ReadUInt64();
@@ -969,25 +1022,24 @@ public partial class GameNetClient : Node
             };
             _minefieldRows[fieldId] = row;
             seen.Add(fieldId);
-            frameSector = sector;
-            haveSector = true;
             _world.NetUpsertMinefield(row);
         }
 
-        // Reconcile the cache: any cached field in this frame's sector the frame no longer lists has
-        // expired/been cleared — drop it from the cache. (When the frame is empty we can't know its
-        // sector, so this only prunes when the frame carried at least one field.) The renderer's
-        // MinefieldViews frees its own nodes on expiry/reconcile — no separate removal delegate.
-        if (haveSector)
-        {
-            List<ulong>? gone = null;
-            foreach (var kv in _minefieldRows)
-                if (kv.Value.SectorId == frameSector && !seen.Contains(kv.Key))
-                    (gone ??= new()).Add(kv.Key);
-            if (gone is not null)
-                foreach (var id in gone)
-                    _minefieldRows.Remove(id);
-        }
+        // Reconcile the cache against the authoritative full set: any cached field the frame no longer
+        // lists has been removed (expired, cleared, or is in a sector we just warped out of). Drop it and
+        // tell the renderer to free its cloud (NetMinefieldGone), so mines never linger across a sector
+        // change. An empty frame purges everything not currently visible — its u16 header made the frame
+        // self-describing even at count 0.
+        List<ulong>? gone = null;
+        foreach (var kv in _minefieldRows)
+            if (!seen.Contains(kv.Key))
+                (gone ??= new()).Add(kv.Key);
+        if (gone is not null)
+            foreach (var id in gone)
+            {
+                _minefieldRows.Remove(id);
+                _world.NetMinefieldGone(id);
+            }
     }
 
     // A single mine popped (mirrors Protocol.BuildMineGone): reconcile the field's aliveMask and let
@@ -1534,6 +1586,8 @@ public partial class GameNetClient : Node
         Team1Name = ReadStr(r);
         HostId = r.ReadInt32();
         SelectedMap = ReadStr(r);
+        Commander0Id = r.ReadInt32();
+        Commander1Id = r.ReadInt32();
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
@@ -1548,6 +1602,39 @@ public partial class GameNetClient : Node
                 break;
             }
         _world.NetSetLobbyTeam(myTeam);
+        // Self-heal the local-ship binding from the roster (belt-and-braces for a lost one-shot
+        // YouAre/ShipGone — either strands the relaunch flow): the roster carries the server's
+        // authoritative pilot→ship map and is re-broadcast on every flip.
+        foreach (var p in list)
+        {
+            if (p.Id != LocalClientId)
+                continue;
+            if (p.HasShip && p.ShipId != 0)
+            {
+                _ghostShipDeadline = 0;
+                if (p.ShipId != LocalShipId)
+                {
+                    // Missed YouAre: adopt exactly as the YouAre handler would. Idempotent when the
+                    // real YouAre is merely still in flight behind this roster frame.
+                    LocalShipId = p.ShipId;
+                    _rows.Remove(LocalShipId);
+                    _world.NetPromoteLocal(LocalShipId);
+                    Log.Print($"[GameNet] adopted ship {LocalShipId} from lobby roster (YouAre missed?)");
+                }
+            }
+            else if (LocalShipId != 0 && _rows.ContainsKey(LocalShipId))
+            {
+                // Roster says we fly nothing but a local ship row lives on — likely a ShipGone still
+                // in flight; arm the grace-delayed ghost heal (fires in _Process if no gone lands).
+                if (_ghostShipDeadline == 0)
+                    _ghostShipDeadline = Time.GetTicksMsec() / 1000.0 + GhostShipGraceSec;
+            }
+            else
+            {
+                _ghostShipDeadline = 0;
+            }
+            break;
+        }
         LobbyChanged?.Invoke();
     }
 

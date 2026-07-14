@@ -178,9 +178,10 @@ bool sHit = Collide.SphereVsBody(new Vec3(1.4f, 0, 0), shipR, single, out var nS
 Check("single-hull via SphereVsBody === SphereVsHull", sHit && Near(nS.X, nRef.X) && Near(nS.Y, nRef.Y) && Near(nS.Z, nRef.Z) && Near(pS, pRef));
 
 // ---------------------------------------------------------------------------------------------
-// REAL BAKED base.glb: SimModel.FromGlb must expose the generated sub-hulls (tools/collision-hull --kind base:
-// a voxel solid-fill greedy-merged into ~90 boxes) with the merged metrics UNCHANGED — the boxes are
-// each strictly interior to the visual convex hull, so they never enlarge the merged hull.
+// REAL BAKED garrison.glb (the shipping garrison base — Outpost.glb is retained but unused):
+// SimModel.FromGlb must expose the generated sub-hulls (tools/collision-hull --kind base: a voxel
+// solid-fill decomposed by CoACD into convex parts) with the merged metrics UNCHANGED — the parts
+// are each strictly interior to the visual convex hull, so they never enlarge the merged hull.
 // Locate the repo GLB by probing up from the test binary (mirrors server/Assets/SimAssets.cs).
 // ---------------------------------------------------------------------------------------------
 string? FindBaseGlb()
@@ -190,7 +191,7 @@ string? FindBaseGlb()
         var d = new DirectoryInfo(start);
         for (int up = 0; up < 8 && d is not null; up++, d = d.Parent)
         {
-            string cand = Path.Combine(d.FullName, "client", "assets", "bases", "base.glb");
+            string cand = Path.Combine(d.FullName, "client", "assets", "bases", "garrison.glb");
             if (File.Exists(cand))
                 return cand;
         }
@@ -201,15 +202,15 @@ string? FindBaseGlb()
 string? glbPath = FindBaseGlb();
 if (glbPath is null)
 {
-    Console.WriteLine("  [SKIP] base.glb not found — skipping baked compound-hull check");
+    Console.WriteLine("  [SKIP] garrison.glb not found — skipping baked compound-hull check");
 }
 else
 {
     var baseModel = SimModel.FromGlb(File.ReadAllBytes(glbPath), glbPath);
     Check($"baked base: generated sub-hulls (COL_ parts) present (got {baseModel.Hulls.Count}, expect 8..512)", baseModel.Hulls.Count is >= 8 and <= 512);
-    Check("baked base: merged LongestAxis unchanged (~32.2436)", Near(baseModel.LongestAxis, 32.243610f, 1e-2f));
-    Check("baked base: merged BoundingRadius unchanged (~16.5435)", Near(baseModel.BoundingRadius, 16.543488f, 1e-2f));
-    Check("baked base: merged Hull has 172 planes", baseModel.Hull.Planes.Length == 172);
+    Check($"baked base: merged LongestAxis unchanged (~59.8492, got {baseModel.LongestAxis:0.######})", Near(baseModel.LongestAxis, 59.849224f, 1e-2f));
+    Check($"baked base: merged BoundingRadius unchanged (~30.6818, got {baseModel.BoundingRadius:0.######})", Near(baseModel.BoundingRadius, 30.681801f, 1e-2f));
+    Check($"baked base: merged Hull plane count unchanged (got {baseModel.Hull.Planes.Length}, expect 56)", baseModel.Hull.Planes.Length == 56);
     bool allNonDegenerate = true;
     bool allBounded = true;
     for (int i = 0; i < baseModel.Hulls.Count; i++)
@@ -225,39 +226,57 @@ else
     Check("baked base: every sub-hull bounded by the merged hull", allBounded);
 
     // ---------------------------------------------------------------------------------------------
-    // GROUPED DOCKING DOORS on the real base.glb: HP_DockingEntrance_0..4 form ONE rectangular door
-    // (1 face marker + 4 boundary markers). The regression this rework fixes: the exit tube (at a Z
-    // OUTSIDE the door's Z range) must NOT trigger a dock, while the door centre must.
+    // GROUPED DOCKING DOORS on the real garrison.glb: HP_DockingEntrance markers chunk in FIVES
+    // (1 face marker + 4 boundary markers) into TWO rectangular doors. The original rework
+    // regression stays covered generically: no HP_DockingExit point may trigger a dock, while every
+    // door centre must.
     // ---------------------------------------------------------------------------------------------
-    float ws = CollisionConfig.BaseRadius * 2f / MathF.Max(1e-3f, baseModel.LongestAxis); // ≈ 5.582
+    float ws = CollisionConfig.BaseRadius * 2f / MathF.Max(1e-3f, baseModel.LongestAxis); // ≈ 3.008
     DockFace[] baseFaces = DockFaceParser.Build(baseModel.Hardpoints, ws);
-    Check($"base.glb: exactly one docking door parsed (got {baseFaces.Length})", baseFaces.Length == 1);
-    if (baseFaces.Length == 1)
+    Check($"garrison.glb: exactly two docking doors parsed (got {baseFaces.Length})", baseFaces.Length == 2);
+    if (baseFaces.Length == 2)
     {
-        DockFace door = baseFaces[0];
         const float shipR3 = CollisionConfig.ShipRadius; // 3
         const float depth = CollisionConfig.DockFaceDepth; // 9
 
-        // (a) A point at the OLD exit-blob spot (local (0,−9.5,−4.6), inside the exit tube, world-
-        //     scaled) must NOT intersect the door — this is the whole point of the rework.
-        Vec3 exitBlob = new Vec3(0f, -9.5f, -4.6f) * ws;
-        Check("base.glb door: exit-tube point does NOT dock", !Collide.IntersectsDockFace(exitBlob, baseFaces, depth, shipR3));
+        foreach (var (door, di) in baseFaces.Select((f, i) => (f, i)))
+        {
+            // (a) The door face centre DOES dock.
+            Check($"garrison.glb door {di}: door-centre point DOES dock", Collide.IntersectsDockFace(door.Center, baseFaces, depth, shipR3));
 
-        // (b) The door face centre DOES dock.
-        Check("base.glb door: door-centre point DOES dock", Collide.IntersectsDockFace(door.Center, baseFaces, depth, shipR3));
+            // (b) Just past a rectangle edge (half-extent + shipRadius + margin) does NOT dock —
+            //     but only if that probe doesn't land inside the OTHER door's slab.
+            Vec3 pastEdgeU = door.Center + door.U * (door.Eu + shipR3 + 1f);
+            Check($"garrison.glb door {di}: point past the U edge does NOT dock", !Collide.IntersectsDockFace(pastEdgeU, new[] { door }, depth, shipR3));
+            Vec3 pastEdgeV = door.Center + door.V * (door.Ev + shipR3 + 1f);
+            Check($"garrison.glb door {di}: point past the V edge does NOT dock", !Collide.IntersectsDockFace(pastEdgeV, new[] { door }, depth, shipR3));
+        }
 
-        // (c) Just past a rectangle edge (half-extent + shipRadius + margin along U) does NOT dock.
-        Vec3 pastEdgeU = door.Center + door.U * (door.Eu + shipR3 + 1f);
-        Check("base.glb door: point past the U edge does NOT dock", !Collide.IntersectsDockFace(pastEdgeU, baseFaces, depth, shipR3));
-        Vec3 pastEdgeV = door.Center + door.V * (door.Ev + shipR3 + 1f);
-        Check("base.glb door: point past the V edge does NOT dock", !Collide.IntersectsDockFace(pastEdgeV, baseFaces, depth, shipR3));
+        // (c) The exit-tube regression, generalized: neither HP_DockingExit hardpoint (world-scaled)
+        //     may intersect any dock face — launching ships must not instantly re-dock.
+        int exits = 0;
+        foreach (var hp in baseModel.Hardpoints)
+        {
+            if (!hp.Name.StartsWith("HP_DockingExit", StringComparison.Ordinal))
+                continue;
+            exits++;
+            Check($"garrison.glb: exit hardpoint {hp.Name} does NOT dock", !Collide.IntersectsDockFace(hp.Pos * ws, baseFaces, depth, shipR3));
+        }
+        Check($"garrison.glb: two exit hardpoints present (got {exits})", exits == 2);
 
-        // Sanity on the derived rectangle: base.glb's door is ~7.7 × 4.4 local ⇒ half-extents
-        // {3.85, 2.21} × ws in world units (order-agnostic — check the sorted pair).
-        float loU = MathF.Min(door.Eu, door.Ev) / ws;
-        float hiU = MathF.Max(door.Eu, door.Ev) / ws;
-        Check($"base.glb door: half-extents ≈ {{3.85, 2.21}} local (got {{{hiU:0.##}, {loU:0.##}}})", Near(hiU, 3.85f, 0.1f) && Near(loU, 2.21f, 0.1f));
-        Check("base.glb door: inward normal is +Y (bay on the base bottom)", Near(door.Normal.Y, 1f, 1e-2f));
+        // Sanity on the derived rectangles: ss27 authors two big side-wall bays (~20.7 x 6.9
+        // local), so the parsed half-diagonals land near 11.4 / 11.6 (measured from the authored
+        // centre marker, which sits slightly off the exact rectangle centre). Matches bake.py's
+        // dock_doors parse of the SAME pristine markers.
+        float HalfDiag(DockFace f) => MathF.Sqrt(f.Eu * f.Eu + f.Ev * f.Ev) / ws;
+        float dLo = MathF.Min(HalfDiag(baseFaces[0]), HalfDiag(baseFaces[1]));
+        float dHi = MathF.Max(HalfDiag(baseFaces[0]), HalfDiag(baseFaces[1]));
+        Check($"garrison.glb doors: half-diagonals ≈ {{11.43, 11.61}} local (got {{{dLo:0.##}, {dHi:0.##}}})", Near(dLo, 11.43f, 0.25f) && Near(dHi, 11.61f, 0.25f));
+        // Door inward normals in the authored (z-up) frame: the bays are carved into opposite
+        // side walls of the two arms — door 0 enters along −Y, door 1 along +Y.
+        bool opposedY = baseFaces.Count(f => Near(f.Normal.Y, -1f, 1e-2f)) == 1
+            && baseFaces.Count(f => Near(f.Normal.Y, 1f, 1e-2f)) == 1;
+        Check("garrison.glb doors: inward normals are -Y and +Y (authored frame)", opposedY);
     }
 }
 

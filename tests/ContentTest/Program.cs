@@ -298,15 +298,16 @@ Check(
 );
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
-// Garrison hardpoints are entirely GLB-sourced (no YAML entries): base.glb supplies 12 lights, 5
-// docking entrances, 1 docking exit = 18, appended by kind byte (Light 5 < DockingEntrance 6 <
-// DockingExit 7), then index.
+// Garrison hardpoints are entirely GLB-sourced (no YAML entries): garrison.glb (pristine ss27
+// art) supplies 4 turrets, 44 lights, 10 docking entrances (2 doors of 5), 2 docking exits = 60,
+// appended by kind byte, then index.
 Check(
-    garrison.Hardpoints.Count == 18
-        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 12
-        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingEntrance) == 5
-        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingExit) == 1,
-    "merged garrison hardpoints (18: 12 lights + 5 docking entrances + 1 docking exit, all from base.glb)",
+    garrison.Hardpoints.Count == 60
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 4
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 44
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingEntrance) == 10
+        && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingExit) == 2,
+    "merged garrison hardpoints (60: 4 turrets + 44 lights + 10 docking entrances + 2 docking exits, all from garrison.glb)",
     $"garrison merged hardpoints wrong (count {garrison.Hardpoints.Count}, kinds {string.Join(",", garrison.Hardpoints.Select(h => h.Kind))})"
 );
 Check(

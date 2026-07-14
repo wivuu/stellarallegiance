@@ -14,7 +14,7 @@ using StellarAllegiance.Shared;
 // when nothing changed. Usage: dotnet SimServer.dll --pregen-assets
 if (args.Contains("--pregen-assets"))
 {
-    int ok = SimAssets.TryLoad("bases/base.glb") is not null ? 1 : 0;
+    int ok = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation) is not null ? 1 : 0;
     int rocks = 0;
     foreach (string name in AsteroidShapes.Variants)
         if (SimAssets.TryLoad($"asteroids/{name}.glb") is not null)

@@ -76,7 +76,7 @@ jobs:
           godot --headless --path client --import || ec=$?
           echo "import exit: $ec"
           if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
-          test -f client/assets/bases/base.glb.import || { echo "::error::GLB import produced no sidecars — exported client would ship placeholder meshes"; exit 1; }
+          test -f client/assets/bases/garrison.glb.import || { echo "::error::GLB import produced no sidecars — exported client would ship placeholder meshes"; exit 1; }
 
       - name: Create export directory
         run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"

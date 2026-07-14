@@ -132,6 +132,7 @@ public partial class ShipController : Node
     private bool _autoJoined; // autofly QuickJoins (team + ready) once on connect
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
+    private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
 
     // Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
     // (clientTick echoed back); native mode times an explicit Ping/Pong nonce (no reducer to
@@ -192,6 +193,11 @@ public partial class ShipController : Node
             {
                 _autoFly = true;
                 _combatTest = true;
+            }
+            if (a == "--warp-test")
+            {
+                _autoFly = true;
+                _warpTest = true;
             }
         }
         // Headless runs are otherwise uncapped: _Process spins as fast as possible,
@@ -382,6 +388,13 @@ public partial class ShipController : Node
             _spawnPending = false;
             _spawnRequest = null;
             SpawnHint = null;
+            // Clear the NAV waypoint on arrival — but only once autopilot has DISENGAGED (the server
+            // drops ShipFlagAutopilot when the ship reaches its mark). Gating on !ApEngagedLocal keeps
+            // the line up for the whole trip no matter how near the waypoint was dropped; a bare
+            // distance check would wipe any waypoint set within the arrive band before the line ever
+            // drew. (A manual takeover far from the mark leaves the waypoint so T can re-engage it.)
+            if (!ApEngagedLocal)
+                TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.LocalShip!.GlobalPosition);
         }
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {
@@ -625,7 +638,15 @@ public partial class ShipController : Node
                 return; // the scope owns Esc while open (its own handler closes it) — don't release/menu
             if (Input.MouseMode == Input.MouseModeEnum.Captured)
             {
-                Input.MouseMode = Input.MouseModeEnum.Visible;
+                Input.MouseMode = Input.MouseModeEnum.Visible; // first Esc frees the cursor (command mode)
+            }
+            else if (TargetMarkers.FocusedId != 0 || SectorOverview.SelectionCount > 0)
+            {
+                // Cursor already free with a target / command group: Esc backs out one level — clear the
+                // combat target and the group first; only the next press (with nothing selected) opens
+                // the escape menu.
+                TargetMarkers.SetFocus(0);
+                SectorOverview.ClearFlightSelection();
             }
             else
             {
@@ -636,11 +657,22 @@ public partial class ShipController : Node
         else if (
             @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }
             && Input.MouseMode != Input.MouseModeEnum.Captured
+            // In cursor-free flight command mode SectorOverview owns the left button (box-select and
+            // the plain-click re-lock, which calls RecaptureCursor below), so don't recapture on press.
+            && !SectorOverview.FlightCommandActive
         )
         {
-            Input.MouseMode = Input.MouseModeEnum.Captured;
-            _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
+            RecaptureCursor();
         }
+    }
+
+    // Re-lock the cursor for mouse-look and drop any stale accumulated motion so recapture doesn't
+    // snap the view. Public so SectorOverview's cursor-free plain-click re-lock routes through the
+    // same seam (it owns the left button while the flight command gestures are live).
+    public void RecaptureCursor()
+    {
+        Input.MouseMode = Input.MouseModeEnum.Captured;
+        _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
     }
 
     // Release the cursor for the spawn menu (dead / not yet spawned). The flying-state
@@ -725,6 +757,36 @@ public partial class ShipController : Node
         // deterministic hit/damage/death check.
         if (_combatTest)
             return new ShipInputState { Thrust = 1f, Firing = true };
+
+        // Warp test: drop a few mines on a short straight run, then steer MANUALLY straight into the
+        // sector's gate to fire the real warp path (cover → swap → reveal + minefield reconcile) this
+        // mode exists to smoke. Manual AutoSteer with a NO-OP avoid delegate (unlike the server
+        // autopilot, whose obstacle-avoidance treats the solid aleph as a barrier and orbits its mouth
+        // without ever entering the warp-trigger radius) plows the ship straight through the mouth.
+        if (_warpTest && _world.LocalShip is { } wpShip)
+        {
+            var gates = _world.VisibleAlephs();
+            bool dropping = _stepsSinceSpawn * FlightModel.Dt < 6f;
+            if ((_stepsSinceSpawn % 40) == 0) // ~2s cadence at 20Hz sim
+                Log.Print($"[warp-test] sector {_world.ViewSector}, gates {gates.Count}, t {_stepsSinceSpawn * FlightModel.Dt:0.0}s");
+            if (dropping || gates.Count == 0)
+                return new ShipInputState { Thrust = 1f, DropMine = dropping };
+
+            // Head for the nearest visible gate. Coords are identical between Godot and sim space
+            // (ShipMath.ToGodot is the identity), so the node transform feeds AutoSteer directly.
+            Vector3 gp = wpShip.GlobalPosition;
+            Vector3 best = gates[0].Pos;
+            foreach (var g in gates)
+                if (gp.DistanceSquaredTo(g.Pos) < gp.DistanceSquaredTo(best))
+                    best = g.Pos;
+            var q = wpShip.GlobalBasis.GetRotationQuaternion();
+            var steer = AutoSteer.SteerToPoint(
+                new Vec3(gp.X, gp.Y, gp.Z),
+                new Quat(q.X, q.Y, q.Z, q.W),
+                new Vec3(best.X, best.Y, best.Z),
+                turnGain: 3f, thrustWhenFacing: 1f, avoid: (_, dir) => dir);
+            return steer;
+        }
 
         float t = _stepsSinceSpawn * FlightModel.Dt; // sim seconds
         return new ShipInputState

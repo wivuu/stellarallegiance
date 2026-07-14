@@ -17,6 +17,10 @@ internal static partial class Log
     [LoggerMessage(EventId = 1103, Level = LogLevel.Warning, Message = "rejected join (bad secret) from client {ClientId}")]
     public static partial void RejectedJoinBadSecret(ILogger logger, int clientId);
 
+    [LoggerMessage(EventId = 1104, Level = LogLevel.Warning,
+        Message = "outbound queue pressure: {Dropped} lossy frame(s) dropped, {Parked} reliable frame(s) parked for retry")]
+    public static partial void OutboundQueuePressure(ILogger logger, long dropped, long parked);
+
     // ---- LobbyRegistrar (1200–1299) ----
     [LoggerMessage(EventId = 1201, Level = LogLevel.Warning,
         Message = "SIM_PUBLIC_NAME must be 3-50 chars (got {Length}); staying private.")]

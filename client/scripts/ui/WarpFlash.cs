@@ -16,7 +16,9 @@ public partial class WarpFlash : CanvasLayer
     // Play() ramps to peak fast and HOLDS there (the hard sector swap happens fully covered); Release()
     // eases back out once WorldRenderer reports the destination sector loaded. The hold has no fixed
     // duration — it lasts exactly as long as the load does (see WorldRenderer.TickWarpSettle).
-    private const float RiseDur = 0.12f;
+    // Public so WorldRenderer can time its deferred sector swap to the flash reaching peak (Phase B runs
+    // only once the flash is fully up) — the cover delay can't drift from the actual ramp this way.
+    public const float RiseDur = 0.12f;
     private const float FallDur = 0.28f;
     private const float PeakAlpha = 0.9f;
 

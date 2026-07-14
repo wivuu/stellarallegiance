@@ -8,6 +8,8 @@ dependencies = [
     "pygltflib>=1.16",
     "scipy>=1.11",
     "matplotlib>=3.8",
+    "coacd>=1.0.5",
+    "scikit-image>=0.22",
 ]
 
 [tool.uv]

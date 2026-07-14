@@ -254,6 +254,17 @@ public sealed partial class Simulation
             foreach (var id in _stalePigIds)
                 _pigDecisions.Remove(id);
         }
+        // Same for commander orders: keyed by ShipId, they die with the drone (a respawned
+        // replacement must never inherit its predecessor's order).
+        if (_pigOrders.Count > 0)
+        {
+            _stalePigIds.Clear();
+            foreach (var id in _pigOrders.Keys)
+                if (!_livePigIds.Contains(id))
+                    _stalePigIds.Add(id);
+            foreach (var id in _stalePigIds)
+                _pigOrders.Remove(id);
+        }
     }
 
     private void EnsurePigSlots()
@@ -289,6 +300,7 @@ public sealed partial class Simulation
     // time combat goes live a fresh squad scrambles immediately.
     private void DespawnAllPigs()
     {
+        _pigOrders.Clear();
         for (byte team = 0; team < NumTeams; team++)
         {
             _squadActive[team] = false;
@@ -524,7 +536,10 @@ public sealed partial class Simulation
     {
         var ctx = GatherPigContext(me, tick);
         bool isBomber = ctx.Slot?.IsBomberSlot ?? false;
+        // Rescue deliberately outranks a commander order — a downed player's pod must never be
+        // stranded because its fetcher was ordered elsewhere.
         return TryRescue(in ctx)
+            ?? TryObeyOrder(in ctx)
             ?? TryChaseLockedTarget(in ctx)
             ?? (isBomber ? null : TryChaseEnemyBomber(in ctx))
             ?? (isBomber ? null : TryChaseEnemy(in ctx))

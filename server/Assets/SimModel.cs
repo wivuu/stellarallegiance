@@ -23,16 +23,20 @@ public static class SimModelCache
     private const int Version = 2;
 
     // Load (and cache) the SimModel for a GLB. `cacheDir` holds the committed .simmodel sidecars.
-    public static SimModel Load(string glbPath, string cacheDir)
+    // `pre` is an optional rigid pre-rotation baked into the parsed model (e.g. the base mesh's
+    // orientation correction, CollisionConfig.BaseModelRotation); it is folded into the cache key so
+    // changing the rotation self-heals a stale sidecar. A default (identity) pre keeps the key equal
+    // to the bare GLB hash, so existing un-rotated ship/asteroid sidecars stay valid untouched.
+    public static SimModel Load(string glbPath, string cacheDir, Quat pre = default)
     {
         byte[] glb = File.ReadAllBytes(glbPath);
-        byte[] hash = SHA256.HashData(glb);
+        byte[] hash = KeyHash(glb, pre);
         string cachePath = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(glbPath) + ".simmodel");
 
         if (TryRead(cachePath, hash, out SimModel? cached))
             return cached!;
 
-        var glbModel = GlbReader.Read(glbPath);
+        var glbModel = GlbReader.Read(glbPath, pre);
         var hull = ConvexHull.Build(glbModel.Vertices);
         // Pass the authored COL_ parts so a fresh (or self-healed) base bake gets its per-part sub-hulls;
         // ships/asteroids/un-baked GLBs carry none → SimModel aliases the single merged hull as before.
@@ -47,6 +51,24 @@ public static class SimModelCache
         { /* read-only fs (e.g. container) — recompute next run, no crash */
         }
         return model;
+    }
+
+    // Cache key = SHA256 of the GLB bytes, with a non-identity pre-rotation's 4 quaternion floats
+    // mixed in so a rotation change invalidates the sidecar. An identity `pre` hashes the bare bytes
+    // exactly like before, so committed un-rotated ship/asteroid sidecars keep their existing keys.
+    private static byte[] KeyHash(byte[] glb, Quat pre)
+    {
+        if (pre.X == 0f && pre.Y == 0f && pre.Z == 0f && (pre.W == 0f || pre.W == 1f))
+            return SHA256.HashData(glb);
+        using var ih = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        ih.AppendData(glb);
+        Span<byte> q = stackalloc byte[16];
+        BitConverter.TryWriteBytes(q.Slice(0, 4), pre.X);
+        BitConverter.TryWriteBytes(q.Slice(4, 4), pre.Y);
+        BitConverter.TryWriteBytes(q.Slice(8, 4), pre.Z);
+        BitConverter.TryWriteBytes(q.Slice(12, 4), pre.W);
+        ih.AppendData(q);
+        return ih.GetHashAndReset();
     }
 
     private static bool TryRead(string path, byte[] expectHash, out SimModel? model)

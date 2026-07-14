@@ -57,8 +57,16 @@ Distance-based visibility culling: server only streams entities within fixed dis
 - **Related:** [[Snapshot]], [[Spatial Grid]]
 - **Notes:** Fixed nearest-60 replaced by distance tiers + environment knobs (SIM_NEAR_RADIUS, SIM_FAR_RADIUS, SIM_FAR_EVERY)
 
+### Reliable / Lossy Outbound Tiers
+Two-tier write discipline on the per-client outbound frame queue (bounded, `FullMode.Wait`). RELIABLE (`SendReliable`) is for one-shot frames with no repair path — Welcome, Defs, YouAre, ShipGone, chat, lobby roster, gone-events, rock deltas; a full queue parks them in the client's `PendingControl`, flushed FIFO next tick (delayed, never lost). LOSSY (`SendLossy`) is for self-healing streams — snapshots, change+keepalive frames, FX; a full queue just drops the write.
+- **Frequency:** Every outbound frame
+- **Key Files:**
+  - `server/Net/ClientHub.cs` — `SendReliable` / `FlushReliable` / `SendLossy`, `OutboundQueueDepth`
+- **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
+- **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
+
 ### Compound Base Hull (COL_ parts)
-Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into `base.glb` each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill + greedy box merge) by `tools/collision-hull/bake.py --kind base` — never hand-placed.
+Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `tools/collision-hull/` — args-driven bake tool for any mesh GLB (per-kind presets, hull-containment / dock-corridor / reachability validations)
@@ -263,8 +271,9 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
 
 ### Docking Door
 Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fives** into one bounded
-**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints); a base
-may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
+**rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints; the
+face marker is detected by ORIENTATION within its five — rim forwards point outward in-plane — not
+assumed first); a base may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
 rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]` along the inward normal
 (no facing/velocity gate). The rest of the base is a solid hull; the same test carves the no-bounce
 carve-out so client prediction and server agree. `HP_DockingExit_*` (one = one exit) is the launch
@@ -728,8 +737,30 @@ Server-side AI decision system: 5 Hz decision tick, evaluates targets/actions, s
   - `server/Sim/Simulation.Pig.cs` — PigBrainTick and decision logic
   - `server/Sim/PigDecision.cs` — steering action encoding
   - `server/Sim/Simulation.cs` — decision caching and re-steering
-- **Related:** [[SimTick]], [[Flight Model]]
+- **Related:** [[SimTick]], [[Flight Model]], [[Commander Order]]
 - **Notes:** Decoupled from SimTick (20 Hz vs 5 Hz); PigBrainTick evaluates fresh targets; SimTick re-steers from cache; safe to hot-swap scheduled table
+
+### Commander
+Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels execute; also gates `/mine` and `/buyminer`. Explicit STATE (not derived like the rename-gating LeaderOf): seeded to the first pilot to join the side, falls to the next-lowest client id when the commander leaves, manually handed off via `/commander <name>` (sitting commander or host). Streamed on the `MsgLobbyState` tail; gold CMDR badge in the roster.
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Net/Lobby.cs` — `CommanderOf` / `SetCommander` / `FixCommanderLocked` state
+  - `server/Net/ClientHub.cs` — `CommanderOrWarn` gate, `/commander` hand-off
+  - `client/scripts/GameNetClient.cs` — `CommanderIdOf` / `IsCommander`
+  - `tests/LobbyTest/` — seed / fall-through / manual-set coverage
+- **Related:** [[Commander Order]], [[Lobby]], [[Team]]
+- **Notes:** Does NOT survive reconnect (new client id → rank falls to next senior; re-promote manually); host is a separate server-wide role
+
+### Commander Order
+An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS any entity (`SectorOverview.SelectedId`, separate from Tab focus), right-click names a target; the SERVER infers the verb — enemy ship/base → attack, anything else → go-to-and-idle, targetKind 255 = release. Anyone may issue; AI executes only the commander's (hub-gated) — orders to human teammates relay as gold advisory chat directives (`MsgChatRelay` scope 2, `DesignTokens.CmdrGold`).
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Sim/Simulation.Orders.cs` — `_pigOrders`, `ApplyCommandOrder` verb inference, `TryObeyOrder`
+  - `server/Net/ClientHub.cs` — `HandleOrder` routing/authorization
+  - `client/scripts/SectorOverview.cs` — selection + right-click dispatch
+  - `tests/CommanderTest/` — 9 sim-level scenarios
+- **Related:** [[Commander]], [[PigBrain]], [[Fog of War]]
+- **Notes:** Orders complete-and-revert (target dead / radar contact lost / base destroyed → autonomy); rescue outranks orders; fog-gated at issue AND execution (no wallhack); keyed by ShipId so respawned drones never inherit; miner subjects map onto mining state (rock pins claim, point = per-miner `/mine`, friendly base = pinned offload)
 
 ---
 

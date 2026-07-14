@@ -123,7 +123,7 @@ public sealed class World
         public HashSet<byte> UnlockedClasses = new();
 
         // Sectors this team's miners may SELECT rocks in (Stage-4 mining). Seeded to the team's
-        // garrison sector(s) each match (SeedEconomy); grown by the "/mine <sector>" order. Gates
+        // garrison sector(s) each match (SeedEconomy); grown by a commander's mouse mining order. Gates
         // rock selection only — a miner freely TRANSITS any sector en route (returning to base is
         // always allowed).
         public HashSet<uint> AuthorizedMiningSectors = new();
@@ -739,14 +739,16 @@ public sealed class World
         return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
     }
 
-    // Base sim-model → world hull + bay frame. The client renders the base at identity rotation
-    // and uniform-scales it via NormalizeLongestAxis(radius*2); we bake that same world scale.
+    // Base sim-model → world hull + bay frame. The base mesh is authored +90° off about X, so we bake
+    // the same orientation correction the client renders with (CollisionConfig.BaseModelRotation) into
+    // the parsed hull + hardpoints, then uniform-scale via NormalizeLongestAxis(radius*2) as the client
+    // does — so the sim hull, docking doors and launch bays match the rendered, corrected superstructure.
     private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
     {
         var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
-        var model = SimAssets.TryLoad("bases/base.glb");
+        var model = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation);
         if (model is null)
-            return (null, null, Array.Empty<ConvexHull>(), fallbackExits, default, default, Array.Empty<DockFace>());
+            return (null, null, [], fallbackExits, default, default, []);
         float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒

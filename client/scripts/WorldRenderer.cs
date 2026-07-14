@@ -406,6 +406,15 @@ public partial class WorldRenderer : Node3D
     private const double WarpMinHold = 0.2;      // flash covers the swap for at least this long
     private const double WarpQuietDebounce = 0.25; // settle this long after the last rock arrives
     private const double WarpMaxHold = 2.0;      // safety cap so the flash never sticks
+
+    // Deferred warp swap (cover → swap → reveal). Phase A (UpdateShip's warp branch) hides the old
+    // sector and arms this; Phase B (in _Process) runs the heavy ApplySectorEnv + RefreshSectorVisibility
+    // + BeginWarpSettle once the WarpFlash has ramped to peak, so the sector-swap hitch lands on a
+    // fully-opaque flash frame instead of the last un-covered one. null = no warp swap pending. This is
+    // UI/world-swap timing, NOT a camera-relative render timeline, so GetTicksMsec seconds are correct.
+    private uint? _pendingWarpSector;
+    private double _warpCoverAtSec; // real-time deadline at which Phase B may run (flash at peak)
+    private const double WarpCoverDelay = StellarAllegiance.Ui.WarpFlash.RiseDur + 0.025; // ramp + ~1.5-frame margin
     public float ViewSectorRadius => _sectors.TryGetValue(ViewSector, out var s) ? s.Radius : 0f;
     public Vector3 ViewSectorCenter =>
         _sectors.TryGetValue(ViewSector, out var s) ? new Vector3(s.CenterX, s.CenterY, s.CenterZ) : Vector3.Zero;
@@ -759,6 +768,18 @@ public partial class WorldRenderer : Node3D
         return _friendlyScratch;
     }
 
+    // A live friendly ship by id, IGNORING the view-sector visibility filter — the F3 map keeps
+    // units selected while the commander views OTHER sectors (team ships are streamed in every
+    // sector, so the node exists until the ship actually despawns). Null once despawned. The
+    // local ship is a PredictionController, not a RemoteShip, so it stays naturally excluded.
+    public RemoteShip? FriendlyShipById(ulong shipId) =>
+        MarkerTeam is byte team
+        && _shipNodes.TryGetValue(shipId, out var node)
+        && node is RemoteShip rs
+        && rs.Team == team
+            ? rs
+            : null;
+
     // Bases in the currently-visible (local) sector, as (world position, team, dead). Returns a
     // shared scratch list — read it immediately. Mirrors the ship accessors' sector filter
     // via Node.Visible, so off-screen base indicators only reflect the sector you're flying.
@@ -1024,9 +1045,10 @@ public partial class WorldRenderer : Node3D
     // fade and only drops to false once a fade-out completes, so the Visible-gated queries
     // (VisibleBases/VisibleAlephs/collision) keep matching what's actually on screen.
     // Gentle in-flight reveal: a rock scouted (fog) in the sector you're ALREADY in dissolves in over
-    // this ramp rather than popping. A sector WARP no longer uses this — it swaps hard under the
-    // WarpFlash overlay (RefreshSectorVisibility(instant: true)) — so this only covers fog reveals in
-    // the current sector and the F3 overview view change.
+    // this ramp rather than popping. SECTOR TRANSITIONS no longer use this — every one is now a hard cut
+    // (RefreshSectorVisibility always goes through ShowNodeInstant; a warp is covered by the WarpFlash,
+    // F3/death/respawn keep their pre-existing hitch) — so this only covers same-sector fog reveals and
+    // the stale-base ghost dim.
     private const float FadeDur = 0.55f; // seconds for a full in/out ramp
     private struct Fade { public float Curr; public float Target; }
     private readonly Dictionary<Node3D, Fade> _fades = new();
@@ -1077,8 +1099,20 @@ public partial class WorldRenderer : Node3D
         n.SetMeta("sector", (int)sector);
         if (sector == ViewSector)
         {
-            n.Visible = false; // fresh nodes default Visible=true; force the fade to start from hidden
-            FadeNode(n, true);
+            // Under a held WarpFlash — a swap still pending Phase B, or the settle window open — a node
+            // streaming into the sector we warped into must appear INSTANTLY, not dissolve: the flash
+            // already hides the pop, and a 0.55s fade would just bleed the reveal out from under it.
+            // Mirrors the rock-insert special-case (see InsertAsteroid), extended to bases and anything
+            // else routed through here.
+            if (_pendingWarpSector is not null || _warpSettling)
+            {
+                ShowNodeInstant(n, true);
+            }
+            else
+            {
+                n.Visible = false; // fresh nodes default Visible=true; force the fade to start from hidden
+                FadeNode(n, true);
+            }
         }
         else
         {
@@ -1234,7 +1268,11 @@ public partial class WorldRenderer : Node3D
         _minefieldViews.Upsert(row, _defs.GetWeapon(row.WeaponId), ServerTick);
 
     public void NetMineGone(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos) =>
-        _minefieldViews.MineGone(fieldId, mineIndex, reason, new Vector3(pos.X, pos.Y, pos.Z));
+        _minefieldViews.MineGone(fieldId, mineIndex, reason, sector, new Vector3(pos.X, pos.Y, pos.Z));
+
+    // Free a minefield's cloud on client-cache reconcile (GameNetClient.ApplyMinefields drops any field
+    // the authoritative frame no longer lists — expiry, clear, or a sector we warped out of).
+    public void NetMinefieldGone(ulong fieldId) => _minefieldViews.Remove(fieldId);
 
     // ShipId -> pilot name, rebuilt from each MsgLobbyState roster. The roster is the only source of
     // names (snapshots carry no identity); it's sent on every roster change including spawn/death, so
@@ -1324,6 +1362,7 @@ public partial class WorldRenderer : Node3D
         Winner = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
+        AbandonWarp(); // a world rebuild (reconnect / phase change) abandons any deferred warp
         _contactLostUntil = -1.0;
         ApplySectorEnv(HomeSector);
     }
@@ -1381,29 +1420,45 @@ public partial class WorldRenderer : Node3D
         n.Visible = sector == ViewSector;
     }
 
-    // Re-evaluate every world node's visibility against the current view sector — called when the local
-    // ship warps, or when the overview retargets the view. `instant` swaps static geometry HARD (no
-    // FadeNode): a warp cuts under the WarpFlash overlay, so the old field is gone and the new one is
-    // present the moment the flash is up — nothing to dissolve. Non-instant (F3 overview) keeps the fade.
-    private void RefreshSectorVisibility(bool instant = false)
+    // Re-evaluate every world node's visibility against the current view sector — called on a warp
+    // (Phase B, under the held WarpFlash), an F3 overview retarget, a spawn/respawn, or a death-cam home
+    // reset. Static geometry ALWAYS swaps HARD (ShowNodeInstant, no FadeNode): every sector transition is
+    // now a hard cut — the old sector's field is gone and the new one is present at once, with nothing to
+    // dissolve across sectors (a warp is covered by the flash; F3/death/respawn keep their pre-existing
+    // hitch, just without the cross-sector crossfade leak). FadeNode survives only for SAME-sector fog
+    // reveals (SetNodeSectorFading) and stale-base ghost dimming — those aren't sector transitions.
+    private void RefreshSectorVisibility()
     {
         foreach (var group in new[] { _bases, _asteroids })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
-            {
-                bool show = (int)n.GetMeta("sector") == (int)ViewSector;
-                if (instant)
-                    ShowNodeInstant(n, show);
-                else
-                    FadeNode(n, show);
-            }
+                ShowNodeInstant(n, (int)n.GetMeta("sector") == (int)ViewSector);
 
-        // Transient groups (ships/bolts/alephs/effects) always toggle instantly — a warp cuts hard
+        // Transient groups (ships/bolts/alephs/effects) always toggle instantly — a sector cut is hard
         // between the two sectors' live action, and fading brief effects would just smear them.
         foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
                 n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
+    }
+
+    // Phase A of a warp (cover): hide every sector-tagged node NOT in the destination sector, HARD, so
+    // the old sector's world vanishes the instant the warp snapshot arrives — under the rising WarpFlash,
+    // before Phase B repaints/reveals the destination. Covers the same node groups RefreshSectorVisibility
+    // touches (statics via ShowNodeInstant so in-flight fades are cancelled; transients via Visible), but
+    // ONLY hides: nodes already in the destination sector are left exactly as they are (still hidden from
+    // before), to be shown in Phase B — nothing new is shown here.
+    private void HideForWarp(uint destSector)
+    {
+        foreach (var group in new[] { _bases, _asteroids })
+        foreach (var child in group.GetChildren())
+            if (child is Node3D n && n.HasMeta("sector") && (int)n.GetMeta("sector") != (int)destSector)
+                ShowNodeInstant(n, false);
+
+        foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
+        foreach (var child in group.GetChildren())
+            if (child is Node3D n && n.HasMeta("sector") && (int)n.GetMeta("sector") != (int)destSector)
+                n.Visible = false;
     }
 
     // Hard show/hide a static node with no ramp: cancel any in-flight fade, snap to the resting
@@ -1426,6 +1481,20 @@ public partial class WorldRenderer : Node3D
         _warpStartSec = now;
         _warpLastRockSec = now; // treat "no rock yet" as just-loaded; a real incoming rock pushes it out
         _warpSettling = true;
+    }
+
+    // Abandon an in-flight warp transition (deferred Phase B swap and/or open settle window) because
+    // something else now owns the view — a reconnect world rebuild, a spawn/respawn, or the death-cam
+    // home reset. The WarpFlash is HELD by Warped and released only by WarpSettled, so an abandonment
+    // must fire WarpSettled too or the flash sticks at peak forever (the pre-deferral code guaranteed
+    // release via WarpMaxHold; this keeps that guarantee). No-op when no warp is in flight.
+    private void AbandonWarp()
+    {
+        if (_pendingWarpSector is null && !_warpSettling)
+            return;
+        _pendingWarpSector = null;
+        _warpSettling = false;
+        WarpSettled?.Invoke();
     }
 
     // Advance the warp-settle window each frame; fire WarpSettled (clears the flash) when the destination
@@ -1880,6 +1949,7 @@ public partial class WorldRenderer : Node3D
             // Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
             _deathCamUntil = -1.0;
             _pendingHomeReset = false;
+            AbandonWarp(); // a spawn/respawn supersedes any deferred warp swap
             // Follow the local ship's sector and re-show that sector's world.
             _localSector = row.SectorId;
             ApplySectorEnv(row.SectorId);
@@ -1946,11 +2016,25 @@ public partial class WorldRenderer : Node3D
                 pc.SetMeta("sector", (int)newRow.SectorId);
                 if (warped)
                 {
+                    // Cover → swap → reveal. Phase A (this frame, all cheap): follow the ship into the
+                    // destination sector and HIDE the old sector's world HARD so no old-sector rock/mine/
+                    // ship/base can render at new-sector coordinates. The heavy repaint + reveal
+                    // (ApplySectorEnv + RefreshSectorVisibility + BeginWarpSettle) is DEFERRED to Phase B
+                    // in _Process, fired once the WarpFlash has ramped to peak — so the sector-swap hitch
+                    // lands on a fully-opaque flash frame instead of the last un-covered one (the old bug:
+                    // the swap ran synchronously here, before Play()'s ramp had put any cover on screen).
+                    // A re-warp while a swap is still pending just re-hides for the newer sector and
+                    // re-arms the cover timer (this branch runs again, warped vs the updated _localSector).
                     _localSector = newRow.SectorId;
-                    ApplySectorEnv(newRow.SectorId);
-                    RefreshSectorVisibility(instant: true); // hard swap — the flash covers it
-                    BeginWarpSettle();
-                    Warped?.Invoke(); // raise (and HOLD) the flash; released once the sector loads
+                    HideForWarp(newRow.SectorId);
+                    _pendingWarpSector = newRow.SectorId;
+                    // Close any still-open settle window from a PREVIOUS warp: while this swap is
+                    // pending, TickWarpSettle must not fire WarpSettled (that would drop the flash
+                    // before Phase B runs the heavy swap). Phase B re-arms it via BeginWarpSettle.
+                    _warpSettling = false;
+                    _warpCoverAtSec = Time.GetTicksMsec() / 1000.0 + WarpCoverDelay;
+                    Warped?.Invoke(); // raise (and HOLD) the flash; released once the destination loads
+                    Log.Print($"[WorldRenderer] warp → sector {newRow.SectorId} (old hidden, swap deferred under flash)");
                 }
                 break;
             case RemoteShip rs:
@@ -2383,11 +2467,26 @@ public partial class WorldRenderer : Node3D
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)
     {
+        // Warp Phase B (cover → swap → reveal): once the WarpFlash has ramped to peak, run the deferred
+        // heavy sector swap fully covered — repaint the environment, show the destination sector's world
+        // hard, and arm the settle window that holds the flash until rock streaming quiesces. Phase A
+        // already hid the old sector and advanced _localSector, so ViewSector points at the destination
+        // through the ~RiseDur cover gap; the hitch this triggers now lands on a fully-opaque frame.
+        if (_pendingWarpSector is { } pendingWarp && Time.GetTicksMsec() / 1000.0 >= _warpCoverAtSec)
+        {
+            _pendingWarpSector = null;
+            ApplySectorEnv(pendingWarp);
+            RefreshSectorVisibility();
+            BeginWarpSettle();
+            Log.Print($"[WorldRenderer] warp swap applied (sector {pendingWarp}, covered)");
+        }
+
         // Death-cam expiry: once the brief hold on the death point is over, pull the world
         // back to the home-battlefield overview (deferred from OnShipDelete so the death
         // sector stayed visible through the hold). Skipped if the player already respawned.
         if (_pendingHomeReset && LocalShip == null && !DeathCamActive)
         {
+            AbandonWarp(); // a death mid-warp abandons the deferred swap; home reset wins
             _localSector = HomeSector;
             ApplySectorEnv(HomeSector);
             RefreshSectorVisibility();

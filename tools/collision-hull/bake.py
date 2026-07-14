@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """collision-hull — generate + bake convex COLLISION-PROXY parts (COL_ nodes) into any mesh GLB.
 
-A visual GLB (e.g. `client/assets/bases/base.glb`) is ONE welded, concave mesh. Both the server sim
+A visual GLB (a station, a ship, a round asteroid) is ONE welded, concave mesh. Both the server sim
 and the Godot client build a single QuickHull "shrink-wrap" over the whole cloud, so ships and bolts
 collide with an invisible convex balloon rather than the visible surface. For BASES the runtime reads
 a COMPOUND hull instead: one convex hull per COL_ part node this tool appends.
 
 This tool GENERATES those parts straight from the mesh volume — there is no hand-authored spec. It
 voxel solid-fills the visual triangles, seals the hollow interior, carves any dock corridors back
-open, greedy-merges the solid into axis-aligned boxes, clamps each strictly inside the visual convex
-hull, adds a surface shell pass, and APPENDS one small triangulated `COL_<name>` mesh node per box.
-The visual mesh, its material, and every `HP_` empty are left untouched.
+open, marching-cubes the carved solid into a watertight surface, decomposes it into convex parts
+with CoACD (https://github.com/SarahWeiii/CoACD), clamps each part strictly inside the visual
+convex hull, and APPENDS one small triangulated `COL_<name>` mesh node per part. The visual mesh,
+its material, and every `HP_` empty are left untouched.
 
 All tuning is via CLI args resolved from a per-`--kind` preset (there is no YAML config). The bake
 is metric-neutral for the pre-compound-hull collision code — two hard, load-bearing validations
@@ -30,17 +31,17 @@ A weaker AABB-containment check is also asserted (the explicit MeshAabb scale co
 relies on), and the output is written deterministically (fixed ordering, cleaned float32) so a
 re-bake of unchanged input + identical resolved args yields a byte-identical GLB (identical SHA).
 
-Usage (via uv — deps in pyproject.toml):
-  uv run bake.py --kind base                    # bake in place: client/assets/bases/base.glb
-  uv run bake.py --kind base --check            # validate only, do not write
+Usage (via uv — deps in pyproject.toml; --glb is always required):
+  uv run bake.py --kind base --glb PATH             # bake COL_ parts into PATH in place
+  uv run bake.py --kind base --glb PATH --check     # validate only, do not write
   uv run bake.py --kind ship --glb PATH --model-length 5.5 --check   # any ship mesh (scale basis)
-  uv run bake.py --kind base --preview out.png  # combined visualizer figure to an exact path
-  uv run bake.py --kind base --preview-dir DIR  # ortho + 3D reviewer PNGs into DIR
-  uv run bake.py --kind base --dump snap.txt    # opt-in provenance snapshot of the resolved args
+  uv run bake.py --kind base --glb PATH --preview out.png  # combined visualizer figure
+  uv run bake.py --kind base --glb PATH --preview-dir DIR  # ortho + 3D reviewer PNGs into DIR
+  uv run bake.py --kind base --glb PATH --dump snap.txt    # provenance snapshot of resolved args
 
-All tunables (--voxel-res --box-res --margin --pad --shell/--no-shell --shell-iters --corridor-*
---ship-radius --hull-extremes --reach-guard/--no-reach-guard --corridor-check/--no-corridor-check)
-default to the kind preset; pass one to override it.
+All tunables (--voxel-res --margin --threshold --max-hulls --max-ch-vertex --seed --mc-smooth
+--corridor-* --ship-radius --hull-extremes --reach-guard/--no-reach-guard
+--corridor-check/--no-corridor-check) default to the kind preset; pass one to override it.
 """
 
 from __future__ import annotations
@@ -55,8 +56,6 @@ import pygltflib
 from scipy.spatial import ConvexHull
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parent.parent
-DEF_GLB = REPO / "client" / "assets" / "bases" / "base.glb"
 
 FLOAT = pygltflib.FLOAT
 UINT = pygltflib.UNSIGNED_INT
@@ -76,18 +75,6 @@ WORLD_SHIP_RADIUS = 3.0       # CollisionConfig.ShipRadius
 WORLD_DOCK_FACE_DEPTH = 9.0   # CollisionConfig.DockFaceDepth (docking-door depth window; lateral
                               # extent is now authored per-door by the 4 boundary markers, so the
                               # corridor width is derived from the door rectangle, not this constant)
-
-# --- spheroid-primitive greedy-sphere-cover tuning (only read by generate_auto_spheroids) --------
-# These bound the sphere count so a round mesh is covered by TENS of ellipsoids, not thousands: a
-# sphere is seeded at the deepest still-uncovered solid voxel and only kept if its radius clears the
-# floor; the cover stops once the target fraction of the solid volume sits inside some sphere. They
-# are the spheroid analogue of the box pass's count window / min-box thickness and never touch the
-# byte-identical box path.
-SPHERE_COVERAGE_TARGET = 0.90    # stop once this fraction of carved-solid voxels lie inside a sphere
-SPHERE_MIN_RADIUS_FRAC = 0.05    # drop/stop spheres whose authored radius < this * longest mesh axis
-SPHERE_DEFAULT_OVERLAP = 0.35    # default greed if --sphere-overlap unset (0 = none, →1 = heavy overlap)
-SPHERE_MAX_ELONGATION = 2.0      # cap on PCA oblong stretch of the principal ellipsoid axis
-SPHERE_MAX_COUNT = 4000          # hard safety cap on greedy iterations (termination guarantee)
 
 
 # ---------------------------------------------------------------------------
@@ -143,11 +130,14 @@ def _accessor_array(gltf, blob, acc_idx) -> np.ndarray:
     return arr.reshape(acc.count, ncomp) if ncomp > 1 else arr
 
 
-def read_visual_vertices(gltf, blob) -> tuple[np.ndarray, list]:
+def read_visual_vertices(gltf, blob, min_extent: float = 0.0) -> tuple[np.ndarray, list]:
     """Return (Nx3 world-space POSITION cloud of every NON-COL mesh, HP records).
 
     Mirrors shared/Collision/GlbReader.Walk + client GlbLoader.MeshAabb: every non-COL mesh
     primitive's POSITION, transformed by its node world matrix. HP records = (name, pos, fwd).
+    `min_extent` > 0 skips primitives whose largest AABB extent is below it (tiny marker /
+    placeholder meshes some exporters leave behind) — a guard for FOREIGN preview meshes only;
+    it changes the containment hull/AABB, so committed bakes must keep the default 0.
     """
     parent = _parent_map(gltf)
     verts = []
@@ -169,45 +159,23 @@ def read_visual_vertices(gltf, blob) -> tuple[np.ndarray, list]:
                 continue
             p = _accessor_array(gltf, blob, prim.attributes.POSITION).astype(np.float64)
             ph = np.c_[p, np.ones(len(p))]
-            verts.append((ph @ w.T)[:, :3])
+            pw = (ph @ w.T)[:, :3]
+            if min_extent > 0.0 and len(pw) and float((pw.max(0) - pw.min(0)).max()) < min_extent:
+                continue
+            verts.append(pw)
     return (np.vstack(verts) if verts else np.zeros((0, 3))), hps
 
 
 # ---------------------------------------------------------------------------
-#  Convex-part construction (box / cylinder / points -> triangulated hull)
+#  Convex-part construction (points -> triangulated hull)
 # ---------------------------------------------------------------------------
 
-def _euler_deg_to_matrix(rot) -> np.ndarray:
-    rx, ry, rz = np.radians(rot or [0, 0, 0])
-    cx, sx = np.cos(rx), np.sin(rx)
-    cy, sy = np.cos(ry), np.sin(ry)
-    cz, sz = np.cos(rz), np.sin(rz)
-    Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    Rz = np.array([[cz, -sz, cz * 0 + 0], [sz, cz, 0], [0, 0, 1]])
-    Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    return Rz @ Ry @ Rx
-
-
-def _box_verts(spec) -> np.ndarray:
-    c = np.array(spec["center"], dtype=np.float64)
-    h = np.array(spec["size"], dtype=np.float64) * 0.5
-    R = _euler_deg_to_matrix(spec.get("rot"))
-    corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)],
-                       dtype=np.float64) * h
-    return (corners @ R.T) + c
-
-
 def part_vertices(part) -> np.ndarray:
-    """Vertex cloud for a generated part. Boxes carry a `box` spec (8 corners); spheroids carry the
-    already-tessellated icosphere cloud in `sphere_verts` (built + placed by generate_auto_spheroids).
-    Both are fed through the SAME convex_mesh machinery downstream — the box branch is first and
-    unchanged so the base bake stays byte-identical."""
-    if "box" in part:
-        return _box_verts(part["box"])
-    if "sphere_verts" in part:
-        return np.asarray(part["sphere_verts"], dtype=np.float64)
-    raise ValueError(f"part {part.get('name')!r} has no box/sphere geometry")
+    """Vertex cloud for a generated part: the clamped hull verts in `verts`
+    (placed by generate_coacd_parts), fed through convex_mesh downstream."""
+    if "verts" in part:
+        return np.asarray(part["verts"], dtype=np.float64)
+    raise ValueError(f"part {part.get('name')!r} has no verts geometry")
 
 
 def convex_mesh(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, ConvexHull]:
@@ -263,6 +231,13 @@ def signed_dist_to_hull(pts: np.ndarray, eqs: np.ndarray) -> np.ndarray:
 
 def point_inside_part(pt: np.ndarray, eqs: np.ndarray, tol: float) -> bool:
     return bool((pt @ eqs[:, :3].T + eqs[:, 3]).max() < -tol)
+
+
+def plane_count(eqs: np.ndarray, tol: float = 1e-4) -> int:
+    """Distinct geometric PLANES in a hull's equations. scipy emits one row per triangulated
+    simplex facet, so coplanar triangles must dedup to reflect the server's per-plane collision
+    cost (SphereVsBody is O(planes) per sub-hull — a box is 6, not 12)."""
+    return len(np.unique(np.round(eqs / tol).astype(np.int64), axis=0))
 
 
 # ---------------------------------------------------------------------------
@@ -530,24 +505,22 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
 
 
 # ---------------------------------------------------------------------------
-#  --auto: deterministic voxel solid-fill + greedy box-merge collision generation
+#  Deterministic voxel solid-fill: the CoACD decomposition's input volume
 # ---------------------------------------------------------------------------
 #
-# The hand-authored star-of-boxes leaves gaps a ship (radius WORLD_SHIP_RADIUS ≈ 0.54 AUTHORED
-# units) can fly THROUGH into the hollow station interior. `--auto` drives coverage off the actual
-# mesh volume instead of hand-eye box placement:
+# Hand-eye part placement leaves gaps a ship (radius WORLD_SHIP_RADIUS in authored units) can fly
+# THROUGH into the hollow station interior. Coverage is driven off the actual mesh volume instead:
 #   1. Voxelize the visual TRIANGLES (robust for the concave, non-watertight shell) at `voxel_res`.
 #   2. Flood-fill the EXTERIOR from the grid boundary through free space; every free cell it cannot
 #      reach is sealed interior → mark solid. This fills the hollow the player flies around inside.
 #      (No outward inflation: a radius-0 boundary flood reaches every exterior cell up to the
 #      surface, so only genuinely-enclosed cells are filled.)
 #   3. Carve swept-cylinder DOCK CORRIDORS back open so docking/launch approaches stay clear.
-#   4. Greedy-merge the solid voxels into maximal axis-aligned boxes (deterministic scan order).
-#   5. Clamp every box strictly inside the visual convex hull (metric-neutrality contract).
+#   4. Marching-cubes the carved solid and decompose it into convex parts with CoACD (see the
+#      coacd section below).
+#   5. Clamp every part strictly inside the visual convex hull (metric-neutrality contract).
 #   6. Reachability ASSERT: no ship-radius exterior path may reach a sealed-interior cell through
-#      the FINAL box set (except inside a corridor) — the regression guard for this very bug.
-
-_STRUCT_ONE = None  # lazily-built 6-connectivity structuring element (label default)
+#      the FINAL part set (except inside a corridor) — the regression guard for this very bug.
 
 
 class VoxelGrid:
@@ -579,10 +552,11 @@ def grid_for(V: np.ndarray, res: float, pad_cells: int = 3) -> VoxelGrid:
     return VoxelGrid(lo, res, dims)
 
 
-def read_visual_triangles(gltf, blob) -> tuple[np.ndarray, np.ndarray]:
+def read_visual_triangles(gltf, blob, min_extent: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """(V Nx3 world float64, F Mx3 int) — every NON-COL indexed mesh primitive's triangles in the
-    same world space as read_visual_vertices. Keeps the index buffer so the voxelizer rasterizes
-    real triangle SURFACES (robust for a concave, non-watertight shell), not just the vert cloud."""
+    same world space as read_visual_vertices (same `min_extent` tiny-marker skip). Keeps the index
+    buffer so the voxelizer rasterizes real triangle SURFACES (robust for a concave,
+    non-watertight shell), not just the vert cloud."""
     parent = _parent_map(gltf)
     Vs, Fs, off = [], [], 0
     for i, n in enumerate(gltf.nodes):
@@ -595,6 +569,8 @@ def read_visual_triangles(gltf, blob) -> tuple[np.ndarray, np.ndarray]:
                 continue
             p = _accessor_array(gltf, blob, prim.attributes.POSITION).astype(np.float64)
             pw = (np.c_[p, np.ones(len(p))] @ w.T)[:, :3]
+            if min_extent > 0.0 and len(pw) and float((pw.max(0) - pw.min(0)).max()) < min_extent:
+                continue
             idx = _accessor_array(gltf, blob, prim.indices).astype(np.int64).reshape(-1, 3)
             Vs.append(pw)
             Fs.append(idx + off)
@@ -653,20 +629,6 @@ def classify_solid(S: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return (S | sealed), sealed, ext
 
 
-def downsample_solid(fine: VoxelGrid, fine_solid: np.ndarray, box: VoxelGrid) -> np.ndarray:
-    """A box-grid cell is solid if ANY fine solid cell centre falls in it. The box solid therefore
-    ENGULFS the fine solid (≈100% coverage of the true volume); the small outward slop is trimmed
-    back by the strict hull-containment clamp. This makes the coarse decomposition robust even if
-    the coarse shell alone would not be voxel-watertight."""
-    xs, ys, zs = np.where(fine_solid)
-    centers = fine.origin + (np.stack([xs, ys, zs], axis=1) + 0.5) * fine.res
-    bi = np.floor((centers - box.origin) / box.res).astype(int)
-    np.clip(bi, 0, np.array(box.dims) - 1, out=bi)
-    B = np.zeros(box.dims, dtype=bool)
-    B[bi[:, 0], bi[:, 1], bi[:, 2]] = True
-    return B
-
-
 def _hp_index(name: str) -> int:
     """Trailing integer index of an 'HP_..._<Index>' node name; 0 if absent (stable sort key)."""
     tail = name.rsplit("_", 1)[-1]
@@ -676,24 +638,55 @@ def _hp_index(name: str) -> int:
         return 0
 
 
+def _face_marker(group):
+    """Index (within `group` of 5 (idx, pos, fwd)) of the FACE marker, detected by ORIENTATION:
+    rim markers' forwards point outward along the face plane (straight at/away from a sibling),
+    the face marker's forward is perpendicular to the whole spread. Score = worst |cos| against
+    any sibling direction; strictly-lowest wins, ties fall to the lowest index (legacy art where
+    all five share the face normal → old first-is-face rule). Mirrors DockFaceParser.FaceMarker."""
+    best, best_score = 0, float("inf")
+    for i, (_, pi, fi) in enumerate(group):
+        ln = float(np.linalg.norm(fi))
+        if ln < 1e-6:
+            continue  # degenerate forward can't be scored — never the face marker
+        f = fi / ln
+        score = 0.0
+        for j, (_, pj, _) in enumerate(group):
+            if j == i:
+                continue
+            d = pj - pi
+            dl = float(np.linalg.norm(d))
+            if dl < 1e-6:
+                continue  # coincident markers carry no direction
+            score = max(score, abs(float(f @ d) / dl))
+        if score < best_score:
+            best, best_score = i, score
+    return best
+
+
 def dock_doors(hps):
     """Group HP_DockingEntrance_* markers (sorted by trailing index) into docking DOORS of FIVE:
-    the FIRST marker of each group is the face — its position is the face centre and its forward
-    (local +Z) is the INWARD normal (the direction a ship travels entering); the NEXT FOUR mark the
-    rectangle boundary. Returns [(face_pos, inward_normal, half_diagonal)] per full group (authored
-    mesh units). Mirrors shared/Collision/DockFace.cs DockFaceParser — KEEP IN SYNC: the bake carves
-    corridors from the same door geometry the sim/client dock against. Leftover (<5) markers are
-    ignored here (the sim treats them as legacy discs; a corridor for them isn't worth the risk)."""
+    ONE marker of each group is the face (found by _face_marker, NOT assumed first) — its position
+    is the face centre and its forward (local +Z) is the INWARD normal (the direction a ship
+    travels entering); the OTHER FOUR mark the rectangle boundary. Returns
+    [(face_pos, inward_normal, half_diagonal)] per full group (authored mesh units). Mirrors
+    shared/Collision/DockFace.cs DockFaceParser — KEEP IN SYNC: the bake carves corridors from the
+    same door geometry the sim/client dock against. Leftover (<5) markers are ignored here (the
+    sim treats them as legacy discs; a corridor for them isn't worth the risk)."""
     ent = [(_hp_index(n), np.asarray(p, float), np.asarray(f, float))
            for n, p, f in hps if "Entrance" in n]
     ent.sort(key=lambda t: t[0])
     doors = []
     for g in range(len(ent) // 5):
-        _, pos, fwd = ent[g * 5]
+        group = ent[g * 5 : g * 5 + 5]
+        face = _face_marker(group)
+        _, pos, fwd = group[face]
         n = fwd / (np.linalg.norm(fwd) or 1.0)
         proj = []
-        for k in range(1, 5):
-            rel = ent[g * 5 + k][1] - pos
+        for k in range(5):
+            if k == face:
+                continue
+            rel = group[k][1] - pos
             proj.append(rel - n * float(rel @ n))  # onto the face plane
         u = None
         for pr in proj:
@@ -710,14 +703,17 @@ def dock_doors(hps):
     return doors
 
 
-def corridor_segments(hps, corridor_r: float, approach: float):
+def corridor_segments(hps, corridor_r: float, approach: float, ship_r: float = 0.0):
     """Swept-cylinder DOCK CORRIDORS that must stay open (never solid). Under the GROUPED-door
-    convention each door is a rectangle (dock_doors): we carve one fat cylinder per door from
-    `approach` units OUTSIDE the face (opposite the inward normal) to the face centre — `corridor_r`
-    is sized by the caller to cover the door rectangle's half-diagonal so no COL part can cap a
-    corner a ship may legally dock through. The HP_DockingExit catapults ships radially outward along
-    normalize(exitPos), so we also sweep from the door reference out along each exit axis. Falls back
-    to the legacy mean-of-entrances sweep for a non-grouped asset. Returns [(a, b, radius)]."""
+    convention each door is a rectangle (dock_doors): we carve one cylinder per door from
+    `approach` units OUTSIDE the face (opposite the inward normal) to the face centre, widened
+    PER DOOR to that door's half-diagonal + a ship radius (floored at `corridor_r`, the
+    ship-clearance minimum) so no COL part can cap a corner a ship may legally dock through —
+    but a big door never inflates the carve at a small one (a single global max radius once ate
+    60% of a two-door station's collision). Each HP_DockingExit catapults ships outward along
+    normalize(exitPos): sweep from the exit point out along that axis only — never from the door
+    reference across the body (with far-apart doors that carved straight through the hub). Falls
+    back to the legacy mean-of-entrances sweep for a non-grouped asset. Returns [(a, b, radius)]."""
     ext = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
 
     def radial(p):
@@ -735,23 +731,12 @@ def corridor_segments(hps, corridor_r: float, approach: float):
             segs.append((door, x + radial(x) * approach, corridor_r))
         return segs
 
-    door_ref = np.mean([d[0] for d in doors], axis=0)
     segs = []
-    for pos, n, _hd in doors:
-        segs.append((pos - n * approach, pos, corridor_r))  # outside-approach → face centre
+    for pos, n, hd in doors:
+        segs.append((pos - n * approach, pos, max(corridor_r, hd + ship_r)))  # approach → face
     for x in ext:
-        segs.append((door_ref, x + radial(x) * approach, corridor_r))
+        segs.append((x, x + radial(x) * approach, corridor_r))  # exit launch ray, outward only
     return segs
-
-
-def door_corridor_radius(hps, floor: float, ship_r: float) -> float:
-    """The single corridor radius used consistently by the carve mask, the retreat keep-out and the
-    guard rays: wide enough to cover the WIDEST door rectangle (its half-diagonal + a ship radius),
-    but never below `floor` (the ship-clearance minimum). Authored mesh units."""
-    doors = dock_doors(hps)
-    if not doors:
-        return floor
-    return max(floor, max(hd for _, _, hd in doors) + ship_r)
 
 
 def corridor_mask(grid: VoxelGrid, segs) -> np.ndarray:
@@ -772,82 +757,6 @@ def corridor_mask(grid: VoxelGrid, segs) -> np.ndarray:
     return inside.reshape(grid.dims)
 
 
-def greedy_boxes(solid: np.ndarray):
-    """Deterministic voxel→cuboid decomposition: scan solid cells in (x,y,z) order; from the first
-    still-unclaimed cell grow a maximal box x→y→z, claim it, repeat. Standard greedy merge; the
-    fixed scan + growth order makes the box set reproducible. Returns [(i0,j0,k0,i1,j1,k1)]."""
-    g = solid.copy()
-    nx, ny, nz = g.shape
-    boxes = []
-    xs, ys, zs = np.where(g)
-    order = np.lexsort((zs, ys, xs))
-    xs, ys, zs = xs[order], ys[order], zs[order]
-    for a in range(len(xs)):
-        x, y, z = int(xs[a]), int(ys[a]), int(zs[a])
-        if not g[x, y, z]:
-            continue
-        x1 = x
-        while x1 + 1 < nx and g[x1 + 1, y, z]:
-            x1 += 1
-        y1 = y
-        while y1 + 1 < ny and g[x:x1 + 1, y1 + 1, z].all():
-            y1 += 1
-        z1 = z
-        while z1 + 1 < nz and g[x:x1 + 1, y:y1 + 1, z1 + 1].all():
-            z1 += 1
-        g[x:x1 + 1, y:y1 + 1, z:z1 + 1] = False
-        boxes.append((x, y, z, x1, y1, z1))
-    return boxes
-
-
-def box_bounds(grid: VoxelGrid, box) -> tuple[np.ndarray, np.ndarray]:
-    x0, y0, z0, x1, y1, z1 = box
-    lo = grid.origin + np.array([x0, y0, z0]) * grid.res
-    hi = grid.origin + (np.array([x1, y1, z1]) + 1) * grid.res
-    return lo, hi
-
-
-_CORNER_SIGNS = np.array([[sx, sy, sz] for sx in (0, 1) for sy in (0, 1) for sz in (0, 1)])
-
-
-def clamp_box_to_hull(lo, hi, eqs, margin, res):
-    """Shrink an AABB's faces inward (minimally, along the dominant violated-plane axis) until all 8
-    corners are >= `margin` strictly inside the visual convex hull — the same interior test the
-    per-part containment validation asserts, so the merged hull / LongestAxis / BoundingRadius stay
-    bit-unchanged. Returns (lo, hi) or None if the box collapses (report + drop)."""
-    lo = np.asarray(lo, float).copy()
-    hi = np.asarray(hi, float).copy()
-    step = res * 0.1
-    for _ in range(2000):
-        pts = np.where(_CORNER_SIGNS.astype(bool), hi, hi * 0 + lo)
-        vals = pts @ eqs[:, :3].T + eqs[:, 3]  # (8, nfaces)
-        corner_max = vals.max(axis=1)
-        w = int(np.argmax(corner_max))
-        if corner_max[w] <= -margin:
-            return lo, hi
-        plane = int(np.argmax(vals[w]))
-        ax = int(np.argmax(np.abs(eqs[plane, :3])))
-        if _CORNER_SIGNS[w, ax] == 1:
-            hi[ax] -= step
-        else:
-            lo[ax] += step
-        if (hi - lo).min() <= 1e-3:
-            return None
-    return None
-
-
-def box_eqs(center, size) -> np.ndarray:
-    """The 6 face inequalities [n|d] of an axis-aligned box (point inside iff n.x+d <= 0 for all),
-    same convention as scipy's hull equations — but exact and cheap (no QuickHull rebuild)."""
-    c = np.asarray(center, float)
-    h = np.asarray(size, float) * 0.5
-    return np.array([
-        [1, 0, 0, -(c[0] + h[0])], [-1, 0, 0, (c[0] - h[0])],
-        [0, 1, 0, -(c[1] + h[1])], [0, -1, 0, (c[1] - h[1])],
-        [0, 0, 1, -(c[2] + h[2])], [0, 0, -1, (c[2] - h[2])],
-    ], dtype=np.float64)
-
-
 def rasterize_parts(part_eqs_list, grid: VoxelGrid) -> np.ndarray:
     """Solid grid = cell centre inside ANY part's convex hull (works for boxes and general parts)."""
     centers = grid.centers_flat()
@@ -855,90 +764,6 @@ def rasterize_parts(part_eqs_list, grid: VoxelGrid) -> np.ndarray:
     for eqs in part_eqs_list:
         inside |= (centers @ eqs[:, :3].T + eqs[:, 3]).max(axis=1) <= 1e-9
     return inside.reshape(grid.dims)
-
-
-def rasterize_boxes(specs, grid: VoxelGrid) -> np.ndarray:
-    """FAST solid mask for AXIS-ALIGNED box specs [(center, size)]: mark every cell whose CENTRE lies
-    inside a box by direct index-range assignment — no per-cell plane dot product, so it scales to the
-    thousands of thin shell boxes the shell pass generates (rasterize_parts over the full fine grid
-    would be minutes at that count). Cell-centre-in-box semantics match rasterize_parts for boxes; it
-    is used only for the shell pass's coverage bookkeeping — the FINAL reachability guard still runs
-    through the exact plane-based rasterize_parts."""
-    dims = np.array(grid.dims)
-    origin = grid.origin
-    res = grid.res
-    B = np.zeros(grid.dims, dtype=bool)
-    for c, s in specs:
-        c = np.asarray(c, float)
-        s = np.asarray(s, float)
-        lo = np.ceil((c - s * 0.5 - origin) / res - 0.5).astype(int)
-        hi = np.floor((c + s * 0.5 - origin) / res - 0.5).astype(int) + 1
-        lo = np.clip(lo, 0, dims)
-        hi = np.clip(hi, 0, dims)
-        if (hi > lo).all():
-            B[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]] = True
-    return B
-
-
-def shell_cover(specs, Sfine, gfine, corridor_fine, eqs, guard_segs, cfg):
-    """SHELL PASS — the surface-shell coverage guarantee.
-
-    After the bulk voxel decomposition + seal-patches, a large fraction of the VISIBLE-SURFACE voxels
-    still have no box at/just outside them: a ship approaching those points — especially the WALLS of a
-    concavity, which sit well inside the visual convex hull — sinks inward until it reaches an interior
-    bulk box before it bounces (the 'visual sink'). This pass closes that gap: it finds the surface
-    voxels not yet covered by any box and greedy-merges THEM into thin boxes, each padded outward by
-    `pad`, hull-clamped, and corridor-retreated exactly like every other box, so collision sits right
-    at the visible skin. Because concavity walls are interior to the convex hull, the outward pad is NOT
-    clamped there — that is exactly where the sink was worst and where this pass wins most. At convex
-    extremities the hull clamp still wins (metric-neutral); a voxel right on the convex skin can only be
-    covered to within `margin`, and a protrusion thinner than a metric-neutral box can hold is left
-    uncovered (reported) — those are the only surface voxels the invariants make impossible to cover.
-
-    Deterministic: greedy_boxes fixed scan order, the same clamp/retreat machinery as the bulk pass, and
-    each candidate box is kept only if it actually covers a still-uncovered surface voxel (so the count
-    stays honest and reproducible). Iterates because clamping/retreating one box can leave a neighbour
-    surface voxel newly exposed. Returns (specs, added)."""
-    pad = cfg["pad"]
-    margin = cfg["margin"]
-    voxel_res = cfg["voxel_res"]
-    corridor_r = cfg["corridor_r"]
-    added = 0
-    for _ in range(int(cfg.get("shell_iters", 6))):
-        solidF = rasterize_boxes(specs, gfine)
-        uncovered = Sfine & ~solidF & ~corridor_fine
-        if not uncovered.any():
-            break
-        boxes = greedy_boxes(uncovered)
-        cand = []
-        for b in boxes:
-            lo, hi = box_bounds(gfine, b)
-            lo = np.asarray(lo, float) - pad
-            hi = np.asarray(hi, float) + pad
-            clamped = clamp_box_to_hull(lo, hi, eqs, margin, gfine.res)
-            if clamped is None:
-                continue
-            clo, chi = clamped
-            cand.append(((clo + chi) * 0.5, chi - clo))
-        if not cand:
-            break
-        cand, _drop = retreat_from_corridors(cand, guard_segs, corridor_r, voxel_res)
-        if not cand:
-            break
-        # Keep only boxes that still cover a previously-uncovered surface voxel after clamp+retreat
-        # (drop the ones the clamp pulled entirely off the skin); charge each voxel to one box only.
-        remaining = uncovered.copy()
-        kept = []
-        for c, s in cand:
-            m = rasterize_boxes([(c, s)], gfine)
-            if (m & remaining).any():
-                kept.append((c, s))
-                remaining &= ~m
-        if not kept:
-            break
-        specs = specs + kept
-        added += len(kept)
-    return specs, added
 
 
 def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, ship_r) -> int:
@@ -959,74 +784,19 @@ def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, shi
     return int(leaked.sum())
 
 
-def retreat_from_corridors(specs, segs, corridor_r: float, res: float):
-    """Keep-out DUAL of the hull clamp: pull each box's faces inward until it clears every dock
-    corridor by `corridor_r`. `pad` grows boxes isotropically, and the coarse carve's cell-centre
-    discretization lets a padded box's corner poke into the flyable tube; this trims exactly that
-    overlap so the corridor validator + the SelfTest dock-ray + spawn clearance still pass. Only
-    boxes that actually intrude move (surgical — coverage elsewhere is untouched). The freed sliver
-    lies within `corridor_r` of the centreline = inside the carved corridor, so it never re-opens a
-    reachability leak (the guard excludes the corridor). Deterministic small-step shrink."""
-    if not segs:
-        return specs, 0
-    # Dense samples along every corridor centreline (the capsule axis a corridor is swept along).
-    qs = []
-    for a, b, _r in segs:
-        a = np.asarray(a, float)
-        b = np.asarray(b, float)
-        n = max(2, int(np.ceil(float(np.linalg.norm(b - a)) / (res * 0.5))) + 1)
-        for t in np.linspace(0.0, 1.0, n):
-            qs.append(a + (b - a) * t)
-    Q = np.array(qs)
-    step = res * 0.1
-    out, dropped = [], 0
-    for c, s in specs:
-        lo = c - s * 0.5
-        hi = c + s * 0.5
-        collapsed = False
-        for _ in range(4000):
-            cp = np.clip(Q, lo, hi)                       # closest box point to each centreline sample
-            d = np.linalg.norm(Q - cp, axis=1)
-            w = int(np.argmin(d))
-            if d[w] >= corridor_r:                        # box already clears the whole corridor
-                break
-            q = Q[w]
-            # Cheapest single face to move so this sample sits >= corridor_r outside the box.
-            best_ax, best_hi, best_cost = 0, True, np.inf
-            for ax in range(3):
-                cost_hi = hi[ax] - (q[ax] - corridor_r)   # push hi[ax] down under q-corridor_r
-                cost_lo = (q[ax] + corridor_r) - lo[ax]   # push lo[ax] up over  q+corridor_r
-                if 0.0 < cost_hi < best_cost:
-                    best_cost, best_ax, best_hi = cost_hi, ax, True
-                if 0.0 < cost_lo < best_cost:
-                    best_cost, best_ax, best_hi = cost_lo, ax, False
-            if best_hi:
-                hi[best_ax] -= step
-            else:
-                lo[best_ax] += step
-            if (hi - lo).min() <= res:  # box sat (almost) entirely in the flyable tube — drop it
-                collapsed = True
-                break
-        if collapsed:
-            dropped += 1
-            continue
-        out.append(((lo + hi) * 0.5, hi - lo))
-    return out, dropped
-
-
-# Per-kind pipeline presets — the resolution baseline for every knob. `base` locks the values the
-# retired base-col.yaml carried (box_res 1.5, pad 0.5, margin 0.05, ...): a no-override `--kind base`
-# MUST reproduce the committed base.glb byte-for-byte, so these are a hard contract, not a default to
-# tweak. `ship` shares the coverage knobs but drops the outward pad (0.0), widens the part-count
-# window, and leaves the reach guard / corridor validator off (turned on by --kind auto-detection or
-# an explicit flag). ship_radius / corridor_radius are filled from the world constants via `ws` below.
+# Per-kind pipeline presets — the resolution baseline for every knob. A no-override `--kind base`
+# bake of an unchanged GLB MUST reproduce the committed bytes (the determinism contract), so these
+# are a hard contract, not a default to tweak. `ship` shares the coverage knobs but tightens the
+# CoACD threshold (finer parts on small meshes), widens the part-count window, and leaves the reach
+# guard / corridor validator off (turned on by --kind auto-detection or an explicit flag).
+# ship_radius / corridor_radius are filled from the world constants via `ws` below.
 KIND_PRESETS = {
-    "base": dict(voxel_res=0.5, box_res=1.5, margin=0.05, pad=0.5, corridor_tol=0.05,
-                 corridor_clearance=0.5, corridor_approach=5.0, shell=True, shell_iters=6,
-                 count_lo=2, count_hi=1024),
-    "ship": dict(voxel_res=0.5, box_res=1.5, margin=0.05, pad=0.0, corridor_tol=0.05,
-                 corridor_clearance=0.5, corridor_approach=5.0, shell=True, shell_iters=6,
-                 count_lo=1, count_hi=100000),
+    "base": dict(voxel_res=0.5, margin=0.05, corridor_tol=0.05,
+                 corridor_clearance=0.5, corridor_approach=8.0,
+                 count_lo=2, count_hi=1024, threshold=0.1),
+    "ship": dict(voxel_res=0.5, margin=0.05, corridor_tol=0.05,
+                 corridor_clearance=0.5, corridor_approach=8.0,
+                 count_lo=1, count_hi=100000, threshold=0.05),
 }
 
 
@@ -1034,7 +804,7 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
     """Resolve the pipeline knobs from the kind preset, overridden by any explicit CLI arg (every
     tunable defaults to None so 'unset' is distinguishable from a passed value). Authored-unit
     thresholds fall back to the world collision constants via world-scale `ws`, exactly as the
-    sim/client derive them at load. Returns the same cfg dict shape generate_auto_parts consumes,
+    sim/client derive them at load. Returns the cfg dict shape generate_coacd_parts consumes,
     plus the per-kind count window + the resolved corridor_tol / hull_extremes the validators read."""
     p = KIND_PRESETS[kind]
 
@@ -1044,180 +814,171 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
 
     clearance = pick("corridor_clearance", p["corridor_clearance"])
     ship_r = pick("ship_radius", WORLD_SHIP_RADIUS / ws)
-    # The corridor-width FLOOR (ship radius + clearance). The real per-bake width is widened to cover
-    # the authored door rectangle in generate_auto_parts (door_corridor_radius) — the door lateral
-    # extent is authored by the 4 boundary markers now, not a global disc-radius constant.
+    # The corridor-width FLOOR (ship radius + clearance). Each door's carve segment is widened to
+    # that door's own rectangle half-diagonal + ship radius in corridor_segments — the lateral
+    # extent is authored by the 4 boundary markers, not a global disc-radius constant.
     corridor_r = pick("corridor_radius", ship_r + clearance)
     return dict(
         voxel_res=float(pick("voxel_res", p["voxel_res"])),
-        box_res=float(pick("box_res", p["box_res"])),
         margin=float(pick("margin", p["margin"])),
-        pad=float(pick("pad", p["pad"])),
         ship_r=float(ship_r),
         corridor_r=float(corridor_r),
         corridor_approach=float(pick("corridor_approach", p["corridor_approach"])),
-        shell=bool(pick("shell", p["shell"])),
-        shell_iters=int(pick("shell_iters", p["shell_iters"])),
         corridor_tol=float(pick("corridor_tol", p["corridor_tol"])),
         hull_extremes=int(pick("hull_extremes", 0)),
         count_lo=p["count_lo"],
         count_hi=p["count_hi"],
-        # spheroid-only knobs (ignored by the box path); resolved here so both generators share cfg.
-        sphere_segments=int(pick("sphere_segments", 1)),
-        sphere_overlap=float(pick("sphere_overlap", SPHERE_DEFAULT_OVERLAP)),
-        sphere_elongate=bool(pick("sphere_elongate", True)),
+        threshold=float(pick("threshold", p["threshold"])),
+        max_hulls=int(pick("max_hulls", -1)),
+        max_ch_vertex=int(pick("max_ch_vertex", 64)),
+        seed=int(pick("seed", 0)),
+        mc_smooth=float(pick("mc_smooth", 1.0)),
     )
 
 
-def generate_auto_parts(verts, V, F, hps, eqs, cfg):
-    """Run the full pipeline and return (yparts, stats). `yparts` are box specs in the SAME schema
-    the authored path consumes: [{'name': 'Auto00', 'box': {'center': [...], 'size': [...]}}]."""
+# ---------------------------------------------------------------------------
+#  CoACD convex decomposition of the carved voxel solid
+# ---------------------------------------------------------------------------
+#
+# CoACD (https://github.com/SarahWeiii/CoACD) splits a watertight mesh into convex parts that hug
+# concave detail far more tightly than fitted boxes. It is NOT run on the raw visual mesh: that
+# would hug the hangar walls and leave the sealed interior HOLLOW (the fly-inside bug the
+# reachability guard exists to catch). Instead it decomposes the SAME carved voxel solid the box
+# path merges — interior sealed by classify_solid, dock corridors carved back open by
+# corridor_mask — turned into a watertight surface by marching cubes. Each resulting hull is then
+# clamped strictly inside the visual hull (the metric-neutrality contract), so all downstream
+# validation/bake machinery is shared unchanged.
+
+def _chebyshev_center(halfspaces: np.ndarray):
+    """Deepest interior point (Chebyshev centre) of {x | n_i.x + d_i <= 0}, or None when the
+    intersection is empty/degenerate. Rows use the scipy hull.equations [n | d] convention."""
+    from scipy.optimize import linprog
+
+    A, b = halfspaces[:, :3], halfspaces[:, 3]
+    norms = np.linalg.norm(A, axis=1, keepdims=True)
+    res = linprog(np.array([0.0, 0.0, 0.0, -1.0]),
+                  A_ub=np.hstack([A, norms]), b_ub=-b,
+                  bounds=[(None, None)] * 3 + [(0.0, None)], method="highs")
+    if not res.success or res.x[3] <= 1e-9:
+        return None
+    return res.x[:3]
+
+
+def clamp_part_to_hull(pv: np.ndarray, eqs: np.ndarray, margin: float, max_verts: int):
+    """Intersect the part's halfspaces with the visual-hull planes offset INWARD by margin and
+    return the intersection's hull vertices (or None if the part collapses). Every returned
+    vertex sits >= margin inside the visual hull —
+    the metric-neutrality contract — with a small epsilon of headroom so the float32 quantization
+    in the baked GLB cannot tip a vertex back over the validator's exact -margin threshold."""
+    from scipy.spatial import HalfspaceIntersection, QhullError
+
+    pv = np.asarray(pv, dtype=np.float64)
+    eps = 1e-3
+    try:
+        if signed_dist_to_hull(pv, eqs).max() <= -(margin + eps):
+            pts = pv  # already strictly inside — keep CoACD's own hull verts
+        else:
+            inner = eqs.copy()
+            inner[:, 3] += margin + eps
+            hs = np.vstack([hull_equations(pv), inner])
+            c = _chebyshev_center(hs)
+            if c is None:
+                return None
+            pts = HalfspaceIntersection(hs, c).intersections
+        if max_verts > 0 and len(pts) > max_verts:
+            pts = reduce_to_extremes(pts, max_verts)
+        hull = ConvexHull(pts)
+        return pts[np.unique(hull.simplices)]
+    except (QhullError, ValueError):
+        return None
+
+
+def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
+    """CoACD pipeline; returns (yparts, stats) with parts in the raw-verts schema
+    [{'name': 'CoACD000', 'verts': hull_verts}]. Reuses the box path's fine voxel stage (solid
+    fill + seal + corridor carve) and reports the same coverage/sink stats so the generators
+    compare like-for-like."""
+    import coacd
+    from scipy.ndimage import distance_transform_edt as _edt
+    from skimage.measure import marching_cubes
+
     ship_r = cfg["ship_r"]
-    box_res = cfg["box_res"]
     voxel_res = cfg["voxel_res"]
     margin = cfg["margin"]
-    pad = cfg["pad"]
-    # Widen the corridor to cover the authored door rectangle(s), then use this ONE radius everywhere
-    # (carve mask, retreat keep-out, guard rays) so the swept tube, the box retreat, and the corridor
-    # validator all agree — no COL part can cap a corner of a doorway a ship may legally dock through.
-    corridor_r = door_corridor_radius(hps, cfg["corridor_r"], ship_r)
-    cfg = dict(cfg, corridor_r=corridor_r)
-    segs = corridor_segments(hps, corridor_r, cfg["corridor_approach"])
-    # Grow-outward margin (`pad`): after the greedy merge every box is inflated by `pad` on all six
-    # faces BEFORE the hull-containment clamp, so collision reaches out to the visual surface (at the
-    # extremity tips the clamp still wins → metric-neutral) instead of stopping strictly inside it —
-    # ships bounce at/just outside the visible hull rather than sinking into the thin outer shell.
-    # The flyable dock tube is protected AFTER padding by the retreat_from_corridors keep-out pass
-    # (trims any box back to the true corridor wall), so the coarse carve here stays at corridor_r.
+    segs = corridor_segments(hps, cfg["corridor_r"], cfg["corridor_approach"], ship_r)
 
-    from scipy.ndimage import label as _label, distance_transform_edt as _edt, binary_dilation as _dil
-
-    # Fine grid: accurate solid + sealed-interior classification (drives coverage + reachability).
     gfine = grid_for(V, voxel_res)
     Sfine = voxelize_surface(V, F, gfine)
     solid_fine, sealed_fine, _ = classify_solid(Sfine)
     corridor_fine = corridor_mask(gfine, segs)
-    # The "fly-around-inside" hollow = sealed cells where a ship of radius ship_r actually FITS (the
-    # space the player currently flies through into). The reachability guard protects exactly this —
-    # not the paper-thin near-surface sealed band any finite-box approximation slightly penetrates.
     interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > ship_r)
 
-    def clamp_specs(boxes, grid, pad_amt=0.0):
-        out, dropped = [], 0
-        for b in boxes:
-            lo, hi = box_bounds(grid, b)
-            if pad_amt > 0.0:  # inflate outward on all faces, then let the hull clamp trim the overshoot
-                lo = np.asarray(lo, float) - pad_amt
-                hi = np.asarray(hi, float) + pad_amt
-            clamped = clamp_box_to_hull(lo, hi, eqs, margin, grid.res)
-            if clamped is None:
-                dropped += 1
-                continue
-            clo, chi = clamped
-            out.append(((clo + chi) * 0.5, chi - clo))
-        return out, dropped
+    carved = solid_fine & ~corridor_fine
+    if not carved.any():
+        sys.exit("ERROR: carved voxel solid is empty — nothing to decompose")
 
-    # COARSE pass: engulf the fine solid at the box resolution, carve corridors, greedy-decompose.
-    # A few large boxes cover the bulk cheaply.
-    gbox = grid_for(V, box_res)
-    solid_box = downsample_solid(gfine, solid_fine, gbox)
-    corridor_box = corridor_mask(gbox, segs)
-    boxes = greedy_boxes(solid_box & ~corridor_box)
-    specs, dropped = clamp_specs(boxes, gbox, pad)  # the coarse bulk grows out to the visual surface
+    # Watertight input surface: marching-cubes the carved solid. Sample (i,j,k) is the CELL CENTRE
+    # at origin + (ijk + 0.5)*res, and grid_for pads 3 empty cells on every side so the isosurface
+    # always closes inside the grid. The binary volume is gaussian-smoothed first (sigma in CELLS,
+    # --mc-smooth): the raw voxel STAIRCASE reads as concavity to CoACD, which then shatters curved
+    # or diagonal geometry into hundreds of thin crust plates that the hull clamp can only drop
+    # (measured: 367 parts for a plain sphere). Smoothing restores the true surface shape; walls or
+    # corridors thinner than ~2*sigma cells can blur away, which the reachability/corridor
+    # validators catch — lower --mc-smooth if that happens.
+    from scipy.ndimage import gaussian_filter
+    vol = carved.astype(np.float32)
+    if cfg["mc_smooth"] > 0.0:
+        vol = gaussian_filter(vol, sigma=cfg["mc_smooth"])
+        if vol.max() <= 0.5:
+            sys.exit("ERROR: --mc-smooth blurred the entire solid below the isosurface level — "
+                     "the mesh is too thin for this sigma; lower --mc-smooth")
+    mv, mf, _, _ = marching_cubes(vol, level=0.5, spacing=(gfine.res,) * 3)
+    mv = mv + (gfine.origin + 0.5 * gfine.res)
+    # skimage's marching_cubes winds faces with normals pointing INTO the solid for this
+    # inside=1 volume — inside-out for CoACD, whose concavity metric then explodes (measured:
+    # a plain sphere shatters into 267 crust plates instead of 1 hull). Flip the winding.
+    mf = mf[:, ::-1]
 
-    # FINE PATCH passes: the hull-containment clamp shrinks coarse boxes at the extremities (tower
-    # top, arm/spindle tips) where the visual hull is tight, which can re-open a narrow gap into a
-    # ship-sized interior pocket the coarse box had covered. Detect exactly those leaks with the
-    # fine-res reachability flood and plug the reachable SOLID cells around each leak with small FINE
-    # boxes (which barely clamp), iterating until the hollow is provably sealed. Only a handful of
-    # cells leak, so this adds few boxes while guaranteeing the guard.
-    reach = max(1, int(np.ceil(ship_r / gfine.res)) + 1)
-    patched = 0
-    for _ in range(8):
-        eqs_list = [box_eqs(c, s) for c, s in specs]
-        solidF = rasterize_parts(eqs_list, gfine)
-        ship_free = (_edt(~solidF) * gfine.res) > ship_r
-        lab, _ = _label(ship_free)
-        ext = np.isin(lab, list(_boundary_labels(lab))) & ship_free
-        leaked_hollow = interior_hollow & ext & ~corridor_fine
-        if not leaked_hollow.any():
-            break
-        # Seal the channel: box the still-uncovered solid cells within ship reach of the leak.
-        plug = solid_fine & ext & ~corridor_fine & _dil(leaked_hollow, iterations=reach)
-        pboxes = greedy_boxes(plug)
-        pspecs, pdrop = clamp_specs(pboxes, gfine)
-        specs.extend(pspecs)
-        patched += len(pspecs)
-        dropped += pdrop
+    coacd.set_log_level("error")
+    cmesh = coacd.Mesh(mv.astype(np.float64), mf.astype(np.int64))
+    kwargs = dict(threshold=cfg["threshold"], max_convex_hull=cfg["max_hulls"],
+                  max_ch_vertex=cfg["max_ch_vertex"], seed=cfg["seed"])
+    try:
+        raw = coacd.run_coacd(cmesh, preprocess_mode="off", **kwargs)
+    except Exception as e:  # marching-cubes output CoACD won't take as-is — let it remesh itself
+        print(f"pipeline: CoACD preprocess=off failed ({e}); retrying with preprocess=auto")
+        raw = coacd.run_coacd(cmesh, preprocess_mode="auto", **kwargs)
 
-    # Dock keep-out geometry — the swept door carve segments (which already cover each door rectangle
-    # to `corridor_r`, the door half-diagonal + ship radius) PLUS each EXIT hardpoint's radial approach
-    # ray (the server SelfTest spawn cone). Both the corridor keep-out and the shell pass retreat
-    # against exactly this, so all downstream guards (bake corridor validator, SelfTest dock ray,
-    # spawn clearance) stay green — the SelfTest dock ray runs along a door's inward normal, which is a
-    # door carve segment's own axis, so it is protected by the door segments themselves.
-    ext_p = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
+    # Clamp every part strictly inside the visual hull (collapsed parts drop), then order
+    # deterministically by rounded centroid — CoACD's output order is seed-stable but opaque.
+    clamped, dropped = [], 0
+    for pv, pf in raw:
+        hv = clamp_part_to_hull(pv, eqs, margin, cfg["max_ch_vertex"])
+        if hv is None or len(hv) < 4:
+            dropped += 1
+            continue
+        clamped.append(hv)
+    clamped.sort(key=lambda h: tuple(np.round(h.mean(0), 4)))
+    yparts = [{"name": f"CoACD{i:03d}", "verts": h} for i, h in enumerate(clamped)]
 
-    def _radial(p):
-        l = float(np.linalg.norm(p))
-        return p / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
-
-    guard_segs = list(segs)
-    for p in ext_p:
-        guard_segs.append((p, p + _radial(p) * cfg["corridor_approach"], cfg["corridor_r"]))  # exit radial ray
-
-    # Corridor keep-out: `pad` can grow a box into a flyable dock tube (coarse-carve discretization);
-    # trim the offending boxes back to the true corridor wall so docking/launch stay clear.
-    if pad > 0.0:
-        specs, rdrop = retreat_from_corridors(specs, guard_segs, cfg["corridor_r"], voxel_res)
-        dropped += rdrop
-
-    # SHELL PASS: cover the visible-surface voxels the bulk decomposition left exposed (the concavity
-    # walls + outer skin) with thin, padded, hull-clamped, corridor-retreated boxes so a ship bounces at
-    # the visible surface instead of sinking to an interior box. This is the visual-sink fix; it may add
-    # many boxes (accepted — each is 6 cheap planes). See shell_cover for the invariant handling.
-    shell_added = 0
-    if cfg.get("shell", True):
-        specs, shell_added = shell_cover(specs, Sfine, gfine, corridor_fine, eqs, guard_segs, cfg)
-
-    # Deterministic ordering (rounded center) + stable names.
-    specs.sort(key=lambda cs: (round(float(cs[0][0]), 4), round(float(cs[0][1]), 4), round(float(cs[0][2]), 4)))
-    yparts = [
-        {"name": f"Auto{i:02d}",
-         "box": {"center": [float(c[0]), float(c[1]), float(c[2])],
-                 "size": [float(s[0]), float(s[1]), float(s[2])]}}
-        for i, (c, s) in enumerate(specs)
-    ]
-
-    # Coverage: fraction of carved fine-solid voxel centres inside some FINAL clamped box.
-    fine_carved = solid_fine & ~corridor_fine
-    sxs, sys_, szs = np.where(fine_carved)
-    scen = gfine.origin + (np.stack([sxs, sys_, szs], axis=1) + 0.5) * gfine.res
-    covered = np.zeros(len(scen), dtype=bool)
-    for c, s in specs:
-        covered |= np.all((scen >= c - s * 0.5 - 1e-9) & (scen <= c + s * 0.5 + 1e-9), axis=1)
-    coverage = float(covered.mean()) if len(scen) else 1.0
-
-    # SURFACE coverage + VISUAL SINK: rasterize the final boxes on the fine grid, then for every
-    # visible-surface voxel measure the distance to the nearest box cell (0 if covered). `surface_cov`
-    # = fraction of surface voxels with a box on them; the sink metric is that distance in WORLD units
-    # (authored * ws) — how far a ship sinks past the visible skin before it bounces. Reported two ways:
-    #   * sink_all_* — over ALL surface voxels (0 where covered): the true typical-case feel metric.
-    #   * sink_unc_* — over only the still-UNCOVERED voxels: the residual worst cases (thin protrusions
-    #     / convex skin the metric-neutrality clamp cannot cover); its mean rises as coverage improves
-    #     because it conditions on the hardest voxels, so read it alongside surface_cov, not alone.
-    from scipy.ndimage import distance_transform_edt as _edt2
+    # Coverage + visual-sink metrics: rasterize the FINAL clamped parts on the fine grid, measure
+    # carved-solid and surface-voxel coverage plus the world-unit distance a ship sinks past the
+    # visible skin before it bounces (sink_all = over ALL surface voxels, the typical-case feel;
+    # sink_unc = over only the still-uncovered voxels, the residual worst case — it conditions on
+    # the hardest voxels, so read it alongside surface_cov, not alone).
+    part_eqs_list = [hull_equations(h) for h in clamped]
+    solid_final = rasterize_parts(part_eqs_list, gfine)
+    coverage = float((carved & solid_final).sum() / carved.sum()) if carved.any() else 1.0
     ws = world_scale(verts)  # authored -> world units, same derivation the sim/client use
-    solid_final = rasterize_boxes(specs, gfine)
     surf_cov = float((Sfine & solid_final).sum() / Sfine.sum()) if Sfine.any() else 1.0
-    sink_world = _edt2(~solid_final) * gfine.res * ws
+    sink_world = _edt(~solid_final) * gfine.res * ws
     sink_all = sink_world[Sfine]
     sink_unc = sink_world[Sfine & ~solid_final]
 
     stats = dict(
         gfine=gfine, interior_hollow=interior_hollow, corridor_fine=corridor_fine,
-        ship_r=ship_r, dropped=dropped, patched=patched, shell_added=shell_added,
-        box_count=len(yparts),
+        ship_r=ship_r, dropped=dropped, part_count=len(yparts),
+        mc_verts=len(mv), mc_faces=len(mf), raw_parts=len(raw),
         coverage=coverage, surface_cov=surf_cov, solid_fine=int(solid_fine.sum()),
         sealed=int(sealed_fine.sum()), hollow=int(interior_hollow.sum()), surface=int(Sfine.sum()),
         sink_all_mean=float(sink_all.mean()) if sink_all.size else 0.0,
@@ -1226,287 +987,37 @@ def generate_auto_parts(verts, V, F, hps, eqs, cfg):
         sink_unc_mean=float(sink_unc.mean()) if sink_unc.size else 0.0,
         sink_unc_max=float(sink_unc.max()) if sink_unc.size else 0.0,
         sink_over_1r=float((sink_all > WORLD_SHIP_RADIUS).mean()) if sink_all.size else 0.0,
-        box_res=box_res, voxel_res=voxel_res, pad=pad, segs=segs,
+        voxel_res=voxel_res, segs=segs,
     )
     return yparts, stats
 
 
-# ---------------------------------------------------------------------------
-#  --primitive spheroid: greedy oblong-sphere cover of the same voxel solid
-# ---------------------------------------------------------------------------
-#
-# For ROUND geometry (asteroids, future organic hulls) a stack of axis-aligned boxes reads badly and
-# stair-steps the collision surface. The spheroid primitive covers the SAME fine voxel solid (reused
-# verbatim: voxelize_surface -> classify_solid) with a small set of overlapping oblong ellipsoids:
-#   1. Distance-transform the carved solid -> each voxel's distance to the nearest non-solid cell = the
-#      radius of the largest interior sphere centred there. Seed the deepest still-uncovered voxel.
-#   2. Optionally stretch that sphere into an oblong ellipsoid along the local uncovered-solid PCA axis.
-#   3. Pad (radius inflation) BEFORE the hull clamp, mirroring the box pad; clamp strictly inside the
-#      visual convex hull; retreat out of any dock corridor. Drop parts that collapse below the floor.
-#   4. Tessellate each survivor to an icosphere (scaled per-axis), then feed it through the SAME
-#      convex_mesh/bake_glb/validation machinery the boxes use.
-# Everything is deterministic (no RNG): fixed voxel scan order, lexsorted deepest-voxel tie-break, and
-# sign-canonicalised eigenvectors, so a re-bake of unchanged input + identical args is byte-identical.
-# COST: a subdiv-1 icosphere hull is ~42 verts / ~80 planes vs 6 for a box, and SphereVsBody is O(planes)
-# — keep --sphere-segments low and the sphere count small; box stays the default/recommended primitive.
-
-
-def _icosphere(subdivisions: int) -> tuple[np.ndarray, np.ndarray]:
-    """Unit-radius icosphere: the 12-vertex regular icosahedron subdivided `subdivisions` times (every
-    triangle -> 4, each new midpoint renormalised to the unit sphere). subdivisions=1 -> 42 verts / 80
-    faces; 0 -> the raw 12-vert icosahedron. Deterministic: fixed base geometry + fixed face iteration
-    order + a per-level midpoint cache keyed on the sorted edge, so the vertex order never varies."""
-    t = (1.0 + np.sqrt(5.0)) / 2.0
-    verts = [np.array(v, dtype=np.float64) for v in (
-        (-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0),
-        (0, -1, t), (0, 1, t), (0, -1, -t), (0, 1, -t),
-        (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1),
-    )]
-    verts = [v / np.linalg.norm(v) for v in verts]
-    faces = [
-        (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
-        (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
-        (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
-        (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
-    ]
-    for _ in range(max(0, subdivisions)):
-        cache: dict[tuple[int, int], int] = {}
-        new_faces = []
-
-        def mid(i, j):
-            key = (min(i, j), max(i, j))
-            if key not in cache:
-                m = verts[i] + verts[j]
-                verts.append(m / np.linalg.norm(m))
-                cache[key] = len(verts) - 1
-            return cache[key]
-
-        for a, b, c in faces:
-            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
-            new_faces += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
-        faces = new_faces
-    return np.array(verts, dtype=np.float64), np.array(faces, dtype=np.int64)
-
-
-def _spheroid_axes(c, r, uncovered, grid, cfg):
-    """Local PCA elongation of a seed sphere into an oblong ellipsoid. Gathers the still-uncovered
-    solid voxels within ~1.5r of the seed and, if they form a clearly anisotropic cluster, stretches
-    the principal axis by a capped factor while the two minor axes keep radius r. Returns
-    (radii[3], R[3,3]) with R's COLUMNS the world-space ellipsoid axes (principal, mid, minor); a plain
-    isotropic sphere (radii=r, R=I) when elongation is disabled or the local cluster is too small/round.
-    Deterministic — np.linalg.eigh + sign-canonicalised eigenvectors, no RNG."""
-    iso = (np.full(3, r, dtype=np.float64), np.eye(3))
-    if not cfg.get("sphere_elongate", True):
-        return iso
-    reach = r * 1.5
-    ext = int(np.ceil(reach / grid.res))
-    ci = np.floor((c - grid.origin) / grid.res - 0.5).astype(int)
-    lo = np.clip(ci - ext, 0, np.array(grid.dims))
-    hi = np.clip(ci + ext + 1, 0, np.array(grid.dims))
-    if not (hi > lo).all():
-        return iso
-    sub = uncovered[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]]
-    if sub.sum() < 8:
-        return iso
-    xs, ys, zs = np.where(sub)
-    pts = grid.origin + (np.stack([xs, ys, zs], axis=1) + lo + 0.5) * grid.res
-    pts = pts[np.linalg.norm(pts - c, axis=1) <= reach]
-    if len(pts) < 8:
-        return iso
-    evals, evecs = np.linalg.eigh(np.cov((pts - c).T))  # ascending eigenvalues, orthonormal columns
-    order = np.argsort(evals)[::-1]                      # principal (largest) first
-    evals, evecs = evals[order], evecs[:, order]
-    if evals[0] <= 1e-9:
-        return iso
-    # Canonicalise eigenvector signs (make the largest-magnitude component positive) so the ellipsoid
-    # frame — hence the tessellated vertex order — is byte-stable regardless of the LAPACK sign choice.
-    for k in range(3):
-        if evecs[np.argmax(np.abs(evecs[:, k])), k] < 0.0:
-            evecs[:, k] = -evecs[:, k]
-    if np.linalg.det(evecs) < 0.0:  # keep a right-handed frame (sign has no geometric effect anyway)
-        evecs[:, 2] = -evecs[:, 2]
-    elong = float(np.clip(np.sqrt(evals[0] / max(evals.mean(), 1e-9)), 1.0, SPHERE_MAX_ELONGATION))
-    return np.array([r * elong, r, r], dtype=np.float64), evecs
-
-
-def _clamp_ellipsoid_to_hull(c, radii, R, eqs, margin):
-    """Uniformly shrink an ellipsoid (centre `c` fixed) until it is strictly inside the visual convex
-    hull with `margin` clearance — the sphere analogue of clamp_box_to_hull, preserving the same
-    metric-neutrality contract. The ellipsoid's support along a plane normal n is ||radii * (R^T n)||,
-    so the largest keep-it-inside scale is min_i (dist_i - margin)/support_i over the hull faces (scipy
-    equations carry UNIT normals, so n.c+d is signed distance). Returns the scaled radii; a non-positive
-    scale collapses them and the caller drops the part."""
-    n, d = eqs[:, :3], eqs[:, 3]
-    dist = -(n @ c + d)                        # per-face signed distance from centre (positive = inside)
-    support = np.linalg.norm((n @ R) * radii, axis=1)  # (n@R)[i] = R^T n_i ; * radii = ellipsoid reach
-    s = float(np.min((dist - margin) / np.maximum(support, 1e-12)))
-    return radii * max(0.0, min(1.0, s))
-
-
-def _clamp_ellipsoid_to_corridors(c, radii, R, segs):
-    """Keep-out DUAL of the hull clamp for dock corridors: uniformly shrink the ellipsoid until its
-    (conservative max-radius) reach clears every corridor capsule by that capsule's radius, using
-    point-to-segment distance from the centre. Only relevant when the mesh has dock hardpoints (segs
-    non-empty); a centre inside a tube yields a non-positive scale and the caller drops the part."""
-    if not segs:
-        return radii
-    reach = float(radii.max())
-    s = 1.0
-    for a, b, cr in segs:
-        a = np.asarray(a, float)
-        b = np.asarray(b, float)
-        ab = b - a
-        L2 = float(ab @ ab) or 1.0
-        t = float(np.clip((c - a) @ ab / L2, 0.0, 1.0))
-        dist = float(np.linalg.norm(c - (a + t * ab)))
-        s = min(s, (dist - cr) / max(reach, 1e-12))
-    return radii * max(0.0, min(1.0, s))
-
-
-def _mark_ellipsoid(mask, grid, c, radii, R):
-    """Set `mask` True for every voxel whose CENTRE lies inside the ellipsoid (c, radii, R). Restricted
-    to the ellipsoid's world-AABB subgrid for speed; deterministic. Used for the greedy cover bookkeeping
-    (which voxels are claimed) — cell-centre-in-ellipsoid semantics mirror the box rasterizers."""
-    ext = np.sqrt(((R * radii) ** 2).sum(axis=1))  # world half-extent per axis of the rotated ellipsoid
-    lo = np.clip(np.floor((c - ext - grid.origin) / grid.res - 0.5).astype(int), 0, np.array(grid.dims))
-    hi = np.clip(np.ceil((c + ext - grid.origin) / grid.res + 0.5).astype(int), 0, np.array(grid.dims))
-    if not (hi > lo).all():
-        return
-    ii = np.arange(lo[0], hi[0])
-    jj = np.arange(lo[1], hi[1])
-    kk = np.arange(lo[2], hi[2])
-    gx, gy, gz = np.meshgrid(ii, jj, kk, indexing="ij")
-    idx = np.stack([gx, gy, gz], axis=-1).reshape(-1, 3)
-    centers = grid.origin + (idx + 0.5) * grid.res
-    u = ((centers - c) @ R) / radii            # (centers-c)@R = R^T(centers-c) = local ellipsoid coords
-    sel = idx[(u * u).sum(axis=1) <= 1.0]
-    mask[sel[:, 0], sel[:, 1], sel[:, 2]] = True
-
-
-def generate_auto_spheroids(verts, V, F, hps, eqs, cfg):
-    """Sibling of generate_auto_parts for --primitive spheroid: greedy oblong-sphere cover of the same
-    fine voxel solid. Returns (yparts, stats). Each ypart carries `sphere_verts` (the placed, tessellated
-    icosphere cloud part_vertices/convex_mesh consume) plus a `sphere` provenance dict; `stats` exposes
-    the fine grid + interior hollow + corridor mask so the reachability guard in main runs unchanged."""
-    from scipy.ndimage import distance_transform_edt as _edt
-
-    voxel_res = cfg["voxel_res"]
-    margin = cfg["margin"]
-    pad = cfg["pad"]
-    ship_r = cfg["ship_r"]
-    # Widen the corridor to cover the authored door rectangle(s) — same rule as the box path.
-    corridor_r = door_corridor_radius(hps, cfg["corridor_r"], ship_r)
-    cfg = dict(cfg, corridor_r=corridor_r)
-    overlap = min(max(float(cfg.get("sphere_overlap", SPHERE_DEFAULT_OVERLAP)), 0.0), 0.95)
-    segments = int(cfg.get("sphere_segments", 1))
-
-    segs = corridor_segments(hps, corridor_r, cfg["corridor_approach"])
-
-    # Reuse the box pipeline's solid/sealed classification verbatim (drives coverage + reach guard).
-    gfine = grid_for(V, voxel_res)
-    Sfine = voxelize_surface(V, F, gfine)
-    solid_fine, sealed_fine, _ = classify_solid(Sfine)
-    corridor_fine = corridor_mask(gfine, segs)
-    interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > ship_r)
-
-    carved = solid_fine & ~corridor_fine
-    longest = float((V.max(0) - V.min(0)).max())
-    min_radius = SPHERE_MIN_RADIUS_FRAC * longest
-
-    # distance (authored units) from each carved-solid voxel centre to the nearest NON-solid cell = the
-    # radius of the largest interior sphere seated there. Computed ONCE; the greedy cover always seeds the
-    # still-uncovered voxel with the largest such distance (deepest core first).
-    depth = _edt(carved) * gfine.res
-    xs, ys, zs = np.where(carved)                 # np.where yields (x,y,z)-ascending = lexsorted indices
-    idx_all = np.stack([xs, ys, zs], axis=1)
-    depth_all = depth[xs, ys, zs]
-    total_solid = max(1, len(idx_all))
-
-    base_ico, _ico_faces = _icosphere(segments)
-
-    covered_pick = np.zeros(gfine.dims, dtype=bool)  # (1-overlap)-radius marks: gate the next SEED
-    covered_full = np.zeros(gfine.dims, dtype=bool)  # full-radius marks: the coverage/stop metric
-    spheres = []                                     # (c, radii, R) survivors
-    dropped = 0
-
-    for _ in range(SPHERE_MAX_COUNT):
-        if (covered_full[xs, ys, zs]).sum() / total_solid >= SPHERE_COVERAGE_TARGET:
-            break
-        unc = ~covered_pick[xs, ys, zs]
-        if not unc.any():
-            break
-        cand = np.where(unc, depth_all, -1.0)
-        best = int(np.argmax(cand))               # first max on ties; idx_all is lexsorted -> deterministic
-        if cand[best] < min_radius:               # deepest remaining voxel is below the floor -> done
-            break
-        ci = idx_all[best]
-        c = gfine.origin + (ci + 0.5) * gfine.res
-        r = float(depth_all[best])
-        radii, R = _spheroid_axes(c, r, carved & ~covered_pick, gfine, cfg)
-        radii = radii + pad                        # pad = radius inflation BEFORE the hull clamp
-        radii = _clamp_ellipsoid_to_hull(c, radii, R, eqs, margin)
-        radii = _clamp_ellipsoid_to_corridors(c, radii, R, segs)
-        if radii.min() < min_radius:               # collapsed by hull/corridor -> drop, but claim a small
-            dropped += 1                            # core so the seed is not re-picked (guarantees progress)
-            _mark_ellipsoid(covered_pick, gfine, c, np.full(3, max(min_radius, voxel_res)), np.eye(3))
-            continue
-        spheres.append((c, radii, R))
-        _mark_ellipsoid(covered_pick, gfine, c, radii * (1.0 - overlap), R)
-        _mark_ellipsoid(covered_full, gfine, c, radii, R)
-
-    # Deterministic ordering (rounded centre) + stable names, then tessellate each survivor.
-    spheres.sort(key=lambda s: (round(float(s[0][0]), 4), round(float(s[0][1]), 4), round(float(s[0][2]), 4)))
-    yparts = []
-    for i, (c, radii, R) in enumerate(spheres):
-        wv = ((base_ico * radii) @ R.T) + c        # icosphere point c + R @ (radii * unit)
-        yparts.append({
-            "name": f"Sph{i:02d}",
-            "sphere_verts": wv.astype(np.float64),
-            "sphere": {"center": [float(x) for x in c], "radii": [float(x) for x in radii]},
-        })
-
-    coverage = float((covered_full[xs, ys, zs]).sum() / total_solid)
-    ws = world_scale(verts)
-    stats = dict(
-        gfine=gfine, interior_hollow=interior_hollow, corridor_fine=corridor_fine,
-        ship_r=ship_r, dropped=dropped, sphere_count=len(yparts),
-        coverage=coverage, solid_fine=int(solid_fine.sum()), sealed=int(sealed_fine.sum()),
-        hollow=int(interior_hollow.sum()), surface=int(Sfine.sum()),
-        segments=segments, overlap=overlap, min_radius=min_radius, ws=ws, segs=segs,
-        verts_per_part=len(base_ico),
-    )
-    return yparts, stats
-
-
-def write_snapshot(path: Path, yparts, cfg, kind: str, primitive: str, glb: Path, ws: float):
+def write_snapshot(path: Path, yparts, cfg, kind: str, glb: Path, ws: float):
     """Opt-in (`--dump PATH`) human-readable record of a bake: the kind, the source GLB, every
-    resolved arg, and the baked box list. Replaces the retired base-col.generated.yaml — NOT consumed
+    resolved arg, and the baked part list. Replaces the retired base-col.generated.yaml — NOT consumed
     by the bake (which regenerates from the mesh every run for determinism), purely provenance so a
     reviewer can see exactly what a given SHA was baked from. Manual string formatting, no yaml lib."""
     lines = [
         f"# collision-hull snapshot — GENERATED by `bake.py --kind {kind}`; provenance only, not consumed.",
-        "# A record of the deterministic voxel solid-fill + greedy box-merge output for a bake.",
-        f"# kind={kind}  primitive={primitive}  glb={glb}  worldScale={ws:.6f}",
-        f"# voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  pad={cfg['pad']}  "
-        f"margin={cfg['margin']}  hull_extremes={cfg['hull_extremes']}",
-        f"# shell={cfg['shell']}  shell_iters={cfg['shell_iters']}  corridor_tol={cfg['corridor_tol']}",
+        "# A record of the deterministic voxel solid-fill + CoACD decomposition output for a bake.",
+        f"# kind={kind}  glb={glb}  worldScale={ws:.6f}",
+        f"# voxel_res={cfg['voxel_res']}  margin={cfg['margin']}  hull_extremes={cfg['hull_extremes']}  "
+        f"corridor_tol={cfg['corridor_tol']}",
         f"# ship_radius(authored)={cfg['ship_r']:.4f}  corridor_radius={cfg['corridor_r']:.4f}  "
         f"corridor_approach={cfg['corridor_approach']}",
+        f"# coacd: threshold={cfg['threshold']}  max_hulls={cfg['max_hulls']}  "
+        f"max_ch_vertex={cfg['max_ch_vertex']}  seed={cfg['seed']}  mc_smooth={cfg['mc_smooth']}",
         f"# {len(yparts)} parts",
         "parts:",
     ]
     for p in yparts:
+        hv = np.asarray(p["verts"], dtype=np.float64)
+        c = hv.mean(0)
+        lo, hi = hv.min(0), hv.max(0)
         lines.append(f"  - name: {p['name']}")
-        if "box" in p:
-            c = p["box"]["center"]
-            s = p["box"]["size"]
-            lines.append(f"    box: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
-                         f"size: [{s[0]:.4f}, {s[1]:.4f}, {s[2]:.4f}]}}")
-        else:
-            c = p["sphere"]["center"]
-            rr = p["sphere"]["radii"]
-            lines.append(f"    sphere: {{center: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
-                         f"radii: [{rr[0]:.4f}, {rr[1]:.4f}, {rr[2]:.4f}]}}")
+        lines.append(f"    hull: {{verts: {len(hv)}, centroid: [{c[0]:.4f}, {c[1]:.4f}, {c[2]:.4f}], "
+                     f"aabb: [[{lo[0]:.4f}, {lo[1]:.4f}, {lo[2]:.4f}], "
+                     f"[{hi[0]:.4f}, {hi[1]:.4f}, {hi[2]:.4f}]]}}")
     Path(path).write_text("\n".join(lines) + "\n")
 
 
@@ -1517,16 +1028,13 @@ def write_snapshot(path: Path, yparts, cfg, kind: str, primitive: str, glb: Path
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Generate + bake convex COL_ collision parts into a mesh GLB")
     ap.add_argument("--kind", choices=["base", "ship"], required=True,
-                    help="preset selector: base = station (default GLB + corridors + reach guard); "
-                         "ship = any ship/model mesh (no pad, guard/corridors off unless present)")
-    ap.add_argument("--primitive", choices=["box", "spheroid"], default="box",
-                    help="collision part shape (spheroid = future round/asteroid geometry; not yet)")
-    ap.add_argument("--glb", type=Path, default=None,
-                    help="mesh GLB (defaults to client/assets/bases/base.glb only for --kind base)")
+                    help="preset selector: base = station (corridors + reach guard); "
+                         "ship = any ship/model mesh (guard/corridors off unless present)")
+    ap.add_argument("--glb", type=Path, required=True, help="source mesh GLB to validate/bake")
     ap.add_argument("--out", type=Path, default=None, help="default: rewrite --glb in place")
     ap.add_argument("--check", action="store_true", help="validate only; do not write")
     ap.add_argument("--dump", type=Path, default=None,
-                    help="write a human-readable provenance snapshot (kind + resolved args + boxes) to PATH")
+                    help="write a human-readable provenance snapshot (kind + resolved args + parts) to PATH")
     ap.add_argument("--preview", type=Path, default=None,
                     help="render ONE combined figure (ortho triptych + 3D) to this exact PNG path")
     ap.add_argument("--preview-dir", type=Path, default=None,
@@ -1541,11 +1049,7 @@ def main(argv=None):
                     help="ship scale basis (REQUIRED for --kind ship); ws = model_length/LongestAxis")
     # --- pipeline knobs: all default None so 'unset' falls through to the kind preset ---
     ap.add_argument("--voxel-res", type=float, default=None)
-    ap.add_argument("--box-res", type=float, default=None)
     ap.add_argument("--margin", type=float, default=None)
-    ap.add_argument("--pad", type=float, default=None)
-    ap.add_argument("--shell", action=argparse.BooleanOptionalAction, default=None)
-    ap.add_argument("--shell-iters", type=int, default=None)
     ap.add_argument("--corridor-clearance", type=float, default=None)
     ap.add_argument("--corridor-approach", type=float, default=None)
     ap.add_argument("--corridor-radius", type=float, default=None)
@@ -1558,27 +1062,37 @@ def main(argv=None):
                     help="sealed-interior reachability guard (default on for base, off for ship)")
     ap.add_argument("--corridor-check", action=argparse.BooleanOptionalAction, default=None,
                     help="dock-corridor validator (default auto: on iff the mesh has HP_Docking* nodes)")
-    # --- spheroid primitive knobs (Phase 3) ---
-    ap.add_argument("--sphere-segments", type=int, default=1,
-                    help="icosphere subdivisions per spheroid part (spheroid primitive; Phase 3)")
-    ap.add_argument("--sphere-overlap", type=float, default=None,
-                    help="greedy sphere-cover overlap factor 0..~0.95 (spheroid primitive; higher = more, "
-                         "overlapping spheres). Default 0.35.")
-    ap.add_argument("--sphere-elongate", action=argparse.BooleanOptionalAction, default=None,
-                    help="PCA-elongate each spheroid into an oblong ellipsoid along the local solid axis "
-                         "(spheroid primitive; default on)")
+    # --- CoACD knobs ---
+    ap.add_argument("--threshold", type=float, default=None,
+                    help="CoACD concavity tolerance (preset base 0.1 / ship 0.05; "
+                         "lower = more, tighter-fitting parts)")
+    ap.add_argument("--max-hulls", type=int, default=None,
+                    help="CoACD max_convex_hull cap (default -1 = unlimited)")
+    ap.add_argument("--max-ch-vertex", type=int, default=None,
+                    help="max verts per CoACD hull (default 64 — server SphereVsBody is O(planes) "
+                         "per sub-hull, so CoACD's native 256 is far too fat)")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="CoACD RNG seed (default 0, fixed for determinism)")
+    ap.add_argument("--mc-smooth", type=float, default=None,
+                    help="gaussian sigma (in voxel CELLS, default 1.0; 0 = off) applied to the "
+                         "carved solid before marching cubes — kills the voxel staircase that "
+                         "CoACD reads as concavity; walls thinner than ~2*sigma cells may blur "
+                         "away (the validators catch it)")
+    ap.add_argument("--min-extent", type=float, default=0.0,
+                    help="skip visual mesh primitives whose largest AABB extent is below this "
+                         "(authored units) — guards FOREIGN preview meshes with tiny marker/"
+                         "placeholder prims; changes the containment hull, so committed bakes "
+                         "must keep the default 0")
     args = ap.parse_args(argv)
 
-    # GLB + scale-basis resolution per kind.
-    glb = args.glb if args.glb is not None else (DEF_GLB if args.kind == "base" else None)
-    if glb is None:
-        sys.exit("ERROR: --glb is required for --kind ship")
+    # Scale-basis resolution per kind.
+    glb = args.glb
     if args.kind == "ship" and args.model_length is None:
         sys.exit("ERROR: --model-length is REQUIRED for --kind ship (ws = model_length/LongestAxis)")
 
     gltf = pygltflib.GLTF2().load(str(glb))
     blob = gltf.binary_blob()
-    verts, hps = read_visual_vertices(gltf, blob)
+    verts, hps = read_visual_vertices(gltf, blob, args.min_extent)
     if not len(verts):
         sys.exit(f"ERROR: {glb} has no non-COL visual vertices to bake against")
     vlo, vhi = verts.min(0), verts.max(0)
@@ -1595,7 +1109,7 @@ def main(argv=None):
     eqs = hull_equations(reduce_to_extremes(verts, cfg["hull_extremes"]))
 
     # Triangles (with indices) drive the voxelizer AND the reachability guard's sealed-interior class.
-    V, F = read_visual_triangles(gltf, blob)
+    V, F = read_visual_triangles(gltf, blob, args.min_extent)
     if not len(F):
         sys.exit(f"ERROR: {glb} has no indexed triangles (unindexed prims are skipped) — nothing to voxelize")
 
@@ -1605,36 +1119,25 @@ def main(argv=None):
     reach_guard = (args.kind == "base") if args.reach_guard is None else args.reach_guard
     corridor_check = has_dock if args.corridor_check is None else args.corridor_check
 
-    print(f"\npipeline: primitive={args.primitive}  voxel_res={cfg['voxel_res']}  box_res={cfg['box_res']}  "
-          f"pad={cfg['pad']}  corridorRadius={cfg['corridor_r']:.4f}  reach_guard={reach_guard}  "
-          f"corridor_check={corridor_check}")
-    if args.primitive == "spheroid":
-        # Spheroid path: greedy oblong-sphere cover of the same voxel solid; parts flow through the same
-        # convex_mesh/validation/bake machinery as boxes below (the box path is entirely untouched).
-        yparts, autostats = generate_auto_spheroids(verts, V, F, hps, eqs, cfg)
-        a = autostats
-        print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
-              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
-              f"{a['sphere_count']} spheroids (segments={a['segments']} -> {a['verts_per_part']} verts each, "
-              f"overlap={a['overlap']:.2f}, min_radius={a['min_radius']:.3f} authored, "
-              f"{a['dropped']} collapsed/dropped by hull/corridor clamp)")
-        print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%")
-    else:
-        yparts, autostats = generate_auto_parts(verts, V, F, hps, eqs, cfg)
-        a = autostats
-        print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
-              f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
-              f"{a['box_count']} boxes ({a['patched']} fine seal-patches, "
-              f"{a['shell_added']} shell-cover boxes, "
-              f"{a['dropped']} collapsed/dropped by hull clamp)")
-        print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%  "
-              f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
-        print(f"pipeline: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
-              f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
-              f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
-              f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
+    print(f"\npipeline: voxel_res={cfg['voxel_res']}  corridorRadius={cfg['corridor_r']:.4f}  "
+          f"reach_guard={reach_guard}  corridor_check={corridor_check}")
+    yparts, autostats = generate_coacd_parts(verts, V, F, hps, eqs, cfg)
+    a = autostats
+    print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
+          f"({a['hollow']} ship-fits hollow) @res {cfg['voxel_res']} -> "
+          f"marching-cubes {a['mc_verts']}v/{a['mc_faces']}f -> "
+          f"{a['raw_parts']} CoACD parts (threshold={cfg['threshold']}, "
+          f"max_ch_vertex={cfg['max_ch_vertex']}, seed={cfg['seed']}, "
+          f"mc_smooth={cfg['mc_smooth']}) -> "
+          f"{a['part_count']} clamped parts ({a['dropped']} collapsed/dropped by hull clamp)")
+    print(f"pipeline: solid-voxel coverage {a['coverage']*100:.2f}%  "
+          f"surface-voxel coverage {a['surface_cov']*100:.2f}%")
+    print(f"pipeline: visual sink (world units) — ALL surface: mean={a['sink_all_mean']:.2f} "
+          f"p90={a['sink_all_p90']:.2f} max={a['sink_all_max']:.2f}; "
+          f"uncovered only: mean={a['sink_unc_mean']:.2f} max={a['sink_unc_max']:.2f}; "
+          f"{a['sink_over_1r']*100:.1f}% of surface sinks > 1 ship radius ({WORLD_SHIP_RADIUS:.0f}w)")
     if args.dump is not None:
-        write_snapshot(args.dump, yparts, cfg, args.kind, args.primitive, glb, ws)
+        write_snapshot(args.dump, yparts, cfg, args.kind, glb, ws)
         print(f"pipeline: wrote snapshot {args.dump}")
     lo, hi = cfg["count_lo"], cfg["count_hi"]
     if not (lo <= len(yparts) <= hi):
@@ -1648,7 +1151,8 @@ def main(argv=None):
     parts = []
     all_col = []
     part_eqs = []
-    print(f"\n{'part':14} {'verts':>5} {'AABB (min..max)':>34}  {'hull-margin':>11}")
+    total_planes = 0
+    print(f"\n{'part':14} {'verts':>5} {'planes':>6} {'AABB (min..max)':>34}  {'hull-margin':>11}")
     ok = True
     for p in yparts:
         name = p["name"]
@@ -1658,14 +1162,18 @@ def main(argv=None):
         all_col.append(hv)
         peq = hull_equations(hv)
         part_eqs.append(peq)
+        nplanes = plane_count(peq)
+        total_planes += nplanes
         d = signed_dist_to_hull(hv.astype(np.float64), eqs)
         worst = d.max()  # want <= -margin
         plo, phi = hv.min(0), hv.max(0)
         flag = "" if worst <= -margin else "  <-- VIOLATION (pokes out of visual hull)"
         if worst > -margin:
             ok = False
-        print(f"{name:14} {len(hv):5d}  [{plo[0]:5.1f},{plo[1]:5.1f},{plo[2]:5.1f}]"
+        print(f"{name:14} {len(hv):5d} {nplanes:6d}  [{plo[0]:5.1f},{plo[1]:5.1f},{plo[2]:5.1f}]"
               f"..[{phi[0]:5.1f},{phi[1]:5.1f},{phi[2]:5.1f}]  {(-worst):8.4f}{flag}")
+    print(f"{'TOTAL':14} {sum(len(hv) for _, hv, _ in parts):5d} {total_planes:6d}  "
+          f"({len(parts)} parts; server SphereVsBody cost scales with total planes)")
 
     # AABB containment (MeshAabb scale contract).
     call = np.vstack(all_col)
@@ -1689,18 +1197,21 @@ def main(argv=None):
         approach = cfg["corridor_approach"]
         print(f"\ndock doors parsed: {len(doors)}; corridor samples must stay OUTSIDE all parts")
         corridor_fail = 0
-        # Per DOOR (a base may author N): walk the inward-normal approach axis from `approach` units
-        # outside the face straight to the face centre — this is the exact ray the server SelfTest
-        # fires, and it must stay clear of every COL part (no part caps the docking mouth). We also
-        # probe a small in-plane cross at half the door's half-diagonal (well inside the rectangle) to
-        # catch a part that laterally pinches the doorway without blocking the centre axis.
+        # Per DOOR (a base may author N): walk the inward-normal approach axis straight to the face
+        # centre — the exact ray the server SelfTest fires. SelfTest probes from BaseRadius*2 world
+        # (= longestAxis authored) outside the face, so walk that FULL lane, not just the carved
+        # `approach` stretch: structure crossing the lane beyond the carve blocks docking just the
+        # same (a two-door hub failed exactly this way). We also probe a small in-plane cross at
+        # half the door's half-diagonal (well inside the rectangle) to catch a part that laterally
+        # pinches the doorway without blocking the centre axis.
+        lane = max(approach, longest)  # authored units == the server's BaseRadius*2-world probe
         for di, (pos, n, hd) in enumerate(doors):
             seed = np.array([0.0, 1.0, 0.0]) if abs(n[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
             u = np.cross(n, seed); u /= (np.linalg.norm(u) or 1.0)
             v = np.cross(n, u); v /= (np.linalg.norm(v) or 1.0)
             samples = []
-            for t in np.linspace(0.0, 1.0, 9):
-                samples.append(pos - n * approach * (1.0 - t))  # outside-approach -> face centre
+            for t in np.arange(0.0, lane, cfg["voxel_res"] * 0.5):
+                samples.append(pos - n * t)  # face centre -> outside, sampled at half-voxel steps
             lat = hd * 0.5  # inside the rectangle (hd is the corner radius) for a lateral pinch probe
             for s in (u, -u, v, -v):
                 samples.append(pos + s * lat)
