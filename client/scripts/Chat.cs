@@ -174,7 +174,7 @@ public partial class Chat : Control
         _teamChannel = false;
         UpdateChip();
         _inputRow.Visible = true;
-        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         _entry.Clear();
         _entry.GrabFocus();
         _savedMouseMode = Input.MouseMode;
@@ -182,10 +182,12 @@ public partial class Chat : Control
         Capturing = true;
     }
 
-    private void CloseInput()
+    // sfx = the sound to play on close. Sending a message (Enter) uses the UI-click sound to match
+    // buttons/tabs; an Escape cancel keeps the distinct menu-close sound.
+    private void CloseInput(SfxManager.SfxId sfx = SfxManager.SfxId.MenuClose)
     {
         _inputRow.Visible = false;
-        SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
+        SfxManager.Instance?.PlayUi(sfx);
         _entry.Clear();
         _entry.ReleaseFocus();
         Capturing = false;
@@ -198,12 +200,12 @@ public partial class Chat : Control
         if (text.StartsWith("/"))
         {
             HandleCommand(text);
-            CloseInput();
+            CloseInput(SfxManager.SfxId.UiClick);
             return;
         }
         if (text.Length > 0)
             _net.SendChat(text, _teamChannel);
-        CloseInput();
+        CloseInput(SfxManager.SfxId.UiClick);
     }
 
     // Local "/" slash-commands: barebones in-game introspection (money, score, team, server info).

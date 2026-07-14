@@ -650,6 +650,7 @@ public partial class ShipLoadout
         {
             if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
             {
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
                 Pressed?.Invoke();
                 AcceptEvent();
             }

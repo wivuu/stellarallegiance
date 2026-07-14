@@ -800,6 +800,7 @@ internal partial class ClusterHeader : PanelContainer
     {
         if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
             Pressed?.Invoke();
             AcceptEvent();
         }
@@ -1048,6 +1049,7 @@ internal partial class NodeCard : PanelContainer
     {
         if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } mb)
         {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
             // The chevron third clicks toggle collapse; the rest of the card selects.
             if (_chevron.Text.Length > 0 && mb.Position.X >= Size.X - 26f)
                 ChevronPressed?.Invoke();
