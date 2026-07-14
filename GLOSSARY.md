@@ -57,6 +57,14 @@ Distance-based visibility culling: server only streams entities within fixed dis
 - **Related:** [[Snapshot]], [[Spatial Grid]]
 - **Notes:** Fixed nearest-60 replaced by distance tiers + environment knobs (SIM_NEAR_RADIUS, SIM_FAR_RADIUS, SIM_FAR_EVERY)
 
+### Reliable / Lossy Outbound Tiers
+Two-tier write discipline on the per-client outbound frame queue (bounded, `FullMode.Wait`). RELIABLE (`SendReliable`) is for one-shot frames with no repair path — Welcome, Defs, YouAre, ShipGone, chat, lobby roster, gone-events, rock deltas; a full queue parks them in the client's `PendingControl`, flushed FIFO next tick (delayed, never lost). LOSSY (`SendLossy`) is for self-healing streams — snapshots, change+keepalive frames, FX; a full queue just drops the write.
+- **Frequency:** Every outbound frame
+- **Key Files:**
+  - `server/Net/ClientHub.cs` — `SendReliable` / `FlushReliable` / `SendLossy`, `OutboundQueueDepth`
+- **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
+- **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
+
 ### Compound Base Hull (COL_ parts)
 Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
 - **Frequency:** Domain-specific

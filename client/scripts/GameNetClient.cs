@@ -83,6 +83,13 @@ public partial class GameNetClient : Node
     private readonly Dictionary<ulong, Ship> _rows = [];
     private readonly HashSet<ulong> _seenThisSnapshot = [];
 
+    // Ghost-ship heal deadline (0 = disarmed). Armed when a lobby roster claims we have NO ship
+    // while a local ship row still exists — the normal explanation is a ShipGone still in flight
+    // (roster broadcasts can race ahead of the per-tick gone drain), so wait a grace beat before
+    // treating the local ship as a ghost and despawning it. A YouAre or a has-ship roster disarms.
+    private double _ghostShipDeadline;
+    private const double GhostShipGraceSec = 1.0;
+
     // Last-decoded in-flight missile per id (from MsgMissiles). Maintained by ApplyMissiles /
     // ApplyMissileGone and read by the HUD (incoming-missile warning) and render layer. Cleared
     // wherever _rows resets (reconnect / world rebuild / voluntary leave).
@@ -705,6 +712,20 @@ public partial class GameNetClient : Node
     {
         while (_rx.TryDequeue(out var frame))
             Apply(frame);
+
+        // Ghost-ship heal: the roster said we have no ship, the grace beat elapsed, and no
+        // ShipGone/YouAre arrived to resolve it — drop the ghost like a clean despawn so the
+        // spawn hangar reopens instead of the client being stuck "IN FLIGHT" forever.
+        if (_ghostShipDeadline > 0 && Time.GetTicksMsec() / 1000.0 >= _ghostShipDeadline)
+        {
+            _ghostShipDeadline = 0;
+            if (LocalShipId != 0 && _rows.ContainsKey(LocalShipId))
+            {
+                Log.Print($"[GameNet] dropping ghost local ship {LocalShipId} (roster says no ship; ShipGone missed?)");
+                ApplyShipGone(LocalShipId, 1);
+                LocalShipId = 0;
+            }
+        }
     }
 
     private void Apply(byte[] f)
@@ -717,6 +738,7 @@ public partial class GameNetClient : Node
                 break;
             case 2:
                 LocalShipId = r.ReadUInt64();
+                _ghostShipDeadline = 0; // a fresh binding supersedes any armed ghost heal
                 // Make this YouAre authoritative about which node is local: forget any prior row
                 // and drop a stale remote node for the same id (possible on a reconnect reclaim
                 // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
@@ -1580,6 +1602,39 @@ public partial class GameNetClient : Node
                 break;
             }
         _world.NetSetLobbyTeam(myTeam);
+        // Self-heal the local-ship binding from the roster (belt-and-braces for a lost one-shot
+        // YouAre/ShipGone — either strands the relaunch flow): the roster carries the server's
+        // authoritative pilot→ship map and is re-broadcast on every flip.
+        foreach (var p in list)
+        {
+            if (p.Id != LocalClientId)
+                continue;
+            if (p.HasShip && p.ShipId != 0)
+            {
+                _ghostShipDeadline = 0;
+                if (p.ShipId != LocalShipId)
+                {
+                    // Missed YouAre: adopt exactly as the YouAre handler would. Idempotent when the
+                    // real YouAre is merely still in flight behind this roster frame.
+                    LocalShipId = p.ShipId;
+                    _rows.Remove(LocalShipId);
+                    _world.NetPromoteLocal(LocalShipId);
+                    Log.Print($"[GameNet] adopted ship {LocalShipId} from lobby roster (YouAre missed?)");
+                }
+            }
+            else if (LocalShipId != 0 && _rows.ContainsKey(LocalShipId))
+            {
+                // Roster says we fly nothing but a local ship row lives on — likely a ShipGone still
+                // in flight; arm the grace-delayed ghost heal (fires in _Process if no gone lands).
+                if (_ghostShipDeadline == 0)
+                    _ghostShipDeadline = Time.GetTicksMsec() / 1000.0 + GhostShipGraceSec;
+            }
+            else
+            {
+                _ghostShipDeadline = 0;
+            }
+            break;
+        }
         LobbyChanged?.Invoke();
     }
 
