@@ -123,7 +123,7 @@ public sealed class World
         public HashSet<byte> UnlockedClasses = new();
 
         // Sectors this team's miners may SELECT rocks in (Stage-4 mining). Seeded to the team's
-        // garrison sector(s) each match (SeedEconomy); grown by the "/mine <sector>" order. Gates
+        // garrison sector(s) each match (SeedEconomy); grown by a commander's mouse mining order. Gates
         // rock selection only — a miner freely TRANSITS any sector en route (returning to base is
         // always allowed).
         public HashSet<uint> AuthorizedMiningSectors = new();

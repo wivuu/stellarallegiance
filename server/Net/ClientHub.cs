@@ -781,8 +781,8 @@ public sealed class ClientHub
     }
 
     // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
-    // /pigs toggles AI drone spawns; /buyminer, /mine, /miners drive the team's mining drones
-    // (thread-safe enqueues — results come back as team-scoped MinerNoticesThisStep chat).
+    // /pigs toggles AI drone spawns; /buyminer buys the team a mining drone (thread-safe enqueue
+    // — results come back as team-scoped MinerNoticesThisStep chat).
     private void HandleCommand(Client client, string text)
     {
         var parts = text[1..].Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
@@ -808,23 +808,6 @@ public sealed class ClientHub
             {
                 if (CommanderOrWarn(client) is byte team)
                     _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
-                break;
-            }
-            case "mine":
-            {
-                if (CommanderOrWarn(client) is not byte team)
-                    break;
-                if (arg.Length == 0)
-                {
-                    SystemTo(client, "Usage: /mine <sector name or id>");
-                    break;
-                }
-                if (ResolveSector(arg, out string err) is not uint sector)
-                {
-                    SystemTo(client, err);
-                    break;
-                }
-                _sim.EnqueueMineOrder(team, sector);
                 break;
             }
             case "commander":
@@ -856,12 +839,6 @@ public sealed class ClientHub
                 }
                 break;
             }
-            case "miners":
-            {
-                if (TeamOrWarn(client) is byte team)
-                    _sim.EnqueueMinerStatus(team);
-                break;
-            }
             default:
                 break; // unknown command: silently ignored
         }
@@ -878,7 +855,7 @@ public sealed class ClientHub
     }
 
     // The sender's team when they are its COMMANDER, or null + a warn naming who is. Gates the
-    // AI-authority seams (/mine, /buyminer, MsgOrder with an AI subject).
+    // AI-authority seams (/buyminer, MsgOrder with an AI subject).
     private byte? CommanderOrWarn(Client client)
     {
         if (TeamOrWarn(client) is not byte team)
@@ -998,66 +975,6 @@ public sealed class ClientHub
             default:
                 return "follow the marked order";
         }
-    }
-
-    // Resolve a /mine argument to a sector id against the CURRENT world: a bare numeric id, an exact
-    // (case-insensitive) sector name, else a UNIQUE case-insensitive name prefix. Returns null and
-    // sets `error` (unknown / ambiguous, listing the sector names) when it can't land on one sector.
-    // World.Sectors is immutable after its ctor, so reading it off the receive thread is safe.
-    private uint? ResolveSector(string arg, out string error)
-    {
-        var world = _sim.World;
-        // A bare numeric id addresses a sector directly.
-        if (uint.TryParse(arg, out uint id))
-        {
-            foreach (var s in world.Sectors)
-                if (s.Id == id)
-                {
-                    error = "";
-                    return s.Id;
-                }
-            error = $"No sector with id {id}. Sectors: {SectorNames()}";
-            return null;
-        }
-        // Exact name wins outright, even if it also prefixes a longer name.
-        foreach (var s in world.Sectors)
-            if (string.Equals(s.Name, arg, StringComparison.OrdinalIgnoreCase))
-            {
-                error = "";
-                return s.Id;
-            }
-        // Else a unique case-insensitive prefix; two+ matches are ambiguous.
-        uint? hit = null;
-        bool ambiguous = false;
-        foreach (var s in world.Sectors)
-            if (s.Name.StartsWith(arg, StringComparison.OrdinalIgnoreCase))
-            {
-                if (hit is null)
-                    hit = s.Id;
-                else
-                    ambiguous = true;
-            }
-        if (ambiguous)
-        {
-            error = $"'{arg}' matches several sectors: {SectorNames()}";
-            return null;
-        }
-        if (hit is uint u)
-        {
-            error = "";
-            return u;
-        }
-        error = $"No sector named '{arg}'. Sectors: {SectorNames()}";
-        return null;
-    }
-
-    // Comma-joined sector names of the current world, for /mine error hints.
-    private string SectorNames()
-    {
-        var names = new List<string>();
-        foreach (var s in _sim.World.Sectors)
-            names.Add(s.Name);
-        return string.Join(", ", names);
     }
 
     // System chat lines reuse the normal chat-relay wire type; "★" is the sender name.

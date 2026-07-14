@@ -285,8 +285,8 @@ public sealed partial class Simulation
     }
 
     // Miner subjects map onto the existing mining state instead of _pigOrders: a rock pins the
-    // claim, a point authorizes + retargets the sector (same semantics as /mine, scoped to this
-    // miner), a friendly base sends it home pinned to that base. Combat targets are refused.
+    // claim, a point authorizes + retargets the sector (scoped to this miner), a friendly base
+    // sends it home pinned to that base. Combat targets are refused.
     private void ApplyMinerCommandOrder(
         int cid,
         string issuer,
@@ -434,8 +434,8 @@ public sealed partial class Simulation
         }
     }
 
-    // Authorize a sector for the team's miners (the /mine seam, minus the duplicate-order warn)
-    // and wake idle-docked miners so the next brain tick re-scans.
+    // Authorize a sector for the team's miners (from a commander's mouse mining order) and wake
+    // idle-docked miners so the next brain tick re-scans.
     private void AuthorizeMiningSector(byte team, uint sector)
     {
         if (World.TeamStates.TryGetValue(team, out var ts) && ts.AuthorizedMiningSectors.Add(sector))

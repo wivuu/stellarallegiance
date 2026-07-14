@@ -931,7 +931,7 @@ void StepAndCollect(Simulation sim)
         $"idle gating wrong (idle={row.Idle}, ship={(row.Ship is null ? "docked" : "flying")})");
 
     // Authorize the far sector: the miner wakes, transits 0→1→2, harvests, and returns 2→1→0.
-    sim.EnqueueMineOrder(0, 2);
+    w.TeamStates[0].AuthorizedMiningSectors.Add(2);
     int credits0 = w.TeamStates[0].Credits;
     bool reachedField = false, offloaded = false;
     var trail = new List<string>(); // dumped only on failure
@@ -955,7 +955,7 @@ void StepAndCollect(Simulation sim)
     if (!(offloaded && reachedField))
         foreach (var line in trail)
             Console.WriteLine($"  [trail19] {line}");
-    Check(reachedField, "the /mine order sends the miner TWO hops out to the rock field", "miner never reached the authorized field");
+    Check(reachedField, "an authorized far sector sends the miner TWO hops out to the rock field", "miner never reached the authorized field");
     Check(offloaded && w.TeamStates[0].Credits > credits0,
         "the miner hauled its ore two hops home and offloaded for credits",
         "cross-sector return/offload never completed");
@@ -1105,20 +1105,6 @@ content.World.FogOfWar = false;
         "a buy with too few credits is refused (count + credits unchanged)", "an unaffordable buy was not refused");
 }
 
-// ---- 25. /mine on an UNKNOWN sector id: "No such sector." and authorizes nothing. ----
-{
-    noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
-    var w = MakeWorld(25, cfg);
-    var sim = new Simulation(w, content);
-    sim.StartMatch();
-    int authBefore = w.TeamStates[0].AuthorizedMiningSectors.Count;
-    sim.EnqueueMineOrder(0, 999);
-    StepAndCollect(sim);
-    Check(noticesSeen.Any(t => t.Contains("No such sector")) && w.TeamStates[0].AuthorizedMiningSectors.Count == authBefore,
-        "a /mine order for an unknown sector is rejected and authorizes nothing", "an unknown-sector /mine order changed authorization");
-}
-
 // ---- 26. Base-destroyed reroute: a full miner retargets a surviving base; none left ⇒ it holds. ----
 {
     // Two team-0 bases: A(sector 0, He3 field) + B(sector 1). The miner fills in A and heads to the
@@ -1194,23 +1180,6 @@ content.World.FogOfWar = false;
     sim.EnqueueMinerBuy(0);
     sim.Step();
     Check(sim.MinerCount(0) == 1, "a repurchase restores the miner slot", "a repurchased miner did not restore the count");
-}
-
-// ---- 28. /miners status: EnqueueMinerStatus answers with a team summary line + a per-miner line. ----
-{
-    noticesSeen.Clear();
-    var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(), radius: 500f);
-    var w = MakeWorld(28, cfg);
-    var sim = new Simulation(w, content);
-    sim.StartMatch();
-    Check(sim.MinerCount(0) == 1, "the free miner is present for the status report", "no miner to report status on");
-    sim.EnqueueMinerStatus(0);
-    StepAndCollect(sim);
-    bool summary = noticesSeen.Any(t => t.StartsWith($"Miners 1/{w.Mining.MaxMinersPerTeam}"));
-    bool perMiner = noticesSeen.Any(t => t.TrimStart().StartsWith("Miner 1:"));
-    Check(summary && perMiner,
-        "/miners reports a team summary line and a per-miner line",
-        $"status report missing lines (summary={summary}, perMiner={perMiner})");
 }
 
 // ============================================================================================

@@ -935,7 +935,7 @@ public sealed partial class Simulation
                 ship.ApDockDoor = -1;
                 ship.ApDockPhaseTick = tick;
             }
-            DrainMinerQueues(tick); // miner buys + /mine sector orders (Simulation.Mining.cs)
+            DrainMinerQueues(tick); // miner buys (Simulation.Mining.cs)
             DrainCommandOrders(); // commander orders for AI vessels (Simulation.Orders.cs)
         }
     }

@@ -110,7 +110,6 @@ public sealed partial class Simulation
     private readonly List<MinerSlot> _miners = [];
     private ulong _nextMinerId = 1;
     private readonly Queue<byte> _minerBuyQueue = new(); // drained under _qLock in DrainQueues
-    private readonly Queue<(byte team, uint sector)> _mineOrderQueue = new();
 
     // Team-scoped one-liners the hub relays as system chat ("Miner destroyed", "at cap", ...).
     // Cleared each step alongside the other *ThisStep state.
@@ -162,70 +161,11 @@ public sealed partial class Simulation
             _minerBuyQueue.Enqueue(team);
     }
 
-    public void EnqueueMineOrder(byte team, uint sector)
-    {
-        lock (_qLock)
-            _mineOrderQueue.Enqueue((team, sector));
-    }
-
-    public void EnqueueMinerStatus(byte team)
-    {
-        lock (_qLock)
-            _minerStatusQueue.Enqueue(team);
-    }
-
-    private readonly Queue<byte> _minerStatusQueue = new();
-
     // Called from DrainQueues (already under _qLock, on the sim thread).
     private void DrainMinerQueues(uint tick)
     {
         while (_minerBuyQueue.Count > 0)
             TryBuyMiner(_minerBuyQueue.Dequeue(), tick);
-        while (_mineOrderQueue.Count > 0)
-        {
-            var (team, sector) = _mineOrderQueue.Dequeue();
-            ApplyMineOrder(team, sector);
-        }
-        while (_minerStatusQueue.Count > 0)
-            ReportMinerStatus(_minerStatusQueue.Dequeue());
-    }
-
-    // /miners: one summary line + one line per owned miner, answered as team-scoped notices on the
-    // sim thread (state reads are only safe here).
-    private void ReportMinerStatus(byte team)
-    {
-        string sectors = "none — /mine <sector> to authorize";
-        if (World.TeamStates.TryGetValue(team, out var ts) && ts.AuthorizedMiningSectors.Count > 0)
-        {
-            var names = new List<string>();
-            foreach (var sec in ts.AuthorizedMiningSectors)
-                names.Add(World.SectorName(sec));
-            names.Sort(StringComparer.OrdinalIgnoreCase);
-            sectors = string.Join(", ", names);
-        }
-        MinerNoticesThisStep.Add((team,
-            $"Miners {MinerCount(team)}/{_mining.MaxMinersPerTeam} · authorized: {sectors}"));
-        foreach (var m in _miners)
-        {
-            if (m.Team != team)
-                continue;
-            string state;
-            if (m.Ship is ShipSim s)
-            {
-                float hold = MinerOreCapacity(s);
-                int pct = hold > 0f ? (int)MathF.Round(100f * s.Ore / hold) : 0;
-                state = m.State switch
-                {
-                    MinerState.ToRock => $"en route to rock in {World.SectorName(s.SectorId)}, hold {pct}%",
-                    MinerState.Harvesting => $"mining in {World.SectorName(s.SectorId)}, hold {pct}%",
-                    MinerState.Prospect => $"prospecting {World.SectorName(m.ProspectSector)}, hold {pct}%",
-                    _ => $"returning to base, hold {pct}%",
-                };
-            }
-            else
-                state = m.Idle ? "docked, idle (no eligible rock)" : "docked, offloading";
-            MinerNoticesThisStep.Add((team, $"  Miner {m.MinerId}: {state}"));
-        }
     }
 
     private void TryBuyMiner(byte team, uint tick)
@@ -265,35 +205,6 @@ public sealed partial class Simulation
         }
         NewMinerSlot(team, tick);
         MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
-    }
-
-    private void ApplyMineOrder(byte team, uint sector)
-    {
-        if (!World.TeamStates.TryGetValue(team, out var ts))
-            return;
-        bool known = false;
-        foreach (var sc in World.Sectors)
-            if (sc.Id == sector)
-            {
-                known = true;
-                break;
-            }
-        if (!known)
-        {
-            MinerNoticesThisStep.Add((team, "No such sector."));
-            return;
-        }
-        string name = World.SectorName(sector);
-        if (!ts.AuthorizedMiningSectors.Add(sector))
-        {
-            MinerNoticesThisStep.Add((team, $"Miners already authorized to mine {name}."));
-            return;
-        }
-        MinerNoticesThisStep.Add((team, $"Miners authorized to mine {name}."));
-        // Wake idle-docked miners so the next brain tick re-scans (and re-announces if still dry).
-        foreach (var m in _miners)
-            if (m.Team == team)
-                m.Idle = false;
     }
 
     private MinerSlot NewMinerSlot(byte team, uint tick)
@@ -398,7 +309,7 @@ public sealed partial class Simulation
                 // Docked: relaunch when the offload delay elapsed AND there is eligible work.
                 // A dry pick keeps RE-CHECKING every brain tick (fog discovery is an async 2 Hz
                 // pass, so at match start the home rocks land a beat AFTER the first brain tick;
-                // depleted fields also come back via /mine). Idle only gates the one-time notice.
+                // depleted fields also come back via a commander order). Idle only gates the one-time notice.
                 if (tick < slot.LaunchAtTick)
                     continue;
                 // A point order issued while docked: relaunch straight into the prospect run —
@@ -419,9 +330,9 @@ public sealed partial class Simulation
                 }
                 else if (!slot.Idle)
                 {
-                    slot.Idle = true; // notice once; /mine or a new buy re-arms the announcement
+                    slot.Idle = true; // notice once; a new commander order or buy re-arms the announcement
                     MinerNoticesThisStep.Add((slot.Team,
-                        "Miner idle: no eligible helium-3 rock. Authorize a sector with /mine <sector>."));
+                        "Miner idle: no eligible helium-3 rock. Commander: order it to a sector to authorize mining."));
                 }
                 continue;
             }
