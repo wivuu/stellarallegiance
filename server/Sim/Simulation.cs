@@ -636,6 +636,7 @@ public sealed partial class Simulation
         // Live rock shrink deltas accumulate on World across a step; clear alongside the other
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
+        World.RocksRemovedThisStep.Clear(); // rock despawns (constructor completions) drained by the hub
         MinerNoticesThisStep.Clear();
         ConstructorNoticesThisStep.Clear();
         BasesCreatedThisStep.Clear();
@@ -672,7 +673,9 @@ public sealed partial class Simulation
             // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
             // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
             if (FogEnabled && tick % VisionEvery == 0)
-                VisionStep(tick);
+                VisionStep(tick); // commits deferred rock removals at its worker join
+            else if (!FogEnabled)
+                CommitPendingRockRemovals(); // no vision worker → safe to mutate the rock grid now
         }
         ResolveDueShots(tick);
         RebuildShipGrid();

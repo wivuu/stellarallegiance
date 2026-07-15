@@ -53,6 +53,9 @@ public static class Wire
     // u64 constructorId) refunds a producing constructor. Constructors now accept move orders (MsgOrder
     // kinds point/sector). MsgConstructorBuilds=25 now emits a 0-count keepalive briefly after builds
     // end (was null) so the client fades the build sphere. See Simulation.Constructors.cs.
+    // a finished constructor base CONSUMES its asteroid — NEW MsgRockGone=27 (server->client
+    // broadcast: u8 count, count x u64 rockId) tells clients to delete the despawned rock (node +
+    // collision) so nothing remains under the new base. See World.RemoveRock / Protocol.BuildRockGone.
     public const byte ProtocolVersion = 37;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

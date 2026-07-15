@@ -134,6 +134,9 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
 
     if (ship is Simulation.ShipSim sh2 && regolith is ulong rockId)
     {
+        // Capture the rock's spawn position BEFORE the build — the finished base consumes (removes) the
+        // rock, so it's no longer in world.Asteroids afterward.
+        Vec3 rockPos = world.Asteroids.First(r => r.Id == rockId).Pos;
         PlaceNear(sim, world, sh2, rockId);
         sim.EnqueueCommandOrder(1, "Cmdr", 0, sh2.ShipId, targetKind: 2, targetId: rockId, sector: 0, pos: default);
 
@@ -149,11 +152,17 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
         if (built)
         {
             var nb = world.Bases[world.Bases.Count - 1];
-            var rock = world.Asteroids.First(r => r.Id == rockId);
-            bool atRock = (nb.Pos - rock.Pos).LengthSquared() < 1f;
+            bool atRock = (nb.Pos - rockPos).LengthSquared() < 1f;
             Check(nb.BaseTypeId == OutpostType && nb.Team == 0 && atRock && sim.RockHasBase(rockId),
                 "the new base is a team-0 outpost at the rock, and the rock is marked occupied",
                 $"new base wrong (type {nb.BaseTypeId}, team {nb.Team}, atRock {atRock}, occupied {sim.RockHasBase(rockId)})");
+            // The structural rock removal is deferred to a vision-worker-quiescent boundary (fog on: the
+            // next 2 Hz VisionStep, ≤ VisionEvery ticks after completion), so step a little for it to land.
+            for (int i = 0; i < 30 && world.RockById(rockId) is not null; i++)
+                sim.Step();
+            Check(world.RockById(rockId) is null && !world.Asteroids.Any(r => r.Id == rockId),
+                "the asteroid is despawned when the base completes (no rock lingers under it)",
+                $"rock {rockId} still exists after the base was built");
             Check(sim.ConstructorCount(0) == 0,
                 "the constructor drone is consumed when the base completes",
                 $"constructor not consumed (count {sim.ConstructorCount(0)})");

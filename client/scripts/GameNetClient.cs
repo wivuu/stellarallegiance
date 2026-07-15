@@ -852,7 +852,20 @@ public partial class GameNetClient : Node
             case 26:
                 ApplyConstructorState(r);
                 break;
+            case 27:
+                ApplyRockGone(r);
+                break;
         }
+    }
+
+    // MsgRockGone: rocks a finished constructor base consumed. Delete each rock outright (mesh node +
+    // client collision + caches). Unknown ids (a rock this client never had, e.g. still fogged) are a
+    // harmless no-op. The base that replaces the rock arrives via the normal reveal path.
+    private void ApplyRockGone(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+            _world.NetRemoveRock(r.ReadUInt64());
     }
 
     // MsgConstructorBuilds (v37): each constructor drone aligning/sinking/building on a rock, driving the

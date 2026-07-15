@@ -1451,6 +1451,11 @@ public sealed class ClientHub
             ? Protocol.BuildBaseReveal(_sim.World, _sim.BasesCreatedThisStep)
             : null;
 
+        // Rock despawns (a constructor's finished base consumed its asteroid): one reliable broadcast so
+        // every client that has the rock deletes it (node + collision). Fog-agnostic — an unknown id is a
+        // client no-op and a rock vanishing leaks nothing. null when no rock was removed this step.
+        byte[]? rockGoneFrame = Protocol.BuildRockGone(_sim.World.RocksRemovedThisStep);
+
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
         // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
@@ -1558,6 +1563,11 @@ public sealed class ClientHub
             // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
             if (baseRevealFrame is not null)
                 SendReliable(client, OutFrame.Whole(baseRevealFrame));
+
+            // Rock despawn (reliable — a one-shot removal the client must not miss, or a ghost rock
+            // lingers under the finished base). Broadcast to every client regardless of fog.
+            if (rockGoneFrame is not null)
+                SendReliable(client, OutFrame.Whole(rockGoneFrame));
 
             // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
             // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).

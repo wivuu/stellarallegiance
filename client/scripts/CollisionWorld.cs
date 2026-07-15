@@ -138,6 +138,20 @@ public sealed class CollisionWorld
         }
     }
 
+    // Fully drop a rock from local prediction (a finished constructor base consumed the asteroid). The
+    // per-sector body list is index-addressed by RockRef.Index, so compacting it would reindex every
+    // other rock's ref — instead neutralize this rock's slot to a zero-radius sphere (never the deepest
+    // contact, so it can't bounce the ship) and forget its ref. The base that replaces it brings its own
+    // collision. No-op for an unknown id (a rock this client never had).
+    public void RemoveAsteroid(ulong id)
+    {
+        if (!_rockRefs.TryGetValue(id, out var rr))
+            return;
+        if (_src.TryGetValue(rr.Sector, out var list) && rr.Index < list.Count)
+            list[rr.Index] = new Entry(Collide.StaticBody.AsteroidSphere(rr.Center, 0f), default, 0f);
+        _rockRefs.Remove(id);
+    }
+
     public void AddBase(DefRegistry defs, StellarAllegiance.Net.Base row)
     {
         var list = BodyList(row.SectorId);

@@ -79,6 +79,9 @@ public partial class WorldRenderer : Node3D
     private List<ConstructorBuild> _constructorBuilds = new();
     private readonly Dictionary<ulong, BuildSphere> _buildSpheres = new();
     private readonly List<ulong> _buildSpherePrune = new(); // scratch
+    // Last-known radius per active build's rock, so the sphere keeps growing after the rock despawns
+    // mid-build (a finished base consumes its asteroid — the rock node is gone but the sphere lives on).
+    private readonly Dictionary<ulong, float> _buildRockRadius = new();
 
     // Streamed (MsgMinerTargets): shipId -> the rock that miner is actively harvesting, so the beam
     // aims at the real target instead of guessing the nearest He3. Replaced wholesale each frame it
@@ -1436,6 +1439,7 @@ public partial class WorldRenderer : Node3D
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
         _buildSpheres.Clear(); // BuildSphere nodes freed by the _effects sweep above
+        _buildRockRadius.Clear();
         _constructorBuilds.Clear();
         _constructorStates.Clear();
         _collidingShips.Clear();
@@ -1509,6 +1513,40 @@ public partial class WorldRenderer : Node3D
         }
         if (_asteroidNodes.TryGetValue(id, out var n))
             n.SetMeta("shadowRadius", radius);
+    }
+
+    // MsgRockGone: a rock was fully consumed by a finished constructor base — delete it outright. Frees
+    // the mesh node (a brief fade, hidden under the build sphere's opaque core), drops every id-keyed
+    // cache, and neutralizes its collision + occlusion so nothing lingers where the base now sits. Its
+    // last-known radius is stashed first so any active build sphere keeps growing after the node is gone
+    // (UpdateBuildSpheres falls back to it). A no-op for an unknown id.
+    public void NetRemoveRock(ulong id)
+    {
+        // If a build sphere is mid-flight on this rock, stash its last radius so the sphere keeps growing
+        // after the node is gone (the prune loop clears the entry when the build ends). Only when a sphere
+        // exists — otherwise there is nothing to feed and the entry would leak.
+        if (_buildSpheres.ContainsKey(id) && _asteroidRows.TryGetValue(id, out var row))
+            _buildRockRadius[id] = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
+
+        if (_asteroidNodes.TryGetValue(id, out var node))
+        {
+            _asteroidNodes.Remove(id);
+            QuietFade(node); // slips out under the opaque build sphere instead of popping
+        }
+        _asteroidRows.Remove(id);
+        _rockScaleBasis.Remove(id);
+        _rockShrinkTarget.Remove(id);
+        _asteroidSpins.Remove(id);
+        // The clip list is index-addressed (_asteroidClipIndex), so don't compact it — zero this rock's
+        // clip radius so it stops occluding bolts/sun where it used to be, and forget the mapping.
+        if (_asteroidClipIndex.TryGetValue(id, out int ci) && ci < _asteroidClip.Count)
+        {
+            var c = _asteroidClip[ci];
+            c.Radius = 0f;
+            _asteroidClip[ci] = c;
+        }
+        _asteroidClipIndex.Remove(id);
+        _collisionWorld.RemoveAsteroid(id);
     }
 
     public void NetAddAleph(Aleph row) => InsertAleph(row);
@@ -2696,8 +2734,13 @@ public partial class WorldRenderer : Node3D
             // the rock (phase 1), when the meshes begin to intersect.
             if (b.Phase < 1)
                 continue;
-            if (!_asteroidNodes.TryGetValue(b.RockId, out var node) || GetAsteroid(b.RockId) is not { } rock)
-                continue; // rock not known / not in view — no sphere (harmless)
+            // Resolve the rock's live position/radius. Once it despawns (a finished base consumes it, or
+            // it goes fogged), fall back to the last-known radius + the sphere's held position so the
+            // sphere keeps growing rather than blinking out. A build we never had a rock for is skipped.
+            Node3D? node = _asteroidNodes.TryGetValue(b.RockId, out var n) ? n : null;
+            Asteroid? rock = node is not null ? GetAsteroid(b.RockId) : null;
+            if (rock is null && !_buildSpheres.ContainsKey(b.RockId))
+                continue; // never saw the rock and have no sphere to anchor — nothing to draw
             live.Add(b.RockId);
             if (!_buildSpheres.TryGetValue(b.RockId, out var sphere))
             {
@@ -2705,11 +2748,16 @@ public partial class WorldRenderer : Node3D
                 _effects.AddChild(sphere);
                 _buildSpheres[b.RockId] = sphere;
             }
-            sphere.GlobalPosition = node.GlobalPosition;
-            SetNodeSector(sphere, rock.SectorId);
+            if (rock is not null)
+            {
+                sphere.GlobalPosition = node!.GlobalPosition;
+                SetNodeSector(sphere, rock.SectorId);
+                _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
+            }
             // Envelop fraction of the rock radius: sink 0.20→0.60, build 0.60→1.35 (swallows the rock).
+            float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
             float frac = b.Phase == 1 ? 0.20f + 0.40f * b.Progress : 0.60f + 0.75f * b.Progress;
-            sphere.SetEnvelop(MathF.Max(2f, rock.CurrentRadius) * frac);
+            sphere.SetEnvelop(rockR * frac);
             // Core opacity: ramp to opaque through the sink, then hold opaque while building — the drone
             // vanishes inside it.
             sphere.SetCover(b.Phase == 1 ? Mathf.Clamp(b.Progress * 1.3f, 0f, 1f) : 1f);
@@ -2728,6 +2776,7 @@ public partial class WorldRenderer : Node3D
         {
             _buildSpheres[id].BeginFade();
             _buildSpheres.Remove(id);
+            _buildRockRadius.Remove(id); // build's done — drop its cached rock radius
         }
     }
 

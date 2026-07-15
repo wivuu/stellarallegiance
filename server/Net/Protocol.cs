@@ -107,6 +107,7 @@ public static class Protocol
     public const byte MsgResearchState = 24; // u8 nBases, n x (u64 baseId, u8 nActive x (u16 devIdx, u32 startTick, u32 durationTicks), u8 hasOnDeck, ?u16 onDeckDevIdx) — PER-TEAM research orders at the team's bases (v36). Progress derives client-side from startTick+duration vs the live tick, so the frame only changes on start/complete/cancel/promote (sent on change + coarse keepalive). See BuildResearchStateFor.
     public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
     public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build), u32 startTick, u32 durationTicks, u64 targetId) — PER-TEAM constructor roster for the Build tab: producing drones (start/duration → progress bar + cancel) and launched drones (status). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
+    public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -487,6 +488,30 @@ public static class Protocol
             frames.Add(buf);
         }
         return frames;
+    }
+
+    // Rock DESPAWN broadcast (MsgRockGone): the ids of rocks fully removed this step (a constructor's
+    // finished base consumed the asteroid). One frame, count capped at the u8 prefix — at most a handful
+    // of bases complete on any tick, so a single frame always suffices. Returns null when nothing was
+    // removed (no frame to send). Broadcast to all: an id a client never had is a harmless client-side
+    // no-op, and a rock's disappearance leaks nothing (the base that replaces it reveals normally).
+    public static byte[]? BuildRockGone(IReadOnlyCollection<ulong> ids)
+    {
+        if (ids.Count == 0)
+            return null;
+        int count = Math.Min(ids.Count, 255);
+        var buf = new byte[2 + count * 8];
+        buf[0] = MsgRockGone;
+        buf[1] = (byte)count;
+        int o = 2, n = 0;
+        foreach (ulong id in ids)
+        {
+            if (n++ >= count)
+                break;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+            o += 8;
+        }
+        return buf;
     }
 
     // Fixed serialized size of one miner-target record (see BuildMinerTargets): u64 shipId | u64 rockId.

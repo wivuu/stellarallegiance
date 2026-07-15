@@ -648,6 +648,35 @@ public sealed class World
             RockBodies[id] = body with { Scale = body.SpawnScale * (s.CurrentRadius / spawn) };
     }
 
+    // Rocks fully DESPAWNED this step (base-building consumes the asteroid — RemoveRock). Drained by the
+    // hub into a MsgRockGone broadcast, then cleared at the top of the next Step alongside the other
+    // change flags. Distinct from RocksChangedThisStep (a shrink delta): a removed rock has no size to
+    // stream, only its disappearance.
+    public readonly HashSet<ulong> RocksRemovedThisStep = new();
+
+    // Fully remove a rock from the world (a constructor's finished base consumes the asteroid it sits on).
+    // Drops it from the asteroid list, the spatial grid, the ore + collision-body state, and the id cache,
+    // and records it in RocksRemovedThisStep so the hub tells clients to delete their rock. Idempotent —
+    // an unknown id is a no-op. Sim thread only (mutates the rock lists the sim/hub read).
+    public bool RemoveRock(ulong id)
+    {
+        if (RockById(id) is not Rock r)
+            return false;
+        if (_rockGrid.TryGetValue(r.SectorId, out var grid))
+        {
+            var key = (CellOf(r.Pos.X), CellOf(r.Pos.Y), CellOf(r.Pos.Z));
+            if (grid.TryGetValue(key, out var cell))
+                cell.RemoveAll(x => x.Id == id);
+        }
+        Asteroids.RemoveAll(x => x.Id == id);
+        RockOre.Remove(id);
+        RockBodies.Remove(id);
+        _rockById = null;                 // invalidate the lazy id→Rock cache (rebuilt on next RockById)
+        RocksChangedThisStep.Remove(id);  // a removed rock has no shrink delta to send
+        RocksRemovedThisStep.Add(id);
+        return true;
+    }
+
     // Build the all-pairs next-hop table over the aleph gate graph. For every ordered sector pair (S, D)
     // reachable through gates, record the one gate to leave S by on a shortest-hop route to D. BFS gives
     // the hop distances; among S's outgoing gates that step one hop closer to D the LOWEST gate Id wins.

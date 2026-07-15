@@ -411,6 +411,11 @@ public sealed partial class Simulation
         if (_visionHasPending && _visionPendingAsync)
             _visionDone!.WaitOne(); // join the worker (no-op if it already finished)
 
+        // Worker is idle here — the one safe window to STRUCTURALLY mutate the rock grid it reads
+        // lock-free. Commit any deferred rock despawns (finished constructor bases consuming asteroids)
+        // now, before the next compute is kicked below. See CommitPendingRockRemovals.
+        CommitPendingRockRemovals();
+
         // Merge any warp-discovered rocks into DiscoveredRocks now that the worker is joined, BEFORE
         // applying (so the apply's own NewRocks that coincide return Add()==false and don't
         // double-append to the reveal log — they were already logged synchronously). See WarpDiscoverRocks (F8).

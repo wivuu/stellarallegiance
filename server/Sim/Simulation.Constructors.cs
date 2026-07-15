@@ -60,6 +60,12 @@ public sealed partial class Simulation
 
     private readonly List<ConstructorSlot> _constructors = [];
     private ulong _nextConstructorId = 1;
+
+    // Rock ids whose STRUCTURAL despawn (asteroid list + spatial grid mutation) is deferred from the
+    // completion tick to a vision-worker-quiescent boundary. The vision worker reads the rock grid
+    // lock-free as "immutable", so mutating it mid-compute would race it — CommitPendingRockRemovals
+    // drains this only when the worker is joined (fog on: the VisionStep join; fog off: no worker).
+    private readonly List<ulong> _pendingRockRemovals = new();
     // Buy queue: (team, stationTypeId, launchBaseId). Drained under _qLock in DrainQueues.
     private readonly Queue<(byte Team, byte StationType, ulong LaunchBase)> _constructorBuyQueue = new();
     // Cancel-production queue: (team, constructorId). Drained under _qLock in DrainQueues.
@@ -344,6 +350,7 @@ public sealed partial class Simulation
         _constructors.Clear();
         _nextConstructorId = 1;
         _rocksWithBase.Clear();
+        _pendingRockRemovals.Clear();
     }
 
     private void KillConstructor(ShipSim s, uint tick)
@@ -437,6 +444,12 @@ public sealed partial class Simulation
             return;
         }
         ulong baseId = World.CreateBase(slot.Team, slot.BuildStationTypeId, rock.SectorId, rock.Pos);
+        // The base consumes the asteroid: despawn the rock so nothing remains under/around the finished
+        // base (the build sphere, at full envelop + opaque, hides the swap; the client fades the rock
+        // out under it — see World.RemoveRock / MsgRockGone). The STRUCTURAL removal mutates the rock
+        // grid, which the vision worker reads lock-free as immutable — so we QUEUE it and commit at a
+        // worker-quiescent boundary (CommitPendingRockRemovals). rock.Pos was already read for CreateBase.
+        _pendingRockRemovals.Add(slot.TargetRockId);
         // Grant the station's techs/capabilities to the team and re-resolve unlocks (mid-match), then
         // reveal the new base to the owning team so it appears immediately (enemies discover it by fog).
         GrantStationUnlocks(slot.Team, slot.BuildStationTypeId);
@@ -446,6 +459,19 @@ public sealed partial class Simulation
         StationCatalogDef? st = StationCatalogFor(slot.BuildStationTypeId);
         ConstructorNoticesThisStep.Add((slot.Team, $"{st?.Name ?? "Base"} constructed."));
         RetireConstructor(slot);
+    }
+
+    // Commit deferred rock despawns (World.RemoveRock mutates the asteroid list + grid). MUST be called
+    // only when the vision worker is joined/idle: fog on → from VisionStep right after the join; fog off
+    // → any time in Step (no worker). World.RemoveRock stamps RocksRemovedThisStep for the hub's
+    // MsgRockGone. A queued id whose rock already vanished (mined out) is a harmless no-op.
+    private void CommitPendingRockRemovals()
+    {
+        if (_pendingRockRemovals.Count == 0)
+            return;
+        foreach (var id in _pendingRockRemovals)
+            World.RemoveRock(id);
+        _pendingRockRemovals.Clear();
     }
 
     private void RetireConstructor(ConstructorSlot slot)

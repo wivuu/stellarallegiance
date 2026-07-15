@@ -120,7 +120,15 @@ charges the station price), it launches from a **garrison** (win-condition base)
 to a compatible asteroid (reuses the miner order plumbing; stock outpost → **Regolith**) — it navigates,
 holds standoff, **aligns**, **sinks** partially into the rock, then a glowing **build sphere** envelops
 the asteroid over the station's `build-time-seconds` before the base appears fully constructed and its
-capabilities are granted. **Bases are now per-type data like ship hulls**: `BaseDef.ModelName` picks the
+capabilities are granted. **The finished base CONSUMES its asteroid**: `CompleteConstruction` calls
+`World.RemoveRock` (drops the rock from the asteroid list, spatial grid, ore + collision-body state, and
+the id cache), and the removal broadcasts as `MsgRockGone=27` (reliable, fog-agnostic) so every client
+deletes its rock node + client collision — nothing lingers under the new base. The swap is hidden under
+the build sphere (full envelop + opaque core); the client caches the rock's last radius (`_buildRockRadius`)
+so the sphere keeps growing after the node is gone. The **collision-flicker** fix is related: a
+constructor skips asteroid collision with **its own target rock** while Aligning/Sinking/Building
+(`ConstructorEmbeddedRock` → `ResolveAsteroidCollisions` ignore) so the embedded drone isn't shoved out
+each tick. **Bases are now per-type data like ship hulls**: `BaseDef.ModelName` picks the
 GLB (server collision `World.LoadBaseModel` + client `BaseModelLoader`/`CollisionWorld`, keyed by
 `BaseSite.BaseTypeId` on the wire), and `World.CreateBase` appends a base at runtime (the base list +
 parallel `BaseHealth`/`ResearchByBase` are APPEND-ONLY so indices never shift). A new base reveals via
@@ -131,8 +139,8 @@ win-condition bases die, so a destroyed outpost never ends the match.
 - **Key Files:**
   - `server/Sim/Simulation.Constructors.cs` — the drone (FSM Idle→ToRock→Aligning→Sinking→Building, buy/charge, brain+steering, completion, orders, build-stream view)
   - `server/Sim/World.cs` — `BaseSite.BaseTypeId`, `_baseModels`/`BaseHullOf`/`BaseRadiusOf`/…, `CreateBase`, `ResetMatchBases`, `GarrisonCount`; `Simulation.cs` — `ApplyBaseDamage` win-condition, per-type collision sweep, `IsConstructorClass`
-  - `server/Net/Protocol.cs` — `MsgBuildConstructor=14`, `MsgConstructorBuilds=25`, `BuildBaseReveal`, `WriteBaseStatic` (+baseTypeId/per-type radius); `server/Content/core/stations.yaml` (outpost) + `hulls.yaml` (constructor)
-  - `client/scripts/BuildSphere.cs` — the enveloping VFX; `WorldRenderer.UpdateBuildSpheres`; `ui/BuildTab.cs` — commander BUILD action (`GameNetClient.SendBuildConstructor`)
+  - `server/Net/Protocol.cs` — `MsgBuildConstructor=14`, `MsgConstructorBuilds=25`, `MsgRockGone=27`/`BuildRockGone` (rock despawn), `BuildBaseReveal`, `WriteBaseStatic` (+baseTypeId/per-type radius); `server/Content/core/stations.yaml` (outpost) + `hulls.yaml` (constructor)
+  - `client/scripts/BuildSphere.cs` — the enveloping VFX; `WorldRenderer.UpdateBuildSpheres`/`NetRemoveRock`, `CollisionWorld.RemoveAsteroid`; `ui/BuildTab.cs` — commander BUILD action (`GameNetClient.SendBuildConstructor`)
   - `tests/ConstructorTest` — full loop, rock-class gate, win-condition, def flags
 - **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab (Construction Placeholder)]]
 - **Notes:** Outpost collision = convex hull from Outpost.glb (no COL_ parts, no dock faces → no docking yet). The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price; align/sink/standoff are consts in `Simulation.Constructors.cs` (build time is the station's authored `build-time-seconds`).
