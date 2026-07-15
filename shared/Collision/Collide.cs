@@ -184,6 +184,12 @@ public static class Collide
         // bounce off your own probes too), matching the server's ResolveProbeCollisions footprint.
         public static StaticBody ProbeSphere(Vec3 center, float radius) =>
             new(null, center, Quat.Identity, 1f, radius, -1, null, null);
+
+        // A constructor's growing base-construction shell: a team-agnostic solid sphere (any ship bounces
+        // off it) matching the server's ResolveBuildSphereCollisions barrier, so the local ship predicts
+        // the same bounce the server enforces instead of sinking into the shell and snapping back.
+        public static StaticBody BuildSphere(Vec3 center, float radius) =>
+            new(null, center, Quat.Identity, 1f, radius, -1, null, null);
     }
 
     // Sphere vs a static body's SOLID: the single merged hull when SubHulls is null (byte-identical

@@ -40,6 +40,15 @@ public sealed class CollisionWorld
     // the server reconciles — acceptable for an object you can't see anyway.
     private readonly Dictionary<uint, Dictionary<ulong, Collide.StaticBody>> _probes = new();
 
+    // Growing base-construction shells (Simulation.Constructors.cs build spheres) that are currently
+    // SOLID (their Building phase). Like probes these are DYNAMIC — created/grown/removed mid-match by
+    // WorldRenderer.UpdateBuildSpheres, keyed sector→rockId — so the local ship predicts the same bounce
+    // the server enforces (ResolveBuildSphereCollisions) instead of sinking into the shell. A sphere
+    // matching a rock the client can't see is a small predict-miss the server reconciles; anchored on
+    // the rock, whose sector never changes for the life of a build, so _sphereSector never goes stale.
+    private readonly Dictionary<uint, Dictionary<ulong, Collide.StaticBody>> _buildSpheres = new();
+    private readonly Dictionary<ulong, uint> _sphereSector = new(); // rockId → sector (for removal)
+
     // Bodies in a sector with their rotation advanced to sim time t (seconds = tick * FlightModel.Dt).
     public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector, float t)
     {
@@ -62,7 +71,34 @@ public sealed class CollisionWorld
         if (_probes.TryGetValue(sector, out var probes))
             foreach (var b in probes.Values)
                 outBuf.Add(b);
+        if (_buildSpheres.TryGetValue(sector, out var spheres))
+            foreach (var b in spheres.Values)
+                outBuf.Add(b);
         return outBuf;
+    }
+
+    // Add/update a solid build-sphere barrier for a rock under construction (idempotent per rock id; a
+    // radius update just replaces the body). Radius is the client's rendered phase-2 envelop, matching
+    // the server's ConstructorBuildSphereRadius so prediction and authority agree.
+    public void SetBuildSphere(uint sector, ulong rockId, Vec3 center, float radius)
+    {
+        if (radius <= 0f)
+        {
+            RemoveBuildSphere(rockId);
+            return;
+        }
+        if (!_buildSpheres.TryGetValue(sector, out var m))
+            _buildSpheres[sector] = m = new Dictionary<ulong, Collide.StaticBody>();
+        m[rockId] = Collide.StaticBody.BuildSphere(center, radius);
+        _sphereSector[rockId] = sector;
+    }
+
+    // Drop a build-sphere barrier (construction finished/cancelled). No-op for an unknown rock id.
+    public void RemoveBuildSphere(ulong rockId)
+    {
+        if (_sphereSector.TryGetValue(rockId, out uint sector) && _buildSpheres.TryGetValue(sector, out var m))
+            m.Remove(rockId);
+        _sphereSector.Remove(rockId);
     }
 
     // A deployed probe is on-screen at a fixed position; add it as a solid sphere of its combat hit
@@ -87,6 +123,8 @@ public sealed class CollisionWorld
         _src.Clear();
         _live.Clear();
         _probes.Clear();
+        _buildSpheres.Clear();
+        _sphereSector.Clear();
         _rockRefs.Clear();
         _shipHulls.Clear(); // a world rebuild may stream retuned defs (ModelName/ModelLength)
     }

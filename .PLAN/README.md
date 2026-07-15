@@ -21,8 +21,6 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - I selected 'leave empty' on my scout in the hanager, but it still launched with a scout cannon
-- Constructors:
-  - Prevent ships from flying into the build sphere - collide against it
 - Base avoidance not working for autopilot (for constructors or own ship)
 - Set minimum distance for bases to spawn near asteroids and asteroids to spawn from each other during initial game state generation
 - Add a custom cursor

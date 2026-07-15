@@ -571,6 +571,46 @@ public sealed partial class Simulation
         return 0;
     }
 
+    // The current SOLID radius (world units) of a constructor's build sphere, or 0 when it has none this
+    // tick. Only the BUILDING phase grows the shell PAST the asteroid: the client (WorldRenderer
+    // .UpdateBuildSpheres phase 2) lerps it from rock·0.55 out to the finished base's footprint
+    // (finalR = max(rock·1.05, baseR)) as the base rises. The earlier phases keep the sphere inside the
+    // still-solid rock, which already bounces ships, so they need no separate barrier. This mirrors the
+    // client's phase-2 envelop formula exactly so the server bounce lands where the shell is drawn.
+    private float ConstructorBuildSphereRadius(ConstructorSlot slot)
+    {
+        if (slot.State != ConstructorState.Building)
+            return 0f;
+        if (World.RockById(slot.TargetRockId) is not World.Rock rock)
+            return 0f;
+        float rockR = MathF.Max(2f, World.RockCurrentRadius(rock.Id));
+        float finalR = MathF.Max(rockR * 1.05f, World.BaseRadiusOf(slot.BuildStationTypeId));
+        uint span = BuildTicksFor(slot.BuildStationTypeId);
+        float progress = span > 0 ? MathF.Min(1f, (Tick - slot.PhaseStartTick) / (float)span) : 1f;
+        float lo = rockR * 0.55f;
+        return lo + (finalR - lo) * progress;
+    }
+
+    // Bounce a ship off every active build sphere in its sector (the solid, growing construction shell),
+    // EXCEPT the constructor raising that base — it lives embedded at the centre and must not be shoved
+    // out. Called per ship from the collision pass, right after the asteroid bounces: the rock underneath
+    // is still solid (removed only on completion), so this only adds the outward shell between the rock
+    // surface and the eventual base, closing the gap a ship could otherwise fly through into the site.
+    private void ResolveBuildSphereCollisions(ShipSim s)
+    {
+        for (int i = 0; i < _constructors.Count; i++)
+        {
+            var c = _constructors[i];
+            if (ReferenceEquals(c.Ship, s))
+                continue; // the builder embeds inside its own sphere
+            float r = ConstructorBuildSphereRadius(c);
+            if (r <= 0f)
+                continue;
+            if (World.RockById(c.TargetRockId) is World.Rock rock && rock.SectorId == s.SectorId)
+                ResolveStaticCollision(s, rock.Pos, r);
+        }
+    }
+
     private ShipInputState ConstructorExecute(ShipSim s, uint tick)
     {
         var slot = ConstructorSlotFor(s);

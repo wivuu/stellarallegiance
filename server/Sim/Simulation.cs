@@ -750,6 +750,7 @@ public sealed partial class Simulation
                 ApplyDamage(s, MathF.Min(_combat.BoundaryBaseDps + over * _combat.BoundaryRampDps, _combat.BoundaryMaxDps) * dt, tick);
 
             ResolveAsteroidCollisions(s);
+            ResolveBuildSphereCollisions(s);      // solid, growing base-construction shells
             ResolveDeployableCollisions(s, tick); // solid deployables (recon probes today)
 
             // Bases in this ship's sector: an ENEMY base is solid (bounce); your OWN base is

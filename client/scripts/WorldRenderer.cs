@@ -2840,6 +2840,16 @@ public partial class WorldRenderer : Node3D
                 ? rockR * (0.05f + 0.50f * b.Progress)
                 : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
             sphere.SetEnvelop(worldR);
+            // Solid barrier for local prediction: only in BUILDING (phase 2), when the shell grows PAST
+            // the (still-solid) rock — matches the server's ResolveBuildSphereCollisions so the local
+            // ship bounces off the shell instead of sinking into it and snapping back. Registered in
+            // SIM/sector coordinates (the rock's raw row position), where the ship prediction runs — not
+            // the sphere node's render-space GlobalPosition. Dropped when the rock is unavailable
+            // (fogged/gone: a predict-miss the server reconciles) or the build leaves phase 2.
+            if (b.Phase >= 2 && rock is not null)
+                _collisionWorld.SetBuildSphere(rock.SectorId, b.RockId, new Vec3(rock.PosX, rock.PosY, rock.PosZ), worldR);
+            else
+                _collisionWorld.RemoveBuildSphere(b.RockId);
             // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
             // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
             // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
@@ -2898,6 +2908,7 @@ public partial class WorldRenderer : Node3D
         {
             _buildSpheres[id].BeginFade();
             _buildSpheres.Remove(id);
+            _collisionWorld.RemoveBuildSphere(id); // build ended — stop predicting a bounce off its shell
             _buildRockRadius.Remove(id); // build's done — drop its cached rock radius
             // If the rock still exists, the build CANCELLED (a completion would have consumed it via
             // MsgRockGone) — un-dim the rock we were fading so it returns to its normal opaque look.
