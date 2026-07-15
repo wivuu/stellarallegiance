@@ -67,7 +67,8 @@ public partial class BuildSphere : Node3D
             float f = vnoise(n * 4.0 + vec3(0.0, t * 0.6, 0.0)) * 0.6
                     + vnoise(n * 8.0 + vec3(t * 0.9, 0.0, 0.0)) * 0.4;
             float bands = 0.5 + 0.5 * sin(n.y * 10.0 + t * 2.0 + f * 6.2831);
-            float intensity = clamp(fres * 0.7 + bands * 0.5 * f, 0.0, 1.0);
+            // Baseline (0.18) keeps the whole shell self-lit rather than only glowing at the fresnel rim.
+            float intensity = clamp(0.18 + fres * 0.7 + bands * 0.5 * f, 0.0, 1.0);
             ALBEDO = tint.rgb;
             EMISSION = tint.rgb * energy * intensity;
             ALPHA = alpha * clamp(fres + bands * 0.4, 0.0, 1.0);
@@ -116,17 +117,22 @@ public partial class BuildSphere : Node3D
     public override void _Ready()
     {
         Name = "BuildSphere";
-        _outer = MakeShell(ShellShader, radius: 1f, energy: 3.5f, bandDir: 1f, OuterAlpha, "alpha", out _outerMat);
-        _inner = MakeShell(ShellShader, radius: 0.82f, energy: 5.0f, bandDir: -1f, InnerAlpha, "alpha", out _innerMat);
-        _core = MakeShell(CoreShader, radius: 0.74f, energy: 2.2f, bandDir: 1f, 0f, "cover", out _coreMat);
+        // Render priority breaks the transparency-sort tie between these three concentric shells (they
+        // share an identical AABB center, so depth-sort alone is ambiguous and Godot's order flips with
+        // sub-pixel camera motion → visible flicker). Force a deterministic back-to-front draw: core
+        // (occluder) first, then the inner and outer additive glows on top of it. The band starts at 1
+        // (not 0) so all three also outrank the fading rock (default priority 0, same center) beneath them.
+        _outer = MakeShell(ShellShader, radius: 1f, energy: 6.0f, bandDir: 1f, OuterAlpha, "alpha", priority: 3, out _outerMat);
+        _inner = MakeShell(ShellShader, radius: 0.82f, energy: 8.0f, bandDir: -1f, InnerAlpha, "alpha", priority: 2, out _innerMat);
+        _core = MakeShell(CoreShader, radius: 0.74f, energy: 3.5f, bandDir: 1f, 0f, "cover", priority: 1, out _coreMat);
         AddChild(_core);
         AddChild(_inner);
         AddChild(_outer);
     }
 
-    private MeshInstance3D MakeShell(string code, float radius, float energy, float bandDir, float opacity, string opacityParam, out ShaderMaterial mat)
+    private MeshInstance3D MakeShell(string code, float radius, float energy, float bandDir, float opacity, string opacityParam, int priority, out ShaderMaterial mat)
     {
-        mat = new ShaderMaterial { Shader = new Shader { Code = code } };
+        mat = new ShaderMaterial { Shader = new Shader { Code = code }, RenderPriority = priority };
         mat.SetShaderParameter("tint", Tint);
         mat.SetShaderParameter("energy", energy);
         mat.SetShaderParameter("u_t", 0f);

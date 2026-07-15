@@ -2775,29 +2775,47 @@ public partial class WorldRenderer : Node3D
                 SetNodeSector(sphere, rock.SectorId);
                 _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
             }
-            // Envelop fraction of the rock radius. Phase 1 (sink) BEGINS at surface contact and its
-            // progress is the drone's physical embed-depth fraction (v38), so the sphere emerges from
-            // the rock CENTER (0.05) and grows with the hull's actual descent to 0.55; phase 2 (build,
-            // the station's build-time-seconds) carries it 0.55→1.35, swallowing the rock.
+            // Envelop radius (world units). Phase 1 (sink) BEGINS at surface contact and its progress is
+            // the drone's physical embed-depth fraction (v38), so the sphere emerges from the rock CENTER
+            // and grows with the hull's actual descent out to the rock surface. Phase 2 (build, the
+            // station's build-time-seconds) grows it from the surface out to finalR — the eventual base's
+            // footprint, so the finished base is revealed from INSIDE a fully-enveloping shell rather than
+            // poking out of a sphere that only reached the rock radius. NOT bigger, or the sphere dwarfs
+            // the base: the base GLB is scaled so its LONGEST axis spans baseR·2 (BaseModelLoader.LoadHull
+            // → NormalizeLongestAxis), so baseR IS the base's furthest tip — the sphere ends snug there.
+            // rockR·1.05 is a floor for the rare rock wider than the base (still covered as it grows).
             float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
-            float frac = b.Phase == 1 ? 0.05f + 0.50f * b.Progress : 0.55f + 0.80f * b.Progress;
-            sphere.SetEnvelop(rockR * frac);
+            float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
+            float finalR = MathF.Max(rockR * 1.05f, baseR);
+            float worldR = b.Phase == 1
+                ? rockR * (0.05f + 0.50f * b.Progress)
+                : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
+            sphere.SetEnvelop(worldR);
             // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
             // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
             // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
             sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
-            // Keep the mesh VISIBLE while it sinks in and through early building — the drone is buried
-            // deep (the solid rock occludes it) while the opaque core grows over it. Only once that core
-            // has genuinely swallowed it (build past ~45%) do we latch the hard hide, so the mesh eases
-            // out of sight inside the sphere instead of popping out of existence at the surface. Latching
-            // HideForBuild stops the per-snapshot SetNodeSector re-showing it (else it blinks at the
-            // snapshot rate); Building is terminal, so it stays hidden right up to its despawn.
-            if (b.Phase >= 2 && b.Progress >= 0.45f
+            // Keep the mesh VISIBLE only while it SINKS (phase 1) so you watch it slide into the rock;
+            // the instant BUILDING begins (phase 2) hard-hide it. By then it's fully embedded — the still-
+            // solid rock (its fade doesn't start until build ~35%) plus the growing opaque core cover the
+            // spot, so it eases away rather than popping — and the build sphere must completely occlude it,
+            // never leaving the drone floating visibly inside. Latching HideForBuild stops the per-snapshot
+            // SetNodeSector re-showing it (else it blinks); Building is terminal, so it stays hidden to
+            // despawn.
+            if (b.Phase >= 2
                 && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
             {
                 drone.HideForBuild = true;
                 drone.Visible = false;
             }
+            // Dissolve the actual ROCK as the base rises so it's gone by the time the finished base is
+            // revealed — the opaque core hides the drone, this fades the rock itself. Stays fully SOLID
+            // through the sink and the first third of BUILDING (so the drone-hide above is covered), then
+            // dissolves gradually across the back two-thirds, fully gone by ~build-95% (the server then
+            // sends MsgRockGone and the already-transparent node slips away under the sphere). Only its
+            // own node, only while a build row is live; RestTransparencyFor restores it if it cancels.
+            if (node is not null)
+                DimNode(node, b.Phase >= 2 ? Mathf.Clamp((b.Progress - 0.35f) / 0.60f, 0f, 1f) : 0f);
         }
         // A build that completed/cancelled drops out of the stream. Don't free its sphere instantly —
         // FADE it (the finished base has appeared underneath via the reveal path); it self-frees.
@@ -2810,6 +2828,10 @@ public partial class WorldRenderer : Node3D
             _buildSpheres[id].BeginFade();
             _buildSpheres.Remove(id);
             _buildRockRadius.Remove(id); // build's done — drop its cached rock radius
+            // If the rock still exists, the build CANCELLED (a completion would have consumed it via
+            // MsgRockGone) — un-dim the rock we were fading so it returns to its normal opaque look.
+            if (_asteroidNodes.TryGetValue(id, out var rockNode))
+                DimNode(rockNode, RestTransparencyFor(rockNode));
         }
     }
 
