@@ -79,6 +79,9 @@ public partial class WorldRenderer : Node3D
     private List<ConstructorBuild> _constructorBuilds = new();
     private readonly Dictionary<ulong, BuildSphere> _buildSpheres = new();
     private readonly List<ulong> _buildSpherePrune = new(); // scratch
+    // Rock-spitting debris spray per active build, live only while the drone SINKS into the rock (phase 1).
+    private readonly Dictionary<ulong, ConstructorDebris> _constructorDebris = new();
+    private readonly List<ulong> _constructorDebrisPrune = new(); // scratch
     // Last-known radius per active build's rock, so the sphere keeps growing after the rock despawns
     // mid-build (a finished base consumes its asteroid — the rock node is gone but the sphere lives on).
     private readonly Dictionary<ulong, float> _buildRockRadius = new();
@@ -1439,6 +1442,7 @@ public partial class WorldRenderer : Node3D
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
         _buildSpheres.Clear(); // BuildSphere nodes freed by the _effects sweep above
+        _constructorDebris.Clear(); // ConstructorDebris nodes freed by the _effects sweep above
         _buildRockRadius.Clear();
         _constructorBuilds.Clear();
         _constructorStates.Clear();
@@ -2795,6 +2799,28 @@ public partial class WorldRenderer : Node3D
             // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
             // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
             sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
+            // Rock-spitting debris: while the drone grinds into the surface (phase 1) throw a continuous
+            // spray of rock chunks from the contact point, anchored on the still-visible drone (falling
+            // back to the sphere centre). The instant it embeds and hides (phase 2) stop the spray — the
+            // last chunks in flight settle out, then the node self-frees.
+            if (b.Phase == 1 && rock is not null)
+            {
+                if (!_constructorDebris.TryGetValue(b.RockId, out var debris))
+                {
+                    debris = new ConstructorDebris();
+                    _effects.AddChild(debris);
+                    _constructorDebris[b.RockId] = debris;
+                }
+                debris.GlobalPosition = _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible
+                    ? dn.GlobalPosition
+                    : sphere.GlobalPosition;
+                SetNodeSector(debris, rock.SectorId);
+            }
+            else if (_constructorDebris.TryGetValue(b.RockId, out var debris))
+            {
+                debris.Stop();                     // embedded/hidden — cut the spray
+                _constructorDebris.Remove(b.RockId); // stop tracking; it self-frees so we never touch a freed node
+            }
             // Keep the mesh VISIBLE only while it SINKS (phase 1) so you watch it slide into the rock;
             // the instant BUILDING begins (phase 2) hard-hide it. By then it's fully embedded — the still-
             // solid rock (its fade doesn't start until build ~35%) plus the growing opaque core cover the
@@ -2832,6 +2858,16 @@ public partial class WorldRenderer : Node3D
             // MsgRockGone) — un-dim the rock we were fading so it returns to its normal opaque look.
             if (_asteroidNodes.TryGetValue(id, out var rockNode))
                 DimNode(rockNode, RestTransparencyFor(rockNode));
+        }
+        // A build that dropped out while still sinking (cancelled) leaves an orphaned debris spray — stop it.
+        _constructorDebrisPrune.Clear();
+        foreach (var kv in _constructorDebris)
+            if (!live.Contains(kv.Key))
+                _constructorDebrisPrune.Add(kv.Key);
+        foreach (var id in _constructorDebrisPrune)
+        {
+            _constructorDebris[id].Stop();
+            _constructorDebris.Remove(id);
         }
     }
 

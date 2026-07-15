@@ -58,6 +58,10 @@ public sealed partial class Simulation
     // Slack (world units) on the DISTANCE-gated Sinking -> Building transition: the creep commands
     // throttle 0 once inside the embed shell, so it settles a hair outside; the gate must tolerate that.
     private const float ConstructorEmbedSlack = 1.5f;
+    // Once the hull touches the rock and starts embedding (Sinking), the descent is deliberately halved
+    // (50%) vs the commanded sink speed, so the mesh eases into the surface — the beat where the client
+    // plays the rock-spitting debris VFX — rather than dropping straight in at full creep.
+    private const float ConstructorDescentSlow = 0.5f;
 
     // Per-station timed phases, resolved off the streamed catalog (authored in stations.yaml).
     private uint AlignTicksFor(byte stationType) =>
@@ -702,7 +706,7 @@ public sealed partial class Simulation
                     // Claim the rock the moment the build sphere takes over, so nothing else builds here.
                     _rocksWithBase.Add(slot.TargetRockId);
                 }
-                return Creep(rock.Pos, _constructor.SinkSpeed, embed);
+                return Creep(rock.Pos, _constructor.SinkSpeed * ConstructorDescentSlow, embed);
             }
             default: // Building — hold embedded (nose on the rock, throttle 0; Creep keeps a drifted
             {        // drone burrowing back to depth) while the build timer runs.
