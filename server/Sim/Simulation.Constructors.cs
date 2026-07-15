@@ -620,12 +620,15 @@ public sealed partial class Simulation
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
         var stats = StatsFor(s.Class, false);
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d, slot.TargetRockId);
+        // Rocks (minus the claimed build rock) + base hulls (see AvoidObstacles). avoidBaseId is set
+        // by the Idle keep-station leg so the drone doesn't wander off its own station anchor.
+        ulong avoidBaseId = 0;
+        Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, slot.TargetRockId, avoidBaseId);
 
         ShipInputState Approach(Vec3 point, float stopDistance, float brakeMargin = ApBrakeMargin) =>
             AutoSteer.ApproachPoint(
                 myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, brakeMargin, avoid);
+                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, brakeMargin, Avoid);
 
         bool CrossSector(uint destSector, out ShipInputState input)
         {
@@ -633,7 +636,7 @@ public sealed partial class Simulation
             if (destSector == s.SectorId)
                 return false;
             if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
-                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid), gate.Pos);
+                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, Avoid), gate.Pos);
             return true;
         }
 
@@ -665,7 +668,7 @@ public sealed partial class Simulation
             if ((myPos - rockCenter).Length() <= stopShell)
                 return FaceRock(rockCenter);
             float throttle = Math.Clamp(speed / MathF.Max(1f, stats.MaxSpeed), 0.01f, 1f);
-            var input = AutoSteer.SteerToPoint(myPos, myRot, rockCenter, PigTurnGain, throttle, avoid);
+            var input = AutoSteer.SteerToPoint(myPos, myRot, rockCenter, PigTurnGain, throttle, Avoid);
             input.Thrust = MathF.Min(input.Thrust, throttle);
             return input;
         }
@@ -677,6 +680,7 @@ public sealed partial class Simulation
                 // Hold near the launch garrison until ordered. Keep-station just outside it.
                 if (World.BaseById(slot.LaunchBaseId) is World.BaseSite gb)
                 {
+                    avoidBaseId = gb.Id; // the station anchor — the stop shell already clears the hull
                     if (CrossSector(gb.SectorId, out var xin))
                         return xin;
                     return Approach(gb.Pos, World.BaseRadiusOf(gb.BaseTypeId) + 120f);

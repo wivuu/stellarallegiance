@@ -906,7 +906,7 @@ public sealed partial class Simulation
         Vec3 aimPoint = tgtPos + (leadPoint - tgtPos) * leadFrac;
         aimPoint += PigAimWobble(aimPoint - myPos, pigId, tick, skill);
         Vec3 desiredDir = NormalizeOr(aimPoint - myPos, myRot.Rotate(new Vec3(0f, 0f, 1f)));
-        desiredDir = PigAvoidAsteroids(me.SectorId, myPos, desiredDir);
+        desiredDir = AvoidObstacles(me.SectorId, myPos, desiredDir); // chase target is a ship — never a base to exclude
 
         Vec3 local = NormalizeOr(Conjugate(myRot).Rotate(desiredDir), new Vec3(0f, 0f, 1f));
         float yaw,
@@ -992,7 +992,7 @@ public sealed partial class Simulation
                         // now-solid hull funnels the pod onto the doorway faces instead of bouncing
                         // it off. Without a model, fall back to the base center (pre-hull target).
                         Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
-                        return PigSteerTo(me, myPos, myRot, aim, 1f);
+                        return PigSteerTo(me, myPos, myRot, aim, 1f, excludeBaseId: b.Id);
                     }
             }
         }
@@ -1029,52 +1029,6 @@ public sealed partial class Simulation
             return targetPos;
         haveLead = true;
         return targetPos + vrel * t;
-    }
-
-    // Bend desiredDir around asteroids lying ahead within the lookahead distance.
-    // excludeRockId (default 0 = none) skips one rock from the avoidance scan — used by a miner flying
-    // AT / harvesting a rock, so the avoid deflection never swings its nose off the very rock it's
-    // heading for. Default keeps every combat-PIG caller byte-identical (PIG-determinism guarded).
-    private Vec3 PigAvoidAsteroids(uint sector, Vec3 pos, Vec3 desiredDir, ulong excludeRockId = 0)
-    {
-        Vec3 dir = NormalizeOr(desiredDir, new Vec3(0f, 0f, 1f));
-        Vec3 steer = default;
-        var grid = World.RockGrid(sector);
-        int cx = World.CellOf(pos.X),
-            cy = World.CellOf(pos.Y),
-            cz = World.CellOf(pos.Z);
-        for (int gx = cx - 1; gx <= cx + 1; gx++)
-        for (int gy = cy - 1; gy <= cy + 1; gy++)
-        for (int gz = cz - 1; gz <= cz + 1; gz++)
-        {
-            if (!grid.TryGetValue((gx, gy, gz), out var cell))
-                continue;
-            foreach (var rock in cell)
-            {
-                if (rock.Id == excludeRockId)
-                    continue; // don't avoid the rock we're flying at / mining
-                Vec3 toA = rock.Pos - pos;
-                float proj = Dot(toA, dir);
-                if (proj <= 0f || proj > PigAvoidLookahead)
-                    continue;
-                Vec3 closest = pos + dir * proj;
-                Vec3 off = closest - rock.Pos;
-                // Deliberately the SPAWN radius (not RockCurrentRadius): steering wider around a mined
-                // rock is harmless (extra clearance), and this runs inside the PIG-determinism-guarded
-                // brain — reading live ore state here would couple avoidance to harvest timing. v1 keeps
-                // PIG avoidance at spawn size (conservative, documented).
-                float clearance = rock.Radius + World.ShipRadius + PigAvoidMargin;
-                float perp = off.Length();
-                if (perp >= clearance)
-                    continue;
-                Vec3 pushDir = NormalizeOr(off, PerpendicularTo(dir));
-                float strength = (1f - proj / PigAvoidLookahead) * (1f - perp / clearance);
-                steer += pushDir * strength;
-            }
-        }
-        if (steer.LengthSquared() < 1e-8f)
-            return dir;
-        return NormalizeOr(dir + steer * 1.5f, dir);
     }
 
     private float PigThreatScore(Vec3 myPos, ShipSim enemy, Vec3? myBasePos)
@@ -1139,22 +1093,25 @@ public sealed partial class Simulation
     }
 
     // Thin wrapper: delegates the steering geometry to the shared AutoSteer.SteerToPoint,
-    // injecting the PIG's asteroid avoidance + turn gain. Behavior is float-identical to the
-    // pre-extraction body (determinism contract).
-    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing) =>
+    // injecting the PIG's obstacle avoidance + turn gain. excludeBaseId (default 0 = none) skips
+    // one base from the avoidance field — the pod-home leg flies INTO its own base door and must
+    // not be steered off it.
+    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing, ulong excludeBaseId = 0) =>
         AutoSteer.SteerToPoint(
             myPos,
             myRot,
             point,
             PigTurnGain,
             thrustWhenFacing,
-            (p, d) => PigAvoidAsteroids(me.SectorId, p, d)
+            (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: excludeBaseId)
         );
 
     private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius, ulong baseLockId)
     {
-        // Shared steering/standoff geometry (float-identical to the pre-extraction body:
-        // standoff = radius + PigStandoff, brake at radius + PigStandoff * 0.6f).
+        // Shared steering/standoff geometry (standoff = radius + PigStandoff, brake at
+        // radius + PigStandoff * 0.6f). The shelled base itself is excluded from avoidance
+        // (the standoff schedule owns its clearance); baseLockId = BaseLockFlag | baseId.
+        ulong attackedBaseId = baseLockId == 0 ? 0 : baseLockId & ~GameContent.BaseLockFlag;
         ShipInputState input = AutoSteer.AttackPoint(
             myPos,
             myRot,
@@ -1162,7 +1119,7 @@ public sealed partial class Simulation
             radius,
             PigStandoff,
             PigTurnGain,
-            (p, d) => PigAvoidAsteroids(me.SectorId, p, d)
+            (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: attackedBaseId)
         );
 
         float dist = (point - myPos).Length();

@@ -10,9 +10,10 @@
 //  original PIG bodies — same operations, same order, no simplification. Any
 //  change here shifts PIG behavior and breaks the determinism test suites.
 //
-//  Asteroid avoidance is an INJECTED delegate (`avoid`) so this shared code
+//  Obstacle avoidance is an INJECTED delegate (`avoid`) so this shared code
 //  never depends on the server's World/asteroid grid; PIG callers pass
-//  (p, d) => PigAvoidAsteroids(me.SectorId, p, d).
+//  (p, d) => AvoidRocks(me.SectorId, p, d) (autopilot flyers, AvoidObstacles —
+//  see Simulation.Avoidance.cs).
 // =====================================================================
 
 using System;
@@ -24,7 +25,7 @@ namespace StellarAllegiance.Shared
         // Steer toward a world-space point: point the nose at `point` (after avoidance),
         // bang-bang while the target is behind (local.Z < 0), proportional turn otherwise.
         // Thrust is `thrustWhenFacing` once roughly facing the target, else a gentle 0.2.
-        // Verbatim move of PigSteerTo (PigAvoidAsteroids -> avoid, PigTurnGain -> turnGain).
+        // Verbatim move of PigSteerTo (asteroid avoidance -> avoid, PigTurnGain -> turnGain).
         public static ShipInputState SteerToPoint(
             Vec3 myPos,
             Quat myRot,

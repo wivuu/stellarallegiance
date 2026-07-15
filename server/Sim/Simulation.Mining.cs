@@ -757,13 +757,16 @@ public sealed partial class Simulation
         var stats = StatsFor(s.Class, false);
         // Exclude the miner's current claim from avoidance: while flying at / mining a rock, avoiding
         // that same rock would deflect the nose off it (the "doesn't face the rock" bug). TargetRockId
-        // is 0 while heading to base, so the offload leg avoids every rock normally.
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d, slot.TargetRockId);
+        // is 0 while heading to base, so the offload leg avoids every rock normally. Base hulls join
+        // the field too (see AvoidObstacles); the ToBase leg excludes its offload base the same way —
+        // avoidBaseId is set there so the dock maneuver owns that base's clearance.
+        ulong avoidBaseId = 0;
+        Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, slot.TargetRockId, avoidBaseId);
 
         ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(
                 myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
+                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, Avoid
             );
 
         // Cross-sector leg toward destSector: FULL-THRUST run at the next-hop gate mouth (TryWarp
@@ -780,7 +783,7 @@ public sealed partial class Simulation
             if (destSector == s.SectorId)
                 return false;
             if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
-                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid), gate.Pos);
+                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, Avoid), gate.Pos);
             return true;
         }
 
@@ -855,6 +858,7 @@ public sealed partial class Simulation
             {
                 if (slot.TargetBaseId == 0 || World.BaseById(slot.TargetBaseId) is not World.BaseSite b)
                     return default; // no live friendly base — hold; brain keeps re-checking
+                avoidBaseId = b.Id; // the offload destination — DockApproach owns its clearance
                 if (CrossSector(b.SectorId, out var xin))
                     return xin;
                 // Same fly-to-door logic as the player autopilot's friendly-base leg: the 3-phase
@@ -865,9 +869,9 @@ public sealed partial class Simulation
                 if (World.BaseDockFacesOf(b.BaseTypeId).Length == 0 || World.BaseHullOf(b.BaseTypeId) is null)
                 {
                     Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
-                    return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid), aim);
+                    return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, Avoid), aim);
                 }
-                return DockApproach(s, tick, b, stats, avoid);
+                return DockApproach(s, tick, b, stats, Avoid);
             }
         }
     }

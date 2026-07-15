@@ -1531,7 +1531,11 @@ public sealed partial class Simulation
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
         var stats = StatsFor(s.Class, s.IsPod);
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d);
+        // Rocks + base hulls (bases are solid to every ship — see AvoidObstacles). avoidBaseId is set
+        // by the base leg (ApKind 1) below so avoidance never steers the nose off the very base being
+        // flown at — the dock maneuver / arrival stop shell owns that base's clearance.
+        ulong avoidBaseId = 0;
+        Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, excludeBaseId: avoidBaseId);
 
         // Physics-based approach steer to `point`, coming to rest `stopDistance` from it (see
         // AutoSteer.ApproachPoint / StoppingDistance). Replaces the PIG combat schedule (AttackPoint),
@@ -1539,7 +1543,7 @@ public sealed partial class Simulation
         ShipInputState Approach(Vec3 point, float stopDistance, float margin) =>
             AutoSteer.ApproachPoint(
                 myPos, myRot, myVel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, margin, avoid
+                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, margin, Avoid
             );
 
         // Fly to a point that lives in `destSector`: if it's another sector, steer to the next-hop aleph
@@ -1554,7 +1558,7 @@ public sealed partial class Simulation
                 return false;
             if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
             {
-                input = AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid);
+                input = AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, Avoid);
                 return true;
             }
             s.ApEngaged = false; // unreachable (no route to the destination sector) — disengage
@@ -1589,6 +1593,7 @@ public sealed partial class Simulation
                     s.ApEngaged = false;
                     return default;
                 }
+                avoidBaseId = eb.Id; // the destination base — its clearance belongs to the dock/arrival logic
                 if (eb.SectorId != s.SectorId)
                 {
                     if (CrossSector(eb.SectorId, out var xin))
@@ -1609,9 +1614,9 @@ public sealed partial class Simulation
                     if (World.BaseDockFacesOf(eb.BaseTypeId).Length == 0 || World.BaseHullOf(eb.BaseTypeId) is null)
                     {
                         Vec3 aim = World.BaseHullOf(eb.BaseTypeId) is not null ? eb.Pos + World.BaseDoorCenterOf(eb.BaseTypeId) : eb.Pos;
-                        return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid);
+                        return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, Avoid);
                     }
-                    return DockApproach(s, tick, eb, stats, avoid);
+                    return DockApproach(s, tick, eb, stats, Avoid);
                 }
                 float hostileR = World.BaseRadiusOf(eb.BaseTypeId); // per-type — enemy base need not be a garrison
                 var input = Approach(eb.Pos, hostileR + PigStandoff, ApBrakeMargin);

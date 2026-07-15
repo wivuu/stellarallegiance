@@ -20,7 +20,10 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Base avoidance not working for autopilot (for constructors or own ship)
+- ✅ Base avoidance not working for autopilot (for constructors or own ship) — fixed 2026-07-15:
+  `Simulation.Avoidance.cs` (`AvoidRocks`/`AvoidBases`/`AvoidObstacles`); autopilot, miners, and
+  constructors now steer around base hulls (dock/keep-station target excluded); PIG combat steering
+  untouched (asteroid-only, determinism-guarded).
 - Set minimum distance for bases to spawn near asteroids and asteroids to spawn from each other during initial game state generation
 - Add a custom cursor
 - Add a 'Map' button to top (next to the 'Build' and 'Research' tabs, to the left of 'Hangar') that opens F3

@@ -532,6 +532,39 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
         $"avoidance: the ship did not arrive past the rock (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})");
 }
 
+// ---- 7b. Base avoidance: a base on the line to the waypoint — never touch its hull, still arrive ----
+// Pre-fix, the autopilot avoidance field only held asteroids: a base astride the flight line was
+// invisible to steering, so the ship flew dead at the hull and ground along it (contact resolution
+// pins a grinding ship at ~hull surface, INSIDE the padded sphere). AvoidBases must bend the line
+// around the whole padded sphere instead — assert a floor safely above the contact-resolution shell.
+{
+    var sim = BootSim(seed: 77);
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
+    var wp = new Vec3(0f, 0f, 900f);
+    PlaceAt(ship, EmptySector, new Vec3(0f, 0f, 0f));
+    // An ENEMY base straddling the flight line (slightly off-axis, like the rock scenario): enemy
+    // hulls are solid everywhere — no docking door to swallow the ship and muddy the signal.
+    ulong baseId = sim.World.CreateBase(team: 1, baseTypeId: 0, EmptySector, new Vec3(10f, 0f, 450f));
+    Vec3 basePos = sim.World.BaseById(baseId)!.Value.Pos;
+    float baseR = sim.World.BaseRadiusOf(0);
+    sim.EnqueueSetAutopilot(1, mode: 1, kind: 3, id: 0, sector: EmptySector, pos: wp);
+    sim.Step();
+
+    float minBaseGap = float.PositiveInfinity;
+    for (int i = 0; i < 1200 && ship.ApEngaged; i++)
+    {
+        sim.Step();
+        minBaseGap = MathF.Min(minBaseGap, Dist(ship.State.Pos, basePos));
+    }
+
+    Check(minBaseGap > baseR + World.ShipRadius,
+        $"base avoidance: the ship never touched the base hull (min gap {minBaseGap:0.0} > {baseR + World.ShipRadius:0.0})",
+        $"base avoidance: the ship ground into the base hull (min gap {minBaseGap:0.0} <= {baseR + World.ShipRadius:0.0})");
+    Check(!ship.ApEngaged && Dist(ship.State.Pos, wp) <= Standoff * 1.3f,
+        "base avoidance: the ship still reached the waypoint past the base and disengaged",
+        $"base avoidance: the ship did not arrive past the base (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})");
+}
+
 // ---- 8. Determinism: the same waypoint scenario twice → bit-identical final position ---------------
 {
     (int x, int y, int z) Run(ulong seed)
