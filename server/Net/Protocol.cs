@@ -1426,6 +1426,7 @@ public static class Protocol
             w.Write(s.BaseTypeId); // i16; -1 = catalog-only (Build-tab placeholder)
             w.Write(s.ResearchSlots);
             w.Write(s.BuildRockClass); // u8; 255 = unset (v37)
+            w.Write(s.AlignTimeSeconds); // i32; constructor align dwell for this station (v38)
             WriteTechList(w, s.RequiredTechIdx);
             WriteTechList(w, s.GrantedTechIdx);
             WriteTechList(w, s.ObsoletedByTechIdx);

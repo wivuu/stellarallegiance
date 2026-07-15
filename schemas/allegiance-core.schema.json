@@ -1740,6 +1740,10 @@
             ],
             "description": "Runtime extension: the asteroid resource-class name (kebab-case, e.g. regolith, matching StellarAllegiance\u0027s RockClass) a constructor drone may build this station on. Null/empty = not constructor-buildable (e.g. the garrison, placed at match start). Distinct from BuildableOn (the Core AsteroidAbility model, unused by the runtime). Serialized kebab-case as build-on-rock-class; projected onto BaseDef/StationCatalogDef.BuildRockClass."
           },
+          "align-time-seconds": {
+            "type": "integer",
+            "description": "Runtime extension: how long a constructor drone holds nose-locked at the rock\u0027s standoff shell before creeping in to build THIS station, in seconds. Omit-when-default (serialized kebab-case as align-time-seconds); 0 resolves to the stock default at projection. Pairs with the inherited BuildTimeSeconds (how long the build sphere runs)."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."

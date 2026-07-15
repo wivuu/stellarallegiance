@@ -164,3 +164,19 @@ mining:
   shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
   miner-standoff: 50            # harvest range from a target rock's surface, world units
   retreat-health-frac: 0.8      # hull fraction below which a miner abandons mining and returns to base
+
+# Constructor / base-building tuning: the drone-wide beats of the build sequence. The PER-STATION
+# beats live in stations.yaml on each buildable station: align-time-seconds (dwell nose-locked at
+# the standoff shell before creeping in) and build-time-seconds (how long the build sphere runs).
+# Build sequence: ToRock (full speed) -> Aligning (align-time-seconds, holding at standoff) ->
+# Approaching (approach-speed creep until the hull TOUCHES the rock) -> Sinking (sink-speed creep
+# until embedded sink-depth-frac below the surface; the build sphere emerges from the rock center
+# here) -> Building (build-time-seconds; sphere envelops the rock) -> base appears, drone consumed.
+constructor:
+  max-constructors-per-team: 4  # cap on live constructors a team may field at once
+  production-seconds: 20        # garrison production dwell after purchase, before the drone launches
+  approach-speed: 8             # creep speed standoff -> surface contact, world units/second
+  sink-speed: 3                 # creep speed surface contact -> embedded, world units/second
+  standoff: 60                  # extra reach past the rock surface where ToRock "arrives" (align shell)
+  sink-depth-frac: 0.65         # embed depth: fraction of the rock radius below the surface
+  sink-backstop-seconds: 30     # force the build to start if the embed creep stalls this long

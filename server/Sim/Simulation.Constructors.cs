@@ -11,18 +11,21 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     // Build lifecycle. A constructor bought from the Build tab launches Idle (holding near its garrison)
-    // until F3-ordered to a rock (ToRock). It then Aligns (faces the rock a few seconds), Sinks (creeps
-    // partially into the rock), and Builds (station-keeps embedded while the build sphere envelops the
-    // asteroid); on the build timer the base is created and the drone despawns.
+    // until F3-ordered to a rock (ToRock). It then Aligns (nose-locked at the standoff shell for the
+    // station's align-time-seconds), Approaches (creeps to surface CONTACT), Sinks (creeps on until
+    // embedded below the surface — the build sphere emerges from the rock center only in this phase),
+    // and Builds (station-keeps embedded for the station's build-time-seconds while the sphere envelops
+    // the asteroid); on the build timer the base is created and the drone despawns.
     private enum ConstructorState : byte
     {
-        Producing, // bought but not yet launched — being built at the garrison (no ship yet)
-        Idle,      // launched, no build order yet — holds station near the launch garrison
-        ToRock,    // en route to TargetRockId (cross-sector legs steer gate to gate)
-        MoveTo,    // commander move order: fly to MoveSector/MovePos and hold there
-        Aligning,  // at the rock's standoff shell, nose-locked, counting down AlignTicks
-        Sinking,   // creeping forward until partially embedded, counting down SinkTicks
-        Building,  // embedded, station-keeping while the build sphere runs (BuildTicks)
+        Producing,   // bought but not yet launched — being built at the garrison (no ship yet)
+        Idle,        // launched, no build order yet — holds station near the launch garrison
+        ToRock,      // en route to TargetRockId (cross-sector legs steer gate to gate)
+        MoveTo,      // commander move order: fly to MoveSector/MovePos and hold there
+        Aligning,    // at the rock's standoff shell, nose-locked, counting down the station's align time
+        Approaching, // creeping (approach-speed) from the standoff shell until the hull touches the rock
+        Sinking,     // touching — creeping (sink-speed) until embedded; DISTANCE-gated, not timed
+        Building,    // embedded, station-keeping while the build sphere runs (build-time-seconds)
     }
 
     // One slot per OWNED constructor. Like the miner slot it does not outlive destruction (repurchase
@@ -46,17 +49,19 @@ public sealed partial class Simulation
     // Kill-switch mirroring MinersEnabled: false stops buys + the brain. Default ON.
     public volatile bool ConstructorsEnabled = true;
 
-    // Fixed phase timings (seconds). The BUILD phase length is the station's authored
-    // build-time-seconds; these extra beats (production, align, sink) are constructor-wide.
-    // ConstructorProductionSeconds = how long the drone is "built" at the garrison after purchase
-    // before it launches (shown as a progress bar in the Build tab). Promote to WorldConstructorTuning
-    // when live tuning is wanted.
-    private const float ConstructorProductionSeconds = 20f;
-    private const float ConstructorAlignSeconds = 3f;
-    private const float ConstructorSinkSeconds = 3f;
-    private const float ConstructorStandoff = 60f;      // extra reach past the rock surface to "arrive"
-    private const float ConstructorSinkDepthFrac = 0.4f; // how deep (fraction of rock radius) it embeds
+    // Phase timings/speeds are all YAML-authored now. PER-STATION (stations.yaml, streamed on the
+    // catalog): align-time-seconds (Aligning dwell) + build-time-seconds (Building duration).
+    // CONSTRUCTOR-WIDE (world.yaml `constructor:`, server-only): production dwell, the two creep
+    // speeds (approach/sink), the standoff shell, the embed depth, and the sink backstop.
+    private WorldConstructorTuning _constructor => World.Constructor;
     private const float ConstructorGateAlignRange = 200f;
+    // Slack (world units) on the DISTANCE-gated Sinking -> Building transition: the creep commands
+    // throttle 0 once inside the embed shell, so it settles a hair outside; the gate must tolerate that.
+    private const float ConstructorEmbedSlack = 1.5f;
+
+    // Per-station timed phases, resolved off the streamed catalog (authored in stations.yaml).
+    private uint AlignTicksFor(byte stationType) =>
+        SecondsToTicks(MathF.Max(0f, StationCatalogFor(stationType)?.AlignTimeSeconds ?? 5));
 
     private readonly List<ConstructorSlot> _constructors = [];
     private ulong _nextConstructorId = 1;
@@ -141,15 +146,17 @@ public sealed partial class Simulation
             switch (c.State)
             {
                 case ConstructorState.Producing:
-                    start = c.PhaseStartTick; dur = SecondsToTicks(ConstructorProductionSeconds); break;
+                    start = c.PhaseStartTick; dur = SecondsToTicks(_constructor.ProductionSeconds); break;
                 case ConstructorState.ToRock:
                     target = c.TargetRockId; break;
                 case ConstructorState.MoveTo:
                     target = c.MoveSector; break;
                 case ConstructorState.Aligning:
-                    start = c.PhaseStartTick; dur = SecondsToTicks(ConstructorAlignSeconds); target = c.TargetRockId; break;
+                    start = c.PhaseStartTick; dur = AlignTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
+                // Approaching/Sinking are DISTANCE-gated (creep legs), not timed — 0/0 like ToRock.
+                case ConstructorState.Approaching:
                 case ConstructorState.Sinking:
-                    start = c.PhaseStartTick; dur = SecondsToTicks(ConstructorSinkSeconds); target = c.TargetRockId; break;
+                    target = c.TargetRockId; break;
                 case ConstructorState.Building:
                     start = c.PhaseStartTick; dur = BuildTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
             }
@@ -159,8 +166,11 @@ public sealed partial class Simulation
     }
 
     // Wire view for the build-sphere VFX stream (Protocol.BuildConstructorBuilds): one row per
-    // constructor actively aligning/sinking/building on a rock. phase 0 = align, 1 = sink, 2 = build;
-    // progress = fraction through the current phase (0..1). Sim thread only.
+    // constructor actively aligning/approaching/sinking/building on a rock. phase 0 = align/approach
+    // (pre-contact — the client draws NO sphere), 1 = sink (the sphere emerges from the rock center),
+    // 2 = build. Sink progress is the physical EMBED DEPTH fraction (surface contact -> embed shell),
+    // so the sphere's emergence tracks the hull actually descending; align/build progress are their
+    // phase timers. Sim thread only.
     public IReadOnlyList<(ulong ShipId, ulong RockId, byte Phase, float Progress)> ConstructorBuildsView()
     {
         var rows = new List<(ulong, ulong, byte, float)>();
@@ -169,19 +179,54 @@ public sealed partial class Simulation
             if (c.Ship is not ShipSim s || c.TargetRockId == 0)
                 continue;
             byte phase;
-            uint span;
+            float progress;
             switch (c.State)
             {
-                case ConstructorState.Aligning: phase = 0; span = SecondsToTicks(ConstructorAlignSeconds); break;
-                case ConstructorState.Sinking: phase = 1; span = SecondsToTicks(ConstructorSinkSeconds); break;
-                case ConstructorState.Building: phase = 2; span = BuildTicksFor(c.BuildStationTypeId); break;
-                default: continue; // Idle/ToRock: no build sphere yet
+                case ConstructorState.Aligning:
+                {
+                    uint span = AlignTicksFor(c.BuildStationTypeId);
+                    phase = 0;
+                    progress = span > 0 ? MathF.Min(1f, (Tick - c.PhaseStartTick) / (float)span) : 1f;
+                    break;
+                }
+                case ConstructorState.Approaching:
+                    phase = 0; progress = 1f; break; // aligned, still closing — no sphere yet
+                case ConstructorState.Sinking:
+                    phase = 1; progress = ConstructorEmbedProgress(s, c.TargetRockId); break;
+                case ConstructorState.Building:
+                {
+                    uint span = BuildTicksFor(c.BuildStationTypeId);
+                    phase = 2;
+                    progress = span > 0 ? MathF.Min(1f, (Tick - c.PhaseStartTick) / (float)span) : 1f;
+                    break;
+                }
+                default: continue; // Idle/ToRock/MoveTo: no build sphere yet
             }
-            float progress = span > 0 ? MathF.Min(1f, (Tick - c.PhaseStartTick) / (float)span) : 1f;
             rows.Add((s.ShipId, c.TargetRockId, phase, progress));
         }
         return rows;
     }
+
+    // Fraction of the embed descent completed: 0 at surface contact, 1 at the embed shell. Drives the
+    // sink-phase sphere so its growth tracks the hull's real depth (a vanished rock reads as done).
+    private float ConstructorEmbedProgress(ShipSim s, ulong rockId)
+    {
+        if (World.RockById(rockId) is not World.Rock rock)
+            return 1f;
+        float rockR = World.RockCurrentRadius(rock.Id);
+        float touch = rockR + World.ShipRadius;
+        float embed = ConstructorEmbedShell(rockR);
+        float span = touch - embed;
+        if (span <= 1e-3f)
+            return 1f;
+        float dist = (s.State.Pos - rock.Pos).Length();
+        return Math.Clamp((touch - dist) / span, 0f, 1f);
+    }
+
+    // The stop shell of the embed creep: the drone's center rests this far from the rock center,
+    // SinkDepthFrac of the radius below the surface (floored so a tiny rock still leaves a shell).
+    private float ConstructorEmbedShell(float rockR) =>
+        MathF.Max(2f, rockR * (1f - _constructor.SinkDepthFrac));
 
     // ---- Purchase (thread-safe enqueue; applied on the sim thread in DrainQueues) ----
 
@@ -379,7 +424,7 @@ public sealed partial class Simulation
             // garrison (it appears at the launch base and starts holding station near it).
             if (slot.State == ConstructorState.Producing)
             {
-                if (tick - slot.PhaseStartTick >= SecondsToTicks(ConstructorProductionSeconds))
+                if (tick - slot.PhaseStartTick >= SecondsToTicks(_constructor.ProductionSeconds))
                 {
                     SpawnConstructor(slot, tick);
                     slot.State = ConstructorState.Idle;
@@ -396,35 +441,34 @@ public sealed partial class Simulation
             switch (slot.State)
             {
                 case ConstructorState.ToRock:
+                case ConstructorState.Aligning:
+                case ConstructorState.Approaching:
+                case ConstructorState.Sinking:
                 {
-                    // Lost the target (depleted-into-nothing / occupied by another build): give up.
+                    // Lost the target (depleted-into-nothing / occupied by another build) any time
+                    // before the build sphere claims it: give up back to Idle. Building instead rides
+                    // its timer out (CompleteConstruction retires the drone if the rock vanished).
                     if (World.RockById(slot.TargetRockId) is null || _rocksWithBase.Contains(slot.TargetRockId))
                     {
                         ConstructorNoticesThisStep.Add((slot.Team, "Constructor's build site is gone — order it to another asteroid."));
                         slot.TargetRockId = 0;
                         slot.State = ConstructorState.Idle;
                         ConstructorChangedThisStep = true;
+                        break;
+                    }
+                    // Aligning is the only TIMED pre-build phase (the station's align-time-seconds);
+                    // ToRock->Aligning, Approaching->Sinking, and Sinking->Building are DISTANCE-gated
+                    // in ConstructorExecute (20 Hz). The sink backstop lives there too (same method
+                    // that would stall).
+                    if (slot.State == ConstructorState.Aligning
+                        && tick - slot.PhaseStartTick >= AlignTicksFor(slot.BuildStationTypeId))
+                    {
+                        slot.State = ConstructorState.Approaching;
+                        slot.PhaseStartTick = tick;
+                        ConstructorChangedThisStep = true;
                     }
                     break;
                 }
-                case ConstructorState.Aligning:
-                    if (tick - slot.PhaseStartTick >= SecondsToTicks(ConstructorAlignSeconds))
-                    {
-                        slot.State = ConstructorState.Sinking;
-                        slot.PhaseStartTick = tick;
-                        ConstructorChangedThisStep = true;
-                    }
-                    break;
-                case ConstructorState.Sinking:
-                    if (tick - slot.PhaseStartTick >= SecondsToTicks(ConstructorSinkSeconds))
-                    {
-                        slot.State = ConstructorState.Building;
-                        slot.PhaseStartTick = tick;
-                        ConstructorChangedThisStep = true;
-                        // Claim the rock the moment the build sphere starts, so nothing else builds here.
-                        _rocksWithBase.Add(slot.TargetRockId);
-                    }
-                    break;
                 case ConstructorState.Building:
                     if (tick - slot.PhaseStartTick >= BuildTicksFor(slot.BuildStationTypeId))
                         CompleteConstruction(slot, tick);
@@ -502,8 +546,11 @@ public sealed partial class Simulation
     // drone still bounces off every OTHER asteroid normally). Sim thread only.
     private ulong ConstructorEmbeddedRock(ShipSim s)
     {
+        // Approaching is included: the phase ENDS by touching the rock, and the contact resolver must
+        // not bounce the drone off at that boundary before the 20 Hz state flip lands.
         if (ConstructorSlotFor(s) is ConstructorSlot slot
-            && slot.State is ConstructorState.Aligning or ConstructorState.Sinking or ConstructorState.Building)
+            && slot.State is ConstructorState.Aligning or ConstructorState.Approaching
+                or ConstructorState.Sinking or ConstructorState.Building)
             return slot.TargetRockId;
         return 0;
     }
@@ -519,10 +566,10 @@ public sealed partial class Simulation
         var stats = StatsFor(s.Class, false);
         Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d, slot.TargetRockId);
 
-        ShipInputState Approach(Vec3 point, float stopDistance) =>
+        ShipInputState Approach(Vec3 point, float stopDistance, float brakeMargin = ApBrakeMargin) =>
             AutoSteer.ApproachPoint(
                 myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid);
+                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, brakeMargin, avoid);
 
         bool CrossSector(uint destSector, out ShipInputState input)
         {
@@ -552,6 +599,21 @@ public sealed partial class Simulation
         ShipInputState FaceRock(Vec3 rockCenter) =>
             AutoSteer.FaceAndRoll(myPos, myRot, rockCenter, myRot.Rotate(new Vec3(0f, 1f, 0f)), PigTurnGain, 0f, 0f);
 
+        // Slow-motion creep at a COMMANDED speed (the YAML approach/sink knobs): the flight model's
+        // throttle commands a forward speed as a fraction of the hull max, so throttle = speed/max
+        // paces the leg directly (ApproachPoint is bang-bang 0/1 throttle — useless for a slow beat).
+        // Clamped after SteerToPoint so its 0.2 not-yet-facing idle can never outrun the creep. Inside
+        // `stopShell`, hold: nose on the rock, throttle 0 (drag rests the drone within a unit or two).
+        ShipInputState Creep(Vec3 rockCenter, float speed, float stopShell)
+        {
+            if ((myPos - rockCenter).Length() <= stopShell)
+                return FaceRock(rockCenter);
+            float throttle = Math.Clamp(speed / MathF.Max(1f, stats.MaxSpeed), 0.01f, 1f);
+            var input = AutoSteer.SteerToPoint(myPos, myRot, rockCenter, PigTurnGain, throttle, avoid);
+            input.Thrust = MathF.Min(input.Thrust, throttle);
+            return input;
+        }
+
         switch (slot.State)
         {
             case ConstructorState.Idle:
@@ -573,7 +635,7 @@ public sealed partial class Simulation
                     return xin;
                 float rockR = World.RockCurrentRadius(rock.Id);
                 var input = Approach(rock.Pos, ConstructorHoldDistance(rockR));
-                float reach = rockR + ConstructorStandoff + World.ShipRadius;
+                float reach = rockR + _constructor.Standoff + World.ShipRadius;
                 if ((myPos - rock.Pos).LengthSquared() <= reach * reach)
                 {
                     slot.State = ConstructorState.Aligning;
@@ -598,26 +660,55 @@ public sealed partial class Simulation
             }
             case ConstructorState.Aligning:
             {
+                // Phase 1 (user-facing): hold at the standoff shell, nose-locked, for the station's
+                // align-time-seconds (the brain advances the timer).
                 if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
                     return default;
                 return FaceRock(rock.Pos);
+            }
+            case ConstructorState.Approaching:
+            {
+                // Phase 2: creep from the standoff shell until the hull TOUCHES the rock (meshes
+                // intersect). Distance-gated — flip to Sinking exactly at surface contact, so the
+                // build sphere (a Sinking/Building visual) can never appear during the approach.
+                if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
+                    return default;
+                float rockR = World.RockCurrentRadius(rock.Id);
+                float touch = rockR + World.ShipRadius;
+                if ((myPos - rock.Pos).LengthSquared() <= touch * touch)
+                {
+                    slot.State = ConstructorState.Sinking;
+                    slot.PhaseStartTick = tick;
+                    ConstructorChangedThisStep = true;
+                }
+                return Creep(rock.Pos, _constructor.ApproachSpeed, ConstructorEmbedShell(rockR));
             }
             case ConstructorState.Sinking:
             {
+                // Phase 3: touching — keep creeping (sink speed) until embedded SinkDepthFrac below
+                // the surface, then start the build. Distance-gated with a stall backstop; collision
+                // with this one rock is skipped (ConstructorEmbeddedRock) so nothing shoves it back out.
                 if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
                     return default;
-                // Creep toward the rock center, resting partially embedded (stop distance inside the
-                // surface). The flight model brakes to the stop distance; the SinkTicks timer advances
-                // the phase regardless, so a slow drone still finishes sinking on schedule.
                 float rockR = World.RockCurrentRadius(rock.Id);
-                float embed = MathF.Max(2f, rockR * (1f - ConstructorSinkDepthFrac));
-                return Approach(rock.Pos, embed);
+                float embed = ConstructorEmbedShell(rockR);
+                bool arrived = (myPos - rock.Pos).LengthSquared() <= (embed + ConstructorEmbedSlack) * (embed + ConstructorEmbedSlack);
+                bool stalled = tick - slot.PhaseStartTick >= SecondsToTicks(_constructor.SinkBackstopSeconds);
+                if (arrived || stalled)
+                {
+                    slot.State = ConstructorState.Building;
+                    slot.PhaseStartTick = tick;
+                    ConstructorChangedThisStep = true;
+                    // Claim the rock the moment the build sphere takes over, so nothing else builds here.
+                    _rocksWithBase.Add(slot.TargetRockId);
+                }
+                return Creep(rock.Pos, _constructor.SinkSpeed, embed);
             }
-            default: // Building — station-keep embedded, nose on the rock (the sphere does the work).
-            {
+            default: // Building — hold embedded (nose on the rock, throttle 0; Creep keeps a drifted
+            {        // drone burrowing back to depth) while the build timer runs.
                 if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
                     return default;
-                return FaceRock(rock.Pos);
+                return Creep(rock.Pos, _constructor.SinkSpeed, ConstructorEmbedShell(World.RockCurrentRadius(rock.Id)));
             }
         }
     }
@@ -811,5 +902,5 @@ public sealed partial class Simulation
     private static string RockClassName(byte rockClass) =>
         rockClass == 255 ? "any" : ((RockClass)rockClass).ToString().ToLowerInvariant();
 
-    private uint MaxConstructorsPerTeam => 4;
+    private int MaxConstructorsPerTeam => _constructor.MaxConstructorsPerTeam;
 }

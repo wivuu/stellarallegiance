@@ -84,4 +84,12 @@ public record Station : Buildable
     /// kebab-case as <c>build-on-rock-class</c>; projected onto BaseDef/StationCatalogDef.BuildRockClass.
     /// </summary>
     public string? BuildOnRockClass { get; set; }
+
+    /// <summary>
+    /// Runtime extension: how long a constructor drone holds nose-locked at the rock's standoff shell
+    /// before creeping in to build THIS station, in seconds. Omit-when-default (serialized kebab-case
+    /// as <c>align-time-seconds</c>); 0 resolves to the stock default at projection. Pairs with the
+    /// inherited <see cref="Buildable.BuildTimeSeconds"/> (how long the build sphere runs).
+    /// </summary>
+    public int AlignTimeSeconds { get; set; }
 }

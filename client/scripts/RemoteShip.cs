@@ -42,6 +42,13 @@ public partial class RemoteShip : Node3D
     public bool IsMiner => Kind == ShipKind.Miner;
     public bool IsConstructor => Kind == ShipKind.Constructor;
 
+    // A constructor drone that has sunk into its target rock and is now BUILDING: the opaque build
+    // sphere fully envelops it, so WorldRenderer hides the mesh to stop it poking through. Once set it
+    // stays hidden until the drone despawns (Building is terminal), so the per-snapshot sector-visibility
+    // pass must NOT re-show it — SetNodeSector/RefreshSectorVisibility honor this flag. Without it the
+    // frame-rate hide and the snapshot-rate re-show fought and the drone blinked at the snapshot rate.
+    public bool HideForBuild { get; set; }
+
     // Actively transferring ore (Ship.IsMining / ShipFlagMining): toggles per tick as the server's
     // miner grinds a rock. WorldRenderer reads this to attach/detach the mining beam; _Process rolls
     // the cosmetic ship model while it's set. Updated in Push (NOT Initialize — it's per-tick state).

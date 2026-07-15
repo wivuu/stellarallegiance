@@ -126,6 +126,9 @@ public sealed class WorldDef
 
     /// <summary>Mining/ore economy tuning (server-side only — never streamed). Null -&gt; stock.</summary>
     public WorldMiningDef? Mining { get; set; }
+
+    /// <summary>Constructor/base-building tuning (server-side only — never streamed). Null -&gt; stock.</summary>
+    public WorldConstructorDef? Constructor { get; set; }
 }
 
 /// <summary>
@@ -430,6 +433,38 @@ public sealed class WorldMiningDef
     public double? RetreatHealthFrac { get; set; }
 }
 
+/// <summary>
+/// Constructor / base-building tuning, authored under <c>constructor:</c> — the drone-wide beats of
+/// the build sequence (production dwell, creep speeds, standoff, embed depth). The PER-STATION beats
+/// (<c>align-time-seconds</c>, <c>build-time-seconds</c>) are authored on each station in
+/// stations.yaml instead. Every field is optional; null falls back to the stock value (the shared
+/// <c>WorldConstructorTuning</c> initializers). Server-side only — never streamed. Durations are
+/// SECONDS, speeds world-units/second.
+/// </summary>
+public sealed class WorldConstructorDef
+{
+    /// <summary>Cap on live constructors a team may field at once.</summary>
+    public int? MaxConstructorsPerTeam { get; set; }
+
+    /// <summary>Garrison production dwell after purchase, before the drone launches, seconds.</summary>
+    public double? ProductionSeconds { get; set; }
+
+    /// <summary>Creep speed from the standoff shell to surface contact, world units/second.</summary>
+    public double? ApproachSpeed { get; set; }
+
+    /// <summary>Creep speed from surface contact to the embed depth, world units/second.</summary>
+    public double? SinkSpeed { get; set; }
+
+    /// <summary>Extra reach past the rock surface where the travel leg "arrives" (the align shell), world units.</summary>
+    public double? Standoff { get; set; }
+
+    /// <summary>How deep the drone embeds: fraction of the rock radius it descends below the surface.</summary>
+    public double? SinkDepthFrac { get; set; }
+
+    /// <summary>Backstop: force the build to start after this long in the Sinking phase, seconds.</summary>
+    public double? SinkBackstopSeconds { get; set; }
+}
+
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
 // the wire streams (the streamed subset: id/scale/density/debug/fog-of-war — Protocol.BuildDefs).
 // Fail-fast like ContentLoader/MapLoader: a missing or malformed world file throws at boot (the
@@ -595,6 +630,17 @@ public static class WorldLoader
             t.ShrinkFloorFrac = F(mi.ShrinkFloorFrac, t.ShrinkFloorFrac);
             t.MinerStandoff = F(mi.MinerStandoff, t.MinerStandoff);
             t.RetreatHealthFrac = F(mi.RetreatHealthFrac, t.RetreatHealthFrac);
+        }
+        if (w.Constructor is { } ct)
+        {
+            var t = cfg.Constructor;
+            t.MaxConstructorsPerTeam = ct.MaxConstructorsPerTeam ?? t.MaxConstructorsPerTeam;
+            t.ProductionSeconds = F(ct.ProductionSeconds, t.ProductionSeconds);
+            t.ApproachSpeed = F(ct.ApproachSpeed, t.ApproachSpeed);
+            t.SinkSpeed = F(ct.SinkSpeed, t.SinkSpeed);
+            t.Standoff = F(ct.Standoff, t.Standoff);
+            t.SinkDepthFrac = F(ct.SinkDepthFrac, t.SinkDepthFrac);
+            t.SinkBackstopSeconds = F(ct.SinkBackstopSeconds, t.SinkBackstopSeconds);
         }
         return cfg;
     }

@@ -44,7 +44,8 @@ stations:
     vision-sphere-radius: 2400
     radar-signature: 1.8
     price: 300
-    build-time-seconds: 45
+    align-time-seconds: 5     # constructor dwell at the standoff shell before creeping into the rock
+    build-time-seconds: 45    # how long the build sphere runs once the drone is embedded
     build-on-rock-class: regolith
     abilities: [land, repair, capture]
     required-capabilities: [base]         # buildable from match start (the expansion entry point)

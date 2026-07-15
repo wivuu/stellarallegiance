@@ -128,6 +128,8 @@ public static class FactionsContentProjection
             // Authored 0/omitted resolves to the default single slot (same rule as BaseDef below).
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
             BuildRockClass = ParseRockClass(s.BuildOnRockClass),
+            // Authored 0/omitted resolves to the stock 5 s align dwell (omit-when-default authoring).
+            AlignTimeSeconds = s.AlignTimeSeconds <= 0 ? 5 : s.AlignTimeSeconds,
             RequiredTechIdx = TechIdxArray(s.RequiredTechs, techIdx),
             GrantedTechIdx = TechIdxArray(s.GrantedTechs, techIdx),
             ObsoletedByTechIdx = TechIdxArray(s.ObsoletedByTechs, techIdx),

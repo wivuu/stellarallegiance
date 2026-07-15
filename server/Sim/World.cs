@@ -55,6 +55,10 @@ public sealed class World
     // the shrink helper. Server-side only — like _seed, never streamed.
     public readonly WorldMiningTuning Mining;
 
+    // Constructor/base-building tuning (world.yaml `constructor:`), consumed by the constructor
+    // brain/steering (Simulation.Constructors.cs). Server-side only — like Mining, never streamed.
+    public readonly WorldConstructorTuning Constructor;
+
     // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
     // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
@@ -283,6 +287,7 @@ public sealed class World
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
         Mining = cfg.Mining;
+        Constructor = cfg.Constructor;
         // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;

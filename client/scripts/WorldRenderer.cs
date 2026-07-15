@@ -1558,7 +1558,10 @@ public partial class WorldRenderer : Node3D
     private void SetNodeSector(Node3D n, uint sector)
     {
         n.SetMeta("sector", (int)sector);
-        n.Visible = sector == ViewSector;
+        // A constructor mesh hidden inside its build sphere (HideForBuild) must stay hidden even as its
+        // per-snapshot update re-runs this — otherwise the frame-rate build-hide and this snapshot-rate
+        // show fight and the drone blinks at the snapshot rate.
+        n.Visible = sector == ViewSector && n is not RemoteShip { HideForBuild: true };
     }
 
     // Re-evaluate every world node's visibility against the current view sector — called on a warp
@@ -1580,7 +1583,8 @@ public partial class WorldRenderer : Node3D
         foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
-                n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
+                // Keep a build-embedded constructor hidden (see SetNodeSector) across this sector re-eval.
+                n.Visible = (int)n.GetMeta("sector") == (int)ViewSector && n is not RemoteShip { HideForBuild: true };
     }
 
     // Phase A of a warp (cover): hide every sector-tagged node NOT in the destination sector, HARD, so
@@ -1685,13 +1689,19 @@ public partial class WorldRenderer : Node3D
             Vector3 c = ship.GlobalPosition;
             if (bodies.Count > 0)
             {
-                bool now = Collide.Touches(
-                    new Vec3(c.X, c.Y, c.Z),
-                    CollisionConfig.ShipRadius,
-                    bodies,
-                    ShipTeamOf(ship),
-                    CollisionConfig.DockFaceDepth
-                );
+                // A constructor on an active build job (align → build) deliberately contacts and embeds
+                // in its target rock; the server skips that collision entirely (ConstructorEmbeddedRock),
+                // so the touch is not an impact — no thud. Gated on the build stream (a row exists from
+                // Aligning on), so a constructor merely flying past rocks (ToRock/MoveTo) still thuds.
+                bool buildContact = ship is RemoteShip { IsConstructor: true } && HasBuildRow(shipId);
+                bool now = !buildContact
+                    && Collide.Touches(
+                        new Vec3(c.X, c.Y, c.Z),
+                        CollisionConfig.ShipRadius,
+                        bodies,
+                        ShipTeamOf(ship),
+                        CollisionConfig.DockFaceDepth
+                    );
                 if (now && _collidingShips.Add(shipId))
                     PlayCollisionSfx(c);
                 else if (!now)
@@ -1739,6 +1749,17 @@ public partial class WorldRenderer : Node3D
 
     // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
     private readonly List<(ulong Id, Node3D Node)> _pairScratch = new();
+
+    // Whether this ship has a row in the live build stream (MsgConstructorBuilds) — i.e. it is a
+    // constructor in its Aligning/Approaching/Sinking/Building window at its target rock. The list is
+    // at most a few drones, so a linear scan per visible ship is trivial.
+    private bool HasBuildRow(ulong shipId)
+    {
+        foreach (var b in _constructorBuilds)
+            if (b.ShipId == shipId)
+                return true;
+        return false;
+    }
 
     // Class + pod flag of a ship node, for the per-class collision-hull lookup.
     private static (byte Cls, bool IsPod) ShipClassOf(Node3D ship) =>
@@ -2754,17 +2775,29 @@ public partial class WorldRenderer : Node3D
                 SetNodeSector(sphere, rock.SectorId);
                 _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
             }
-            // Envelop fraction of the rock radius: sink 0.20→0.60, build 0.60→1.35 (swallows the rock).
+            // Envelop fraction of the rock radius. Phase 1 (sink) BEGINS at surface contact and its
+            // progress is the drone's physical embed-depth fraction (v38), so the sphere emerges from
+            // the rock CENTER (0.05) and grows with the hull's actual descent to 0.55; phase 2 (build,
+            // the station's build-time-seconds) carries it 0.55→1.35, swallowing the rock.
             float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
-            float frac = b.Phase == 1 ? 0.20f + 0.40f * b.Progress : 0.60f + 0.75f * b.Progress;
+            float frac = b.Phase == 1 ? 0.05f + 0.50f * b.Progress : 0.55f + 0.80f * b.Progress;
             sphere.SetEnvelop(rockR * frac);
-            // Core opacity: ramp to opaque through the sink, then hold opaque while building — the drone
-            // vanishes inside it.
-            sphere.SetCover(b.Phase == 1 ? Mathf.Clamp(b.Progress * 1.3f, 0f, 1f) : 1f);
-            // Once BUILDING (fully enveloped, opaque core), remove the drone mesh from existence — the
-            // server despawns the constructor at completion; the sphere covers the gap until then.
-            if (b.Phase >= 2 && _shipNodes.TryGetValue(b.ShipId, out var shipNode))
-                shipNode.Visible = false;
+            // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
+            // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
+            // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
+            sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
+            // Keep the mesh VISIBLE while it sinks in and through early building — the drone is buried
+            // deep (the solid rock occludes it) while the opaque core grows over it. Only once that core
+            // has genuinely swallowed it (build past ~45%) do we latch the hard hide, so the mesh eases
+            // out of sight inside the sphere instead of popping out of existence at the surface. Latching
+            // HideForBuild stops the per-snapshot SetNodeSector re-showing it (else it blinks at the
+            // snapshot rate); Building is terminal, so it stays hidden right up to its despawn.
+            if (b.Phase >= 2 && b.Progress >= 0.45f
+                && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
+            {
+                drone.HideForBuild = true;
+                drone.Visible = false;
+            }
         }
         // A build that completed/cancelled drops out of the stream. Don't free its sphere instantly —
         // FADE it (the finished base has appeared underneath via the reveal path); it self-frees.

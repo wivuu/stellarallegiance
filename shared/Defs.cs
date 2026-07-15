@@ -339,6 +339,10 @@ namespace StellarAllegiance.Shared
         public short BaseTypeId = -1; // runtime wire base-type id; -1 = catalog-only (not buildable/spawnable)
         public byte ResearchSlots; // resolved (>= 1) for runtime bases; authored raw otherwise
         public byte BuildRockClass = 255; // RockClass a constructor builds this on; 255 = unset (v37)
+        // Constructor align dwell for THIS station (seconds at the standoff shell before creeping in),
+        // resolved (> 0) at projection from stations.yaml `align-time-seconds` (v38). Pairs with
+        // BuildTimeSeconds = how long the build sphere runs once the drone is embedded.
+        public int AlignTimeSeconds = 5;
         public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
         public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
         public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
@@ -539,15 +543,16 @@ namespace StellarAllegiance.Shared
         public float RockRadarSignature = 2f;
 
         // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
-        // `seeding:` / `mining:`). NONE of these ride the wire — Protocol.BuildDefs deliberately
-        // skips them (drones/damage/seeding/mining are server-authoritative; the client only sees
-        // their results). The field initializers below ARE the stock values: projection only
+        // `seeding:` / `mining:` / `constructor:`). NONE of these ride the wire — Protocol.BuildDefs
+        // deliberately skips them (drones/damage/seeding/mining are server-authoritative; the client
+        // only sees their results). The field initializers below ARE the stock values: projection only
         // overrides the knobs an author actually wrote, so an omitted block or field means "stock".
         public WorldAiTuning Ai = new();
         public WorldCombatTuning Combat = new();
         public WorldMechanicsTuning Mechanics = new();
         public WorldSeedingTuning Seeding = new();
         public WorldMiningTuning Mining = new();
+        public WorldConstructorTuning Constructor = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -730,6 +735,34 @@ namespace StellarAllegiance.Shared
         // A miner whose hull drops below this fraction of its max abandons mining and returns to
         // base (it relaunches at full health after docking). 0 disables the retreat.
         public float RetreatHealthFrac = 0.8f;
+    }
+
+    // Constructor / base-building tuning (world.yaml `constructor:`) — the drone-wide beats of the
+    // build sequence. Server-side only, never streamed (same contract as ai/combat/mechanics/mining).
+    // The initializers ARE the stock values; an omitted block/field means "stock". Durations are
+    // seconds, speeds world-units/second. The PER-STATION beats live on StationCatalogDef instead:
+    // AlignTimeSeconds (dwell at the standoff shell) and BuildTimeSeconds (build-sphere duration).
+    public sealed class WorldConstructorTuning
+    {
+        public int MaxConstructorsPerTeam = 4; // cap on live constructors a team may field at once
+        public float ProductionSeconds = 20f; // garrison production dwell after purchase, before launch
+
+        // Creep speeds for the two slow legs of the build approach. These COMMAND a speed (throttle =
+        // speed/hull-max), so they tune the visual pace directly — the travel legs (ToRock/MoveTo) still
+        // fly at full hull speed.
+        public float ApproachSpeed = 8f; // standoff shell -> surface contact (meshes touching)
+        public float SinkSpeed = 3f;     // surface contact -> embedded at SinkDepthFrac
+
+        public float Standoff = 60f; // extra reach past the rock surface where ToRock "arrives" (align shell)
+
+        // How deep the drone embeds, as the fraction of the rock radius it descends BELOW the surface
+        // (stop shell at radius x (1 - frac) from center). Deep enough that the hull slips fully under
+        // the surface and the rock itself occludes it.
+        public float SinkDepthFrac = 0.65f;
+
+        // Backstop: if the embed creep stalls (wedged on a weird hull, avoidance fighting the creep),
+        // force the build to start after this long in the Sinking phase anyway.
+        public float SinkBackstopSeconds = 30f;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

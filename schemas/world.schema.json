@@ -737,6 +737,65 @@
       },
       "description": "Mining/ore economy tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
       "additionalProperties": false
+    },
+    "constructor": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "max-constructors-per-team": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Cap on live constructors a team may field at once."
+        },
+        "production-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Garrison production dwell after purchase, before the drone launches, seconds."
+        },
+        "approach-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Creep speed from the standoff shell to surface contact, world units/second."
+        },
+        "sink-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Creep speed from surface contact to the embed depth, world units/second."
+        },
+        "standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra reach past the rock surface where the travel leg \u0022arrives\u0022 (the align shell), world units."
+        },
+        "sink-depth-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How deep the drone embeds: fraction of the rock radius it descends below the surface."
+        },
+        "sink-backstop-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Backstop: force the build to start after this long in the Sinking phase, seconds."
+        }
+      },
+      "description": "Constructor/base-building tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

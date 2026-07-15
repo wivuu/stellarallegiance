@@ -279,13 +279,16 @@ public partial class BuildTab : Control
                     row.ConfigureNote(DesignTokens.TeamAccent, $"▸ {name} CONSTRUCTOR · MOVING TO {sec.ToUpperInvariant()}");
                     break;
                 }
-                case 4: // Aligning
+                case 4: // Aligning (timed: the station's align-time-seconds)
                     row.ConfigureTimed(_world!, DesignTokens.TeamAccent, $"◈ {name} · ALIGNING", c.StartTick, c.DurationTicks, null, "");
                     break;
-                case 5: // Sinking
-                    row.ConfigureTimed(_world!, DesignTokens.TeamAccent, $"◈ {name} · EMBEDDING", c.StartTick, c.DurationTicks, null, "");
+                case 5: // Approaching (v38: distance-gated creep to surface contact — untimed)
+                    row.ConfigureNote(DesignTokens.TeamAccent, $"◈ {name} · APPROACHING SURFACE");
                     break;
-                default: // Building
+                case 6: // Sinking (v38: distance-gated embed creep — untimed)
+                    row.ConfigureNote(DesignTokens.TeamAccent, $"◈ {name} · EMBEDDING");
+                    break;
+                default: // Building (timed: the station's build-time-seconds)
                     row.ConfigureTimed(_world!, DesignTokens.Warn, $"◈ BUILDING {name}", c.StartTick, c.DurationTicks, null, "");
                     break;
             }

@@ -56,7 +56,15 @@ public static class Wire
     // a finished constructor base CONSUMES its asteroid — NEW MsgRockGone=27 (server->client
     // broadcast: u8 count, count x u64 rockId) tells clients to delete the despawned rock (node +
     // collision) so nothing remains under the new base. See World.RemoveRock / Protocol.BuildRockGone.
-    public const byte ProtocolVersion = 37;
+    // v38: constructor build-sequence rework — StationCatalog record appends i32 alignTimeSeconds
+    // (after buildRockClass): the per-station constructor align dwell (stations.yaml
+    // align-time-seconds). MsgConstructorState `state` bytes renumbered: a new Approaching=5 state
+    // (standoff -> surface-contact creep) shifts Sinking to 6 and Building to 7; Sinking/Approaching
+    // now stream 0/0 start/duration (distance-gated, untimed). MsgConstructorBuilds phase semantics:
+    // phase 1 (sink) begins at surface CONTACT and its progress is the physical embed-depth fraction
+    // (was a timer), so the client's build sphere emerges only once the meshes intersect. See
+    // Simulation.Constructors.cs / world.yaml `constructor:`.
+    public const byte ProtocolVersion = 38;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

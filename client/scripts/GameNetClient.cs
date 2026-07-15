@@ -1741,6 +1741,7 @@ public partial class GameNetClient : Node
                     BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
                     ResearchSlots = r.ReadByte(),
                     BuildRockClass = r.ReadByte(), // v37; mirror of BuildDefs
+                    AlignTimeSeconds = r.ReadInt32(), // v38; constructor align dwell for this station
                     RequiredTechIdx = ReadTechList(r),
                     GrantedTechIdx = ReadTechList(r),
                     ObsoletedByTechIdx = ReadTechList(r),
