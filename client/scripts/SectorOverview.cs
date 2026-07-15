@@ -657,6 +657,14 @@ public partial class SectorOverview : Node3D
             Open();
     }
 
+    // Open the sector map from outside the F3 poll (e.g. the docked shell's MAP button). No-op if
+    // it's already up or there's no sector data yet — same guards as the F3 toggle / Open().
+    public static void RequestOpen()
+    {
+        if (!Active)
+            _instance?.Open();
+    }
+
     private void Open()
     {
         float radius = _world.LocalSectorRadius;
@@ -761,16 +769,13 @@ public partial class SectorOverview : Node3D
 
         switch (@event)
         {
-            // Esc from the map: pop the flight escape menu ON TOP of the map. ShipController's Esc
-            // handler is gated off while the map owns input, so we mirror it here. The map stays
-            // Active (and frozen — see _Process / the EscapeMenu.Active guard above), so closing the
-            // menu drops back into the map, not straight into flight. Cursor is already free.
+            // Esc from the map: exit F3 (same as toggling F3 off), dropping back to flight / the
+            // docked shell. Cancel any live drag first so a stale box/orbit gesture can't resume,
+            // then close. (The escape menu is still reachable with Esc once the map is closed.)
             case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
-                // Cancel any live drag first — the menu swallows the mouse release, and a stale
-                // box/orbit drag must not resume when the menu closes.
                 _orbitDrag = _panDrag = _boxSelecting = _boxDragging = false;
                 _selBox.Visible = false;
-                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                Close();
                 GetViewport().SetInputAsHandled();
                 break;
 

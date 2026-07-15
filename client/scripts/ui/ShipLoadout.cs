@@ -200,11 +200,24 @@ public partial class ShipLoadout : Control
         row.AddChild(dot);
         row.AddChild(UiKit.MakeLabel("STELLAR ALLEGIANCE", UiKit.TextStyle.Label, DesignTokens.TextHi));
 
+        // MAP + the tab strip share one HBox so the MAP↔HANGAR gap matches the inter-tab gap (12px);
+        // if MAP joined `row` directly it'd inherit the outer 24px separation and sit too far out.
+        var navGroup = new HBoxContainer();
+        navGroup.AddThemeConstantOverride("separation", 12);
+        row.AddChild(navGroup);
+
+        // MAP opens the F3 sector overview. It's a one-shot action, not a tab: this shell hides
+        // itself while the map is up (see _Process) and reappears when F3 closes it, so the button
+        // sits to the LEFT of the HANGAR/BUILD/RESEARCH tab strip rather than joining it.
+        var mapBtn = UiKit.MakeButton("MAP", SectorOverview.RequestOpen, ButtonVariant.Secondary);
+        mapBtn.CustomMinimumSize = new Vector2(96, 38);
+        navGroup.AddChild(mapBtn);
+
         // Real tab strip — HANGAR live; BUILD / RESEARCH are server-catalog guards this phase.
         var tabs = UiKit.MakeSegmented(["HANGAR", "BUILD", "RESEARCH"], 0, OnTabSelected);
         tabs.AddThemeConstantOverride("separation", 12); // wider gap between the three docked-screen tabs
         tabs.CustomMinimumSize = new Vector2(380, 0);
-        row.AddChild(tabs);
+        navGroup.AddChild(tabs);
 
         // (Launch base is shown in the bottom launch footer's FROM readout, not up here — the top
         // bar's left region overlaps the in-game chat comms.)
