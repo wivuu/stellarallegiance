@@ -2826,6 +2826,11 @@ public sealed partial class Simulation
 
     private void ResolveAsteroidCollisions(ShipSim s)
     {
+        // A constructor deliberately sinks into and embeds in its target rock during the build phases;
+        // resolving that penetration would shove it back out every tick (the visible flicker). Skip
+        // collision with just that one rock while it's aligning/sinking/building on it.
+        ulong ignoreRock = s.Kind == ShipKind.Constructor ? ConstructorEmbeddedRock(s) : 0;
+
         var grid = World.RockGrid(s.SectorId);
         int cx = World.CellOf(s.State.Pos.X),
             cy = World.CellOf(s.State.Pos.Y),
@@ -2838,6 +2843,8 @@ public sealed partial class Simulation
                 continue;
             foreach (var a in cell)
             {
+                if (a.Id == ignoreRock)
+                    continue;
                 // Cheap bounding-sphere reject at the SPAWN radius (conservative — rocks only shrink,
                 // so this never skips a real contact), then the convex hull if this rock has one — else
                 // the legacy sphere sized to the rock's CURRENT (mined-down) surface.

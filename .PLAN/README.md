@@ -24,6 +24,9 @@ Archives:
 - Constructors:
   - Asteroid needs to despawn during the build-sphere phase; it should no longer exist once base is built on it
   - The build sphere must enlarge at least as large as the base it will eventually produce
+  - When you dock at a base, remember where the pilot is, so they re-launch from the same base by default (unless they pick a different base in the hangar)
+  - Show yellow waypoint direction for highlighted constructors ordered to a rock - the waypoint should indicate the direction to the target rock
+  - Untarget the rock once it has begun its construction (I am still able to target it even after construction has started)
 - Add a 'Map' button to top (next to the 'Build' and 'Research' tabs, to the left of 'Hangar') that opens F3
 - F3 map view shows offset vector for ships in other sectors
 ---

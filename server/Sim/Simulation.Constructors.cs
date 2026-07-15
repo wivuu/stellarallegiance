@@ -471,6 +471,17 @@ public sealed partial class Simulation
         return null;
     }
 
+    // The rock this constructor is currently embedding into (aligning/sinking/building), so asteroid
+    // collision resolution can ignore that single rock and let the drone rest inside it. 0 = none (the
+    // drone still bounces off every OTHER asteroid normally). Sim thread only.
+    private ulong ConstructorEmbeddedRock(ShipSim s)
+    {
+        if (ConstructorSlotFor(s) is ConstructorSlot slot
+            && slot.State is ConstructorState.Aligning or ConstructorState.Sinking or ConstructorState.Building)
+            return slot.TargetRockId;
+        return 0;
+    }
+
     private ShipInputState ConstructorExecute(ShipSim s, uint tick)
     {
         var slot = ConstructorSlotFor(s);
