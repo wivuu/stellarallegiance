@@ -37,6 +37,7 @@ public partial class ShipController : Node
 
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
+    private DefRegistry? _defs; // sibling; hardpoint layouts for the MsgSpawn weapon-override tail
 
     // Phase-1b: when GameNetClient is active (SIM_URI set), spawn + input go over the
     // native sim socket instead of STDB reducers; everything else (prediction, defs,
@@ -155,6 +156,7 @@ public partial class ShipController : Node
     {
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
+        _defs = GetNodeOrNull<DefRegistry>("../DefRegistry");
 
         if (int.TryParse(OS.GetEnvironment("STDB_LEAD"), out var lead))
         {
@@ -446,8 +448,14 @@ public partial class ShipController : Node
                     ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1), (4u, (byte)1) }
                     : LoadoutState.Shared.CargoFor((byte)cls);
                 // v36: carry the hangar sidebar's launch-base pick (0 = server default; the
-                // server validates friendly+alive and silently falls back).
-                _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId);
+                // server validates friendly+alive and silently falls back). The weapon-slot
+                // override tail rides alongside (autofly sends none — authored loadout keeps the
+                // headless smoke deterministic); the server echoes the accepted loadout back on
+                // MsgShipLoadout.
+                var mounts = !_autoFly && _defs?.GetHardpoints((byte)cls) is { } hps
+                    ? LoadoutState.Shared.WeaponOverridesFor((byte)cls, hps)
+                    : null;
+                _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId, mounts);
                 _spawnPending = true;
                 _spawnRetry = 1.0;
                 SpawnHint = null;

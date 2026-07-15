@@ -63,7 +63,7 @@ public static class Protocol
     public const byte MsgHello = 1;
     public const byte MsgInput = 2; // u32 tick, f32 thrust/strafeX/strafeY/yaw/pitch/roll, u8 flags
     public const byte MsgPing = 3; // u32 nonce (echoed back as MsgPong for RTT/adaptive-lead)
-    public const byte MsgSpawn = 4; // u8 cls, u64 launchBaseId (0 = server default; v36), u8 nCargo, nCargo x (u32 cargoId, u8 count) — request to spawn this class (honored only while Active)
+    public const byte MsgSpawn = 4; // u8 cls, u64 launchBaseId (0 = server default; v36), u8 nCargo, nCargo x (u32 cargoId, u8 count), u8 nMounts, nMounts x (u8 hpIndex, u32 weaponId) — request to spawn this class (honored only while Active). Mount tail: only OVERRIDDEN weapon slots (hardpoint Index + weapon id; u32.Max = leave the slot empty); absent/empty tail = authored loadout. Old frames without the tail parse as zero overrides.
     public const byte MsgSetTeam = 5; // u8 team — pick a side in the lobby
     public const byte MsgSetReady = 6; // u8 ready (0/1) — toggle ready in the lobby
     public const byte MsgChat = 7; // u8 scope (0 all, 1 team), u16 len, utf8 text
@@ -108,6 +108,7 @@ public static class Protocol
     public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
     public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build), u32 startTick, u32 durationTicks, u64 targetId) — PER-TEAM constructor roster for the Build tab: producing drones (start/duration → progress bar + cancel) and launched drones (status). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
     public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
+    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) for every ship flying a NON-authored loadout. Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -543,6 +544,43 @@ public static class Protocol
             BitConverter.TryWriteBytes(buf.AsSpan(o), pairs[i].rock);
             o += 8;
         }
+        return buf;
+    }
+
+    // Per-ship weapon-mount table (MsgShipLoadout): one record per ship flying a NON-authored
+    // loadout — its EFFECTIVE per-barrel weapon ids in hardpoint declaration order (u32.Max =
+    // an emptied slot). Ships on the authored class loadout are OMITTED (clients derive their
+    // mounts from the streamed class def), which keeps the frame tiny and makes pruning free:
+    // the client replaces its whole cache per frame. Always returns a frame (count may be 0) so
+    // a stale entry prunes even when the last override ship leaves. Broadcast + reliable; the
+    // owner's copy doubles as the authoritative echo of what the server accepted at spawn.
+    public static byte[] BuildShipLoadouts(Simulation sim)
+    {
+        List<Simulation.ShipSim>? rows = null;
+        foreach (var s in sim.Ships)
+            if (s.MountWeaponIds is not null && rows?.Count is null or < 255)
+                (rows ??= new()).Add(s);
+        int size = 2;
+        if (rows is not null)
+            foreach (var s in rows)
+                size += 8 + 1 + 4 * s.MountWeaponIds!.Length;
+        var buf = new byte[size];
+        buf[0] = MsgShipLoadout;
+        buf[1] = (byte)(rows?.Count ?? 0);
+        int o = 2;
+        if (rows is not null)
+            foreach (var s in rows)
+            {
+                BitConverter.TryWriteBytes(buf.AsSpan(o), s.ShipId);
+                o += 8;
+                var ids = s.MountWeaponIds!;
+                buf[o++] = (byte)ids.Length;
+                foreach (uint id in ids)
+                {
+                    BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+                    o += 4;
+                }
+            }
         return buf;
     }
 

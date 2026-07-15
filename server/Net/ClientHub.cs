@@ -582,8 +582,11 @@ public sealed class ClientHub
                 case Protocol.MsgSpawn when count >= 10:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team
-                    // comes from the lobby (authoritative), not the client. v36 layout:
-                    // [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)].
+                    // comes from the lobby (authoritative), not the client. Layout:
+                    // [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)]
+                    // [nMounts][nMounts x (u8 hpIndex, u32 weaponId)] — the mount tail is the
+                    // hangar's weapon-slot overrides (u32.Max = leave empty); it's optional, so
+                    // a frame ending after the cargo block parses as zero overrides.
                     // launchBaseId 0 = server default base; the sim validates friendly+alive and
                     // falls back silently. A bare length-10 frame carries no cargo (hull default).
                     byte cls = buffer[1];
@@ -594,20 +597,42 @@ public sealed class ClientHub
                         cls = 0;
                     ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
                     (uint cargoId, byte count)[] cargo = System.Array.Empty<(uint, byte)>();
+                    (byte hpIndex, uint weaponId)[] mounts = System.Array.Empty<(byte, uint)>();
                     if (count >= 11)
                     {
                         int nCargo = buffer[10];
                         int o = 11;
-                        if (nCargo > 0 && count >= o + nCargo * 5)
+                        if (count >= o + nCargo * 5)
                         {
-                            cargo = new (uint, byte)[nCargo];
-                            for (int i = 0; i < nCargo; i++)
+                            if (nCargo > 0)
                             {
-                                uint cargoId = BitConverter.ToUInt32(buffer, o);
-                                o += 4;
-                                byte cnt = buffer[o];
-                                o += 1;
-                                cargo[i] = (cargoId, cnt);
+                                cargo = new (uint, byte)[nCargo];
+                                for (int i = 0; i < nCargo; i++)
+                                {
+                                    uint cargoId = BitConverter.ToUInt32(buffer, o);
+                                    o += 4;
+                                    byte cnt = buffer[o];
+                                    o += 1;
+                                    cargo[i] = (cargoId, cnt);
+                                }
+                            }
+                            // Optional mount-override tail (bounds-checked like the cargo block;
+                            // a malformed tail is ignored, not a protocol error).
+                            if (count >= o + 1)
+                            {
+                                int nMounts = buffer[o++];
+                                if (nMounts > 0 && count >= o + nMounts * 5)
+                                {
+                                    mounts = new (byte, uint)[nMounts];
+                                    for (int i = 0; i < nMounts; i++)
+                                    {
+                                        byte hpIndex = buffer[o];
+                                        o += 1;
+                                        uint weaponId = BitConverter.ToUInt32(buffer, o);
+                                        o += 4;
+                                        mounts[i] = (hpIndex, weaponId);
+                                    }
+                                }
                             }
                         }
                     }
@@ -621,7 +646,7 @@ public sealed class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls, cargo, launchBaseId);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo, launchBaseId, mounts);
                     }
                     break;
                 }
@@ -1363,6 +1388,13 @@ public sealed class ClientHub
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
         byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World, _sim.Content) : null;
 
+        // Per-ship weapon-mount override table: full-table broadcast on change + coarse keepalive
+        // (reconcile-by-omission — an EMPTY frame still prunes stale entries, so it's always built
+        // on this cadence, never null-skipped). RELIABLE: the spawn-tick frame doubles as the
+        // owner's authoritative loadout echo and must not race the ship's first shot; the frame is
+        // tiny (only non-authored loadouts ride it).
+        byte[]? loadoutFrame = (_sim.LoadoutsChangedThisStep || coarse) ? Protocol.BuildShipLoadouts(_sim) : null;
+
         // Per-base research orders (v36): PER-TEAM (a team sees only its own bases' research — the
         // fog-safe choice), on the same on-change + coarse cadence. Built lazily once per team.
         bool sendResearch = _sim.ResearchChangedThisStep || coarse;
@@ -1537,6 +1569,10 @@ public sealed class ClientHub
 
             if (teamStateFrame is not null)
                 SendLossy(client, OutFrame.Whole(teamStateFrame));
+
+            // Ship weapon-mount table (see the build note above): reliable one-shot per cadence tick.
+            if (loadoutFrame is not null)
+                SendReliable(client, OutFrame.Whole(loadoutFrame));
 
             // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
             if (sendResearch && client.Team <= 1)

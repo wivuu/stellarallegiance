@@ -1304,7 +1304,48 @@ public partial class WorldRenderer : Node3D
     public void NetDeleteShip(Ship row, byte reason)
     {
         _shipShield.Remove(row.ShipId);
+        _shipMounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
+        _mountShadow.Remove(row.ShipId);
         DeleteShip(row, reason);
+    }
+
+    // ---- Per-ship weapon loadouts (MsgShipLoadout mirror) -----------------
+
+    // Effective per-barrel weapon ids for every ship flying a NON-authored loadout (absent =
+    // authored class loadout). Fed whole by GameNetClient.ApplyShipLoadout each frame.
+    private readonly Dictionary<ulong, uint[]> _shipMounts = new();
+    // Per-remote-ship derived MountLastFire shadow (FireCadence): which tick each gun barrel
+    // last fired, reconstructed from observed LastFireTick changes so SpawnBoltFor knows WHICH
+    // mounts fired a given volley. Reset when that ship's loadout changes; pruned with the ship.
+    private readonly Dictionary<ulong, uint[]> _mountShadow = new();
+    private static readonly List<ulong> _loadoutScratch = new(); // stale-key sweep, reused
+
+    // Reconcile the loadout mirror to the streamed table (replace-whole, reconcile-by-omission).
+    // Only ships whose ids ACTUALLY changed reset their cadence shadow / re-seed the local
+    // predictor — the frame also arrives as a coarse keepalive every ~0.5s, and resetting shadows
+    // on every keepalive would re-derive "all mounts eligible" mid-burst.
+    public void NetShipLoadouts(List<(ulong shipId, uint[] ids)> table)
+    {
+        _loadoutScratch.Clear();
+        foreach (var id in _shipMounts.Keys)
+            _loadoutScratch.Add(id);
+        foreach (var (shipId, ids) in table)
+        {
+            _loadoutScratch.Remove(shipId);
+            if (_shipMounts.TryGetValue(shipId, out var old) && old.AsSpan().SequenceEqual(ids))
+                continue; // unchanged keepalive row
+            _shipMounts[shipId] = ids;
+            _mountShadow.Remove(shipId);
+            if (LocalShip is { } pc && pc.ShipId == shipId)
+                pc.SetLoadout(ids); // the authoritative echo of what the server accepted
+        }
+        foreach (var shipId in _loadoutScratch) // omitted = back on the authored loadout
+        {
+            _shipMounts.Remove(shipId);
+            _mountShadow.Remove(shipId);
+            if (LocalShip is { } pc && pc.ShipId == shipId)
+                pc.SetLoadout(null);
+        }
     }
 
     // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
@@ -2135,6 +2176,17 @@ public partial class WorldRenderer : Node3D
             pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
             ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
             pc.Initialize(row, _defs);
+            // Seed the loadout prediction fires from: the authoritative MsgShipLoadout echo when
+            // it already landed (reliable, sent the spawn tick — it can precede this insert), else
+            // the hangar's optimistic expectation (matches the server unless it rejected the
+            // request; the echo corrects that within a tick). Pods fly no guns — skip.
+            if (!row.IsPod)
+                pc.SetLoadout(
+                    _shipMounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds
+                    : _defs.GetHardpoints((byte)row.Class) is { } hps
+                        ? StellarAllegiance.Ui.LoadoutState.Shared.ExpectedEffectiveIds((byte)row.Class, hps)
+                        : null
+                );
             // Fresh launch (base spawn/respawn or pod-eject) gets the establishing cinematic; a
             // reconnect reclaim of a ship already in flight does not (NetPromoteLocal tagged it).
             if (_reclaimedShipId == row.ShipId)
@@ -2373,13 +2425,23 @@ public partial class WorldRenderer : Node3D
 
     // A REMOTE ship's row showed a new LastFireTick: rebuild the shot the server fired —
     // the exact mirror of the module's TryFire muzzle math. The spread direction is
-    // deterministic in (ShipId, fire tick) via the shared FlightModel.SpreadDirection, so
-    // every client and the server derive the same bolt from the same replicated row.
+    // deterministic in (ShipId, fire tick) via the shared FlightModel.SpreadDirection, and
+    // WHICH mounts fired is derived by replaying the shared FireCadence rule against this
+    // ship's per-mount shadow (per-mount cooldowns; the wire carries only LastFireTick), so
+    // every client and the server derive the same bolts from the same replicated row. A fresh
+    // shadow (first sight / loadout change / reconnect) renders the first volley from every
+    // off-cooldown mount and is in lockstep from then on; a lossy far-tier ship that skips
+    // fire events drifts and self-corrects — visual only.
     private void SpawnBoltFor(Ship row)
     {
-        var mounts = _defs.WeaponMounts((byte)row.Class);
-        if (mounts.Count == 0)
+        var slots = _defs.SlotsForShip(
+            (byte)row.Class,
+            _shipMounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds : null
+        );
+        if (slots.Count == 0)
             return;
+        if (!_mountShadow.TryGetValue(row.ShipId, out var shadow) || shadow.Length < slots.Count)
+            _mountShadow[row.ShipId] = shadow = new uint[slots.Count];
 
         var state = ShipMath.StateFromRow(row);
 
@@ -2391,16 +2453,20 @@ public partial class WorldRenderer : Node3D
             row.LastInputTick > row.LastFireTick ? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
         Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
 
-        // One bolt per weapon hardpoint (the Fighter's twin cannons), each from its own muzzle
-        // offset and with its own barrel-seeded scatter — the exact mirror of the server's TryFire.
-        for (byte barrel = 0; barrel < mounts.Count; barrel++)
+        // One bolt per FIRING weapon slot, each from its own muzzle offset and with its own
+        // barrel-seeded scatter — the exact mirror of the server's TryFire.
+        for (byte barrel = 0; barrel < slots.Count; barrel++)
         {
-            var (hp, weapon) = mounts[barrel];
-            // Skip missile racks: they don't fire bolts. The barrel index is STILL consumed so the
-            // per-barrel spread seed stays aligned with the server's TryFire loop regardless of where
-            // racks sit in the hardpoint array (server mirror: Simulation.TryFire).
-            if (weapon.Kind != WeaponKind.Bolt)
+            var (hp, weapon) = slots[barrel];
+            // Skip empty slots and missile racks: they don't fire bolts. The barrel index is
+            // STILL consumed so the per-barrel spread seed stays aligned with the server's
+            // TryFire loop regardless of where racks/empties sit in the hardpoint array.
+            if (weapon is null || weapon.Kind != WeaponKind.Bolt)
                 continue;
+            // Off cooldown at the observed fire tick? (The same gate the server fired by.)
+            if (!FireCadence.MountFires(row.LastFireTick, shadow[barrel], weapon.FireIntervalTicks))
+                continue;
+            shadow[barrel] = row.LastFireTick;
             Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
             Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
             Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));

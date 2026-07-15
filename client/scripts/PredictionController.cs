@@ -75,7 +75,27 @@ public partial class PredictionController : Node3D
     private bool _hasStats; // false until this class's def arrives (then guard, don't bake)
     private DefRegistry _defs = null!; // runtime ship/weapon defs (M3); wired at Initialize
     private ShipClass _class; // class id for def/weapon lookups
-    private uint _lastFireTick; // mirrors server Ship.LastFireTick (0 = ready)
+    private uint _lastFireTick; // mirrors server Ship.LastFireTick (0 = ready): latest gun fire across mounts
+
+    // Per-mount gun cadence (mixed loadouts): _mountLastFire[barrel] mirrors the server's
+    // ShipSim.MountLastFire, gated by the SAME shared FireCadence rule, so predicted volleys
+    // match the authoritative ones mount-for-mount. Sized to the class's positional slot list.
+    private uint[] _mountLastFire = System.Array.Empty<uint>();
+
+    // The local ship's EFFECTIVE per-barrel weapon ids (null = authored class loadout). Seeded
+    // optimistically from the hangar's expectation at spawn (matches the server unless it
+    // rejected the request) and replaced by the authoritative MsgShipLoadout echo — both pushed
+    // in by WorldRenderer via SetLoadout.
+    private uint[]? _loadoutIds;
+
+    // Swap the effective loadout prediction fires from. Cadence stamps are kept (the slots
+    // didn't move; what they fire changed) — the next Step simply gates against the new defs.
+    public void SetLoadout(uint[]? effectiveIds) => _loadoutIds = effectiveIds;
+
+    // The local ship's effective per-barrel weapon ids (null = authored class loadout) — the
+    // HUD's read seam (weapons panel, lead reticle, aim range, missile counter) so every local
+    // readout reflects what THIS ship actually mounts, via DefRegistry's loadout-aware helpers.
+    public uint[]? LoadoutIds => _loadoutIds;
     private uint _clientTick; // tick last passed to Step (HUD cooldown readout keys off it)
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();
@@ -204,13 +224,49 @@ public partial class PredictionController : Node3D
     public float Fuel => _state.Fuel;
     public float MaxFuel => _hasStats ? _stats.MaxFuel : 0f;
 
-    // Primary-gun fire cadence, surfaced for the HUD weapons readout. LastFireTick mirrors the
-    // server's Ship.LastFireTick (0 = never fired / ready); ClientTick is the tick the predictor
-    // last stepped. The gun is READY once ClientTick - LastFireTick >= the mount's FireIntervalTicks
-    // — the SAME gate Step() uses to spawn a predicted bolt (kept in the predictor so the readout
-    // reads the identical tick space the sim fires on).
+    // Gun fire cadence, surfaced for the HUD weapons readout. LastFireTick mirrors the server's
+    // Ship.LastFireTick (0 = never fired / ready; latest fire across mounts); ClientTick is the
+    // tick the predictor last stepped. A weapon is READY once ClientTick - LastFireTickFor(id)
+    // >= its FireIntervalTicks — the SAME per-mount gate Step() uses to spawn a predicted bolt
+    // (kept in the predictor so the readout reads the identical tick space the sim fires on).
     public uint LastFireTick => _lastFireTick;
     public uint ClientTick => _clientTick;
+
+    // Latest predicted fire tick across the mounts carrying this weapon (mixed loadouts: two
+    // different guns cool down independently, so the HUD reads each weapon's own gate).
+    public uint LastFireTickFor(uint weaponId)
+    {
+        var slots = _defs.SlotsForShip((byte)_class, _loadoutIds);
+        uint last = 0;
+        for (int i = 0; i < slots.Count && i < _mountLastFire.Length; i++)
+            if (slots[i].weapon?.WeaponId == weaponId && _mountLastFire[i] > last)
+                last = _mountLastFire[i];
+        return last;
+    }
+
+    // Adopt an authoritative fire stamp (follow-authority / hard snap — paths where Step isn't
+    // predicting fire): derive WHICH mounts fired at row.LastFireTick with the same shared
+    // FireCadence rule the server gated them by, and stamp those. The exact derivation remote
+    // renderers use (WorldRenderer.SpawnBoltFor), so all three mirrors stay in lockstep.
+    private void ReconcileFire(Ship row)
+    {
+        if (row.LastFireTick == 0)
+        {
+            System.Array.Clear(_mountLastFire, 0, _mountLastFire.Length);
+            _lastFireTick = 0;
+            return;
+        }
+        if (row.LastFireTick == _lastFireTick)
+            return; // stamp already known/predicted
+        var slots = _defs.SlotsForShip((byte)_class, _loadoutIds);
+        if (_mountLastFire.Length < slots.Count)
+            System.Array.Resize(ref _mountLastFire, slots.Count);
+        for (int i = 0; i < slots.Count; i++)
+            if (slots[i].weapon is { Kind: WeaponKind.Bolt } w
+                && FireCadence.MountFires(row.LastFireTick, _mountLastFire[i], w.FireIntervalTicks))
+                _mountLastFire[i] = row.LastFireTick;
+        _lastFireTick = row.LastFireTick;
+    }
 
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
@@ -295,6 +351,8 @@ public partial class PredictionController : Node3D
         _class = row.Class;
         _defs = defs;
         _lastFireTick = 0;
+        _loadoutIds = null; // WorldRenderer pushes the expected/echoed loadout right after Initialize
+        _mountLastFire = new uint[defs.WeaponSlots((byte)row.Class).Count];
         // Stats come purely from the runtime ShipClassDef (M3): a pod flies the slow,
         // boost-less Pod profile, combat ships their class stats. DefRegistry rebuilds the
         // SAME shared ShipStats the server derives, so prediction stays bit-identical to
@@ -359,65 +417,58 @@ public partial class PredictionController : Node3D
             _buffer.RemoveRange(0, _buffer.Count - BufferLen);
         _tickTimer = 0;
 
-        // Muzzles + weapon come from data (M3): every Weapon hardpoint on this class and the
-        // WeaponDef each names — the SAME rows the server's TryFire reads, so the local bolts
-        // match the shots the server resolves. No def / no weapon hardpoint (e.g. a pod) ⇒ the
-        // server won't fire either, so we predict nothing. The shared FireInterval is the same on
-        // every barrel of a class, so the first mount gates the whole volley.
-        var mounts = input.Firing ? _defs.WeaponMounts((byte)_class) : EmptyMounts;
-        // Gun cadence keys off the first BOLT mount — racks launch via Firing2 on their own
-        // server-side cadence and must not gate (or join) the predicted volley. Mirror of
-        // Simulation.TryFire / PrimaryWeapon.
-        WeaponDef? gun = null;
-        foreach (var (_, w) in mounts)
-            if (w.Kind == WeaponKind.Bolt)
-            {
-                gun = w;
-                break;
-            }
-        if (gun != null && clientTick - _lastFireTick >= gun.FireIntervalTicks)
+        // Slots + weapons come from data (M3): every Weapon hardpoint on this class — POSITIONAL,
+        // empties included, with this ship's effective loadout overlaid — the SAME resolution the
+        // server's TryFire reads (ClassMuzzles + MountWeaponIds), so the local bolts match the
+        // shots the server resolves. No def / no weapon hardpoint (e.g. a pod) ⇒ the server won't
+        // fire either, so we predict nothing. Each gun mount gates on its OWN cadence via the
+        // shared FireCadence rule (mixed loadouts) — the exact mirror of Simulation.TryFire.
+        var slots = input.Firing ? _defs.SlotsForShip((byte)_class, _loadoutIds) : EmptySlots;
+        if (_mountLastFire.Length < slots.Count)
+            System.Array.Resize(ref _mountLastFire, slots.Count);
+        // Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
+        // raw post-integration _state. _state.Pos is up to one tick of motion AHEAD of what's
+        // on screen (the visual interpolates toward it over the next tick, plus any reconcile
+        // _posErr offset), so spawning from it made the ghost's exit point drift off the hull
+        // by an amount proportional to the ship's speed. The rendered transform is exactly
+        // where the ship appears right now, so each muzzle stays pinned to its hardpoint
+        // regardless of thrust/velocity. The local hardpoint offset/forward are rotated by the
+        // rendered attitude (the twin Fighter cannons sit at ±X, the single Scout/Bomber gun on
+        // the nose, reproducing the old `pos + fwd*NoseOffset`).
+        for (byte barrel = 0; barrel < slots.Count; barrel++)
         {
+            var (hp, weapon) = slots[barrel];
+            // Skip empty slots and missile racks: primary fire is bolts only. The barrel index
+            // is STILL consumed so the spread seed stays aligned with the server's TryFire loop
+            // (same skip in WorldRenderer.SpawnBoltFor for remote ships).
+            if (weapon is null || weapon.Kind != WeaponKind.Bolt)
+                continue;
+            if (!FireCadence.MountFires(clientTick, _mountLastFire[barrel], weapon.FireIntervalTicks))
+                continue;
+            _mountLastFire[barrel] = clientTick;
             _lastFireTick = clientTick;
-            // Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
-            // raw post-integration _state. _state.Pos is up to one tick of motion AHEAD of what's
-            // on screen (the visual interpolates toward it over the next tick, plus any reconcile
-            // _posErr offset), so spawning from it made the ghost's exit point drift off the hull
-            // by an amount proportional to the ship's speed. The rendered transform is exactly
-            // where the ship appears right now, so each muzzle stays pinned to its hardpoint
-            // regardless of thrust/velocity. The local hardpoint offset/forward are rotated by the
-            // rendered attitude (the twin Fighter cannons sit at ±X, the single Scout/Bomber gun on
-            // the nose, reproducing the old `pos + fwd*NoseOffset`).
-            for (byte barrel = 0; barrel < mounts.Count; barrel++)
-            {
-                var (hp, weapon) = mounts[barrel];
-                // Skip missile racks: primary fire is bolts only. The barrel index is STILL
-                // consumed so the spread seed stays aligned with the server's TryFire loop
-                // (same skip in WorldRenderer.SpawnBoltFor for remote ships).
-                if (weapon.Kind != WeaponKind.Bolt)
-                    continue;
-                Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
-                Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
-                Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
-                Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick, barrel);
-                Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
-                Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
-                _shotsOut.Add(
-                    new PredictedShot
-                    {
-                        Pos = ShipMath.ToGodot(mp),
-                        Vel = ShipMath.ToGodot(mv),
-                        Dir = ShipMath.ToGodot(shotDir), // fired direction, for tracer orientation (not skewed by strafe)
-                        LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
-                        BoltRadius = weapon.BoltRadius,
-                        BoltLength = weapon.BoltLength,
-                    }
-                );
-            }
+            Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
+            Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
+            Vec3 fwd = new Vec3(fwdG.X, fwdG.Y, fwdG.Z);
+            Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, ShipId, clientTick, barrel);
+            Vec3 mp = new Vec3(_renderedPos.X + offG.X, _renderedPos.Y + offG.Y, _renderedPos.Z + offG.Z);
+            Vec3 mv = shotDir * weapon.ProjectileSpeed + _state.Vel;
+            _shotsOut.Add(
+                new PredictedShot
+                {
+                    Pos = ShipMath.ToGodot(mp),
+                    Vel = ShipMath.ToGodot(mv),
+                    Dir = ShipMath.ToGodot(shotDir), // fired direction, for tracer orientation (not skewed by strafe)
+                    LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
+                    BoltRadius = weapon.BoltRadius,
+                    BoltLength = weapon.BoltLength,
+                }
+            );
         }
         return _shotsOut;
     }
 
-    private static readonly List<(HardpointDef hp, WeaponDef weapon)> EmptyMounts = new();
+    private static readonly List<(HardpointDef hp, WeaponDef? weapon)> EmptySlots = new();
 
     // T5 test hook: artificially diverge the predicted path from authority by
     // offsetting the current state AND every unacknowledged buffered prediction.
@@ -459,7 +510,7 @@ public partial class PredictionController : Node3D
         // ReconcileCount is deliberately left untouched (no divergence math runs here).
         if (_autopilot)
         {
-            _lastFireTick = row.LastFireTick;
+            ReconcileFire(row);
             // Keep the exhaust alive: local input.Thrust isn't driving _throttle while Step is
             // skipped, so feed the glow from the authoritative forward speed / afterburner ramp.
             _throttle = _hasStats && _stats.MaxSpeed > 0f
@@ -536,7 +587,7 @@ public partial class PredictionController : Node3D
         Shield = row.Shield;
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
-        _lastFireTick = row.LastFireTick;
+        ReconcileFire(row);
         _buffer.Clear();
         _tickTimer = 0;
         _posErr = Vector3.Zero;

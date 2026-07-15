@@ -326,14 +326,19 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
-    // Request to spawn the chosen class with a consumable hold (honored server-side only while a
-    // match is Active). Wire (v36): [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId,
-    // u8 count)]. launchBaseId picks the hangar sidebar's launch base (0 = server default; the
-    // server validates friendly+alive and silently falls back).
-    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null, ulong launchBaseId = 0)
+    // Request to spawn the chosen class with a consumable hold + the hangar's weapon-slot
+    // overrides (honored server-side only while a match is Active). Wire: [4][cls]
+    // [u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)][nMounts][nMounts x
+    // (u8 hpIndex, u32 weaponId)]. launchBaseId picks the hangar sidebar's launch base (0 =
+    // server default; the server validates friendly+alive and silently falls back). The mount
+    // tail carries ONLY overridden slots (weaponId u32.Max = leave the slot empty); the server
+    // validates (mountable kind, tech owned, payload fits) and falls back to the authored
+    // loadout — the accepted result echoes back on MsgShipLoadout.
+    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null, ulong launchBaseId = 0, (byte hpIndex, uint weaponId)[]? mounts = null)
     {
         cargo ??= Array.Empty<(uint, byte)>();
-        var f = new byte[11 + cargo.Length * 5];
+        mounts ??= Array.Empty<(byte, uint)>();
+        var f = new byte[11 + cargo.Length * 5 + 1 + mounts.Length * 5];
         int o = 0;
         f[o++] = 4; // MsgSpawn
         f[o++] = shipClass;
@@ -345,6 +350,13 @@ public partial class GameNetClient : Node
             BitConverter.TryWriteBytes(f.AsSpan(o), cargoId);
             o += 4;
             f[o++] = count;
+        }
+        f[o++] = (byte)mounts.Length;
+        foreach (var (hpIndex, weaponId) in mounts)
+        {
+            f[o++] = hpIndex;
+            BitConverter.TryWriteBytes(f.AsSpan(o), weaponId);
+            o += 4;
         }
         _tx.Writer.TryWrite(f);
     }
@@ -855,7 +867,31 @@ public partial class GameNetClient : Node
             case 27:
                 ApplyRockGone(r);
                 break;
+            case 28:
+                ApplyShipLoadout(r);
+                break;
         }
+    }
+
+    // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
+    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) for every ship flying a
+    // NON-authored loadout (reconcile-by-omission: a ship absent from the frame flies its
+    // authored class loadout). Decode and forward whole to WorldRenderer, which owns the
+    // render-side mirror (remote bolt mounts + own-ship prediction loadout).
+    private void ApplyShipLoadout(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var table = new List<(ulong shipId, uint[] ids)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            int nSlots = r.ReadByte();
+            var ids = new uint[nSlots];
+            for (int s = 0; s < nSlots; s++)
+                ids[s] = r.ReadUInt32();
+            table.Add((shipId, ids));
+        }
+        _world.NetShipLoadouts(table);
     }
 
     // MsgRockGone: rocks a finished constructor base consumed. Delete each rock outright (mesh node +

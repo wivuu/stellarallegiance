@@ -460,24 +460,25 @@ public partial class TargetMarkers : Control
         return false;
     }
 
-    // Whether the local ship's hull mounts a CanDamageBase missile weapon (D3) — the gate on
-    // offering the enemy base as a Tab-cycle lock target. Pods carry no weapons. Mirrors
-    // Hud.cs's local-missile-def resolution (WeaponDef? via DefRegistry.MissileMount), which
-    // picks the class's first Missile-kind hardpoint the same way the server does.
+    // Whether the local ship ACTUALLY mounts a CanDamageBase missile weapon (D3, loadout-aware:
+    // a rack emptied in the hangar removes the capability) — the gate on offering the enemy
+    // base as a Tab-cycle lock target. Pods carry no weapons. Mirrors Hud.cs's local-missile-def
+    // resolution (WeaponDef? via DefRegistry.MissileMount), which picks the ship's first
+    // effective Missile-kind slot the same way the server's ship-aware MissileMountFor does.
     private bool HasSiegeCapability(PredictionController local) =>
-        !local.IsPod && _defs.MissileMount((byte)local.Class) is { CanDamageBase: true };
+        !local.IsPod && _defs.MissileMount((byte)local.Class, local.LoadoutIds) is { CanDamageBase: true };
 
-    // The local ship's first Bolt-kind weapon mount (hardpoint + the WeaponDef it fires), or
-    // null if the hull carries none (a pod, an unarmed hull, or the defs haven't streamed yet
-    // — the server won't fire either way, so the aim line has nothing to solve). Mirrors
-    // PredictionController's own mount resolution (PredictionController.cs ~315-331): same
-    // pod-aware class-id lookup (ShipModelLoader.DefId's idiom) and same "first Bolt mount"
-    // pick, so the muzzle/lead solve reads the exact row the server fires from.
+    // The local ship's first effective Bolt-kind weapon slot (hardpoint + the WeaponDef it
+    // fires), or null if it carries none (a pod, an unarmed/emptied hull, or the defs haven't
+    // streamed yet — the server won't fire either way, so the aim line has nothing to solve).
+    // Mirrors PredictionController's own slot resolution: same pod-aware class-id lookup
+    // (ShipModelLoader.DefId's idiom) and same "first Bolt slot of the effective loadout" pick,
+    // so the muzzle/lead solve reads the exact slot the server fires from.
     private (HardpointDef hp, WeaponDef gun)? ResolveLocalGun(PredictionController local)
     {
         byte classId = local.IsPod ? DefRegistry.PodClassId : (byte)local.Class;
-        foreach (var (hp, weapon) in _defs.WeaponMounts(classId))
-            if (weapon.Kind == WeaponKind.Bolt)
+        foreach (var (hp, weapon) in _defs.SlotsForShip(classId, local.IsPod ? null : local.LoadoutIds))
+            if (weapon?.Kind == WeaponKind.Bolt)
                 return (hp, weapon);
         return null;
     }
@@ -487,7 +488,11 @@ public partial class TargetMarkers : Control
     // back to the DefaultAimRange anchor for a pod/unarmed hull. Shared by the reticle draw, the
     // Tab-target ranking point, and the SystemRing gauge centre so all three stay on one point.
     private float LocalAimRange(PredictionController local) =>
-        _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
+        _defs.BoltAimRange(
+            local.IsPod ? DefRegistry.PodClassId : (byte)local.Class,
+            DefaultAimRange,
+            local.IsPod ? null : local.LoadoutIds
+        );
 
     // The enemy closest to the local ship, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.

@@ -137,9 +137,18 @@ public sealed partial class Simulation
         s.Health -= dmg;
     }
 
-    // A class's primary GUN — the first Bolt-kind muzzle, or the Scout gun if the hull carries no
-    // bolt weapon (missile racks are ignored). Drives the PIG threat heuristic + the gun cadence
-    // gate; single-sourced from the same muzzles/defs the sim fires from.
+    // The EFFECTIVE weapon id at a ship's weapon-hardpoint barrel: the spawn-validated override
+    // when one exists, else the authored class default. THE read seam for every armed-mount
+    // consumer (TryFire, MissileMountFor(ship), the loadout wire table).
+    private uint WeaponIdAt(ShipSim s, int barrel) =>
+        s.MountWeaponIds is { } m && barrel < m.Length
+            ? m[barrel]
+            : ClassMuzzles[s.Class][barrel].WeaponId;
+
+    // A class's AUTHORED primary gun — the first Bolt-kind muzzle, or the Scout gun if the hull
+    // carries no bolt weapon (missile racks are ignored). Class-based by design: it only drives
+    // the PIG threat heuristic (bots always fly authored loadouts, and a rough per-class damage
+    // guess is fine for an enemy that may have swapped guns).
     private WeaponDef PrimaryWeapon(byte cls)
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
@@ -149,14 +158,28 @@ public sealed partial class Simulation
         return WeaponDefs[GameContent.ScoutWeaponId];
     }
 
-    // The first missile mount for a class + its projected WeaponDef, or null if the hull has none.
-    // Used to init a spawn's ammo and by TryFireMissile/UpdateLock (the missile launch/lock path).
+    // The first AUTHORED missile mount for a class + its projected WeaponDef, or null if the hull
+    // has none. Class-based: the PIG spawn/heuristic path only (bots fly authored loadouts).
+    // Player paths (ammo seeding, TryFireMissile, UpdateLock, siege orders) use the ship-aware
+    // overload below so an emptied/swapped rack is honored.
     private (Muzzle mount, WeaponDef w)? MissileMountFor(byte cls)
     {
         var mounts = cls < ClassMissileMounts.Length ? ClassMissileMounts[cls] : System.Array.Empty<Muzzle>();
         if (mounts.Length == 0)
             return null;
         return (mounts[0], WeaponDefs[mounts[0].WeaponId]);
+    }
+
+    // The first EFFECTIVE Missile-kind mount for this ship (per-ship loadout aware) + its def, or
+    // null when the hull authors no rack / every rack slot was emptied. The returned Muzzle carries
+    // the effective weapon id; its geometry is the class table's (overrides never move a mount).
+    private (Muzzle mount, WeaponDef w)? MissileMountFor(ShipSim s)
+    {
+        var muzzles = s.Class < ClassMuzzles.Length ? ClassMuzzles[s.Class] : System.Array.Empty<Muzzle>();
+        for (int barrel = 0; barrel < muzzles.Length; barrel++)
+            if (WeaponDefs.TryGetValue(WeaponIdAt(s, barrel), out var wd) && wd.Kind == WeaponKind.Missile)
+                return (new Muzzle(muzzles[barrel].Off, muzzles[barrel].Dir, wd.WeaponId), wd);
+        return null;
     }
 
     // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
@@ -189,6 +212,18 @@ public sealed partial class Simulation
         public float SigBias;
         public uint LastInputTick;
         public uint LastFireTick;
+
+        // ---- Per-ship weapon loadout (hangar mount overrides, validated at spawn) ----
+        // MountWeaponIds[barrel] = the EFFECTIVE weapon id at that weapon-hardpoint barrel
+        // (HardpointDef.NoWeapon = deliberately-empty slot); null = the authored class default
+        // (PIGs/pods/miners always null). Geometry always comes from ClassMuzzles — an override
+        // swaps WHAT a mount fires, never WHERE it sits. Read through WeaponIdAt.
+        public uint[]? MountWeaponIds;
+        // Per-mount gun cadence gates (FireCadence.MountFires), lazily sized to the class muzzle
+        // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
+        // derive WHICH mounts from the same shared rule, so these never go on the wire.
+        public uint[]? MountLastFire;
+
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;
         public uint RespawnAtTick; // when !Alive
@@ -357,7 +392,7 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
     // Player autopilot engage/disengage requests (MsgSetAutopilot), drained alongside the input queue.
     private readonly Queue<(int clientId, byte mode, byte kind, ulong id, uint sector, Vec3 pos)> _autopilotQueue = new();
-    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId)> _joinQueue = new();
+    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId, (byte hpIndex, uint weaponId)[] mounts)> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
     // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
     // back to the returning connection), both keyed by the connection's reconnect token.
@@ -381,9 +416,9 @@ public sealed partial class Simulation
     // across combat->pod->respawn, so the hub re-sends YouAre whenever this ship flips.
     private readonly Dictionary<int, ShipSim> _byClient = new();
 
-    // Remembered join class/team/cargo per connected client, so a respawn re-creates the same ship
-    // with the same validated consumable hold.
-    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId)> _clientInfo = new();
+    // Remembered join class/team/cargo/mounts per connected client, so a respawn re-creates the
+    // same ship with the same validated consumable hold AND weapon-slot overrides.
+    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId, (byte hpIndex, uint weaponId)[] mounts)> _clientInfo = new();
 
     // Chaff/mine dispenser WeaponDefs keyed by the cargo id they consume (D8 — dispensers are not
     // hardpoint-mounted; a spawn's cargo id names which dispenser its ammo feeds). Cargo item mass
@@ -469,6 +504,12 @@ public sealed partial class Simulation
     // Set whenever per-team economy changed this step (paycheck accrued, economy (re)seeded), so
     // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
     public bool TeamStateChangedThisStep { get; private set; }
+
+    // Set whenever the MsgShipLoadout table changed this step (a ship with mount overrides spawned
+    // or left), so the hub streams a fresh frame promptly; the coarse keepalive heals late joiners.
+    // Ships flying the authored class loadout are OMITTED from the table (clients fall back to the
+    // class default), so authored-only spawns don't touch this.
+    public bool LoadoutsChangedThisStep { get; private set; }
 
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
@@ -557,10 +598,12 @@ public sealed partial class Simulation
     // Join with an explicit consumable hold (chaff/mine counts from MsgSpawn). Empty cargo ⇒ the
     // hull's authored DefaultCargo is seeded at spawn. launchBaseId picks the friendly base to
     // launch from (v36 hangar sidebar); 0/invalid ⇒ the first team base (legacy behavior).
-    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0)
+    // `mounts` = the hangar's weapon-slot overrides ((hardpoint Index, weaponId) pairs; weaponId
+    // HardpointDef.NoWeapon = deliberately empty); empty ⇒ the authored class loadout.
+    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0, (byte hpIndex, uint weaponId)[]? mounts = null)
     {
         lock (_qLock)
-            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>(), launchBaseId));
+            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>(), launchBaseId, mounts ?? System.Array.Empty<(byte, uint)>()));
     }
 
     // Compat overload (no cargo): the hull's DefaultCargo is used. Kept for tests / callers that
@@ -633,6 +676,7 @@ public sealed partial class Simulation
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
+        LoadoutsChangedThisStep = false;
         // Live rock shrink deltas accumulate on World across a step; clear alongside the other
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
@@ -858,10 +902,10 @@ public sealed partial class Simulation
         {
             while (_joinQueue.Count > 0)
             {
-                var (cid, team, cls, cargo, launchBase) = _joinQueue.Dequeue();
-                // Remember the slot (team/cls/hold/launch base) and spawn this very step
-                // (ProcessRespawns, tick now).
-                _clientInfo[cid] = (team, cls, cargo, launchBase);
+                var (cid, team, cls, cargo, launchBase, mounts) = _joinQueue.Dequeue();
+                // Remember the slot (team/cls/hold/launch base/mount overrides) and spawn this
+                // very step (ProcessRespawns, tick now).
+                _clientInfo[cid] = (team, cls, cargo, launchBase, mounts);
                 _clientRespawn[cid] = tick;
             }
             while (_leaveQueue.Count > 0)
@@ -1082,7 +1126,7 @@ public sealed partial class Simulation
 
     // Spawn a combat ship for a connected client at its team base, facing the sector center
     // and launched clear of the base sphere (mirrors the module's SpawnShip).
-    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0)
+    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo, ulong launchBaseId = 0, (byte hpIndex, uint weaponId)[]? mounts = null)
     {
         var s = new ShipSim
         {
@@ -1099,14 +1143,20 @@ public sealed partial class Simulation
         s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
         s.ShieldDamageTick = 0;
         s.SigBias = ShieldDefFor(s).SignatureBias; // projected default-loadout signature bias
+        // Validate the hangar's weapon-slot overrides + consumable hold as ONE loadout (they share
+        // PayloadCapacity); any invalid piece reverts BOTH to the authored defaults (logged).
+        var (mountIds, hold) = ResolveLoadout(team, cls, mounts, cargo);
+        s.MountWeaponIds = mountIds;
+        if (mountIds is not null)
+            LoadoutsChangedThisStep = true; // MsgShipLoadout table gains a row this step
 
-        if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
+        if (MissileMountFor(s) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet); an emptied rack seeds 0
             s.MissileAmmo = mw.MagazineSize;
         // D7: remember what the team paid for this hull (TryReserveSpawn just deducted it) so a
         // voluntary dock can refund it. PIGs/pods never go through here, so they keep PaidCost 0.
         s.PaidCost = ShipDefs.TryGetValue(cls, out var cd) ? cd.Cost : 0;
         // D6/D9: seed the chaff/mine dispenser ammo from the validated spawn cargo (empty ⇒ hull default).
-        SeedDispenserAmmo(s, cls, cargo);
+        SeedDispenserAmmo(s, hold);
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
@@ -1114,13 +1164,9 @@ public sealed partial class Simulation
         return s;
     }
 
-    // Validate a requested consumable hold and seed the ship's dispenser ammo/weapon-ids from it.
-    // A cargo id must resolve to a Chaff/Mine dispenser WeaponDef, and mounted-weapon mass + the
-    // hold's mass must fit PayloadCapacity — otherwise the whole request is rejected (logged) and the
-    // hull's authored DefaultCargo is used instead.
-    private void SeedDispenserAmmo(ShipSim s, byte cls, (uint cargoId, byte count)[] cargo)
+    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout).
+    private void SeedDispenserAmmo(ShipSim s, (uint cargoId, byte count)[] chosen)
     {
-        var chosen = ResolveCargo(cls, cargo);
         foreach (var (cargoId, count) in chosen)
         {
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
@@ -1147,38 +1193,97 @@ public sealed partial class Simulation
         }
     }
 
-    // Resolve the hold to seed: the requested cargo if it's valid (all ids are dispenser cargo AND
-    // mounted-weapon mass + hold mass ≤ PayloadCapacity), else the hull's authored DefaultCargo.
-    private (uint cargoId, byte count)[] ResolveCargo(byte cls, (uint cargoId, byte count)[] requested)
+    // Resolve a spawn request's weapon-slot overrides + consumable hold into the loadout to seed.
+    // The two halves share PayloadCapacity, so they validate as ONE request: every override must
+    // name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a hardpoint-
+    // mountable (Bolt/Missile), team-tech-owned weapon; every cargo id must be dispenser cargo;
+    // and the EFFECTIVE mount mass + hold mass must fit PayloadCapacity. Any failure rejects the
+    // whole request (logged) back to the authored loadout (null mounts = class default) — only a
+    // hacked/buggy client hits this, the hangar UI gates capacity and tech before sending.
+    private (uint[]? mountIds, (uint cargoId, byte count)[] cargo) ResolveLoadout(
+        byte team, byte cls, (byte hpIndex, uint weaponId)[]? mounts, (uint cargoId, byte count)[] requested)
     {
         ShipDefs.TryGetValue(cls, out var def);
-        (uint, byte)[] fallback = def is null
+        (uint, byte)[] fallbackCargo = def is null
             ? System.Array.Empty<(uint, byte)>()
             : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
-        if (requested is null || requested.Length == 0)
-            return fallback;
+        bool wantMounts = mounts is { Length: > 0 } && def is not null;
+        bool wantCargo = requested is { Length: > 0 };
+        if (!wantMounts && !wantCargo)
+            return (null, fallbackCargo); // pure authored spawn (boot-validated to fit capacity)
 
-        float used = 0f;
-        if (def is not null)
-            foreach (var h in def.Hardpoints)
-                if (h.Kind == HardpointKind.Weapon && WeaponDefs.TryGetValue(h.WeaponId, out var wm))
-                    used += wm.Mass;
-        foreach (var (cargoId, count) in requested)
+        // Effective per-barrel weapon ids: authored, then overrides applied by hardpoint Index
+        // (mapped to barrel = position among the class's Weapon-kind hardpoints — the same
+        // declaration order ClassMuzzles/the client's slot list use; Index is NOT assumed
+        // to equal position).
+        var muzzles = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
+        uint[]? effective = null;
+        if (wantMounts)
         {
-            if (!_dispenserByCargo.ContainsKey(cargoId))
+            effective = new uint[muzzles.Length];
+            for (int i = 0; i < muzzles.Length; i++)
+                effective[i] = muzzles[i].WeaponId;
+            var barrelByIndex = new Dictionary<byte, int>();
+            int barrel = 0;
+            foreach (var h in def!.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon)
+                    barrelByIndex[h.Index] = barrel++;
+            World.TeamStates.TryGetValue(team, out var ts);
+            foreach (var (hpIndex, weaponId) in mounts!)
+            {
+                if (!barrelByIndex.TryGetValue(hpIndex, out int b))
+                {
+                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
+                    return (null, fallbackCargo);
+                }
+                if (weaponId == HardpointDef.NoWeapon)
+                {
+                    effective[b] = HardpointDef.NoWeapon; // deliberately-empty slot
+                    continue;
+                }
+                if (!WeaponDefs.TryGetValue(weaponId, out var w)
+                    || (w.Kind != WeaponKind.Bolt && w.Kind != WeaponKind.Missile))
+                {
+                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls); // unknown or a dispenser (D8: not mountable)
+                    return (null, fallbackCargo);
+                }
+                foreach (ushort t in w.RequiredTechIdx)
+                    if (ts is null || t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id))
+                    {
+                        Log.SpawnMountTechLocked(_log, weaponId, team);
+                        return (null, fallbackCargo);
+                    }
+                effective[b] = weaponId;
+            }
+        }
+
+        // Cargo: an empty request normally means "hull default" (legacy quick-launch, no hangar
+        // visit) — but WITH mount overrides it means a deliberately EMPTY hold: overrides only
+        // come from the hangar, which always ships its real (possibly zero) hold counts, and
+        // silently re-adding the default cargo could push a legal gun swap over PayloadCapacity.
+        var cargo = wantCargo ? requested
+            : wantMounts ? System.Array.Empty<(uint, byte)>()
+            : fallbackCargo;
+        float used = 0f;
+        for (int i = 0; i < muzzles.Length; i++)
+            if (WeaponDefs.TryGetValue(effective is null ? muzzles[i].WeaponId : effective[i], out var wm))
+                used += wm.Mass;
+        foreach (var (cargoId, count) in cargo)
+        {
+            if (wantCargo && !_dispenserByCargo.ContainsKey(cargoId))
             {
                 Log.SpawnCargoNotDispenser(_log, cargoId);
-                return fallback;
+                return (null, fallbackCargo);
             }
             used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
         }
         float cap = def?.PayloadCapacity ?? 0f;
         if (used > cap)
         {
-            Log.SpawnCargoPayloadExceeds(_log, used, cap);
-            return fallback;
+            Log.SpawnLoadoutPayloadExceeds(_log, used, cap);
+            return (null, fallbackCargo);
         }
-        return requested;
+        return (effective, cargo);
     }
 
     // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
@@ -1244,6 +1349,7 @@ public sealed partial class Simulation
             AbPower = 0f,
         };
         s.LastFireTick = 0;
+        s.MountLastFire = null; // per-mount cadence gates restart with the fresh LastFireTick
         s.LastInputTick = tick;
         s.Alive = true;
     }
@@ -1277,7 +1383,7 @@ public sealed partial class Simulation
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, info.launchBaseId);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, info.launchBaseId, info.mounts);
         }
     }
 
@@ -1910,6 +2016,8 @@ public sealed partial class Simulation
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         DeathsThisStep.Add((s.ShipId, GoneDestroyed));
+        if (s.MountWeaponIds is not null)
+            LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }
 
     // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
@@ -1947,6 +2055,8 @@ public sealed partial class Simulation
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
                 DeathsThisStep.Add((s.ShipId, s.GoneReason));
+                if (s.MountWeaponIds is not null)
+                    LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
             }
             _toRemove.Clear();
         }
@@ -1978,42 +2088,29 @@ public sealed partial class Simulation
         if (muzzles.Length == 0)
             return; // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
 
-        // Primary fire is the GUNS: one cadence per ship, gated off the first Bolt muzzle's weapon
-        // (missile racks have their own cadence in TryFireMissile). A hull with no gun (only racks)
-        // has nothing to fire here. Per-weapon cadence arrives with mixed loadouts (Stage 2).
-        // TryGetValue skips an empty/unbound mount (WeaponId == HardpointDef.NoWeapon never
-        // resolves) — same guard every other muzzle consumer uses (PrimaryWeapon, ClassMissileMounts).
-        WeaponDef? primary = null;
-        foreach (var mz in muzzles)
-            if (WeaponDefs.TryGetValue(mz.WeaponId, out var pwd) && pwd.Kind == WeaponKind.Bolt)
-            {
-                primary = pwd;
-                break;
-            }
-        if (primary is null)
-            return; // no gun on this hull — primary fire is a no-op (missiles fire via Firing2)
-        if (tick - ship.LastFireTick < primary.FireIntervalTicks && ship.LastFireTick != 0)
-            return;
-        ship.LastFireTick = tick;
-
-        // One shot per muzzle, in hardpoint order (the Fighter's twin cannons fire together). Each
-        // muzzle fires its own weapon, dispatched by kind. IMPORTANT: the loop still visits missile
-        // mounts and KEEPS the hardpoint-array index as `barrel` (the per-barrel spread seed) — it
-        // just skips firing a bolt for them. The client's SpawnBoltFor mirrors this exactly so the
-        // gun barrel seeds stay aligned on both sides regardless of where racks sit in the array.
+        // Primary fire is the GUNS, and each gun mount gates on its OWN cadence (mixed loadouts):
+        // FireCadence.MountFires is THE shared eligibility rule — the client derives WHICH mounts
+        // fired at a replicated LastFireTick by replaying it against a per-ship shadow, so the
+        // wire carries no per-mount data. TryGetValue skips an empty/unbound mount (WeaponId ==
+        // HardpointDef.NoWeapon never resolves); missile racks have their own cadence in
+        // TryFireMissile. IMPORTANT: the loop still visits every weapon hardpoint and KEEPS the
+        // array index as `barrel` (the per-barrel spread seed) — skipped slots consume their
+        // index, so gun seeds stay aligned with the client (SpawnBoltFor/PredictionController)
+        // regardless of where racks or emptied slots sit in the array.
+        bool fired = false;
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
-            if (!WeaponDefs.TryGetValue(muzzles[barrel].WeaponId, out var w))
-                continue; // empty/unbound mount (NoWeapon) — assignable slot, nothing to fire
-            switch (w.Kind)
-            {
-                case WeaponKind.Bolt:
-                    FireBolt(ship, tick, w, muzzles[barrel], barrel);
-                    break;
-                case WeaponKind.Missile:
-                    break; // racks are fired by Firing2 (TryFireMissile), not primary fire
-            }
+            if (!WeaponDefs.TryGetValue(WeaponIdAt(ship, barrel), out var w) || w.Kind != WeaponKind.Bolt)
+                continue; // empty/unbound mount, or a rack (fired by Firing2, not primary fire)
+            ship.MountLastFire ??= new uint[muzzles.Length];
+            if (!FireCadence.MountFires(tick, ship.MountLastFire[barrel], w.FireIntervalTicks))
+                continue;
+            ship.MountLastFire[barrel] = tick;
+            FireBolt(ship, tick, w, muzzles[barrel], barrel);
+            fired = true;
         }
+        if (fired)
+            ship.LastFireTick = tick; // wire stamp: "a gun fired this tick" — clients derive which
     }
 
     // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
@@ -2193,8 +2290,8 @@ public sealed partial class Simulation
     // Progress reaching LockTicks latches Locked. Also bakes the wire LockState byte.
     private void UpdateLock(ShipSim ship, in ShipInputState input, uint tick)
     {
-        if (MissileMountFor(ship.Class) is not (_, WeaponDef w))
-            return; // no launcher on this hull — never locks
+        if (MissileMountFor(ship) is not (_, WeaponDef w))
+            return; // no effective launcher on this ship (none authored, or rack emptied) — never locks
 
         ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
         bool valid = false;
@@ -2276,8 +2373,8 @@ public sealed partial class Simulation
     // iterates _order, not _missiles).
     private void TryFireMissile(ShipSim ship, uint tick)
     {
-        if (MissileMountFor(ship.Class) is not (Muzzle mount, WeaponDef w))
-            return;
+        if (MissileMountFor(ship) is not (Muzzle mount, WeaponDef w))
+            return; // no effective rack (none authored, or emptied in the hangar)
         if (ship.MissileAmmo == 0)
             return;
         if (ship.LastMissileTick != 0 && tick - ship.LastMissileTick < w.FireIntervalTicks)

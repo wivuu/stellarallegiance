@@ -229,7 +229,7 @@ public sealed partial class Simulation
                     _pigOrders[subject] = new PigOrder { Kind = OrderAttackBase, TargetBaseId = targetId };
                     // Accepted regardless of loadout, but tell the commander when the hull can't
                     // actually hurt a base (it will harass the airspace instead).
-                    if (!(MissileMountFor(ship.Class) is (_, WeaponDef mw) && mw.CanDamageBase))
+                    if (!(MissileMountFor(ship) is (_, WeaponDef mw) && mw.CanDamageBase))
                         Notice($"{subjectName} has no base-damaging weapon — it will only harass the defenses.");
                     Directive($"{subjectName}: attack the {World.SectorName(b.SectorId)} base");
                 }

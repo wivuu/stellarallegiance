@@ -377,6 +377,17 @@ Server message reporting ballistic projectile hits: target ship ID, impact posit
 - **Related:** [[Projectile]], [[Client-Side Hit Sparks]]
 - **Notes:** Separate batch drained per SimTick; allows client to render bolts and confirm hits
 
+### Per-Ship Weapon Loadout (mount overrides)
+The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) carried on MsgSpawn, validated + stored per-ship in the sim, and echoed to every client via MsgShipLoadout=28 (full table, reconcile-by-omission: an omitted ship flies its authored class loadout).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/ui/LoadoutState.cs` — hangar model; WeaponOverridesFor / ExpectedEffectiveIds
+  - `server/Sim/Simulation.cs` — ResolveLoadout (joint mount+cargo validation: mountable kind, team tech, PayloadCapacity), ShipSim.MountWeaponIds/MountLastFire, WeaponIdAt
+  - `shared/FireCadence.cs` — THE per-mount gun-cadence rule shared by server TryFire, PredictionController, and WorldRenderer.SpawnBoltFor
+  - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept) vs filtered WeaponMounts; SlotsForShip overlay
+- **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
+- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
+
 ---
 
 ## Content Pipeline & Game Data

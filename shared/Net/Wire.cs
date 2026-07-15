@@ -64,6 +64,14 @@ public static class Wire
     // phase 1 (sink) begins at surface CONTACT and its progress is the physical embed-depth fraction
     // (was a timer), so the client's build sphere emerges only once the meshes intersect. See
     // Simulation.Constructors.cs / world.yaml `constructor:`.
+    // per-ship weapon loadouts (still 38 — nothing released in between; server+client deploy
+    // together as usual): MsgSpawn appends an optional mount-override tail after the cargo block
+    // ([u8 nMounts] + nMounts x (u8 hpIndex, u32 weaponId); weaponId u32.Max = deliberately-empty
+    // slot, unlisted slots keep the authored default); NEW MsgShipLoadout=28 (server->client
+    // reliable full table, on change + coarse keepalive: u8 count, count x (u64 shipId, u8 nSlots,
+    // nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids in hardpoint declaration order,
+    // reconcile-by-omission). Guns moved to per-mount cadence; the ship record is UNCHANGED —
+    // which mounts fired at LastFireTick is derived client-side via the shared FireCadence rule.
     public const byte ProtocolVersion = 38;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

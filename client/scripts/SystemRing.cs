@@ -68,7 +68,11 @@ public partial class SystemRing : Control
         Camera3D cam = Cam;
         Vector2 c;
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        float aimRange = _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
+        float aimRange = _defs.BoltAimRange(
+            local.IsPod ? DefRegistry.PodClassId : (byte)local.Class,
+            DefaultAimRange,
+            local.IsPod ? null : local.LoadoutIds // effective gun's reach, not the class default
+        );
         Vector3 reticle = local.GlobalPosition + fwd * aimRange;
         if (cam.IsPositionBehind(reticle))
             c = GetViewportRect().Size * 0.5f;

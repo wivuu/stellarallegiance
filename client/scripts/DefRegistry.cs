@@ -34,6 +34,7 @@ public partial class DefRegistry : Node
     // cleared whenever the defs are reloaded.
     private readonly Dictionary<byte, ShipStats> _statsCache = [];
     private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef weapon)>> _mountsCache = [];
+    private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef? weapon)>> _slotsCache = [];
 
     // Latest streamed world config. Fog-of-war (server-authoritative per-server toggle) drives the
     // client's fog presentation: eyeball-only marker suppression + ghost rendering only apply when
@@ -61,6 +62,7 @@ public partial class DefRegistry : Node
         _cargo.Clear();
         _statsCache.Clear();
         _mountsCache.Clear();
+        _slotsCache.Clear();
         foreach (var s in ships)
             _ships[s.ClassId] = s;
         foreach (var w in weapons)
@@ -113,10 +115,10 @@ public partial class DefRegistry : Node
     // ---- Weapons / hardpoints --------------------------------------------
 
     // Every Weapon hardpoint on a class paired with the WeaponDef it fires, in hardpoint
-    // declaration order (the Fighter's twin cannons → two mounts). The list index is the barrel
-    // index, matching the server's per-muzzle TryFire, so rendered bolts line up with the
-    // authoritative shots. Empty when the class has no def or carries no firing weapon hardpoint
-    // (e.g. a pod) — in that case the ship simply doesn't fire.
+    // declaration order — ARMED AUTHORED mounts only (unresolvable/NoWeapon slots are dropped, so
+    // list position is NOT the barrel index; barrel-indexed math must use WeaponSlots). Kept for
+    // non-positional consumers (HUD listings) that want the authored armed set. Empty when the
+    // class has no def or carries no firing weapon hardpoint (e.g. a pod).
     public List<(HardpointDef hp, WeaponDef weapon)> WeaponMounts(byte classId)
     {
         if (_mountsCache.TryGetValue(classId, out var cached))
@@ -130,26 +132,66 @@ public partial class DefRegistry : Node
         return mounts;
     }
 
-    // The effective reach of a class's primary bolt weapon: how far a bolt travels before it's
-    // culled (ProjectileSpeed × ProjectileLifeTicks × Dt), resolved from the SAME first Bolt mount
-    // ResolveLocalGun/TryFire fire from. The HUD sits the aim reticle here so the crosshair marks
-    // the edge of your gun's range. Returns `fallback` for a hull with no bolt gun (pod/unarmed) or
-    // before the defs stream in — there's no weapon range to read yet.
-    public float BoltAimRange(byte classId, float fallback)
+    // POSITIONAL weapon slots: EVERY Weapon-kind hardpoint in declaration order, null weapon for
+    // an empty/unresolvable slot. The list index IS the barrel index — the per-barrel spread seed
+    // (FlightModel.SpreadDirection) and the MsgShipLoadout per-barrel echo both index this order,
+    // matching the server's ClassMuzzles (which also keeps empty slots). Every barrel-indexed
+    // consumer (prediction, remote bolt render) MUST iterate this, not the filtered WeaponMounts,
+    // or seeds desync the moment a leading slot is emptied.
+    public List<(HardpointDef hp, WeaponDef? weapon)> WeaponSlots(byte classId)
     {
-        foreach (var (_, weapon) in WeaponMounts(classId))
-            if (weapon.Kind == WeaponKind.Bolt)
+        if (_slotsCache.TryGetValue(classId, out var cached))
+            return cached;
+        var slots = new List<(HardpointDef, WeaponDef?)>();
+        if (_ships.TryGetValue(classId, out var def) && def.Hardpoints is not null)
+            foreach (var h in def.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon)
+                    slots.Add((h, _weapons.TryGetValue(h.WeaponId, out var w) ? w : null));
+        _slotsCache[classId] = slots;
+        return slots;
+    }
+
+    // Positional slots with a ship's EFFECTIVE per-barrel weapon ids overlaid (the MsgShipLoadout
+    // record / the hangar's expected loadout). Geometry stays the authored hardpoint's; only what
+    // each slot fires changes. Never mutates the class caches. `effectiveIds` null = the ship
+    // flies the authored loadout (absent from the loadout table) — the cached class slots return
+    // as-is. A defensive length mismatch keeps the authored tail.
+    public List<(HardpointDef hp, WeaponDef? weapon)> SlotsForShip(byte classId, uint[]? effectiveIds)
+    {
+        var authored = WeaponSlots(classId);
+        if (effectiveIds is null)
+            return authored;
+        var slots = new List<(HardpointDef, WeaponDef?)>(authored.Count);
+        for (int i = 0; i < authored.Count; i++)
+        {
+            uint id = i < effectiveIds.Length ? effectiveIds[i] : authored[i].hp.WeaponId;
+            slots.Add((authored[i].hp, _weapons.TryGetValue(id, out var w) ? w : null));
+        }
+        return slots;
+    }
+
+    // The effective reach of a ship's primary bolt weapon: how far a bolt travels before it's
+    // culled (ProjectileSpeed × ProjectileLifeTicks × Dt), resolved from the SAME first Bolt slot
+    // ResolveLocalGun/TryFire fire from — loadout-aware via `effectiveIds` (null = authored). The
+    // HUD sits the aim reticle here so the crosshair marks the edge of your gun's range. Returns
+    // `fallback` for a hull with no bolt gun (pod/unarmed/emptied) or before the defs stream in.
+    public float BoltAimRange(byte classId, float fallback, uint[]? effectiveIds = null)
+    {
+        foreach (var (_, weapon) in SlotsForShip(classId, effectiveIds))
+            if (weapon?.Kind == WeaponKind.Bolt)
                 return weapon.ProjectileSpeed * weapon.ProjectileLifeTicks * FlightModel.Dt;
         return fallback;
     }
 
-    // The class's first missile-kind weapon mount's WeaponDef, or null if the hull carries no
-    // launcher. The HUD keys the missile ammo counter off this (shown only when non-null), and it
-    // mirrors the server's ClassMissileMounts pick (first Missile-kind mount in hardpoint order).
-    public WeaponDef? MissileMount(byte classId)
+    // The ship's first EFFECTIVE missile-kind mount's WeaponDef, or null when it carries no
+    // launcher (none authored, or the rack was emptied in the hangar — `effectiveIds` null =
+    // authored loadout). The HUD keys the missile ammo counter off this (shown only when
+    // non-null), and it mirrors the server's ship-aware MissileMountFor pick (first Missile-kind
+    // slot in hardpoint order).
+    public WeaponDef? MissileMount(byte classId, uint[]? effectiveIds = null)
     {
-        foreach (var (_, weapon) in WeaponMounts(classId))
-            if (weapon.Kind == WeaponKind.Missile)
+        foreach (var (_, weapon) in SlotsForShip(classId, effectiveIds))
+            if (weapon?.Kind == WeaponKind.Missile)
                 return weapon;
         return null;
     }

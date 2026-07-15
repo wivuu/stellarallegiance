@@ -5,14 +5,15 @@ using StellarAllegiance.Shared;
 namespace StellarAllegiance.Ui;
 
 // =====================================================================
-//  LoadoutState.cs — CLIENT-LOCAL HANGAR LOADOUT MODEL (skeleton)
+//  LoadoutState.cs — CLIENT-LOCAL HANGAR LOADOUT MODEL
 //
-//  Holds the hangar screen's weapon assignments and cargo counts. This state is
-//  COSMETIC-ONLY today: the sim still spawns ships with the authored
-//  HardpointDef.WeaponId, and nothing here is sent over the wire. It exists so the
-//  loadout UI has a real interaction model to build against before the server side
-//  lands (MsgSetLoadout + per-ship mounts — see the hangar plan's future-work notes).
-//  Must never mutate DefRegistry (its WeaponMounts cache feeds prediction).
+//  Holds the hangar screen's weapon assignments and cargo counts — the request side of the
+//  loadout seam. RequestSpawn ships both halves on MsgSpawn (cargo counts + the weapon-slot
+//  override tail from WeaponOverridesFor); the server validates, spawns the ship with the
+//  accepted loadout, and echoes the effective per-barrel weapon ids back on MsgShipLoadout.
+//  ExpectedEffectiveIds seeds own-ship prediction optimistically until that echo lands (it
+//  matches unless the server rejected the request). Must never mutate DefRegistry (its
+//  mount caches feed prediction).
 // =====================================================================
 public sealed class LoadoutState
 {
@@ -56,6 +57,40 @@ public sealed class LoadoutState
         if (!_weaponOverrides.TryGetValue(classId, out var slots))
             _weaponOverrides[classId] = slots = new Dictionary<byte, uint?>();
         slots[hpIndex] = weaponId;
+    }
+
+    // The MsgSpawn mount tail for a class: ONLY the slots whose current assignment differs from
+    // the authored default, as (hardpoint Index, weaponId) pairs — an emptied slot rides as
+    // HardpointDef.NoWeapon. A slot toggled back to its authored weapon is omitted (nothing to
+    // override), so a pristine hangar sends an empty tail and spawns the pure authored loadout.
+    public (byte hpIndex, uint weaponId)[] WeaponOverridesFor(byte classId, IReadOnlyList<HardpointDef> hardpoints)
+    {
+        if (!_weaponOverrides.TryGetValue(classId, out var slots) || slots.Count == 0)
+            return Array.Empty<(byte, uint)>();
+        List<(byte, uint)>? list = null;
+        foreach (HardpointDef hp in hardpoints)
+        {
+            if (hp.Kind != HardpointKind.Weapon || !slots.TryGetValue(hp.Index, out uint? w))
+                continue;
+            uint? authored = hp.WeaponId == HardpointDef.NoWeapon ? null : hp.WeaponId;
+            if (w == authored)
+                continue; // back on the authored default — no override to send
+            (list ??= new()).Add((hp.Index, w ?? HardpointDef.NoWeapon));
+        }
+        return list?.ToArray() ?? Array.Empty<(byte, uint)>();
+    }
+
+    // The per-barrel effective weapon ids this hangar state EXPECTS the server to accept —
+    // every Weapon-kind hardpoint in declaration order (the barrel order ClassMuzzles / the
+    // MsgShipLoadout echo use), HardpointDef.NoWeapon for empty slots. Seeds own-ship
+    // prediction at spawn; the authoritative echo replaces it if the server rejected anything.
+    public uint[] ExpectedEffectiveIds(byte classId, IReadOnlyList<HardpointDef> hardpoints)
+    {
+        var list = new List<uint>();
+        foreach (HardpointDef hp in hardpoints)
+            if (hp.Kind == HardpointKind.Weapon)
+                list.Add(AssignedWeapon(classId, hp) ?? HardpointDef.NoWeapon);
+        return list.ToArray();
     }
 
     // RESET: back to the authored loadout and an empty hold.
