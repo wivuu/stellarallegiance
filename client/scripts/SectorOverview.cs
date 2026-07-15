@@ -603,8 +603,8 @@ public partial class SectorOverview : Node3D
     private void RebuildStems()
     {
         _stemPoints.Clear();
-        if (_world.LocalShip != null)
-            _stemPoints.Add(_world.LocalShip.GlobalPosition);
+        if (TryLocalShip(out _, out var localPos))
+            _stemPoints.Add(localPos);
         foreach (var s in _world.FriendlyShips())
             _stemPoints.Add(s.GlobalPosition);
         foreach (var s in _world.EnemyShips())
