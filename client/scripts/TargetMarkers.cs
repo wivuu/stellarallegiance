@@ -817,9 +817,11 @@ public partial class TargetMarkers : Control
             DrawFocusTag(view, focusedShip, local);
             DrawLockArc(focusedShip);
             DrawTargetHealthArc(focusedShip);
-            // A non-combat miner reads as "MINER" under its bracket so its role is obvious at focus.
+            // A non-combat drone reads as its role under its bracket so it's obvious at focus.
             if (focusedShip.IsMiner)
                 DrawShipRoleTag(view, focusedShip.GlobalPosition, "MINER");
+            else if (focusedShip.IsConstructor)
+                DrawShipRoleTag(view, focusedShip.GlobalPosition, "CONSTRUCTOR");
         }
 
         // A focused FRIENDLY ship gets the target tag + health arc + MINER role tag, but NEVER a lock
@@ -831,6 +833,8 @@ public partial class TargetMarkers : Control
             DrawTargetHealthArc(focusedFriendly);
             if (focusedFriendly.IsMiner)
                 DrawShipRoleTag(view, focusedFriendly.GlobalPosition, "MINER");
+            else if (focusedFriendly.IsConstructor)
+                DrawShipRoleTag(view, focusedFriendly.GlobalPosition, "CONSTRUCTOR");
         }
 
         // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
@@ -1088,6 +1092,7 @@ public partial class TargetMarkers : Control
         {
             ShipKind.Pod => Kind.Pod,
             ShipKind.Miner => Kind.Miner,
+            ShipKind.Constructor => Kind.Miner, // a non-combat drone; reuses the miner glyph (v37)
             _ => s.Class switch
             {
                 ShipClass.Scout => Kind.Scout,

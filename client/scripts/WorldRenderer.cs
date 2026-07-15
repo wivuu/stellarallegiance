@@ -43,6 +43,8 @@ public partial class WorldRenderer : Node3D
     // walks it and filters by Node.Visible (sector visibility), so it allocates nothing. Id is
     // also read by LockableEnemyBases() to offer a base as a Tab-cycle lock target.
     private readonly List<(Node3D Node, byte Team, ulong Id, uint Sector)> _baseList = new();
+    // Base id -> type id (garrison 0, outpost 1, …), for type-aware base naming. Parallel to _baseList.
+    private readonly Dictionary<ulong, byte> _baseType = new();
 
     // Per-base health fraction (0..1), keyed by BaseId. Drives the screen-space damage bar
     // TargetMarkers draws over each base; full-health (>= ~1) bases are skipped so the bar
@@ -69,6 +71,14 @@ public partial class WorldRenderer : Node3D
     // client-side VFX — the server streams the flag plus (via MsgMinerTargets) the exact target rock.
     private readonly Dictionary<ulong, MiningBeam> _miningBeams = new();
     private readonly List<ulong> _miningBeamPrune = new(); // scratch: beams to drop this frame
+
+    // Base construction (v37): one BuildSphere per rock a constructor is actively raising a base on,
+    // driven by the MsgConstructorBuilds stream (NetUpdateConstructorBuilds). Keyed by rock id; created
+    // when the build appears, grown by phase/progress, freed when the build drops out (base completes).
+    public struct ConstructorBuild { public ulong ShipId, RockId; public byte Phase; public float Progress; }
+    private List<ConstructorBuild> _constructorBuilds = new();
+    private readonly Dictionary<ulong, BuildSphere> _buildSpheres = new();
+    private readonly List<ulong> _buildSpherePrune = new(); // scratch
 
     // Streamed (MsgMinerTargets): shipId -> the rock that miner is actively harvesting, so the beam
     // aims at the real target instead of guessing the nearest He3. Replaced wholesale each frame it
@@ -126,13 +136,14 @@ public partial class WorldRenderer : Node3D
     // base still has hull (see _baseHealthFrac, updated from MsgBases); a base whose health frame
     // hasn't landed yet reads alive so a freshly-inserted garrison isn't shown DESTROYED. This exposes
     // only what MsgBases already streams — no secret sector-local base positions.
-    public IReadOnlyList<(ulong Id, uint Sector, byte Team, bool Alive)> KnownBases()
+    public IReadOnlyList<(ulong Id, uint Sector, byte Team, bool Alive, byte TypeId)> KnownBases()
     {
-        var list = new List<(ulong, uint, byte, bool)>(_baseList.Count);
+        var list = new List<(ulong, uint, byte, bool, byte)>(_baseList.Count);
         foreach (var (_, team, id, sector) in _baseList)
         {
             bool alive = !_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f;
-            list.Add((id, sector, team, alive));
+            byte typeId = _baseType.TryGetValue(id, out byte t) ? t : (byte)0;
+            list.Add((id, sector, team, alive, typeId));
         }
         return list;
     }
@@ -757,6 +768,31 @@ public partial class WorldRenderer : Node3D
     // 0..1 progress of a research order at the live server tick (clamped; 1 = due to complete).
     public float ResearchProgress(uint startTick, uint durationTicks) =>
         durationTicks == 0 ? 1f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
+
+    // Per-team constructor roster (MsgConstructorState, v38): producing + launched drones for the Build
+    // tab. State ordinals mirror the server: 0 producing, 1 idle, 2 to-rock, 3 move, 4 align, 5 sink,
+    // 6 build. StartTick/DurationTicks describe the current timed phase (0/0 for untimed states) so the
+    // progress bar derives client-side; TargetId = rock (build orders) or sector (move orders).
+    public struct ConstructorStatus
+    {
+        public ulong Id;
+        public byte StationTypeId;
+        public byte State;
+        public uint StartTick;
+        public uint DurationTicks;
+        public ulong TargetId;
+    }
+
+    private System.Collections.Generic.List<ConstructorStatus> _constructorStates = new();
+
+    public void NetUpdateConstructorState(System.Collections.Generic.List<ConstructorStatus> list) =>
+        _constructorStates = list;
+
+    public IReadOnlyList<ConstructorStatus> ConstructorStates() => _constructorStates;
+
+    // 0..1 progress of a constructor's current timed phase (same derivation as research).
+    public float ConstructorProgress(uint startTick, uint durationTicks) =>
+        durationTicks == 0 ? 0f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
 
     public int TeamCredits(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Credits : 0;
 
@@ -1383,6 +1419,7 @@ public partial class WorldRenderer : Node3D
         _fades.Clear(); // keyed by the base/asteroid nodes freed just above
         _baseNodes.Clear();
         _baseList.Clear();
+        _baseType.Clear();
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
@@ -1398,6 +1435,9 @@ public partial class WorldRenderer : Node3D
         _probes.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
+        _buildSpheres.Clear(); // BuildSphere nodes freed by the _effects sweep above
+        _constructorBuilds.Clear();
+        _constructorStates.Clear();
         _collidingShips.Clear();
         _collidingPairs.Clear();
         _alephNodes.Clear();
@@ -1752,10 +1792,10 @@ public partial class WorldRenderer : Node3D
             return;
 
         // Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
-        // from the subscribed BaseDef (M5). Every base is BaseTypeId 0 this phase.
+        // from the subscribed BaseDef. v37: the base type is streamed per-base (garrison 0, outpost 1).
         var node = BaseModelLoader.Build(
             _defs,
-            DefaultBaseTypeId,
+            row.BaseTypeId,
             row.Team,
             row.Team == 0 ? _team0Mat : _team1Mat,
             out Node3D? glbHull
@@ -1765,13 +1805,14 @@ public partial class WorldRenderer : Node3D
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
         _baseList.Add((node, row.Team, row.BaseId, row.SectorId));
+        _baseType[row.BaseId] = row.BaseTypeId;
         NetUpdateBaseHealth(row.BaseId, row.Health);
         // Bake a visible-mesh ray-caster from the authored GLB hull child (null when the base fell
         // back to the procedural sphere). node.Transform is already the base's world placement, so
         // the raycaster composes correct world transforms without waiting for the tree.
         MeshRaycaster? ray = glbHull != null ? new MeshRaycaster(glbHull, node.Transform) : null;
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId, ray));
-        _collisionWorld.AddBase(row);
+        _collisionWorld.AddBase(_defs, row);
         _baseTeams.Add((row.SectorId, row.Team));
         SetNodeSectorFading(node, row.SectorId);
         // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team
@@ -2597,6 +2638,7 @@ public partial class WorldRenderer : Node3D
         }
 
         UpdateMiningBeams();
+        UpdateBuildSpheres();
 
         // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that
         // holds the WarpFlash until the warped-into sector's rocks have finished streaming in.
@@ -2635,6 +2677,59 @@ public partial class WorldRenderer : Node3D
     // MsgMinerTargets: replace the shipId -> target-rock map wholesale. A ship that stopped mining
     // simply isn't in the new map; its beam clears on the ShipFlagMining falling edge below.
     public void NetUpdateMinerTargets(Dictionary<ulong, ulong> map) => _minerTargetRock = map;
+
+    // MsgConstructorBuilds: replace the active-build list wholesale. UpdateBuildSpheres reconciles the
+    // BuildSphere nodes against it each frame (a build that completed/cancelled drops out → its sphere
+    // FADES out and self-frees; the finished base arrives via the normal reveal path). The server sends
+    // a brief 0-count keepalive after builds end so this drop is reliably seen despite lossy delivery.
+    public void NetUpdateConstructorBuilds(List<ConstructorBuild> builds) => _constructorBuilds = builds;
+
+    // Grow/place a glowing sphere enveloping each rock a constructor is building on; free spheres whose
+    // build dropped out. Envelop fraction ramps through the phases (align → sink → build) so the sphere
+    // gradually swallows the asteroid, peaking just past the rock surface as the base completes.
+    private void UpdateBuildSpheres()
+    {
+        var live = new HashSet<ulong>();
+        foreach (var b in _constructorBuilds)
+        {
+            // No sphere during ALIGNING (phase 0) — it only appears once the drone starts sinking into
+            // the rock (phase 1), when the meshes begin to intersect.
+            if (b.Phase < 1)
+                continue;
+            if (!_asteroidNodes.TryGetValue(b.RockId, out var node) || GetAsteroid(b.RockId) is not { } rock)
+                continue; // rock not known / not in view — no sphere (harmless)
+            live.Add(b.RockId);
+            if (!_buildSpheres.TryGetValue(b.RockId, out var sphere))
+            {
+                sphere = new BuildSphere();
+                _effects.AddChild(sphere);
+                _buildSpheres[b.RockId] = sphere;
+            }
+            sphere.GlobalPosition = node.GlobalPosition;
+            SetNodeSector(sphere, rock.SectorId);
+            // Envelop fraction of the rock radius: sink 0.20→0.60, build 0.60→1.35 (swallows the rock).
+            float frac = b.Phase == 1 ? 0.20f + 0.40f * b.Progress : 0.60f + 0.75f * b.Progress;
+            sphere.SetEnvelop(MathF.Max(2f, rock.CurrentRadius) * frac);
+            // Core opacity: ramp to opaque through the sink, then hold opaque while building — the drone
+            // vanishes inside it.
+            sphere.SetCover(b.Phase == 1 ? Mathf.Clamp(b.Progress * 1.3f, 0f, 1f) : 1f);
+            // Once BUILDING (fully enveloped, opaque core), remove the drone mesh from existence — the
+            // server despawns the constructor at completion; the sphere covers the gap until then.
+            if (b.Phase >= 2 && _shipNodes.TryGetValue(b.ShipId, out var shipNode))
+                shipNode.Visible = false;
+        }
+        // A build that completed/cancelled drops out of the stream. Don't free its sphere instantly —
+        // FADE it (the finished base has appeared underneath via the reveal path); it self-frees.
+        _buildSpherePrune.Clear();
+        foreach (var kv in _buildSpheres)
+            if (!live.Contains(kv.Key))
+                _buildSpherePrune.Add(kv.Key);
+        foreach (var id in _buildSpherePrune)
+        {
+            _buildSpheres[id].BeginFade();
+            _buildSpheres.Remove(id);
+        }
+    }
 
     // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is
     // visible, ensure a MiningBeam child exists and point it at the rock it's harvesting; tear a beam

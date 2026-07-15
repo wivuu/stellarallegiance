@@ -112,6 +112,31 @@ A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull cla
 - **Related:** [[Rock Class / Ore (Mining)]], [[PigBrain]], [[Autopilot / AutoSteer]], [[Dock Refund]]
 - **Notes:** Enemy PIGs auto-hunt miners via the normal chase path (intended). Any teammate can buy/order v1 (Stage-2 bootstrap authority; commander tightens later). Miners scout as they fly (hull vision values) — a miner's own vision reveals new rocks.
 
+### Constructor (AI base-builder drone) & per-type Bases
+Proto v37 base building. A **constructor** is a team-owned AI drone (`ShipKind.Constructor`,
+`ShipFlagConstructor=128`, hull `is-builder` → `ShipClassDef.IsConstructor`) modeled on the miner: a
+commander buys one from the docked **Build tab** bound to a station TYPE (`MsgBuildConstructor=14`,
+charges the station price), it launches from a **garrison** (win-condition base) only, and — F3-ordered
+to a compatible asteroid (reuses the miner order plumbing; stock outpost → **Regolith**) — it navigates,
+holds standoff, **aligns**, **sinks** partially into the rock, then a glowing **build sphere** envelops
+the asteroid over the station's `build-time-seconds` before the base appears fully constructed and its
+capabilities are granted. **Bases are now per-type data like ship hulls**: `BaseDef.ModelName` picks the
+GLB (server collision `World.LoadBaseModel` + client `BaseModelLoader`/`CollisionWorld`, keyed by
+`BaseSite.BaseTypeId` on the wire), and `World.CreateBase` appends a base at runtime (the base list +
+parallel `BaseHealth`/`ResearchByBase` are APPEND-ONLY so indices never shift). A new base reveals via
+the owning team's fog reveal log (fog-off: a broadcast `BuildBaseReveal`). **Win condition reworked**: a
+per-type `WinCondition` flag (the `start` ability, garrison-only) — a team loses only when ALL its
+win-condition bases die, so a destroyed outpost never ends the match.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Constructors.cs` — the drone (FSM Idle→ToRock→Aligning→Sinking→Building, buy/charge, brain+steering, completion, orders, build-stream view)
+  - `server/Sim/World.cs` — `BaseSite.BaseTypeId`, `_baseModels`/`BaseHullOf`/`BaseRadiusOf`/…, `CreateBase`, `ResetMatchBases`, `GarrisonCount`; `Simulation.cs` — `ApplyBaseDamage` win-condition, per-type collision sweep, `IsConstructorClass`
+  - `server/Net/Protocol.cs` — `MsgBuildConstructor=14`, `MsgConstructorBuilds=25`, `BuildBaseReveal`, `WriteBaseStatic` (+baseTypeId/per-type radius); `server/Content/core/stations.yaml` (outpost) + `hulls.yaml` (constructor)
+  - `client/scripts/BuildSphere.cs` — the enveloping VFX; `WorldRenderer.UpdateBuildSpheres`; `ui/BuildTab.cs` — commander BUILD action (`GameNetClient.SendBuildConstructor`)
+  - `tests/ConstructorTest` — full loop, rock-class gate, win-condition, def flags
+- **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab (Construction Placeholder)]]
+- **Notes:** Outpost collision = convex hull from Outpost.glb (no COL_ parts, no dock faces → no docking yet). The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price; align/sink/standoff are consts in `Simulation.Constructors.cs` (build time is the station's authored `build-time-seconds`).
+
 ---
 
 ## Weapons & Combat

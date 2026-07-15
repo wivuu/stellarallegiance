@@ -129,7 +129,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
         if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
-    int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
+    int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
     // RockStatic v32: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct + f32 oreCapacity) = 51.
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 51);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
@@ -487,7 +487,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); }
             if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); }
         }
-        int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
+        int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         long nr = br.ReadUInt32();
         for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
@@ -497,7 +497,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte();
-        int nb = br.ReadByte(); br.ReadBytes(nb * 33);
+        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         int nr = br.ReadUInt16();
         for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
@@ -1148,7 +1148,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte(); // MsgReveal
-        int nb = br.ReadByte(); br.ReadBytes(nb * 33);
+        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         int nr = br.ReadUInt16(); br.ReadBytes(nr * 51); // RockStatic v32: 41 + mining block (class + currentRadius + orePct + oreCapacity)
         int na = br.ReadByte(); br.ReadBytes(na * 28);
         int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius

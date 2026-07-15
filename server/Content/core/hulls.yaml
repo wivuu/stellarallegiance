@@ -241,6 +241,47 @@ hulls:
       # Cockpit eye point for the first-person camera (client-only).
       - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
 
+  # Constructor (class-id 5): a slow, unarmed AI utility drone that builds forward bases. Bought from
+  # the docked Build tab bound to a station type, launches from a garrison, and — F3-ordered to a
+  # compatible asteroid — aligns, sinks in, and raises the base (Simulation.Constructors.cs). Marked a
+  # builder by the `is-builder` ability (ConstructorClassId resolves it). Like the miner it is unarmed
+  # and tough; utl11 is a boxy industrial hull.
+  - id: constructor
+    name: Constructor
+    glyph: "⊞"
+    role: CONSTRUCTION
+    description: "Slow, unarmed construction drone. Sinks into an asteroid and raises a forward base from it. Defenseless — escort it."
+    model-name: utl11   # res://assets/ships/utl11.glb
+    model-length: 7.0
+    class-id: 5
+    mass: 70
+    speed: 45
+    thrust: 10
+    max-turn-rates: { yaw: 40, pitch: 40, roll: 40 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-accel: 0
+    ab-on-rate: 1.0
+    ab-off-rate: 1.0
+    armor-hit-points: 500
+    shield-capacity: 40
+    shield-recharge: 6
+    shield-delay: 3
+    vision-cone-length: 2000
+    vision-cone-angle-deg: 28
+    vision-sphere-radius: 1000
+    radar-signature: 1.5
+    price: 500
+    abilities: [is-builder]   # marks this hull a constructor chassis (ShipClassDef.IsConstructor)
+    required-capabilities: [base]
+    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. main-engine + cockpit
+    # authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the miner.
+    hardpoints:
+      - { kind: main-engine, off-z: -3.2, dir-z: -1 }
+      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod
     name: Pod

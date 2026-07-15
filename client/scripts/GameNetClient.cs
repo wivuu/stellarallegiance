@@ -362,6 +362,26 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
+    // Commander buys a constructor bound to a station type (v37): [14][u8 stationTypeId][u64 launchBaseId].
+    // launchBaseId 0 = the team's default garrison. The server validates + charges the station price.
+    public void SendBuildConstructor(byte stationTypeId, ulong launchBaseId)
+    {
+        var f = new byte[10];
+        f[0] = 14; // MsgBuildConstructor
+        f[1] = stationTypeId;
+        BitConverter.TryWriteBytes(f.AsSpan(2), launchBaseId);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander cancels a still-producing constructor (refund): [15][u64 constructorId] (v38).
+    public void SendCancelConstructor(ulong constructorId)
+    {
+        var f = new byte[9];
+        f[0] = 15; // MsgConstructorCancel
+        BitConverter.TryWriteBytes(f.AsSpan(1), constructorId);
+        _tx.Writer.TryWrite(f);
+    }
+
     public void SetTeam(byte team)
     {
         _tx.Writer.TryWrite([5, team]); // MsgSetTeam
@@ -826,7 +846,54 @@ public partial class GameNetClient : Node
             case 24:
                 ApplyResearchState(r);
                 break;
+            case 25:
+                ApplyConstructorBuilds(r);
+                break;
+            case 26:
+                ApplyConstructorState(r);
+                break;
         }
+    }
+
+    // MsgConstructorBuilds (v37): each constructor drone aligning/sinking/building on a rock, driving the
+    // build-sphere VFX. Whole-set replace each frame (a finished/cancelled build drops out). Broadcast —
+    // the renderer only draws a sphere for a rock it can see.
+    private void ApplyConstructorBuilds(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorBuild>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            ulong rockId = r.ReadUInt64();
+            byte phase = r.ReadByte();
+            float progress = StellarAllegiance.Shared.WireQuant.UnpackHalf(r.ReadUInt16());
+            list.Add(new WorldRenderer.ConstructorBuild { ShipId = shipId, RockId = rockId, Phase = phase, Progress = progress });
+        }
+        _world.NetUpdateConstructorBuilds(list);
+    }
+
+    // MsgConstructorState (v38): PER-TEAM constructor roster (producing + launched) for the Build tab.
+    // Whole-set replace each frame — a retired constructor drops out (reconcile by omission).
+    private void ApplyConstructorState(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorStatus>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            byte stationType = r.ReadByte();
+            byte state = r.ReadByte();
+            uint startTick = r.ReadUInt32();
+            uint durationTicks = r.ReadUInt32();
+            ulong targetId = r.ReadUInt64();
+            list.Add(new WorldRenderer.ConstructorStatus
+            {
+                Id = id, StationTypeId = stationType, State = state,
+                StartTick = startTick, DurationTicks = durationTicks, TargetId = targetId,
+            });
+        }
+        _world.NetUpdateConstructorState(list);
     }
 
     // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
@@ -1334,8 +1401,9 @@ public partial class GameNetClient : Node
             PosY = r.ReadSingle(),
             PosZ = r.ReadSingle(),
         };
-        r.ReadSingle(); // radius (client renders from BaseDef)
+        r.ReadSingle(); // radius (client renders from BaseDef by type)
         row.Health = r.ReadSingle();
+        row.BaseTypeId = r.ReadByte(); // v37: which base type (mesh/def)
         return row;
     }
 
@@ -1508,6 +1576,7 @@ public partial class GameNetClient : Node
             d.DefaultCargo = new List<CargoLoadDef>(cargoN);
             for (int c = 0; c < cargoN; c++)
                 d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
+            d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
             ships.Add(d);
         }
 
@@ -1599,6 +1668,10 @@ public partial class GameNetClient : Node
             b.Hardpoints = ReadHardpoints(r);
             // Research slots (v36; mirror of BuildDefs — streamed after Hardpoints).
             b.ResearchSlots = r.ReadByte();
+            // Base building (v37; mirror of BuildDefs — streamed after ResearchSlots).
+            b.ModelName = ReadStr(r);
+            b.WinCondition = r.ReadBoolean();
+            b.BuildRockClass = r.ReadByte();
             bases.Add(b);
         }
 
@@ -1654,6 +1727,7 @@ public partial class GameNetClient : Node
                     StationClass = r.ReadByte(),
                     BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
                     ResearchSlots = r.ReadByte(),
+                    BuildRockClass = r.ReadByte(), // v37; mirror of BuildDefs
                     RequiredTechIdx = ReadTechList(r),
                     GrantedTechIdx = ReadTechList(r),
                     ObsoletedByTechIdx = ReadTechList(r),

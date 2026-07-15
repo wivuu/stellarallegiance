@@ -179,7 +179,7 @@ public partial class Simulation
     // after AccrueTeamCredits.
     private void ResearchStep(uint tick)
     {
-        for (int i = 0; i < World.ResearchByBase.Length; i++)
+        for (int i = 0; i < World.ResearchByBase.Count; i++)
         {
             var state = World.ResearchByBase[i];
             if (state.Active.Count == 0 && state.OnDeck is null)

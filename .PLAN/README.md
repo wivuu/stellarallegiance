@@ -21,6 +21,11 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - I selected 'leave empty' on my scout in the hanager, but it still launched with a scout cannon
+- Constructors:
+  - Asteroid needs to despawn during the build-sphere phase; it should no longer exist once base is built on it
+  - The build sphere must enlarge at least as large as the base it will eventually produce
+- Add a 'Map' button to top (next to the 'Build' and 'Research' tabs, to the left of 'Hangar') that opens F3
+- F3 map view shows offset vector for ships in other sectors
 ---
 
 ## Content philosophy (the through-line)
@@ -355,15 +360,35 @@ Stage-1 YAML pipeline.
   research suite + ContentTest catalog checks. *Deferred: stat-modifier developments
   (AttributeModifiers), per-site base types for slots, authored obsoleted-by content, hull unlock
   chips (ShipClassDef has no wire tech refs).*
-- ☐ **[XL]** **Base building + constructors** — deployable structures for resource processing; ships land,
-  repair, and rearm at bases.
-  - Generalize bases, so that the mesh to be used is determined by the YAML configuration, similar to hulls for ships
-  - Create multiple base types, defined by yaml: Garrison (default), Outpost, Shipyard, Supremacy Center, Tactical Laboratory, and Expansion Complex, Teleport Receiver, Refinery. Some bases unlock tech tree paths (configurable).
-  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
-  - Constructors are ships (utl11.glb in pick_assets - but dont hardcode the usage of this mesh; there will be many configurable models) which are AI controlled like miners. They launch from a garrison only (not outposts), and the types of rock (regolith, uranium, etc) they can build on is configurable based on the type of base bought.
-  - When a constructor is ordered to a compatible asteroid, it navigates there, and will reach a standoff point (similar to a miner), once at the standoff point, it will align itself for a few seconds (configurable), before beginning to *sink into the rock* slowly (fly towards until the constructor is partially embedded into the rock)
-  - From here, a spinning greenish/bluish glowing sphere, with multiple translucent textured layers, will gradually envelop the entire asteroid (for a configurable number of seconds), and the constructor mesh disappears completely
-  - Once the build sphere is done, the configured base appears on the asteroid, fully constructed, and the build effect is removed, leaving the base ready for use, and potentially tech trees unlocked
+- ◐ **[XL]** **Base building + constructors** — MVP shipped 2026-07-14 (proto 37): the **Outpost** is
+  buildable end-to-end; the other station types are one YAML edit away (see below). Bases are now
+  **per-type data** like ship hulls — `BaseDef.ModelName` selects the GLB (server collision + client
+  mesh, mirroring `ShipClassDef`), `BaseSite.BaseTypeId` rides the wire, and `World.CreateBase`
+  appends a base at runtime (growable `BaseHealth`/`ResearchByBase`, index-parallel). A **constructor**
+  is an AI drone (`ShipKind.Constructor`, `Simulation.Constructors.cs`) modeled on the miner: bought
+  from the docked **Build tab** bound to a station type (commander-gated `MsgBuildConstructor`, charges
+  the station price), launched from a **garrison** (win-condition base) only, F3-ordered to a
+  compatible rock (reuses the miner order plumbing; stock outpost → **Regolith**), then it navigates,
+  aligns, **sinks** into the rock, and a spinning greenish-blue **build sphere** (`BuildSphere.cs`,
+  streamed via `MsgConstructorBuilds`) envelops the asteroid over the station's `build-time-seconds`
+  before the base appears fully constructed (reveals via the fog log / a fog-off broadcast) and grants
+  its capabilities. **Win condition reworked**: a per-type `WinCondition` flag (= the `start` ability,
+  garrison-only) — a team loses only when ALL its win-condition bases die, so a destroyed outpost never
+  ends the match. `tests/ConstructorTest` covers the full loop + the rock-class gate + win-condition.
+  *Deferred:* docking/repair/rearm at outposts (no dock faces on Outpost.glb — sphere/convex collision
+  only); the 6 other station types (add `base-type-id` + `model-name` + `build-on-rock-class` to
+  `stations.yaml` — no code); cap-revoke when a granting base is destroyed (grants are additive for the
+  match); CommandSidebar build banner; per-site research slots; live visual sign-off of the sphere.
+  - ✅ Generalize bases so the mesh is YAML config (`model-name`), like ship hulls — not hardcoded.
+  - ◐ Multiple base types by YAML (Garrison + Outpost live; Shipyard/Supremacy/Tactical-Lab/Expansion/
+    Teleport-Receiver/Refinery are authored placeholders, buildable via YAML). Bases grant caps/tech.
+  - ✅ Commander buys constructors from the docked Build tab (miners stay on `/buyminer`).
+  - ✅ Constructors are AI drones (`utl11.glb`, not hardcoded), launch from a garrison, buildable rock
+    class configurable per base type.
+  - ✅ Ordered to a compatible asteroid → navigate → standoff → align (configurable) → sink in.
+  - ✅ Spinning greenish/blue translucent multi-layer sphere envelops the asteroid over a configurable
+    time; the constructor mesh vanishes (server despawns it at completion, sphere covers it).
+  - ✅ Base appears fully constructed on the asteroid; build effect removed; tech paths unlocked.
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/

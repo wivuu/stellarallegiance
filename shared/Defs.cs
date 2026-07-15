@@ -123,6 +123,7 @@ namespace StellarAllegiance.Shared
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
+        public bool IsConstructor; // v37: a constructor drone chassis (builds bases). Server-only (NOT streamed — client uses ShipFlagConstructor); projected from HullAbility.IsBuilder.
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
 
@@ -265,6 +266,19 @@ namespace StellarAllegiance.Shared
         // Authored per station (`research-slots`), resolved to >= 1 at projection. Streamed LAST
         // in the BaseDef block (after Hardpoints) so the fields above stay byte-stable (v36).
         public byte ResearchSlots = 1;
+
+        // ---- Base building (v37), streamed after ResearchSlots (append-only convention) ----------
+        // The GLB the client loads for this base type (res://assets/bases/<ModelName>.glb) and the
+        // server reads for collision — mirrors ShipClassDef.ModelName. Empty => procedural sphere.
+        public string ModelName = "";
+        // Win-condition base ("headquarters"): a team loses when ALL its WinCondition bases are
+        // destroyed. Garrisons are WinCondition; forward structures (outpost, …) are not. Projected
+        // from the station's `start` ability (only the garrison carries it).
+        public bool WinCondition;
+        // The asteroid class a constructor may build this base on (RockClass byte). Only meaningful
+        // for constructor-built forward bases; the garrison authors none (built at match start).
+        // 255 = unset (not constructor-buildable).
+        public byte BuildRockClass = 255;
     }
 
     // ---- Tech-path catalog defs (Stage-4 research), streamed in MsgDefs after the world config ----
@@ -324,6 +338,7 @@ namespace StellarAllegiance.Shared
         public byte StationClass; // factions StationClass enum byte (Starbase=0, Garrison=1, Shipyard=2, ...)
         public short BaseTypeId = -1; // runtime wire base-type id; -1 = catalog-only (not buildable/spawnable)
         public byte ResearchSlots; // resolved (>= 1) for runtime bases; authored raw otherwise
+        public byte BuildRockClass = 255; // RockClass a constructor builds this on; 255 = unset (v37)
         public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
         public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
         public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();

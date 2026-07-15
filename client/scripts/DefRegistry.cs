@@ -169,7 +169,7 @@ public partial class DefRegistry : Node
     {
         var list = new List<ShipClassDef>();
         foreach (var s in _ships.Values)
-            if (s.ClassId != PodClassId && s.OreCapacity <= 0f)
+            if (s.ClassId != PodClassId && s.OreCapacity <= 0f && !s.IsConstructor)
                 list.Add(s);
         list.Sort((a, b) => a.ClassId.CompareTo(b.ClassId));
         return list;

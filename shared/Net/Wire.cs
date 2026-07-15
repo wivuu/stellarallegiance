@@ -39,7 +39,21 @@ public static class Wire
     // research op: u8 op, u64 baseId, u16 devIndex) + NEW MsgResearchState=24 (server->client
     // per-team per-base research orders, startTick+duration encoded). TechList = u8 n x u16 index
     // into the streamed tech catalog. See Protocol.BuildDefs/BuildTeamState/BuildResearchStateFor.
-    public const byte ProtocolVersion = 36;
+    // v37: base building — BaseDef appends str ModelName + u8 winCondition + u8 buildRockClass (after
+    // researchSlots); StationCatalog appends u8 buildRockClass (after researchSlots); WriteBaseStatic
+    // appends u8 baseTypeId and streams the per-type radius (was the World.BaseRadius constant);
+    // NEW MsgBuildConstructor=14 (client->server commander: u8 stationTypeId, u64 launchBaseId) +
+    // NEW MsgConstructorBuilds=25 (server->client: u8 count, count x (u64 shipId, u64 rockId, u8 phase,
+    // f16 progress)); ShipFlagConstructor=128 now emitted (AI constructor drone). See
+    // Simulation.Constructors.cs / Protocol.BuildConstructorBuilds.
+    // constructor polish — a bought constructor now PRODUCES at the garrison before launching
+    // (timed, cancellable). NEW MsgConstructorState=26 (server->client per-team: u8 count, count x
+    // (u64 id, u8 stationTypeId, u8 state, u32 startTick, u32 durationTicks, u64 targetId)) drives the
+    // Build-tab progress/cancel + drone status; NEW MsgConstructorCancel=15 (client->server commander:
+    // u64 constructorId) refunds a producing constructor. Constructors now accept move orders (MsgOrder
+    // kinds point/sector). MsgConstructorBuilds=25 now emits a 0-count keepalive briefly after builds
+    // end (was null) so the client fades the build sphere. See Simulation.Constructors.cs.
+    public const byte ProtocolVersion = 37;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -73,6 +73,8 @@ public static class Protocol
     public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
     public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/4 sector/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only). Kind 4 ignores pos: pigs hold just inside the entry aleph, miners prospect-patrol the sector until helium-3 is found.
     public const byte MsgResearch = 13; // u8 op (0 start-or-queue, 1 cancel-active, 2 cancel-on-deck), u64 baseId, u16 devIndex — commander research order at a friendly base (12-byte frame incl. type byte; v36). Hub-gated by CommanderOrWarn; results come back as system chat + the next MsgResearchState.
+    public const byte MsgBuildConstructor = 14; // u8 stationTypeId (BaseTypeId to build), u64 launchBaseId (0 = team default garrison) — commander buys a constructor drone that will build this station type (v37). Hub-gated by CommanderOrWarn; launches from a WinCondition base only. Order it to a rock via MsgOrder.
+    public const byte MsgConstructorCancel = 15; // u64 constructorId — commander cancels a STILL-PRODUCING constructor (refunds the station price) (v38). Hub-gated by CommanderOrWarn. A launched drone is managed via MsgOrder, not this.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -103,6 +105,8 @@ public static class Protocol
     public const byte MsgRockUpdate = 22; // u8 count, count x (u64 id, f32 currentRadius, u8 orePct) — live rock shrink deltas (mining), on-change; fog-on = discovered rocks only. See BuildRockUpdates.
     public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
     public const byte MsgResearchState = 24; // u8 nBases, n x (u64 baseId, u8 nActive x (u16 devIdx, u32 startTick, u32 durationTicks), u8 hasOnDeck, ?u16 onDeckDevIdx) — PER-TEAM research orders at the team's bases (v36). Progress derives client-side from startTick+duration vs the live tick, so the frame only changes on start/complete/cancel/promote (sent on change + coarse keepalive). See BuildResearchStateFor.
+    public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
+    public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build), u32 startTick, u32 durationTicks, u64 targetId) — PER-TEAM constructor roster for the Build tab: producing drones (start/duration → progress bar + cancel) and launched drones (status). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -119,7 +123,7 @@ public static class Protocol
     public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
     public const byte ShipFlagMiner = 32; // AI mining ship (ShipKind.Miner) — HUD tags it a MINER; PIG brain never touches it
     public const byte ShipFlagMining = 64; // that miner is actively moving ore this tick (ShipSim.IsHarvesting) — HUD "MINING" state
-    public const byte ShipFlagConstructor = 128; // RESERVED (ShipKind.Constructor) — never emitted yet; kept so the role round-trips end-to-end
+    public const byte ShipFlagConstructor = 128; // AI base-builder drone (ShipKind.Constructor) — HUD tags it CONSTRUCTOR; PIG brain never touches it
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -402,14 +406,15 @@ public static class Protocol
 
     // One base static record (used by Welcome + MsgReveal — byte-identical output, load-bearing).
     // Layout: u64 id | u8 team | u32 sector | 3x f32 pos | f32 radius | f32 health.
-    private static void WriteBaseStatic(BinaryWriter w, in World.BaseSite b, float health)
+    private static void WriteBaseStatic(BinaryWriter w, World world, in World.BaseSite b, float health)
     {
         w.Write(b.Id);
         w.Write(b.Team);
         w.Write(b.SectorId);
         WriteVec3(w, b.Pos);
-        w.Write(World.BaseRadius);
+        w.Write(world.BaseRadiusOf(b.BaseTypeId)); // per-type radius (was the World.BaseRadius constant; v37)
         w.Write(health);
+        w.Write(b.BaseTypeId); // v37: which base type (mesh/def), appended after health for byte-stability
     }
 
     // One asteroid static record (Welcome + MsgReveal). Cosmetic shape: variant index into
@@ -514,6 +519,72 @@ public static class Protocol
             o += 8;
         }
         return buf;
+    }
+
+    // Fixed serialized size of one constructor-build record: u64 shipId | u64 rockId | u8 phase | f16 progress.
+    public const int ConstructorBuildRecordSize = 8 + 8 + 1 + 2; // 19
+
+    // Each constructor drone actively aligning/sinking/building on a rock (MsgConstructorBuilds), so the
+    // client drives the build-sphere VFX enveloping that asteroid. Broadcast like MsgMinerTargets — a
+    // receiver that can't see the ship or the rock renders nothing. Null when nobody is building (v37).
+    // ~1.5s at 20 Hz: keep emitting 0-count frames this long after the last active build so the lossy
+    // client is guaranteed to see the drop and fade the sphere out.
+    private const uint ConstructorBuildEmptyGraceTicks = 30;
+
+    public static byte[]? BuildConstructorBuilds(Simulation sim)
+    {
+        var rows = sim.ConstructorBuildsView();
+        if (rows.Count == 0)
+        {
+            // Silent once the grace window since the last activity has passed.
+            if (sim.Tick - sim.LastConstructorBuildTick > ConstructorBuildEmptyGraceTicks)
+                return null;
+            return new[] { MsgConstructorBuilds, (byte)0 };
+        }
+        sim.LastConstructorBuildTick = sim.Tick;
+        int count = Math.Min(rows.Count, 255);
+        var buf = new byte[2 + count * ConstructorBuildRecordSize];
+        buf[0] = MsgConstructorBuilds;
+        buf[1] = (byte)count;
+        int o = 2;
+        for (int i = 0; i < count; i++)
+        {
+            var r = rows[i];
+            BitConverter.TryWriteBytes(buf.AsSpan(o), r.ShipId);
+            o += 8;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), r.RockId);
+            o += 8;
+            buf[o++] = r.Phase;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackHalf(r.Progress));
+            o += 2;
+        }
+        return buf;
+    }
+
+    // A broadcast one-slice MsgReveal carrying just the given base ids as statics (0 rocks/alephs/
+    // sectors) — the FOG-OFF path for a mid-match base (a new constructor-built base): fog-on streams
+    // it through the per-team reveal log instead. Null when the id list is empty. Reuses WriteBaseStatic
+    // so a broadcast reveal is byte-identical to a fog-on one. (v37)
+    public static byte[]? BuildBaseReveal(World world, IReadOnlyList<ulong> baseIds)
+    {
+        if (baseIds.Count == 0)
+            return null;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgReveal);
+        // Count only the ids that resolve to a live base index.
+        var idx = new List<int>();
+        for (int i = 0; i < world.Bases.Count; i++)
+            if (baseIds.Contains(world.Bases[i].Id))
+                idx.Add(i);
+        w.Write((byte)idx.Count);
+        foreach (int i in idx)
+            WriteBaseStatic(w, world, world.Bases[i], world.BaseHealth[i]);
+        w.Write((ushort)0); // rocks
+        w.Write((byte)0);   // alephs
+        w.Write((byte)0);   // sectors
+        w.Flush();
+        return ms.ToArray();
     }
 
     // Fog-filtered rock-update frames for one team: only rocks the team has DISCOVERED, so an enemy
@@ -697,7 +768,7 @@ public static class Protocol
 
             w.Write((ushort)world.Bases.Count);
             for (int i = 0; i < world.Bases.Count; i++)
-                WriteBaseStatic(w, world.Bases[i], world.BaseHealth[i]);
+                WriteBaseStatic(w, world, world.Bases[i], world.BaseHealth[i]);
 
             w.Write((uint)world.Asteroids.Count);
             foreach (var a in world.Asteroids)
@@ -746,7 +817,7 @@ public static class Protocol
                     if (!vision.DiscoveredBases.Contains(b.Id))
                         continue;
                     float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[i];
-                    WriteBaseStatic(w, b, h);
+                    WriteBaseStatic(w, world, b, h);
                 }
 
                 int rockCount = 0;
@@ -855,7 +926,7 @@ public static class Protocol
         {
             var b = world.Bases[idx];
             float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[idx];
-            WriteBaseStatic(w, b, h);
+            WriteBaseStatic(w, world, b, h);
         }
         w.Write((ushort)rockIdx.Count);
         foreach (int idx in rockIdx)
@@ -1059,6 +1130,37 @@ public static class Protocol
         return buf;
     }
 
+    // PER-TEAM constructor roster (MsgConstructorState, v38): every owned constructor — producing
+    // (start/duration → Build-tab progress bar + cancel) and launched (status). Progress derives
+    // client-side from startTick+durationTicks, so the frame is stable between state changes and rides
+    // the on-change + coarse cadence.
+    public static byte[] BuildConstructorState(Simulation sim, byte team)
+    {
+        var rows = sim.ConstructorStatesView();
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgConstructorState);
+        int countPos = (int)ms.Position;
+        w.Write((byte)0); // patched below
+        byte n = 0;
+        foreach (var r in rows)
+        {
+            if (r.Team != team || n >= 255)
+                continue;
+            w.Write(r.Id);
+            w.Write(r.StationType);
+            w.Write(r.State);
+            w.Write(r.StartTick);
+            w.Write(r.DurationTicks);
+            w.Write(r.TargetId);
+            n++;
+        }
+        w.Flush();
+        var buf = ms.ToArray();
+        buf[countPos] = n;
+        return buf;
+    }
+
     public static byte[] BuildShipGone(ulong shipId, byte reason)
     {
         var buf = new byte[10];
@@ -1160,6 +1262,7 @@ public static class Protocol
                 w.Write(c.CargoId);
                 w.Write(c.Count);
             }
+            w.Write(s.IsConstructor); // v37: constructor chassis (hidden from the buy menu, like miners)
         }
 
         var weapons = content.Weapons;
@@ -1241,6 +1344,10 @@ public static class Protocol
             WriteHardpoints(w, b.Hardpoints);
             // Research slots (v36), streamed after Hardpoints (append-only convention).
             w.Write(b.ResearchSlots);
+            // Base building (v37), streamed after ResearchSlots. Reader mirrors this order exactly.
+            WriteString(w, b.ModelName);
+            w.Write(b.WinCondition);
+            w.Write(b.BuildRockClass);
         }
 
         var cfg = content.World;
@@ -1293,6 +1400,7 @@ public static class Protocol
             w.Write(s.StationClass);
             w.Write(s.BaseTypeId); // i16; -1 = catalog-only (Build-tab placeholder)
             w.Write(s.ResearchSlots);
+            w.Write(s.BuildRockClass); // u8; 255 = unset (v37)
             WriteTechList(w, s.RequiredTechIdx);
             WriteTechList(w, s.GrantedTechIdx);
             WriteTechList(w, s.ObsoletedByTechIdx);

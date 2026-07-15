@@ -75,4 +75,13 @@ public record Station : Buildable
     /// projection. Only meaningful for stations that project to a runtime base.
     /// </summary>
     public int ResearchSlots { get; set; }
+
+    /// <summary>
+    /// Runtime extension: the asteroid resource-class name (kebab-case, e.g. <c>regolith</c>, matching
+    /// StellarAllegiance's RockClass) a constructor drone may build this station on. Null/empty =
+    /// not constructor-buildable (e.g. the garrison, placed at match start). Distinct from
+    /// <see cref="BuildableOn"/> (the Core AsteroidAbility model, unused by the runtime). Serialized
+    /// kebab-case as <c>build-on-rock-class</c>; projected onto BaseDef/StationCatalogDef.BuildRockClass.
+    /// </summary>
+    public string? BuildOnRockClass { get; set; }
 }

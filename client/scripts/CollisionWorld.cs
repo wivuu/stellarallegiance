@@ -17,8 +17,7 @@ public sealed class CollisionWorld
     // Cached authored-unit models, built once per asteroid variant / for the base. A null entry
     // marks a GLB that couldn't be read (→ sphere fallback), so we don't retry.
     private readonly Dictionary<string, SimModel?> _variantModels = new();
-    private SimModel? _baseModel;
-    private bool _baseLoaded;
+    private readonly Dictionary<string, SimModel?> _baseModels = new(); // v37: per-base-type mesh cache
 
     // Per-sector static bodies. We keep the SPAWN pose plus each rock's tumble (axis/speed) and
     // compose the live rotation at query time, so the predicted hull spins in lockstep with the
@@ -139,18 +138,23 @@ public sealed class CollisionWorld
         }
     }
 
-    public void AddBase(StellarAllegiance.Net.Base row)
+    public void AddBase(DefRegistry defs, StellarAllegiance.Net.Base row)
     {
         var list = BodyList(row.SectorId);
         var center = new Vec3(row.PosX, row.PosY, row.PosZ);
-        SimModel? model = BaseModel();
+        // v37: per-base-type mesh + radius (mirrors the server's World.LoadBaseModel), so an outpost
+        // predicts its own hull, not the garrison's. Falls back to the garrison model/radius.
+        BaseDef? def = defs.GetBaseDef(row.BaseTypeId);
+        string modelName = string.IsNullOrEmpty(def?.ModelName) ? "garrison" : def!.ModelName;
+        float radius = def is { Radius: > 0f } ? def.Radius : CollisionConfig.BaseRadius;
+        SimModel? model = BaseModel(modelName);
         if (model is null || model.LongestAxis <= 1e-3f)
         {
-            list.Add(new Entry(Collide.StaticBody.BaseSphere(center, CollisionConfig.BaseRadius, row.Team), default, 0f));
+            list.Add(new Entry(Collide.StaticBody.BaseSphere(center, radius, row.Team), default, 0f));
             return;
         }
         // World scale: the client renders the base via NormalizeLongestAxis(radius*2); bake the same.
-        float ws = CollisionConfig.BaseRadius * 2f / model.LongestAxis;
+        float ws = radius * 2f / model.LongestAxis;
         ConvexHull hull = model.Hull.Scaled(ws);
         // Authored compound sub-hulls, world-scaled exactly like the server's World.LoadBase (same GLB
         // bytes → same ConvexHull.Build per part → bit-identical hulls). Partless bases: model.Hulls
@@ -248,17 +252,16 @@ public sealed class CollisionWorld
         return model;
     }
 
-    private SimModel? BaseModel()
+    private SimModel? BaseModel(string modelName)
     {
-        if (!_baseLoaded)
-        {
-            // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
-            // bakes (World.LoadBase) and the visual renders (BaseModelLoader), so the predicted hull +
-            // docking faces stay bit-identical to the server's and aligned with the rendered base.
-            _baseModel = LoadGlb("res://assets/bases/garrison.glb", CollisionConfig.BaseModelRotation);
-            _baseLoaded = true;
-        }
-        return _baseModel;
+        if (_baseModels.TryGetValue(modelName, out var cached))
+            return cached;
+        // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
+        // bakes (World.LoadBaseModel) and the visual renders (BaseModelLoader), so the predicted hull +
+        // docking faces stay bit-identical to the server's and aligned with the rendered base.
+        var model = LoadGlb($"res://assets/bases/{modelName}.glb", CollisionConfig.BaseModelRotation);
+        _baseModels[modelName] = model;
+        return model;
     }
 
     // Read the raw .glb bytes from res:// and build the shared SimModel (same path the server takes

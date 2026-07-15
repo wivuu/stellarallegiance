@@ -133,8 +133,9 @@ public sealed partial class Simulation
                 miner = m;
                 break;
             }
-        bool combatPig = miner is null && ship.IsPig && !ship.IsPod;
-        if (!combatPig && miner is null)
+        ConstructorSlot? ctor = miner is null ? ConstructorSlotFor(ship) : null;
+        bool combatPig = miner is null && ctor is null && ship.IsPig && !ship.IsPod;
+        if (!combatPig && miner is null && ctor is null)
         {
             // Human ships never reach the sim (the hub turns them into advisory directives); this
             // covers races (roster changed mid-flight) and malformed ids.
@@ -163,6 +164,8 @@ public sealed partial class Simulation
                         GoHome(mp, mlive, remember: false);
                 }
             }
+            if (ctor is ConstructorSlot cc)
+                ClearConstructorOrder(cc);
             Notice($"{DescribeAi(ship, miner)} released to autonomy.");
             return;
         }
@@ -170,6 +173,12 @@ public sealed partial class Simulation
         if (miner is MinerSlot ms)
         {
             ApplyMinerCommandOrder(cid, issuer, team, ms, targetKind, targetId, sector, pos);
+            return;
+        }
+
+        if (ctor is ConstructorSlot cs)
+        {
+            ApplyConstructorCommandOrder(cid, issuer, team, cs, targetKind, targetId, sector, pos);
             return;
         }
 

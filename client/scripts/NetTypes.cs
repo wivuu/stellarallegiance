@@ -141,6 +141,7 @@ namespace StellarAllegiance.Net
             PosY,
             PosZ;
         public float Health;
+        public byte BaseTypeId; // v37: which base type (selects mesh/def)
     }
 
     // A field asteroid (static, from Welcome). Variant is the GLB mesh name (cosmetic). Radius is the

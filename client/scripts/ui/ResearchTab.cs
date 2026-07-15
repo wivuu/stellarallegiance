@@ -1121,6 +1121,33 @@ internal partial class ActiveBanner : PanelContainer
         AddChild(lbl);
     }
 
+    // Generic timed banner (reused by the Build tab for constructor production/build phases): a live
+    // countdown + progress bar in the given accent, with an optional cancel button. Progress derives
+    // from start+dur vs ServerTick, exactly like a research order.
+    public void ConfigureTimed(WorldRenderer world, Color accent, string title, uint start, uint dur, Action? onCancel, string cancelText)
+    {
+        _world = world;
+        _start = start;
+        _dur = dur;
+        _live = true;
+        Build(accent, title, "--:--", onCancel, cancelText, withBar: true);
+    }
+
+    // Generic untimed status note (reused by the Build tab for idle / en-route / moving constructors):
+    // a left-accent bordered label with no bar or countdown.
+    public void ConfigureNote(Color accent, string title)
+    {
+        _live = false;
+        var sb = new StyleBoxFlat { BgColor = new Color(accent, 0.06f), BorderColor = new Color(accent, 0.55f), AntiAliasing = false };
+        sb.SetCornerRadiusAll(0);
+        sb.BorderWidthLeft = 2;
+        sb.ContentMarginLeft = 12;
+        sb.ContentMarginRight = 10;
+        sb.ContentMarginTop = sb.ContentMarginBottom = 8;
+        AddThemeStyleboxOverride("panel", sb);
+        AddChild(UiKit.MakeLabel(title, UiKit.TextStyle.Data, accent));
+    }
+
     private void Build(Color accent, string title, string countText, Action? onCancel, string cancelText, bool withBar)
     {
         var sb = new StyleBoxFlat { BgColor = new Color(accent, 0.08f), BorderColor = accent, AntiAliasing = false };

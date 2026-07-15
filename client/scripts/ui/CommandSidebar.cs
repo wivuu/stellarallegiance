@@ -113,15 +113,20 @@ public partial class CommandSidebar : Control
         foreach (Sector s in _world.MapSectors)
             sectorNames[s.SectorId] = string.IsNullOrEmpty(s.Name) ? $"SECTOR {s.SectorId}" : s.Name.ToUpperInvariant();
 
+        // Name each base by TYPE · SECTOR (e.g. "OUTPOST · CINDER BELT"). When two same-type bases share
+        // a sector, the second+ get a numeric suffix so they stay distinct.
         var entries = new List<BaseEntry>();
-        int n = 0;
-        foreach (var (id, sector, bteam, alive) in _world.KnownBases())
+        var seen = new Dictionary<(string, uint), int>();
+        foreach (var (id, sector, bteam, alive, typeId) in _world.KnownBases())
         {
             if (bteam != team)
                 continue; // never surface enemy bases beyond what the map already reveals
-            n++;
             string sname = sectorNames.TryGetValue(sector, out string? nm) ? nm : $"SECTOR {sector}";
-            entries.Add(new BaseEntry(id, $"GARRISON {n:00}", sname, sector, alive));
+            string typeName = (_defs?.GetBaseDef(typeId)?.Name ?? "BASE").ToUpperInvariant();
+            int k = seen.TryGetValue((typeName, sector), out int c) ? c + 1 : 1;
+            seen[(typeName, sector)] = k;
+            string label = k > 1 ? $"{typeName} · {sname} {k}" : $"{typeName} · {sname}";
+            entries.Add(new BaseEntry(id, label, sname, sector, alive));
         }
 
         SetData(entries, BuildMapModel(_world));

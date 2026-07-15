@@ -375,14 +375,18 @@ Check(
     $"development projection wrong (count {stock.Developments.Count}, "
         + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
 );
-// Station catalog: 8 entries, exactly ONE with a runtime BaseTypeId (the garrison, ResearchSlots 1);
-// every other entry is catalog-only (BaseTypeId -1 => never projected to a runtime BaseDef).
+// Station catalog: 8 entries, TWO with a runtime BaseTypeId (garrison type 0 + outpost type 1, v37
+// base building); every other entry stays catalog-only (BaseTypeId -1 => never a runtime BaseDef).
+// The outpost carries build-on-rock-class Regolith and is NOT a win-condition base (no `start`).
 var runtimeStations = stock.StationCatalog.Where(s => s.BaseTypeId >= 0).ToList();
+var garrisonCat = stock.StationCatalog.First(s => s.Id == "garrison");
+var outpostCat = stock.StationCatalog.First(s => s.Id == "outpost");
 Check(
-    stock.StationCatalog.Count == 8 && runtimeStations.Count == 1 && runtimeStations[0].ResearchSlots == 1,
-    "station catalog has 8 entries, exactly one runtime station (garrison, ResearchSlots 1)",
+    stock.StationCatalog.Count == 8 && runtimeStations.Count == 2 && garrisonCat.ResearchSlots == 1
+        && outpostCat.BaseTypeId == 1 && outpostCat.BuildRockClass == (byte)RockClass.Regolith,
+    "station catalog has 8 entries, two runtime stations (garrison slots 1 + outpost type 1 on Regolith)",
     $"station catalog wrong (count {stock.StationCatalog.Count}, runtime {runtimeStations.Count}, "
-        + $"slots {(runtimeStations.Count > 0 ? runtimeStations[0].ResearchSlots : -1)})"
+        + $"outpost type {outpostCat.BaseTypeId} rockClass {outpostCat.BuildRockClass})"
 );
 var techLab = stock.StationCatalog.First(s => s.Id == "tech-lab");
 Check(

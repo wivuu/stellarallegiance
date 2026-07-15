@@ -57,7 +57,7 @@ public static class SelfTest
         var content = ContentLoader.Load(
             Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml"),
             Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml"));
-        var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+        var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases);
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });
 

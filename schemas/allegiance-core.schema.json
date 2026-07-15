@@ -1733,6 +1733,13 @@
             "type": "integer",
             "description": "How many research orders this station may run concurrently. Omit-when-default (serialized kebab-case as research-slots); 0 means \u0022default (1)\u0022 and is resolved to a single slot at projection. Only meaningful for stations that project to a runtime base."
           },
+          "build-on-rock-class": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Runtime extension: the asteroid resource-class name (kebab-case, e.g. regolith, matching StellarAllegiance\u0027s RockClass) a constructor drone may build this station on. Null/empty = not constructor-buildable (e.g. the garrison, placed at match start). Distinct from BuildableOn (the Core AsteroidAbility model, unused by the runtime). Serialized kebab-case as build-on-rock-class; projected onto BaseDef/StationCatalogDef.BuildRockClass."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."

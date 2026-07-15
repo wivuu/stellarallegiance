@@ -28,6 +28,9 @@ public sealed class World
     public const float BaseRadius = CollisionConfig.BaseRadius;
     public const float DockFaceDepth = CollisionConfig.DockFaceDepth; // docking-door depth window (own base carve-out)
     public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
+    private readonly IReadOnlyList<BaseDef>? _baseDefs; // per-type base defs (mesh/radius); null = garrison-only
+    private ulong _nextBaseId = 1; // stable per-match base id; garrisons seed it, CreateBase extends it
+    public readonly int GarrisonCount; // count of match-start garrisons (all type 0); runtime bases append after
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
     // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
@@ -64,7 +67,9 @@ public sealed class World
     // list lock-free, exactly like the rock grid.
     public readonly record struct DustCloud(uint SectorId, Vec3 Pos, float Radius, float Density);
 
-    public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
+    // BaseTypeId selects the base's mesh/def/collision (0 = garrison; forward bases built by
+    // constructors carry their station's type). Match-start garrisons are always type 0.
+    public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos, byte BaseTypeId = 0);
 
     // Variant/Rot* are cosmetic only (the sim ignores them) but are drawn from the same DetRng
     // sequence the module uses, so they ride along to the client via the Welcome frame instead
@@ -83,8 +88,12 @@ public sealed class World
     public readonly record struct Gate(ulong Id, uint SectorId, uint DestSectorId, Vec3 Pos, Vec3 PartnerPos);
 
     public readonly List<Sector> Sectors = new();
+    // Bases grow at runtime (v37 base building appends constructor-built bases). Appending never
+    // invalidates an existing index, so BaseHealth/ResearchByBase (indexed like Bases) stay in
+    // lockstep — every consumer iterates `for i < Bases.Count`. Bases are never removed/reordered
+    // (a destroyed base keeps its slot with BaseHealth 0).
     public readonly List<BaseSite> Bases = new();
-    public readonly float[] BaseHealth; // indexed like Bases
+    public readonly List<float> BaseHealth = new(); // indexed like Bases
 
     // Stage-4 research: one mutable research-order state per base, indexed like Bases. Lives on
     // World so a match-start world swap resets it for free (StartMatch builds a fresh World).
@@ -100,7 +109,7 @@ public sealed class World
         public ushort? OnDeck;
     }
 
-    public readonly BaseResearchState[] ResearchByBase; // indexed like Bases
+    public readonly List<BaseResearchState> ResearchByBase = new(); // indexed like Bases
     public readonly List<Rock> Asteroids = new();
     public readonly List<DustCloud> DustClouds = new();
     public readonly List<Gate> Alephs = new();
@@ -149,33 +158,59 @@ public sealed class World
     // at construction and re-seeded on each match start (SeedEconomy).
     public readonly Dictionary<byte, TeamState> TeamStates = new();
 
-    // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
-    // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
-    // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
-    public readonly SimModel? BaseModel;
-    public readonly ConvexHull? BaseHull; // base hull in WORLD units (base is identity-oriented)
-
-    // Authored compound sub-hulls (one per baked COL_ part), world-scaled in the base's identity
-    // frame — the SOLID a ship actually bounces off / a bolt ray-clips against, so collision matches
-    // the visible concave superstructure instead of the merged shrink-wrap. Empty when no base model
-    // loads (sphere fallback). When the GLB carries NO COL_ parts, model.Hulls aliases the merged
-    // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
-    // behave bit-identically to the pre-compound single-hull path.
-    public readonly ConvexHull[] BaseSubHulls;
     // One launch bay per authored HP_DockingExit node: Pos = where a launching ship first appears
     // (the hardpoint, base-local world units), Dir = the launch axis out of the bay (opposite the
     // node's inward forward). A base may author N exits — the sim picks one at random per launch.
     // Always at least one element (a modelless/exitless base gets a single default entry).
     public readonly record struct BaseExit(Vec3 Pos, Vec3 Dir);
-    public readonly BaseExit[] BaseExits;
-    public readonly Vec3 BaseEntryAxis; // mean inward face-normal across doors, for AI aim
-    public readonly Vec3 BaseDoorCenter; // centroid of the door face centres (AI aim target)
 
-    // Rectangular docking DOORS: one DockFace per group of 5 HP_DockingEntrance markers (1 face
-    // marker + 4 boundary markers), in base-local (world-scaled) units offset from the base center.
-    // A base may author N doors. A ship docks ONLY by intersecting one of these bounded faces; the
-    // rest of the base is a solid hull. Parsed by the shared DockFaceParser (same as the client).
-    public readonly DockFace[] BaseDockFaces;
+    // Server-side collision/hardpoint model for ONE base type (v37 — base building generalized bases
+    // to be per-type, like ship hulls). Garrison (type 0) carries the full compound COL_ hull + docking
+    // doors; a constructor-built forward base (outpost) shrink-wraps to a single convex hull with no
+    // doors (sphere/convex collision, no docking). Hull null => sphere fallback at Radius.
+    public sealed class BaseModelData
+    {
+        public SimModel? Model;
+        public ConvexHull? Hull; // base hull in WORLD units (base is identity-oriented)
+        public ConvexHull[] SubHulls = System.Array.Empty<ConvexHull>();
+        public BaseExit[] Exits = System.Array.Empty<BaseExit>();
+        public Vec3 EntryAxis; // mean inward face-normal across doors, for AI aim
+        public Vec3 DoorCenter; // centroid of the door face centres (AI aim target)
+        public DockFace[] DockFaces = System.Array.Empty<DockFace>();
+        public float Radius = BaseRadius; // world-unit collision radius for this type
+    }
+
+    // Loaded base models keyed by BaseTypeId. Type 0 (garrison) is always present. Populated in the
+    // ctor from the content base defs (per-type ModelName + Radius); a minimal caller with no base
+    // defs falls back to the single garrison model, keeping legacy behavior byte-identical.
+    private readonly Dictionary<byte, BaseModelData> _baseModels = new();
+
+    // Garrison (type 0) model — the fallback for any type not loaded, and the source of the legacy
+    // single-model accessors below (call sites without a base-type context).
+    private BaseModelData Model0 => _baseModels.TryGetValue(0, out var m) ? m : EmptyBaseModel;
+    private static readonly BaseModelData EmptyBaseModel = new();
+
+    public BaseModelData BaseModelFor(byte typeId) =>
+        _baseModels.TryGetValue(typeId, out var m) ? m : Model0;
+
+    // Per-type collision accessors — the call sites that iterate bases resolve by b.BaseTypeId.
+    public ConvexHull? BaseHullOf(byte typeId) => BaseModelFor(typeId).Hull;
+    public ConvexHull[] BaseSubHullsOf(byte typeId) => BaseModelFor(typeId).SubHulls;
+    public BaseExit[] BaseExitsOf(byte typeId) => BaseModelFor(typeId).Exits;
+    public Vec3 BaseDoorCenterOf(byte typeId) => BaseModelFor(typeId).DoorCenter;
+    public Vec3 BaseEntryAxisOf(byte typeId) => BaseModelFor(typeId).EntryAxis;
+    public DockFace[] BaseDockFacesOf(byte typeId) => BaseModelFor(typeId).DockFaces;
+    public float BaseRadiusOf(byte typeId) => BaseModelFor(typeId).Radius;
+
+    // Legacy single-model accessors (garrison, type 0) — for call sites without a base-type context
+    // (SelfTest, launch fallback). Behavior byte-identical to the pre-v37 single-model fields.
+    public SimModel? BaseModel => Model0.Model;
+    public ConvexHull? BaseHull => Model0.Hull;
+    public ConvexHull[] BaseSubHulls => Model0.SubHulls;
+    public BaseExit[] BaseExits => Model0.Exits;
+    public Vec3 BaseEntryAxis => Model0.EntryAxis;
+    public Vec3 BaseDoorCenter => Model0.DoorCenter;
+    public DockFace[] BaseDockFaces => Model0.DockFaces;
     public readonly Dictionary<ulong, RockBody> RockBodies = new();
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
@@ -240,8 +275,9 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, ILogger? log = null)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, IReadOnlyList<BaseDef>? baseDefs = null, ILogger? log = null)
     {
+        _baseDefs = baseDefs;
         _log = log ?? NullLogger.Instance;
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
@@ -289,7 +325,6 @@ public sealed class World
                 break;
             }
         var baseRng = new DetRng(seed ^ 0xB453_BA53_B453_BA53UL);
-        ulong baseId = 1;
         for (int i = 0; i < secCfg.Count; i++)
         {
             var sc = secCfg[i];
@@ -299,7 +334,7 @@ public sealed class World
                 continue;
             float r = RadiusOf(sc.Id);
             Vec3 pos = RandomBasePos(ref baseRng, r * _seed.BaseInnerFrac, r * _seed.BaseOuterFrac, _seed.BaseYJitter);
-            Bases.Add(new BaseSite(baseId++, garrison.Team, sc.Id, pos));
+            Bases.Add(new BaseSite(_nextBaseId++, garrison.Team, sc.Id, pos)); // garrisons are type 0
         }
         if (Bases.Count == 0)
             throw new InvalidOperationException(
@@ -319,11 +354,14 @@ public sealed class World
             throw new InvalidOperationException(
                 $"map declares {teams.Count} garrison team(s) (max id {maxTeam}) — the sim currently "
                     + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
-        BaseHealth = new float[Bases.Count];
-        Array.Fill(BaseHealth, BaseMaxHealth);
-        ResearchByBase = new BaseResearchState[Bases.Count];
-        for (int i = 0; i < ResearchByBase.Length; i++)
-            ResearchByBase[i] = new BaseResearchState();
+        for (int i = 0; i < Bases.Count; i++)
+        {
+            BaseHealth.Add(BaseMaxHealth);
+            ResearchByBase.Add(new BaseResearchState());
+        }
+        // The match-start garrisons (all type 0). ResetMatchBases trims runtime-built bases back to
+        // these on a World-reuse rematch, so a reused World starts each match with only its garrisons.
+        GarrisonCount = Bases.Count;
 
         // One economy state per team (Stage-1 = every team seeds from the single stock faction).
         foreach (var b in Bases)
@@ -386,8 +424,10 @@ public sealed class World
         AssignOre(secCfg);
         AssignVariants();
 
-        // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
+        // Load the per-type GLB collision/hardpoint models (best-effort; falls back to spheres). Type 0
+        // (garrison) is always loaded — from the content garrison def if present, else the legacy
+        // "garrison"/BaseRadius fallback so a minimal caller (map preview) stays byte-identical.
+        LoadBaseModels();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies(ships);
 
@@ -758,17 +798,37 @@ public sealed class World
         return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
     }
 
-    // Base sim-model → world hull + bay frame. The base mesh is authored +90° off about X, so we bake
-    // the same orientation correction the client renders with (CollisionConfig.BaseModelRotation) into
-    // the parsed hull + hardpoints, then uniform-scale via NormalizeLongestAxis(radius*2) as the client
-    // does — so the sim hull, docking doors and launch bays match the rendered, corrected superstructure.
-    private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
+    // Populate _baseModels, one BaseModelData per runtime base type. Type 0 (garrison) is always
+    // loaded. From the content base defs when supplied (per-type ModelName + Radius); else the legacy
+    // single "garrison"/BaseRadius model so a minimal caller stays byte-identical. A type whose GLB is
+    // missing keeps a sphere-collision entry (Hull null) at its def radius.
+    private void LoadBaseModels()
+    {
+        if (_baseDefs is { Count: > 0 })
+        {
+            foreach (var def in _baseDefs)
+            {
+                string model = string.IsNullOrEmpty(def.ModelName) ? "garrison" : def.ModelName;
+                _baseModels[def.BaseTypeId] = LoadBaseModel(model, def.Radius > 0f ? def.Radius : BaseRadius);
+            }
+        }
+        // Guarantee a garrison (type 0) entry regardless (legacy/minimal callers).
+        if (!_baseModels.ContainsKey(0))
+            _baseModels[0] = LoadBaseModel("garrison", BaseRadius);
+    }
+
+    // One base type's sim-model → world hull + bay frame. The base mesh is authored +90° off about X,
+    // so we bake the same orientation correction the client renders with (CollisionConfig.BaseModel
+    // Rotation) into the parsed hull + hardpoints, then uniform-scale so the longest axis spans
+    // radius*2 as the client does — so the sim hull, docking doors and launch bays match the rendered,
+    // corrected superstructure. A missing GLB yields a sphere-collision entry (Hull null) at `radius`.
+    private static BaseModelData LoadBaseModel(string modelName, float radius)
     {
         var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
-        var model = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation);
+        var model = SimAssets.TryLoad($"bases/{modelName}.glb", CollisionConfig.BaseModelRotation);
         if (model is null)
-            return (null, null, [], fallbackExits, default, default, []);
-        float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
+            return new BaseModelData { Exits = fallbackExits, Radius = radius };
+        float ws = radius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒
         // just uniform scale). Partless models: model.Hulls aliases the merged hull ⇒ one entry whose
@@ -808,7 +868,17 @@ public sealed class World
         Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitArr[0].Dir;
         if (entryAxis.LengthSquared() < 0.5f)
             entryAxis = exitArr[0].Dir; // faces' normals canceled (opposed doors) — fall back to a unit axis
-        return (model, hull, subHulls, exitArr, entryAxis, doorCenter, faces);
+        return new BaseModelData
+        {
+            Model = model,
+            Hull = hull,
+            SubHulls = subHulls,
+            Exits = exitArr,
+            EntryAxis = entryAxis,
+            DoorCenter = doorCenter,
+            DockFaces = faces,
+            Radius = radius,
+        };
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
@@ -870,6 +940,40 @@ public sealed class World
             if (b.Id == id)
                 return b;
         return null;
+    }
+
+    // Runtime base creation (v37 base building). APPENDS a new base of `baseTypeId` for `team` at
+    // (sector, pos), full health + a fresh research state — never reorders/removes, so every existing
+    // Bases index stays valid (BaseHealth/ResearchByBase are appended in lockstep). Returns the new
+    // base id. Sim-thread only (called from the constructor build completion). The caller re-resolves
+    // team unlocks (the new base type may grant capabilities) and reveals it to the owning team.
+    public ulong CreateBase(byte team, byte baseTypeId, uint sectorId, Vec3 pos)
+    {
+        ulong id = _nextBaseId++;
+        Bases.Add(new BaseSite(id, team, sectorId, pos, baseTypeId));
+        BaseHealth.Add(BaseMaxHealth);
+        ResearchByBase.Add(new BaseResearchState());
+        return id;
+    }
+
+    // Match reset on a REUSED World (StartMatch when no fresh World is built): trim runtime-built
+    // bases back to the original garrisons, refill health, and clear research so the next match starts
+    // clean. (The production path builds a fresh World per match; this covers World reuse in tests.)
+    public void ResetMatchBases()
+    {
+        if (Bases.Count > GarrisonCount)
+        {
+            Bases.RemoveRange(GarrisonCount, Bases.Count - GarrisonCount);
+            BaseHealth.RemoveRange(GarrisonCount, BaseHealth.Count - GarrisonCount);
+            ResearchByBase.RemoveRange(GarrisonCount, ResearchByBase.Count - GarrisonCount);
+        }
+        for (int i = 0; i < BaseHealth.Count; i++)
+        {
+            BaseHealth[i] = BaseMaxHealth;
+            ResearchByBase[i].Active.Clear();
+            ResearchByBase[i].OnDeck = null;
+        }
+        _nextBaseId = (ulong)GarrisonCount + 1;
     }
 
     // TEST SEAM: hand-place an occluder rock into a sector's spatial grid (and the flat list) so the

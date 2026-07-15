@@ -24,6 +24,7 @@ public partial class BuildTab : Control
 {
     private DefRegistry? _defs;
     private WorldRenderer? _world;
+    private GameNetClient? _net;
 
     private ulong _baseId;
     private string _baseTitle = "";
@@ -43,10 +44,16 @@ public partial class BuildTab : Control
     private HFlowContainer _grid = null!;
     private TechDetailPanel _detail = null!;
 
-    public void Init(DefRegistry defs, WorldRenderer world)
+    // Fleet-constructor roster (producing + launched drones), rebuilt when the set/states change.
+    private Control _rosterSection = null!;
+    private VBoxContainer _roster = null!;
+    private long _rosterSig = long.MinValue;
+
+    public void Init(DefRegistry defs, WorldRenderer world, GameNetClient? net = null)
     {
         _defs = defs;
         _world = world;
+        _net = net;
     }
 
     // Called by ShipLoadout when the CommandSidebar selection changes (mirrors ResearchTab.SetBase).
@@ -111,6 +118,7 @@ public partial class BuildTab : Control
 
         _detail = new TechDetailPanel();
         _detail.SetSchematic("⬡", "// STRUCTURE");
+        _detail.PrimaryPressed += OnBuildPressed;
         _mainBody.AddChild(_detail);
     }
 
@@ -138,6 +146,17 @@ public partial class BuildTab : Control
 
         col.AddChild(new DiamondDivider());
 
+        // Fleet-constructor roster: producing drones (progress + cancel) and launched drones (status).
+        // Hidden entirely when the team has no constructors.
+        _rosterSection = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
+        _rosterSection.AddThemeConstantOverride("separation", 8);
+        _rosterSection.AddChild(UiKit.MakeLabel("▶ FLEET CONSTRUCTORS", UiKit.TextStyle.Label, DesignTokens.TextDim));
+        _roster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _roster.AddThemeConstantOverride("separation", 6);
+        _rosterSection.AddChild(_roster);
+        _rosterSection.AddChild(new DiamondDivider());
+        col.AddChild(_rosterSection);
+
         // Responsive card grid — HFlowContainer wraps ~232px cells (StationCard sets its min width).
         _grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _grid.AddThemeConstantOverride("h_separation", 14);
@@ -149,13 +168,22 @@ public partial class BuildTab : Control
 
     // ---- catalog-only entries ---------------------------------------------
 
+    // Every buildable structure: the runtime forward bases (BaseTypeId >= 1, e.g. the outpost — really
+    // constructible) plus the catalog-only placeholders (-1). The garrison (type 0) is the starting
+    // base, never in the Build catalog.
     private List<StationCatalogDef> Catalog() =>
-        _defs == null ? new() : _defs.AllStationCatalog().Where(s => s.BaseTypeId == -1).ToList();
+        _defs == null ? new() : _defs.AllStationCatalog().Where(s => s.BaseTypeId != 0).ToList();
+
+    // A structure that actually builds today (has a runtime base projection). Placeholders (-1) are
+    // display-only until their type is authored.
+    private static bool IsConstructible(StationCatalogDef s) => s.BaseTypeId >= 1;
 
     public override void _Process(double delta)
     {
         if (_defs == null || _world == null)
             return;
+
+        UpdateRoster();
 
         List<StationCatalogDef> catalog = Catalog();
         bool have = catalog.Count > 0;
@@ -199,6 +227,75 @@ public partial class BuildTab : Control
         _headerLabel.Text = string.IsNullOrEmpty(_baseTitle)
             ? "CONSTRUCTION CATALOG"
             : $"CONSTRUCTION CATALOG · {_baseTitle.ToUpperInvariant()}";
+
+    // ---- fleet-constructor roster -----------------------------------------
+
+    // Rebuild the roster only when the constructor SET or their STATES change (progress within a state
+    // animates continuously in each row's _Process — no rebuild). Hidden when the team has none.
+    private void UpdateRoster()
+    {
+        var states = _world!.ConstructorStates();
+        long sig = states.Count * 2654435761L;
+        foreach (var c in states)
+            sig ^= (long)(c.Id * 131u + c.State + 1u) * 40503L;
+        if (sig == _rosterSig)
+            return;
+        _rosterSig = sig;
+        RebuildRoster(states);
+    }
+
+    private void RebuildRoster(IReadOnlyList<WorldRenderer.ConstructorStatus> states)
+    {
+        foreach (Node c in _roster.GetChildren())
+            c.QueueFree();
+        _rosterSection.Visible = states.Count > 0;
+        if (states.Count == 0)
+            return;
+
+        bool commander = _net?.IsCommander ?? false;
+        foreach (var c in states)
+        {
+            string name = StationName(c.StationTypeId);
+            var row = new ActiveBanner { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            switch (c.State)
+            {
+                case 0: // Producing
+                {
+                    ulong id = c.Id;
+                    Action? cancel = commander ? () => { _net?.SendCancelConstructor(id); SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick); } : null;
+                    row.ConfigureTimed(_world!, DesignTokens.Warn, $"◷ PRODUCING · {name} CONSTRUCTOR", c.StartTick, c.DurationTicks, cancel, "✕ CANCEL");
+                    break;
+                }
+                case 1: // Idle
+                    row.ConfigureNote(DesignTokens.Data, $"◌ {name} CONSTRUCTOR · IDLE — F3-order it to an asteroid");
+                    break;
+                case 2: // ToRock
+                    row.ConfigureNote(DesignTokens.TeamAccent, $"▸ {name} CONSTRUCTOR · EN ROUTE TO BUILD SITE");
+                    break;
+                case 3: // MoveTo
+                {
+                    string sec = _world!.SectorName((uint)c.TargetId);
+                    if (string.IsNullOrEmpty(sec)) sec = $"SECTOR {c.TargetId}";
+                    row.ConfigureNote(DesignTokens.TeamAccent, $"▸ {name} CONSTRUCTOR · MOVING TO {sec.ToUpperInvariant()}");
+                    break;
+                }
+                case 4: // Aligning
+                    row.ConfigureTimed(_world!, DesignTokens.TeamAccent, $"◈ {name} · ALIGNING", c.StartTick, c.DurationTicks, null, "");
+                    break;
+                case 5: // Sinking
+                    row.ConfigureTimed(_world!, DesignTokens.TeamAccent, $"◈ {name} · EMBEDDING", c.StartTick, c.DurationTicks, null, "");
+                    break;
+                default: // Building
+                    row.ConfigureTimed(_world!, DesignTokens.Warn, $"◈ BUILDING {name}", c.StartTick, c.DurationTicks, null, "");
+                    break;
+            }
+            _roster.AddChild(row);
+        }
+    }
+
+    // Display name for a base type (from the station catalog), e.g. "OUTPOST".
+    private string StationName(byte baseTypeId) =>
+        (_defs?.AllStationCatalog().FirstOrDefault(s => s.BaseTypeId == baseTypeId)?.Name ?? "STRUCTURE").ToUpperInvariant();
 
     // ---- status resolution (client-side, streamed data only) --------------
 
@@ -263,8 +360,8 @@ public partial class BuildTab : Control
             _detail.SetMeta("—", "—", "—");
             _detail.ClearPrereqs();
             _detail.ClearUnlocks();
-            _detail.SetFooter(true, "⊘ CONSTRUCTORS OFFLINE", ButtonVariant.Secondary, null,
-                "Construction logic arrives with the base-building update.");
+            _detail.SetFooter(true, "— SELECT A STRUCTURE", ButtonVariant.Secondary, null,
+                "Choose a structure to commission a constructor.");
             return;
         }
 
@@ -279,8 +376,54 @@ public partial class BuildTab : Control
 
         BuildPrereqs(sel);
         BuildUnlocks(sel);
-        _detail.SetFooter(true, "⊘ CONSTRUCTORS OFFLINE", ButtonVariant.Secondary, null,
-            "Construction logic arrives with the base-building update.");
+        UpdateFooter(sel, available);
+    }
+
+    // The action footer. A constructible structure that's available lets a COMMANDER buy a constructor
+    // (which then F3-orders to a compatible asteroid); non-commanders get a disabled affordance; locked
+    // structures show why; placeholder types (BaseTypeId -1) stay "offline" until authored.
+    private void UpdateFooter(StationCatalogDef sel, bool available)
+    {
+        if (!IsConstructible(sel))
+        {
+            _detail.SetFooter(true, "⊘ NOT YET BUILDABLE", ButtonVariant.Secondary, null,
+                "This structure type arrives in a later update.");
+            return;
+        }
+        if (!available)
+        {
+            _detail.SetFooter(true, "⊘ LOCKED", ButtonVariant.Secondary, null,
+                "Research or build the prerequisites to unlock this structure.");
+            return;
+        }
+        bool commander = _net?.IsCommander ?? false;
+        if (!commander)
+        {
+            _detail.SetFooter(true, "⊘ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Secondary, null,
+                "Only the team commander can commission a constructor.");
+            return;
+        }
+        string rock = sel.BuildRockClass == 255 ? "asteroid" : $"{RockClassName(sel.BuildRockClass)} asteroid";
+        _detail.SetFooter(false, "◈ BUILD CONSTRUCTOR", ButtonVariant.Primary, null,
+            $"Launches a constructor from your garrison — then F3-order it to a {rock}.");
+    }
+
+    private static string RockClassName(byte rc) => rc switch
+    {
+        0 => "carbonaceous", 1 => "silicon", 2 => "uranium", 3 => "helium-3", 4 => "regolith", _ => "any",
+    };
+
+    // BUILD button: commander commissions a constructor for the selected structure, launching from the
+    // sidebar-selected base (0 = the server's default garrison). The server validates + charges.
+    private void OnBuildPressed()
+    {
+        if (_net is null || _selectedId is null)
+            return;
+        StationCatalogDef? sel = Catalog().FirstOrDefault(s => s.Id == _selectedId);
+        if (sel is null || !IsConstructible(sel) || !IsAvailable(sel) || !_net.IsCommander)
+            return;
+        _net.SendBuildConstructor((byte)sel.BaseTypeId, _baseId);
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
     private void BuildPrereqs(StationCatalogDef s)

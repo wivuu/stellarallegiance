@@ -637,11 +637,14 @@ public sealed partial class Simulation
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
         MinerNoticesThisStep.Clear();
+        ConstructorNoticesThisStep.Clear();
+        BasesCreatedThisStep.Clear();
         OrderNoticesThisStep.Clear();
         OrderDirectivesThisStep.Clear();
         ResearchChangedThisStep = false;
         ResearchNoticesThisStep.Clear();
         ResearchTeamNoticesThisStep.Clear();
+        ConstructorChangedThisStep = false;
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -663,6 +666,7 @@ public sealed partial class Simulation
         {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             MinerBrainStep(tick); // 5 Hz miner lifecycle + rock/base targeting (Simulation.Mining.cs)
+            ConstructorBrainStep(tick); // 5 Hz constructor build lifecycle (Simulation.Constructors.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
             ResearchStep(tick); // Stage-4: per-base research progress + on-deck promotion (Simulation.Research.cs)
             // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
@@ -755,7 +759,7 @@ public sealed partial class Simulation
                     continue;
                 if (b.Team != s.Team)
                 {
-                    ResolveBaseCollision(s, b.Pos); // enemy base: fully solid hull
+                    ResolveBaseCollision(s, b.Pos, b.BaseTypeId); // enemy base: fully solid hull
                     continue;
                 }
                 // Own base: with a loaded hull you dock ONLY by flying your ship into a rectangular
@@ -763,9 +767,9 @@ public sealed partial class Simulation
                 // the rest of the base is a solid hull that bounces you. Without a model, fall back to
                 // the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
-                if (World.BaseHull is not null)
+                if (World.BaseHullOf(b.BaseTypeId) is not null)
                 {
-                    if (Collide.IntersectsDockFace(d, World.BaseDockFaces, World.DockFaceDepth, World.ShipRadius))
+                    if (Collide.IntersectsDockFace(d, World.BaseDockFacesOf(b.BaseTypeId), World.DockFaceDepth, World.ShipRadius))
                     {
                         // Intersected a rectangular docking door. Miners never enter DockShip
                         // (it refunds PaidCost + rebinds the client) — they offload instead.
@@ -780,12 +784,12 @@ public sealed partial class Simulation
                     // sub-hulls, resolved through the shared Collide.SphereVsBody kernel so the client
                     // predicts the identical bounce (same contact-selection rule — deepest wins). A
                     // partless base collapses to the single merged hull, matching the old behaviour.
-                    if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos), out Vec3 bn, out float bpen))
+                    if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos, b.BaseTypeId), out Vec3 bn, out float bpen))
                         BounceShip(s, bn, bpen);
                 }
                 else
                 {
-                    float dockR = World.BaseRadius * DockRadiusFrac;
+                    float dockR = World.BaseRadiusOf(b.BaseTypeId) * DockRadiusFrac;
                     if (d.LengthSquared() <= dockR * dockR)
                     {
                         if (s.IsMiner)
@@ -942,6 +946,7 @@ public sealed partial class Simulation
                 ship.ApDockPhaseTick = tick;
             }
             DrainMinerQueues(tick); // miner buys (Simulation.Mining.cs)
+            DrainConstructorQueues(tick); // constructor buys (Simulation.Constructors.cs)
             DrainCommandOrders(); // commander orders for AI vessels (Simulation.Orders.cs)
             DrainResearchOps(tick); // commander research start/cancel/queue (Simulation.Research.cs)
         }
@@ -978,7 +983,7 @@ public sealed partial class Simulation
         var nextWorld = BuildMatchWorld?.Invoke();
         if (nextWorld != null)
             World = nextWorld;
-        Array.Fill(World.BaseHealth, World.BaseMaxHealth);
+        World.ResetMatchBases();
         BasesChangedThisStep = true;
         Phase = PhaseActive;
         Winner = NoWinner;
@@ -998,6 +1003,7 @@ public sealed partial class Simulation
         ResearchChangedThisStep = true;
         ResolveTeamUnlocks();
         SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
+        DespawnAllConstructors(); // constructors are bought, never seeded — clear any from a prior match
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Log.MatchStarted(_log);
@@ -1057,7 +1063,7 @@ public sealed partial class Simulation
         // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
         // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
         _heldOrphans.Clear();
-        Array.Fill(World.BaseHealth, World.BaseMaxHealth);
+        World.ResetMatchBases();
         BasesChangedThisStep = true;
         Phase = PhaseLobby;
         Winner = NoWinner;
@@ -1181,10 +1187,12 @@ public sealed partial class Simulation
     {
         Vec3 basePos = default;
         uint sector = World.DefaultSector;
+        byte baseType = 0;
         if (at is World.BaseSite site)
         {
             basePos = site.Pos;
             sector = site.SectorId;
+            baseType = site.BaseTypeId;
         }
         else
             foreach (var b in World.Bases)
@@ -1192,20 +1200,22 @@ public sealed partial class Simulation
                 {
                     basePos = b.Pos;
                     sector = b.SectorId;
+                    baseType = b.BaseTypeId;
                     break;
                 }
 
         Vec3 outward;
         Quat rot;
         Vec3 spawnPos;
-        if (World.BaseHull is not null)
+        var exits = World.BaseExitsOf(baseType);
+        if (World.BaseHullOf(baseType) is not null && exits.Length > 0)
         {
             // Catapult out of a docking bay picked at random among the base's DockingExit
             // hardpoints: the ship first appears at the hardpoint pushed warp-exit-offset (plus
             // `clearance`) along the launch axis — the opposite of the node's inward-pointing
             // forward. (Any residual overlap with the bay is a benign outward pop — ApplyBounce
             // never damages a ship already moving outward.)
-            var exit = World.BaseExits[_rng.Next(World.BaseExits.Length)];
+            var exit = exits[_rng.Next(exits.Length)];
             outward = exit.Dir;
             rot = LookRotationZ(outward);
             spawnPos = basePos + exit.Pos + outward * (clearance + _mech.WarpExitOffset);
@@ -1216,7 +1226,7 @@ public sealed partial class Simulation
             outward = dirLen > 1e-3f ? basePos * (-1f / dirLen) : new Vec3(0f, 0f, 1f);
             float yaw = MathF.Atan2(-basePos.X, -basePos.Z);
             rot = new Quat(0f, MathF.Sin(yaw * 0.5f), 0f, MathF.Cos(yaw * 0.5f));
-            spawnPos = basePos + outward * (World.BaseRadius + clearance);
+            spawnPos = basePos + outward * (World.BaseRadiusOf(baseType) + clearance);
         }
 
         s.SectorId = sector;
@@ -1287,7 +1297,11 @@ public sealed partial class Simulation
     // drone. Replaces the hub's old hardcoded `cls > 2 -> scout` clamp (v36), so researched hulls
     // with any class id can spawn once unlocked (TryReserveSpawn still gates lock/cost).
     public bool IsPlayerSpawnableClass(byte cls) =>
-        cls != GameContent.PodClassId && !IsMinerClass(cls) && ShipDefs.ContainsKey(cls);
+        cls != GameContent.PodClassId && !IsMinerClass(cls) && !IsConstructorClass(cls) && ShipDefs.ContainsKey(cls);
+
+    // A constructor drone chassis (HullAbility.IsBuilder projected to ShipClassDef.IsConstructor):
+    // AI-owned, bought from the Build tab, never a personal spawn.
+    public bool IsConstructorClass(byte cls) => ShipDefs.TryGetValue(cls, out var d) && d.IsConstructor;
 
     public enum SpawnDecision { Allowed, Locked, TooPoor }
 
@@ -1320,6 +1334,8 @@ public sealed partial class Simulation
             return PigExecute(s, tick);
         if (s.IsMiner)
             return MinerExecute(s, tick); // server-driven drone: no input ring, no autopilot flags
+        if (s.Kind == ShipKind.Constructor)
+            return ConstructorExecute(s, tick); // server-driven build drone (Simulation.Constructors.cs)
 
         int slot = (int)(tick % InputRingSize);
         if (s.InputRingTick[slot] == tick)
@@ -1766,6 +1782,8 @@ public sealed partial class Simulation
         s.ApEngaged = false; // autopilot never survives the ship it was flying
         if (s.IsMiner)
             KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
+        else if (s.Kind == ShipKind.Constructor)
+            KillConstructor(s, tick); // slot dies with the drone — no pod, repurchase only
         else if (s.IsPod)
             KillPod(s, tick);
         else if (s.IsPig)
@@ -2006,9 +2024,9 @@ public sealed partial class Simulation
                 var b = World.Bases[i];
                 if (b.SectorId != ship.SectorId || b.Team == ship.Team)
                     continue;
-                bool hit = World.BaseHull is not null
-                    ? BaseHullsRayEntry(b.Pos, mp, mv, World.ProjectileRadius, bestT, out float t)
-                    : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
+                bool hit = World.BaseHullOf(b.BaseTypeId) is not null
+                    ? BaseHullsRayEntry(b.Pos, b.BaseTypeId, mp, mv, World.ProjectileRadius, bestT, out float t)
+                    : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadiusOf(b.BaseTypeId) + World.ProjectileRadius, bestT, out t);
                 if (hit && t < bestT)
                 {
                     bestT = t;
@@ -2366,9 +2384,9 @@ public sealed partial class Simulation
                 var b = World.Bases[bi];
                 if (b.SectorId != mis.SectorId || b.Team == mis.Team)
                     continue; // friendly bases are non-colliding, matching bolts
-                bool bhit = World.BaseHull is not null
-                    ? BaseHullsRayEntry(b.Pos, mp, vel, 0f, bestT, out float bt)
-                    : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadius, bestT, out bt);
+                bool bhit = World.BaseHullOf(b.BaseTypeId) is not null
+                    ? BaseHullsRayEntry(b.Pos, b.BaseTypeId, mp, vel, 0f, bestT, out float bt)
+                    : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadiusOf(b.BaseTypeId), bestT, out bt);
                 if (bhit && bt < bestT)
                 {
                     bestT = bt;
@@ -2562,23 +2580,60 @@ public sealed partial class Simulation
         return n > 1e-6f ? blended * (1f / n) : desired;
     }
 
-    // Apply damage to a base (health floor at 0), flag it as changed/dirty, and — the first time
-    // it drops to 0 — latch the match end (winner = the OTHER team, i.e. the side that destroyed
-    // it) and schedule the return-to-lobby. Shared by the bolt path (ResolveDueShots) and missile
-    // detonation (StepMissiles) so both apply base damage identically.
+    // The BaseDef for a live base's type (garrison 0, outpost 1, …); null if the content has none.
+    private ContentBaseLookup? _baseDefByType;
+    private sealed class ContentBaseLookup
+    {
+        public readonly Dictionary<byte, BaseDef> ByType = new();
+    }
+    private BaseDef? BaseDefForType(byte typeId)
+    {
+        if (_baseDefByType is null)
+        {
+            _baseDefByType = new ContentBaseLookup();
+            foreach (var d in Content.Bases)
+                _baseDefByType.ByType[d.BaseTypeId] = d;
+        }
+        return _baseDefByType.ByType.TryGetValue(typeId, out var def) ? def : null;
+    }
+
+    // A base type is a win-condition ("headquarters") base when its def carries WinCondition (the
+    // `start` ability — only the garrison, in stock content). A team loses when ALL its WinCondition
+    // bases are destroyed; a forward base (outpost) at 0 HP never ends the match.
+    private bool IsWinConditionBase(byte typeId) => BaseDefForType(typeId)?.WinCondition ?? false;
+
+    // Does `team` still hold a live WinCondition base (optionally excluding one index)?
+    private bool TeamHasAliveWinBase(byte team, int excludeIndex)
+    {
+        for (int i = 0; i < World.Bases.Count; i++)
+            if (i != excludeIndex && World.Bases[i].Team == team && World.BaseHealth[i] > 0f
+                && IsWinConditionBase(World.Bases[i].BaseTypeId))
+                return true;
+        return false;
+    }
+
+    // Apply damage to a base (health floor at 0), flag it as changed/dirty, and — when a team's LAST
+    // win-condition (headquarters) base drops to 0 — latch the match end (winner = the OTHER team) and
+    // schedule the return-to-lobby. Destroying a forward base (outpost) removes it from play but never
+    // ends the match. Shared by the bolt path (ResolveDueShots) and missile detonation (StepMissiles).
     private void ApplyBaseDamage(int baseIndex, float damage, uint tick)
     {
+        bool wasAlive = World.BaseHealth[baseIndex] > 0f;
         float hp = MathF.Max(0f, World.BaseHealth[baseIndex] - damage);
         World.BaseHealth[baseIndex] = hp;
         BasesChangedThisStep = true;
         _matchDirty = true;
-        if (hp <= 0f && Phase != PhaseEnded)
+        if (hp <= 0f && wasAlive && Phase != PhaseEnded)
         {
             byte loser = World.Bases[baseIndex].Team;
-            Winner = (byte)(loser == 0 ? 1 : 0);
-            Phase = PhaseEnded;
-            JustEnded = true;
-            _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+            // Only the loss of a team's FINAL win-condition base ends the match.
+            if (IsWinConditionBase(World.Bases[baseIndex].BaseTypeId) && !TeamHasAliveWinBase(loser, baseIndex))
+            {
+                Winner = (byte)(loser == 0 ? 1 : 0);
+                Phase = PhaseEnded;
+                JustEnded = true;
+                _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+            }
         }
     }
 
@@ -2807,15 +2862,15 @@ public sealed partial class Simulation
     // Bounce a ship off a base: the loaded compound world hull if present, else the legacy radius
     // sphere. Runs through the shared Collide.SphereVsBody kernel over the authored sub-hulls (deepest
     // contact = one BounceShip), so an enemy base bounces exactly as the client predicts it.
-    private void ResolveBaseCollision(ShipSim s, Vec3 center)
+    private void ResolveBaseCollision(ShipSim s, Vec3 center, byte baseTypeId)
     {
-        if (World.BaseHull is not null)
+        if (World.BaseHullOf(baseTypeId) is not null)
         {
-            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center), out Vec3 n, out float pen))
+            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center, baseTypeId), out Vec3 n, out float pen))
                 BounceShip(s, n, pen);
         }
         else
-            ResolveStaticCollision(s, center, World.BaseRadius);
+            ResolveStaticCollision(s, center, World.BaseRadiusOf(baseTypeId));
     }
 
     // The base as a shared compound StaticBody at `center`: `BaseHull` is the merged shrink-wrap (kept
@@ -2823,18 +2878,18 @@ public sealed partial class Simulation
     // kernel actually resolves against. Team/discs are irrelevant to SphereVsBody (it never gates on
     // them — dock carve-out is handled by the caller), so a fixed team/the discs are passed for shape.
     // Callers guard World.BaseHull is not null first.
-    private Collide.StaticBody BaseBody(Vec3 center) =>
-        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockFaces);
+    private Collide.StaticBody BaseBody(Vec3 center, byte baseTypeId) =>
+        Collide.StaticBody.BaseHull(World.BaseHullOf(baseTypeId)!, World.BaseSubHullsOf(baseTypeId), center, 0, World.BaseDockFacesOf(baseTypeId));
 
     // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity
     // frame), the ray analogue of SphereVsBody: the CLOSEST sub-hull surface stops the bolt/missile, so
     // a shot threading a gap between parts passes through exactly as the client renders it. Reuses
     // HullRayEntry per part; the caller's `bestT` plumbing still picks the closest target overall.
-    private bool BaseHullsRayEntry(Vec3 center, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    private bool BaseHullsRayEntry(Vec3 center, byte baseTypeId, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
     {
         t = maxT;
         bool hit = false;
-        var subs = World.BaseSubHulls;
+        var subs = World.BaseSubHullsOf(baseTypeId);
         for (int i = 0; i < subs.Length; i++)
             if (HullRayEntry(subs[i], center, Quat.Identity, 1f, mp, mv, margin, t, out float th) && th < t)
             {

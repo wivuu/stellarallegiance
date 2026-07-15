@@ -127,6 +127,7 @@ public static class FactionsContentProjection
             BaseTypeId = s.BaseTypeId is byte b ? (short)b : (short)-1,
             // Authored 0/omitted resolves to the default single slot (same rule as BaseDef below).
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
+            BuildRockClass = ParseRockClass(s.BuildOnRockClass),
             RequiredTechIdx = TechIdxArray(s.RequiredTechs, techIdx),
             GrantedTechIdx = TechIdxArray(s.GrantedTechs, techIdx),
             ObsoletedByTechIdx = TechIdxArray(s.ObsoletedByTechs, techIdx),
@@ -197,6 +198,9 @@ public static class FactionsContentProjection
             PayloadCapacity = (float)h.PayloadCapacity,
             // Mining ore hold (0 = not a miner). Behavior-inert until the miner sim/wire WPs land.
             OreCapacity = (float)h.OreCapacity,
+            // v37 base building: a constructor drone chassis (HullAbility.IsBuilder). Server-only marker
+            // (not streamed — the client identifies a constructor by ShipFlagConstructor on the wire).
+            IsConstructor = h.Abilities.Contains(Factions.HullAbility.IsBuilder),
             // Explicit runtime extend-fields (no clean Core source).
             DriftYawDeg = (float)h.DriftYawDeg,
             DriftPitchDeg = (float)h.DriftPitchDeg,
@@ -408,7 +412,18 @@ public static class FactionsContentProjection
             Hardpoints = s.Hardpoints.Select(ProjectHardpoint).ToList(),
             // Stage-4 research: authored 0/omitted resolves to the default single slot.
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
+            // Base building (v37): the GLB, the win-condition ("headquarters") flag = the `start`
+            // ability (only the garrison carries it), and the constructor build-target rock class.
+            ModelName = s.ModelName ?? "",
+            WinCondition = s.Abilities.Contains(Factions.StationAbility.Start),
+            BuildRockClass = ParseRockClass(s.BuildOnRockClass),
         };
+
+    // Parse a kebab-case RockClass name ("regolith") to its byte; 255 (unset) for null/empty/unknown.
+    private static byte ParseRockClass(string? name) =>
+        string.IsNullOrWhiteSpace(name) || !Enum.TryParse<RockClass>(name, ignoreCase: true, out var rc)
+            ? (byte)255
+            : (byte)rc;
 
     private static HardpointDef ProjectHardpoint(Factions.Hardpoint h) =>
         new()

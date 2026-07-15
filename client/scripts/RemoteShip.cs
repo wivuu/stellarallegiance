@@ -40,6 +40,7 @@ public partial class RemoteShip : Node3D
 
     // AI mining ship (Kind.Miner): a non-combat harvester. TargetMarkers tags a focused one "MINER".
     public bool IsMiner => Kind == ShipKind.Miner;
+    public bool IsConstructor => Kind == ShipKind.Constructor;
 
     // Actively transferring ore (Ship.IsMining / ShipFlagMining): toggles per tick as the server's
     // miner grinds a rock. WorldRenderer reads this to attach/detach the mining beam; _Process rolls

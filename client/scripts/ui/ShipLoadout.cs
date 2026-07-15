@@ -230,7 +230,7 @@ public partial class ShipLoadout : Control
             {
                 _buildTab = new BuildTab();
                 _tabContent.AddChild(_buildTab);
-                _buildTab.Init(_defs, _world);
+                _buildTab.Init(_defs, _world, _net);
                 _buildTab.SetBase(_sidebar.SelectedBaseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName);
             }
             _buildTab.Visible = true;
@@ -432,7 +432,7 @@ public partial class ShipLoadout : Control
     private long ComputeBaseSig(byte team)
     {
         long sig = team + 1L;
-        foreach (var (id, _, bteam, alive) in _world.KnownBases())
+        foreach (var (id, _, bteam, alive, _) in _world.KnownBases())
             if (bteam == team)
                 sig ^= unchecked((long)(id * 1000003UL) + (alive ? 1L : 2L));
         return sig;

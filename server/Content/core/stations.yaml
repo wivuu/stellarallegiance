@@ -28,14 +28,27 @@ stations:
   # Build tab as buildable cards with tech/capability lock states, but have no in-world effect yet
   # (base building lands in a later phase). Gating uses the closed Capability enum for granted-*, and
   # required-techs (from developments.yaml) where the tree is research-gated.
+  # Outpost — the first constructor-built forward base (v37). base-type-id makes it a RUNTIME base
+  # (projected to a BaseDef, streamed, spawnable); model-name binds Outpost.glb (server collision +
+  # client mesh). build-on-rock-class gates which asteroid a constructor may raise it on (Regolith =
+  # the common class, so expansion is always possible). NO `start` ability => not a win-condition
+  # base (destroying it doesn't end the match). Grants expansion-allowed on completion.
   - id: outpost
     name: Outpost
+    base-type-id: 1
     class: garrison
+    model-name: Outpost   # res://assets/bases/Outpost.glb
     description: "A light forward garrison — eyes and a foothold in a contested sector."
+    radius: 55
+    max-armor: 800
+    vision-sphere-radius: 2400
+    radar-signature: 1.8
     price: 300
     build-time-seconds: 45
+    build-on-rock-class: regolith
     abilities: [land, repair, capture]
-    required-capabilities: [expansion-allowed]
+    required-capabilities: [base]         # buildable from match start (the expansion entry point)
+    granted-capabilities: [expansion-allowed]  # raising one opens the rest of the expansion tree
 
   - id: shipyard
     name: Shipyard

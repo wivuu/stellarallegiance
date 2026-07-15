@@ -788,6 +788,31 @@ public sealed class ClientHub
                     }
                     break;
                 }
+                case Protocol.MsgBuildConstructor when count >= 10:
+                {
+                    // Commander buys a constructor bound to a station type:
+                    // [14][u8 stationTypeId][u64 launchBaseId] (v37). Commander-gated HERE (the
+                    // /buyminer pattern); validated + applied on the sim thread. Results come back as
+                    // team-scoped ConstructorNoticesThisStep chat.
+                    if (CommanderOrWarn(client) is byte cmdTeam)
+                    {
+                        byte stationType = buffer[1];
+                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
+                        _sim.EnqueueConstructorBuy(cmdTeam, stationType, launchBaseId);
+                    }
+                    break;
+                }
+                case Protocol.MsgConstructorCancel when count >= 9:
+                {
+                    // Commander cancels a still-producing constructor: [15][u64 constructorId] (v38).
+                    // Commander-gated HERE; refund applied on the sim thread.
+                    if (CommanderOrWarn(client) is byte cancTeam)
+                    {
+                        ulong constructorId = BitConverter.ToUInt64(buffer, 1);
+                        _sim.EnqueueConstructorCancel(cancTeam, constructorId);
+                    }
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
@@ -828,6 +853,34 @@ public sealed class ClientHub
             {
                 if (CommanderOrWarn(client) is byte team)
                     _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
+                break;
+            }
+            case "buildconstructor":
+            case "build":
+            {
+                // Commander buys a constructor bound to a station type (chat seam mirroring /buyminer;
+                // the Build tab sends MsgBuildConstructor directly). /build <station-id> (e.g. outpost);
+                // bare /build lists the buildable stations. Order it to a rock via F3 after it launches.
+                if (CommanderOrWarn(client) is byte team)
+                {
+                    var runtime = _sim.Content.StationCatalog.Where(s => s.BaseTypeId >= 0 && s.BaseTypeId != 0);
+                    if (arg.Length == 0)
+                    {
+                        SystemTo(client, "Buildable: " + string.Join(", ", runtime.Select(s => s.Id)));
+                        break;
+                    }
+                    var match = runtime.FirstOrDefault(s => string.Equals(s.Id, arg, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                        SystemTo(client, $"No buildable station '{arg}'.");
+                    else
+                        _sim.EnqueueConstructorBuy(team, (byte)match.BaseTypeId, 0);
+                }
+                break;
+            }
+            case "constructors":
+            {
+                int n = _sim.ConstructorCount(client.Team);
+                SystemTo(client, $"Active constructors on your team: {n}.");
                 break;
             }
             case "research":
@@ -1169,6 +1222,10 @@ public sealed class ClientHub
         foreach (var (team, msg) in _sim.MinerNoticesThisStep)
             SystemToTeam(team, msg);
 
+        // Constructor / base-building notices (same team-scoped contract).
+        foreach (var (team, msg) in _sim.ConstructorNoticesThisStep)
+            SystemToTeam(team, msg);
+
         // Research notices (same accumulate-in-Step contract): team-wide announcements
         // (started/complete/cancelled) + issuer-only rejections.
         foreach (var (team, msg) in _sim.ResearchTeamNoticesThisStep)
@@ -1311,6 +1368,11 @@ public sealed class ClientHub
         bool sendResearch = _sim.ResearchChangedThisStep || coarse;
         Dictionary<byte, byte[]>? researchFramesByTeam = sendResearch ? new() : null;
 
+        // Per-team constructor roster (v38): producing + launched drones for the Build tab, same
+        // on-change + coarse cadence. Built lazily once per team.
+        bool sendConstructor = _sim.ConstructorChangedThisStep || coarse;
+        Dictionary<byte, byte[]>? constructorFramesByTeam = sendConstructor ? new() : null;
+
         // Fog point-visibility for minefields (F10): the enemy-visibility of a field depends only on
         // (field, team), NOT the individual client — so compute it ONCE per team, then reuse for every
         // client on that team (and for both the count + write passes inside BuildMinefieldsFor). Built
@@ -1377,6 +1439,17 @@ public sealed class ClientHub
         // nearest-rock guess). Broadcast, on-change-free (tiny: at most a handful of miners); null when
         // nothing is mining. Rendering is naturally gated by ship+rock visibility, so no fog filtering.
         byte[]? minerTargetsFrame = Protocol.BuildMinerTargets(_sim);
+
+        // Constructor build-sphere stream (v37): each constructor aligning/sinking/building on a rock,
+        // so the client drives the enveloping VFX. Broadcast like miner targets; null when idle.
+        byte[]? constructorBuildsFrame = Protocol.BuildConstructorBuilds(_sim);
+
+        // Fog-off ONLY: a mid-match constructor-built base has no per-team reveal log to ride, so
+        // broadcast a one-slice MsgReveal carrying its static to every client (fog-on streams it via
+        // the per-team reveal cursor in RevealBaseToTeam). Idempotent client-side (InsertBase dedups).
+        byte[]? baseRevealFrame = (!fog && _sim.BasesCreatedThisStep.Count > 0)
+            ? Protocol.BuildBaseReveal(_sim.World, _sim.BasesCreatedThisStep)
+            : null;
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
@@ -1470,6 +1543,21 @@ public sealed class ClientHub
 
             if (minerTargetsFrame is not null)
                 SendLossy(client, OutFrame.Whole(minerTargetsFrame));
+
+            if (constructorBuildsFrame is not null)
+                SendLossy(client, OutFrame.Whole(constructorBuildsFrame));
+
+            // Constructor roster (v38): per-team, lazy-built once per team; NoTeam spectators get none.
+            if (sendConstructor && client.Team <= 1)
+            {
+                if (!constructorFramesByTeam!.TryGetValue(client.Team, out var cf))
+                    constructorFramesByTeam[client.Team] = cf = Protocol.BuildConstructorState(_sim, client.Team);
+                SendLossy(client, OutFrame.Whole(cf));
+            }
+
+            // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
+            if (baseRevealFrame is not null)
+                SendReliable(client, OutFrame.Whole(baseRevealFrame));
 
             // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
             // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).
