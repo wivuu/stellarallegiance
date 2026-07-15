@@ -239,7 +239,7 @@ public sealed partial class Simulation
                     {
                         Kind = OrderGoto,
                         Sector = b.SectorId,
-                        Pos = StandoffNear(b.Pos, ship, World.BaseRadius * 1.5f),
+                        Pos = StandoffNear(b.Pos, ship, World.BaseRadiusOf(b.BaseTypeId) * 1.5f),
                     };
                     Directive($"{subjectName}: hold at the {World.SectorName(b.SectorId)} base");
                 }
@@ -540,7 +540,7 @@ public sealed partial class Simulation
                     Px = b.Pos.X,
                     Py = b.Pos.Y,
                     Pz = b.Pos.Z,
-                    Radius = World.BaseRadius,
+                    Radius = World.BaseRadiusOf(b.BaseTypeId),
                     TargetBaseLockId = GameContent.BaseLockId(b.Id),
                 };
             }

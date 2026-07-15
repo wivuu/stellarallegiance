@@ -1495,15 +1495,20 @@ public sealed partial class Simulation
                     // without either (modelless base / no doors) keep the legacy full-thrust SteerToPoint
                     // at the aggregate door centre (or the base centre for a modelless base) — it bounces/
                     // slides into the door and still docks, just crudely. Preserved EXACTLY as before.
-                    if (World.BaseDockFaces.Length == 0 || World.BaseHull is null)
+                    // Geometry MUST be per-base-type: a newly-built outpost is a different BaseTypeId than
+                    // the home garrison, and the dock trigger (see IntersectsDockFace ~L775) tests the
+                    // OUTPOST's own door face. Reading the global (garrison-only) door/hull here aimed the
+                    // ship at a phantom door pinned at the outpost's position, so the capture never fired.
+                    if (World.BaseDockFacesOf(eb.BaseTypeId).Length == 0 || World.BaseHullOf(eb.BaseTypeId) is null)
                     {
-                        Vec3 aim = World.BaseHull is not null ? eb.Pos + World.BaseDoorCenter : eb.Pos;
+                        Vec3 aim = World.BaseHullOf(eb.BaseTypeId) is not null ? eb.Pos + World.BaseDoorCenterOf(eb.BaseTypeId) : eb.Pos;
                         return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid);
                     }
                     return DockApproach(s, tick, eb, stats, avoid);
                 }
-                var input = Approach(eb.Pos, World.BaseRadius + PigStandoff, ApBrakeMargin);
-                if (Arrived(myPos, s.State.Vel, eb.Pos, World.BaseRadius + PigStandoff * 1.2f))
+                float hostileR = World.BaseRadiusOf(eb.BaseTypeId); // per-type — enemy base need not be a garrison
+                var input = Approach(eb.Pos, hostileR + PigStandoff, ApBrakeMargin);
+                if (Arrived(myPos, s.State.Vel, eb.Pos, hostileR + PigStandoff * 1.2f))
                     s.ApEngaged = false;
                 return input;
             }
@@ -1549,7 +1554,13 @@ public sealed partial class Simulation
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
         Vec3 angVel = s.State.AngVel; // ship-local turn rates (X=pitch,Y=yaw,Z=roll) — the frame FaceAndRollAnticipated expects
-        DockFace[] faces = World.BaseDockFaces;
+        // Per-base-type geometry: `eb` may be an outpost/refinery, NOT the home garrison (typeId 0), and
+        // every consumer below (door faces, hull-clearance radius) must match the type the dock trigger
+        // tests. The global World.BaseDockFaces/BaseRadius are garrison-only aliases — using them here
+        // parked non-garrison bases at a phantom door.
+        byte baseType = eb.BaseTypeId;
+        DockFace[] faces = World.BaseDockFacesOf(baseType);
+        float baseRadius = World.BaseRadiusOf(baseType);
 
         // Conservative per-axis angular-accel budgets for the anticipation profile: the at-rest
         // TorqueMultiplier (0.5) times turnTorque/mass — i.e. the slew cap FlightModel.Integrate applies
@@ -1672,12 +1683,12 @@ public sealed partial class Simulation
                 else
                 {
                     Vec3 goal = doorW - f.Normal * ApDockOuterStandoff;
-                    float sphereR = World.BaseRadius + ApDockHullMargin;
+                    float sphereR = baseRadius + ApDockHullMargin;
                     if (AutoSteer.SegmentEntersSphere(myPos, goal, eb.Pos, sphereR, ApDockLosSlack))
                     {
                         // Goal is behind the base hull: steer a live-recomputed carrot around the
                         // clearance ring instead of driving straight through the structure.
-                        float ring = World.BaseRadius + ApDockClearance;
+                        float ring = baseRadius + ApDockClearance;
                         Vec3 carrot = AutoSteer.OrbitWaypoint(
                             myPos, goal, eb.Pos, ring, ApDockDetourStepRad,
                             new Vec3(0f, 1f, 0f), new Vec3(1f, 0f, 0f)
@@ -1728,8 +1739,9 @@ public sealed partial class Simulation
             return s.ApDockDoor; // already chosen — keep it for the whole engagement
 
         Vec3 myPos = s.State.Pos;
-        float sphereR = World.BaseRadius + ApDockHullMargin;
-        float detourPenalty = MathF.PI * (World.BaseRadius + ApDockClearance); // ~half-ring arc cost
+        float baseRadius = World.BaseRadiusOf(eb.BaseTypeId); // per-type — eb may be a non-garrison base
+        float sphereR = baseRadius + ApDockHullMargin;
+        float detourPenalty = MathF.PI * (baseRadius + ApDockClearance); // ~half-ring arc cost
         int best = 0;
         float bestCost = float.MaxValue;
         for (int i = 0; i < faces.Length; i++)

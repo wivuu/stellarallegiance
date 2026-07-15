@@ -23,6 +23,8 @@ Archives:
 - I selected 'leave empty' on my scout in the hanager, but it still launched with a scout cannon
 - Constructors:
   - Unable to auto-nav and dock with a newly constructed base; I suspect the collision sphere from an asteroid is still present and blocking the autopilot path
+  - Build sphere flickers
+  - Once the constructor intersects with the asteroid, slow its descent by 50%, add a rock spitting particle effect as it descends until the constructor is hidden
   - The build sphere must enlarge at least as large as the base it will eventually produce
   - When you dock at a base, remember where the pilot is, so they re-launch from the same base by default (unless they pick a different base in the hangar)
   - Show yellow waypoint direction for highlighted constructors ordered to a rock - the waypoint should indicate the direction to the target rock

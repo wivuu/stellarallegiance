@@ -738,7 +738,7 @@ public sealed partial class Simulation
                 Px = eb.Pos.X,
                 Py = eb.Pos.Y,
                 Pz = eb.Pos.Z,
-                Radius = World.BaseRadius,
+                Radius = World.BaseRadiusOf(eb.BaseTypeId),
                 TargetBaseLockId = GameContent.BaseLockId(eb.Id),
             };
         }
@@ -991,7 +991,7 @@ public sealed partial class Simulation
                         // Aim at the docking-bay mouth (the entrance-hardpoint centroid) so the
                         // now-solid hull funnels the pod onto the doorway faces instead of bouncing
                         // it off. Without a model, fall back to the base center (pre-hull target).
-                        Vec3 aim = World.BaseHull is not null ? b.Pos + World.BaseDoorCenter : b.Pos;
+                        Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
                         return PigSteerTo(me, myPos, myRot, aim, 1f);
                     }
             }

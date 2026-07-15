@@ -862,9 +862,9 @@ public sealed partial class Simulation
                 // way the collision-pass dock trigger fires and routes to OffloadMiner. The legacy
                 // steer gets the same near-target align gate as the aleph run: the dock sphere is
                 // small and a fast misaligned miner would otherwise orbit it forever.
-                if (World.BaseDockFaces.Length == 0 || World.BaseHull is null)
+                if (World.BaseDockFacesOf(b.BaseTypeId).Length == 0 || World.BaseHullOf(b.BaseTypeId) is null)
                 {
-                    Vec3 aim = World.BaseHull is not null ? b.Pos + World.BaseDoorCenter : b.Pos;
+                    Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
                     return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid), aim);
                 }
                 return DockApproach(s, tick, b, stats, avoid);
