@@ -241,12 +241,28 @@ public partial class CommandSidebar : Control
             _rows.Add((e.Id, e.Sector, e.Title, e.SectorName, row));
         }
 
-        // Keep the current selection if it still exists, else auto-select the first base.
+        // Keep the current selection if it still exists; else default to the base the pilot last
+        // docked at (relaunch from where you docked); else the first base in list order. The sidebar
+        // is rebuilt fresh each time the hangar opens (SelectedBaseId starts 0), so this default
+        // applies once per dock — a deliberate click here overrides it, and the next dock moves it.
         bool stillPresent = false;
         foreach (var (id, _, _, _, _) in _rows)
             if (id == SelectedBaseId)
                 stillPresent = true;
-        Select(stillPresent ? SelectedBaseId : _rows[0].Id);
+
+        ulong pick;
+        if (stillPresent)
+            pick = SelectedBaseId;
+        else
+        {
+            pick = _rows[0].Id;
+            ulong lastDocked = _world?.LastDockedBaseId ?? 0;
+            if (lastDocked != 0)
+                foreach (var (id, _, _, _, _) in _rows)
+                    if (id == lastDocked)
+                        pick = lastDocked;
+        }
+        Select(pick);
     }
 
     private void Select(ulong id)

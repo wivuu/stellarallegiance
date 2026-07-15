@@ -154,6 +154,35 @@ public partial class WorldRenderer : Node3D
         return list;
     }
 
+    // The friendly base the local ship most recently docked at — the nearest team base, in the dock
+    // sector, to where the ship vanished (docking flies you INTO a base's door, so nearest is
+    // unambiguous). 0 until the first dock this session. The hangar's CommandSidebar defaults its
+    // launch-base pick to this, so a pilot relaunches from where they last docked unless they pick
+    // another base; the next dock updates it. Purely a UI default — the sim still validates the id.
+    public ulong LastDockedBaseId { get; private set; }
+
+    // Record the base a just-docked local ship touched: the closest same-team base in `sector` to the
+    // ship's final position. Leaves LastDockedBaseId unchanged if no candidate exists (e.g. a pod
+    // rescued away from any base — callers already exclude pods).
+    private void RememberDockedBase(Vector3 dockPos, uint sector, byte team)
+    {
+        ulong best = 0;
+        float bestSq = float.MaxValue;
+        foreach (var (node, bteam, id, bsector) in _baseList)
+        {
+            if (bteam != team || bsector != sector)
+                continue;
+            float sq = (node.GlobalPosition - dockPos).LengthSquared();
+            if (sq < bestSq)
+            {
+                bestSq = sq;
+                best = id;
+            }
+        }
+        if (best != 0)
+            LastDockedBaseId = best;
+    }
+
     // ---- Fog of war (WP3 stores; WP4 renders) --------------------------
     // A last-known enemy contact (from MsgContacts). HUD/radar glyph only — never a 3D node. Pos is
     // sector-local, frozen at the tick the ship was last streamed; Yaw/Pitch are the frozen heading.
@@ -2276,6 +2305,11 @@ public partial class WorldRenderer : Node3D
         if (local)
         {
             LocalShip = null;
+            // A local COMBAT ship going clean (GoneClean) can only mean it docked — the sole clean
+            // despawn for a non-pod own ship (rescue is pod-only; fog lost-contact never targets your
+            // own ship). Remember the base it docked at so the hangar defaults the next relaunch to it.
+            if (reason == GoneClean && !row.IsPod)
+                RememberDockedBase(node.GlobalPosition, row.SectorId, row.Team);
             // Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
             // menu reopens). A local COMBAT ship's death instead ejects an escape pod the
             // SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
