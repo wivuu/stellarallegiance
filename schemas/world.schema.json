@@ -744,12 +744,12 @@
         "null"
       ],
       "properties": {
-        "max-constructors-per-team": {
+        "max-constructors-per-base": {
           "type": [
             "integer",
             "null"
           ],
-          "description": "Cap on live constructors a team may field at once."
+          "description": "Cap on live constructors a single garrison may build at once (no team-wide cap)."
         },
         "production-seconds": {
           "type": [

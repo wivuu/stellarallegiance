@@ -122,6 +122,17 @@ public sealed partial class Simulation
         return n;
     }
 
+    // Live constructors currently building/producing out of a single garrison. The per-base
+    // simultaneous-build cap gates purchases; there is no team-wide cap.
+    public int ConstructorCountForBase(ulong launchBaseId)
+    {
+        int n = 0;
+        foreach (var c in _constructors)
+            if (c.LaunchBaseId == launchBaseId)
+                n++;
+        return n;
+    }
+
     // Read-only slot view (sim thread only) for tests/diagnostics.
     public IReadOnlyList<(ulong Id, byte Team, ShipSim? Ship, byte StationType, ulong TargetRockId, string State)>
         ConstructorSlotsView()
@@ -289,11 +300,6 @@ public sealed partial class Simulation
             Notice("No such buildable station.");
             return;
         }
-        if (ConstructorCount(team) >= MaxConstructorsPerTeam)
-        {
-            Notice($"Constructor cap reached ({MaxConstructorsPerTeam}).");
-            return;
-        }
         if (!World.TeamStates.TryGetValue(team, out var ts))
             return;
         if (!StationAvailableTo(ts, station))
@@ -311,6 +317,12 @@ public sealed partial class Simulation
         if (garrison is not World.BaseSite gb)
         {
             Notice("No garrison to launch a constructor from.");
+            return;
+        }
+        // Per-base simultaneous-build cap (no team-wide cap): this garrison may only build so many at once.
+        if (ConstructorCountForBase(gb.Id) >= MaxConstructorsPerBase)
+        {
+            Notice($"This garrison's constructor cap is reached ({MaxConstructorsPerBase}).");
             return;
         }
         // Charge the STATION price (the constructor is the delivery mechanism; the hull itself is free).
@@ -906,5 +918,5 @@ public sealed partial class Simulation
     private static string RockClassName(byte rockClass) =>
         rockClass == 255 ? "any" : ((RockClass)rockClass).ToString().ToLowerInvariant();
 
-    private int MaxConstructorsPerTeam => _constructor.MaxConstructorsPerTeam;
+    private int MaxConstructorsPerBase => _constructor.MaxConstructorsPerBase;
 }

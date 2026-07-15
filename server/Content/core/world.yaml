@@ -173,7 +173,7 @@ mining:
 # until embedded sink-depth-frac below the surface; the build sphere emerges from the rock center
 # here) -> Building (build-time-seconds; sphere envelops the rock) -> base appears, drone consumed.
 constructor:
-  max-constructors-per-team: 4  # cap on live constructors a team may field at once
+  max-constructors-per-base: 4  # cap on live constructors a single garrison may build at once (no team-wide cap)
   production-seconds: 20        # garrison production dwell after purchase, before the drone launches
   approach-speed: 8             # creep speed standoff -> surface contact, world units/second
   sink-speed: 3                 # creep speed surface contact -> embedded, world units/second

@@ -443,8 +443,8 @@ public sealed class WorldMiningDef
 /// </summary>
 public sealed class WorldConstructorDef
 {
-    /// <summary>Cap on live constructors a team may field at once.</summary>
-    public int? MaxConstructorsPerTeam { get; set; }
+    /// <summary>Cap on live constructors a single garrison may build at once (no team-wide cap).</summary>
+    public int? MaxConstructorsPerBase { get; set; }
 
     /// <summary>Garrison production dwell after purchase, before the drone launches, seconds.</summary>
     public double? ProductionSeconds { get; set; }
@@ -634,7 +634,7 @@ public static class WorldLoader
         if (w.Constructor is { } ct)
         {
             var t = cfg.Constructor;
-            t.MaxConstructorsPerTeam = ct.MaxConstructorsPerTeam ?? t.MaxConstructorsPerTeam;
+            t.MaxConstructorsPerBase = ct.MaxConstructorsPerBase ?? t.MaxConstructorsPerBase;
             t.ProductionSeconds = F(ct.ProductionSeconds, t.ProductionSeconds);
             t.ApproachSpeed = F(ct.ApproachSpeed, t.ApproachSpeed);
             t.SinkSpeed = F(ct.SinkSpeed, t.SinkSpeed);

@@ -744,7 +744,7 @@ namespace StellarAllegiance.Shared
     // AlignTimeSeconds (dwell at the standoff shell) and BuildTimeSeconds (build-sphere duration).
     public sealed class WorldConstructorTuning
     {
-        public int MaxConstructorsPerTeam = 4; // cap on live constructors a team may field at once
+        public int MaxConstructorsPerBase = 4; // cap on live constructors a single garrison may build at once (no team-wide cap)
         public float ProductionSeconds = 20f; // garrison production dwell after purchase, before launch
 
         // Creep speeds for the two slow legs of the build approach. These COMMAND a speed (throttle =
