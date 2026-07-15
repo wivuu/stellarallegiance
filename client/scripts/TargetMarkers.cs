@@ -311,7 +311,13 @@ public partial class TargetMarkers : Control
                 stillValid = ContainsBaseId(bases, bid) || ContainsFriendlyBaseId(bid);
             }
             else if (GameContent.IsAsteroidFocus(f))
-                stillValid = ContainsRockId(_world.AsteroidsInView(), GameContent.AsteroidIdOf(f));
+            {
+                // A rock a constructor has claimed for a base is no longer a nav/lock target — drop
+                // it the moment construction begins (it'll be consumed into a base shortly).
+                ulong rid = GameContent.AsteroidIdOf(f);
+                stillValid = !_world.IsRockUnderConstruction(rid)
+                    && ContainsRockId(_world.AsteroidsInView(), rid);
+            }
             else
                 // A raw ship-id focus stays valid whether it's an ENEMY (combat) or a same-team FRIENDLY
                 // (fly-to / follow) ship — else a focused teammate would be dropped and re-aimed at the
@@ -367,6 +373,8 @@ public partial class TargetMarkers : Control
             }
         foreach (var (id, node) in _world.AsteroidsInView())
         {
+            if (_world.IsRockUnderConstruction(id))
+                continue; // a rock being built into a base is no longer a Tab/lock target
             Vector3 pos = node.GlobalPosition;
             if (!cam.IsPositionBehind(pos))
             {

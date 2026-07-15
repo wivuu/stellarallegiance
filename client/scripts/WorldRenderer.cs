@@ -1765,6 +1765,17 @@ public partial class WorldRenderer : Node3D
         return false;
     }
 
+    // Whether a constructor has claimed this rock for a base (it has a row in the live build stream,
+    // any phase from Aligning through Building). Such a rock is about to become a base, so it drops
+    // out of Tab/lock targeting (TargetMarkers) — you can't nav-lock a rock that's being consumed.
+    public bool IsRockUnderConstruction(ulong rockId)
+    {
+        foreach (var b in _constructorBuilds)
+            if (b.RockId == rockId)
+                return true;
+        return false;
+    }
+
     // Class + pod flag of a ship node, for the per-class collision-hull lookup.
     private static (byte Cls, bool IsPod) ShipClassOf(Node3D ship) =>
         ship switch
