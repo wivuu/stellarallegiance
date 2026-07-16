@@ -264,13 +264,6 @@ Stage-2 economy, no rework.
   - As the ship is preparing to ripcord, it should display a visual countdown, and very slowly list/spin in a circle until the countdown reaches zero, then the ship is instantly transported.
   - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded back and the countdown cancels
   - Show a visual flash as the user leaves and enters the sector via teleport/ripcord
-- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
-  to fly over and collect; ties into the Stage-2 economy.
-  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
-  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
-  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
-  - If the ship does not have capacity, the item can bounce off harmlessly.
-  - If the item is in-motion, it should collision detect with asteroids and bases
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
@@ -407,7 +400,6 @@ Stage-1 YAML pipeline.
     - Supremacy Center -> Adv. Supremacy Center
     - Shipyard
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
@@ -472,6 +464,13 @@ Not stage-bound — done when convenient or when a stage needs them.
 ## Deep backlog
 
 - ☐ **[L]** **Replay system** — tick log or time-travel query playback.
-- ☐ **[M]** **.NET 10 upgrade** — upgrade from .NET 8 to 10 for perf.
 - ☐ **[M]** **Fireteam support** — sub-teams of 2-6 players that can privately chat. Commanders can
   assign players to fireteams and issue orders to specific fireteams.
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
+- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
+  to fly over and collect; ties into the Stage-2 economy.
+  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
+  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
+  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
+  - If the ship does not have capacity, the item can bounce off harmlessly.
+  - If the item is in-motion, it should collision detect with asteroids and bases
