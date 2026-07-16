@@ -673,6 +673,16 @@ namespace StellarAllegiance.Shared
         public float BaseOuterFrac = 0.3f;
         public float BaseYJitter = 80f;
 
+        // ---- Minimum spawn spacing (enforced by rejection sampling at world-gen; a rock that
+        // can't fit after a fixed number of attempts is dropped, so layouts stay per-seed
+        // deterministic) ----
+
+        // Minimum surface-to-surface gap between any two rocks, world units (0 = allow overlap).
+        public float RockMinGap = 8f;
+
+        // Minimum gap between a rock's surface and a base's collision sphere, world units (0 = off).
+        public float BaseClearance = 250f;
+
         // ---- Rock-class seeding (which rocks become He3 / special at world-gen) ----
 
         // Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count).

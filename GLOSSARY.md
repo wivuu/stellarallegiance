@@ -16,7 +16,7 @@ Single `ulong` from which the whole static arena — base positions, asteroid fi
   - `server/Sim/World.cs` — `Seed`; `DetRng` streams for bases (`seed ^ 0xB453…`), asteroids/alephs (`DetRng(seed)`), dust (own RNG)
   - `tests/FogTest/Program.cs` — same-seed identical / different-seed differ layout assertions
 - **Related:** [[Minefield]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
-- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement.
+- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement. Rock placement enforces minimum spawn spacing (`seeding.rock-min-gap` rock↔rock, `seeding.base-clearance` rock↔base; surface-to-surface, 0 disables) by deterministic rejection sampling — a rock that can't fit after a fixed attempt count is dropped, and ore classes are assigned afterwards from the survivors so guaranteed He3/special counts are unaffected.
 
 ### Flight Model
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.

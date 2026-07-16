@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Set minimum distance for bases to spawn near asteroids and asteroids to spawn from each other during initial game state generation
 ---
 
 ## Content philosophy (the through-line)

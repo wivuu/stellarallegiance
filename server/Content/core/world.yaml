@@ -141,6 +141,8 @@ seeding:
   base-inner-frac: 0.14      # garrison radial band, as fractions of the sector radius
   base-outer-frac: 0.30
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
+  rock-min-gap: 8            # min surface-to-surface gap between any two rocks (0 = allow overlap)
+  base-clearance: 250        # min gap between a rock's surface and a base's collision sphere (0 = off)
   he3-per-sector: 4          # guaranteed He3 rocks per ordinary (non-home) sector
   he3-per-home-sector: 2     # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
   special-per-sector: 1      # RARE special rocks per sector; everything else is common Regolith

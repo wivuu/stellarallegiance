@@ -1064,16 +1064,28 @@ public sealed class World
         float maxR = sectorRadius * fillFrac;
         float hY = maxR * flatten;
         int count = (int)MathF.Round(density * areaDensity * MathF.PI * maxR * maxR);
+        var placed = new PlacementGrid(_seed.FieldRockMax, _seed.RockMinGap);
         for (int i = 0; i < count; i++)
         {
-            double ang = rng.NextDouble() * Math.PI * 2.0;
-            double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density, bounded by maxR
-            float px = (float)(Math.Cos(ang) * rr);
-            float pz = (float)(Math.Sin(ang) * rr);
-            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            // Size FIRST — the fit check needs the radius before a position can be judged.
             float radius = RockRadius(ref rng, _seed.FieldRockMin, _seed.FieldRockMax, _seed.RockSizeSkew);
+            Vec3 pos = default;
+            bool ok = false;
+            for (int attempt = 0; attempt < MaxPlaceAttempts && !ok; attempt++)
+            {
+                double ang = rng.NextDouble() * Math.PI * 2.0;
+                double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density, bounded by maxR
+                float px = (float)(Math.Cos(ang) * rr);
+                float pz = (float)(Math.Sin(ang) * rr);
+                float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+                pos = new Vec3(px, py, pz);
+                ok = RockFits(pos, radius, sector, placed);
+            }
+            if (!ok)
+                continue; // crowded pocket — drop rather than overlap (still deterministic per seed)
             var (variant, rx, ry, rz) = NextShape(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
+            Asteroids.Add(new Rock(id++, sector, pos, radius, variant, rx, ry, rz));
+            placed.Add(pos, radius);
         }
     }
 
@@ -1091,17 +1103,105 @@ public sealed class World
         float hY = sectorRadius * flatten;
         float area = MathF.PI * (rOut * rOut - rIn * rIn);
         int count = (int)MathF.Round(density * areaDensity * area);
+        var placed = new PlacementGrid(_seed.BeltRockMax, _seed.RockMinGap);
         for (int i = 0; i < count; i++)
         {
-            double ang = rng.NextDouble() * Math.PI * 2.0;
-            double t = rng.NextDouble();
-            double rr = Math.Sqrt(rIn * rIn + t * (rOut * rOut - rIn * rIn)); // uniform areal density across the annulus
-            float px = (float)(Math.Cos(ang) * rr);
-            float pz = (float)(Math.Sin(ang) * rr);
-            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            // Size FIRST — the fit check needs the radius before a position can be judged.
             float radius = RockRadius(ref rng, _seed.BeltRockMin, _seed.BeltRockMax, _seed.RockSizeSkew);
+            Vec3 pos = default;
+            bool ok = false;
+            for (int attempt = 0; attempt < MaxPlaceAttempts && !ok; attempt++)
+            {
+                double ang = rng.NextDouble() * Math.PI * 2.0;
+                double t = rng.NextDouble();
+                double rr = Math.Sqrt(rIn * rIn + t * (rOut * rOut - rIn * rIn)); // uniform areal density across the annulus
+                float px = (float)(Math.Cos(ang) * rr);
+                float pz = (float)(Math.Sin(ang) * rr);
+                float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+                pos = new Vec3(px, py, pz);
+                ok = RockFits(pos, radius, sector, placed);
+            }
+            if (!ok)
+                continue; // crowded pocket — drop rather than overlap (still deterministic per seed)
             var (variant, rx, ry, rz) = NextShape(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
+            Asteroids.Add(new Rock(id++, sector, pos, radius, variant, rx, ry, rz));
+            placed.Add(pos, radius);
+        }
+    }
+
+    // ---- Seeding-time minimum spacing (rock↔rock via seeding.rock-min-gap, rock↔base via
+    // seeding.base-clearance; both surface-to-surface, 0 disables). Candidate positions are
+    // rejection-sampled: a rock re-rolls its position up to MaxPlaceAttempts times and is DROPPED
+    // if it never fits — accepting anyway would reintroduce overlap exactly in the crowded spots
+    // the gap exists to prevent. The fixed attempt loop keeps layouts per-seed deterministic, and
+    // ore classes are assigned AFTER seeding (AssignOre) from the surviving rocks, so drops never
+    // eat into a sector's guaranteed He3/special counts. Caveat: the rare special rocks are
+    // inflated ×SpecialRockRadiusMult after seeding, so an oversized special (≤1/sector) may still
+    // brush a neighbour. At stock knobs the drop rate is ~0. ----
+    private const int MaxPlaceAttempts = 12;
+
+    private bool RockFits(Vec3 pos, float radius, uint sector, PlacementGrid placed)
+    {
+        float clearance = _seed.BaseClearance;
+        if (clearance > 0f)
+            foreach (var b in Bases)
+            {
+                if (b.SectorId != sector)
+                    continue;
+                float need = BaseRadius + radius + clearance;
+                if ((pos - b.Pos).LengthSquared() < need * need)
+                    return false;
+            }
+        float gap = _seed.RockMinGap;
+        return gap <= 0f || !placed.AnyCloserThan(pos, radius, gap);
+    }
+
+    // Already-placed rocks for ONE Seed* call, bucketed into a coarse grid whose cell covers the
+    // worst-case interacting pair (2·rockMax + gap) so a fit check scans only its 3×3×3
+    // neighbourhood even when modded densities balloon rock counts (same broad-phase idea as the
+    // sim's _rockGrid).
+    private sealed class PlacementGrid
+    {
+        private readonly Dictionary<(int, int, int), List<int>> _cells = new();
+        private readonly List<(Vec3 Pos, float Radius)> _placed = new();
+        private readonly float _cell;
+
+        public PlacementGrid(float rockMax, float gap) =>
+            _cell = MathF.Max(2f * rockMax + MathF.Max(gap, 0f), 1f);
+
+        private (int, int, int) KeyOf(Vec3 p) =>
+            (
+                (int)MathF.Floor(p.X / _cell),
+                (int)MathF.Floor(p.Y / _cell),
+                (int)MathF.Floor(p.Z / _cell)
+            );
+
+        public void Add(Vec3 pos, float radius)
+        {
+            var key = KeyOf(pos);
+            if (!_cells.TryGetValue(key, out var cell))
+                _cells[key] = cell = new List<int>();
+            cell.Add(_placed.Count);
+            _placed.Add((pos, radius));
+        }
+
+        public bool AnyCloserThan(Vec3 pos, float radius, float gap)
+        {
+            var (cx, cy, cz) = KeyOf(pos);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (!_cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var cell))
+                            continue;
+                        foreach (int j in cell)
+                        {
+                            float need = radius + _placed[j].Radius + gap;
+                            if ((pos - _placed[j].Pos).LengthSquared() < need * need)
+                                return true;
+                        }
+                    }
+            return false;
         }
     }
 

@@ -237,6 +237,85 @@ WorldConfig FieldConfig(WorldMiningTuning mining, WorldSeedingTuning? seeding = 
     Check(he3 == 5, $"sector he3-count override forces exactly 5 He3 (world default was 1) — got {he3}", $"per-sector override ignored: got {he3}, want 5");
 }
 
+// ---- 5. Minimum spawn spacing: every rock honours rock-min-gap (rock↔rock) and base-clearance
+//          (rock↔base), both surface-to-surface at SPAWN size; 0-knobs disable the checks entirely
+//          (no rock is ever dropped). Ore classes are assigned AFTER spacing prunes (AssignOre runs
+//          post-seeding on the survivors), so the guaranteed He3/special counts are untouched —
+//          tests 3 and 7b pin those on this same stock config. ----
+{
+    var s = stockCfg.Seeding;
+    // Spacing is enforced on the rolled spawn radius; specials are inflated ×SpecialRockRadiusMult
+    // AFTER seeding (accepted caveat), so divide the mult back out to recover spawn geometry.
+    float SpawnRadius(World w, ulong id, float radius) =>
+        w.RockClassOf(id) is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium
+            ? radius / s.SpecialRockRadiusMult
+            : radius;
+
+    bool gapOk = true, clearOk = true, nonEmpty = true;
+    string detail = "";
+    foreach (ulong seed in new ulong[] { 1, 7, 12345 })
+    {
+        var w = MakeWorld(seed, stockCfg);
+        foreach (var group in w.Asteroids.GroupBy(r => r.SectorId))
+        {
+            var rocks = group.ToList();
+            if (rocks.Count == 0)
+            {
+                nonEmpty = false;
+                detail = $"seed {seed} sector {group.Key} seeded no rocks";
+            }
+            for (int i = 0; i < rocks.Count && gapOk; i++)
+            {
+                float ri = SpawnRadius(w, rocks[i].Id, rocks[i].Radius);
+                for (int j = i + 1; j < rocks.Count; j++)
+                {
+                    float rj = SpawnRadius(w, rocks[j].Id, rocks[j].Radius);
+                    float need = ri + rj + s.RockMinGap - 1e-3f;
+                    if ((rocks[i].Pos - rocks[j].Pos).LengthSquared() < need * need)
+                    {
+                        gapOk = false;
+                        detail = $"seed {seed} rocks {rocks[i].Id}/{rocks[j].Id}: dist {(rocks[i].Pos - rocks[j].Pos).Length():F1} < {need:F1}";
+                        break;
+                    }
+                }
+                foreach (var b in w.Bases)
+                {
+                    if (b.SectorId != group.Key)
+                        continue;
+                    float need = World.BaseRadius + ri + s.BaseClearance - 1e-3f;
+                    if ((rocks[i].Pos - b.Pos).LengthSquared() < need * need)
+                    {
+                        clearOk = false;
+                        detail = $"seed {seed} rock {rocks[i].Id} vs base {b.Id}: dist {(rocks[i].Pos - b.Pos).Length():F1} < {need:F1}";
+                    }
+                }
+            }
+        }
+    }
+    Check(s.RockMinGap > 0f && s.BaseClearance > 0f,
+        $"stock spacing knobs are on (rock-min-gap {s.RockMinGap}, base-clearance {s.BaseClearance})",
+        "stock spacing knobs are zero — the spacing assertions would be vacuous");
+    Check(nonEmpty, "spacing never empties a seeded sector (3 seeds)", $"spacing emptied a sector: {detail}");
+    Check(gapOk, "every same-sector rock pair honours rock-min-gap (surface-to-surface, 3 seeds)", $"rock gap violated: {detail}");
+    Check(clearOk, "every rock honours base-clearance around its sector's bases (3 seeds)", $"base clearance violated: {detail}");
+
+    // Knobs at 0 disable spacing entirely: the rock count equals the analytic area formula (no
+    // rejection ever drops a rock), and the enabled stock world keeps ≳ that count too (the retry
+    // loop relocates rocks instead of dropping them at stock density).
+    var off = new WorldSeedingTuning { RockMinGap = 0f, BaseClearance = 0f };
+    const float radius = 1500f, density = 3f;
+    int expected = (int)MathF.Round(density * off.FieldAreaDensity * MathF.PI
+        * (radius * off.FieldFillFrac) * (radius * off.FieldFillFrac));
+    var wOff = MakeWorld(24680, FieldConfig(new WorldMiningTuning(), seeding: off, radius: radius, density: density));
+    var wOn = MakeWorld(24680, FieldConfig(new WorldMiningTuning(), radius: radius, density: density));
+    Check(wOff.Asteroids.Count == expected,
+        $"zeroed spacing knobs place the full analytic rock count ({expected}) — no drops",
+        $"disabled spacing still dropped rocks: got {wOff.Asteroids.Count}, want {expected}");
+    Check(wOn.Asteroids.Count >= (int)(expected * 0.9f),
+        $"stock spacing keeps ≥90% of the analytic count ({wOn.Asteroids.Count}/{expected})",
+        $"stock spacing dropped too many rocks: {wOn.Asteroids.Count}/{expected}");
+}
+
 // ---- 6. Capacity: size-scaled, clamped into [ore-capacity-min, ore-capacity-max], richness within band. ----
 {
     var mining = new WorldMiningTuning { OreCapacityMin = 800f, OreCapacityMax = 3000f };

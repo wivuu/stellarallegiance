@@ -626,6 +626,20 @@
           ],
           "description": "Vertical (Y-axis) random jitter applied to garrison placement, world units."
         },
+        "rock-min-gap": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum surface-to-surface gap between any two rocks, world units (0 = allow overlap)."
+        },
+        "base-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum gap between a rock\u0027s surface and a base\u0027s collision sphere, world units (0 = off)."
+        },
         "he3-per-sector": {
           "type": [
             "integer",
