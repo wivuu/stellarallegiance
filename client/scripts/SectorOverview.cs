@@ -186,7 +186,10 @@ public partial class SectorOverview : Node3D
             Visible = false,
             HorizontalAlignment = HorizontalAlignment.Center,
             AnchorRight = 1f,
-            OffsetTop = 46f,
+            AnchorTop = 1f,
+            AnchorBottom = 1f,
+            OffsetTop = -46f,
+            OffsetBottom = -14f,
             Text = "SECTOR MAP — drag box-select · shift-click add · right-drag / arrows orbit · shift-drag / mid-drag pan · wheel zoom · click select · right-click command / engage · F3 to exit",
         };
         _hint.AddThemeFontSizeOverride("font_size", 18);
