@@ -101,13 +101,14 @@ public partial class SectorOverview : Node3D
     private readonly System.Collections.Generic.Dictionary<ulong, (uint Sector, Vector3 Pos)> _orderedPoints = new();
     private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 point, bool line, bool glyph)> _orderMarkerDraws = new();
 
-    // A CONSTRUCTOR subject → the rock id it was ordered to mine (build a base on). Recorded when a
-    // rock order is SENT (client-side intent, like _orderedPoints, and mutually exclusive with it),
-    // and drawn as a yellow "MINE" waypoint pointing from the constructor to that rock while the
-    // constructor is selected. Dropped once construction begins (IsRockUnderConstruction — the order
-    // is fulfilled and the rock leaves targeting) or the subject/rock is gone.
+    // A CONSTRUCTOR or MINER subject → the rock id it was ordered to (build a base on / mine).
+    // Recorded when a rock order is SENT (client-side intent, like _orderedPoints, and mutually
+    // exclusive with it), and drawn as a yellow "BUILD" (constructor) or "MINE" (miner) waypoint
+    // pointing from the drone to that rock while it's selected. Dropped once the order is fulfilled —
+    // construction begins (IsRockUnderConstruction) or the miner's beam lands on the ordered rock
+    // (IsMinerHarvesting) — or the subject/rock is gone.
     private readonly System.Collections.Generic.Dictionary<ulong, ulong> _orderedRocks = new();
-    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 rock, bool shipOn, bool rockBehind)> _mineMarkerDraws = new();
+    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 rock, bool shipOn, bool rockBehind, bool build)> _rockMarkerDraws = new();
 
     private Control _selBox = null!; // rubber-band selection rectangle while left-dragging
     private Vector2 _boxEnd; // current cursor corner of the box (anchor = _leftPressPos)
@@ -250,16 +251,16 @@ public partial class SectorOverview : Node3D
                 HorizontalAlignment.Left, -1, 9, gold);
         }
 
-        // Yellow mine-target waypoints for selected constructors: a diamond + "MINE" tag over the rock
-        // when it's on screen, or an edge arrow pointing the way when it's off-screen / behind — the
-        // same on-screen/edge treatment the flight-HUD nav waypoint uses. A faint leader line ties it
-        // back to the drone whenever the drone is itself drawable.
+        // Yellow rock-order waypoints for selected constructors/miners: a diamond + "BUILD"/"MINE" tag
+        // over the rock when it's on screen, or an edge arrow pointing the way when it's off-screen /
+        // behind — the same on-screen/edge treatment the flight-HUD nav waypoint uses. A faint leader
+        // line ties it back to the drone whenever the drone is itself drawable.
         Vector2 vp = _selMarker.Size;
-        var mineOnScreen = new Rect2(Vector2.Zero, vp).Grow(-MineEdgeMargin);
+        var rockOnScreen = new Rect2(Vector2.Zero, vp).Grow(-RockEdgeMargin);
         Color yellow = DesignTokens.CmdrGold;
-        foreach (var (ship, rock, shipOn, rockBehind) in _mineMarkerDraws)
+        foreach (var (ship, rock, shipOn, rockBehind, build) in _rockMarkerDraws)
         {
-            if (!rockBehind && mineOnScreen.HasPoint(rock))
+            if (!rockBehind && rockOnScreen.HasPoint(rock))
             {
                 if (shipOn)
                     _selMarker.DrawLine(ship, rock, new Color(yellow, 0.35f), 1f);
@@ -272,7 +273,7 @@ public partial class SectorOverview : Node3D
                 _selMarker.DrawLine(bottom, left, yellow, 1.75f, true);
                 _selMarker.DrawLine(left, top, yellow, 1.75f, true);
                 _selMarker.DrawCircle(rock, r * 0.28f, yellow);
-                const string mtag = "MINE";
+                string mtag = build ? "BUILD" : "MINE";
                 float mtw = UiFonts.Mono.GetStringSize(mtag, HorizontalAlignment.Left, -1, 9).X;
                 _selMarker.DrawString(UiFonts.Mono, rock + new Vector2(-mtw * 0.5f, -r - 4f), mtag,
                     HorizontalAlignment.Left, -1, 9, yellow);
@@ -287,10 +288,10 @@ public partial class SectorOverview : Node3D
         }
     }
 
-    private const float MineEdgeMargin = 40f; // off-screen mine-arrow inset from the viewport edge (px)
+    private const float RockEdgeMargin = 40f; // off-screen rock-order-arrow inset from the viewport edge (px)
 
-    // The point on the MineEdgeMargin-inset rectangle along the ray from center toward sp, plus the
-    // outward unit direction — mirrors TargetMarkers.ClampToEdge so the mine arrow pins like the HUD's.
+    // The point on the RockEdgeMargin-inset rectangle along the ray from center toward sp, plus the
+    // outward unit direction — mirrors TargetMarkers.ClampToEdge so the rock-order arrow pins like the HUD's.
     private static Vector2 ClampToViewportEdge(Vector2 sp, Vector2 view, out Vector2 dir)
     {
         Vector2 center = view * 0.5f;
@@ -298,7 +299,7 @@ public partial class SectorOverview : Node3D
         if (dir.LengthSquared() < 1e-4f)
             dir = Vector2.Down;
         dir = dir.Normalized();
-        Vector2 half = center - new Vector2(MineEdgeMargin, MineEdgeMargin);
+        Vector2 half = center - new Vector2(RockEdgeMargin, RockEdgeMargin);
         float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
         return center + dir * scale;
     }
@@ -401,7 +402,7 @@ public partial class SectorOverview : Node3D
 
         _selMarkerDraws.Clear();
         _orderMarkerDraws.Clear();
-        _mineMarkerDraws.Clear();
+        _rockMarkerDraws.Clear();
         Vector2 vp = GetViewport().GetVisibleRect().Size;
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
         for (int i = _selection.Count - 1; i >= 0; i--)
@@ -438,30 +439,35 @@ public partial class SectorOverview : Node3D
                     cam.UnprojectPosition(wPos),
                     true,
                     false));
-            // Mine-target waypoint: a selected CONSTRUCTOR ordered to build on a rock gets a yellow
-            // diamond (or an edge arrow, when the rock is off-screen/behind) pointing the way, plus a
-            // leader line from the drone. Dropped once construction begins (the order is fulfilled and
-            // the rock leaves targeting) or the subject stops being a constructor. Anchored on the rock,
-            // so it draws even while the drone itself is off-screen.
-            if (_orderedRocks.TryGetValue(id, out ulong mineRockId))
+            // Rock-order waypoint: a selected CONSTRUCTOR (ordered to build on a rock) or MINER
+            // (ordered to mine one) gets a yellow diamond (or an edge arrow, when the rock is
+            // off-screen/behind) pointing the way, plus a leader line from the drone. Dropped once
+            // the order is fulfilled — construction begins, or the miner's beam lands on the ordered
+            // rock — or the subject stops being a constructor/miner. Anchored on the rock, so it
+            // draws even while the drone itself is off-screen.
+            if (_orderedRocks.TryGetValue(id, out ulong orderedRockId))
             {
-                if (_world.IsRockUnderConstruction(mineRockId)
-                    || _world.FriendlyShipById(id) is not { IsConstructor: true })
+                var subject = _world.FriendlyShipById(id);
+                bool build = subject is { IsConstructor: true };
+                bool fulfilled = build
+                    ? _world.IsRockUnderConstruction(orderedRockId)
+                    : _world.IsMinerHarvesting(id, orderedRockId);
+                if (fulfilled || subject is not ({ IsConstructor: true } or { IsMiner: true }))
                     _orderedRocks.Remove(id);
-                else if (TryResolveRock(mineRockId, out Vector3 rockPos))
+                else if (TryResolveRock(orderedRockId, out Vector3 rockPos))
                 {
                     bool rockBehind = cam.IsPositionBehind(rockPos);
                     Vector2 rsp = cam.UnprojectPosition(rockPos);
                     if (rockBehind)
                         rsp = vp - rsp; // flip a behind-camera point to the opposite side for edge-clamping
-                    _mineMarkerDraws.Add((shipDrawable ? cam.UnprojectPosition(pos) : Vector2.Zero, rsp, shipDrawable, rockBehind));
+                    _rockMarkerDraws.Add((shipDrawable ? cam.UnprojectPosition(pos) : Vector2.Zero, rsp, shipDrawable, rockBehind, build));
                 }
             }
             if (!shipDrawable)
                 continue; // still selected, just not drawable this frame
             _selMarkerDraws.Add((cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
         }
-        _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0 || _mineMarkerDraws.Count > 0;
+        _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0 || _rockMarkerDraws.Count > 0;
         if (_selMarker.Visible)
             _selMarker.QueueRedraw();
     }
@@ -585,7 +591,7 @@ public partial class SectorOverview : Node3D
 
     // Resolve a raw rock id to its world position via the same view-filtered accessor the pick uses
     // (sectors are origin-centered, so this is only valid — and only returns true — while the rock's
-    // sector is the one on screen). Used to place the yellow mine-target waypoint.
+    // sector is the one on screen). Used to place the yellow rock-order waypoint.
     private bool TryResolveRock(ulong rockId, out Vector3 pos)
     {
         foreach (var (id, node) in _world.AsteroidsInView())
@@ -948,7 +954,7 @@ public partial class SectorOverview : Node3D
                         {
                             _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
                             _orderedPoints.Remove(subject); // supersedes any earlier point order
-                            _orderedRocks.Remove(subject); // ...and any mine intent
+                            _orderedRocks.Remove(subject); // ...and any rock intent
                         }
                     if (ownSelected)
                         OrderOwnShipToSector(mapSector);
@@ -1012,10 +1018,11 @@ public partial class SectorOverview : Node3D
                 {
                     _net.SendOrder(subject, kind, id, sector: 0, pos: Vector3.Zero);
                     _orderedPoints.Remove(subject); // an entity target supersedes any goto point
-                    // A rock order on a constructor = "mine/build here": remember the rock so a
-                    // yellow MINE waypoint points the way while it's selected. Any other entity
-                    // target (or a non-constructor subject) clears the mine intent.
-                    if (kind == 2 && _world.FriendlyShipById(subject) is { IsConstructor: true })
+                    // A rock order on a constructor ("build here") or miner ("mine here"): remember
+                    // the rock so a yellow BUILD/MINE waypoint points the way while it's selected.
+                    // Any other entity target (or other subject type) clears the rock intent.
+                    if (kind == 2
+                        && _world.FriendlyShipById(subject) is { IsConstructor: true } or { IsMiner: true })
                         _orderedRocks[subject] = id;
                     else
                         _orderedRocks.Remove(subject);
@@ -1026,7 +1033,7 @@ public partial class SectorOverview : Node3D
                 {
                     _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
                     _orderedPoints[subject] = (_world.ViewSector, world);
-                    _orderedRocks.Remove(subject); // a goto point supersedes any mine intent
+                    _orderedRocks.Remove(subject); // a goto point supersedes any rock intent
                 }
             // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along.
             if (ownId != 0 && _selection.Contains(ownId))

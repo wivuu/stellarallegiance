@@ -2900,6 +2900,12 @@ public partial class WorldRenderer : Node3D
     // simply isn't in the new map; its beam clears on the ShipFlagMining falling edge below.
     public void NetUpdateMinerTargets(Dictionary<ulong, ulong> map) => _minerTargetRock = map;
 
+    // True while MsgMinerTargets says this miner is actively harvesting that exact rock — the F3 map
+    // uses it to dismiss a commander MINE waypoint once the order is fulfilled (the miner arrived and
+    // its beam is on the ordered rock), the miner analog of IsRockUnderConstruction for constructors.
+    public bool IsMinerHarvesting(ulong shipId, ulong rockId) =>
+        _minerTargetRock.TryGetValue(shipId, out ulong target) && target == rockId;
+
     // MsgConstructorBuilds: replace the active-build list wholesale. UpdateBuildSpheres reconciles the
     // BuildSphere nodes against it each frame (a build that completed/cancelled drops out → its sphere
     // FADES out and self-frees; the finished base arrives via the normal reveal path). The server sends
