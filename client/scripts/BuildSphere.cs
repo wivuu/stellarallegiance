@@ -96,6 +96,15 @@ public partial class BuildSphere : Node3D
         }
         """;
 
+    // ONE compiled Shader per source, shared by every BuildSphere instance (uniforms live on the
+    // per-instance ShaderMaterials): compiling per spawn re-parsed the source on every build event,
+    // a visible frame hitch. AssetPreloader touches these at startup so even the first build is warm.
+    private static readonly Shader ShellShaderObj = new() { Code = ShellShader };
+    private static readonly Shader CoreShaderObj = new() { Code = CoreShader };
+
+    // Force the shared shaders to exist (and compile) now, off the gameplay path.
+    internal static void WarmShaders() => _ = (ShellShaderObj, CoreShaderObj);
+
     // Base per-shell opacity (scaled by the fade envelope each frame).
     private const float OuterAlpha = 0.10f;
     private const float InnerAlpha = 0.16f;
@@ -122,17 +131,17 @@ public partial class BuildSphere : Node3D
         // sub-pixel camera motion → visible flicker). Force a deterministic back-to-front draw: core
         // (occluder) first, then the inner and outer additive glows on top of it. The band starts at 1
         // (not 0) so all three also outrank the fading rock (default priority 0, same center) beneath them.
-        _outer = MakeShell(ShellShader, radius: 1f, energy: 6.0f, bandDir: 1f, OuterAlpha, "alpha", priority: 3, out _outerMat);
-        _inner = MakeShell(ShellShader, radius: 0.82f, energy: 8.0f, bandDir: -1f, InnerAlpha, "alpha", priority: 2, out _innerMat);
-        _core = MakeShell(CoreShader, radius: 0.74f, energy: 3.5f, bandDir: 1f, 0f, "cover", priority: 1, out _coreMat);
+        _outer = MakeShell(ShellShaderObj, radius: 1f, energy: 6.0f, bandDir: 1f, OuterAlpha, "alpha", priority: 3, out _outerMat);
+        _inner = MakeShell(ShellShaderObj, radius: 0.82f, energy: 8.0f, bandDir: -1f, InnerAlpha, "alpha", priority: 2, out _innerMat);
+        _core = MakeShell(CoreShaderObj, radius: 0.74f, energy: 3.5f, bandDir: 1f, 0f, "cover", priority: 1, out _coreMat);
         AddChild(_core);
         AddChild(_inner);
         AddChild(_outer);
     }
 
-    private MeshInstance3D MakeShell(string code, float radius, float energy, float bandDir, float opacity, string opacityParam, int priority, out ShaderMaterial mat)
+    private MeshInstance3D MakeShell(Shader shader, float radius, float energy, float bandDir, float opacity, string opacityParam, int priority, out ShaderMaterial mat)
     {
-        mat = new ShaderMaterial { Shader = new Shader { Code = code }, RenderPriority = priority };
+        mat = new ShaderMaterial { Shader = shader, RenderPriority = priority };
         mat.SetShaderParameter("tint", Tint);
         mat.SetShaderParameter("energy", energy);
         mat.SetShaderParameter("u_t", 0f);

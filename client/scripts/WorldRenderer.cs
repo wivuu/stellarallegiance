@@ -517,7 +517,14 @@ public partial class WorldRenderer : Node3D
     private const int MaxShadowOccluders = 64; // safety backstop: keep at most the NEAREST this many in range
     private readonly List<(Node3D Node, float D)> _occluderScratch = new(); // D = distance² to camera (bases sort first)
     private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
-    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts, built once
+    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts (base hierarchies), built once
+
+    // Lone-mesh occluders (rocks): the collected local verts collapse to RAW MESH vertices (the
+    // root's own transform cancels out), identical for every instance sharing a variant Mesh — so
+    // the cache keys on the Mesh, not the node. Keyed per node, spawning into a 60-rock sector
+    // re-read the same handful of giant asteroid meshes ~10x each (~1s of SurfaceGetArrays +
+    // Extremes on the spawn frame). STATIC so AssetPreloader can warm it per variant at startup.
+    private static readonly Dictionary<Mesh, Vector3[]> _meshHullVertCache = new();
     private Vector3 _lastOccluderCamPos = new(float.MaxValue, float.MaxValue, float.MaxValue);
 
     // The shadow-casting occluders for `sector` given a camera/reference position: every base in the sector
@@ -581,11 +588,29 @@ public partial class WorldRenderer : Node3D
     // rock's meshes every time it re-selects the set. Cleared on world teardown (Reset).
     private Vector3[] HullVertsFor(Node3D node)
     {
+        if (node is MeshInstance3D { Mesh: Mesh mesh } && !HasMeshDescendant(node))
+        {
+            if (_meshHullVertCache.TryGetValue(mesh, out var meshCached))
+                return meshCached;
+            var meshVerts = CollectHullVerts(node);
+            _meshHullVertCache[mesh] = meshVerts;
+            return meshVerts;
+        }
         if (_hullVertCache.TryGetValue(node, out var cached))
             return cached;
         var verts = CollectHullVerts(node);
         _hullVertCache[node] = verts;
         return verts;
+    }
+
+    // A node with any MeshInstance3D below it collects hierarchy-dependent verts and must stay
+    // node-keyed; a lone-mesh node (every rock) is safe to share by Mesh.
+    private static bool HasMeshDescendant(Node node)
+    {
+        foreach (Node child in node.GetChildren())
+            if (child is MeshInstance3D || HasMeshDescendant(child))
+                return true;
+        return false;
     }
 
     private static bool InSector(Node3D n, uint sector) =>
@@ -613,21 +638,41 @@ public partial class WorldRenderer : Node3D
     private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
     {
         if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
-        {
             // Vertex into the occluder-root's local frame: undo the root, apply the sub-mesh's own world
             // placement. For a lone-mesh rock (mi is the root) this collapses to the raw mesh vertices.
-            Transform3D xform = rootInv * mi.GlobalTransform;
-            for (int s = 0; s < mesh.GetSurfaceCount(); s++)
-            {
-                var arrays = mesh.SurfaceGetArrays(s);
-                if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
-                    continue;
-                foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
-                    outVerts.Add(xform * v);
-            }
-        }
+            CollectSurfaceVerts(mesh, rootInv * mi.GlobalTransform, outVerts);
         foreach (var child in node.GetChildren())
             CollectMeshVerts(child, rootInv, outVerts);
+    }
+
+    private static void CollectSurfaceVerts(Mesh mesh, Transform3D xform, List<Vector3> outVerts)
+    {
+        for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+        {
+            var arrays = mesh.SurfaceGetArrays(s);
+            if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
+                continue;
+            foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+                outVerts.Add(xform * v);
+        }
+    }
+
+    // Startup warm (AssetPreloader, time-sliced during the splash/browser screen): pull the variant
+    // GLB into the static mesh cache (GD.Load is near-free once the threaded load landed) and bake
+    // its shadow-occluder extremes, so the first sector reveal does neither on a gameplay frame.
+    internal static void WarmAsteroidVariant(string variant)
+    {
+        var (mesh, _, _) = AsteroidMesh(variant);
+        if (mesh is null)
+            return;
+        MeshRaycaster.WarmMesh(mesh); // beam/impact traces BVH, else baked at first in-flight hit
+        if (_meshHullVertCache.ContainsKey(mesh))
+            return;
+        _hullVertScratch.Clear();
+        CollectSurfaceVerts(mesh, Transform3D.Identity, _hullVertScratch);
+        _meshHullVertCache[mesh] = _hullVertScratch.Count >= 4
+            ? ShadowVolume.Extremes(_hullVertScratch, 48)
+            : System.Array.Empty<Vector3>();
     }
 
     private byte? _localTeam;
@@ -1972,10 +2017,13 @@ public partial class WorldRenderer : Node3D
     // colour/normal/ORM maps. AuthoredRadius is the mesh's bounding radius at author scale,
     // used to scale each instance to its row's collision Radius. A null Mesh marks a variant
     // that failed to load (e.g. asset missing) so we don't retry and fall back to a sphere.
-    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
+    // STATIC: the cache is instance-independent (meshes are immutable shared resources), so
+    // AssetPreloader can warm it at startup — first-touch GD.Load of a variant GLB costs
+    // ~300ms and used to land mid-join, inside the world-restream frame.
+    private static readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
 
     // Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
-    private (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
+    internal static (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
     {
         if (_asteroidMeshes.TryGetValue(variant, out var cached))
             return cached;

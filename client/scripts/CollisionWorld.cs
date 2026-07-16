@@ -320,22 +320,30 @@ public sealed class CollisionWorld
     // from disk). Returns null if the file can't be read so the caller falls back to a sphere.
     // ponytail: needs the raw .glb included in exported builds (export filter); editor reads it from
     // disk fine. If a build ships without it, collision degrades to spheres, not a crash.
+    //
+    // AssetPreloader builds the asteroid-variant models OFF-THREAD at startup; a hit skips the
+    // QuickHull rebuild (~60ms per variant, previously on the join frame). The shared cache is
+    // safe because the pre-rotation is a pure function of the path's category (only bases pass
+    // CollisionConfig.BaseModelRotation, and every base load comes through here with it). A build
+    // done here is stored back so a world rebuild's fresh CollisionWorld reuses it too.
     private static SimModel? LoadGlb(string resPath, Quat pre = default)
     {
+        if (AssetPreloader.TryGetSimModel(resPath, out SimModel? warm))
+            return warm;
         byte[] bytes = FileAccess.GetFileAsBytes(resPath);
+        SimModel? model = null;
         if (bytes is null || bytes.Length == 0)
-        {
             Log.Warn($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
-            return null;
-        }
-        try
-        {
-            return SimModel.FromGlb(bytes, resPath, pre);
-        }
-        catch (System.Exception e)
-        {
-            Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
-            return null;
-        }
+        else
+            try
+            {
+                model = SimModel.FromGlb(bytes, resPath, pre);
+            }
+            catch (System.Exception e)
+            {
+                Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
+            }
+        AssetPreloader.StoreSimModel(resPath, model);
+        return model;
     }
 }

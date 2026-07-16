@@ -155,10 +155,26 @@ public partial class AlephView : Node3D
     /// - Double-sided rendering so you can see inside the funnel
     /// - Noise is sampled on a circular path to avoid UV seam at angle=0/1
     /// </summary>
-    private ShaderMaterial BuildVortexShader()
+    // The three aleph shaders compile ONCE and are shared by every gate instance (uniforms live on
+    // the per-instance ShaderMaterials): compiling per gate re-parsed each source on every world
+    // stream. AssetPreloader touches them at startup so the first streamed gate is already warm.
+    private static Shader? _vortexShader;
+    private static Shader? _capShader;
+    private static Shader? _starShader;
+
+    internal static void WarmShaders()
     {
-        var shader = new Shader();
-        shader.Code =
+        BuildVortexShader();
+        BuildCapShader();
+        BuildStarShader();
+    }
+
+    private static ShaderMaterial BuildVortexShader()
+    {
+        if (_vortexShader == null)
+        {
+            _vortexShader = new Shader();
+            _vortexShader.Code =
             @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
@@ -258,7 +274,8 @@ void fragment() {
     ALPHA = alpha_fade * (0.3 + pattern * 0.7) * clamp(intensity + 0.2, 0.0, 1.0);
 }
 ";
-        var mat = new ShaderMaterial { Shader = shader };
+        }
+        var mat = new ShaderMaterial { Shader = _vortexShader };
         mat.SetShaderParameter("time_scale", 1.0f);
         mat.SetShaderParameter("color_core", new Vector3(0.6f, 0.98f, 1.0f));
         mat.SetShaderParameter("color_mid", new Vector3(0.25f, 0.7f, 1.0f));
@@ -318,8 +335,10 @@ void fragment() {
     /// Shader for the throat cap disc: radial glow that's brightest at center,
     /// with a subtle swirl animation.
     /// </summary>
-    private Shader BuildCapShader()
+    private static Shader BuildCapShader()
     {
+        if (_capShader != null)
+            return _capShader;
         var shader = new Shader();
         shader.Code =
             @"
@@ -344,7 +363,7 @@ void fragment() {
     ALPHA = glow;
 }
 ";
-        return shader;
+        return _capShader = shader;
     }
 
     /// <summary>
@@ -352,8 +371,10 @@ void fragment() {
     /// with soft glow, discarding pixels outside the star silhouette.
     /// Billboard mode is handled in the vertex shader.
     /// </summary>
-    private Shader BuildStarShader()
+    private static Shader BuildStarShader()
     {
+        if (_starShader != null)
+            return _starShader;
         var shader = new Shader();
         shader.Code =
             @"
@@ -407,6 +428,6 @@ void fragment() {
     ALPHA = clamp(brightness, 0.0, 1.0);
 }
 ";
-        return shader;
+        return _starShader = shader;
     }
 }

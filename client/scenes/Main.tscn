@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://main"]
+[gd_scene load_steps=16 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SfxManager.cs" id="12"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/Starscape.cs" id="7"]
 [ext_resource type="Script" path="res://scripts/DustField.cs" id="8"]
 [ext_resource type="Script" path="res://scripts/SectorEnvironment.cs" id="13"]
+[ext_resource type="Script" path="res://scripts/AssetPreloader.cs" id="14"]
 
 [sub_resource type="Environment" id="Env"]
 background_mode = 1
@@ -91,3 +92,6 @@ script = ExtResource("11")
 
 [node name="Hud" type="CanvasLayer" parent="."]
 script = ExtResource("5")
+
+[node name="AssetPreloader" type="Node" parent="."]
+script = ExtResource("14")

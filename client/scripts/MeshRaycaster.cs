@@ -43,6 +43,14 @@ public sealed class MeshRaycaster
     // transform, including the hull's NormalizeLongestAxis scale) rather than a hull-local one.
     public MeshRaycaster(Node3D hull, Transform3D baseWorld) => Walk(hull, baseWorld);
 
+    // Startup warm (AssetPreloader): bake a Mesh's BVH into the shared cache up front, so the
+    // first in-flight trace against it (IntersectMeshInstance on a big asteroid) pays nothing.
+    internal static void WarmMesh(Mesh mesh)
+    {
+        if (!_triCache.ContainsKey(mesh))
+            _triCache[mesh] = mesh.GenerateTriangleMesh();
+    }
+
     private void Walk(Node node, Transform3D xform)
     {
         // COL_* nodes are Phase-B authored collision proxies (rendered invisible): they are not

@@ -19,6 +19,13 @@ public partial class ShieldFlash : Node3D
     //   * a thin bright ring whose radius `front` expands from 0 outward — the "radiating" arc.
     // Everything scales by the global life envelope (1 -> 0), so the sphere is fully transparent
     // except where those features light it. `u_t` is life progress in [0,1].
+    //
+    // ONE compiled Shader shared by every flash (uniforms live on the per-instance material):
+    // compiling per hit re-parsed the source every impact. AssetPreloader warms it at startup.
+    private static readonly Shader SharedShader = new() { Code = ShaderCode };
+
+    internal static void WarmShaders() => _ = SharedShader;
+
     private const string ShaderCode =
         """
         shader_type spatial;
@@ -79,7 +86,7 @@ public partial class ShieldFlash : Node3D
     public override void _Ready()
     {
         Name = "ShieldFlash";
-        _mat = new ShaderMaterial { Shader = new Shader { Code = ShaderCode } };
+        _mat = new ShaderMaterial { Shader = SharedShader };
         _mat.SetShaderParameter("tint", _tint);
         _mat.SetShaderParameter("impact_dir", _impactDir);
         _mat.SetShaderParameter("energy", Energy);
