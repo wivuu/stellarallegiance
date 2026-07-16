@@ -264,6 +264,7 @@ Stage-2 economy, no rework.
   - The player yields control of the ship, and is exposed/vulnerable to damage for a length of time that is based on yaml config + configurable target multiplier (i.e. probes take longer to ripcord to, potentially)
   - As the ship is preparing to ripcord, it should display a visual countdown, and very slowly list/spin in a circle until the countdown reaches zero, then the ship is instantly transported.
   - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded back and the countdown cancels
+  - Show a visual flash as the user leaves and enters the sector via teleport/ripcord
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
