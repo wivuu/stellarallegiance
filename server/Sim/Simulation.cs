@@ -1002,8 +1002,14 @@ public sealed partial class Simulation
 
     // Restore a fresh lobby on an empty server (called from the sim loop a grace period after
     // the last client leaves). Tears the match down to a clean idle Lobby so the next handoff
-    // readies up afresh, and the server sits idle until then.
-    public void ResetMatch() => ReturnToLobby();
+    // readies up afresh, and the server sits idle until then. A live match cut short this way
+    // gets its "match ended" log here — the normal win path logs via the result sink instead.
+    public void ResetMatch()
+    {
+        if (Phase == PhaseActive)
+            Log.MatchEnded(_log);
+        ReturnToLobby();
+    }
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
