@@ -116,6 +116,8 @@ public partial class ConnectionManager : Node
 	{
 		_net = GetNode<GameNetClient>("../GameNetClient");
 
+		UiCursor.Apply(); // custom cursor from the first visible screen (address input) on
+
 		// Window close (and macOS Cmd+Q) no longer kills the process outright — it raises
 		// NotificationWMCloseRequest instead, which routes through QuitGracefully so the MsgBye
 		// gets flushed to the server before we exit. Explicit GetTree().Quit() calls (--ui-shot,

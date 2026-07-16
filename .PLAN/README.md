@@ -21,8 +21,6 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Set minimum distance for bases to spawn near asteroids and asteroids to spawn from each other during initial game state generation
-- Add a custom cursor
-- F3 map view shows offset vector for ships in other sectors
 ---
 
 ## Content philosophy (the through-line)
@@ -259,6 +257,8 @@ Stage-2 economy, no rework.
   - Abstract the PIG autopilot/autosteer behavior so that it can be reused for player ships, allowing them to follow waypoints or targets with similar logic.
   - We will eventually (out of scope) want to be able to attach this autopilot behavior to other entities, such as miners and constructors (that fly to asteroids to make bases)
   - Press 'T' (new mappable control) to engage the autopilot towards the selected target or waypoint.
+- Turrets: Allow players to mount turret endpoints while a ship that supports turret hardpoints is in-base ('load up' the turrets)
+  - Once launched, the player will 'ride along' with the pilot, able to control a gun from the turret's hardpoint, aiming it and firing it
 - ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
   to fly over and collect; ties into the Stage-2 economy.
   - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
@@ -386,6 +386,21 @@ Stage-1 YAML pipeline.
   - ✅ Spinning greenish/blue translucent multi-layer sphere envelops the asteroid over a configurable
     time; the constructor mesh vanishes (server despawns it at completion, sphere covers it).
   - ✅ Base appears fully constructed on the asteroid; build effect removed; tech paths unlocked.
+- ☐ **[L]** **Allegiance Stub tech tree**  — Take a thin slice of the allegiance tech tree by implementing SOME of iron coalitions ships, bases, weapons, research etc
+  - Ships: 
+    - Starting: Scout, Lt Interceptor
+    - Supremacy Center: Enh. Fighter and Adv. Fighter upgrades
+    - Basic: Bomber (Must research before launching)
+    - Shipyard: Devastator
+  - Weapons: 
+    - Gatling Gun (1, 2, and 3), (for scouts, fighters, and bombers)
+    - Nanite (inverse damage)
+    - Mini-Gun (for interceptors)
+  - Bases:
+    - Garrison -> Starbase
+    - Outpost -> Heavy Outpost (each has to be upgraded?)
+    - Supremacy Center -> Adv. Supremacy Center
+    - Shipyard
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
