@@ -36,8 +36,11 @@ public sealed partial class Simulation
         if ((s.State.Pos - rock.Pos).LengthSquared() > reach * reach)
             return 0f;
         // Clamp the transfer by the rate·dt budget, the rock's remaining ore, and the miner's free hold.
+        // MiningRate (v41): the per-second harvest budget scales by the miner team's faction multiplier
+        // (Iron ×0.85 mines slower); MiningCapacity scales the hold (inside MinerOreCapacity).
         float hold = MinerOreCapacity(s);
-        float move = MathF.Min(_mining.HarvestRatePerSecond * dt, MathF.Min(ore.OreRemaining, hold - s.Ore));
+        float rate = _mining.HarvestRatePerSecond * TeamAttr(s.Team, Allegiance.Factions.Model.GameAttribute.MiningRate);
+        float move = MathF.Min(rate * dt, MathF.Min(ore.OreRemaining, hold - s.Ore));
         if (move <= 0f)
             return 0f;
         s.Ore += move;
@@ -45,10 +48,13 @@ public sealed partial class Simulation
         return move;
     }
 
-    // The ore-hold size for a ship, read straight from its class def (0 = not a miner hull — a non-miner
-    // therefore harvests nothing). Mirrors HullFor's def lookup; an unknown class holds nothing.
+    // The ore-hold size for a ship, read from its class def and scaled by the team's MiningCapacity
+    // faction multiplier (v41; Iron ×0.75 = smaller holds). 0 = not a miner hull (a non-miner harvests
+    // nothing). Mirrors HullFor's def lookup; an unknown class holds nothing.
     private float MinerOreCapacity(ShipSim s) =>
-        ShipDefs.TryGetValue(s.Class, out var d) ? d.OreCapacity : 0f;
+        ShipDefs.TryGetValue(s.Class, out var d)
+            ? d.OreCapacity * TeamAttr(s.Team, Allegiance.Factions.Model.GameAttribute.MiningCapacity)
+            : 0f;
 
     // ================================================================================================
     // Miner AI (Stream 6): team-owned autonomous ore drones. A team seeds ONE free miner slot each

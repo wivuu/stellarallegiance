@@ -52,7 +52,9 @@ public partial class DefRegistry : Node
         WorldConfig world,
         IReadOnlyList<TechDef>? techs = null,
         IReadOnlyList<DevelopmentDef>? developments = null,
-        IReadOnlyList<StationCatalogDef>? stationCatalog = null
+        IReadOnlyList<StationCatalogDef>? stationCatalog = null,
+        string factionName = "",
+        AttrMod[]? factionAttributes = null
     )
     {
         _world = world;
@@ -75,7 +77,19 @@ public partial class DefRegistry : Node
         _techs = techs ?? System.Array.Empty<TechDef>();
         _developments = developments ?? System.Array.Empty<DevelopmentDef>();
         _stationCatalog = stationCatalog ?? System.Array.Empty<StationCatalogDef>();
+        // Faction identity + team-wide stat multipliers (v41).
+        FactionName = factionName;
+        _factionAttributes = factionAttributes ?? System.Array.Empty<AttrMod>();
     }
+
+    // ---- Faction identity + team-wide stat multipliers (v41; empty until MsgDefs lands) ----
+
+    // The streamed faction display name (e.g. "Iron Coalition"); "" until the defs arrive.
+    public string FactionName { get; private set; } = "";
+    private AttrMod[] _factionAttributes = System.Array.Empty<AttrMod>();
+    // The faction's GAS block (sorted by attr byte). Consumed by the sim server-side; kept here so a
+    // client identity/stat panel can surface it. Empty until the defs arrive.
+    public IReadOnlyList<AttrMod> FactionAttributes => _factionAttributes;
 
     // ---- Tech-path catalog (Stage-4 research; empty until MsgDefs lands — callers guard) ----
 

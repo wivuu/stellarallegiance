@@ -593,7 +593,7 @@ public partial class ShipController : Node
             // Skip local prediction while the server flies us; snapshots drive the render instead.
             if (!apActive)
                 foreach (var shot in pc.Step(_input, _predTick))
-                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
+                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength, shot.IsHeal);
         }
 
         // T5 divergence injection (debug). Press P to force a misprediction and

@@ -138,6 +138,21 @@ public enum StationClass
     Electronics,
 }
 
+/// <summary>
+/// Which of a team's bases a station-upgrade <see cref="Development"/> physically upgrades on
+/// completion. Default <see cref="All"/> keeps the historical team-wide behaviour; <see cref="Single"/>
+/// upgrades only the base that HOSTED the research (the research engine is already per-base). A
+/// non-upgrade development (one whose granted techs unlock no station successor tier) ignores this.
+/// </summary>
+public enum UpgradeScope
+{
+    /// <summary>Upgrade every live matching base of the team; later-built matching bases spawn pre-upgraded.</summary>
+    All,
+
+    /// <summary>Upgrade only the base the research completed at; other matching bases stay at the base tier.</summary>
+    Single,
+}
+
 /// <summary>Behaviour profile for an AI-piloted drone. Mirrors <c>PilotType</c> (igc.h:685-689).</summary>
 public enum PilotKind
 {

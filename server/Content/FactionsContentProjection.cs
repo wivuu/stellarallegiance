@@ -51,8 +51,15 @@ public static class FactionsContentProjection
             .Select(t => new TechDef { Id = t.Id, Name = t.Name, Description = t.Description ?? "" })
             .ToList();
         var developments = core.Developments.Select(d => ProjectDevelopment(d, techIdx)).ToList();
+        // Station upgrades (v39): resolve a station's `successor-station-id` to the successor tier's
+        // base-type-id. Built from the runtime-base subset (a successor must itself be a runtime base).
+        var baseTypeByStationId = core.Stations
+            .Where(s => s.BaseTypeId is not null)
+            .ToDictionary(s => s.Id, s => (short)s.BaseTypeId!.Value, StringComparer.Ordinal);
+        short SuccessorBaseType(string? succId) =>
+            !string.IsNullOrEmpty(succId) && baseTypeByStationId.TryGetValue(succId, out var t) ? t : (short)-1;
         // Station CATALOG = every authored station, runtime AND catalog-only (Build-tab placeholders).
-        var stationCatalog = core.Stations.Select(s => ProjectStationCatalog(s, techIdx)).ToList();
+        var stationCatalog = core.Stations.Select(s => ProjectStationCatalog(s, techIdx, SuccessorBaseType(s.SuccessorStationId))).ToList();
 
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
@@ -72,7 +79,7 @@ public static class FactionsContentProjection
 
         var bases = core.Stations
             .Where(s => s.BaseTypeId is not null)
-            .Select(ProjectBase)
+            .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId)))
             .ToList();
 
         // AllExpendables() iterates Missiles→Mines→Chaffs→Probes in list order — deterministic.
@@ -98,6 +105,14 @@ public static class FactionsContentProjection
     private static byte[] CapArray(Factions.CapabilitySet set) =>
         set.Select(c => (byte)c).OrderBy(b => b).ToArray();
 
+    // v41 team-wide stat multipliers: an AttributeModifiers map (GameAttribute -> double) projected to a
+    // wire-stable AttrMod[] SORTED by the attribute byte (ContentTest determinism guard — the map has no
+    // stable iteration order). The multiplier is carried as f32.
+    private static StellarAllegiance.Shared.AttrMod[] AttrArray(Factions.AttributeModifiers mods) =>
+        mods.Select(kv => new StellarAllegiance.Shared.AttrMod((byte)kv.Key, (float)kv.Value))
+            .OrderBy(m => m.Attr)
+            .ToArray();
+
     private static DevelopmentDef ProjectDevelopment(Factions.Development d, IReadOnlyDictionary<string, ushort> techIdx) =>
         new()
         {
@@ -113,9 +128,13 @@ public static class FactionsContentProjection
             ObsoletedByTechIdx = TechIdxArray(d.ObsoletedByTechs, techIdx),
             RequiredCaps = CapArray(d.RequiredCapabilities),
             GrantedCaps = CapArray(d.GrantedCapabilities),
+            // Station upgrade (v39): which matching bases physically upgrade (0 all / 1 single).
+            UpgradeScope = (byte)d.UpgradeScope,
+            // v41 team-wide stat multipliers (sorted by attr byte). Empty for the slice's tech-only devs.
+            Attributes = AttrArray(d.Attributes),
         };
 
-    private static StationCatalogDef ProjectStationCatalog(Factions.Station s, IReadOnlyDictionary<string, ushort> techIdx) =>
+    private static StationCatalogDef ProjectStationCatalog(Factions.Station s, IReadOnlyDictionary<string, ushort> techIdx, short successorBaseTypeId) =>
         new()
         {
             Id = s.Id,
@@ -135,6 +154,7 @@ public static class FactionsContentProjection
             ObsoletedByTechIdx = TechIdxArray(s.ObsoletedByTechs, techIdx),
             RequiredCaps = CapArray(s.RequiredCapabilities),
             GrantedCaps = CapArray(s.GrantedCapabilities),
+            SuccessorBaseTypeId = successorBaseTypeId, // v39: the base-type this station upgrades into (-1 = none)
         };
 
     // Stage-2: the single stock faction's per-match starting state (credits/income + tech/capability
@@ -149,7 +169,9 @@ public static class FactionsContentProjection
             baseTechs: f.BaseTechs.Clone(),
             baseCapabilities: f.BaseCapabilities.Clone(),
             lifepodHullId: f.LifepodHullId,
-            initialStationId: f.InitialStationId
+            initialStationId: f.InitialStationId,
+            factionName: f.Name,
+            baseAttributes: AttrArray(f.BaseAttributes)
         );
     }
 
@@ -247,6 +269,7 @@ public static class FactionsContentProjection
             ProjectileLifeTicks = w.ProjectileLifeTicks,
             Kind = (WeaponKind)(byte)w.Kind,
             CanDamageBase = w.CanDamageBase,
+            IsHealing = w.IsHealing,
             ShieldMult = (float)(w.ShieldDamageMultiplier ?? 1.0),
             // Client bolt-mesh dims come from the referenced projectile (0 = client default).
             BoltRadius = (float)proj.BoltRadius,
@@ -400,7 +423,7 @@ public static class FactionsContentProjection
             Description = e.Description ?? "",
         };
 
-    private static BaseDef ProjectBase(Factions.Station s) =>
+    private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId) =>
         new()
         {
             BaseTypeId = s.BaseTypeId!.Value,
@@ -419,6 +442,7 @@ public static class FactionsContentProjection
             ModelName = s.ModelName ?? "",
             WinCondition = s.Abilities.Contains(Factions.StationAbility.Start),
             BuildRockClass = ParseRockClass(s.BuildOnRockClass),
+            SuccessorBaseTypeId = successorBaseTypeId, // v39: the base-type this base upgrades into (-1 = none)
         };
 
     // Parse a kebab-case RockClass name ("regolith") to its byte; 255 (unset) for null/empty/unknown.

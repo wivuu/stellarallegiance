@@ -888,7 +888,9 @@ public sealed class ClientHub
                 // bare /build lists the buildable stations. Order it to a rock via F3 after it launches.
                 if (CommanderOrWarn(client) is byte team)
                 {
-                    var runtime = _sim.Content.StationCatalog.Where(s => s.BaseTypeId >= 0 && s.BaseTypeId != 0);
+                    // Constructor-buildable runtime stations only: exclude the garrison (0) and the
+                    // upgrade tiers (runtime base-type-id but no build-on-rock-class — reached via research).
+                    var runtime = _sim.Content.StationCatalog.Where(s => s.BaseTypeId >= 1 && s.BuildRockClass != 255);
                     if (arg.Length == 0)
                     {
                         SystemTo(client, "Buildable: " + string.Join(", ", runtime.Select(s => s.Id)));

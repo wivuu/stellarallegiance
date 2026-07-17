@@ -39,13 +39,15 @@ const int Settle = 30; // ticks to hold a configuration so the 2 Hz apply reflec
 Simulation BootSim(ulong seed, bool sync = true)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    // The bomber (class 2) is tech-gated behind heavy-ordnance at match start (StrategyTest's subject);
+    // The bomber (class 2) is tech-gated behind the `bomber` tech at match start (StrategyTest's subject);
     // this suite reads a bomber's signature, so seed the tech so StartMatch unlocks class 2.
-    content.Start.BaseTechs.Add("heavy-ordnance");
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — used as a vision target
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts exact signature/detection boundaries
     sim.FogEnabled = true;
     sim.VisionSynchronous = sync;
     sim.StartMatch();
@@ -1578,6 +1580,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     Simulation MkDustSim(float amount, float opacity, out World w)
     {
         var c = ContentLoader.Load(stockPath, worldPath);
+        c.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — dust-sim viewers/targets
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
         c.World.SectorScale = 1f;
         c.World.SectorRadius = baseR; // sector 0 (no explicit radius) → radius baseR, dust ~0.9·baseR
@@ -1751,6 +1754,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ship sees OUT while remaining unseen itself: dust-signature-mult quiets targets, not viewers.
 {
     var c = ContentLoader.Load(stockPath, worldPath);
+    c.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — dust-signature viewers/targets
     float dustMult = c.World.DustSignatureMult;
     if (dustMult >= 0.95f)
         Console.WriteLine("SKIP: dust-signature-mult is neutral — dust signature test skipped");

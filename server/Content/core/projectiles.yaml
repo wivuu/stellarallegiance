@@ -1,36 +1,110 @@
 # Projectiles — the bolt each cannon fires. power→WeaponDef.damage, speed→projectile-speed,
 # width→projectile-radius (the per-weapon fire-interval/life ticks live on the weapon, in the
-# tick domain, to avoid seconds→tick rounding drift). Numbers reproduce stock.yaml exactly.
-# bolt-radius/bolt-length = the client tracer mesh's visual size (world units); omit = client default.
+# tick domain, to avoid seconds→tick rounding drift).
+#
+# Iron Coalition gun line (Phase 2, PCore014.igc). Anchors (plan Adaptation §3 + Phase-2 brief):
+#   - DAMAGE: per-gun DPS preserves the IGC DPS ratio vs PW Gat Gun 1, anchored at our Gat 1 =
+#     10 dmg / 4 ticks = 50 dmg/s. IGC DPS = |proj power| / dtimeBurst. Our conversion:
+#     our_DPS = igc_DPS × (50/32); projectile power = our_DPS × fire-interval-ticks / 20.
+#   - SPEED: 200 × (IGC projectile speed / 600) — the Gat bolt (IGC speed 600) is the 200 anchor.
+#     Gat 600→200, Mini-Gun 500→167, AutoCan 1000→333.
+#   - LIFE (on the weapon): from the --iron-slice translation, capped ≤ 20 ticks.
+# IGC projectile widths are all 0 — the tracer's visual size (bolt-radius/bolt-length) stays ours.
 projectiles:
-  - id: scout-bolt
-    name: Scout Bolt
-    power: 4
+  # ---- PW Gat Gun line (DPS ratio 1.00 / 1.25 / 1.5625 vs Gat 1) ----
+  - id: gat-bolt-1
+    name: Gat Bolt 1
+    power: 10.0     # 50 dmg/s × 4/20
     speed: 200
     width: 1
     bolt-radius: 0.22
     bolt-length: 2.2
-  - id: fighter-bolt
-    name: Fighter Bolt
-    power: 10
+  - id: gat-bolt-2
+    name: Gat Bolt 2
+    power: 12.5     # 62.5 dmg/s × 4/20
     speed: 200
     width: 1
     bolt-radius: 0.22
     bolt-length: 2.2
-  - id: bomber-bolt
-    name: Bomber Bolt
-    power: 22
+  - id: gat-bolt-3
+    name: Gat Bolt 3
+    power: 15.6     # 78.1 dmg/s × 4/20
     speed: 200
     width: 1
-    bolt-radius: 0.3
+    bolt-radius: 0.24
+    bolt-length: 2.4
+
+  # ---- PW Mini-Gun line (DPS ratio 1.5625 / 2.003 / 2.441 vs Gat 1) ----
+  - id: minigun-bolt-1
+    name: Mini-Gun Bolt 1
+    power: 11.7     # 78.1 dmg/s × 3/20
+    speed: 167
+    width: 1
+    bolt-radius: 0.20
+    bolt-length: 2.0
+  - id: minigun-bolt-2
+    name: Mini-Gun Bolt 2
+    power: 15.0     # 100.2 dmg/s × 3/20
+    speed: 167
+    width: 1
+    bolt-radius: 0.20
+    bolt-length: 2.0
+  - id: minigun-bolt-3
+    name: Mini-Gun Bolt 3
+    power: 18.3     # 122.1 dmg/s × 3/20
+    speed: 167
+    width: 1
+    bolt-radius: 0.22
+    bolt-length: 2.2
+
+  # ---- PW AutoCan line (DPS ratio 3.686 / 4.665 / 5.832 vs Gat 1) — the heavy assault gun ----
+  - id: autocan-bolt-1
+    name: AutoCan Bolt 1
+    power: 27.6     # 184.3 dmg/s × 3/20
+    speed: 333
+    width: 1
+    bolt-radius: 0.30
     bolt-length: 2.8
-  # Heavy-bolt: the class-2 cannon round (fired by heavy-cannon, weapon-id 9, tech-gated behind
-  # cannon-tier-2). Hits noticeably harder than the bomber bolt (40 vs 22) but flies slightly slower
-  # (180 vs 200) — a heavier, more punishing slug. Not mounted by any stock hull (arsenal display only).
-  - id: heavy-bolt
-    name: Heavy Bolt
-    power: 40
-    speed: 180
+  - id: autocan-bolt-2
+    name: AutoCan Bolt 2
+    power: 35.0     # 233.2 dmg/s × 3/20
+    speed: 333
+    width: 1
+    bolt-radius: 0.30
+    bolt-length: 2.8
+  - id: autocan-bolt-3
+    name: AutoCan Bolt 3
+    power: 43.7     # 291.6 dmg/s × 3/20
+    speed: 333
     width: 1
     bolt-radius: 0.34
     bolt-length: 3.2
+
+  # ---- ER Nanite line (Phase 5) — the HEALING projectile. `power` is the HULL RESTORED per bolt
+  # (the weapon carries is-healing: true; the sim heals a same-team target instead of damaging it).
+  # IGC Nanite proj powers are NEGATIVE (−22.5/−30/−37.5); we take the magnitude as heal power and
+  # preserve the IGC heal-per-second ratio vs PW Gat Gun 1 at the nanite's 10-tick cadence:
+  #   IGC HP/s = |proj power| / dtimeBurst(0.25); ratio vs Gat 1 (IGC DPS 32) → our_HPS = 50 × ratio;
+  #   power = our_HPS × fire-interval-ticks(10) / 20.  Nanite 1: 90/32→2.8125→140.6 HP/s → 70.3, etc.
+  # SPEED: 200 × (IGC 400 / 600) = 133. Green tint is applied client-side off IsHealing (not authored).
+  - id: nanite-bolt-1
+    name: Nanite Bolt 1
+    power: 70.3     # 140.6 HP/s × 10/20 (heal, not damage)
+    speed: 133
+    width: 1
+    bolt-radius: 0.22
+    bolt-length: 2.2
+  - id: nanite-bolt-2
+    name: Nanite Bolt 2
+    power: 93.8     # 187.5 HP/s × 10/20
+    speed: 133
+    width: 1
+    bolt-radius: 0.22
+    bolt-length: 2.2
+  - id: nanite-bolt-3
+    name: Nanite Bolt 3
+    power: 117.2    # 234.4 HP/s × 10/20
+    speed: 133
+    width: 1
+    bolt-radius: 0.24
+    bolt-length: 2.4

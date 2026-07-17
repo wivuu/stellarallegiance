@@ -32,6 +32,22 @@ public class ValidationTests
     }
 
     [Fact]
+    public void HealingWeaponThatDamagesBase_IsReported()
+    {
+        // A healing gun can never also siege a base — its heal power would damage bases. Boot-fatal.
+        var core = new Core
+        {
+            Projectiles = { new Projectile { Id = "bolt", Name = "Bolt", Power = 10 } },
+            Weapons = { new Weapon { Id = "bad-nanite", Name = "Bad Nanite", ProjectileId = "bolt", IsHealing = true, CanDamageBase = true } },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("bad-nanite") && e.Contains("is-healing") && e.Contains("can-damage-base"));
+    }
+
+    [Fact]
     public void UnknownObsoletedByTechReference_IsReported()
     {
         var core = new Core
@@ -58,6 +74,67 @@ public class ValidationTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.Contains("research-slots") && e.Contains("lab"));
+    }
+
+    [Fact]
+    public void SingleScopeUpgradeWithMatchingSuccessorTier_IsValid()
+    {
+        // garrison --successor--> garrison-str (requires garrison-str tech); dev grants garrison-str.
+        var core = new Core
+        {
+            Techs = { new Tech { Id = "garrison-str", Name = "Garrison (Str)" } },
+            Stations =
+            {
+                new Station { Id = "garrison", Name = "Garrison", BaseTypeId = 0, SuccessorStationId = "garrison-str" },
+                new Station { Id = "garrison-str", Name = "Garrison (Str)", BaseTypeId = 4, RequiredTechs = new TechSet(new[] { "garrison-str" }) },
+            },
+            Developments =
+            {
+                new Development
+                {
+                    Id = "dev-upgrade-garrison", Name = "Upgrade Garrison",
+                    UpgradeScope = UpgradeScope.Single,
+                    GrantedTechs = new TechSet(new[] { "garrison-str" }),
+                },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.True(result.IsValid, string.Join("\n", result.Errors));
+    }
+
+    [Fact]
+    public void SingleScopeUpgradeThatTriggersNoUpgrade_IsReported()
+    {
+        // Same roster, but the dev grants a tech NO successor tier requires — it would upgrade nothing.
+        var core = new Core
+        {
+            Techs =
+            {
+                new Tech { Id = "garrison-str", Name = "Garrison (Str)" },
+                new Tech { Id = "unrelated", Name = "Unrelated" },
+            },
+            Stations =
+            {
+                new Station { Id = "garrison", Name = "Garrison", BaseTypeId = 0, SuccessorStationId = "garrison-str" },
+                new Station { Id = "garrison-str", Name = "Garrison (Str)", BaseTypeId = 4, RequiredTechs = new TechSet(new[] { "garrison-str" }) },
+            },
+            Developments =
+            {
+                new Development
+                {
+                    Id = "dev-upgrade-garrison", Name = "Upgrade Garrison",
+                    UpgradeScope = UpgradeScope.Single,
+                    GrantedTechs = new TechSet(new[] { "unrelated" }),
+                },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("dev-upgrade-garrison") && e.Contains("upgrade-scope: single"));
     }
 
     [Fact]

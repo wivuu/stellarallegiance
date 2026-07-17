@@ -1,50 +1,146 @@
 # Weapons — the cannons. dispersion→WeaponDef.spread-rad; damage/speed/radius come from the
 # referenced projectile. weapon-id (referenced by hull hardpoints) and the tick-domain ballistics
-# (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions. Reproduces stock.yaml.
+# (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions.
 # mass = payload units the weapon occupies when mounted (counts against the hull's payload-capacity).
-# shield-damage-multiplier (optional, default 1.0) = damage dealt to an energy shield relative to hull:
-# >1 strong vs shields, <1 weak. Heavy AP rounds punch hull but shrug off shields (see bomber-cannon).
+#
+# Iron Coalition gun line (Phase 2, PCore014.igc). Three tiered lines share the gun weapon-id space
+# with the launchers (launchers.yaml claims 3–8):
+#   PW Gat Gun 1/2/3   = weapon-ids 0/1/2   (partMask 0x1, wep09)  — the all-round gun
+#   PW Mini-Gun 1/2/3  = weapon-ids 9/10/11 (partMask 0x8, wep16)  — rapid-fire, homed at the Garrison
+#   PW AutoCan 1/2/3   = weapon-ids 12/13/14 (partMask 0x4000)     — heavy assault gun (Bomber)
+# fire-interval-ticks = round(dtimeBurst × 40): Gat 0.100→4, Mini-Gun 0.080→3, AutoCan 0.083→3.
+# All gun masses are 1.0 (IGC). Tier 2/3 gate on the same-named research tech. can-damage-base stays
+# OFF for every gun — the bomber's anti-base torpedo (weapon-id 5, launchers.yaml) is the match-ender.
 weapons:
-  - id: scout-cannon
-    name: Scout Cannon
+  # ---- PW Gat Gun 1/2/3 (weapon-ids 0/1/2) ----
+  - id: gat-gun-1
+    name: PW Gat Gun 1
     weapon-id: 0
-    mass: 2
-    dispersion: 0.006
+    mass: 1
+    dispersion: 0.005
     fire-interval-ticks: 4
-    projectile-life-ticks: 16
-    projectile-id: scout-bolt
+    projectile-life-ticks: 20
+    projectile-id: gat-bolt-1
     required-capabilities: [base]
-  - id: fighter-cannon
-    name: Fighter Cannon
+  - id: gat-gun-2
+    name: PW Gat Gun 2
     weapon-id: 1
-    mass: 5
-    dispersion: 0.035
+    mass: 1
+    dispersion: 0.005
     fire-interval-ticks: 4
-    projectile-life-ticks: 16
-    projectile-id: fighter-bolt
+    projectile-life-ticks: 20
+    projectile-id: gat-bolt-2
     required-capabilities: [base]
-  - id: bomber-cannon
-    name: Bomber Cannon
+    required-techs: [gat-2]
+  - id: gat-gun-3
+    name: PW Gat Gun 3
     weapon-id: 2
-    mass: 11
-    dispersion: 0.012
-    fire-interval-ticks: 14
-    projectile-life-ticks: 16
-    projectile-id: bomber-bolt
-    shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, only half-effective vs shields
+    mass: 1
+    dispersion: 0.005
+    fire-interval-ticks: 4
+    projectile-life-ticks: 20
+    projectile-id: gat-bolt-3
     required-capabilities: [base]
-  # Heavy Cannon (weapon-id 9 — the next free id after the launchers claim 3-8). The class-2 gun,
-  # tech-gated behind cannon-tier-2 (dev-cannon-tier-2). NOT mounted by any stock hull hardpoint or
-  # default loadout: it exists only so the hangar arsenal can show a tech-locked entry (Phase D).
-  # Heavier + slower-firing than the bomber cannon, firing the harder-hitting heavy-bolt.
-  - id: heavy-cannon
-    name: Heavy Cannon
+    required-techs: [gat-3]
+
+  # ---- PW Mini-Gun 1/2/3 (weapon-ids 9/10/11) ----
+  - id: mini-gun-1
+    name: PW Mini-Gun 1
     weapon-id: 9
-    mass: 14
+    mass: 1
     dispersion: 0.010
-    fire-interval-ticks: 18
+    fire-interval-ticks: 3
     projectile-life-ticks: 16
-    projectile-id: heavy-bolt
-    shield-damage-multiplier: 0.5 # class-2 AP round: hull-focused, half-effective vs shields
+    projectile-id: minigun-bolt-1
     required-capabilities: [base]
-    required-techs: [cannon-tier-2]
+  - id: mini-gun-2
+    name: PW Mini-Gun 2
+    weapon-id: 10
+    mass: 1
+    dispersion: 0.010
+    fire-interval-ticks: 3
+    projectile-life-ticks: 16
+    projectile-id: minigun-bolt-2
+    required-capabilities: [base]
+    required-techs: [minigun-2]
+  - id: mini-gun-3
+    name: PW Mini-Gun 3
+    weapon-id: 11
+    mass: 1
+    dispersion: 0.010
+    fire-interval-ticks: 3
+    projectile-life-ticks: 16
+    projectile-id: minigun-bolt-3
+    required-capabilities: [base]
+    required-techs: [minigun-3]
+
+  # ---- PW AutoCan 1/2/3 (weapon-ids 12/13/14) — the heavy assault gun ----
+  - id: autocan-1
+    name: PW AutoCan 1
+    weapon-id: 12
+    mass: 1
+    dispersion: 0.010
+    fire-interval-ticks: 3
+    projectile-life-ticks: 20
+    projectile-id: autocan-bolt-1
+    shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
+    required-capabilities: [base]
+  - id: autocan-2
+    name: PW AutoCan 2
+    weapon-id: 13
+    mass: 1
+    dispersion: 0.010
+    fire-interval-ticks: 3
+    projectile-life-ticks: 20
+    projectile-id: autocan-bolt-2
+    shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
+    required-capabilities: [base]
+    required-techs: [autocan-2]
+  - id: autocan-3
+    name: PW AutoCan 3
+    weapon-id: 14
+    mass: 1
+    dispersion: 0.010
+    fire-interval-ticks: 3
+    projectile-life-ticks: 20
+    projectile-id: autocan-bolt-3
+    shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
+    required-capabilities: [base]
+    required-techs: [autocan-3]
+
+  # ---- ER Nanite 1/2/3 (weapon-ids 15/16/17) — the HEALING gun (IGC partMask 0x2, wep18) ----
+  # is-healing: a bolt striking a SAME-team ship restores hull only (clamp to max, shields untouched);
+  # an enemy hit is a no-op. IGC mass 2, dtimeBurst 0.25 → fire-interval-ticks 10. Fits the Scout's
+  # 0x3 mount (loadout swap; the Scout's authored default keeps the Gat gun). Tier 2/3 gate on research.
+  - id: nanite-1
+    name: ER Nanite 1
+    weapon-id: 15
+    mass: 2
+    dispersion: 0.005
+    fire-interval-ticks: 10
+    projectile-life-ticks: 20
+    projectile-id: nanite-bolt-1
+    is-healing: true
+    required-capabilities: [base]
+  - id: nanite-2
+    name: ER Nanite 2
+    weapon-id: 16
+    mass: 2
+    dispersion: 0.005
+    fire-interval-ticks: 10
+    projectile-life-ticks: 20
+    projectile-id: nanite-bolt-2
+    is-healing: true
+    required-capabilities: [base]
+    required-techs: [nanite-2]
+  - id: nanite-3
+    name: ER Nanite 3
+    weapon-id: 17
+    mass: 2
+    dispersion: 0.005
+    fire-interval-ticks: 10
+    projectile-life-ticks: 20
+    projectile-id: nanite-bolt-3
+    is-healing: true
+    required-capabilities: [base]
+    required-techs: [nanite-3]

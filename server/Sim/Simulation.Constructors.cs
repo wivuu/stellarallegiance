@@ -300,6 +300,14 @@ public sealed partial class Simulation
             Notice("No such buildable station.");
             return;
         }
+        // Only constructor-buildable stations (with a build-on-rock-class) may be ordered. Upgrade-tier
+        // bases (garrison-str/supremacy-adv/shipyard-dry) carry no rock class — they are reached only by
+        // researching their upgrade dev, never built directly (v39).
+        if (station.BuildRockClass == 255)
+        {
+            Notice($"{station.Name} isn't constructor-buildable.");
+            return;
+        }
         if (!World.TeamStates.TryGetValue(team, out var ts))
             return;
         if (!StationAvailableTo(ts, station))
@@ -513,6 +521,10 @@ public sealed partial class Simulation
         // Grant the station's techs/capabilities to the team and re-resolve unlocks (mid-match), then
         // reveal the new base to the owning team so it appears immediately (enemies discover it by fog).
         GrantStationUnlocks(slot.Team, slot.BuildStationTypeId);
+        // Station upgrades (v39), `all` scope: a base built AFTER its team already completed an
+        // all-scope upgrade dev spawns pre-upgraded. (No slice content uses `all` — the authored
+        // upgrade devs are all `single` — but the path is here so `all` behaves as documented.)
+        MaybePreUpgradeSpawnedBase(slot.Team, baseId, slot.BuildStationTypeId);
         RevealBaseToTeam(slot.Team, baseId);
         BasesCreatedThisStep.Add(baseId);
         BasesChangedThisStep = true;
@@ -954,8 +966,10 @@ public sealed partial class Simulation
             tv.DiscoveredBases.Add(baseId);
             if (!tv.RevealLogBases.Contains(baseId))
                 tv.RevealLogBases.Add(baseId); // newly built = full health
-            tv.DiscoveredSectors.Add(World.BaseById(baseId)?.SectorId ?? World.DefaultSector);
-            tv.LastKnownBaseHealth[baseId] = World.BaseMaxHealth;
+            var site = World.BaseById(baseId);
+            tv.DiscoveredSectors.Add(site?.SectorId ?? World.DefaultSector);
+            tv.LastKnownBaseHealth[baseId] = World.BaseMaxHealthOf(site?.BaseTypeId ?? 0, team); // per-type full hull × team factor (v41)
+
         }
     }
 

@@ -62,14 +62,16 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    // The bomber (class 2) is tech-gated behind heavy-ordnance at match start (StrategyTest's
+    // The bomber (class 2) is tech-gated behind the `bomber` tech at match start (StrategyTest's
     // subject); this suite lays mines from bombers, so seed the tech so StartMatch unlocks class 2.
-    content.Start.BaseTechs.Add("heavy-ordnance");
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw mine damage from shield absorption (ShieldTest covers shields)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts pre-multiplier damage/base health
     sim.StartMatch();
     return sim;
 }
@@ -455,9 +457,10 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 Simulation BootHubSim(ulong seed, bool fog)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    // Seed heavy-ordnance so the matchmaker's StartMatch unlocks the tech-gated bomber (class 2)
+    // Seed the bomber tech so the matchmaker's StartMatch unlocks the tech-gated bomber (class 2)
     // this harness spawns (gating is StrategyTest's subject, not this one).
-    content.Start.BaseTechs.Add("heavy-ordnance");
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     return new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = fog, VisionSynchronous = true };
 }

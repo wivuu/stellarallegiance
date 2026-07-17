@@ -182,6 +182,7 @@ public sealed class World
         public Vec3 DoorCenter; // centroid of the door face centres (AI aim target)
         public DockFace[] DockFaces = System.Array.Empty<DockFace>();
         public float Radius = BaseRadius; // world-unit collision radius for this type
+        public float MaxHealth; // per-type base hull (from the base def's max-armor); 0 => fall back to World.BaseMaxHealth
     }
 
     // Loaded base models keyed by BaseTypeId. Type 0 (garrison) is always present. Populated in the
@@ -205,6 +206,36 @@ public sealed class World
     public Vec3 BaseEntryAxisOf(byte typeId) => BaseModelFor(typeId).EntryAxis;
     public DockFace[] BaseDockFacesOf(byte typeId) => BaseModelFor(typeId).DockFaces;
     public float BaseRadiusOf(byte typeId) => BaseModelFor(typeId).Radius;
+
+    // Per-type base max hull. Sourced from the type's projected BaseDef (max-armor); falls back to the
+    // legacy single BaseMaxHealth (garrison, type 0) for a type with no def / no authored health —
+    // mirroring BaseRadiusOf's Model0 fallback so callers without base defs stay byte-identical.
+    public float BaseMaxHealthOf(byte typeId)
+    {
+        var m = BaseModelFor(typeId);
+        return m.MaxHealth > 0f ? m.MaxHealth : BaseMaxHealth;
+    }
+
+    // Team-aware per-type base max hull (v41): the raw per-type max scaled by the team's MaxArmorStation
+    // faction multiplier (TeamAttr; 1.0 when unseeded). Every base-health STAMP/refill site resolves the
+    // owning team so Iron Coalition's tougher bases (×1.15) hold consistently. UpgradeBaseAt's
+    // fraction-of-max rescale stays correct because both old and new max carry the same team factor.
+    public float BaseMaxHealthOf(byte typeId, byte team) =>
+        BaseMaxHealthOf(typeId) * TeamAttr(team, (int)Allegiance.Factions.Model.GameAttribute.MaxArmorStation);
+
+    // ---- Per-team resolved stat multipliers (v41) --------------------------------------------------
+    // A flat float[attrId] cache per team (faction base-attributes × completed developments), populated
+    // by the sim (Simulation.RecomputeTeamAttributes) at match start + on research completion. World owns
+    // it so the team-aware BaseMaxHealthOf can read it; the sim reads it through TeamAttr(team, attr).
+    // Unseeded (empty / pre-match / attributes-disabled tests) ⇒ every attr resolves 1.0 (neutral).
+    private readonly Dictionary<byte, float[]> _teamAttr = new();
+
+    public float TeamAttr(byte team, int attrId) =>
+        _teamAttr.TryGetValue(team, out var a) && (uint)attrId < (uint)a.Length ? a[attrId] : 1f;
+
+    public void SetTeamAttributes(byte team, float[] attrs) => _teamAttr[team] = attrs;
+
+    public void ClearTeamAttributes() => _teamAttr.Clear();
 
     // Legacy single-model accessors (garrison, type 0) — for call sites without a base-type context
     // (SelfTest, launch fallback). Behavior byte-identical to the pre-v37 single-model fields.
@@ -361,7 +392,11 @@ public sealed class World
                     + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
         for (int i = 0; i < Bases.Count; i++)
         {
-            BaseHealth.Add(BaseMaxHealth);
+            // All match-start bases are garrisons (type 0); BaseMaxHealthOf(0) == BaseMaxHealth here
+            // (base models load below, so the fallback returns it) — kept per-type for uniformity. The
+            // v41 team attr cache is empty at ctor ⇒ ×1.0; StartMatch's ResetMatchBases re-stamps once
+            // the sim has seeded it (Iron's ×1.15 lands there, not here — no active match at ctor).
+            BaseHealth.Add(BaseMaxHealthOf(Bases[i].BaseTypeId, Bases[i].Team));
             ResearchByBase.Add(new BaseResearchState());
         }
         // The match-start garrisons (all type 0). ResetMatchBases trims runtime-built bases back to
@@ -843,7 +878,9 @@ public sealed class World
             foreach (var def in _baseDefs)
             {
                 string model = string.IsNullOrEmpty(def.ModelName) ? "garrison" : def.ModelName;
-                _baseModels[def.BaseTypeId] = LoadBaseModel(model, def.Radius > 0f ? def.Radius : BaseRadius);
+                var data = LoadBaseModel(model, def.Radius > 0f ? def.Radius : BaseRadius);
+                data.MaxHealth = def.MaxHealth; // per-type hull; BaseMaxHealthOf falls back to BaseMaxHealth if 0
+                _baseModels[def.BaseTypeId] = data;
             }
         }
         // Guarantee a garrison (type 0) entry regardless (legacy/minimal callers).
@@ -985,7 +1022,7 @@ public sealed class World
     {
         ulong id = _nextBaseId++;
         Bases.Add(new BaseSite(id, team, sectorId, pos, baseTypeId));
-        BaseHealth.Add(BaseMaxHealth);
+        BaseHealth.Add(BaseMaxHealthOf(baseTypeId, team)); // per-type hull × team factor (v41)
         ResearchByBase.Add(new BaseResearchState());
         return id;
     }
@@ -1003,7 +1040,12 @@ public sealed class World
         }
         for (int i = 0; i < BaseHealth.Count; i++)
         {
-            BaseHealth[i] = BaseMaxHealth;
+            // Every match-start base is a type-0 garrison (world-gen places only garrisons). A station
+            // upgrade (v39) may have swapped one to a higher tier mid-match — restore it to type 0 so a
+            // reused-World restart starts pristine (health then refills at the type-0 max).
+            if (Bases[i].BaseTypeId != 0)
+                Bases[i] = Bases[i] with { BaseTypeId = 0 };
+            BaseHealth[i] = BaseMaxHealthOf(Bases[i].BaseTypeId, Bases[i].Team); // per-type refill × team factor (v41)
             ResearchByBase[i].Active.Clear();
             ResearchByBase[i].OnDeck = null;
         }

@@ -17,6 +17,11 @@ public partial class HitFlash : Node3D
     private StandardMaterial3D _mat = null!;
     private double _age;
 
+    // Core/emission tint of the spark. Default = the hot white-gold impact flash; the ER Nanite heal
+    // path sets both to green before the flash is added to the tree. Set before _Ready runs.
+    public Color CoreColor { get; set; } = new Color(1f, 0.95f, 0.8f, 1f);
+    public Color EmissionColor { get; set; } = Colors.White;
+
     public override void _Ready()
     {
         Name = "HitFlash";
@@ -26,10 +31,10 @@ public partial class HitFlash : Node3D
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             BlendMode = BaseMaterial3D.BlendModeEnum.Add,
             AlbedoTexture = Dot,
-            AlbedoColor = new Color(1f, 0.95f, 0.8f, 1f), // hot white-gold core
+            AlbedoColor = CoreColor,
             EmissionEnabled = true,
             EmissionTexture = Dot,
-            Emission = Colors.White,
+            Emission = EmissionColor,
             EmissionEnergyMultiplier = StartEnergy,
             BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
         };

@@ -171,8 +171,15 @@ public partial class BuildTab : Control
     // Every buildable structure: the runtime forward bases (BaseTypeId >= 1, e.g. the outpost — really
     // constructible) plus the catalog-only placeholders (-1). The garrison (type 0) is the starting
     // base, never in the Build catalog.
+    // The garrison (type 0) is the starting base, never in the Build catalog. Upgrade-tier runtime
+    // bases (garrison-str/supremacy-adv/shipyard-dry — a runtime base-type-id but NO build-on-rock-class)
+    // are reached only via research (their upgrade dev), never built directly, so they are excluded too.
     private List<StationCatalogDef> Catalog() =>
-        _defs == null ? new() : _defs.AllStationCatalog().Where(s => s.BaseTypeId != 0).ToList();
+        _defs == null
+            ? new()
+            : _defs.AllStationCatalog()
+                .Where(s => s.BaseTypeId != 0 && !(s.BaseTypeId >= 1 && s.BuildRockClass == 255))
+                .ToList();
 
     // A structure that actually builds today (has a runtime base projection). Placeholders (-1) are
     // display-only until their type is authored.

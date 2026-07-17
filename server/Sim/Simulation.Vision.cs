@@ -541,6 +541,10 @@ public sealed partial class Simulation
                 ),
                 _sigKnobs
             );
+            // Signature (v41): the ship's detectability scales by its team's faction multiplier (Iron
+            // ×0.85 = quieter). Vision-only consumer — never touches sim state, so the fog-off byte path
+            // is unaffected (fog-off ignores reveal entirely).
+            sig *= TeamAttr(s.Team, Allegiance.Factions.Model.GameAttribute.Signature);
             _inTargets.Add(
                 new TargetSnap
                 {

@@ -61,28 +61,35 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    // The bomber (class 2, the torpedo carrier) is tech-gated behind heavy-ordnance at match start
+    // The bomber (class 2, the torpedo carrier) is tech-gated behind the `bomber` tech at match start
     // (StrategyTest's subject); this suite sieges bases with bombers, so seed the tech into the
     // faction base so StartMatch unlocks class 2.
-    content.Start.BaseTechs.Add("heavy-ordnance");
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw missile/blast damage from shield absorption (ShieldTest covers shields)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts pre-multiplier missile/base damage
     sim.FogEnabled = false; // isolate lock mechanics from the fog radar-visibility gate (FogTest covers fog); vision is a 2 Hz async pass this suite never waits on
 
     sim.StartMatch(); // Lobby -> Active: resolves team unlocks + seeds economy, so spawns are allowed
     return sim;
 }
 
-// Spawn two enemy fighters (class 1 — the only hull with a missile mount in the stock bundle),
-// reposition them nose-to-nose in the empty sector well inside LockRange, and return the seeker
-// missile's projected WeaponDef (weapon-id 3) alongside the two ShipSims.
+// Spawn two enemy fighters (class 1). The Iron Coalition fighter is now an all-gun hull (no
+// default missile mount), so the attacker's spawn carries a loadout override reconstructing the
+// old default fighter rack — guns on hardpoints 0/1 plus a seeker rack (weapon-id 3) on hardpoint
+// 2, with the old default 2 sensor-decoy hold — so the lock/launch scenarios below still have a
+// seeker to fire. Reposition them nose-to-nose in the empty sector well inside LockRange, and
+// return the seeker missile's projected WeaponDef (weapon-id 3) alongside the two ShipSims.
 (Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef seeker) SetupDuel(ulong seed)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+        cargo: new (uint, byte)[] { (3u, 2) },        // 2 sensor-decoy (old default hold)
+        mounts: new (byte, uint)[] { (2, 3u) });      // hp index 2 = seeker rack (old default)
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step(); // tick 1: DrainQueues -> ProcessRespawns spawns both ships this very step
 
@@ -637,7 +644,11 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 // ---- 8. Non-siege: a fighter's seeker rack can never lock a base --------------------------------
 {
     var sim = BootSim(seed: 102);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    // The stock fighter no longer mounts a seeker by default (all-gun hull) — reconstruct the old
+    // loadout (seeker rack on hp index 2) so this scenario actually exercises a seeker-vs-base lock.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (2, 3u) });
     sim.Step();
     var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
     int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
@@ -664,7 +675,11 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 // ---- 9. Non-siege: a dumbfired seeker detonates on the base hull but deals no base damage --------
 {
     var sim = BootSim(seed: 103);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    // Reconstruct the old fighter seeker mount (see scenario 8) so it actually has something to
+    // dumbfire — the stock fighter is now an all-gun hull.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (2, 3u) });
     sim.Step();
     var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
     int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);

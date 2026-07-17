@@ -1,17 +1,61 @@
 # Techs — named research-tree nodes a team can OWN (distinct from the closed Capability enum the
 # engine branches on). A tech is flipped on by completing a Development that grants it (see
-# developments.yaml); items then gate on it via required-techs. These are v1 unlock-only nodes:
-# owning the tech opens buildables, it carries no stat modifier of its own.
+# developments.yaml), or by completing a Station that grants it (stations.yaml granted-techs); items
+# then gate on it via required-techs. These are v1 unlock-only nodes: owning the tech opens
+# buildables, it carries no stat modifier of its own.
+#
+# Iron Coalition tech tree (Phase 2, PCore014.igc). Some nodes are FORWARD-DECLARED for later phases
+# (their granting base/dev doesn't exist yet) — the gun/hull items that require them stay truthfully
+# locked until Phase 3/4 lands the base that grants the tech. That is intentional and legal
+# (CoreValidator only requires a referenced tech to exist in this catalog, not to be reachable).
 techs:
-  - id: heavy-ordnance
-    name: Heavy Ordnance Certification
-    description: "Clears the team to field siege-grade weapons and the assault hulls that carry them."
-  - id: cannon-tier-2
-    name: Class-2 Cannon Doctrine
-    description: "Uprated cannon fire-control, unlocking the heavier class-2 gun line."
-  - id: expansion-1
-    name: Expansion Doctrine
-    description: "Logistics and survey training that authorizes building out beyond the home garrison."
-  - id: tactical-1
-    name: Tactical Doctrine
-    description: "Advanced electronics and ordnance protocols that open the tactical station tree."
+  # ---- Weapon research (granted by developments.yaml) ----
+  - id: gat-2
+    name: PW Gat Gun 2
+    description: "Uprated Gat Gun fire-control — the mid-tier of the all-round gun line."
+  - id: gat-3
+    name: PW Gat Gun 3
+    description: "Top-tier Gat Gun tuning — the hardest-hitting of the all-round gun line."
+  - id: minigun-2
+    name: PW Mini-Gun 2
+    description: "Uprated Mini-Gun — faster, harder-hitting rapid fire."
+  - id: minigun-3
+    name: PW Mini-Gun 3
+    description: "Top-tier Mini-Gun — the fleet's fastest sustained gun."
+  - id: autocan-2
+    name: PW AutoCan 2
+    description: "Uprated AutoCannon — heavier assault rounds for the bomber line."
+  - id: autocan-3
+    name: PW AutoCan 3
+    description: "Top-tier AutoCannon — the heaviest gun rounds in the arsenal."
+  - id: nanite-2
+    name: ER Nanite 2
+    description: "Uprated repair nanites — a stronger hull-restoring beam for the support gun line."
+  - id: nanite-3
+    name: ER Nanite 3
+    description: "Top-tier repair nanites — the fastest field hull-restore in the arsenal."
+
+  # ---- Hull research ----
+  - id: bomber
+    name: Bomber Doctrine
+    description: "Clears the team to field the assault bomber and its base-cracking ordnance."
+
+  # ---- Forward-declared base/tier techs (granted by station tiers in Phase 3/4) ----
+  - id: supremacy-1
+    name: Supremacy Fielded
+    description: "Granted when the team raises a Supremacy base — opens the supremacy gun/hull tier."
+  - id: supremacy-adv
+    name: Supremacy (Adv)
+    description: "Granted by the upgraded Supremacy (Adv) base — opens the top gun tier and the Adv Fighter."
+  - id: garrison-str
+    name: Garrison (Str)
+    description: "Granted by the upgraded Garrison (Str) — opens the top-tier Mini-Gun research."
+  - id: shipyard-1
+    name: Shipyard Fielded
+    description: "Granted when the team raises a Shipyard — opens capital-ship servicing."
+  - id: shipyard-dry
+    name: Shipyard (Dry)
+    description: "Granted by the upgraded Shipyard (Dry) — required to field the heavy capital hull."
+  - id: heavy-class
+    name: Heavy Class Certification
+    description: "Certifies the team for capital-class construction — the Devastator's gate."

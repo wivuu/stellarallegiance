@@ -137,6 +137,19 @@ public sealed partial class Simulation
         s.Health -= dmg;
     }
 
+    // Nanite heal: a healing bolt hitting a same-team ship restores hull only. Shields are never
+    // touched (no ShieldDamageTick stamp, no shield pool change) and the hull is clamped to the
+    // hull's max (HullFor). The health stream carries the new value to clients like any other change,
+    // so the HUD shows the bar rise naturally — no separate wire event. Enemy hits never reach here
+    // (FireBolt only targets same-team ships for a healing weapon); self-hits are excluded there too.
+    private void ApplyHeal(ShipSim s, float power)
+    {
+        if (power <= 0f)
+            return;
+        float max = HullFor(s.IsPod ? GameContent.PodClassId : s.Class);
+        s.Health = MathF.Min(s.Health + power, max);
+    }
+
     // The EFFECTIVE weapon id at a ship's weapon-hardpoint barrel: the spawn-validated override
     // when one exists, else the authored class default. THE read seam for every armed-mount
     // consumer (TryFire, MissileMountFor(ship), the loadout wire table).
@@ -153,8 +166,8 @@ public sealed partial class Simulation
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
         foreach (var mz in m)
-            if (WeaponDefs.TryGetValue(mz.WeaponId, out var wd) && wd.Kind == WeaponKind.Bolt)
-                return wd;
+            if (WeaponDefs.TryGetValue(mz.WeaponId, out var wd) && wd.Kind == WeaponKind.Bolt && !wd.IsHealing)
+                return wd; // a healing gun (ER Nanite) is never a threat weapon — skip it
         return WeaponDefs[GameContent.ScoutWeaponId];
     }
 
@@ -372,7 +385,7 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
-    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0);
+    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0, bool Heal = false);
 
     // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
     // sim thread). Reads across the sim keep working — it's a reference field, reassignment is atomic.
@@ -1037,15 +1050,18 @@ public sealed partial class Simulation
         var nextWorld = BuildMatchWorld?.Invoke();
         if (nextWorld != null)
             World = nextWorld;
-        World.ResetMatchBases();
-        BasesChangedThisStep = true;
         Phase = PhaseActive;
         Winner = NoWinner;
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
-        // Fresh economy each match: reset every team to its starting credits + base unlocks.
+        // Fresh economy each match: reset every team to its starting credits + base unlocks. SEEDED
+        // BEFORE ResetMatchBases (v41): the team attr cache resolves off the freshly-seeded OwnedTechs,
+        // so ResetMatchBases stamps base health with the correct Iron ×1.15 station-armor factor.
         World.SeedEconomy(Content.Start);
+        RecomputeTeamAttributes();
+        World.ResetMatchBases();
+        BasesChangedThisStep = true;
         // Fresh research slate too. A map swap already brought a fresh World (fresh ResearchByBase),
         // but StartMatch may REUSE the world (BuildMatchWorld null / same map in tests) — clear
         // explicitly so a previous match's in-flight research never bleeds into the new one.
@@ -1080,6 +1096,50 @@ public sealed partial class Simulation
                 .Where(h => h.ClassId is not null)
                 .Select(h => h.ClassId!.Value)
                 .ToHashSet();
+    }
+
+    // ---- Faction-level team-wide stat multipliers (v41) --------------------------------------------
+    // Test kill-switch (mirrors ShieldsEnabled/MinersEnabled): default on so real matches carry the Iron
+    // Coalition GAS. Suites that assert absolute pre-multiplier damage/health/mining numbers flip it off
+    // before StartMatch to run through the neutral ×1.0 path (RecomputeTeamAttributes clears the World
+    // cache). AttributesEnabledDefault lets a suite that builds many sims neutralize them all with one
+    // top-of-file line instead of per-sim; production never touches either (stays true).
+    public static bool AttributesEnabledDefault = true;
+    public bool AttributesEnabled = AttributesEnabledDefault;
+
+    private static readonly int AttrCount = System.Enum.GetValues<Allegiance.Factions.Model.GameAttribute>().Length;
+
+    // The team's resolved multiplier for one attribute (1.0 when unseeded/disabled). ALL consumption
+    // (gun/missile damage, station armor, signature, mining) goes through this single accessor.
+    private float TeamAttr(byte team, Allegiance.Factions.Model.GameAttribute a) => World.TeamAttr(team, (int)a);
+
+    // Rebuild every team's resolved multiplier cache = faction base-attributes × each COMPLETED
+    // development (a dev counts as completed when the team owns all its granted techs — the same proxy
+    // MaybePreUpgradeSpawnedBase uses). Uses the library AttributeResolver so the multiplicative combine
+    // has ONE implementation. Called at match start (fresh economy ⇒ faction-base only) and on research
+    // completion. INTENTIONALLY UNCONSUMED attrs resolved into the cache but with no sim consumer:
+    // MaxShieldStation + MaxEnergy (no station-shield / ship-energy model). A mid-match dev that changed
+    // MaxArmorStation would NOT retro-rescale live base health (slice devs carry no attributes — noted).
+    private void RecomputeTeamAttributes()
+    {
+        if (!AttributesEnabled)
+        {
+            World.ClearTeamAttributes();
+            return;
+        }
+        var faction = Content.Catalog.Factions.Single();
+        var devs = Content.Catalog.Developments;
+        foreach (var (team, ts) in World.TeamStates)
+        {
+            bool Completed(Allegiance.Factions.Model.Development d) =>
+                d.GrantedTechs.Count > 0 && d.GrantedTechs.All(t => ts.OwnedTechs.Contains(t));
+            var resolved = Allegiance.Factions.Resolution.AttributeResolver
+                .Resolve(faction, devs.Where(Completed));
+            var arr = new float[AttrCount];
+            for (int i = 0; i < arr.Length; i++)
+                arr[i] = (float)resolved.Get((Allegiance.Factions.Model.GameAttribute)i);
+            World.SetTeamAttributes(team, arr);
+        }
     }
 
     // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
@@ -2168,7 +2228,13 @@ public sealed partial class Simulation
             {
                 foreach (var s in shipsInCell)
                 {
-                    if (s.Team == ship.Team || !s.Alive)
+                    if (!s.Alive)
+                        continue;
+                    // A HEALING gun (ER Nanite) targets SAME-team ships (to heal them) and skips the
+                    // shooter itself; a normal gun targets the ENEMY and skips friendlies. Enemy hits by
+                    // a heal bolt are a pure client-side spark (zero server effect), so the server simply
+                    // never targets them here — the heal path can only ever resolve on a friendly.
+                    if (w.IsHealing ? (s.Team != ship.Team || s.ShipId == ship.ShipId) : s.Team == ship.Team)
                         continue;
                     var body = World.ShipHull(s.Class, s.IsPod);
                     if (body is World.ShipBody sb)
@@ -2271,7 +2337,7 @@ public sealed partial class Simulation
         // Deployed enemy probes are destructible: a stationary hit-sphere scan (probes are few and
         // not in the ship grid, so a linear scan is cheap and stays replay-deterministic in list
         // order). A closer probe hit wins and clears any ship/base target.
-        for (int i = 0; i < _probes.Count; i++)
+        for (int i = 0; i < _probes.Count && !w.IsHealing; i++) // a healing gun never targets enemy probes
         {
             var p = _probes[i];
             if (p.SectorId != ship.SectorId || p.Team == ship.Team || p.Health <= 0f)
@@ -2289,7 +2355,12 @@ public sealed partial class Simulation
         if (targetShip != 0 || targetBase >= 0 || targetProbe != 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult, targetProbe));
+            // GunDamage (v41): scale by the shooter team's faction multiplier. Applies to healing bolts
+            // too — Iron's better guns heal harder (ApplyHeal reads this same Damage field as heal power),
+            // consistent + simpler than a separate heal path. Bakes into PendingShot so the base-damage
+            // path (ApplyBaseDamage via shot.Damage) inherits it as well.
+            float dmg = w.Damage * TeamAttr(ship.Team, Allegiance.Factions.Model.GameAttribute.GunDamage);
+            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing));
         }
     }
 
@@ -2607,10 +2678,13 @@ public sealed partial class Simulation
             if (detonate)
             {
                 Vec3 hitPos = mp + vel * bestT;
+                // MissileDamage (v41): scale the warhead by the firing team's faction multiplier (direct
+                // hit + base hit here; the splash inherits it inside ApplyBlast off the same mis.Team).
+                float md = TeamAttr(mis.Team, Allegiance.Factions.Model.GameAttribute.MissileDamage);
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
-                    ApplyDamage(victim, w.Damage * w.DirectHitMult, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+                    ApplyDamage(victim, w.Damage * w.DirectHitMult * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
-                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
+                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult * md, tick); // blast never touches the base
                 ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
@@ -2642,6 +2716,9 @@ public sealed partial class Simulation
         if (w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
         float fuseR = w.ProjectileRadius;
+        // MissileDamage (v41): the splash inherits the firing team's faction multiplier (same factor the
+        // direct hit applied), so a whole detonation scales consistently.
+        float md = TeamAttr(team, Allegiance.Factions.Model.GameAttribute.MissileDamage);
 
         // Enemy probes within the blast take splash too (same inverse-square falloff), so a missile
         // detonation is a valid probe counter. Probes aren't gridded — a linear scan (few probes) in
@@ -2656,7 +2733,7 @@ public sealed partial class Simulation
             if (d > w.BlastRadius)
                 continue;
             float f = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-            DamageProbe(p, w.BlastPower * f, tick);
+            DamageProbe(p, w.BlastPower * f * md, tick);
         }
 
         if (shipGrid is null)
@@ -2681,7 +2758,7 @@ public sealed partial class Simulation
                         if (d > w.BlastRadius)
                             continue;
                         float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-                        ApplyDamage(s, w.BlastPower * falloff, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+                        ApplyDamage(s, w.BlastPower * falloff * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                     }
                 }
     }
@@ -2797,9 +2874,14 @@ public sealed partial class Simulation
             }
             else if (_ships.TryGetValue(shot.TargetShipId, out var s) && s.Alive)
             {
-                // Apply damage only; the end-of-step death/dock pass detects 0 health and
-                // ejects the pod / frees the slot — one death path, like the module.
-                ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
+                if (shot.Heal)
+                    // ER Nanite: FireBolt only ever queues a heal shot against a same-team ship, so
+                    // restore hull here (clamp/no-shield inside ApplyHeal). Damage is the heal power.
+                    ApplyHeal(s, shot.Damage);
+                else
+                    // Apply damage only; the end-of-step death/dock pass detects 0 health and
+                    // ejects the pod / frees the slot — one death path, like the module.
+                    ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
             }
         }
         due.Clear();

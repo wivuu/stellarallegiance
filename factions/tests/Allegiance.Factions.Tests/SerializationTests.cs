@@ -85,6 +85,48 @@ public class SerializationTests
     }
 
     [Fact]
+    public void UpgradeScope_RoundTripsAsKebabCase()
+    {
+        var dev = new Development { Id = "dev-upgrade", Name = "Upgrade", UpgradeScope = UpgradeScope.Single };
+
+        var yaml = CoreSerializer.Serialize(dev);
+        Assert.Contains("upgrade-scope: single", yaml);   // kebab-cased key + hyphenated enum value
+
+        var reloaded = CoreSerializer.Deserialize<Development>(yaml);
+        Assert.Equal(UpgradeScope.Single, reloaded.UpgradeScope);
+    }
+
+    [Fact]
+    public void UpgradeScope_OmittedWhenDefault()
+    {
+        // Default `all` keeps ordinary (non-upgrade) developments terse.
+        var dev = new Development { Id = "dev-plain", Name = "Plain" };
+
+        Assert.DoesNotContain("upgrade-scope", CoreSerializer.Serialize(dev));
+    }
+
+    [Fact]
+    public void IsHealing_RoundTripsAsKebabCase()
+    {
+        var weapon = new Weapon { Id = "nanite", Name = "Nanite", IsHealing = true };
+
+        var yaml = CoreSerializer.Serialize(weapon);
+        Assert.Contains("is-healing: true", yaml);   // kebab-cased runtime-extension key
+
+        var reloaded = CoreSerializer.Deserialize<Weapon>(yaml);
+        Assert.True(reloaded.IsHealing);
+    }
+
+    [Fact]
+    public void IsHealing_OmittedWhenDefault()
+    {
+        // Default false keeps ordinary (damage) weapons' serialized form unchanged.
+        var weapon = new Weapon { Id = "gun", Name = "Gun" };
+
+        Assert.DoesNotContain("is-healing", CoreSerializer.Serialize(weapon));
+    }
+
+    [Fact]
     public void ResearchSlotsAndObsoletedByTechs_RoundTripAsKebabCase()
     {
         var core = new Core

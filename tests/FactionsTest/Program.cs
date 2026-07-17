@@ -56,10 +56,10 @@ Check(stockVr.IsValid, "stock bundle passes CoreValidator", $"stock bundle inval
 
 var scout = stock.Hulls.Single(h => h.Id == "scout");
 Check(
-    scout.ClassId == 0 && scout.Mass == 40 && scout.Speed == 160 && scout.Thrust == 30
-        && scout.MaxTurnRates.Yaw == 50 && scout.ArmorHitPoints == 60
+    scout.ClassId == 0 && scout.Mass == 48 && scout.Speed == 173.3 && scout.Thrust == 40
+        && scout.MaxTurnRates.Yaw == 50 && scout.ArmorHitPoints == 69
         && scout.DriftYawDeg == 5 && scout.StrafeThrustMultiplier == 0.5 && scout.ReverseThrustMultiplier == 0.25,
-    "stock scout carries derived + extend flight fields",
+    "stock scout carries derived + extend flight fields (Iron Coalition fig13)",
     $"stock scout fields wrong (class {scout.ClassId}, mass {scout.Mass}, speed {scout.Speed}, drift {scout.DriftYawDeg})"
 );
 // RAW (pre-merge) YAML shape: the GLB-authoritative merge runs server-side (SimServer's
@@ -77,6 +77,26 @@ var pod = stock.Hulls.Single(h => h.Id == "pod");
 Check(pod.ClassId == 255, "stock pod is class-id 255 (lifepod)", $"stock pod class-id wrong ({pod.ClassId})");
 Check(stock.Factions.Single().LifepodHullId == "pod", "stock faction lifepod resolves to pod hull", "stock lifepod-hull-id wrong");
 
+// Phase 6: the live faction IS Iron Coalition, carrying the 8-multiplier GAS block (kebab-case
+// GameAttribute keys) imported from PCore014.igc + the ×0.875 economy modifier.
+var ironFaction = stock.Factions.Single();
+var ga = ironFaction.BaseAttributes;
+Check(
+    ironFaction.Id == "iron-coalition" && ironFaction.Name == "Iron Coalition"
+        && ironFaction.BonusMoney == 875 && ironFaction.IncomeMoney == 88,
+    "live faction is Iron Coalition with ×0.875 economy (bonus 875, income 88)",
+    $"faction identity/economy wrong (id {ironFaction.Id}, name {ironFaction.Name}, bonus {ironFaction.BonusMoney}, income {ironFaction.IncomeMoney})"
+);
+Check(
+    ga.Count == 8
+        && ga.Get(GameAttribute.MaxArmorStation) == 1.15 && ga.Get(GameAttribute.MaxShieldStation) == 1.15
+        && ga.Get(GameAttribute.Signature) == 0.85 && ga.Get(GameAttribute.MaxEnergy) == 1.2
+        && ga.Get(GameAttribute.MiningRate) == 0.85 && ga.Get(GameAttribute.MiningCapacity) == 0.75
+        && ga.Get(GameAttribute.GunDamage) == 1.1 && ga.Get(GameAttribute.MissileDamage) == 1.1,
+    "Iron Coalition carries the 8 base-attributes (station-armor/shield 1.15, sig 0.85, energy 1.2, mining 0.85/0.75, gun/missile 1.1)",
+    $"Iron base-attributes wrong (count {ga.Count})"
+);
+
 // The AI miner (class-id 4): carries an ore hold and is deliberately UNARMED (no weapon hardpoint),
 // which CoreValidator accepts (proven above by the whole bundle validating green).
 var miner = stock.Hulls.Single(h => h.Id == "miner");
@@ -87,22 +107,32 @@ Check(
     $"stock miner wrong (class {miner.ClassId}, ore {miner.OreCapacity}, weapon-hps {miner.Hardpoints.Count(hp => hp.Kind == RuntimeHardpointKind.Weapon)})"
 );
 
-var scoutCannon = stock.Weapons.Single(w => w.Id == "scout-cannon");
+var gatGun1 = stock.Weapons.Single(w => w.Id == "gat-gun-1");
 Check(
-    scoutCannon.WeaponId == 0 && scoutCannon.FireIntervalTicks == 4 && scoutCannon.ProjectileLifeTicks == 16
-        && scoutCannon.Dispersion == 0.006,
-    "stock scout cannon carries weapon-id + tick ballistics + dispersion",
-    $"stock scout cannon wrong (id {scoutCannon.WeaponId}, fire {scoutCannon.FireIntervalTicks}, disp {scoutCannon.Dispersion})"
+    gatGun1.WeaponId == 0 && gatGun1.FireIntervalTicks == 4 && gatGun1.ProjectileLifeTicks == 20
+        && gatGun1.Dispersion == 0.005,
+    "stock PW Gat Gun 1 carries weapon-id + tick ballistics + dispersion",
+    $"stock gat gun 1 wrong (id {gatGun1.WeaponId}, fire {gatGun1.FireIntervalTicks}, disp {gatGun1.Dispersion})"
 );
-var scoutBolt = stock.Projectiles.Single(p => p.Id == "scout-bolt");
-Check(scoutBolt.Power == 4 && scoutBolt.Speed == 200 && scoutBolt.Width == 1, "stock scout bolt carries power/speed/width", $"stock scout bolt wrong (power {scoutBolt.Power})");
+var gatBolt1 = stock.Projectiles.Single(p => p.Id == "gat-bolt-1");
+Check(gatBolt1.Power == 10 && gatBolt1.Speed == 200 && gatBolt1.Width == 1, "stock Gat Bolt 1 carries power/speed/width", $"stock gat bolt 1 wrong (power {gatBolt1.Power})");
+
+// ER Nanite (Phase 5): the healing gun carries is-healing: true + 10-tick cadence + mass 2; a normal
+// gun (Gat) leaves is-healing at its false default. Guards the YAML kebab-case bind for the flag.
+var nanite1 = stock.Weapons.Single(w => w.Id == "nanite-1");
+Check(
+    nanite1.WeaponId == 15 && nanite1.IsHealing && !nanite1.CanDamageBase
+        && nanite1.FireIntervalTicks == 10 && nanite1.Mass == 2 && !gatGun1.IsHealing,
+    "stock ER Nanite 1 carries is-healing + weapon-id 15 + 10-tick cadence + mass 2 (Gat stays non-healing)",
+    $"stock nanite 1 wrong (id {nanite1.WeaponId}, heal {nanite1.IsHealing}, base {nanite1.CanDamageBase}, fire {nanite1.FireIntervalTicks}, mass {nanite1.Mass})"
+);
 
 // Payload authoring: hull capacity, weapon mass, and cargo-id expendables (the hangar's hold).
-var fighter = stock.Hulls.Single(h => h.Id == "fighter");
+var fighter = stock.Hulls.Single(h => h.Id == "enh-fighter");
 Check(
-    scout.PayloadCapacity == 8 && fighter.PayloadCapacity == 20 && scoutCannon.Mass == 2,
+    scout.PayloadCapacity == 12 && fighter.PayloadCapacity == 20 && gatGun1.Mass == 1,
     "stock hulls/weapons carry payload-capacity + mass",
-    $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, cannon mass {scoutCannon.Mass})"
+    $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, gun mass {gatGun1.Mass})"
 );
 // Booster fuel: kebab-case (max-fuel/ab-fuel-drain/ab-fuel-recharge) binds onto the fighter hull.
 Check(
@@ -187,14 +217,26 @@ Check(
     $"fighter default-cargo wrong ({string.Join(",", fighter.DefaultCargo.Select(c => $"{c.Item}x{c.Count}"))})"
 );
 
-// The bomber's missile hardpoint (index 1) was repointed from the seeker rack (weapon-id 3) to the
-// torpedo rack (weapon-id 5) — the fighter keeps its seeker rack untouched.
+// The bomber authors 5 weapon mounts (2 Gat + 2 AutoCan + torpedo rack). The anti-base torpedo rack
+// (weapon-id 5, the only can-damage-base weapon) rides the last authored weapon index (4).
 var bomberHull = stock.Hulls.Single(h => h.Id == "bomber");
 Check(
-    bomberHull.Hardpoints.Count > 1
-        && bomberHull.Hardpoints[1].Kind == RuntimeHardpointKind.Weapon && bomberHull.Hardpoints[1].WeaponId == 5,
-    "stock bomber hardpoint index 1 mounts the torpedo rack (weapon-id 5)",
-    $"stock bomber hardpoint wrong ({(bomberHull.Hardpoints.Count > 1 ? bomberHull.Hardpoints[1].WeaponId.ToString() : "missing")})"
+    bomberHull.Hardpoints.Count > 4
+        && bomberHull.Hardpoints[4].Kind == RuntimeHardpointKind.Weapon && bomberHull.Hardpoints[4].WeaponId == 5,
+    "stock bomber weapon index 4 mounts the torpedo rack (weapon-id 5)",
+    $"stock bomber hardpoint wrong ({(bomberHull.Hardpoints.Count > 4 ? bomberHull.Hardpoints[4].WeaponId.ToString() : "missing")})"
+);
+
+// Devastator (Phase 4 capital hull, class-id 7, cap09): four heavy PW AutoCan mounts (weapon-id 12),
+// gated behind BOTH heavy-class AND shipyard-dry. cap09.glb exposes exactly four HP_Weapon nodes.
+var devastator = stock.Hulls.Single(h => h.Id == "devastator");
+int devAutoCans = devastator.Hardpoints.Count(hp => hp.Kind == RuntimeHardpointKind.Weapon && hp.WeaponId == 12);
+Check(
+    devastator.ClassId == 7 && devastator.ModelName == "cap09" && devastator.ArmorHitPoints == 1200
+        && devAutoCans == 4
+        && devastator.RequiredTechs.Contains("heavy-class") && devastator.RequiredTechs.Contains("shipyard-dry"),
+    "stock Devastator is class-id 7 (cap09), 4x PW AutoCan, gated on heavy-class + shipyard-dry",
+    $"Devastator wrong (class {devastator.ClassId}, model {devastator.ModelName}, autocans {devAutoCans}, hp {devastator.ArmorHitPoints})"
 );
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");

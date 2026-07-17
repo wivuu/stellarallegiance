@@ -45,6 +45,7 @@ public partial class PredictionController : Node3D
         public float LifeSec;
         public float BoltRadius; // client bolt-mesh dims from the firing weapon (0 = client default)
         public float BoltLength;
+        public bool IsHeal; // ER Nanite healing gun → green tracer (WorldRenderer tints off this)
     }
 
     private struct Entry
@@ -462,6 +463,7 @@ public partial class PredictionController : Node3D
                     LifeSec = weapon.ProjectileLifeTicks * FlightModel.Dt,
                     BoltRadius = weapon.BoltRadius,
                     BoltLength = weapon.BoltLength,
+                    IsHeal = weapon.IsHealing,
                 }
             );
         }

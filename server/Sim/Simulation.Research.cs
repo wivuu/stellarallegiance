@@ -52,11 +52,16 @@ public partial class Simulation
         }
     }
 
-    // Concurrent research orders the base at this index may run. All bases are type 0 today, so
-    // the single garrison BaseDef's ResearchSlots applies. TODO(base-building): resolve per-site
-    // base TYPE once World.BaseSite carries one.
-    private int SlotsFor(int baseIndex) =>
-        Content.Bases.Count > 0 ? Content.Bases[0].ResearchSlots : 1;
+    // Concurrent research orders the base at this index may run — resolved from the base site's OWN
+    // type def (garrison 1, supremacy 2, forward bases 1). A type with no def falls back to the
+    // garrison (index 0), then to 1.
+    private int SlotsFor(int baseIndex)
+    {
+        var def = BaseDefForType(World.Bases[baseIndex].BaseTypeId);
+        if (def is not null)
+            return def.ResearchSlots;
+        return Content.Bases.Count > 0 ? Content.Bases[0].ResearchSlots : 1;
+    }
 
     private uint ResearchDurationTicks(DevelopmentDef dev) =>
         (uint)dev.BuildTimeSeconds * TickHz;
@@ -120,12 +125,29 @@ public partial class Simulation
                     ResearchNoticesThisStep.Add((cid, $"{dev.Name} is not available to research."));
                     return;
                 }
+                // Station-upgrade guard (v39): a single-scope upgrade dev must be researched AT a base of
+                // the from-type of the chain it unlocks (the completion upgrades the hosting base). Reject
+                // — with no charge — at any other base (already-upgraded bases are no longer a from-type).
+                var ups = TriggeredUpgrades(dev);
+                if (ups.Count > 0 && dev.UpgradeScope == (byte)Allegiance.Factions.Model.UpgradeScope.Single)
+                {
+                    byte hostType = World.Bases[baseIdx].BaseTypeId;
+                    if (!ups.Exists(u => u.FromType == hostType))
+                    {
+                        int fi = ups.FindIndex(_ => true);
+                        string wantName = BaseDefForType(ups[fi].FromType)?.Name ?? "the correct base";
+                        ResearchNoticesThisStep.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
+                        return;
+                    }
+                }
                 if (ts.Credits < dev.Price)
                 {
                     ResearchNoticesThisStep.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
                     return;
                 }
-                string baseName = $"{Content.Bases[0].Name} {World.SectorName(World.Bases[baseIdx].SectorId)}";
+                string baseTypeName = BaseDefForType(World.Bases[baseIdx].BaseTypeId)?.Name
+                    ?? (Content.Bases.Count > 0 ? Content.Bases[0].Name : "Base");
+                string baseName = $"{baseTypeName} {World.SectorName(World.Bases[baseIdx].SectorId)}";
                 if (state.Active.Count < SlotsFor(baseIdx))
                 {
                     ts.Credits -= dev.Price; // deduct at start (authoritative moment)
@@ -205,7 +227,7 @@ public partial class Simulation
                 if (tick < start + dur)
                     continue;
                 state.Active.RemoveAt(a);
-                CompleteResearch(team, devIdx);
+                CompleteResearch(team, i, devIdx);
                 ResearchChangedThisStep = true;
             }
 
@@ -226,8 +248,9 @@ public partial class Simulation
     }
 
     // Grant a completed development's techs + capabilities to the team and re-resolve its unlock
-    // set (ResolveTeamUnlocks — the Stage-2 gate, now truly mid-match).
-    private void CompleteResearch(byte team, ushort devIndex)
+    // set (ResolveTeamUnlocks — the Stage-2 gate, now truly mid-match). `hostingBaseIndex` is the base
+    // the research ran at (-1 = none) — the target for a single-scope station upgrade (v39).
+    private void CompleteResearch(byte team, int hostingBaseIndex, ushort devIndex)
     {
         if (!World.TeamStates.TryGetValue(team, out var ts))
             return;
@@ -237,7 +260,142 @@ public partial class Simulation
         foreach (byte c in dev.GrantedCaps)
             ts.OwnedCapabilities.Add((Allegiance.Factions.Model.Capability)c);
         ResolveTeamUnlocks();
+        RecomputeTeamAttributes(); // v41: a completed dev may carry team-wide stat multipliers
         TeamStateChangedThisStep = true;
         ResearchTeamNoticesThisStep.Add((team, $"RESEARCH COMPLETE: {dev.Name}."));
+
+        // Station upgrades (v39): if this dev's granted techs unlock a station successor tier, swap the
+        // matching base(s) in place. single scope → only the hosting base; all → every live matching base.
+        ApplyStationUpgrades(team, hostingBaseIndex, dev);
+    }
+
+    // The (fromType -> toType) base-type upgrades a development triggers: for each base type whose def
+    // names a successor tier, the dev must grant a tech that successor tier's station requires. Empty
+    // for a non-upgrade development. (The CoreValidator proves a single-scope dev triggers >= 1.)
+    private List<(byte FromType, byte ToType)> TriggeredUpgrades(DevelopmentDef dev)
+    {
+        var res = new List<(byte, byte)>();
+        if (dev.GrantedTechIdx.Length == 0)
+            return res;
+        var granted = new HashSet<ushort>(dev.GrantedTechIdx);
+        foreach (var bd in Content.Bases)
+        {
+            if (bd.SuccessorBaseTypeId < 0)
+                continue;
+            byte toType = (byte)bd.SuccessorBaseTypeId;
+            var succ = StationCatalogFor(toType);
+            if (succ is null)
+                continue;
+            foreach (ushort t in succ.RequiredTechIdx)
+                if (granted.Contains(t))
+                {
+                    res.Add((bd.BaseTypeId, toType));
+                    break;
+                }
+        }
+        return res;
+    }
+
+    // A base built after its team already completed an `all`-scope upgrade dev spawns pre-upgraded.
+    // Called from the constructor build-completion path (Simulation.Constructors.CompleteBuild).
+    private void MaybePreUpgradeSpawnedBase(byte team, ulong baseId, byte builtType)
+    {
+        if (!World.TeamStates.TryGetValue(team, out var ts))
+            return;
+        int idx = World.Bases.FindIndex(b => b.Id == baseId);
+        if (idx < 0)
+            return;
+        foreach (var dev in Content.Developments)
+        {
+            if (dev.UpgradeScope != (byte)Allegiance.Factions.Model.UpgradeScope.All || dev.GrantedTechIdx.Length == 0)
+                continue;
+            // The dev counts as completed when the team owns every tech it grants.
+            bool owned = true;
+            foreach (ushort t in dev.GrantedTechIdx)
+                if (t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id)) { owned = false; break; }
+            if (!owned)
+                continue;
+            var ups = TriggeredUpgrades(dev);
+            int mi = ups.FindIndex(u => u.FromType == builtType);
+            if (mi >= 0)
+            {
+                UpgradeBaseAt(idx, ups[mi].ToType, team);
+                return;
+            }
+        }
+    }
+
+    private void ApplyStationUpgrades(byte team, int hostingBaseIndex, DevelopmentDef dev)
+    {
+        var ups = TriggeredUpgrades(dev);
+        if (ups.Count == 0)
+            return;
+        bool single = dev.UpgradeScope == (byte)Allegiance.Factions.Model.UpgradeScope.Single;
+        if (single)
+        {
+            if (hostingBaseIndex < 0 || hostingBaseIndex >= World.Bases.Count || World.BaseHealth[hostingBaseIndex] <= 0f)
+                return;
+            byte ft = World.Bases[hostingBaseIndex].BaseTypeId;
+            int mi = ups.FindIndex(u => u.FromType == ft);
+            if (mi >= 0)
+                UpgradeBaseAt(hostingBaseIndex, ups[mi].ToType, team);
+            return;
+        }
+        // all: every live matching base of the team.
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            if (World.Bases[i].Team != team || World.BaseHealth[i] <= 0f)
+                continue;
+            byte ft = World.Bases[i].BaseTypeId;
+            int mi = ups.FindIndex(u => u.FromType == ft);
+            if (mi >= 0)
+                UpgradeBaseAt(i, ups[mi].ToType, team);
+        }
+    }
+
+    // Swap a base's type in place (record replace), rescale current health by fraction-of-max into the
+    // new type's max, grant the tier station's own techs, and re-stream the base static so clients pick
+    // up the new type (mesh/name). ResearchByBase/BaseHealth stay index-aligned (same base index).
+    private void UpgradeBaseAt(int idx, byte toType, byte team)
+    {
+        var site = World.Bases[idx];
+        byte fromType = site.BaseTypeId;
+        if (fromType == toType)
+            return;
+        float oldMax = World.BaseMaxHealthOf(fromType, team);
+        float newMax = World.BaseMaxHealthOf(toType, team);
+        float frac = oldMax > 0f ? System.Math.Clamp(World.BaseHealth[idx] / oldMax, 0f, 1f) : 1f;
+        World.Bases[idx] = site with { BaseTypeId = toType };
+        World.BaseHealth[idx] = frac * newMax;
+        // Grant the tier station's OWN granted techs/caps (the slice tiers grant none) + re-resolve.
+        GrantStationUnlocks(team, toType);
+        BasesChangedThisStep = true;
+        RestreamUpgradedBase(team, site.Id);
+        var st = StationCatalogFor(toType);
+        ResearchTeamNoticesThisStep.Add((team, $"BASE UPGRADED: {st?.Name ?? "new tier"} ({World.SectorName(site.SectorId)})."));
+    }
+
+    // Push the upgraded base's full static (carrying the new BaseTypeId) to clients. Fog-on: re-append
+    // to the owning team's reveal log unconditionally (the reveal-cursor re-streams it; enemies re-mesh
+    // on their next fresh sighting — the slice tiers reuse the same mesh, so no visible enemy stale).
+    // Fog-off: BasesCreatedThisStep drives a broadcast one-base MsgReveal (InsertBase is idempotent).
+    private void RestreamUpgradedBase(byte team, ulong baseId)
+    {
+        if (FogEnabled && VisionFor(team) is { } tv)
+        {
+            lock (tv.DiscoverLock)
+            {
+                tv.DiscoveredBases.Add(baseId);
+                tv.RevealLogBases.Add(baseId); // unconditional re-append — re-stream the new static/type
+                var site = World.BaseById(baseId);
+                tv.DiscoveredSectors.Add(site?.SectorId ?? World.DefaultSector);
+                int idx = World.Bases.FindIndex(b => b.Id == baseId);
+                tv.LastKnownBaseHealth[baseId] = idx >= 0 ? World.BaseHealth[idx] : 0f;
+            }
+        }
+        else
+        {
+            BasesCreatedThisStep.Add(baseId);
+        }
     }
 }

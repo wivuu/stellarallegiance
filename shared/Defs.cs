@@ -223,6 +223,12 @@ namespace StellarAllegiance.Shared
         // equipped/bought — the hangar arsenal's lock state (Stage-4 tech paths). Streamed LAST
         // (after ProbeModelSize) so every block above stays byte-stable (v36).
         public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+
+        // True = this gun HEALS instead of damages: a bolt hitting a same-team ship restores hull
+        // (clamped to max; shields untouched), an enemy hit is a no-op. The ER Nanite line. Drives
+        // the sim heal branch (ResolveDueShots) and the client's green bolt/spark tint. Streamed LAST
+        // (after RequiredTechIdx) so every block above stays byte-stable (v40).
+        public bool IsHealing;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -279,6 +285,13 @@ namespace StellarAllegiance.Shared
         // for constructor-built forward bases; the garrison authors none (built at match start).
         // 255 = unset (not constructor-buildable).
         public byte BuildRockClass = 255;
+
+        // ---- Station upgrades (v39) -------------------------------------------------------------
+        // The base type this base UPGRADES INTO (its successor tier); -1 = no successor. Resolved at
+        // projection from the station's `successor-station-id`. A station-upgrade development whose
+        // granted tech unlocks the successor tier swaps a hosting base's type to this id (in place).
+        // Streamed LAST in the BaseDef block (append-only).
+        public short SuccessorBaseTypeId = -1;
     }
 
     // ---- Tech-path catalog defs (Stage-4 research), streamed in MsgDefs after the world config ----
@@ -298,6 +311,11 @@ namespace StellarAllegiance.Shared
         TacticalAllowed = 3,
         SupremacyAllowed = 4,
     }
+
+    // One team-wide stat multiplier: (GameAttribute byte, multiplier). Mirrors the factions library's
+    // GameAttribute enum id (append-only, wire byte) × its double multiplier carried as f32. Neutral at
+    // 1.0; a faction's base-attributes and a development's attributes stream as sorted AttrMod[] arrays.
+    public readonly record struct AttrMod(byte Attr, float Mult);
 
     // One research-tree tech node (a pure catalog identity techs/developments reference).
     public sealed class TechDef
@@ -322,6 +340,18 @@ namespace StellarAllegiance.Shared
         public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
         public byte[] RequiredCaps = System.Array.Empty<byte>(); // CapabilityId bytes
         public byte[] GrantedCaps = System.Array.Empty<byte>();
+
+        // Station upgrade (v39): which of the team's matching bases this development physically upgrades
+        // on completion — 0 = all (default), 1 = single (only the hosting base). Mirrors the library
+        // UpgradeScope enum byte. Meaningful only for a development that grants a station-tier tech.
+        public byte UpgradeScope;
+        public const byte UpgradeScopeAll = 0;
+        public const byte UpgradeScopeSingle = 1;
+
+        // Team-wide stat multipliers this development grants while owned (v41). Sorted by attr byte for
+        // deterministic wire bytes. Slice devs are all tech-only ⇒ empty; the client renders any present
+        // entries as readable effect lines ("Gun damage +10%").
+        public AttrMod[] Attributes = System.Array.Empty<AttrMod>();
     }
 
     // One station CATALOG entry — every authored station, including future structures that have no
@@ -348,6 +378,10 @@ namespace StellarAllegiance.Shared
         public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
         public byte[] RequiredCaps = System.Array.Empty<byte>();
         public byte[] GrantedCaps = System.Array.Empty<byte>();
+
+        // Station upgrades (v39): the base type this station upgrades into (its successor tier); -1 =
+        // no successor. Resolved at projection from `successor-station-id`. Streamed after GrantedCaps.
+        public short SuccessorBaseTypeId = -1;
     }
 
     // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;

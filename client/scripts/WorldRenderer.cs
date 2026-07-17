@@ -112,6 +112,7 @@ public partial class WorldRenderer : Node3D
 
     // Cyan shield-bubble tint (#37E0FF), matching the HUD SHLD arc; alpha sets the flash's base opacity.
     private static readonly Color ShieldFlashTint = new(0.216f, 0.878f, 1f, 0.3f);
+    private static readonly Color HealSparkTint = new(0.35f, 1f, 0.5f, 1f); // ER Nanite heal-impact spark (green)
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
@@ -707,6 +708,7 @@ public partial class WorldRenderer : Node3D
     private StandardMaterial3D _pigTeam0Mat = null!;
     private StandardMaterial3D _pigTeam1Mat = null!;
     private StandardMaterial3D _projectileMat = null!;
+    private StandardMaterial3D _healBoltMat = null!; // green tracer for ER Nanite healing guns (IsHealing)
 
     private ShipController? _ship; // sibling; lazily resolved for the live latency readout
     private Starscape? _starscape; // sibling; repaints the backdrop as the local sector changes
@@ -1145,6 +1147,17 @@ public partial class WorldRenderer : Node3D
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             EmissionEnabled = true,
             Emission = new Color(1f, 0.85f, 0.35f),
+            EmissionEnergyMultiplier = 2.5f,
+        };
+        // ER Nanite healing tracer: a distinct green (chrome is cyan, teams are blue/red — a saturated
+        // heal-green reads as "friendly restorative" without colliding with either). Same recipe as
+        // the golden gun tracer, just retuned; bolt colour is hardcoded in the renderer like _projectileMat.
+        _healBoltMat = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.35f, 1f, 0.5f),
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            EmissionEnabled = true,
+            Emission = new Color(0.3f, 1f, 0.45f),
             EmissionEnergyMultiplier = 2.5f,
         };
 
@@ -1978,7 +1991,22 @@ public partial class WorldRenderer : Node3D
     private void InsertBase(Base row)
     {
         if (_baseNodes.ContainsKey(row.BaseId))
+        {
+            // Known base. A mid-match station upgrade (v39) swaps its BaseTypeId (same id) and re-streams
+            // the static. Refresh the type record so name/labels that read _baseType (KnownBases -> the
+            // CommandSidebar) reflect the new tier. The Iron slice's upgrade tiers reuse the same mesh
+            // (garrison/ss21a/acs05), so the visual node needs no rebuild — updating the type is enough
+            // and avoids a flicker. A future divergent-mesh upgrade would warn (live re-mesh unsupported).
+            if (_baseType.TryGetValue(row.BaseId, out byte prev) && prev != row.BaseTypeId)
+            {
+                _baseType[row.BaseId] = row.BaseTypeId;
+                string? oldModel = _defs.GetBaseDef(prev)?.ModelName;
+                string? newModel = _defs.GetBaseDef(row.BaseTypeId)?.ModelName;
+                if (!string.Equals(oldModel ?? "", newModel ?? "", StringComparison.Ordinal))
+                    Log.Warn($"[WorldRenderer] Base {row.BaseId} upgraded to a DIFFERENT mesh ({oldModel} -> {newModel}); live re-mesh is not supported — mesh stays stale until reload.");
+            }
             return;
+        }
 
         // Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
         // from the subscribed BaseDef. v37: the base type is streamed per-base (garrison 0, outpost 1).
@@ -2529,15 +2557,16 @@ public partial class WorldRenderer : Node3D
                 row.ShipId,
                 ShotMaskLeadSec(),
                 weapon.BoltRadius,
-                weapon.BoltLength
+                weapon.BoltLength,
+                weapon.IsHealing
             );
         }
     }
 
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
     // rendering as a remote bolt, no masking lead (prediction is already now-correct).
-    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength) =>
-        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength);
+    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength, bool isHeal) =>
+        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength, isHeal);
 
     private void AddBolt(
         Vector3 pos,
@@ -2548,12 +2577,13 @@ public partial class WorldRenderer : Node3D
         ulong ownerShipId,
         float leadSec,
         float boltRadius,
-        float boltLength
+        float boltLength,
+        bool isHeal
     )
     {
-        var pv = new ProjectileView { Name = "Bolt" };
+        var pv = new ProjectileView { Name = "Bolt", IsHeal = isHeal };
         _projectiles.AddChild(pv);
-        pv.AddChild(NewProjectileMesh(boltRadius, boltLength));
+        pv.AddChild(NewProjectileMesh(boltRadius, boltLength, isHeal));
         float ttl = ClipBoltTtl(sector, pos, vel, lifeSec, out Vector3 impact, out bool impactAtExpiry);
         pv.Initialize(pos, vel, aimDir, ttl, ownerShipId, leadSec);
         // Carry the static-surface impact (if any) so the TTL-expiry cull sparks it (see _Process).
@@ -2767,7 +2797,7 @@ public partial class WorldRenderer : Node3D
 
     // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back
     // to the built-in default so an unauthored weapon still renders a bolt.
-    private MeshInstance3D NewProjectileMesh(float radius, float height)
+    private MeshInstance3D NewProjectileMesh(float radius, float height, bool isHeal)
     {
         float r = radius > 0f ? radius : 0.22f;
         float h = height > 0f ? height : 2.2f;
@@ -2783,7 +2813,7 @@ public partial class WorldRenderer : Node3D
                 RadialSegments = 8,
                 Rings = 1,
             },
-            MaterialOverride = _projectileMat,
+            MaterialOverride = isHeal ? _healBoltMat : _projectileMat,
             RotationDegrees = new Vector3(-90f, 0f, 0f),
             // Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -3160,9 +3190,16 @@ public partial class WorldRenderer : Node3D
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
                 {
+                    if (pv.IsHeal)
+                    {
+                        // ER Nanite heal impact: a green spark on the (same-team) ship it restores;
+                        // a heal bypasses shields, so never the shield-bubble flash even if it's up.
+                        SpawnEffect(new HitFlash { CoreColor = HealSparkTint, EmissionColor = HealSparkTint }, hit, _localSector);
+                        SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 1.15f + GD.Randf() * 0.12f);
+                    }
                     // Shield up on the struck ship → a hemisphere shield-bubble flash + shield sound;
                     // otherwise the plain hull spark + impact sound. Both cosmetic/predicted.
-                    if (_shipShield.TryGetValue(shipId, out float sh) && sh > 0f)
+                    else if (_shipShield.TryGetValue(shipId, out float sh) && sh > 0f)
                     {
                         SpawnEffect(new ShieldFlash(hit - c, VisualHitRadius * 1.2f, ShieldFlashTint), c, _localSector);
                         SfxManager.Instance?.PlayAt(SfxManager.SfxId.ShieldImpact, hit, pitch: 0.95f + GD.Randf() * 0.12f);

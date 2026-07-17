@@ -149,6 +149,47 @@ public static class SelfTest
         }
         Check("world: every dock corridor reaches its face without hitting a sub-hull", corridorsClear);
 
+        // Per-type base roster (v37+): the garrison above is type 0; every OTHER runtime base type
+        // (Outpost/Supremacy/Shipyard on ss90/ss21a/acs05) must also load a compound hull with docking
+        // doors + launch exits so constructor-built forward bases can be docked/launched through. Same
+        // structural checks as the garrison, radius-relative (a base may author fewer sub-hulls than the
+        // garrison's 8, so only assert >= 2 — a real compound decomposition, not a single shrink-wrap).
+        foreach (var bd in content.Bases)
+        {
+            byte t = bd.BaseTypeId;
+            if (t == 0)
+                continue; // garrison covered above
+            var subs = world.BaseSubHullsOf(t);
+            var exits = world.BaseExitsOf(t);
+            var doors = world.BaseDockFacesOf(t);
+            float typeR = world.BaseRadiusOf(t);
+            Check($"world: base type {t} ({bd.Name}) hull loaded", world.BaseHullOf(t) is { Planes.Length: > 0 });
+            Check($"world: base type {t} has compound sub-hulls (got {subs.Length}, expect >= 2)", subs.Length >= 2);
+            Check($"world: base type {t} has >= 1 docking exit", exits.Length >= 1);
+            Check($"world: base type {t} has >= 1 dock door", doors.Length >= 1);
+            for (int i = 0; i < exits.Length; i++)
+            {
+                Approx($"world: base type {t} exit {i} axis is unit", exits[i].Dir.Length(), 1f, 1e-3f);
+                Vec3 spawn = exits[i].Pos + exits[i].Dir * (World.ShipRadius + content.World.Mechanics.WarpExitOffset);
+                float pen = 0f;
+                foreach (var sub in subs)
+                    if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float p) && p > pen)
+                        pen = p;
+                Check($"world: base type {t} exit {i} spawn clears the bay mouth (pen {pen:0.##} < ShipRadius)", pen < World.ShipRadius);
+            }
+            bool typeCorridorsClear = true;
+            foreach (var f in doors)
+            {
+                float probe = typeR * 2f;
+                Vec3 origin = f.Center - f.Normal * probe;
+                foreach (var sub in subs)
+                    if (sub.RayEntry(origin, f.Normal, probe, 0f, out float th) && th < probe - 0.5f)
+                        typeCorridorsClear = false;
+            }
+            Check($"world: base type {t} every dock corridor reaches its face", typeCorridorsClear);
+            Console.WriteLine($"  base type {t} ({bd.Name}): {subs.Length} sub-hulls, {exits.Length} exits, {doors.Length} doors, radius {typeR:0.#}");
+        }
+
         TestShipHulls(world);
     }
 
@@ -158,10 +199,11 @@ public static class SelfTest
     {
         (byte cls, bool pod, string name, float target)[] kinds =
         {
-            (0, false, "scout", 4.5f),
+            (0, false, "scout", 4.0f),
             (1, false, "fighter", 5.5f),
-            (2, false, "bomber", 7.2f),
+            (2, false, "bomber", 9.6f),
             (4, false, "miner", 6.5f),
+            (7, false, "devastator", 20.0f), // v39 capital hull (cap09) — collision-hull load + silhouette
             (0, true, "pod", 2.8f),
         };
         foreach (var (cls, pod, name, target) in kinds)

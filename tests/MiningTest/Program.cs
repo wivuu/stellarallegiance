@@ -33,6 +33,11 @@ var content = ContentLoader.Load(manifest, worldPath);
 var stockCfg = content.World;
 float baseHp = content.Bases[0].MaxHealth;
 
+// Phase 6: this suite asserts absolute harvest rates + miner-hold capacities. Neutralize the Iron
+// Coalition GAS (MiningRate ×0.85 / MiningCapacity ×0.75) for every sim built below so those numbers
+// stay pre-multiplier. A dedicated Iron-enabled case at the end proves the multipliers DO apply.
+Simulation.AttributesEnabledDefault = false;
+
 // Mirror World.AssignOre's size-scaled, clamped He3 capacity so the capacity assertions match the sim
 // exactly: the rock's volume (radius³) fraction across the field size range interpolates [capMin,
 // capMax], richness scales it, and the result is clamped hard back into the band.
@@ -1452,6 +1457,44 @@ if (retreatSim is { } rsim)
             "a lightly-damaged miner keeps working the field",
             $"sub-threshold damage triggered a retreat (state {row.State})");
     }
+}
+
+// ---- Phase 6: Iron Coalition GAS applies to mining when attributes are ENABLED. ----
+// Overrides the file-wide neutral default for one sim: StartMatch seeds the per-team attr cache from
+// the live Iron faction (mining-rate ×0.85, mining-capacity ×0.75), and both flow through HarvestStep.
+{
+    var cfg = HarvestConfig(rate: 40f);
+    var w = MakeWorld(2025, cfg);
+    var sim = new Simulation(w, content) { PigsEnabled = false, MinersEnabled = false };
+    sim.AttributesEnabled = true; // Iron GAS on (override the top-of-file neutral default)
+    sim.StartMatch();             // seeds the per-team attr cache from the Iron faction
+    var he3 = w.Asteroids.First(r => w.RockOre[r.Id].Class == RockClass.Helium3);
+    float defCap = MinerHold();   // 2000 (class-4 def ore-capacity)
+    const float dt = 0.05f;
+
+    // MiningRate ×0.85: one in-range tick moves 0.85 × rate·dt (rate 40 ⇒ 40·0.05·0.85 = 1.7).
+    var mr = MinerAt(he3.Pos, he3.SectorId, ore: 0f); // team 0 (ShipSim default)
+    float moved = sim.HarvestStep(mr, he3.Id, dt);
+    float wantRate = 40f * dt * 0.85f;
+    Check(MathF.Abs(moved - wantRate) < 1e-3f,
+        $"Iron MiningRate ×0.85: a tick moves {moved:F3} (= 40·dt·0.85 = {wantRate:F3})",
+        $"mining-rate multiplier not applied (moved {moved}, want {wantRate})");
+
+    // MiningCapacity ×0.75: the effective hold is 2000 × 0.75 = 1500 — a miner AT 1500 is full; one
+    // 0.5 below takes exactly its last 0.5 (hold-limited, since 0.5 < the 1.7/tick rate budget).
+    float scaledHold = defCap * 0.75f; // 1500
+    var atCap = MinerAt(he3.Pos, he3.SectorId, ore: scaledHold);
+    var belowCap = MinerAt(he3.Pos, he3.SectorId, ore: scaledHold - 0.5f);
+    float movedFull = sim.HarvestStep(atCap, he3.Id, dt);
+    float movedNearFull = sim.HarvestStep(belowCap, he3.Id, dt);
+    Check(movedFull == 0f && MathF.Abs(movedNearFull - 0.5f) < 1e-3f,
+        $"Iron MiningCapacity ×0.75: hold caps at {scaledHold:F0} (full miner moves 0; a 0.5-below miner takes exactly 0.5)",
+        $"mining-capacity multiplier not applied (atCap {movedFull}, belowCap {movedNearFull})");
+
+    // TeamAttr defaults to 1.0 for an attribute Iron does not set (ScanRange = GameAttribute id 11).
+    Check(w.TeamAttr(0, 11) == 1f,
+        "TeamAttr defaults to 1.0 for an unset attribute (ScanRange)",
+        $"unset attribute did not default to 1.0 (ScanRange {w.TeamAttr(0, 11)})");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL MINING TESTS PASSED" : $"\n{failures} MINING TEST(S) FAILED");

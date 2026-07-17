@@ -209,7 +209,13 @@ public static class CoreValidator
         foreach (var part in core.AllParts())
             CheckRef(result, partIds, part.SuccessorPartId, $"{Describe(part)} successor-part-id");
         foreach (var weapon in core.Weapons)
+        {
             CheckRef(result, projectileIds, weapon.ProjectileId, $"weapon '{weapon.Id}' projectile-id");
+            // A healing weapon heals friendly ships; it must never also be a base-siege weapon (the
+            // heal power would then damage enemy bases through the base-hit path). Mutually exclusive.
+            if (weapon.IsHealing && weapon.CanDamageBase)
+                result.Error($"weapon '{weapon.Id}' is both is-healing and can-damage-base (mutually exclusive).");
+        }
         foreach (var launcher in core.Launchers)
             CheckRef(result, expendableIds, launcher.ExpendableId, $"launcher '{launcher.Id}' expendable-id");
 
@@ -225,6 +231,35 @@ public static class CoreValidator
             CheckRef(result, droneIds, station.ConstructionDroneId, $"station '{station.Id}' construction-drone-id");
             if (station.ResearchSlots < 0)
                 result.Error($"station '{station.Id}' research-slots must be >= 0 (got {station.ResearchSlots}).");
+        }
+
+        // Developments: a station-upgrade with `upgrade-scope: single` must actually TRIGGER an
+        // upgrade — i.e. it must grant a tech that some station's SUCCESSOR tier requires. Without
+        // that link the scoped completion has no valid target (the ResearchOpStart from-type guard
+        // would reject every base), so refuse boot with a named key. Build the successor→required-tech
+        // map once from the station roster (successor-station-id points at the upgraded tier).
+        var stationById = core.Stations.ToDictionary(s => s.Id, StringComparer.Ordinal);
+        foreach (var dev in core.Developments)
+        {
+            if (dev.UpgradeScope != UpgradeScope.Single)
+                continue;
+            bool triggersAnUpgrade = false;
+            foreach (var station in core.Stations)
+            {
+                if (string.IsNullOrEmpty(station.SuccessorStationId)
+                    || !stationById.TryGetValue(station.SuccessorStationId, out var successor))
+                    continue;
+                if (successor.RequiredTechs.Any(t => dev.GrantedTechs.Contains(t)))
+                {
+                    triggersAnUpgrade = true;
+                    break;
+                }
+            }
+            if (!triggersAnUpgrade)
+                result.Error(
+                    $"development '{dev.Id}' has upgrade-scope: single but grants no tech required by any "
+                    + "station's successor tier — it would upgrade nothing. Grant a tech the successor "
+                    + "station's required-techs names, or drop upgrade-scope.");
         }
 
         // Drones.

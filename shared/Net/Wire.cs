@@ -72,7 +72,10 @@ public static class Wire
     // nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids in hardpoint declaration order,
     // reconcile-by-omission). Guns moved to per-mount cadence; the ship record is UNCHANGED —
     // which mounts fired at LastFireTick is derived client-side via the shared FireCadence rule.
-    public const byte ProtocolVersion = 38;
+    // v39 (2026-07-16, tech-tree Phase 4): station upgrades + Devastator. BaseDef/StationCatalogDef
+    // append SuccessorBaseTypeId (i16, -1 = none); DevelopmentDef appends UpgradeScope (u8, 0 all /
+    // 1 single). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs mirror the new fields.
+    public const byte ProtocolVersion = 41;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

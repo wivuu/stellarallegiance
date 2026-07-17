@@ -2,45 +2,140 @@
 # (Simulation.Research); on completion it grants its techs to the whole team. These are v1
 # UNLOCK-ONLY developments: tech-only: true, no `attributes:` block (no stat modifiers yet), so they
 # exist purely to flip techs on. `group:` clusters them in the client Research tab.
-#   dev-heavy-ordnance -> dev-cannon-tier-2 is a two-step chain (the tier-2 cannon doctrine requires
-#   the heavy-ordnance certification first).
+#
+# Iron Coalition weapon/hull research (Phase 2, PCore014.igc). Prices are IGC ×0.06; build-times are
+# scaled in line with the existing dev magnitudes (150→30s, 300→60s, 600→120s). Research homing
+# (plan Adaptation §1): the IGC Expansion base is absent from the slice, so Mini-Gun tiers home at the
+# Garrison — Mini-Gun 2 needs only `base` (researchable at start), Mini-Gun 3 behind garrison-str.
+# Gat/AutoCan 2 require supremacy-1, Gat/AutoCan 3 require supremacy-adv (granted by the Supremacy
+# base tiers in Phase 3/4) — until then those tiers show truthfully LOCKED.
 developments:
-  - id: dev-heavy-ordnance
-    name: Heavy Ordnance
-    description: "Certify the team for siege weapons and assault hulls."
+  # ---- Hull unlock (researchable from match start) ----
+  - id: dev-bomber
+    name: Bomber Doctrine
+    description: "Certify the team for the assault bomber and its base-cracking ordnance."
     group: WEAPONS
-    price: 400
-    build-time-seconds: 90
+    price: 600
+    build-time-seconds: 120
     tech-only: true
     required-capabilities: [base]
-    granted-techs: [heavy-ordnance]
+    granted-techs: [bomber]
 
-  - id: dev-cannon-tier-2
-    name: Class-2 Cannons
-    description: "Uprate the cannon line to class-2 fire-control."
+  # ---- PW Gat Gun line (tier 2 behind supremacy-1, tier 3 behind supremacy-adv + gat-2) ----
+  - id: dev-gat-2
+    name: PW Gat Gun 2
+    description: "Uprate the Gat Gun line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [gat-2]
+  - id: dev-gat-3
+    name: PW Gat Gun 3
+    description: "Uprate the Gat Gun line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, gat-2]
+    granted-techs: [gat-3]
+
+  # ---- PW Mini-Gun line (homed at the Garrison: tier 2 needs only `base`, tier 3 behind garrison-str) ----
+  - id: dev-minigun-2
+    name: PW Mini-Gun 2
+    description: "Uprate the Mini-Gun line to tier 2."
     group: WEAPONS
     price: 300
     build-time-seconds: 60
     tech-only: true
-    required-techs: [heavy-ordnance]
-    granted-techs: [cannon-tier-2]
+    required-capabilities: [base]
+    granted-techs: [minigun-2]
+  - id: dev-minigun-3
+    name: PW Mini-Gun 3
+    description: "Uprate the Mini-Gun line to tier 3."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [garrison-str, minigun-2]
+    granted-techs: [minigun-3]
 
-  - id: dev-expansion
-    name: Expansion Doctrine
-    description: "Authorize building out beyond the home garrison."
-    group: EXPANSION
-    price: 500
-    build-time-seconds: 120
+  # ---- PW AutoCan line (tier 2 behind supremacy-1, tier 3 behind supremacy-adv + autocan-2) ----
+  - id: dev-autocan-2
+    name: PW AutoCan 2
+    description: "Uprate the AutoCannon line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [autocan-2]
+  - id: dev-autocan-3
+    name: PW AutoCan 3
+    description: "Uprate the AutoCannon line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, autocan-2]
+    granted-techs: [autocan-3]
+
+  # ---- Station upgrades (Phase 4) — each grants a tier tech that swaps the HOSTING base in place ----
+  # Authored LAST so the weapon/hull dev wire indices above stay stable. upgrade-scope: single (plan
+  # Adaptation §2): the physical base swap targets ONLY the base the research completed at (each team
+  # owns <=1 of each type anyway). The tech grant is still team-wide. ResearchOpStart rejects queuing
+  # one of these at a base that isn't the from-type of its chain.
+  - id: dev-upgrade-garrison
+    name: Upgrade Garrison
+    description: "Structurally reinforce this garrison — more armor, same headquarters role. Unlocks the top Mini-Gun tier."
+    group: UPGRADES
+    price: 720
+    build-time-seconds: 144
+    tech-only: true
+    upgrade-scope: single
+    required-capabilities: [base]
+    granted-techs: [garrison-str]
+  - id: dev-upgrade-supremacy
+    name: Upgrade Supremacy
+    description: "Advance this Supremacy Center to its top tier — opens the top gun tier and the Adv Fighter."
+    group: UPGRADES
+    price: 1800
+    build-time-seconds: 360
+    tech-only: true
+    upgrade-scope: single
+    required-techs: [supremacy-1]
+    granted-techs: [supremacy-adv]
+  - id: dev-upgrade-heavy-class
+    name: Upgrade Heavy Class
+    description: "Convert this Shipyard to a dry dock and certify heavy-class construction — the Devastator's gate."
+    group: UPGRADES
+    price: 1440
+    build-time-seconds: 288
+    tech-only: true
+    upgrade-scope: single
+    required-techs: [shipyard-1]
+    granted-techs: [heavy-class, shipyard-dry]   # unlocks heavy hulls AND upgrades the shipyard tier
+
+  # ---- ER Nanite line (Phase 5, healing gun) — homed at the Garrison like the Mini-Gun line: tier 2
+  # needs only `base` (researchable from match start), tier 3 behind garrison-str. Authored at the VERY
+  # END (indices 10/11) so the Phase-2/4 weapon + station-upgrade dev wire indices above stay stable
+  # (StrategyTest drives research ops by dev index). ----
+  - id: dev-nanite-2
+    name: ER Nanite 2
+    description: "Uprate the repair-nanite line to tier 2 — a stronger hull-restoring beam."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
     tech-only: true
     required-capabilities: [base]
-    granted-techs: [expansion-1]
-
-  - id: dev-tactical
-    name: Tactical Doctrine
-    description: "Open the tactical station and ordnance tree."
-    group: TACTICAL
-    price: 500
-    build-time-seconds: 120
+    granted-techs: [nanite-2]
+  - id: dev-nanite-3
+    name: ER Nanite 3
+    description: "Uprate the repair-nanite line to tier 3 — the fastest field hull-restore."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
     tech-only: true
-    required-capabilities: [base]
-    granted-techs: [tactical-1]
+    required-techs: [garrison-str, nanite-2]
+    granted-techs: [nanite-3]

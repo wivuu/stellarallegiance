@@ -20,7 +20,7 @@
 #  loaded separately at boot (SIM_WORLD / --world overrides it).
 # =====================================================================
 
-version: "2026.07.14-tech-tree"
+version: "2026.07.16-tech-tree-p6"
 
 catalog:
   - hulls.yaml
@@ -33,4 +33,4 @@ catalog:
   - developments.yaml
 
 factions:
-  - factions/stock.yaml
+  - factions/iron-coalition.yaml

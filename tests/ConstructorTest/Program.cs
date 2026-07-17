@@ -30,7 +30,7 @@ var outpostDef = content.Bases.First(b => b.BaseTypeId == OutpostType);
 Check(garrisonDef.WinCondition && !outpostDef.WinCondition,
     "garrison is a win-condition base; the outpost is not",
     $"win flags wrong (garrison {garrisonDef.WinCondition}, outpost {outpostDef.WinCondition})");
-Check(outpostDef.BuildRockClass == (byte)RockClass.Regolith && outpostDef.ModelName == "Outpost",
+Check(outpostDef.BuildRockClass == (byte)RockClass.Regolith && outpostDef.ModelName == "ss90",
     "outpost builds on Regolith and carries its model name",
     $"outpost def wrong (rockClass {outpostDef.BuildRockClass}, model '{outpostDef.ModelName}')");
 
@@ -41,6 +41,7 @@ Check(outpostDef.BuildRockClass == (byte)RockClass.Regolith && outpostDef.ModelN
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false;
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts pre-multiplier base health
     sim.StartMatch();
     return (sim, world);
 }
@@ -226,6 +227,93 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
     }
     else
         Check(false, "", "constructor never launched for the move-order test");
+}
+
+// ---- Scenario 5 (Phase 3): the Iron Coalition base roster — build a Supremacy + Shipyard, verify
+// per-type max health, station-completion tech grants (supremacy-1 unlocks dev-gat-2), and that the
+// Supremacy runs 2 concurrent research slots while the garrison runs 1. -------------------------------
+{
+    const byte SupremacyType = 2;
+    const byte ShipyardType = 3;
+    var (sim, world) = NewSim();
+    world.TeamStates[0].Credits = 100_000; // fund the whole roster + research up front (deterministic)
+
+    // All Regolith rocks (anywhere) so each build claims a fresh one.
+    var regoliths = world.Asteroids.Where(r => world.RockClassOf(r.Id) == RockClass.Regolith)
+        .Select(r => r.Id).ToList();
+    Check(regoliths.Count >= 3, "the map has >=3 Regolith rocks to expand onto",
+        $"only {regoliths.Count} Regolith rocks — cannot build the roster");
+
+    // Buy a constructor for `stationType`, teleport it to `rockId`, order + step until its base lands.
+    // Returns the new base index (or -1). expansion-allowed must already be owned for supremacy/shipyard.
+    int BuildBaseOn(byte stationType, ulong rockId)
+    {
+        int before = world.Bases.Count;
+        sim.EnqueueConstructorBuy(0, stationType, 0);
+        var drone = StepUntilLaunched(sim);
+        if (drone is not Simulation.ShipSim sh)
+            return -1;
+        PlaceNear(sim, world, sh, rockId);
+        sim.EnqueueCommandOrder(1, "Cmdr", 0, sh.ShipId, targetKind: 2, targetId: rockId, sector: 0, pos: default);
+        for (int i = 0; i < 6000 && world.Bases.Count == before; i++)
+            sim.Step();
+        return world.Bases.Count > before ? world.Bases.Count - 1 : -1;
+    }
+
+    // 1) Outpost first — grants the expansion-allowed capability the higher bases require.
+    int outpostIdx = BuildBaseOn(OutpostType, regoliths[0]);
+    Check(outpostIdx >= 0 && world.Bases[outpostIdx].BaseTypeId == OutpostType,
+        "an outpost builds and grants expansion-allowed",
+        $"outpost build failed (idx {outpostIdx})");
+    Check(outpostIdx >= 0 && Math.Abs(world.BaseHealth[outpostIdx] - 667f) < 0.5f,
+        "the outpost spawns at its per-type max health (667)",
+        $"outpost health wrong ({(outpostIdx >= 0 ? world.BaseHealth[outpostIdx] : -1)}, want 667)");
+
+    // 2) Supremacy — expansion-allowed now owned; completing it grants supremacy-1 team-wide.
+    int supIdx = BuildBaseOn(SupremacyType, regoliths[1]);
+    Check(supIdx >= 0 && world.Bases[supIdx].BaseTypeId == SupremacyType,
+        "a Supremacy Center builds on a Regolith rock",
+        $"supremacy build failed (idx {supIdx})");
+    Check(supIdx >= 0 && Math.Abs(world.BaseHealth[supIdx] - 1333f) < 0.5f,
+        "the Supremacy spawns at its per-type max health (1333, NOT the garrison's 2000)",
+        $"supremacy health wrong ({(supIdx >= 0 ? world.BaseHealth[supIdx] : -1)}, want 1333)");
+    Check(world.TeamStates[0].OwnedTechs.Contains("supremacy-1"),
+        "completing the Supremacy grants the supremacy-1 tech to the team",
+        $"supremacy-1 not granted (owned: {string.Join(",", world.TeamStates[0].OwnedTechs)})");
+
+    // supremacy-1 unlocks dev-gat-2 (previously locked). Start it + dev-autocan-2 at the Supremacy: both
+    // go Active (2 research slots), proving SlotsFor reads the base's OWN type (garrison would allow 1).
+    ushort DevIdx(string id) => (ushort)content.Developments.ToList().FindIndex(d => d.Id == id);
+    ulong supBaseId = world.Bases[supIdx].Id;
+    sim.EnqueueResearchOp(1, 0, Simulation.ResearchOpStart, supBaseId, DevIdx("dev-gat-2"));
+    sim.EnqueueResearchOp(1, 0, Simulation.ResearchOpStart, supBaseId, DevIdx("dev-autocan-2"));
+    sim.Step();
+    Check(world.ResearchByBase[supIdx].Active.Count == 2 && world.ResearchByBase[supIdx].OnDeck is null,
+        "the Supremacy runs 2 concurrent research slots (both dev-gat-2 and dev-autocan-2 go Active)",
+        $"supremacy research slots wrong (active {world.ResearchByBase[supIdx].Active.Count}, "
+            + $"onDeck {world.ResearchByBase[supIdx].OnDeck?.ToString() ?? "null"})");
+
+    // Contrast: the garrison (type 0) allows only 1 slot — a 2nd start there goes on-deck, not active.
+    int garIdx = 0; // world.Bases[0] is team-0's garrison
+    ulong garBaseId = world.Bases[garIdx].Id;
+    sim.EnqueueResearchOp(1, 0, Simulation.ResearchOpStart, garBaseId, DevIdx("dev-minigun-2"));
+    sim.EnqueueResearchOp(1, 0, Simulation.ResearchOpStart, garBaseId, DevIdx("dev-bomber"));
+    sim.Step();
+    Check(world.ResearchByBase[garIdx].Active.Count == 1,
+        "the garrison runs only 1 research slot (SlotsFor is per-type)",
+        $"garrison slots wrong (active {world.ResearchByBase[garIdx].Active.Count})");
+
+    // 3) Shipyard — also expansion-gated; grants shipyard-1 on completion.
+    int yardIdx = BuildBaseOn(ShipyardType, regoliths[2]);
+    Check(yardIdx >= 0 && world.Bases[yardIdx].BaseTypeId == ShipyardType,
+        "a Shipyard builds on a Regolith rock",
+        $"shipyard build failed (idx {yardIdx})");
+    Check(world.TeamStates[0].OwnedTechs.Contains("shipyard-1"),
+        "completing the Shipyard grants the shipyard-1 tech to the team",
+        $"shipyard-1 not granted (owned: {string.Join(",", world.TeamStates[0].OwnedTechs)})");
+    Check(sim.Phase == Simulation.PhaseActive,
+        "building forward bases never ends the match (none are win-condition)",
+        $"match ended after building the roster (phase {sim.Phase})");
 }
 
 Console.WriteLine(failures == 0 ? "\nALL CONSTRUCTOR TESTS PASSED" : $"\n{failures} CONSTRUCTOR TEST(S) FAILED");

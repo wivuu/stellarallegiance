@@ -68,6 +68,7 @@ const float Standoff = 90f; // PigStandoff (world.yaml ai.standoff) — the auto
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — spawned in these scenarios
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;

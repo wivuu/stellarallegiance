@@ -39,8 +39,8 @@ Check(errors.Count == 0, "stock bundle passes ContentValidator", $"stock bundle 
 // 2a. The loader maps fields correctly (guards a mis-mapped/swapped key).
 var scout = stock.Ships.First(s => s.ClassId == FlightModel.ClassScout);
 Check(
-    scout.MaxSpeed == 160f && scout.Mass == 40f && scout.MaxHull == 60f,
-    "loader parsed scout flight stats",
+    scout.MaxSpeed == 173.3f && scout.Mass == 48f && scout.MaxHull == 69f,
+    "loader parsed scout flight stats (Iron Coalition fig13)",
     $"scout stats wrong (speed {scout.MaxSpeed}, mass {scout.Mass}, hull {scout.MaxHull})"
 );
 // Stage-2 economy: the buildable's authored price projects onto ShipClassDef.Cost (wire field).
@@ -53,26 +53,27 @@ Check(
 // GLB-authoritative merge: the scout's YAML binds the cannon (HP_Weapon_0) + missile rack
 // (HP_Weapon_1, P2) + cockpit; every unclaimed mesh node appends (by kind byte, then index) —
 // Booster_0/1, Thruster_0, Light_0..2. YAML-declared entries keep their order at the head.
+// fig13 carries HP_Weapon_0 (nose, bound to PW Gat Gun 1) + HP_Weapon_1 (belly, unbound → empty
+// mount) + Booster_0/1 + Thruster_0 + Light_0..2. YAML authors the bound gun + cockpit; everything
+// else appends. Total = gun + cockpit + empty-mount + 2 boosters + thruster + 3 lights = 9.
 Check(
     scout.Hardpoints.Count == 9
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon
         && scout.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId
-        && scout.Hardpoints[1].Kind == HardpointKind.Weapon
-        && scout.Hardpoints[1].WeaponId == 3
-        && scout.Hardpoints[2].Kind == HardpointKind.Cockpit
+        && scout.Hardpoints[1].Kind == HardpointKind.Cockpit
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Thruster) == 1
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 3
-        // Both weapon mounts armed now (cannon on P1 + missile rack on P2).
-        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 2
+        // One armed gun (Gat 1) + one appended empty belly mount.
+        && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 1
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 2,
-    "merged scout hardpoints (bound cannon + missile rack + cockpit, appended boosters/thruster/lights; both weapons armed)",
+    "merged scout hardpoints (bound Gat 1 + cockpit; appended empty mount/boosters/thruster/lights)",
     $"scout merged hardpoints wrong (count {scout.Hardpoints.Count}, kinds {string.Join(",", scout.Hardpoints.Select(h => h.Kind))})"
 );
 // The GLB is authoritative for geometry: the bound scout cannon inherits its mesh node's position
 // (world-scaled by ModelLength/LongestAxis) rather than the old hand-authored (0,0,3).
-var scoutModel = SimServer.Assets.SimAssets.TryLoad("ships/scout.glb");
-Check(scoutModel is not null, "scout GLB resolves for the geometry-merge assertions", "scout GLB not found — assets dir unresolved");
+var scoutModel = SimServer.Assets.SimAssets.TryLoad("ships/fig13.glb");
+Check(scoutModel is not null, "scout GLB (fig13) resolves for the geometry-merge assertions", "scout GLB not found — assets dir unresolved");
 if (scoutModel is not null)
 {
     var w0 = scoutModel.Hardpoints.First(h => h.Name == "HP_Weapon_0");
@@ -88,16 +89,16 @@ if (scoutModel is not null)
 }
 var scoutW = stock.Weapons.First(w => w.WeaponId == GameContent.ScoutWeaponId);
 Check(
-    scoutW.Damage == 4f && scoutW.FireIntervalTicks == 4 && scoutW.ProjectileSpeed == 200f && scoutW.SpreadRad == 0.006f,
-    "loader parsed scout weapon",
-    $"scout weapon wrong (dmg {scoutW.Damage}, fire {scoutW.FireIntervalTicks}, spread {scoutW.SpreadRad})"
+    scoutW.Damage == 10f && scoutW.FireIntervalTicks == 4 && scoutW.ProjectileSpeed == 200f && scoutW.SpreadRad == 0.005f,
+    "loader parsed the PW Gat Gun 1 (weapon-id 0)",
+    $"gat gun 1 wrong (dmg {scoutW.Damage}, fire {scoutW.FireIntervalTicks}, spread {scoutW.SpreadRad})"
 );
 // Payload: hull capacity + weapon mass are authored (hulls/weapons.yaml), cargo items project
 // from expendables carrying a cargo-id (expendables.yaml).
 Check(
-    scout.PayloadCapacity == 12f && bomber.PayloadCapacity == 37f && scoutW.Mass == 2f,
+    scout.PayloadCapacity == 12f && bomber.PayloadCapacity == 20f && scoutW.Mass == 1f,
     "loader projected payload capacity + weapon mass",
-    $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, scout gun mass {scoutW.Mass})"
+    $"payload wrong (scout cap {scout.PayloadCapacity}, bomber cap {bomber.PayloadCapacity}, gat gun mass {scoutW.Mass})"
 );
 // Mining hull (class-id 4): the projection carries Hull.OreCapacity onto ShipClassDef.OreCapacity;
 // a non-mining hull projects 0. The miner's GLB (utl19.glb) carries an HP_Weapon_0 node with no
@@ -136,11 +137,11 @@ Check(
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 3
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 5
-        && fighterVis.Hardpoints[0].Kind == HardpointKind.Weapon && fighterVis.Hardpoints[0].WeaponId == GameContent.FighterWeaponId,
-    "merged fighter hardpoints (3 armed guns, 2 boosters, appended thruster + 5 lights)",
+        && fighterVis.Hardpoints[0].Kind == HardpointKind.Weapon && fighterVis.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId,
+    "merged Enh Fighter hardpoints (3 armed Gat guns, 2 boosters, appended thruster + 5 lights)",
     $"fighter merged hardpoints wrong (count {fighterVis.Hardpoints.Count}, weapons {fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)})"
 );
-var fighterModel = SimServer.Assets.SimAssets.TryLoad("ships/fighter.glb");
+var fighterModel = SimServer.Assets.SimAssets.TryLoad("ships/wc_icfig.glb");
 Check(fighterModel is not null, "fighter GLB resolves for the geometry-merge assertion", "fighter GLB not found — assets dir unresolved");
 if (fighterModel is not null)
 {
@@ -175,9 +176,9 @@ Check(
 // Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 10,
-    "loader projected guns + missile launchers + dispensers (4 guns [+ tech-gated heavy-cannon] + 3 racks + chaff + mine + probe)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 10)"
+    stock.Weapons.Count == 18,
+    "loader projected guns + missile launchers + dispensers (12 guns [3 Gat + 3 Mini-Gun + 3 AutoCan + 3 Nanite] + 3 racks + chaff + mine + probe)",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 18)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
@@ -283,18 +284,21 @@ Check(
     "loader projected scout as fuel-unmodeled (no afterburner)",
     $"scout fuel wrong (max {scout.MaxFuel}, drain {scout.AbFuelDrain}, recharge {scout.AbFuelRecharge})"
 );
-// Bomber: twin main cannons bind HP_Weapon_0 (right barrel) and HP_Weapon_1 (left barrel), the
-// missile rack binds HP_Weapon_2 → 3 weapon mounts, all 3 armed. hardpoint[1] inherits the mesh
-// left-barrel geometry as-is (negative X, no authored override) — honoring the GLB node.
+// Bomber (wc_icbmb): 5 armed weapon mounts — Gat 1 (mesh HP_Weapon_0), two AutoCan 1 (mesh
+// HP_Weapon_1/2 nose pair), a second Gat 1 (authored index 3, mirror of node 0), and the anti-base
+// torpedo rack (authored index 4, weapon-id 5). Guns at the low indices, rack last. wc_icbmb carries
+// 2 turret nodes (HP_Turret_0/1) that append.
 Check(
-    bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 3
-        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 3
-        && bomber.Hardpoints[0].WeaponId == 2 && bomber.Hardpoints[1].WeaponId == 2
-        && bomber.Hardpoints[2].Kind == HardpointKind.Weapon && bomber.Hardpoints[2].WeaponId == 5
-        && bomber.Hardpoints[1].OffX < 0f
-        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 1,
-    "merged bomber hardpoints (3 armed weapon mounts: twin cannons 0/1 + missile rack 2; HP_Weapon_1 mesh geometry honored)",
-    $"bomber merged hardpoints wrong (weapons {bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)}, hp[1] wid {bomber.Hardpoints[1].WeaponId} offX {bomber.Hardpoints[1].OffX}, hp[2] wid {bomber.Hardpoints[2].WeaponId})"
+    bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 5
+        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 5
+        && bomber.Hardpoints[0].WeaponId == 0
+        && bomber.Hardpoints[1].WeaponId == 12 && bomber.Hardpoints[2].WeaponId == 12
+        && bomber.Hardpoints[3].WeaponId == 0
+        && bomber.Hardpoints[4].Kind == HardpointKind.Weapon && bomber.Hardpoints[4].WeaponId == 5
+        && bomber.Hardpoints[2].OffX < 0f && bomber.Hardpoints[3].OffX > 0f
+        && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 2,
+    "merged bomber hardpoints (5 armed mounts: Gat + 2 AutoCan + Gat + torpedo rack; 2 turrets append)",
+    $"bomber merged hardpoints wrong (weapons {bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)}, ids [{string.Join(",", bomber.Hardpoints.Where(h => h.Kind == HardpointKind.Weapon).Select(h => h.WeaponId))}])"
 );
 var garrison = stock.Bases.First();
 Check(garrison.MaxHealth == 2000f && garrison.Radius == 90f, "loader parsed base", $"base wrong (hp {garrison.MaxHealth}, r {garrison.Radius})");
@@ -356,43 +360,65 @@ Check(
 // and stream in MsgDefs. Tech references ride the wire as u16 INDICES into the tech list, so resolve
 // them via TechIndexById rather than hardcoding an index.
 Check(
-    stock.Techs.Count == 4 && stock.TechIndexById.Count == 4,
-    "loader projected 4 techs (TechIndexById has 4 entries)",
+    stock.Techs.Count == 15 && stock.TechIndexById.Count == 15,
+    "loader projected 15 Iron Coalition techs (TechIndexById has 15 entries; +nanite-2/3)",
     $"tech count wrong (techs {stock.Techs.Count}, index {stock.TechIndexById.Count})"
 );
-ushort heavyIdx = stock.TechIndexById["heavy-ordnance"];
-var devCannonTier2 = stock.Developments.First(d => d.Id == "dev-cannon-tier-2");
+// dev-gat-2 gates on the (forward-declared) supremacy-1 tech — resolved by index off the tech list.
+ushort supremacyIdx = stock.TechIndexById["supremacy-1"];
+var devGat2 = stock.Developments.First(d => d.Id == "dev-gat-2");
 Check(
-    devCannonTier2.RequiredTechIdx.Length == 1
-        && devCannonTier2.RequiredTechIdx[0] == heavyIdx
-        && stock.Techs[heavyIdx].Id == "heavy-ordnance",
-    "dev-cannon-tier-2 RequiredTechIdx resolves (by index) to the heavy-ordnance tech",
-    $"cannon-tier-2 required-tech wrong (idx [{string.Join(",", devCannonTier2.RequiredTechIdx)}], heavy-ordnance idx {heavyIdx})"
+    devGat2.RequiredTechIdx.Length == 1
+        && devGat2.RequiredTechIdx[0] == supremacyIdx
+        && stock.Techs[supremacyIdx].Id == "supremacy-1",
+    "dev-gat-2 RequiredTechIdx resolves (by index) to the supremacy-1 tech",
+    $"dev-gat-2 required-tech wrong (idx [{string.Join(",", devGat2.RequiredTechIdx)}], supremacy-1 idx {supremacyIdx})"
 );
 Check(
-    stock.Developments.Count == 4 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
-    "loader projected 4 developments, all with positive price + build-time",
+    stock.Developments.Count == 12 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
+    "loader projected 12 developments, all with positive price + build-time (+dev-nanite-2/3)",
     $"development projection wrong (count {stock.Developments.Count}, "
         + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
 );
-// Station catalog: 8 entries, TWO with a runtime BaseTypeId (garrison type 0 + outpost type 1, v37
-// base building); every other entry stays catalog-only (BaseTypeId -1 => never a runtime BaseDef).
-// The outpost carries build-on-rock-class Regolith and is NOT a win-condition base (no `start`).
+// Station catalog (Phase 4): 7 entries, ALL runtime bases — garrison type 0, outpost type 1,
+// supremacy type 2, shipyard type 3, plus the upgrade tiers garrison-str (4), supremacy-adv (5),
+// shipyard-dry (6). The outpost carries build-on-rock-class Regolith and is NOT a win-condition base.
 var runtimeStations = stock.StationCatalog.Where(s => s.BaseTypeId >= 0).ToList();
 var garrisonCat = stock.StationCatalog.First(s => s.Id == "garrison");
 var outpostCat = stock.StationCatalog.First(s => s.Id == "outpost");
 Check(
-    stock.StationCatalog.Count == 8 && runtimeStations.Count == 2 && garrisonCat.ResearchSlots == 1
+    stock.StationCatalog.Count == 7 && runtimeStations.Count == 7 && garrisonCat.ResearchSlots == 1
         && outpostCat.BaseTypeId == 1 && outpostCat.BuildRockClass == (byte)RockClass.Regolith,
-    "station catalog has 8 entries, two runtime stations (garrison slots 1 + outpost type 1 on Regolith)",
+    "station catalog has 7 runtime stations (garrison slots 1 + outpost type 1 on Regolith)",
     $"station catalog wrong (count {stock.StationCatalog.Count}, runtime {runtimeStations.Count}, "
         + $"outpost type {outpostCat.BaseTypeId} rockClass {outpostCat.BuildRockClass})"
 );
-var techLab = stock.StationCatalog.First(s => s.Id == "tech-lab");
+// Phase 4 station upgrades: successor-station-id projects to SuccessorBaseTypeId on both the BaseDef
+// and the StationCatalogDef (garrison 0 -> garrison-str 4). The upgrade tiers carry NO build-on-rock-
+// class (255) so they never appear as constructor-buildable. The dev-upgrade-garrison development is
+// upgrade-scope: single (byte 1) and grants garrison-str.
+var garrisonBase = stock.Bases.First(b => b.BaseTypeId == 0);
+var garrisonStrCat = stock.StationCatalog.First(s => s.Id == "garrison-str");
+var devUpgradeGarrison = stock.Developments.First(d => d.Id == "dev-upgrade-garrison");
+ushort garrisonStrTechIdx = stock.TechIndexById["garrison-str"];
 Check(
-    techLab.BaseTypeId < 0 && techLab.ResearchSlots == 2,
-    "the catalog-only tech-lab station carries ResearchSlots == 2",
-    $"tech-lab wrong (baseTypeId {techLab.BaseTypeId}, slots {techLab.ResearchSlots})"
+    garrisonBase.SuccessorBaseTypeId == 4 && garrisonCat.SuccessorBaseTypeId == 4
+        && garrisonStrCat.BaseTypeId == 4 && garrisonStrCat.BuildRockClass == 255
+        && devUpgradeGarrison.UpgradeScope == DevelopmentDef.UpgradeScopeSingle
+        && devUpgradeGarrison.GrantedTechIdx.Contains(garrisonStrTechIdx),
+    "garrison -> garrison-str upgrade chain projects (SuccessorBaseTypeId 4, tier rockClass 255, single scope)",
+    $"upgrade chain wrong (baseSucc {garrisonBase.SuccessorBaseTypeId}, catSucc {garrisonCat.SuccessorBaseTypeId}, "
+        + $"tier rockClass {garrisonStrCat.BuildRockClass}, scope {devUpgradeGarrison.UpgradeScope})"
+);
+// Phase 3 made the Supremacy Center (type 2, 2 research slots) and Shipyard (type 3) runtime bases.
+var supremacyCat = stock.StationCatalog.First(s => s.Id == "supremacy");
+var shipyardCat = stock.StationCatalog.First(s => s.Id == "shipyard");
+Check(
+    supremacyCat.BaseTypeId == 2 && supremacyCat.ResearchSlots == 2
+        && shipyardCat.BaseTypeId == 3 && shipyardCat.BuildRockClass == (byte)RockClass.Regolith,
+    "supremacy (type 2, 2 slots) and shipyard (type 3) are runtime bases",
+    $"supremacy/shipyard wrong (supremacy type {supremacyCat.BaseTypeId} slots {supremacyCat.ResearchSlots}, "
+        + $"shipyard type {shipyardCat.BaseTypeId} rockClass {shipyardCat.BuildRockClass})"
 );
 // The bomber ShipClassDef still PROJECTS — tech gating is availability (UnlockedClasses), not
 // projection: the def must exist so a researched hull can spawn/render once its tech lands.
@@ -401,14 +427,29 @@ Check(
     "the tech-gated bomber still projects to a ShipClassDef (gating is availability, not projection)",
     "bomber ShipClassDef missing — tech gating wrongly dropped it from projection"
 );
-// heavy-cannon (weapon-id 9): projects with a non-empty RequiredTechIdx (the hangar arsenal lock,
-// Phase D). Not mounted by any hull — it exists purely for the tech-locked arsenal display.
-var heavyCannon = stock.Weapons.First(w => w.WeaponId == 9);
-ushort cannonTier2Idx = stock.TechIndexById["cannon-tier-2"];
+// PW Gat Gun 2 (weapon-id 1): the tier-2 gun projects with a non-empty RequiredTechIdx (the hangar
+// arsenal lock) resolving to the gat-2 tech. Its tier-3 sibling (weapon-id 2) gates on gat-3.
+var gatGun2 = stock.Weapons.First(w => w.WeaponId == 1);
+ushort gat2Idx = stock.TechIndexById["gat-2"];
 Check(
-    heavyCannon.RequiredTechIdx.Length == 1 && heavyCannon.RequiredTechIdx[0] == cannonTier2Idx,
-    "heavy-cannon WeaponDef projects with RequiredTechIdx = [cannon-tier-2]",
-    $"heavy-cannon required-tech wrong (idx [{string.Join(",", heavyCannon.RequiredTechIdx)}], cannon-tier-2 idx {cannonTier2Idx})"
+    gatGun2.RequiredTechIdx.Length == 1 && gatGun2.RequiredTechIdx[0] == gat2Idx,
+    "PW Gat Gun 2 WeaponDef projects with RequiredTechIdx = [gat-2]",
+    $"gat-gun-2 required-tech wrong (idx [{string.Join(",", gatGun2.RequiredTechIdx)}], gat-2 idx {gat2Idx})"
+);
+
+// ER Nanite (Phase 5): the healing gun line projects IsHealing=true (weapon-ids 15/16/17), heals
+// (positive projectile power), is NOT a base weapon, and tier 2/3 gate on nanite-2/nanite-3. A normal
+// gun (Gat 1) projects IsHealing=false. This is the flag the sim heal branch + client green tint read.
+var nanite1 = stock.Weapons.First(w => w.WeaponId == 15);
+var nanite3 = stock.Weapons.First(w => w.WeaponId == 17);
+ushort nanite3Idx = stock.TechIndexById["nanite-3"];
+Check(
+    nanite1.IsHealing && !nanite1.CanDamageBase && nanite1.Damage > 0f
+        && nanite1.RequiredTechIdx.Length == 0 && nanite1.FireIntervalTicks == 10
+        && nanite3.IsHealing && nanite3.RequiredTechIdx.Length == 1 && nanite3.RequiredTechIdx[0] == nanite3Idx
+        && !stock.Weapons.First(w => w.WeaponId == 0).IsHealing,
+    "ER Nanite guns project IsHealing=true (15/16/17, positive heal power, tier-gated); Gat 1 stays IsHealing=false",
+    $"nanite projection wrong (n1 heal {nanite1.IsHealing} dmg {nanite1.Damage} base {nanite1.CanDamageBase} tick {nanite1.FireIntervalTicks}, n3 techIdx [{string.Join(",", nanite3.RequiredTechIdx)}])"
 );
 
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the

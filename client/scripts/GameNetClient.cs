@@ -1682,6 +1682,8 @@ public partial class GameNetClient : Node
                     ProbeModelSize = r.ReadSingle(),
                     // Tech-path lock state (v36; mirror of BuildDefs — streamed after ProbeModelSize).
                     RequiredTechIdx = ReadTechList(r),
+                    // Healing-gun flag (v40, ER Nanite line), read LAST (mirror of BuildDefs).
+                    IsHealing = r.ReadBoolean(),
                 }
             );
 
@@ -1721,6 +1723,8 @@ public partial class GameNetClient : Node
             b.ModelName = ReadStr(r);
             b.WinCondition = r.ReadBoolean();
             b.BuildRockClass = r.ReadByte();
+            // Station upgrades (v39; mirror of BuildDefs — appended after BuildRockClass).
+            b.SuccessorBaseTypeId = r.ReadInt16();
             bases.Add(b);
         }
 
@@ -1760,6 +1764,8 @@ public partial class GameNetClient : Node
                     ObsoletedByTechIdx = ReadTechList(r),
                     RequiredCaps = ReadCapList(r),
                     GrantedCaps = ReadCapList(r),
+                    UpgradeScope = r.ReadByte(), // v39; mirror of BuildDefs (0 all / 1 single)
+                    Attributes = ReadAttrList(r), // v41; mirror of BuildDefs (sorted by attr byte)
                 }
             );
         var stationCatalog = new List<StationCatalogDef>();
@@ -1783,10 +1789,15 @@ public partial class GameNetClient : Node
                     ObsoletedByTechIdx = ReadTechList(r),
                     RequiredCaps = ReadCapList(r),
                     GrantedCaps = ReadCapList(r),
+                    SuccessorBaseTypeId = r.ReadInt16(), // v39; mirror of BuildDefs (appended last)
                 }
             );
 
-        _defs.Load(ships, weapons, bases, cargoItems, cfg, techs, developments, stationCatalog);
+        // Faction identity + team-wide stat multipliers (v41; mirror of BuildDefs — appended LAST).
+        string factionName = ReadStr(r);
+        AttrMod[] factionAttrs = ReadAttrList(r);
+
+        _defs.Load(ships, weapons, bases, cargoItems, cfg, techs, developments, stationCatalog, factionName, factionAttrs);
         Log.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases, {techs.Count} techs, {developments.Count} developments, {stationCatalog.Count} stations");
         DefsReceived?.Invoke();
     }
@@ -1799,6 +1810,16 @@ public partial class GameNetClient : Node
         for (int i = 0; i < n; i++)
             idx[i] = r.ReadUInt16();
         return idx;
+    }
+
+    // A count-prefixed stat-multiplier list (u8 n, n x (u8 attr, f32 mult)) — mirror of WriteAttrList.
+    private static AttrMod[] ReadAttrList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var mods = new AttrMod[n];
+        for (int i = 0; i < n; i++)
+            mods[i] = new AttrMod(r.ReadByte(), r.ReadSingle());
+        return mods;
     }
 
     // A count-prefixed capability list (u8 n, n x u8) — mirror of Protocol.WriteCapList.

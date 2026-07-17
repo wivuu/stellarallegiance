@@ -1379,6 +1379,8 @@ public static class Protocol
             w.Write(wp.ProbeModelSize);
             // Tech-path lock state (v36), streamed after ProbeModelSize (append-only convention).
             WriteTechList(w, wp.RequiredTechIdx);
+            // Healing-gun flag (v40, ER Nanite line), streamed LAST (append-only). Reader mirrors.
+            w.Write(wp.IsHealing);
         }
 
         var cargoItems = content.CargoItems;
@@ -1411,6 +1413,8 @@ public static class Protocol
             WriteString(w, b.ModelName);
             w.Write(b.WinCondition);
             w.Write(b.BuildRockClass);
+            // Station upgrades (v39): the base-type this base upgrades into (-1 = none). Appended last.
+            w.Write(b.SuccessorBaseTypeId);
         }
 
         var cfg = content.World;
@@ -1450,6 +1454,10 @@ public static class Protocol
             WriteTechList(w, d.ObsoletedByTechIdx);
             WriteCapList(w, d.RequiredCaps);
             WriteCapList(w, d.GrantedCaps);
+            // Station-upgrade scope (v39): 0 all / 1 single. Appended after the cap lists.
+            w.Write(d.UpgradeScope);
+            // Team-wide stat multipliers (v41): u8 count + (u8 attr, f32 mult) pairs, sorted by attr.
+            WriteAttrList(w, d.Attributes);
         }
         var stations = content.StationCatalog;
         w.Write((ushort)stations.Count);
@@ -1470,10 +1478,31 @@ public static class Protocol
             WriteTechList(w, s.ObsoletedByTechIdx);
             WriteCapList(w, s.RequiredCaps);
             WriteCapList(w, s.GrantedCaps);
+            // Station upgrades (v39): the base-type this station upgrades into (-1 = none). Appended last.
+            w.Write(s.SuccessorBaseTypeId);
         }
+
+        // ---- Faction identity + team-wide stat multipliers (v41), appended LAST. ----
+        // The single faction's display name + GAS block. The name enables an "Iron Coalition" identity
+        // display; the attributes stream for client visibility (the SIM resolves its per-team TeamAttr
+        // cache from Content.Catalog directly, not this block). Sorted by attr byte for determinism.
+        var start = content.Start;
+        WriteString(w, start.FactionName);
+        WriteAttrList(w, start.BaseAttributes);
 
         w.Flush();
         return ms.ToArray();
+    }
+
+    // A count-prefixed stat-multiplier list: u8 n, then n x (u8 attr, f32 mult) — mirror in ApplyDefs.
+    private static void WriteAttrList(BinaryWriter w, StellarAllegiance.Shared.AttrMod[] mods)
+    {
+        w.Write((byte)mods.Length);
+        foreach (var m in mods)
+        {
+            w.Write(m.Attr);
+            w.Write(m.Mult);
+        }
     }
 
     // A count-prefixed tech-index list: u8 n, then n x u16 index into the streamed tech catalog.

@@ -520,7 +520,11 @@ public partial class ResearchTab : Control
         _detail.SetTitle(dev.Name.ToUpperInvariant());
         (string pillText, StatusPill.Kind pillKind, bool pulse) = PillFor(status);
         _detail.SetStatus(pillText, pillKind, pulse);
-        _detail.SetDescription(string.IsNullOrEmpty(dev.Description) ? "No briefing on file." : dev.Description);
+        // A single-scope station upgrade (v39) swaps the HOSTING base to its next tier — make that clear.
+        string desc = string.IsNullOrEmpty(dev.Description) ? "No briefing on file." : dev.Description;
+        if (dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle)
+            desc += "\n\n▲ Upgrades this base to its next tier.";
+        _detail.SetDescription(desc);
         _detail.SetMeta(TechDetailPanel.PriceText(dev.Price), TechDetailPanel.Mmss(dev.BuildTimeSeconds),
             string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle);
 
@@ -549,6 +553,11 @@ public partial class ResearchTab : Control
         foreach (ushort t in dev.GrantedTechIdx)
             names.Add(_defs!.GetTech(t)?.Name ?? $"TECH {t}");
 
+        // Team-wide stat multipliers this dev grants (v41), as readable signed-percent effect lines
+        // ("Gun damage +10%"). Slice devs carry none ⇒ dormant, but wired for a faction that authors them.
+        foreach (var m in dev.Attributes)
+            names.Add($"{AttrName(m.Attr)} {SignedPercent(m.Mult)}");
+
         bool Intersects(ushort[] req) => req.Any(G.Contains);
         // Other developments gated by a granted tech.
         foreach (DevelopmentDef d in _defs!.AllDevelopments())
@@ -566,6 +575,36 @@ public partial class ResearchTab : Control
 
         _detail.SetUnlocks(names); // dedupe + "// nothing new" fallback live in the panel
     }
+
+    // (mult - 1) as a signed percent: 1.10 -> "+10%", 0.85 -> "-15%". Rounds to the nearest whole percent.
+    private static string SignedPercent(float mult)
+    {
+        int pct = Mathf.RoundToInt((mult - 1f) * 100f);
+        return pct >= 0 ? $"+{pct}%" : $"{pct}%";
+    }
+
+    // Readable name for a GameAttribute wire byte (order mirrors the factions library GameAttribute enum,
+    // shared/AttrMod carries the byte). Only the attributes a dev can plausibly carry are named; anything
+    // else falls back to a generic label so a future faction never renders a blank line.
+    private static string AttrName(byte attr) => attr switch
+    {
+        0 => "Top speed",
+        1 => "Thrust",
+        2 => "Turn rate",
+        4 => "Station armor",
+        6 => "Station shield",
+        8 => "Ship armor",
+        9 => "Ship shield",
+        11 => "Scan range",
+        12 => "Signature",
+        13 => "Max energy",
+        17 => "Mining rate",
+        18 => "Mining yield",
+        19 => "Mining capacity",
+        21 => "Gun damage",
+        22 => "Missile damage",
+        _ => $"Attr {attr}",
+    };
 
     // ---- action footer state machine --------------------------------------
 
