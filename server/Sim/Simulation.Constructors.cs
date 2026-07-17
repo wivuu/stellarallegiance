@@ -310,6 +310,16 @@ public sealed partial class Simulation
         }
         if (!World.TeamStates.TryGetValue(team, out var ts))
             return;
+        // Rock-discovery gate: a constructor base is only orderable once this team's fog of war has
+        // revealed at least one asteroid of its build class (mask maintained in Simulation.Vision's
+        // DiscoverRockClass). Fog OFF bypasses (ResetVision also stamps the mask 0xFF then — belt
+        // and suspenders). Uniform over every buildable station: Regolith unlocks on the garrison's
+        // first vision apply, so in practice this bites only the rare-class tech bases.
+        if (FogEnabled && (ts.DiscoveredRockClasses & (byte)(1 << station.BuildRockClass)) == 0)
+        {
+            Notice($"No {RockClassName(station.BuildRockClass)} asteroid discovered — scout one first.");
+            return;
+        }
         if (!StationAvailableTo(ts, station))
         {
             Notice($"{station.Name} is locked for your team.");
@@ -477,6 +487,9 @@ public sealed partial class Simulation
                         ConstructorNoticesThisStep.Add((slot.Team, "Constructor's build site is gone — order it to another asteroid."));
                         slot.TargetRockId = 0;
                         slot.State = ConstructorState.Idle;
+                        // Idle holds HERE (see ConstructorExecute) — never a trek back to the garrison.
+                        slot.MoveSector = s.SectorId;
+                        slot.MovePos = s.State.Pos;
                         ConstructorChangedThisStep = true;
                         break;
                     }
@@ -689,15 +702,22 @@ public sealed partial class Simulation
         {
             case ConstructorState.Idle:
             {
-                // Hold near the launch garrison until ordered. Keep-station just outside it.
-                if (World.BaseById(slot.LaunchBaseId) is World.BaseSite gb)
+                // In the garrison's own sector: hold near the launch garrison until ordered.
+                if (World.BaseById(slot.LaunchBaseId) is World.BaseSite gb && gb.SectorId == s.SectorId)
                 {
                     avoidBaseId = gb.Id; // the station anchor — the stop shell already clears the hull
-                    if (CrossSector(gb.SectorId, out var xin))
-                        return xin;
                     return Approach(gb.Pos, World.BaseRadiusOf(gb.BaseTypeId) + 120f);
                 }
-                return default;
+                // Anywhere else (order cleared / build site lost mid-mission, or the garrison is
+                // gone): SIT IDLE where it is — never trek home across the map, which read as the
+                // drone abandoning its ordered sector and "turning back". Anchor once at the spot
+                // it went idle so it station-keeps instead of drifting.
+                if (slot.MoveSector != s.SectorId)
+                {
+                    slot.MoveSector = s.SectorId;
+                    slot.MovePos = myPos;
+                }
+                return Approach(slot.MovePos, World.ShipRadius + 6f);
             }
             case ConstructorState.ToRock:
             {
@@ -882,6 +902,13 @@ public sealed partial class Simulation
             slot.TargetRockId = 0;
             slot.MoveFromEntry = false;
             slot.State = ConstructorState.Idle;
+            // Idle holds HERE (see ConstructorExecute) — a released drone sits where it is
+            // instead of trekking back to its launch garrison.
+            if (slot.Ship is ShipSim live)
+            {
+                slot.MoveSector = live.SectorId;
+                slot.MovePos = live.State.Pos;
+            }
             ConstructorChangedThisStep = true;
         }
     }

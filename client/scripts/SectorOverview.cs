@@ -911,8 +911,8 @@ public partial class SectorOverview : Node3D
     }
 
     // Resolve a map click in the VIEWED sector. Minimap keeps precedence: a LEFT click on a
-    // minimap sector retargets the view (same as a left press); a RIGHT click on one with a
-    // command group selected orders the group to that sector instead.
+    // minimap sector retargets the view (same as a left press); a RIGHT click on one orders units
+    // to that sector — the selected command group if any, otherwise our own ship (autopilot + idle).
     //
     // LEFT click: SELECT whatever was hit (any entity — friendly, enemy, base, rock; an entity
     // hit also sets the Tab focus); a miss just DESELECTS — left click never drops waypoints
@@ -932,13 +932,15 @@ public partial class SectorOverview : Node3D
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
 
         // Minimap precedence (covers the right-click path; left already gated on press).
-        // LEFT click on a sector node views it; RIGHT click with a selection sends it there:
+        // LEFT click on a sector node views it; RIGHT click sends units there:
         //   - teammates get a SECTOR order (targetKind 4): combat drones go through the aleph and
         //     hold just inside (never a run at the sector center), miners prospect-patrol the sector
         //     until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
         //     server-side (wherever the unit enters), so any client-drawn diamond would lie.
         //   - our own ship gets the autopilot analog (OrderOwnShipToSector): a cross-sector nav
-        //     waypoint that multi-hops the gates there and warps through.
+        //     waypoint that multi-hops the gates there and warps through, then idles on arrival.
+        //     This is the path taken with NOTHING selected — the common "send me over there" case —
+        //     so a right-click on a sector commands the ship rather than just changing the view.
         _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
         if (_minimap != null && _minimap.TryClickSector(point, out uint mapSector))
         {
@@ -960,9 +962,20 @@ public partial class SectorOverview : Node3D
                         OrderOwnShipToSector(mapSector);
                     return;
                 }
+                // Nothing selected but LAUNCHED: a right-click sends our OWN ship to autopilot to that
+                // sector and idle on arrival (OrderOwnShipToSector's kind-3 cross-sector waypoint at the
+                // sector centre). It deliberately does NOT retarget the F3 view — viewing a sector is the
+                // LEFT-click gesture (TryMinimapClick on press). Pre-launch / spectating (no own ship)
+                // falls through to SwitchView so the map is still explorable by right-click.
+                if (ownId != 0)
+                {
+                    OrderOwnShipToSector(mapSector);
+                    return;
+                }
             }
-            // A non-engage minimap click only retargets the F3 view; in cursor-free flight the map
-            // isn't open, so a left-click there does nothing (orders go through the engage path above).
+            // A LEFT (non-engage) minimap click, or a RIGHT click while not launched, only retargets the
+            // F3 view; in cursor-free flight the map isn't open, so a left-click there does nothing
+            // (orders go through the engage path above).
             if (Active)
                 SwitchView(mapSector);
             return;

@@ -1150,6 +1150,9 @@ public static class Protocol
             w.Write((byte)caps.Count);
             foreach (byte c in caps)
                 w.Write(c);
+            // RockClass bitmask of asteroid classes this team's fog has revealed (v42) — lets the
+            // Build tab predict the rock-discovery construction gate. 0xFF when fog is off.
+            w.Write(kv.Value.DiscoveredRockClasses);
         }
         w.Flush();
         return ms.ToArray();

@@ -156,6 +156,13 @@ public sealed class World
         // rock selection only — a miner freely TRANSITS any sector en route (returning to base is
         // always allowed).
         public HashSet<uint> AuthorizedMiningSectors = new();
+
+        // RockClass bitmask (1 << (byte)RockClass) of asteroid classes this team's fog of war has
+        // revealed at least one rock of. Derived from TeamVision.DiscoveredRocks (monotonic, like the
+        // set itself) at its sim-thread write sites; fog OFF stamps 0xFF at ResetVision. Gates
+        // constructor purchases (TryBuyConstructor) and streams via MsgTeamState so the client Build
+        // tab can predict the lock.
+        public byte DiscoveredRockClasses;
     }
 
     // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot
@@ -574,8 +581,10 @@ public sealed class World
                 isHe3[order[k]] = true;
 
             // RARE special rocks: the next `specialCount` ranked rocks (immediately after the He3
-            // block, so He3 and special never collide) become cosmetic special classes. Clamped to the
-            // rocks left after He3, so a small sector never over-allocates. Everything else is common.
+            // block, so He3 and special never collide) become special classes (Carbonaceous/Silicon/
+            // Uranium — no longer cosmetic: rock-class-gated stations like the Supremacy build on
+            // them). Clamped to the rocks left after He3, so a small sector never over-allocates.
+            // Everything else is common.
             // A HOME (garrison) sector only gets its specials when the per-sector chance roll passes
             // (stock home-special-chance is 0 — home fields hold no landmark rock); a map-authored
             // special-count bypasses the roll entirely.

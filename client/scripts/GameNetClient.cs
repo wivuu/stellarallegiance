@@ -1240,7 +1240,9 @@ public partial class GameNetClient : Node
             var ownedCaps = new byte[nCaps];
             for (int j = 0; j < nCaps; j++)
                 ownedCaps[j] = r.ReadByte();
-            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps);
+            // Discovered-rock-class bitmask (v42) — the rock-gated construction lock predictor.
+            byte rockClasses = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps, rockClasses);
         }
     }
 

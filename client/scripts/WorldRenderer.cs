@@ -13,11 +13,24 @@ public partial class WorldRenderer : Node3D
     // DefaultBaseTypeId); the BaseDef supplies radius/health/hardpoints.
     private const byte DefaultBaseTypeId = 0;
 
-    // BaseMaxHealth mirrors the module's win-condition hull (Lib.cs BaseMaxHealth) so the
-    // damage bar can show a 0..1 fraction; keep the two in sync. The bar itself is a
-    // screen-space overlay drawn by TargetMarkers (see VisibleBaseHealth) so it never clips
-    // behind the base geometry.
-    private const float BaseMaxHealth = 2000f;
+    // Fallback full hull used only until a base's own BaseDef has streamed in — the real max
+    // is resolved PER TYPE by BaseMaxHealthOf (garrison 2000, outpost 667, supremacy/shipyard
+    // 1333, …). Dividing every base by this single value made a full-health built outpost read
+    // at ~1/3 of its bar. The bar itself is a screen-space overlay drawn by TargetMarkers (see
+    // VisibleBaseHealth) so it never clips behind the base geometry.
+    private const float BaseMaxHealthFallback = 2000f;
+
+    // The authored full hull for a base, resolved from its OWN per-type BaseDef so the damage
+    // bar reads a correct 0..1 fraction regardless of station tier. Falls back to the garrison-
+    // tier constant until the def has streamed (and if a type is somehow unknown). Note: server
+    // max can additionally scale by a per-team armor attribute; the def value matches the common
+    // (attribute-off) case, and a >1 factor merely clamps to full — never under-reads.
+    private float BaseMaxHealthOf(ulong baseId)
+    {
+        byte typeId = _baseType.TryGetValue(baseId, out byte t) ? t : DefaultBaseTypeId;
+        float max = _defs.GetBaseDef(typeId)?.MaxHealth ?? 0f;
+        return max > 0f ? max : BaseMaxHealthFallback;
+    }
 
     // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is
     // a voluntary dock or a pod rescue — it despawns silently instead of playing the death blast.
@@ -794,9 +807,10 @@ public partial class WorldRenderer : Node3D
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null)
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF)
     {
         _teamEconomy[team] = (credits, score);
+        _teamRockClasses[team] = discoveredRockClasses;
         if (!_teamUnlocks.TryGetValue(team, out var set))
             _teamUnlocks[team] = set = new HashSet<byte>();
         set.Clear();
@@ -821,6 +835,16 @@ public partial class WorldRenderer : Node3D
 
     private readonly Dictionary<byte, HashSet<ushort>> _teamOwnedTechs = new();
     private readonly Dictionary<byte, HashSet<byte>> _teamOwnedCaps = new();
+
+    // Discovered-rock-class bitmask per team (MsgTeamState tail, v42). Gates constructor-base cards
+    // in the Build tab exactly like the server's TryBuyConstructor rock gate.
+    private readonly Dictionary<byte, byte> _teamRockClasses = new();
+
+    // True once the team's fog has revealed at least one asteroid of `rockClass`. Defers to the
+    // server while no team state has arrived yet (only block on positive knowledge — the server
+    // gate is authoritative either way).
+    public bool TeamRockClassDiscovered(byte team, byte rockClass) =>
+        !_teamRockClasses.TryGetValue(team, out var mask) || (mask & (1 << rockClass)) != 0;
 
     public bool TeamOwnsTech(byte team, ushort techIdx) =>
         _teamOwnedTechs.TryGetValue(team, out var s) && s.Contains(techIdx);
@@ -1199,7 +1223,7 @@ public partial class WorldRenderer : Node3D
     // this records the 0..1 fraction TargetMarkers reads for the screen-space damage bar.
     public void NetUpdateBaseHealth(ulong baseId, float health)
     {
-        float frac = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
+        float frac = Mathf.Clamp(health / BaseMaxHealthOf(baseId), 0f, 1f);
         // Detect the alive→destroyed transition so the 3D silhouette is dimmed exactly once. A base's
         // last-known health only ever falls (a re-scout of a killed base shows it destroyed), so this
         // never needs to un-dim.

@@ -26,12 +26,12 @@ public static class Wire
     // v34: commander — MsgOrder=12 (client->server: u64 subjectShipId, u8 targetKind, u64 targetId,
     // u32 sector, 3x f32 pos); MsgChatRelay scope 2 = commander order directive (gold on the client);
     // MsgLobbyState tail appends i32 commander0 + i32 commander1 after selectedMap.
-    // v35: MsgMinefields=13 frame gains a u16 anchor-sector header BEFORE the u8 count
+    // MsgMinefields=13 frame gains a u16 anchor-sector header BEFORE the u8 count
     // ([13][u16 anchorSector][u8 count] + count x 41-B records). Per-record sector is unchanged. The
     // header lets the client prune stale fields even from an empty (count==0) frame, and the server now
     // also emits a frame whenever a client's anchor sector changes (warp) so mines never leak across
     // sectors. See server/Net/ClientHub.BuildMinefieldsFor + client GameNetClient.ApplyMinefields.
-    // v36: tech paths — MsgSpawn gains u64 launchBaseId after cls (0 = server default base);
+    // tech paths — MsgSpawn gains u64 launchBaseId after cls (0 = server default base);
     // MsgDefs appends the tech catalog (u16-counted techs/developments/station-catalog) after the
     // world config, plus BaseDef +u8 researchSlots (after hardpoints) and WeaponDef +TechList
     // requiredTechs (after probeModelSize); MsgTeamState appends per-team owned tech indices +
@@ -39,7 +39,7 @@ public static class Wire
     // research op: u8 op, u64 baseId, u16 devIndex) + NEW MsgResearchState=24 (server->client
     // per-team per-base research orders, startTick+duration encoded). TechList = u8 n x u16 index
     // into the streamed tech catalog. See Protocol.BuildDefs/BuildTeamState/BuildResearchStateFor.
-    // v37: base building — BaseDef appends str ModelName + u8 winCondition + u8 buildRockClass (after
+    // base building — BaseDef appends str ModelName + u8 winCondition + u8 buildRockClass (after
     // researchSlots); StationCatalog appends u8 buildRockClass (after researchSlots); WriteBaseStatic
     // appends u8 baseTypeId and streams the per-type radius (was the World.BaseRadius constant);
     // NEW MsgBuildConstructor=14 (client->server commander: u8 stationTypeId, u64 launchBaseId) +
@@ -56,7 +56,7 @@ public static class Wire
     // a finished constructor base CONSUMES its asteroid — NEW MsgRockGone=27 (server->client
     // broadcast: u8 count, count x u64 rockId) tells clients to delete the despawned rock (node +
     // collision) so nothing remains under the new base. See World.RemoveRock / Protocol.BuildRockGone.
-    // v38: constructor build-sequence rework — StationCatalog record appends i32 alignTimeSeconds
+    // constructor build-sequence rework — StationCatalog record appends i32 alignTimeSeconds
     // (after buildRockClass): the per-station constructor align dwell (stations.yaml
     // align-time-seconds). MsgConstructorState `state` bytes renumbered: a new Approaching=5 state
     // (standoff -> surface-contact creep) shifts Sinking to 6 and Building to 7; Sinking/Approaching
@@ -72,10 +72,14 @@ public static class Wire
     // nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids in hardpoint declaration order,
     // reconcile-by-omission). Guns moved to per-mount cadence; the ship record is UNCHANGED —
     // which mounts fired at LastFireTick is derived client-side via the shared FireCadence rule.
-    // v39 (2026-07-16, tech-tree Phase 4): station upgrades + Devastator. BaseDef/StationCatalogDef
+    // (2026-07-16, tech-tree Phase 4): station upgrades + Devastator. BaseDef/StationCatalogDef
     // append SuccessorBaseTypeId (i16, -1 = none); DevelopmentDef appends UpgradeScope (u8, 0 all /
     // 1 single). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs mirror the new fields.
-    public const byte ProtocolVersion = 41;
+    // (2026-07-17) rock-discovery construction gate: MsgTeamState appends u8 discoveredRockClasses
+    // per team (bitmask 1 << RockClass of asteroid classes the team's fog has revealed; 0xFF when
+    // fog is off) after the capability list — the Build tab's predictor for the new TryBuyConstructor
+    // rock gate. Writer Protocol.BuildTeamState ↔ reader GameNetClient.ApplyTeamState.
+    public const byte ProtocolVersion = 34;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -320,6 +320,12 @@ public partial class BuildTab : Control
             && s.RequiredCaps.All(c => _world.TeamOwnsCap(team, c));
     }
 
+    // Rock-discovery gate predictor: a constructor base stays locked until the team's fog of war has
+    // revealed at least one asteroid of its build class (mirrors the server's TryBuyConstructor gate
+    // via the MsgTeamState discoveredRockClasses mask). Defers to the server pre-team-state.
+    private bool RockDiscovered(StationCatalogDef s) =>
+        _world != null && (s.BuildRockClass == 255 || _world.TeamRockClassDiscovered(Team, s.BuildRockClass));
+
     // ---- grid --------------------------------------------------------------
 
     private void RebuildGrid(List<StationCatalogDef> catalog)
@@ -335,7 +341,7 @@ public partial class BuildTab : Control
             card.Configure(
                 GlyphFor(s.StationClass), s.Name.ToUpperInvariant(), ClassName(s.StationClass),
                 s.Description, TechDetailPanel.PriceText(s.Price), TechDetailPanel.Mmss(s.BuildTimeSeconds),
-                IsAvailable(s), _selectedId == id);
+                IsAvailable(s) && RockDiscovered(s), _selectedId == id);
             card.Pressed += () => SelectStation(id);
             _grid.AddChild(card);
             _cards.Add((id, card));
@@ -376,23 +382,24 @@ public partial class BuildTab : Control
         }
 
         bool available = IsAvailable(sel);
+        bool rockOk = RockDiscovered(sel);
         _detail.SetSchematic(GlyphFor(sel.StationClass), "// STRUCTURE");
         _detail.SetTitle(sel.Name.ToUpperInvariant());
-        _detail.SetStatus(available ? "◈ AVAILABLE" : "⊘ LOCKED",
-            available ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral);
+        _detail.SetStatus(available && rockOk ? "◈ AVAILABLE" : "⊘ LOCKED",
+            available && rockOk ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral);
         _detail.SetDescription(string.IsNullOrEmpty(sel.Description) ? "No briefing on file." : sel.Description);
         _detail.SetMeta(TechDetailPanel.PriceText(sel.Price), TechDetailPanel.Mmss(sel.BuildTimeSeconds),
             string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle);
 
         BuildPrereqs(sel);
         BuildUnlocks(sel);
-        UpdateFooter(sel, available);
+        UpdateFooter(sel, available, rockOk);
     }
 
     // The action footer. A constructible structure that's available lets a COMMANDER buy a constructor
     // (which then F3-orders to a compatible asteroid); non-commanders get a disabled affordance; locked
     // structures show why; placeholder types (BaseTypeId -1) stay "offline" until authored.
-    private void UpdateFooter(StationCatalogDef sel, bool available)
+    private void UpdateFooter(StationCatalogDef sel, bool available, bool rockOk)
     {
         if (!IsConstructible(sel))
         {
@@ -404,6 +411,13 @@ public partial class BuildTab : Control
         {
             _detail.SetFooter(true, "⊘ LOCKED", ButtonVariant.Secondary, null,
                 "Research or build the prerequisites to unlock this structure.");
+            return;
+        }
+        if (!rockOk)
+        {
+            string cls = RockClassName(sel.BuildRockClass);
+            _detail.SetFooter(true, $"⊘ NO {cls.ToUpperInvariant()} ASTEROID DISCOVERED", ButtonVariant.Secondary, null,
+                $"Scout a {cls} asteroid to unlock this structure.");
             return;
         }
         bool commander = _net?.IsCommander ?? false;
@@ -430,7 +444,7 @@ public partial class BuildTab : Control
         if (_net is null || _selectedId is null)
             return;
         StationCatalogDef? sel = Catalog().FirstOrDefault(s => s.Id == _selectedId);
-        if (sel is null || !IsConstructible(sel) || !IsAvailable(sel) || !_net.IsCommander)
+        if (sel is null || !IsConstructible(sel) || !IsAvailable(sel) || !RockDiscovered(sel) || !_net.IsCommander)
             return;
         _net.SendBuildConstructor((byte)sel.BaseTypeId, _baseId);
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);

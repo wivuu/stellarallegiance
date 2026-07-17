@@ -511,7 +511,10 @@ public partial class ShipController : Node
         // ShipInput so the server integrates the same boost the client predicted (no
         // reconcile storm), and still drives the engine glow. Autofly pins it on so
         // headless runs exercise the boost + exhaust path.
-        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
+        // Gate on a captured cursor too: freeing the mouse (Esc → command mode, or the escape
+        // menu) means the pilot isn't flying, so a held Shift shouldn't keep the burner lit.
+        bool boost = _autoFly || (Input.MouseMode == Input.MouseModeEnum.Captured
+            && !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
         _input.Boost = boost;
         // While the server flies us the boost decision is the server's; PredictionController drives the
         // plume from the authoritative AbPower instead (feeding the local key here would fight it).

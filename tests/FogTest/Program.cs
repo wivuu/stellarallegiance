@@ -1015,15 +1015,39 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     // Park the scout on the aleph so Pass A's TryWarp fires this step, then verify the arrival rock
     // was scouted synchronously (streamed via the reveal log the same tick).
+    // A test-seam rock is unknown to RockOre, so RockClassOf defaults it to Carbonaceous — no seeded
+    // rock in this unmapped world carries that class, making it a clean marker for the mask fold.
+    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) == 0,
+        "the marker rock class is undiscovered before the warp (pre-condition)", "carbonaceous bit already set before warping");
     Park(scout, g.SectorId, g.Pos);
     sim.Step();
     Check(scout.SectorId == g.DestSectorId, "the scout warped to the destination sector (pre-condition)", "the scout did not warp");
     Check(Vision(sim, 0).RevealLogRocks.Contains(exitRock.Id), "warping scouts the arrival-point rocks the SAME tick (reveal log) (F8)", "the arrival rock was not revealed on warp");
+    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) != 0,
+        "warp discovery folds the rock's class into TeamState.DiscoveredRockClasses the SAME tick (F8)",
+        $"warp did not set the class mask bit (mask {sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
 
     // Hold at the exit a couple of vision boundaries: the warp-staged rock is merged into the
     // persistent DiscoveredRocks (so a late joiner's Welcome and fog memory carry it).
     Run(sim, () => Park(scout, g.DestSectorId, g.PartnerPos), Settle);
     Check(Vision(sim, 0).DiscoveredRocks.Contains(exitRock.Id), "the warp-revealed rock persists into DiscoveredRocks (F8)", "the warp-revealed rock was never persisted");
+}
+
+// ================================================================================================
+// 14b. DiscoveredRockClasses lifecycle: home vision seeds the mask by the first boundaries, and a
+//      match reset clears it back to 0 under fog (the new match's teams re-scout from scratch).
+// ================================================================================================
+{
+    var sim = BootSim(88);
+    Run(sim, () => { }, Settle);
+    Check(sim.World.TeamStates[0].DiscoveredRockClasses != 0,
+        "garrison vision seeds the discovered-rock-class mask within the first boundaries",
+        "class mask still 0 after settling — vision apply never folded a rock class");
+    sim.ReturnToLobby(); // match reset path — ResetVision clears fog memory including the class mask
+    sim.StartMatch();    // (StartMatch alone no-ops while Active; the lobby round-trip is the real cycle)
+    Check(sim.World.TeamStates[0].DiscoveredRockClasses == 0,
+        "a match reset clears DiscoveredRockClasses under fog",
+        $"class mask survived the match reset ({sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
 }
 
 // ================================================================================================

@@ -54,8 +54,8 @@ stations:
   # Outpost (Hvy) — the first constructor-built forward base. base-type-id makes it a RUNTIME base
   # (projected to a BaseDef, streamed, spawnable); model-name binds ss90.glb (server collision +
   # client mesh). build-on-rock-class gates which asteroid a constructor may raise it on (Regolith =
-  # the common class, so expansion is always possible). NO `start` ability => not a win-condition
-  # base (destroying it doesn't end the match). Grants expansion-allowed on completion.
+  # the common class, so an outpost is always possible). NO `start` ability => not a win-condition
+  # base (destroying it doesn't end the match).
   - id: outpost
     name: Outpost (Hvy)
     base-type-id: 1
@@ -72,14 +72,14 @@ stations:
     build-time-seconds: 45    # how long the build sphere runs once the drone is embedded
     build-on-rock-class: regolith
     abilities: [land, repair, capture]
-    required-capabilities: [base]         # buildable from match start (the expansion entry point)
-    granted-capabilities: [expansion-allowed]  # raising one opens the rest of the expansion tree
+    required-capabilities: [base]         # buildable from match start
 
   # Supremacy Center — constructor-built research/ordnance base (IGC ss21a). Grants the supremacy-1
   # tech on completion (station-completion tech grant, Simulation.Constructors.GrantStationUnlocks),
   # which unlocks the Gat/AutoCan tier-2 developments + the Enhanced Fighter hull. Two research slots
-  # (resolved per-type in SlotsFor). NOT a win-condition base (no start/restart). Requires the
-  # expansion-allowed capability (raise an Outpost first).
+  # (resolved per-type in SlotsFor). NOT a win-condition base (no start/restart). Independent of the
+  # Outpost (matching IGC, where the tech bases are parallel paths); the real gate is finding a
+  # Carbonaceous asteroid — the buy stays locked until the team's fog of war reveals one.
   - id: supremacy
     name: Supremacy Center
     base-type-id: 2
@@ -94,10 +94,10 @@ stations:
     income: 0
     align-time-seconds: 5
     build-time-seconds: 50
-    build-on-rock-class: regolith   # special-rock fidelity deferred (plan Phase 3)
+    build-on-rock-class: carbonaceous   # tech bases claim a RARE special rock (seeded ~1/sector, hash-rolled class)
     research-slots: 2
     abilities: [land, repair, capture]
-    required-capabilities: [expansion-allowed]
+    required-capabilities: [base]
     granted-techs: [supremacy-1]
     successor-station-id: supremacy-adv   # dev-upgrade-supremacy swaps this base to Adv Supremacy
 
@@ -120,7 +120,7 @@ stations:
 
   # Shipyard — constructor-built forward hull yard (IGC acs05). Grants shipyard-1 on completion.
   # Runtime base as of Phase 3 (was catalog-only). No research slots (authored 0 => resolves to 1 at
-  # projection). Requires expansion-allowed.
+  # projection). Independent of the Outpost (matching IGC).
   - id: shipyard
     name: Shipyard
     base-type-id: 3
@@ -138,7 +138,7 @@ stations:
     build-on-rock-class: regolith
     research-slots: 0    # projection min-clamps to 1 slot; shipyard runs no research tree of its own
     abilities: [land, repair, capture]
-    required-capabilities: [expansion-allowed]
+    required-capabilities: [base]
     granted-techs: [shipyard-1]
     successor-station-id: shipyard-dry   # dev-upgrade-heavy-class swaps this base to Shipyard (Dry)
 

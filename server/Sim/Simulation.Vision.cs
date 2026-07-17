@@ -386,6 +386,14 @@ public sealed partial class Simulation
         }
         _warpRevealPending.Clear();
 
+        // Rock-class discovery mask resets with the rest of the fog memory: fog ON starts with
+        // nothing discovered; fog OFF stamps every class discovered (all rocks broadcast — the
+        // rock-gated buy must never block without fog). Belt-and-suspenders with the FogEnabled
+        // bypass in TryBuyConstructor.
+        foreach (var ts in World.TeamStates.Values)
+            ts.DiscoveredRockClasses = FogEnabled ? (byte)0 : (byte)0xFF;
+        TeamStateChangedThisStep = true;
+
         for (int i = 0; i < World.Bases.Count; i++)
         {
             var b = World.Bases[i];
@@ -1061,7 +1069,10 @@ public sealed partial class Simulation
                         tv.RevealLogBases.Add(id);
                 foreach (var id in r.NewRocks)
                     if (tv.DiscoveredRocks.Add(id))
+                    {
                         tv.RevealLogRocks.Add(id);
+                        DiscoverRockClass(team, id);
+                    }
                 foreach (var id in r.NewAlephs)
                     if (tv.DiscoveredAlephs.Add(id))
                     {
@@ -1268,9 +1279,28 @@ public sealed partial class Simulation
                                 continue;
                             tv.RevealLogRocks.Add(rk.Id); // stream immediately via each client's cursor
                             pending.Add(rk.Id);
+                            // Fold the class mask NOW (not at the deferred MergeWarpDiscoveries):
+                            // the worker never reads TeamState, so this is safe from the sim thread,
+                            // and it keeps the Build tab in lockstep with the rock the client just saw.
+                            DiscoverRockClass(s.Team, rk.Id);
                         }
                     }
         }
+    }
+
+    // Fold a just-discovered rock's class into the team's DiscoveredRockClasses mask (World.TeamState —
+    // streamed via MsgTeamState so the client Build tab can predict rock-gated construction locks).
+    // Sim thread only (RockClassOf reads the sim-thread RockOre cache); safe from both the boundary
+    // apply and the warp path because the vision worker never reads TeamState.
+    private void DiscoverRockClass(byte team, ulong rockId)
+    {
+        if (!World.TeamStates.TryGetValue(team, out var ts))
+            return;
+        byte bit = (byte)(1 << (byte)World.RockClassOf(rockId));
+        if ((ts.DiscoveredRockClasses & bit) != 0)
+            return;
+        ts.DiscoveredRockClasses |= bit;
+        TeamStateChangedThisStep = true;
     }
 
     // Merge warp-discovered rocks into the persistent DiscoveredRocks set. Called at the vision boundary

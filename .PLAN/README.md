@@ -20,12 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Constructor should sit idle if ordered to a sector and no further orders are given; currently it turns back
-- New bases/outpost spawns with half health
-- Tech tree
-  - Why does supremacy center require expansion complex?
-  - Only allow a research base like supremacy / expansion / tactical once a suitable rock is discovered
-  - Supremacy center currently wants to build on regolith rocks - but only Carbonaceous should be allowed - this needs to be configurable per base-type
 ---
 
 ## Content philosophy (the through-line)

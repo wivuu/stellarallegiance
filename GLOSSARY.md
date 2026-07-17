@@ -149,6 +149,29 @@ win-condition bases die, so a destroyed outpost never ends the match.
 - **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab (Construction Placeholder)]]
 - **Notes:** Outpost collision = convex hull from Outpost.glb (no COL_ parts, no dock faces → no docking yet). The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price. **All beats are YAML (v38)**: per-station `align-time-seconds` + `build-time-seconds` (stations.yaml, streamed on the catalog), drone-wide creep speeds / standoff / embed depth / production dwell under world.yaml `constructor:` (server-only, mirrors `mining:`). Gotcha: `AutoSteer.ApproachPoint` is bang-bang (thrust 0/1) — the slow legs instead COMMAND a speed (throttle = speed/hull-max via `SteerToPoint`, the `Creep` helper), so tuning a hull's max-speed is NOT how you pace the approach.
 
+### Rock-Discovery Construction Gate (DiscoveredRockClasses)
+A constructor station is only buyable once the team's fog of war has **revealed at least one asteroid
+of its `build-on-rock-class`** — the Supremacy Center (Carbonaceous, a rare hash-rolled special
+seeded only in NON-home sectors) must literally be scouted before it unlocks; common Regolith unlocks
+on the garrison's first vision apply so outpost/shipyard never notice the gate. State is a per-team
+byte bitmask `World.TeamState.DiscoveredRockClasses` (`1 << (byte)RockClass`), **monotonic like
+`TeamVision.DiscoveredRocks`** and folded at exactly that set's sim-thread write sites
+(`Simulation.Vision.DiscoverRockClass`: boundary apply, warp-time discovery, `ResetVision` clear).
+**Fog OFF stamps `0xFF`** at match (re)start AND the server gate short-circuits on `!FogEnabled` —
+without fog there is no gate. Server-enforced in `TryBuyConstructor` (before the caps/tech
+`StationAvailableTo` check, one seam covering the Build tab + `/build` chat); streamed as a trailing
+`u8` on `MsgTeamState` so the client Build tab predicts the lock (card greyed, footer
+"NO {CLASS} ASTEROID DISCOVERED"). The tech bases are otherwise **independent of the Outpost** —
+the placeholder-era `expansion-allowed` chain was removed (IGC-faithful: rock + credits are the gate).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Vision.cs` — `DiscoverRockClass` + the three write sites; `server/Sim/World.cs` — `TeamState.DiscoveredRockClasses`
+  - `server/Sim/Simulation.Constructors.cs` — the `TryBuyConstructor` gate; `server/Net/Protocol.cs` — `BuildTeamState` tail
+  - `client/scripts/WorldRenderer.cs` — `TeamRockClassDiscovered` (defers-to-server pre-team-state); `client/scripts/ui/BuildTab.cs` — `RockDiscovered` card/footer/buy-guard
+  - `tests/ConstructorTest` scenarios 6/7, `tests/FogTest` 14/14b
+- **Related:** [[Constructor (AI base-builder drone) & per-type Bases]], [[Fog of War (Team Vision)]], [[Rock Class / Ore (Mining)]]
+- **Notes:** A given map/seed may hold NO Carbonaceous rock (stock: 1 special per non-home sector, class = per-rock hash % 3) — then the Supremacy stays locked all match by design; map authors tune supply via `special-count`/`special-per-sector`. Mask is monotonic: building on the only discovered Carbonaceous rock does NOT re-lock the card (a second constructor just finds no valid target, same as any no-rock case). Test gotcha: an unmapped test world (no `MapLoader.ApplyTo`) has ONLY home sectors ⇒ zero specials ⇒ no Carbonaceous anywhere — use ConstructorTest's `NewMappedSim`.
+
 ---
 
 ## Weapons & Combat
