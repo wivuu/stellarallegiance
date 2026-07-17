@@ -603,6 +603,10 @@ public sealed class World
             for (int k = he3Count; k < he3Count + specialCount; k++)
                 isSpecial[order[k]] = true;
 
+            // Which special CLASS a selected rock becomes is drawn from the sector's weights (its own
+            // override else the world seeding default). Uniform weights reproduce the legacy hash%3.
+            var specialWeights = sc?.SpecialWeights ?? _seed.SpecialWeights;
+
             float richness = sc?.OreRichnessMult ?? 1f;
             // Capacity band this sector clamps to, resolved sector → map → world. MapLoader.ApplyTo
             // already folds any map-level ore-capacity-min/max into each sector's config (a sector's
@@ -631,10 +635,10 @@ public sealed class World
                 else
                 {
                     // Non-He3 rocks carry no ore hold — capacity 0, never shrinks. A selected special
-                    // rock gets one of the three special classes by the same hash (0=Carbonaceous,
-                    // 1=Silicon, 2=Uranium); every other rock is common Regolith.
+                    // rock gets one of the three special classes by the weighted draw over the same
+                    // per-rock hash (default uniform = legacy hash%3); every other rock is Regolith.
                     RockClass cls = isSpecial[i]
-                        ? (RockClass)(byte)(hash[i] % 3)
+                        ? specialWeights.Pick(hash[i])
                         : RockClass.Regolith;
 
                     // Special (rare) rocks are landmark-sized: scale the spawn radius (collision + visual)

@@ -668,6 +668,37 @@
           ],
           "description": "Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll."
         },
+        "special-weights": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "carbonaceous": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Carbonaceous class (default 0 when the block is authored but this key omitted)."
+            },
+            "silicon": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Silicon class."
+            },
+            "uranium": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Uranium class."
+            }
+          },
+          "description": "Default relative weights for which special CLASS (carbonaceous/silicon/uranium) each special rock becomes; omitted \u2192 uniform. A map may override per sector. See SpecialWeightsDef.",
+          "additionalProperties": false
+        },
         "special-rock-radius-mult": {
           "type": [
             "number",

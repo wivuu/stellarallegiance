@@ -147,6 +147,11 @@ seeding:
   he3-per-home-sector: 2     # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
   special-per-sector: 1      # RARE special rocks per sector; everything else is common Regolith
   home-special-chance: 0.0   # chance a HOME sector gets its specials at all (0 = never; per-seed roll)
+  # special-weights: which CLASS each special rock becomes (relative shares, not probabilities — a 0
+  # excludes that class, at least one must be > 0). Omitted → uniform thirds (the default below). A
+  # map may override this PER SECTOR (sectors[].special-weights) to guarantee/bias a class — e.g.
+  # carbonaceous:1 silicon:0 uranium:0 forces Carbonaceous (the class the Supremacy Center builds on).
+  # special-weights: { carbonaceous: 1, silicon: 1, uranium: 1 }
   special-rock-radius-mult: 3 # landmark sizing for the rare specials (1 = no change)
 
 # Mining + ore economy: how the AI miner economy is tuned and how much ore a He3 rock holds (which

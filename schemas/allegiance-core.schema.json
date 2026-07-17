@@ -595,6 +595,10 @@
             "type": "boolean",
             "description": "True if this weapon\u0027s shots/warheads apply damage to bases (station siege ordnance)."
           },
+          "is-healing": {
+            "type": "boolean",
+            "description": "True if this weapon\u0027s shots HEAL rather than damage: a bolt striking a same-team ship restores hull (clamped to max, shields untouched); an enemy hit does nothing. The ER Nanite gun line. Mutually exclusive with CanDamageBase (a healing shot never sieges a base)."
+          },
           "mass": {
             "type": "number",
             "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
@@ -1870,6 +1874,13 @@
           "tech-only": {
             "type": "boolean",
             "description": "When true this development exists only to grant techs (no lasting effect of its own), so it becomes obsolete once its GrantedTechs are already owned. Mirrors the C\u002B\u002B tech-only / IsObsolete behaviour (developmentigc.h:110)."
+          },
+          "upgrade-scope": {
+            "enum": [
+              "all",
+              "single"
+            ],
+            "description": "For a development whose granted techs unlock a station\u0027s successor tier (a \u0022station upgrade\u0022), which of the team\u0027s matching bases physically upgrade on completion. Serialized kebab-case as upgrade-scope (all | single); defaults to All. A development that triggers no station upgrade ignores this field."
           },
           "id": {
             "type": "string",

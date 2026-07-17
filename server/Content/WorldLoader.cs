@@ -399,8 +399,30 @@ public sealed class WorldSeedingDef
     /// <summary>Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll.</summary>
     public double? HomeSpecialChance { get; set; }
 
+    /// <summary>Default relative weights for which special CLASS (carbonaceous/silicon/uranium) each special rock becomes; omitted → uniform. A map may override per sector. See <c>SpecialWeightsDef</c>.</summary>
+    public SpecialWeightsDef? SpecialWeights { get; set; }
+
     /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
     public double? SpecialRockRadiusMult { get; set; }
+}
+
+/// <summary>
+/// Relative weights for which special CLASS a seeded special rock becomes. Authored as a small map of
+/// class name → non-negative share, e.g. <c>{ carbonaceous: 0.5, silicon: 0.25, uranium: 0.25 }</c>.
+/// An omitted class defaults to 0 (excluded); at least one share must be positive. Shared by the
+/// world seeding default (<c>seeding.special-weights</c>) and the per-sector map override
+/// (<c>sectors[].special-weights</c>). Projected + validated by <c>ParseSpecialWeights</c>.
+/// </summary>
+public sealed class SpecialWeightsDef
+{
+    /// <summary>Relative share for the Carbonaceous class (default 0 when the block is authored but this key omitted).</summary>
+    public double? Carbonaceous { get; set; }
+
+    /// <summary>Relative share for the Silicon class.</summary>
+    public double? Silicon { get; set; }
+
+    /// <summary>Relative share for the Uranium class.</summary>
+    public double? Uranium { get; set; }
 }
 
 /// <summary>
@@ -625,6 +647,8 @@ public static class WorldLoader
             t.He3PerHomeSector = se.He3PerHomeSector ?? t.He3PerHomeSector;
             t.SpecialPerSector = se.SpecialPerSector ?? t.SpecialPerSector;
             t.HomeSpecialChance = F(se.HomeSpecialChance, t.HomeSpecialChance);
+            if (ParseSpecialWeights(se.SpecialWeights, "seeding.special-weights") is { } sw)
+                t.SpecialWeights = sw;
             t.SpecialRockRadiusMult = F(se.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
         }
         if (w.Mining is { } mi)
@@ -656,4 +680,24 @@ public static class WorldLoader
 
     // Authored-override resolve: a knob the author wrote wins; null keeps the stock default.
     private static float F(double? authored, float stock) => authored is { } v ? (float)v : stock;
+
+    // Project + validate an authored special-class weight block into the runtime SpecialWeights.
+    // Null in → null out (caller keeps its default). Fail-fast (like the rest of content loading) on
+    // a negative share or an all-zero block: a distribution the seeder could never draw from is an
+    // authoring bug, not a silently-tolerated one. Shared by the world seeding default and the
+    // per-sector map override so both validate identically. `ctx` names the offending block.
+    public static SpecialWeights? ParseSpecialWeights(SpecialWeightsDef? d, string ctx)
+    {
+        if (d is null)
+            return null;
+        float c = (float)(d.Carbonaceous ?? 0);
+        float s = (float)(d.Silicon ?? 0);
+        float u = (float)(d.Uranium ?? 0);
+        if (c < 0 || s < 0 || u < 0)
+            throw new InvalidDataException($"{ctx}: special-weights must be non-negative (got carbonaceous={c}, silicon={s}, uranium={u}).");
+        var w = new SpecialWeights { Carbonaceous = c, Silicon = s, Uranium = u };
+        if (!w.AnyPositive)
+            throw new InvalidDataException($"{ctx}: special-weights has no positive share — at least one of carbonaceous/silicon/uranium must be > 0.");
+        return w;
+    }
 }

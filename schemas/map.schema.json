@@ -140,6 +140,37 @@
             ],
             "description": "Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 \u2192 none, and an authored value bypasses the home-special-chance roll. World seeding default otherwise."
           },
+          "special-weights": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "carbonaceous": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Relative share for the Carbonaceous class (default 0 when the block is authored but this key omitted)."
+              },
+              "silicon": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Relative share for the Silicon class."
+              },
+              "uranium": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Relative share for the Uranium class."
+              }
+            },
+            "description": "Optional per-sector override of the special-class weights \u2014 which class each special rock becomes (e.g. carbonaceous 1 / silicon 0 / uranium 0 guarantees Carbonaceous here). Omitted inherits the world seeding default. Composes with special-count (count = how many, weights = which class).",
+            "additionalProperties": false
+          },
           "ore-richness-mult": {
             "type": [
               "number",

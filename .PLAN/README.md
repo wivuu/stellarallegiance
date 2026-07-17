@@ -20,6 +20,21 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Add different gun effects 
+  - i.e. minigun green, different looking bolt
+  - ER nanite shoots glowing blue, thin, toruses
+- Remove stale AI generated content not from the iron coalition tech tree:
+  - i.e. dart missiles, etc
+  - replace with missiles from igc for iron coalition
+- Outpost -> Hvy Outpost should be an upgrade option under 'research' for each outpost, as defined by the server-side YAML. Same with upgrading a Garrison to a Starbase.
+  - Each outpost / garrison have to be upgraded independently, not centralized research that applies immediately to all pre-built instances.
+- When weapons are upgraded (i.e. Gatling gun 1 -> 2), all in-flight ships will retain the Gatling gun 1, but when they dock Gatling gun 1 should no longer be an option/selectable/visible any more in te hangar, and all loadouts should reflect the new upgrade.
+- Locked hull cards show generic "⚿ TECH LOCKED" with no hint that a Supremacy/Shipyard is the path (weapon rows already say "REQUIRES <tech>").
+- Nanite reads as a damage gun in the arsenal ("DMG N", never checks IsHealing).
+- Research "UNLOCKS" list never names the hull a dev certifies (bomber/adv-fighter/devastator).
+- Upgrade-research has no base-type match check in the UI (can authorize "Upgrade Supremacy" with a Garrison selected; relies on server rejection).
+- Faction name "Iron Coalition" is streamed but never displayed.
+- hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
 
 ## Content philosophy (the through-line)

@@ -399,6 +399,47 @@ namespace StellarAllegiance.Shared
         Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4,
     }
 
+    // Relative weights for which SPECIAL class (Carbonaceous/Silicon/Uranium) a seeded special rock
+    // becomes. A weight is a relative share, not a probability — [1,1,1] and [2,2,2] both mean "equal
+    // thirds". A zero weight excludes that class entirely; at least one must be positive (enforced at
+    // content load). Authorable as the world seeding default (world.yaml `seeding.special-weights`)
+    // and overridable per sector in a map (`sectors[].special-weights`), so an author can guarantee a
+    // class (e.g. carbonaceous 1 / silicon 0 / uranium 0) or bias the mix. Server-side only — the
+    // resolved class byte is what streams, never these weights.
+    public sealed class SpecialWeights
+    {
+        public float Carbonaceous = 1f;
+        public float Silicon = 1f;
+        public float Uranium = 1f;
+
+        // A distribution is usable iff some class carries a positive share.
+        public bool AnyPositive => Carbonaceous > 0f || Silicon > 0f || Uranium > 0f;
+
+        // Equal positive shares reproduce the historical `hash % 3` draw EXACTLY, so an un-authored
+        // (default) world/sector keeps every existing pinned seed's rock classes — and thus their
+        // class-derived mesh variants / oversize radius — byte-identical.
+        private bool IsLegacyUniform => Carbonaceous == Silicon && Silicon == Uranium && Carbonaceous > 0f;
+
+        // Pick a special class deterministically from a rock's per-rock hash. Uniform → legacy hash%3.
+        // Otherwise a cumulative-weight draw over a fixed integer quantization: pure integer math from
+        // the hash (no floating-point non-determinism, no shared-RNG draw), so the layout stays
+        // byte-identical for a seed. A zero-weight class gets a zero-width bucket and is never chosen.
+        public RockClass Pick(ulong hash)
+        {
+            if (IsLegacyUniform)
+                return (RockClass)(byte)(hash % 3);
+            const long Scale = 1_000_000;
+            long wc = (long)(Carbonaceous * Scale);
+            long ws = (long)(Silicon * Scale);
+            long wu = (long)(Uranium * Scale);
+            long sum = wc + ws + wu; // > 0 guaranteed by AnyPositive validation at load
+            long r = (long)(hash % (ulong)sum);
+            return r < wc ? RockClass.Carbonaceous
+                 : r < wc + ws ? RockClass.Silicon
+                 : RockClass.Uranium;
+        }
+    }
+
     // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
     // determines how many teams the map supports (one home per team).
     public sealed class SectorGarrison
@@ -431,13 +472,18 @@ namespace StellarAllegiance.Shared
         // Optional per-sector rock-class overrides (null → the world-level WorldSeedingTuning
         // default). He3Count pins this sector's guaranteed He3 rock count exactly; SpecialCount
         // overrides how many RARE special rocks (Carbonaceous/Silicon/Uranium) this sector gets
-        // (0 → none — an authored value also bypasses the home-special-chance roll);
+        // (0 → none — an authored value also bypasses the home-special-chance roll); SpecialWeights
+        // overrides which special CLASS each of those rocks becomes (null → world default);
         // OreRichnessMult scales the per-rock He3 capacity here.
         // OreCapacityMin/Max override the per-He3-rock capacity band this sector clamps to (null →
         // the map/world-level WorldMiningTuning bound). Server-side only — resolved during World's
         // ore-assignment pass.
         public int? He3Count;
         public int? SpecialCount;
+        // Optional per-sector override of the special-class weights (which class each special rock
+        // becomes). Null → the world seeding default (WorldSeedingTuning.SpecialWeights). Composes
+        // with SpecialCount: count = how many special rocks, weights = which class each is.
+        public SpecialWeights? SpecialWeights;
         public float? OreRichnessMult;
         public float? OreCapacityMin;
         public float? OreCapacityMax;
@@ -740,6 +786,12 @@ namespace StellarAllegiance.Shared
         // garrison sector from a deterministic per-sector sub-RNG (same world seed → same outcome).
         // A map-authored per-sector special-count bypasses the roll entirely.
         public float HomeSpecialChance = 0f;
+
+        // Relative weights deciding which special CLASS each seeded special rock becomes
+        // (Carbonaceous/Silicon/Uranium). Default is uniform (equal thirds) — the historical behavior.
+        // A map may override this per sector (WorldSectorConfig.SpecialWeights). world.yaml
+        // `seeding.special-weights` sets this default. Independent of SpecialPerSector (how MANY).
+        public SpecialWeights SpecialWeights = new();
 
         // The rare special rocks (Carbonaceous/Silicon/Uranium — NOT He3) are landmark-sized: their spawn
         // radius (collision + visual) is multiplied by this so they stand out from the common field. 1 =

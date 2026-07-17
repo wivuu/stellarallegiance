@@ -534,5 +534,139 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
         $"fog-off mask wrong ({world.TeamStates[0].DiscoveredRockClasses:x2}, want ff)");
 }
 
+// ---- Scenario 8: per-sector special-CLASS weights (the map-authored special-weights override).
+// The class each special rock becomes is a weighted draw over {Carbonaceous, Silicon, Uranium}; a
+// map may pin it per sector so e.g. the Supremacy's Carbonaceous is guaranteed. A garrison sector
+// with an explicit special-count bypasses the home-special-chance roll, so this seeds specials. -----
+{
+    float baseHp8 = content.Bases[0].MaxHealth;
+
+    // Build a single-sector field world whose one sector forces `count` specials drawn from `weights`.
+    World WeightedWorld(ulong seed, int count, SpecialWeights? weights)
+    {
+        var sc = new WorldSectorConfig
+        {
+            Id = 0,
+            Radius = 1500f,
+            Asteroids = AsteroidKind.Field,
+            Garrison = new SectorGarrison { Team = 0 },
+            SpecialCount = count,       // explicit → bypasses the home-special-chance roll
+            SpecialWeights = weights,   // null → world default (uniform)
+        };
+        var cfg = new WorldConfig
+        {
+            SectorScale = 1f,
+            AsteroidDensity = 3f,
+            SectorRadius = 700f,
+            Seeding = content.World.Seeding,
+            Mining = content.World.Mining,
+            Sectors = new List<WorldSectorConfig> { sc },
+        };
+        return new World(seed, cfg, baseHp8, content.Start, content.Ships);
+    }
+
+    // Tally the special-class rocks (non-He3, non-Regolith) a world seeded.
+    (int carb, int sil, int uran) SpecialTally(World w)
+    {
+        int c = 0, s = 0, u = 0;
+        foreach (var r in w.Asteroids)
+            switch (w.RockClassOf(r.Id))
+            {
+                case RockClass.Carbonaceous: c++; break;
+                case RockClass.Silicon: s++; break;
+                case RockClass.Uranium: u++; break;
+            }
+        return (c, s, u);
+    }
+
+    // Carbonaceous-only weights → every special is Carbonaceous, on EVERY seed (the reachability fix).
+    var carbOnly = new SpecialWeights { Carbonaceous = 1f, Silicon = 0f, Uranium = 0f };
+    bool allCarb = true, anySpecial = false;
+    for (ulong seed = 1; seed <= 20; seed++)
+    {
+        var (c, s, u) = SpecialTally(WeightedWorld(seed, 5, carbOnly));
+        if (c > 0) anySpecial = true;
+        if (s != 0 || u != 0) allCarb = false;
+    }
+    Check(anySpecial && allCarb,
+        "special-weights carbonaceous:1/silicon:0/uranium:0 seeds only Carbonaceous specials (20 seeds)",
+        $"weighted seeding leaked Silicon/Uranium under a carbonaceous-only weight (anySpecial {anySpecial}, allCarb {allCarb})");
+
+    // Silicon-only weights → every special is Silicon, no Carbonaceous/Uranium.
+    var silOnly = new SpecialWeights { Carbonaceous = 0f, Silicon = 1f, Uranium = 0f };
+    bool allSil = true, anySil = false;
+    for (ulong seed = 1; seed <= 20; seed++)
+    {
+        var (c, s, u) = SpecialTally(WeightedWorld(seed, 5, silOnly));
+        if (s > 0) anySil = true;
+        if (c != 0 || u != 0) allSil = false;
+    }
+    Check(anySil && allSil,
+        "special-weights silicon:1 seeds only Silicon specials (a zero-weight class is never drawn)",
+        $"silicon-only weight drew a non-Silicon class (anySil {anySil}, allSil {allSil})");
+
+    // Two-class weights (C + S, U excluded) → both C and S appear across seeds, U never does.
+    var noUran = new SpecialWeights { Carbonaceous = 1f, Silicon = 1f, Uranium = 0f };
+    int tc = 0, ts = 0, tu = 0;
+    for (ulong seed = 1; seed <= 40; seed++)
+    {
+        var (c, s, u) = SpecialTally(WeightedWorld(seed, 5, noUran));
+        tc += c; ts += s; tu += u;
+    }
+    Check(tc > 0 && ts > 0 && tu == 0,
+        "two-class weights (carbonaceous+silicon, uranium:0) draw both and never Uranium (40 seeds)",
+        $"two-class weighted draw wrong (carb {tc}, sil {ts}, uran {tu} — expected uran 0)");
+
+    // Default (null) weights reproduce the legacy uniform hash%3 — a mix of all three over enough seeds.
+    int dc = 0, ds = 0, du = 0;
+    for (ulong seed = 1; seed <= 40; seed++)
+    {
+        var (c, s, u) = SpecialTally(WeightedWorld(seed, 5, null));
+        dc += c; ds += s; du += u;
+    }
+    Check(dc > 0 && ds > 0 && du > 0,
+        "default (null) special-weights keep the uniform mix of all three classes (40 seeds)",
+        $"default weighted draw is no longer a full mix (carb {dc}, sil {ds}, uran {du})");
+
+    // Determinism: same seed + weights ⇒ identical class tally.
+    var t1 = SpecialTally(WeightedWorld(777, 5, noUran));
+    var t2 = SpecialTally(WeightedWorld(777, 5, noUran));
+    Check(t1 == t2,
+        "weighted special-class seeding is deterministic for a seed",
+        $"weighted seeding not deterministic ({t1} vs {t2})");
+
+    // End-to-end: the stock Brimstone Gambit map authors Defaultio (sector 2) with a carbonaceous-only
+    // special-weights, so its lone special is Carbonaceous on EVERY seed — the Supremacy branch is
+    // always reachable there (previously ~1/3 of matches). Exercises the map YAML parse → seeding path.
+    var maps = MapLoader.LoadAvailable(Path.Combine(AppContext.BaseDirectory, "content", "maps"), null);
+    var brimstone = MapLoader.Resolve(maps, "Brimstone Gambit");
+    bool defaultioCarbEverySeed = true;
+    string brimDetail = "";
+    for (ulong seed = 1; seed <= 20; seed++)
+    {
+        var bc = ContentLoader.Load(manifest, worldPath);
+        MapLoader.ApplyTo(brimstone, bc.World);
+        var bw = new World(seed, bc.World, baseHp8, bc.Start, bc.Ships);
+        // Defaultio = sector id 2 (the only neutral sector); its specials must all be Carbonaceous.
+        int carb2 = 0, other2 = 0;
+        foreach (var r in bw.Asteroids)
+        {
+            if (r.SectorId != 2) continue;
+            var cls = bw.RockClassOf(r.Id);
+            if (cls == RockClass.Carbonaceous) carb2++;
+            else if (cls is RockClass.Silicon or RockClass.Uranium) other2++;
+        }
+        if (carb2 < 1 || other2 != 0)
+        {
+            defaultioCarbEverySeed = false;
+            brimDetail = $"seed {seed}: Defaultio carb {carb2}, silicon/uranium {other2}";
+            break;
+        }
+    }
+    Check(defaultioCarbEverySeed,
+        "Brimstone Gambit's Defaultio guarantees a Carbonaceous special every seed (map special-weights)",
+        $"Brimstone Defaultio failed to guarantee Carbonaceous ({brimDetail})");
+}
+
 Console.WriteLine(failures == 0 ? "\nALL CONSTRUCTOR TESTS PASSED" : $"\n{failures} CONSTRUCTOR TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
