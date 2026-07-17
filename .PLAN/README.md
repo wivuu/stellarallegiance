@@ -22,7 +22,6 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Remember the user's ship preference when they dock with a ship, they should automatically be selecting the same ship
 - 'Build' pane does not include miners, but we should be able to purchase up to N miners per team
-- Improve right click asteroid intersection behavior (sometimes you right click on it, but it adds a nav point behind the rock, so the ray trace appears inaccurate)
 - Make the circle around the sector in the minimap an indicator of the sector the camera is currently looking at (f3 or active piloting)
 - Add different gun effects 
   - i.e. minigun green, different looking bolt

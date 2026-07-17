@@ -1243,64 +1243,59 @@ public partial class SectorOverview : Node3D
     // FocusedId-encoded id (raw ship / BaseLockId / AsteroidFocusId).
     private bool TryPickEntity(Camera3D cam, Vector2 point, out ulong encoded)
     {
-        encoded = 0;
-        float bestD2 = PickRadiusPx * PickRadiusPx;
+        // Normalised pick: each candidate is a hit when the click lands inside its screen threshold
+        // (score < 1), and the smallest score wins so a dead-centre hit beats a glancing one. Point
+        // targets (ships/bases) use the flat PickRadiusPx. Asteroids instead scale the threshold to
+        // their on-screen disc (AsteroidPickRadiusPx) so a click anywhere on a large or nearby rock's
+        // visible surface still resolves to the rock — rather than missing the fixed 24px centre test
+        // and falling through to the grid plane, which plants the waypoint on empty space behind it.
+        float bestScore = 1f;
+        ulong best = 0;
+
+        void Consider(Vector3 worldPos, ulong id, float thresholdPx)
+        {
+            if (cam.IsPositionBehind(worldPos))
+                return;
+            float d2 = (cam.UnprojectPosition(worldPos) - point).LengthSquared();
+            float score = d2 / (thresholdPx * thresholdPx);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = id;
+            }
+        }
 
         foreach (var e in _world.FriendlyShips())
-        {
-            if (cam.IsPositionBehind(e.GlobalPosition))
-                continue;
-            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = e.ShipId;
-            }
-        }
-        if (TryLocalShip(out ulong localId, out Vector3 localPos) && !cam.IsPositionBehind(localPos))
-        {
-            float d2 = (cam.UnprojectPosition(localPos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = localId;
-            }
-        }
+            Consider(e.GlobalPosition, e.ShipId, PickRadiusPx);
+        if (TryLocalShip(out ulong localId, out Vector3 localPos))
+            Consider(localPos, localId, PickRadiusPx);
         foreach (var e in _world.EnemyShips())
-        {
-            if (cam.IsPositionBehind(e.GlobalPosition))
-                continue;
-            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = e.ShipId;
-            }
-        }
+            Consider(e.GlobalPosition, e.ShipId, PickRadiusPx);
         foreach (var (id, pos, _) in _world.AllVisibleBases())
-        {
-            if (cam.IsPositionBehind(pos))
-                continue;
-            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = GameContent.BaseLockId(id);
-            }
-        }
+            Consider(pos, GameContent.BaseLockId(id), PickRadiusPx);
         foreach (var (id, node) in _world.AsteroidsInView())
-        {
-            Vector3 pos = node.GlobalPosition;
-            if (cam.IsPositionBehind(pos))
-                continue;
-            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = GameContent.AsteroidFocusId(id);
-            }
-        }
+            Consider(node.GlobalPosition, GameContent.AsteroidFocusId(id), AsteroidPickRadiusPx(cam, node.GlobalPosition, id));
+
+        encoded = best;
         return encoded != 0;
+    }
+
+    // Screen-space pick radius (px) for an asteroid: the on-screen radius of its visible disc, floored
+    // at PickRadiusPx so tiny/distant rocks stay clickable. Projects a point on the rock's surface
+    // (offset along the camera's right axis, which maps to the disc radius regardless of view angle)
+    // and measures its pixel distance from the projected centre. CurrentRadius is the live mined size;
+    // the server already folds the special-rock oversize into it, so it matches the rendered node.
+    private float AsteroidPickRadiusPx(Camera3D cam, Vector3 center, ulong id)
+    {
+        float worldRadius = 0f;
+        if (_world.GetAsteroid(id) is { } row)
+            worldRadius = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
+        if (worldRadius <= 0f || cam.IsPositionBehind(center))
+            return PickRadiusPx;
+        Vector3 right = cam.GlobalTransform.Basis.X.Normalized();
+        Vector2 cScreen = cam.UnprojectPosition(center);
+        Vector2 eScreen = cam.UnprojectPosition(center + right * worldRadius);
+        return Mathf.Max(PickRadiusPx, (eScreen - cScreen).Length());
     }
 
     // Intersect the camera ray through the click point with the sector's grid plane (Y = sector
