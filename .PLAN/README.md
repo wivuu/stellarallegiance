@@ -20,6 +20,12 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Constructor should sit idle if ordered to a sector and no further orders are given; currently it turns back
+- New bases/outpost spawns with half health
+- Tech tree
+  - Why does supremacy center require expansion complex?
+  - Only allow a research base like supremacy / expansion / tactical once a suitable rock is discovered
+  - Supremacy center currently wants to build on regolith rocks - but only Carbonaceous should be allowed - this needs to be configurable per base-type
 ---
 
 ## Content philosophy (the through-line)
@@ -384,7 +390,7 @@ Stage-1 YAML pipeline.
   - ✅ Spinning greenish/blue translucent multi-layer sphere envelops the asteroid over a configurable
     time; the constructor mesh vanishes (server despawns it at completion, sphere covers it).
   - ✅ Base appears fully constructed on the asteroid; build effect removed; tech paths unlocked.
-- ☐ **[L]** **Allegiance Stub tech tree**  — Take a thin slice of the allegiance tech tree by implementing SOME of iron coalitions ships, bases, weapons, research etc
+- ✅ **[L]** **Allegiance Stub tech tree**  — Take a thin slice of the allegiance tech tree by implementing SOME of iron coalitions ships, bases, weapons, research etc
   - Ships: 
     - Starting: Scout, Lt Interceptor
     - Supremacy Center: Enh. Fighter and Adv. Fighter upgrades
