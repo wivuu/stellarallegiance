@@ -20,6 +20,10 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Remember the user's ship preference when they dock with a ship, they should automatically be selecting the same ship
+- 'Build' pane does not include miners, but we should be able to purchase up to N miners per team
+- Improve right click asteroid intersection behavior (sometimes you right click on it, but it adds a nav point behind the rock, so the ray trace appears inaccurate)
+- Make the circle around the sector in the minimap an indicator of the sector the camera is currently looking at (f3 or active piloting)
 - Add different gun effects 
   - i.e. minigun green, different looking bolt
   - ER nanite shoots glowing blue, thin, toruses
@@ -31,6 +35,7 @@ Archives:
 - When weapons are upgraded (i.e. Gatling gun 1 -> 2), all in-flight ships will retain the Gatling gun 1, but when they dock Gatling gun 1 should no longer be an option/selectable/visible any more in te hangar, and all loadouts should reflect the new upgrade.
 - Locked hull cards show generic "⚿ TECH LOCKED" with no hint that a Supremacy/Shipyard is the path (weapon rows already say "REQUIRES <tech>").
 - Nanite reads as a damage gun in the arsenal ("DMG N", never checks IsHealing).
+- No ability to research fighters in supremacy center
 - Research "UNLOCKS" list never names the hull a dev certifies (bomber/adv-fighter/devastator).
 - Upgrade-research has no base-type match check in the UI (can authorize "Upgrade Supremacy" with a Garrison selected; relies on server rejection).
 - Faction name "Iron Coalition" is streamed but never displayed.
