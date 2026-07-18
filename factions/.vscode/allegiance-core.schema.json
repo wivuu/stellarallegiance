@@ -439,6 +439,10 @@
             "type": "integer",
             "description": "Time to build/complete, in seconds."
           },
+          "order-time-seconds": {
+            "type": "integer",
+            "description": "Miner-only: production delay (seconds) from ordering the hull to it launching, the miner analogue of a constructor's Producing phase. 0 = launches at once. Projected onto ShipClassDef.OrderTimeSeconds."
+          },
           "group": {
             "type": [
               "string",

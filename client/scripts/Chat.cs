@@ -224,12 +224,10 @@ public partial class Chat : Control
                         + "  /team — which team you're on\n"
                         + "  /server — server address & connection info\n"
                         + "  /pigs on|off — toggle AI drone spawns (server-wide)\n"
-                        + "  /buyminer — buy a mining drone for your team (commander only)\n"
                         + "  /commander [name] — show the team commander / hand off command"
                 );
                 break;
             case "/pigs":
-            case "/buyminer":
             case "/commander":
                 // Server-side commands: relay the raw text so the sim acts on it and answers
                 // via system chat. Scope is irrelevant — the server intercepts '/'-prefixed

@@ -801,7 +801,7 @@ public sealed class ClientHub
                 case Protocol.MsgResearch when count >= 12:
                 {
                     // Commander research order: [13][u8 op][u64 baseId][u16 devIndex] (v36).
-                    // Commander-gated HERE (the /buyminer pattern); validated + applied on the
+                    // Commander-gated HERE (the commander-buy pattern); validated + applied on the
                     // sim thread (Simulation.Research). Results come back as system chat + the
                     // next MsgResearchState frame.
                     if (CommanderOrWarn(client) is byte cmdTeam)
@@ -817,7 +817,7 @@ public sealed class ClientHub
                 {
                     // Commander buys a constructor bound to a station type:
                     // [14][u8 stationTypeId][u64 launchBaseId] (v37). Commander-gated HERE (the
-                    // /buyminer pattern); validated + applied on the sim thread. Results come back as
+                    // commander-buy pattern); validated + applied on the sim thread. Results come back as
                     // team-scoped ConstructorNoticesThisStep chat.
                     if (CommanderOrWarn(client) is byte cmdTeam)
                     {
@@ -838,6 +838,15 @@ public sealed class ClientHub
                     }
                     break;
                 }
+                case Protocol.MsgBuyMiner:
+                {
+                    // Commander buys a mining drone: [16] (no body). Replaces the old /buyminer chat
+                    // command. Commander-gated HERE; cap/cost/phase/kill-switch validated on the sim
+                    // thread (TryBuyMiner). Results come back as team-scoped MinerNoticesThisStep chat.
+                    if (CommanderOrWarn(client) is byte minerTeam)
+                        _sim.EnqueueMinerBuy(minerTeam);
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
@@ -851,8 +860,8 @@ public sealed class ClientHub
     }
 
     // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
-    // /pigs toggles AI drone spawns; /buyminer buys the team a mining drone (thread-safe enqueue
-    // — results come back as team-scoped MinerNoticesThisStep chat).
+    // /pigs toggles AI drone spawns. (Miner buying moved from /buyminer to the MsgBuyMiner Build-tab
+    // button — commander-gated, results come back as team-scoped MinerNoticesThisStep chat.)
     private void HandleCommand(Client client, string text)
     {
         var parts = text[1..].Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
@@ -874,16 +883,10 @@ public sealed class ClientHub
                 SystemAll(client, $"AI drones turned {(on ? "ON" : "OFF")} by {_players.NameOf(client.Id)}");
                 break;
             }
-            case "buyminer":
-            {
-                if (CommanderOrWarn(client) is byte team)
-                    _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
-                break;
-            }
             case "buildconstructor":
             case "build":
             {
-                // Commander buys a constructor bound to a station type (chat seam mirroring /buyminer;
+                // Commander buys a constructor bound to a station type (commander-gated chat seam;
                 // the Build tab sends MsgBuildConstructor directly). /build <station-id> (e.g. outpost);
                 // bare /build lists the buildable stations. Order it to a rock via F3 after it launches.
                 if (CommanderOrWarn(client) is byte team)
@@ -912,7 +915,7 @@ public sealed class ClientHub
             }
             case "research":
             {
-                // Commander research by development id (the chat seam mirroring /buyminer; the
+                // Commander research by development id (a commander-gated chat seam; the
                 // Research tab UI sends MsgResearch directly). Bare /research lists the catalog.
                 // The order targets the team's FIRST alive base — base-specific starts come from
                 // the UI, where the sidebar picks the base.
@@ -999,7 +1002,7 @@ public sealed class ClientHub
     }
 
     // The sender's team when they are its COMMANDER, or null + a warn naming who is. Gates the
-    // AI-authority seams (/buyminer, MsgOrder with an AI subject).
+    // AI-authority seams (MsgBuyMiner, MsgOrder with an AI subject).
     private byte? CommanderOrWarn(Client client)
     {
         if (TeamOrWarn(client) is not byte team)
@@ -1388,7 +1391,7 @@ public sealed class ClientHub
 
         // Per-team economy (credits/score/techs): same low-rate cadence as bases — on change or coarse
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
-        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World, _sim.Content) : null;
+        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim) : null;
 
         // Per-ship weapon-mount override table: full-table broadcast on change + coarse keepalive
         // (reconcile-by-omission — an EMPTY frame still prunes stale entries, so it's always built

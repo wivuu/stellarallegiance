@@ -343,6 +343,7 @@ hulls:
     vision-sphere-radius: 1000
     radar-signature: 1.5   # big and loud — spotted well before it can react
     price: 400
+    order-time-seconds: 30 # production delay from ordering a miner (Build tab) to it launching — the miner analogue of a constructor's Producing phase (faction-tunable, like price). 0 = instant.
     ore-capacity: 2000     # helium-3 units the miner fills at a rock and offloads at base
     required-capabilities: [base]
     # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,

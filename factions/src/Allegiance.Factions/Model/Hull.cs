@@ -121,6 +121,15 @@ public record Hull : Buildable
     /// </summary>
     public double OreCapacity { get; set; }
 
+    /// <summary>
+    /// Production delay (seconds) between ORDERING this hull and it actually launching — the miner's
+    /// analogue of a constructor's Producing phase. When a team buys a miner it is charged + counted
+    /// immediately but does not fly until this many seconds elapse (0 = launches at once). Sits next
+    /// to <see cref="Buildable.Price"/> as the other faction-tunable cost of a miner. Omit-when-default;
+    /// projected onto <c>ShipClassDef.OrderTimeSeconds</c>.
+    /// </summary>
+    public int OrderTimeSeconds { get; set; }
+
     /// <summary>Drift (turn-rate slop) knobs the game's flight model needs; no clean Core source.</summary>
     public double DriftYawDeg { get; set; }
     /// <summary>Pitch-axis drift (turn-rate slop) knob, in degrees; pairs with drift-yaw-deg above.</summary>

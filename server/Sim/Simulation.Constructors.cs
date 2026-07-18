@@ -36,6 +36,11 @@ public sealed partial class Simulation
         public byte Team;
         public ShipSim? Ship;
         public byte BuildStationTypeId; // the BaseTypeId this drone will raise (outpost = 1)
+        // A MINER order shares this production queue (same Producing lifecycle + Build-tab roster), but
+        // on completion it graduates into a MinerSlot instead of launching a base-builder: it never
+        // enters the launched states below (Idle/ToRock/…). BuildStationTypeId/LaunchBaseId are unused.
+        public bool ProducesMiner;
+        public uint ProductionTicks; // Producing duration for THIS slot (constructor production dwell, or a miner's order-time)
         public ConstructorState State;
         public ulong TargetRockId; // the rock it is ordered to build on (0 = none; other constructors avoid it)
         public ulong LaunchBaseId; // the garrison it launched from (relaunch/idle anchor)
@@ -113,22 +118,25 @@ public sealed partial class Simulation
         }
     }
 
+    // Team's constructor count — miner producers share the _constructors list but are NOT constructors,
+    // so they are excluded here (they are gated by the miner cap, MaxMinersPerTeam, instead).
     public int ConstructorCount(byte team)
     {
         int n = 0;
         foreach (var c in _constructors)
-            if (c.Team == team)
+            if (c.Team == team && !c.ProducesMiner)
                 n++;
         return n;
     }
 
     // Live constructors currently building/producing out of a single garrison. The per-base
-    // simultaneous-build cap gates purchases; there is no team-wide cap.
+    // simultaneous-build cap gates purchases; there is no team-wide cap. Miner producers (no launch
+    // base) are excluded so they never eat a garrison's constructor slots.
     public int ConstructorCountForBase(ulong launchBaseId)
     {
         int n = 0;
         foreach (var c in _constructors)
-            if (c.LaunchBaseId == launchBaseId)
+            if (c.LaunchBaseId == launchBaseId && !c.ProducesMiner)
                 n++;
         return n;
     }
@@ -150,10 +158,10 @@ public sealed partial class Simulation
     // phase (production, or align/sink/build) so the client animates a smooth bar; 0/0 for untimed states
     // (idle / en route / move). TargetId carries the rock (build orders) or sector (move orders) so the
     // client can name the destination. Sim thread only.
-    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId)>
+    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner)>
         ConstructorStatesView()
     {
-        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong)>(_constructors.Count);
+        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool)>(_constructors.Count);
         foreach (var c in _constructors)
         {
             uint start = 0, dur = 0;
@@ -161,7 +169,7 @@ public sealed partial class Simulation
             switch (c.State)
             {
                 case ConstructorState.Producing:
-                    start = c.PhaseStartTick; dur = SecondsToTicks(_constructor.ProductionSeconds); break;
+                    start = c.PhaseStartTick; dur = c.ProductionTicks; break;
                 case ConstructorState.ToRock:
                     target = c.TargetRockId; break;
                 case ConstructorState.MoveTo:
@@ -175,7 +183,7 @@ public sealed partial class Simulation
                 case ConstructorState.Building:
                     start = c.PhaseStartTick; dur = BuildTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
             }
-            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target));
+            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner));
         }
         return rows;
     }
@@ -363,9 +371,28 @@ public sealed partial class Simulation
             LaunchBaseId = launchBaseId,
             State = ConstructorState.Producing,
             PhaseStartTick = tick,
+            ProductionTicks = SecondsToTicks(_constructor.ProductionSeconds),
         };
         _constructors.Add(slot);
         ConstructorChangedThisStep = true;
+    }
+
+    // A MINER order enters the SAME production queue as a constructor (Simulation.Mining.TryBuyMiner
+    // routes here): a Producing slot with the miner's per-hull order-time, shown in the Build-tab roster
+    // with a progress bar + cancel. On completion the brain graduates it into a MinerSlot (NewMinerSlot).
+    private void NewMinerProductionSlot(byte team, uint tick, uint orderTicks)
+    {
+        _constructors.Add(new ConstructorSlot
+        {
+            ConstructorId = _nextConstructorId++,
+            Team = team,
+            ProducesMiner = true,
+            ProductionTicks = orderTicks,
+            State = ConstructorState.Producing,
+            PhaseStartTick = tick,
+        });
+        ConstructorChangedThisStep = true;
+        TeamStateChangedThisStep = true; // producing miners count toward MinerCount → restream the "X / N" tail
     }
 
     // Commander cancel of a still-producing constructor: refund the station price and drop the slot.
@@ -377,14 +404,20 @@ public sealed partial class Simulation
             var slot = _constructors[i];
             if (slot.Team != team || slot.ConstructorId != constructorId || slot.State != ConstructorState.Producing)
                 continue;
+            // Refund what was charged: a miner order paid the miner hull cost; a constructor paid the
+            // station price. Both were deducted at buy time (TryReserveSpawn / ts.Credits -= price).
+            int refund = slot.ProducesMiner
+                ? (ShipDefs.TryGetValue((byte)MinerClassId, out var md) ? md.Cost : 0)
+                : StationCatalogFor(slot.BuildStationTypeId)?.Price ?? 0;
             if (World.TeamStates.TryGetValue(team, out var ts))
             {
-                ts.Credits += StationCatalogFor(slot.BuildStationTypeId)?.Price ?? 0;
+                ts.Credits += refund;
                 TeamStateChangedThisStep = true;
             }
             _constructors.RemoveAt(i);
             ConstructorChangedThisStep = true;
-            ConstructorNoticesThisStep.Add((team, $"{StationCatalogFor(slot.BuildStationTypeId)?.Name ?? "Constructor"} production cancelled — refunded."));
+            string what = slot.ProducesMiner ? "Miner" : StationCatalogFor(slot.BuildStationTypeId)?.Name ?? "Constructor";
+            ConstructorNoticesThisStep.Add((team, $"{what} production cancelled — refunded."));
             return true;
         }
         return false;
@@ -454,12 +487,21 @@ public sealed partial class Simulation
         {
             var slot = _constructors[i];
 
-            // Producing: no ship yet. When the production timer elapses, launch the drone from the
-            // garrison (it appears at the launch base and starts holding station near it).
+            // Producing: no ship yet. When the production timer elapses, launch the unit. A miner order
+            // GRADUATES out of the constructor system into a MinerSlot (autonomous, F3-optional); a
+            // constructor launches from the garrison and starts holding station near it.
             if (slot.State == ConstructorState.Producing)
             {
-                if (tick - slot.PhaseStartTick >= SecondsToTicks(_constructor.ProductionSeconds))
+                if (tick - slot.PhaseStartTick >= slot.ProductionTicks)
                 {
+                    if (slot.ProducesMiner)
+                    {
+                        _constructors.RemoveAt(i);
+                        NewMinerSlot(slot.Team, tick); // launches on the next brain tick like a seed miner
+                        ConstructorChangedThisStep = true;
+                        MinerNoticesThisStep.Add((slot.Team, $"Miner ready ({MinerCount(slot.Team)}/{_mining.MaxMinersPerTeam})."));
+                        continue;
+                    }
                     SpawnConstructor(slot, tick);
                     slot.State = ConstructorState.Idle;
                     ConstructorChangedThisStep = true;

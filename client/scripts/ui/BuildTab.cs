@@ -33,6 +33,10 @@ public partial class BuildTab : Control
     private string? _selectedId;
     private readonly List<(string id, StationCard card)> _cards = new();
 
+    // Sentinel card id for the synthetic MINER DRONE entry — a team mining drone (a ship, not a
+    // StationCatalogDef), special-cased in the grid/detail/footer. Bought via MsgBuyMiner.
+    private const string MinerCardId = "__miner__";
+
     private bool _built;
     private double _refreshTimer;
     private long _statusSig = long.MinValue;
@@ -150,7 +154,7 @@ public partial class BuildTab : Control
         // Hidden entirely when the team has no constructors.
         _rosterSection = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
         _rosterSection.AddThemeConstantOverride("separation", 8);
-        _rosterSection.AddChild(UiKit.MakeLabel("▶ FLEET CONSTRUCTORS", UiKit.TextStyle.Label, DesignTokens.TextDim));
+        _rosterSection.AddChild(UiKit.MakeLabel("▶ FLEET PRODUCTION", UiKit.TextStyle.Label, DesignTokens.TextDim));
         _roster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _roster.AddThemeConstantOverride("separation", 6);
         _rosterSection.AddChild(_roster);
@@ -220,7 +224,9 @@ public partial class BuildTab : Control
     {
         byte team = Team;
         long sig = team + 1L + catalog.Count * 131L;
-        foreach (ushort t in _world!.TeamOwnedTechs(team))
+        // Fold the miner fleet count + cap so a purchase/loss re-renders the MINER DRONE card's "X / N".
+        sig ^= (_world!.TeamMinerCount(team) * 733L + 1) ^ (_world.TeamMinerCap(team) * 5701L);
+        foreach (ushort t in _world.TeamOwnedTechs(team))
             sig ^= (t + 1) * 2654435761L;
         // Fold capability ownership: caps are a small closed enum, poll each catalog entry's needs.
         foreach (StationCatalogDef s in catalog)
@@ -262,7 +268,10 @@ public partial class BuildTab : Control
         bool commander = _net?.IsCommander ?? false;
         foreach (var c in states)
         {
-            string name = StationName(c.StationTypeId);
+            // A miner order shares this production queue (Simulation routes miner buys through the
+            // constructor Producing slot); it only ever appears here while producing, labeled as a drone.
+            string name = c.ProducesMiner ? "MINER DRONE" : StationName(c.StationTypeId);
+            string suffix = c.ProducesMiner ? "" : " CONSTRUCTOR";
             var row = new ActiveBanner { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             switch (c.State)
             {
@@ -270,7 +279,7 @@ public partial class BuildTab : Control
                 {
                     ulong id = c.Id;
                     Action? cancel = commander ? () => { _net?.SendCancelConstructor(id); SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick); } : null;
-                    row.ConfigureTimed(_world!, DesignTokens.Warn, $"◷ PRODUCING · {name} CONSTRUCTOR", c.StartTick, c.DurationTicks, cancel, "✕ CANCEL");
+                    row.ConfigureTimed(_world!, DesignTokens.Warn, $"◷ PRODUCING · {name}{suffix}", c.StartTick, c.DurationTicks, cancel, "✕ CANCEL");
                     break;
                 }
                 case 1: // Idle
@@ -334,6 +343,8 @@ public partial class BuildTab : Control
             c.QueueFree();
         _cards.Clear();
 
+        AddMinerCard();
+
         foreach (StationCatalogDef s in catalog)
         {
             string id = s.Id;
@@ -346,6 +357,31 @@ public partial class BuildTab : Control
             _grid.AddChild(card);
             _cards.Add((id, card));
         }
+    }
+
+    // The synthetic MINER DRONE card, prepended to the grid. A team mining drone is a ship (not a
+    // StationCatalogDef), so it's built by hand. Hidden when the content bundle carries no miner hull
+    // (MinerShipDef null) or before the first team state streams the per-team cap.
+    private void AddMinerCard()
+    {
+        if (_world == null || _defs?.MinerShipDef() is not ShipClassDef miner)
+            return;
+        byte team = Team;
+        int cap = _world.TeamMinerCap(team);
+        if (cap <= 0)
+            return;
+        int count = _world.TeamMinerCount(team);
+        var card = new StationCard();
+        card.Configure(
+            GlyphFor(4), "MINER DRONE", ClassName(4),
+            "Autonomous drone — harvests helium-3 into team credits.",
+            TechDetailPanel.PriceText(miner.Cost),
+            miner.OrderTimeSeconds > 0 ? TechDetailPanel.Mmss(miner.OrderTimeSeconds) : "",
+            count < cap, _selectedId == MinerCardId,
+            kindWord: "DRONE", statusText: $"{count} / {cap}");
+        card.Pressed += () => SelectStation(MinerCardId);
+        _grid.AddChild(card);
+        _cards.Add((MinerCardId, card));
     }
 
     private void SelectStation(string id)
@@ -362,6 +398,12 @@ public partial class BuildTab : Control
     {
         if (_defs == null || _world == null)
             return;
+
+        if (_selectedId == MinerCardId)
+        {
+            RefreshMinerDetail();
+            return;
+        }
 
         StationCatalogDef? sel = _selectedId != null
             ? Catalog().FirstOrDefault(s => s.Id == _selectedId)
@@ -394,6 +436,82 @@ public partial class BuildTab : Control
         BuildPrereqs(sel);
         BuildUnlocks(sel);
         UpdateFooter(sel, available, rockOk);
+    }
+
+    // ---- miner drone (synthetic card) -------------------------------------
+
+    // Detail panel for the MINER DRONE card. Cost/fielded-count come from streamed data; the buy is
+    // commander-only and validated server-side (cap/cost/phase/kill-switch in Simulation.TryBuyMiner).
+    private void RefreshMinerDetail()
+    {
+        ShipClassDef? miner = _defs!.MinerShipDef();
+        byte team = Team;
+        int count = _world!.TeamMinerCount(team);
+        int cap = _world.TeamMinerCap(team);
+        bool room = miner != null && count < cap;
+
+        _detail.SetSchematic(GlyphFor(4), "// DRONE");
+        _detail.SetTitle("MINER DRONE");
+        _detail.SetStatus(room ? $"◈ {count} / {cap} FIELDED" : $"⊘ CAP REACHED ({cap})",
+            room ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral);
+        _detail.SetDescription("An autonomous mining drone. It prospects your team's sectors for "
+            + "helium-3, harvests it, and offloads at a friendly base as team credits. A destroyed "
+            + "drone is not replaced automatically — buy another.");
+        int orderSec = miner?.OrderTimeSeconds ?? 0;
+        _detail.SetMeta(TechDetailPanel.PriceText(miner?.Cost ?? 0),
+            orderSec > 0 ? TechDetailPanel.Mmss(orderSec) : "INSTANT", "GARRISON");
+        _detail.ClearPrereqs();
+        _detail.ClearUnlocks();
+        UpdateMinerFooter(miner, count, cap);
+    }
+
+    // Miner buy footer, in priority order: no miner hull → offline; non-commander → disabled;
+    // at cap → disabled; can't afford → disabled; else the commander BUY affordance.
+    private void UpdateMinerFooter(ShipClassDef? miner, int count, int cap)
+    {
+        if (miner is null)
+        {
+            _detail.SetFooter(true, "⊘ MINING OFFLINE", ButtonVariant.Secondary, null,
+                "This server's content has no mining drone.");
+            return;
+        }
+        if (!(_net?.IsCommander ?? false))
+        {
+            _detail.SetFooter(true, "⊘ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Secondary, null,
+                "Only the team commander can buy a mining drone.");
+            return;
+        }
+        if (count >= cap)
+        {
+            _detail.SetFooter(true, $"⊘ MINER CAP REACHED ({cap})", ButtonVariant.Secondary, null,
+                "Your team is fielding the maximum number of mining drones.");
+            return;
+        }
+        if (_world!.TeamCredits(Team) < miner.Cost)
+        {
+            _detail.SetFooter(true, "⊘ INSUFFICIENT CREDITS", ButtonVariant.Secondary, null,
+                $"A mining drone costs {TechDetailPanel.PriceText(miner.Cost)}.");
+            return;
+        }
+        int orderSec = miner.OrderTimeSeconds;
+        string when = orderSec > 0
+            ? $"Orders a mining drone — launches from your garrison after {TechDetailPanel.Mmss(orderSec)}."
+            : "Launches an autonomous mining drone from your garrison.";
+        _detail.SetFooter(false, "◈ BUY MINER", ButtonVariant.Primary, null, when);
+    }
+
+    // BUY MINER: commander buys one mining drone (MsgBuyMiner). The server re-validates + charges.
+    private void OnMinerBuyPressed()
+    {
+        if (_net is null || !_net.IsCommander || _world == null)
+            return;
+        if (_defs?.MinerShipDef() is not ShipClassDef miner)
+            return;
+        byte team = Team;
+        if (_world.TeamMinerCount(team) >= _world.TeamMinerCap(team) || _world.TeamCredits(team) < miner.Cost)
+            return;
+        _net.SendBuyMiner();
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
     // The action footer. A constructible structure that's available lets a COMMANDER buy a constructor
@@ -443,6 +561,11 @@ public partial class BuildTab : Control
     {
         if (_net is null || _selectedId is null)
             return;
+        if (_selectedId == MinerCardId)
+        {
+            OnMinerBuyPressed();
+            return;
+        }
         StationCatalogDef? sel = Catalog().FirstOrDefault(s => s.Id == _selectedId);
         if (sel is null || !IsConstructible(sel) || !IsAvailable(sel) || !RockDiscovered(sel) || !_net.IsCommander)
             return;
@@ -613,18 +736,19 @@ internal partial class StationCard : PanelContainer
         Restyle();
     }
 
-    public void Configure(string glyph, string name, string className, string desc, string priceText, string buildText, bool available, bool selected)
+    public void Configure(string glyph, string name, string className, string desc, string priceText, string buildText, bool available, bool selected, string kindWord = "STRUCTURE", string? statusText = null)
     {
         EnsureBuilt();
         _glyph.Text = glyph;
         _name.Text = name;
-        _kind.Text = $"STRUCTURE · {className}";
+        _kind.Text = $"{kindWord} · {className}";
         _desc.Text = desc;
         _price.Text = priceText;
-        _build.Text = $"BUILD {buildText}";
+        _build.Text = string.IsNullOrEmpty(buildText) ? "" : $"BUILD {buildText}";
         _available = available;
         _selected = selected;
-        _status.Text = available ? "◈ AVAILABLE" : "⊘ LOCKED";
+        // statusText overrides the derived AVAILABLE/LOCKED label (e.g. the miner card's "X / N").
+        _status.Text = statusText ?? (available ? "◈ AVAILABLE" : "⊘ LOCKED");
         _status.AddThemeColorOverride("font_color", available ? DesignTokens.TeamAccent : DesignTokens.TextDim);
         Restyle();
     }

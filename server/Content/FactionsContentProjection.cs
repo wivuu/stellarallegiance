@@ -222,6 +222,8 @@ public static class FactionsContentProjection
             PayloadCapacity = (float)h.PayloadCapacity,
             // Mining ore hold (0 = not a miner). Behavior-inert until the miner sim/wire WPs land.
             OreCapacity = (float)h.OreCapacity,
+            // Miner production delay (seconds from order to launch; 0 = instant). Consumed by TryBuyMiner.
+            OrderTimeSeconds = h.OrderTimeSeconds,
             // v37 base building: a constructor drone chassis (HullAbility.IsBuilder). Server-only marker
             // (not streamed — the client identifies a constructor by ShipFlagConstructor on the wire).
             IsConstructor = h.Abilities.Contains(Factions.HullAbility.IsBuilder),

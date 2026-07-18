@@ -807,10 +807,11 @@ public partial class WorldRenderer : Node3D
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF)
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF, int minerCount = 0, int minerCap = 0)
     {
         _teamEconomy[team] = (credits, score);
         _teamRockClasses[team] = discoveredRockClasses;
+        _teamMiners[team] = (minerCount, minerCap);
         if (!_teamUnlocks.TryGetValue(team, out var set))
             _teamUnlocks[team] = set = new HashSet<byte>();
         set.Clear();
@@ -839,6 +840,14 @@ public partial class WorldRenderer : Node3D
     // Discovered-rock-class bitmask per team (MsgTeamState tail, v42). Gates constructor-base cards
     // in the Build tab exactly like the server's TryBuyConstructor rock gate.
     private readonly Dictionary<byte, byte> _teamRockClasses = new();
+
+    // Live miner count + per-team cap (MsgTeamState miner tail). Drives the Build tab's "X / N"
+    // MINER DRONE card readout + its cap gate. (0, 0) until the first team state arrives.
+    private readonly Dictionary<byte, (int Count, int Cap)> _teamMiners = new();
+
+    // Miners the team currently fields / the per-team cap (server-authoritative, from MsgTeamState).
+    public int TeamMinerCount(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Count : 0;
+    public int TeamMinerCap(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Cap : 0;
 
     // True once the team's fog has revealed at least one asteroid of `rockClass`. Defers to the
     // server while no team state has arrived yet (only block on positive knowledge — the server
@@ -887,6 +896,7 @@ public partial class WorldRenderer : Node3D
         public uint StartTick;
         public uint DurationTicks;
         public ulong TargetId;
+        public bool ProducesMiner; // true = a miner order in the shared production queue (roster shows "MINER DRONE")
     }
 
     private System.Collections.Generic.List<ConstructorStatus> _constructorStates = new();

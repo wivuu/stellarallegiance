@@ -138,11 +138,17 @@ public sealed partial class Simulation
 
     private bool IsMinerClass(byte cls) => ShipDefs.TryGetValue(cls, out var d) && d.OreCapacity > 0f;
 
+    // A team's miners toward the cap: live/docked miners PLUS any still producing in the shared
+    // constructor queue (ProducesMiner slots), so ordering counts against the cap immediately and the
+    // count survives the graduate hand-off (producing slot removed as the MinerSlot is added).
     public int MinerCount(byte team)
     {
         int n = 0;
         foreach (var m in _miners)
             if (m.Team == team)
+                n++;
+        foreach (var c in _constructors)
+            if (c.Team == team && c.ProducesMiner)
                 n++;
         return n;
     }
@@ -209,8 +215,22 @@ public sealed partial class Simulation
                 MinerNoticesThisStep.Add((team, $"Not enough credits for a miner ({cost})."));
                 return;
         }
-        NewMinerSlot(team, tick);
-        MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        // Order → launch production, routed through the SAME queue as a constructor purchase (a
+        // Producing slot in _constructors, shown in the Build-tab roster with a progress bar + cancel).
+        // The dwell is the miner hull's faction-tunable order-time-seconds; on completion the brain
+        // graduates the slot into a MinerSlot. 0 = no production, launch at once.
+        int orderSec = ShipDefs.TryGetValue((byte)cls, out var md) ? md.OrderTimeSeconds : 0;
+        uint orderTicks = orderSec > 0 ? SecondsToTicks(orderSec) : 0;
+        if (orderTicks == 0)
+        {
+            NewMinerSlot(team, tick);
+            MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        }
+        else
+        {
+            NewMinerProductionSlot(team, tick, orderTicks);
+            MinerNoticesThisStep.Add((team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        }
     }
 
     private MinerSlot NewMinerSlot(byte team, uint tick)
@@ -222,6 +242,7 @@ public sealed partial class Simulation
             LaunchAtTick = tick, // launches on the next brain tick if there's eligible work
         };
         _miners.Add(slot);
+        TeamStateChangedThisStep = true; // restream the MsgTeamState miner-count tail (Build tab "X / N")
         return slot;
     }
 
@@ -269,6 +290,7 @@ public sealed partial class Simulation
                 MinerNoticesThisStep.Add((s.Team,
                     $"Miner destroyed ({MinerCount(s.Team) - 1}/{_mining.MaxMinersPerTeam} left)."));
                 _miners.RemoveAt(i);
+                TeamStateChangedThisStep = true; // restream the miner-count tail so the card ticks down
                 break;
             }
     }

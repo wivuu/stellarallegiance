@@ -75,6 +75,7 @@ public static class Protocol
     public const byte MsgResearch = 13; // u8 op (0 start-or-queue, 1 cancel-active, 2 cancel-on-deck), u64 baseId, u16 devIndex — commander research order at a friendly base (12-byte frame incl. type byte; v36). Hub-gated by CommanderOrWarn; results come back as system chat + the next MsgResearchState.
     public const byte MsgBuildConstructor = 14; // u8 stationTypeId (BaseTypeId to build), u64 launchBaseId (0 = team default garrison) — commander buys a constructor drone that will build this station type (v37). Hub-gated by CommanderOrWarn; launches from a WinCondition base only. Order it to a rock via MsgOrder.
     public const byte MsgConstructorCancel = 15; // u64 constructorId — commander cancels a STILL-PRODUCING constructor (refunds the station price) (v38). Hub-gated by CommanderOrWarn. A launched drone is managed via MsgOrder, not this.
+    public const byte MsgBuyMiner = 16; // (no body) — commander buys a mining drone for their team (replaces the old /buyminer chat command). Team inferred server-side; Hub-gated by CommanderOrWarn. Cap/cost/phase/kill-switch validated on the sim thread (Simulation.TryBuyMiner); results come back as team-scoped MinerNoticesThisStep chat + the MsgTeamState miner-count tail.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -86,7 +87,7 @@ public static class Protocol
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope (0 all, 1 team, 2 commander order directive — team-scoped, gold on the client), u8 fromTeam, str name, str text
-    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap) — low-rate per-team economy (+ owned techs/caps, v36)
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap, u8 discoveredRockClasses (v42), u8 minerCount, u8 minerCap (miner tail)) — low-rate per-team economy (+ owned techs/caps, v36)
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
     public const byte MsgMinefields = 13; // u16 anchorSector, u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change, coarse keepalive, or anchor-sector change)
@@ -1118,8 +1119,10 @@ public static class Protocol
     // appends count-prefixed lists of the ClassIds it may build (Stage-2 unlock gating) and, v36,
     // the tech indices + CapabilityId bytes it owns (Stage-4 research state on the client).
     // HashSets are unordered — every list is SORTED here so the frame is byte-deterministic.
-    public static byte[] BuildTeamState(World world, SimServer.Content.ContentSet content)
+    public static byte[] BuildTeamState(Simulation sim)
     {
+        World world = sim.World;
+        SimServer.Content.ContentSet content = sim.Content;
         var teams = world.TeamStates;
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
@@ -1153,6 +1156,10 @@ public static class Protocol
             // RockClass bitmask of asteroid classes this team's fog has revealed (v42) — lets the
             // Build tab predict the rock-discovery construction gate. 0xFF when fog is off.
             w.Write(kv.Value.DiscoveredRockClasses);
+            // Live miner count + per-team cap (miner tail) — drives the Build tab's "X / N" miner
+            // card readout. Byte-wide: the cap is a small tunable (default 4).
+            w.Write((byte)sim.MinerCount(kv.Key));
+            w.Write((byte)world.Mining.MaxMinersPerTeam);
         }
         w.Flush();
         return ms.ToArray();
@@ -1219,6 +1226,7 @@ public static class Protocol
             w.Write(r.StartTick);
             w.Write(r.DurationTicks);
             w.Write(r.TargetId);
+            w.Write(r.ProducesMiner); // miner order in the shared production queue (roster shows "MINER DRONE")
             n++;
         }
         w.Flush();
@@ -1319,6 +1327,7 @@ public static class Protocol
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);
             w.Write(s.OreCapacity); // mining ore hold (0 = not a miner); client tags MINER hulls + shows capacity
+            w.Write(s.OrderTimeSeconds); // miner order→launch production delay (seconds; 0 = instant)
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
             // Default consumable hold (authored order): u8 count, then n x (u32 cargoId, u8 count).

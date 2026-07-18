@@ -218,9 +218,9 @@ public partial class DefRegistry : Node
 
     // Every buildable ship class (every ship def except the reserved pod and team-only ore miners),
     // ascending by ClassId so the buy menu has a stable order regardless of dictionary iteration.
-    // Miner hulls (OreCapacity > 0) are AI-owned team drones bought via /buyminer, never a personal
-    // spawn — the server drops a player MsgSpawn of one, so hiding them here is UX only. Empty until
-    // the defs arrive.
+    // Miner hulls (OreCapacity > 0) are AI-owned team drones bought from the Build tab (MsgBuyMiner),
+    // never a personal spawn — the server drops a player MsgSpawn of one, so hiding them here is UX
+    // only. Empty until the defs arrive.
     public List<ShipClassDef> BuildableShips()
     {
         var list = new List<ShipClassDef>();
@@ -229,6 +229,18 @@ public partial class DefRegistry : Node
                 list.Add(s);
         list.Sort((a, b) => a.ClassId.CompareTo(b.ClassId));
         return list;
+    }
+
+    // The team's mining-drone hull: the lowest-ClassId ship def with an ore hold (OreCapacity > 0),
+    // mirroring the server's MinerClassId selection. Null when the content bundle has no miner hull
+    // (mining dormant). The Build tab reads this for the MINER DRONE card's cost + existence.
+    public ShipClassDef? MinerShipDef()
+    {
+        ShipClassDef? best = null;
+        foreach (var s in _ships.Values)
+            if (s.OreCapacity > 0f && (best is null || s.ClassId < best.ClassId))
+                best = s;
+        return best;
     }
 
     public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;

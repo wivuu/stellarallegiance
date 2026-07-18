@@ -394,6 +394,10 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
+    // Commander buys a mining drone for their team: [16] (no body). Replaces the old /buyminer chat
+    // command. Team inferred server-side; the server validates cap/cost/phase and charges the hull.
+    public void SendBuyMiner() => _tx.Writer.TryWrite([16]); // MsgBuyMiner
+
     public void SetTeam(byte team)
     {
         _tx.Writer.TryWrite([5, team]); // MsgSetTeam
@@ -936,10 +940,12 @@ public partial class GameNetClient : Node
             uint startTick = r.ReadUInt32();
             uint durationTicks = r.ReadUInt32();
             ulong targetId = r.ReadUInt64();
+            bool producesMiner = r.ReadBoolean();
             list.Add(new WorldRenderer.ConstructorStatus
             {
                 Id = id, StationTypeId = stationType, State = state,
                 StartTick = startTick, DurationTicks = durationTicks, TargetId = targetId,
+                ProducesMiner = producesMiner,
             });
         }
         _world.NetUpdateConstructorState(list);
@@ -1242,7 +1248,10 @@ public partial class GameNetClient : Node
                 ownedCaps[j] = r.ReadByte();
             // Discovered-rock-class bitmask (v42) — the rock-gated construction lock predictor.
             byte rockClasses = r.ReadByte();
-            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps, rockClasses);
+            // Live miner count + per-team cap (miner tail) — the Build tab's "X / N" miner readout.
+            byte minerCount = r.ReadByte();
+            byte minerCap = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps, rockClasses, minerCount, minerCap);
         }
     }
 
@@ -1620,6 +1629,7 @@ public partial class GameNetClient : Node
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
             d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
+            d.OrderTimeSeconds = r.ReadInt32(); // miner order→launch delay (seconds; 0 = instant)
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).

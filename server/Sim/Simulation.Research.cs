@@ -35,7 +35,7 @@ public partial class Simulation
     public readonly List<(byte Team, string Text)> ResearchTeamNoticesThisStep = new();
 
     // Thread-safe intake (socket thread); commander gating happens upstream at the hub
-    // (ClientHub.CommanderOrWarn), mirroring /buyminer.
+    // (ClientHub.CommanderOrWarn), the same pattern the miner and constructor buys use.
     public void EnqueueResearchOp(int clientId, byte team, byte op, ulong baseId, ushort devIndex)
     {
         lock (_qLock)

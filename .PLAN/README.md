@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- 'Build' pane does not include miners, but we should be able to purchase up to N miners per team
 - Make the circle around the sector in the minimap an indicator of the sector the camera is currently looking at (f3 or active piloting)
 - Add different gun effects 
   - i.e. minigun green, different looking bolt
@@ -282,6 +281,7 @@ Stage-2 economy, no rework.
   - As the ship is preparing to ripcord, it should display a visual countdown, and very slowly list/spin in a circle until the countdown reaches zero, then the ship is instantly transported.
   - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded back and the countdown cancels
   - Show a visual flash as the user leaves and enters the sector via teleport/ripcord
+- **[M]** **Mini-preview of target** — Display information about the currently selected target in a compact HUD element, including health, type, and distance. This allows players to quickly assess threats and opportunities without opening the full F3 map. We should also show it in the F3 map.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 

@@ -38,6 +38,12 @@ float baseHp = content.Bases[0].MaxHealth;
 // stay pre-multiplier. A dedicated Iron-enabled case at the end proves the multipliers DO apply.
 Simulation.AttributesEnabledDefault = false;
 
+// Bought miners now have a per-hull order→launch production delay (order-time-seconds, stock 30s).
+// This suite asserts POST-LAUNCH behavior (claims, collisions, reroutes), so neutralize the delay so
+// a purchased miner launches on the next eligible brain tick like before. A dedicated case at the end
+// (`order-time-seconds gates the launch`) restores it and proves the delay DOES hold the launch back.
+content.Ships.First(s => s.ClassId == 4).OrderTimeSeconds = 0;
+
 // Mirror World.AssignOre's size-scaled, clamped He3 capacity so the capacity assertions match the sim
 // exactly: the rock's volume (radius³) fraction across the field size range interpolates [capMin,
 // capMax], richness scales it, and the result is clamped hard back into the band.
@@ -1495,6 +1501,37 @@ if (retreatSim is { } rsim)
     Check(w.TeamAttr(0, 11) == 1f,
         "TeamAttr defaults to 1.0 for an unset attribute (ScanRange)",
         $"unset attribute did not default to 1.0 (ScanRange {w.TeamAttr(0, 11)})");
+}
+
+// ---- order-time-seconds routes a miner order through the SAME production queue as constructors:
+//      it PRODUCES (in the constructor roster, counted toward the miner cap) before graduating into a
+//      MinerSlot. Restores the delay this suite zeroed above. ----
+{
+    var minerDef = content.Ships.First(s => s.ClassId == 4);
+    minerDef.OrderTimeSeconds = 3; // 3s = 60 ticks at 20 Hz
+    try
+    {
+        var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(4), radius: 500f);
+        var w = MakeWorld(777, cfg);
+        var sim = new Simulation(w, content);
+        sim.StartMatch();
+        w.TeamStates[0].Credits = 100_000; // fund the buy
+        sim.EnqueueMinerBuy(0);
+        for (int i = 0; i < 15; i++) sim.Step(); // drain the buy + a few ticks (well under the 60-tick delay)
+        // While producing: the order is NOT yet a MinerSlot (only the free seed is), but it counts
+        // toward the cap and shows in the constructor roster as a ProducesMiner Producing (state 0) row.
+        bool producing = sim.ConstructorStatesView().Any(r => r.ProducesMiner && r.State == 0);
+        Check(sim.MinerCount(0) == 2 && sim.MinerSlotsView().Count == 1 && producing,
+            "a bought miner PRODUCES in the shared queue (counts toward cap, roster row, not yet a MinerSlot)",
+            $"produce routing wrong (count {sim.MinerCount(0)}, slots {sim.MinerSlotsView().Count}, producing {producing})");
+        for (int i = 0; i < 70; i++) sim.Step(); // step past the 60-tick order-time → graduate
+        bool graduated = sim.MinerSlotsView().Count == 2
+            && !sim.ConstructorStatesView().Any(r => r.ProducesMiner);
+        Check(graduated && sim.MinerCount(0) == 2,
+            "after order-time the miner graduates into a MinerSlot and leaves the production queue",
+            $"graduation wrong (slots {sim.MinerSlotsView().Count}, count {sim.MinerCount(0)})");
+    }
+    finally { minerDef.OrderTimeSeconds = 0; }
 }
 
 Console.WriteLine(failures == 0 ? "\nALL MINING TESTS PASSED" : $"\n{failures} MINING TEST(S) FAILED");

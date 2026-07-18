@@ -123,6 +123,7 @@ namespace StellarAllegiance.Shared
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
+        public int OrderTimeSeconds; // miner production delay: seconds from ORDERING this hull to it launching (constructor-Producing analogue); 0 = instant. Streamed after OreCapacity.
         public bool IsConstructor; // v37: a constructor drone chassis (builds bases). Server-only (NOT streamed — client uses ShipFlagConstructor); projected from HullAbility.IsBuilder.
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0

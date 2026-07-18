@@ -1440,7 +1440,7 @@ public sealed partial class Simulation
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
             // A miner hull is a team drone, never a player ship: a MsgSpawn asking for it is
-            // dropped like a locked class (buy one with /buyminer instead). Guards the sim even
+            // dropped like a locked class (buy one from the Build tab instead). Guards the sim even
             // when a client fails to hide ore hulls from its hangar.
             if (IsMinerClass(info.cls))
                 continue;
@@ -1484,7 +1484,7 @@ public sealed partial class Simulation
     // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
     // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
     // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
-    // Authority for a PLAYER's own hull stays any-player-spends; team-drone buys (/buyminer) are
+    // Authority for a PLAYER's own hull stays any-player-spends; team-drone buys (MsgBuyMiner) are
     // commander-gated upstream at the hub (ClientHub.CommanderOrWarn) before they reach this seam.
     public SpawnDecision TryReserveSpawn(byte team, byte cls)
     {
