@@ -21,7 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Faction name "Iron Coalition" is streamed but never displayed.
-- Dont show grayed out unresearched items in 'build' or 'hangar'; i.e. if gat gun 2 isnt researched, dont gray it out - dont display it at all. Same with ships and other equipment.
+- ce5655737898f061b9b1bb74d8ffb6497ecdd0ad attempted to make weapon hardpoints only allow either gun or missile; but currently it does not work - i can assign ER nanite in slot 2 of scout OR a missile
 - Booster fuel needed, interceptor starting fuel too low, and we need the ability to add additional fuel to cargo that can load when we run out
 - hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
@@ -357,8 +357,9 @@ Stage-1 YAML pipeline.
   (deduct at start AND at queue-reservation; cancel = 100% refund; dead base = loss); completion
   grants techs/caps and re-resolves unlocks **mid-match** (`Simulation.Research.cs`; per-team
   `MsgResearchState`, startTick+duration encoded). Stock tree gates the **bomber** behind
-  `heavy-ordnance` and a new **heavy-cannon** behind `cannon-tier-2` (arsenal shows real
-  `⚿ LOCKED · REQUIRES <tech>` rows). The BUILD tab renders the 7 future station types from YAML as
+  `heavy-ordnance` and a new **heavy-cannon** behind `cannon-tier-2` (2026-07-18: unresearched
+  items are HIDDEN outright in the hangar/build UI — no greyed `⚿ LOCKED` rows/cards; research
+  makes them appear). The BUILD tab renders the 7 future station types from YAML as
   placeholders (real gating states, purchase disabled until base building). `tests/StrategyTest`
   research suite + ContentTest catalog checks. *Deferred: stat-modifier developments
   (AttributeModifiers), per-site base types for slots, authored obsoleted-by content, hull unlock

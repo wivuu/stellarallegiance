@@ -14,8 +14,10 @@ namespace StellarAllegiance.Ui;
 //
 //  The center is a responsive card GRID of the station CATALOG (DefRegistry.AllStationCatalog()
 //  entries with BaseTypeId == -1 — future structures with no runtime base projection). Status is
-//  derived CLIENT-SIDE from streamed data only (owned techs/caps): available = cyan card, locked =
-//  dim. Nothing is baked: an empty catalog shows the awaiting-uplink guard.
+//  derived CLIENT-SIDE from streamed data only (owned techs/caps): a structure whose research
+//  prerequisites aren't met is HIDDEN outright (research makes its card appear); situational locks
+//  (undiscovered build rock, full build queue) grey the card. Nothing is baked: an empty catalog
+//  shows the awaiting-uplink guard.
 //
 //  Construction is NOT wired anywhere — the action footer is ALWAYS disabled ("CONSTRUCTORS
 //  OFFLINE"); building lands with the base-building update. No MsgSpawn/MsgResearch is sent here.
@@ -232,10 +234,16 @@ public partial class BuildTab : Control
         foreach (ushort t in _world.TeamOwnedTechs(team))
             sig ^= (t + 1) * 2654435761L;
         // Fold capability ownership: caps are a small closed enum, poll each catalog entry's needs.
+        // Fold each owned cap ONCE — a per-entry fold XOR-cancels when two structures need the same cap.
+        var capsSeen = new HashSet<byte>();
         foreach (StationCatalogDef s in catalog)
             foreach (byte c in s.RequiredCaps)
-                if (_world.TeamOwnsCap(team, c))
+                if (capsSeen.Add(c) && _world.TeamOwnsCap(team, c))
                     sig ^= (c + 17L) * 40503L;
+        // Fold rock discovery so a scout's find re-enables the greyed constructor card live.
+        for (byte rc = 0; rc < 5; rc++)
+            if (_world.TeamRockClassDiscovered(team, rc))
+                sig ^= (rc + 29L) * 15485863L;
         return sig;
     }
 
@@ -367,16 +375,26 @@ public partial class BuildTab : Control
         bool queueFull = BuildQueueFull(out _);
         foreach (StationCatalogDef s in catalog)
         {
+            // A structure whose research prerequisites aren't met (or that an owned tech obsoleted)
+            // is hidden outright — no greyed card. Situational locks stay visible-but-greyed: an
+            // undiscovered build rock and a full build queue are actionable, not missing research.
+            if (!IsAvailable(s))
+                continue;
             string id = s.Id;
             var card = new StationCard();
             card.Configure(
                 GlyphFor(s.StationClass), s.Name.ToUpperInvariant(), ClassName(s.StationClass),
                 s.Description, TechDetailPanel.PriceText(s.Price), TechDetailPanel.Mmss(s.BuildTimeSeconds),
-                IsAvailable(s) && RockDiscovered(s) && !queueFull, _selectedId == id);
+                RockDiscovered(s) && !queueFull, _selectedId == id);
             card.Pressed += () => SelectStation(id);
             _grid.AddChild(card);
             _cards.Add((id, card));
         }
+
+        // A selection that fell out of the grid (its structure just got obsoleted by research)
+        // reverts the detail panel to the select-a-structure guard.
+        if (_selectedId != null && _cards.All(c => c.id != _selectedId))
+            _selectedId = null;
     }
 
     // The synthetic MINER DRONE card, prepended to the grid. A team mining drone is a ship (not a
@@ -689,8 +707,9 @@ public partial class BuildTab : Control
 //
 //  40px glyph tile + status label; name; "STRUCTURE · <class>" kind line; a two-line description
 //  snippet; footer "₡ price" (amber) + "BUILD mm:ss". Available = cyan border; locked = dim 0.62 +
-//  "⊘ LOCKED"; selected = brighter cyan fill (fills the detail panel). Cyan is chrome here (the
-//  selection cursor / availability), never team identity.
+//  "⊘ LOCKED" (only situational locks render — unresearched structures get no card at all);
+//  selected = brighter cyan fill (fills the detail panel). Cyan is chrome here (the selection
+//  cursor / availability), never team identity.
 // =====================================================================
 internal partial class StationCard : PanelContainer
 {

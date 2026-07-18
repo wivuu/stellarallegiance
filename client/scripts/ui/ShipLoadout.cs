@@ -378,11 +378,14 @@ public partial class ShipLoadout : Control
 
         // 1..9 select the Nth hull — the old buy menu's 1/2/3 spawn hotkeys, now scoped
         // to selection (LAUNCH/Enter-free so chat and launch stay deliberate). The order
-        // matches the card strip (DefRegistry.BuildableShips()).
+        // matches the VISIBLE card strip: tech-locked hulls are hidden there, so they
+        // don't consume a number either.
         int slot = (int)(key.Keycode - Key.Key1);
         if (slot >= 0 && slot < 9)
         {
+            byte hotkeyTeam = _world.LocalTeam ?? _net.MyTeam;
             List<ShipClassDef> ships = _defs.BuildableShips();
+            ships.RemoveAll(s => _world.CheckSpawnGate(hotkeyTeam, s.ClassId) == WorldRenderer.SpawnGate.Locked);
             if (slot < ships.Count)
             {
                 SelectShip(ships[slot].ClassId);
@@ -481,15 +484,21 @@ public partial class ShipLoadout : Control
     }
 
     // The card to highlight when the picker first opens with no in-session pick yet: the hull the
-    // pilot last docked with (UserPrefs.LastShip), if it's still in the buildable set, otherwise the
-    // first buildable ship. Keeps a returning pilot in their preferred ship without forcing it.
+    // pilot last docked with (UserPrefs.LastShip), if it's still in the buildable set AND not
+    // tech-locked (locked hulls have no card — a fresh match can lock a previously flown hull),
+    // otherwise the first unlocked ship. Keeps a returning pilot in their preferred ship.
     private byte DefaultShipClassId(List<ShipClassDef> ships)
     {
+        byte team = _world.LocalTeam ?? _net.MyTeam;
+        bool Unlocked(byte cls) => _world.CheckSpawnGate(team, cls) != WorldRenderer.SpawnGate.Locked;
         int last = UserPrefs.LastShip;
-        if (last >= 0)
+        if (last >= 0 && Unlocked((byte)last))
             foreach (ShipClassDef s in ships)
                 if (s.ClassId == last)
                     return (byte)last;
+        foreach (ShipClassDef s in ships)
+            if (Unlocked(s.ClassId))
+                return s.ClassId;
         return ships[0].ClassId;
     }
 
@@ -629,7 +638,8 @@ public partial class ShipLoadout : Control
         _classId is byte classId && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem) > def.PayloadCapacity;
 
     // The arsenal: every streamed weapon that fits the selected slot, plus the empty-slot
-    // row and a placeholder tech-locked entry (the lock becomes real with the tech tree).
+    // row. Weapons gated behind unresearched tech are hidden outright (no locked rows) —
+    // the arsenal only lists what the pilot can actually equip; research makes rows appear.
     private void RefreshArsenal()
     {
         foreach (var child in _arsenalRows.GetChildren())
@@ -677,24 +687,19 @@ public partial class ShipLoadout : Control
         }
 
         int fit = 0;
-        var lockedDefs = new List<WeaponDef>();
         foreach (WeaponDef w in _defs.AllWeapons())
         {
             if (!LoadoutState.Compatible(slot, w))
                 continue;
             // A tier the team has outgrown (an owned tech obsoletes it) is retired from the arsenal
-            // entirely — not even shown as locked. Its successor tier carries the mount instead.
+            // entirely. Its successor tier carries the mount instead.
             if (w.ObsoletedByTechIdx.Length > 0 && w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t)))
                 continue;
-            fit++;
             // A weapon gated behind tech the team hasn't fully researched can't be equipped —
-            // it drops into the locked section below (heavy-cannon is the stock case). A weapon
-            // whose required techs are ALL owned (or has none) is a normal equippable row.
+            // it's hidden entirely (heavy-cannon is the stock case), not rendered as a locked row.
             if (w.RequiredTechIdx.Length > 0 && !w.RequiredTechIdx.All(t => _world.TeamOwnsTech(team, t)))
-            {
-                lockedDefs.Add(w);
                 continue;
-            }
+            fit++;
             uint weaponId = w.WeaponId;
             bool isEquipped = equipped == weaponId;
             var row = new LoadoutSlot { Selected = isEquipped };
@@ -711,18 +716,6 @@ public partial class ShipLoadout : Control
             _arsenalRows.AddChild(row);
         }
         _arsenalFit.Text = $"{fit} FIT";
-
-        // Real tech-locked rows: weapons that fit this slot but need unresearched tech. Rendered
-        // dim with the required tech name(s); no Pressed handler, so clicking never equips them.
-        foreach (WeaponDef w in lockedDefs)
-        {
-            string techs = string.Join(", ", w.RequiredTechIdx.Select(
-                t => _defs.GetTech(t)?.Name.ToUpperInvariant() ?? $"TECH {t}"));
-            var locked = new LoadoutSlot { Accent = DesignTokens.TextDim };
-            locked.Configure("⚿ LOCKED", w.Name.ToUpperInvariant(), $"REQUIRES {techs}");
-            locked.Modulate = new Color(1, 1, 1, 0.6f);
-            _arsenalRows.AddChild(locked);
-        }
     }
 
     // Walk the weapon-tier successor chain: while the current weapon is obsoleted by a tech the team

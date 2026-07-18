@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
@@ -145,8 +144,10 @@ public partial class ShipLoadout
         _cardGateSig = long.MinValue; // force a state refresh next frame
     }
 
-    // Grey + note the cards this team can't currently launch (tech-locked or unaffordable), reading
-    // the same gate as the LAUNCH button. Only reruns when the gate inputs (credits/unlocks) change.
+    // Apply the launch gate to the card strip: tech-locked hulls are HIDDEN outright (the strip only
+    // lists what the team can actually field — researching a hull makes its card appear), unaffordable
+    // ones grey. Reads the same gate as the LAUNCH button; only reruns when the gate inputs
+    // (credits/unlocks) change.
     private void RefreshShipCardStates(byte team)
     {
         long sig = team + 1L + (long)_world.TeamCredits(team) * 131L;
@@ -158,18 +159,21 @@ public partial class ShipLoadout
         _cardGateSig = sig;
 
         foreach (var (classId, card) in _shipCards)
-            card.SetGate(_world.CheckSpawnGate(team, classId), LockNoteFor(classId));
-    }
+        {
+            var gate = _world.CheckSpawnGate(team, classId);
+            card.Visible = gate != WorldRenderer.SpawnGate.Locked;
+            card.SetGate(gate);
+        }
 
-    // The "REQUIRES <tech>" note for a locked hull card, resolved from the hull's streamed
-    // RequiredTechIdx exactly like the weapon-arsenal locked rows. Null when the hull authored no
-    // required-techs (the card falls back to the generic "TECH LOCKED").
-    private string? LockNoteFor(byte classId)
-    {
-        if (!_defs.TryGetShipDef(classId, out ShipClassDef def) || def.RequiredTechIdx.Length == 0)
-            return null;
-        return "REQUIRES " + string.Join(", ", def.RequiredTechIdx.Select(
-            t => _defs.GetTech(t)?.Name.ToUpperInvariant() ?? $"TECH {t}"));
+        // The selected hull can go hidden under us (a persisted last-ship pick landing before the
+        // first team state proved it locked) — fall back to the first fieldable card.
+        if (_classId is byte sel && _world.CheckSpawnGate(team, sel) == WorldRenderer.SpawnGate.Locked)
+            foreach (var (classId, card) in _shipCards)
+                if (card.Visible)
+                {
+                    SelectShip(classId);
+                    break;
+                }
     }
 
     // ---- right: hardpoints + arsenal + cargo ------------------------------------
@@ -367,8 +371,8 @@ public partial class ShipLoadout
             case 4: DragPreview(new Vector2(150, -40)); break;
             case 5: Snap("03-rotated"); break;
             case 6: ClickFirstMarker(); break;
-            // The arsenal for a PRIMARY weapon hardpoint now lists the heavy-cannon as a real
-            // tech-locked row (⚿ LOCKED · REQUIRES CLASS-2 CANNON DOCTRINE) — snap it before equipping.
+            // The arsenal for a PRIMARY weapon hardpoint lists only researched weapons — the
+            // unresearched heavy-cannon is hidden outright, not shown as a locked row.
             case 7: Snap("04-slot-selected"); break;
             case 8: ClickArsenalRow(); break;
             case 9: Snap("05-equipped"); break;
@@ -394,12 +398,12 @@ public partial class ShipLoadout
             case 25: Snap("13-build-catalog"); break;
             case 26: ClickBuildCard(); break;
             case 27: Snap("14-build-selected"); break;
-            // Back on the HANGAR tab, reopen a primary weapon slot; the equippable weapons fill the
-            // arsenal, so scroll it to reveal the heavy-cannon ⚿ LOCKED row before snapping.
+            // Back on the HANGAR tab, reopen a primary weapon slot and scroll the arsenal to its
+            // foot — proves the unresearched heavy-cannon stays hidden (no ⚿ LOCKED row).
             case 28: ClickTab("HANGAR"); break;
             case 29: ClickFirstMarker(); break;
-            case 30: ScrollArsenalToLock(); break;
-            case 31: Snap("15-arsenal-locked"); break;
+            case 30: ScrollArsenalToEnd(); break;
+            case 31: Snap("15-arsenal-bottom"); break;
             case 32: _demoLaunched = true; ClickAt(_launch.GetGlobalRect().GetCenter()); break;
             // Only reached if the spawn never landed — the ship spawning closes this
             // screen first and DemoAfterLaunch takes the final shot instead.
@@ -415,8 +419,8 @@ public partial class ShipLoadout
             GD.PrintErr("HANGAR_DEMO: no build card available");
     }
 
-    // Scroll the right column so the tech-locked arsenal rows (bottom of the weapon list) show.
-    private void ScrollArsenalToLock()
+    // Scroll the right column to the bottom of the weapon list.
+    private void ScrollArsenalToEnd()
     {
         Node? n = _arsenalRows;
         while (n != null && n is not ScrollContainer)
@@ -493,12 +497,16 @@ public partial class ShipLoadout
         Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = pos, GlobalPosition = pos });
     }
 
-    // Click the Nth ship card in the strip (guarded — the harness may run with fewer hulls).
+    // Click the Nth VISIBLE ship card in the strip (guarded — the harness may run with fewer
+    // hulls, and tech-locked cards are hidden so they don't count).
     private void ClickShipCard(int idx)
     {
-        if (idx < 0 || idx >= _shipCards.Count)
-            return;
-        ClickAt(_shipCards[idx].card.GetGlobalRect().GetCenter());
+        foreach (var (_, card) in _shipCards)
+            if (card.Visible && idx-- == 0)
+            {
+                ClickAt(card.GetGlobalRect().GetCenter());
+                return;
+            }
     }
 
     // Click the Nth friendly base row in the CommandSidebar (guarded — none pre-world).
@@ -561,8 +569,9 @@ public partial class ShipLoadout
     }
 
     // Compact ship-class card for the horizontal strip: class glyph, name, and a role · cost line.
-    // Selected = cyan border + tint; gated (tech-locked / unaffordable) = greyed with a lock note.
-    // Cyan here is chrome (the selection cursor), never team identity.
+    // Selected = cyan border + tint; unaffordable = greyed with a warn cost line. Tech-locked hulls
+    // never render (RefreshShipCardStates hides their cards); the Locked style survives only for the
+    // UiShowcase gallery. Cyan here is chrome (the selection cursor), never team identity.
     public sealed partial class ShipCard : PanelContainer
     {
         private Label _glyph = null!;
@@ -618,9 +627,8 @@ public partial class ShipLoadout
             Restyle();
         }
 
-        // Reflect the launch gate: Locked/unaffordable grey the card and swap the sub line for a note.
-        // lockNote names the gating tech (e.g. "REQUIRES SUPREMACY FIELDED") the way the weapon-arsenal
-        // rows do — falls back to the generic "TECH LOCKED" when the hull authored no required-techs.
+        // Reflect the launch gate: unaffordable greys the card and warns the cost line. The Locked
+        // style is showcase-only in practice — the hangar hides locked cards instead of greying them.
         public void SetGate(WorldRenderer.SpawnGate gate, string? lockNote = null)
         {
             EnsureBuilt();

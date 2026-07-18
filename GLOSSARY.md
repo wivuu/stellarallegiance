@@ -539,8 +539,9 @@ startTick+duration — the client derives live progress from ServerTick.
 The BUILD docked-screen tab: a responsive card grid of the **station catalog** — future structures
 (outpost, shipyard, refinery, tech-lab, supremacy-center, expansion-complex, teleport-receiver)
 authored with `base-type-id` omitted, so they never project to a runtime base (`BaseTypeId == -1`).
-Cards show availability from the same owned-tech/cap rules as research (available = cyan, locked =
-dim). It reuses `TechDetailPanel`. Construction is **not wired** — the action footer is always
+Cards use the same owned-tech/cap rules as research, but an UNRESEARCHED structure is hidden
+outright (no card until its prerequisites are owned); only situational locks — undiscovered build
+rock, full build queue — render as dim "⊘ LOCKED" cards. It reuses `TechDetailPanel`. Construction is **not wired** — the action footer is always
 disabled ("CONSTRUCTORS OFFLINE"); base-building lands in a later phase. No frames are sent from this tab.
 - **Frequency:** Occasional
 - **Key Files:**
