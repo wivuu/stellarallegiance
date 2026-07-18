@@ -218,10 +218,15 @@ public sealed class LoadoutState
                 {
                     byte hpIndex = (byte)weapons[i];
                     uint weaponId = (uint)weapons[i + 1];
-                    if (hardpoints is null || !HasWeaponSlot(hardpoints, hpIndex))
+                    if (hardpoints is null || FindWeaponSlot(hardpoints, hpIndex) is not HardpointDef hp)
                         continue; // slot no longer exists on this hull
-                    if (weaponId != HardpointDef.NoWeapon && defs.GetWeapon(weaponId) is null)
-                        continue; // weapon isn't in this match's content
+                    if (weaponId != HardpointDef.NoWeapon)
+                    {
+                        if (defs.GetWeapon(weaponId) is not WeaponDef w)
+                            continue; // weapon isn't in this match's content
+                        if (!Compatible(hp, w))
+                            continue; // saved before the slot's mount type restricted it
+                    }
                     Assign(classId, hpIndex, weaponId == HardpointDef.NoWeapon ? (uint?)null : weaponId);
                     restored = true;
                 }
@@ -247,12 +252,12 @@ public sealed class LoadoutState
         }
     }
 
-    private static bool HasWeaponSlot(List<HardpointDef> hardpoints, byte hpIndex)
+    private static HardpointDef? FindWeaponSlot(List<HardpointDef> hardpoints, byte hpIndex)
     {
         foreach (HardpointDef hp in hardpoints)
             if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex)
-                return true;
-        return false;
+                return hp;
+        return null;
     }
 
     // The class's current hold as (cargoId, count) pairs (positive counts only) — the array
@@ -297,8 +302,11 @@ public sealed class LoadoutState
         return used;
     }
 
-    // Whether a weapon fits a hardpoint. Today every streamed weapon is a Bolt and every
-    // Weapon-kind mount accepts it; the future rule adds category (primary/missile/utility)
-    // and size (S/M/L) fields on both sides — see the design's compatibility model.
-    public static bool Compatible(HardpointDef hp, WeaponDef w) => hp.Kind == HardpointKind.Weapon;
+    // Whether a weapon fits a hardpoint: the streamed mount type decides (a gun mount takes guns,
+    // a missile mount takes racks, an untyped mount takes either; dispensers never mount). The
+    // rule itself is shared/HardpointDef.MountAccepts, and hp.Mount is resolved server-side at
+    // projection (hulls.yaml `mount:`, else derived from the authored weapon) — so this filter and
+    // the server's ResolveLoadout gate can never disagree.
+    public static bool Compatible(HardpointDef hp, WeaponDef w) =>
+        hp.Kind == HardpointKind.Weapon && HardpointDef.MountAccepts(hp.Mount, w.Kind);
 }

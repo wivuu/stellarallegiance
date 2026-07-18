@@ -7,8 +7,12 @@
 //
 // Content facts this suite leans on (server/Content/core — Iron Coalition roster):
 //   Scout (cls 0, payload 12):   weapon hp0 = gat-gun-1 (id 0, mass 1, interval 4); hp1 = EMPTY mount
-//                                 (armed by an override). default hold: 3 mine + 1 decoy + 1 probe.
-//   Fighter (cls 1, payload 20): hp0/hp1/hp2 = gat-gun-1 (id 0, mass 1, interval 4). all-gun, no rack.
+//                                 (mesh-appended, UNTYPED — armed by an override with a gun OR a
+//                                 rack). default hold: 3 mine + 1 decoy + 1 probe.
+//   Fighter (cls 1, payload 20): hp0/hp1/hp2 = gat-gun-1 (id 0, mass 1, interval 4). all-gun, no
+//                                 rack; every mount is GUN-typed (racks reject — scenario 4b).
+//   Bomber (cls 2, payload 20):  hp0/hp3 gat, hp1/hp2 autocan (all gun-typed); hp4 = SRM anti-base
+//                                 rack (id 5, mass 4) — the one MISSILE-typed mount.
 //   Seeker rack 1:   weapon-id 3 (Missile, mass 4, magazine 6) — mountable with no tech; obsoleted by
 //                     seeker-2 -> migrates to weapon-id 18 (seeker-rack-2) once owned.
 //   Quickfire rack 1: weapon-id 4 (Missile, mass 2, magazine 6) — mountable with no tech (Iron
@@ -25,8 +29,10 @@
 //   3. Tech gate: Gat Gun 2 (weapon-id 1) without gat-2 -> whole-request revert to authored; with the
 //      tech seeded -> accepted (MountWeaponIds echo + emptied mount seeds nothing).
 //   4. Whole-request reject: bad hpIndex / dispenser weapon id / payload overflow — each reverts
-//      BOTH mounts and cargo to authored (cargo proven via the dispenser ammo seed); the same request
-//      that overflows the scout (cap 12) fits the fighter (cap 20).
+//      BOTH mounts and cargo to authored (cargo proven via the dispenser ammo seed); the same swap
+//      with a smaller hold fits, proving the overflow reject was capacity, not content.
+//   4b. Mount-type gate: a rack rejects on a gun-typed mount, a gun rejects on the bomber's
+//      missile-typed SRM mount, rack-for-rack on that mount is accepted.
 //   5. Per-mount cadence: mixed gat-gun-1(4) + mini-gun-1(3) fire on their own intervals, and a
 //      client-side shadow replaying shared FireCadence against ONLY the observed LastFireTick
 //      sequence reconstructs the server's MountLastFire exactly (the derivation invariant remote
@@ -239,10 +245,10 @@ Simulation.ShipSim Spawn(
     );
 }
 
-// ---- 3b. ER Nanite (Phase 5): the healing gun swaps onto the Scout's 0x3 mount (no per-mount mask) --
-// Our schema has no per-mount compatibility mask (ResolveLoadout accepts any Bolt/Missile weapon the
-// team's tech allows that fits payload), so a Nanite (id 15, Bolt, mass 2, no tech) mounts on the
-// Scout's single gun hp0 exactly like a gun swap — it stores + fires. Tier 3 (id 17) needs nanite-3.
+// ---- 3b. ER Nanite (Phase 5): the healing gun swaps onto the Scout's 0x3 mount -------------------
+// The mount-type gate restricts CATEGORY only (gun mount takes guns, missile mount takes racks —
+// scenario 4b), so a Nanite (id 15, Bolt, mass 2, no tech) mounts on the Scout's gun-typed hp0
+// exactly like a gun swap — it stores + fires. Tier 3 (id 17) needs nanite-3.
 {
     const uint Nanite1 = 15;
     var sim = BootSim(seed: 31);
@@ -281,7 +287,7 @@ Simulation.ShipSim Spawn(
 
     // (c) payload overflow: seeker rack (4) on hp1 + gat (1) = 5 weapon mass, plus a 10-mine request
     // (10) = 15 > scout capacity 12 — the reject must ALSO revert the requested cargo to the authored
-    // hold. The SAME request is proven to fit the fighter in (d).
+    // hold. The SAME swap is proven legal in (d) with a hold that fits.
     var c = Spawn(sim, 3, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 3u)], cargo: [(2u, 10)]);
     Check(c.MountWeaponIds is null, "over-payload swap rejects to authored mounts", "over-payload swap accepted");
     Check(
@@ -290,13 +296,40 @@ Simulation.ShipSim Spawn(
         $"cargo not reverted (mine {c.MineAmmo}/{control.MineAmmo}, chaff {c.ChaffAmmo}/{control.ChaffAmmo}, probe {c.ProbeAmmo}/{control.ProbeAmmo})"
     );
 
-    // (d) the same request on a hull with the budget for it (fighter cap 20: gat+seeker+gat = 6,
-    // + 10 mines = 16 ≤ 20) is ACCEPTED — proving (c) failed on capacity, not on the weapon/cargo.
-    var d = Spawn(sim, 4, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 3u)], cargo: [(2u, 10)]);
+    // (d) the same swap with a hold that fits (gat 1 + seeker 4 + 7 mines = 12 ≤ scout cap 12) is
+    // ACCEPTED — proving (c) failed on capacity, not on the weapon/cargo.
+    var d = Spawn(sim, 4, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 3u)], cargo: [(2u, 7)]);
     Check(
-        d.MountWeaponIds is [0u, 3u, 0u] && d.MineAmmo == 10 && d.ChaffAmmo == 0,
-        "same request fits the fighter (16/20) — accepted (seeker rack on hp1, 10-mine hold)",
+        d.MountWeaponIds is [0u, 3u] && d.MineAmmo == 7 && d.ChaffAmmo == 0,
+        "same swap with a 7-mine hold fits the scout exactly (12/12) — accepted",
         $"legal swap rejected (mounts [{string.Join(",", d.MountWeaponIds ?? [])}], mine {d.MineAmmo}, chaff {d.ChaffAmmo})"
+    );
+}
+
+// ---- 4b. Mount-type gate: a mount only takes its own weapon category ----------------------------
+// Mount types resolve at projection from the authored weapon (gun -> gun mount, rack -> missile
+// mount) or hulls.yaml `mount:`; the scout's mesh-appended hp1 is untyped (accepts either, proven
+// by scenarios 2/8/9 above). HardpointDef.MountAccepts is the shared rule the hangar mirrors.
+{
+    var sim = BootSim(seed: 41, "bomber"); // bomber hull is tech-gated; seed its unlock
+
+    // (a) missile rack on a GUN mount: the fighter's hp1 is gun-typed (authored gat-gun-1) — the
+    // same seeker rack that mounts fine on the scout's untyped hp1 whole-request-rejects here.
+    var a = Spawn(sim, 1, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 3u)]);
+    Check(a.MountWeaponIds is null, "missile rack on a gun mount rejects to authored mounts", "rack accepted on a gun mount");
+
+    // (b) gun on a MISSILE mount: the bomber's hp4 is missile-typed (authored SRM anti-base rack).
+    var b = Spawn(sim, 2, team: 0, cls: FlightModel.ClassBomber, mounts: [(4, 0u)]);
+    Check(b.MountWeaponIds is null, "gun on a missile mount rejects to authored mounts", "gun accepted on a missile mount");
+
+    // (c) rack for rack: a seeker rack IS missile-category, so it swaps onto the bomber's SRM
+    // mount (mass 4 -> 4; the override ships an empty hold). Team 1: team 0's credits already
+    // bought (b)'s bomber, and a TooPoor drop would look like a false reject.
+    var c = Spawn(sim, 3, team: 1, cls: FlightModel.ClassBomber, mounts: [(4, 3u)]);
+    Check(
+        c.MountWeaponIds is [0u, 12u, 12u, 0u, 3u],
+        "seeker rack swaps onto the bomber's missile mount (effective [gat, autocan, autocan, gat, seeker])",
+        $"rack-for-rack swap wrong (mounts [{string.Join(",", c.MountWeaponIds ?? [])}])"
     );
 }
 

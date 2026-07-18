@@ -409,7 +409,7 @@ The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) 
   - `shared/FireCadence.cs` — THE per-mount gun-cadence rule shared by server TryFire, PredictionController, and WorldRenderer.SpawnBoltFor
   - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept) vs filtered WeaponMounts; SlotsForShip overlay
 - **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
-- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
+- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, untyped mounts take either — `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
 
 ---
 
@@ -462,7 +462,7 @@ Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints f
 - **Notes:** Immutable after game start; each hull has unique GLB 3D model and collision shape
 
 ### Hardpoint
-Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. Unbound mesh Weapon nodes stream as empty assignable mounts (`HardpointDef.NoWeapon`).
+Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. Unbound mesh Weapon nodes stream as empty assignable mounts (`HardpointDef.NoWeapon`). Every Weapon mount carries a MOUNT TYPE (`WeaponMountKind` gun/missile/any, streamed): authored via `mount:` in YAML or derived from the bound weapon (gun→gun, rack→missile, unbound→any) — the hangar and `ResolveLoadout` both reject a weapon of the wrong category via `HardpointDef.MountAccepts`.
 - **Frequency:** Very common
 - **Key Files:**
   - `server/Content/HardpointGeometryMerge.cs` — the mesh→def merge pass (in ContentLoader.Load)

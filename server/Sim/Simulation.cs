@@ -1267,11 +1267,13 @@ public sealed partial class Simulation
 
     // Resolve a spawn request's weapon-slot overrides + consumable hold into the loadout to seed.
     // The two halves share PayloadCapacity, so they validate as ONE request: every override must
-    // name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a hardpoint-
-    // mountable (Bolt/Missile), team-tech-owned weapon; every cargo id must be dispenser cargo;
-    // and the EFFECTIVE mount mass + hold mass must fit PayloadCapacity. Any failure rejects the
-    // whole request (logged) back to the authored loadout (null mounts = class default) — only a
-    // hacked/buggy client hits this, the hangar UI gates capacity and tech before sending.
+    // name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a team-tech-owned
+    // weapon the mount's TYPE accepts (HardpointDef.MountAccepts — a gun mount takes guns, a
+    // missile mount takes racks, an untyped mount takes either; dispensers never mount); every
+    // cargo id must be dispenser cargo; and the EFFECTIVE mount mass + hold mass must fit
+    // PayloadCapacity. Any failure rejects the whole request (logged) back to the authored loadout
+    // (null mounts = class default) — only a hacked/buggy client hits this, the hangar UI gates
+    // mount type, capacity and tech before sending.
     private (uint[]? mountIds, (uint cargoId, byte count)[] cargo) ResolveLoadout(
         byte team, byte cls, (byte hpIndex, uint weaponId)[]? mounts, (uint cargoId, byte count)[] requested)
     {
@@ -1297,10 +1299,14 @@ public sealed partial class Simulation
         if (wantMounts)
         {
             var barrelByIndex = new Dictionary<byte, int>();
+            var mountByIndex = new Dictionary<byte, WeaponMountKind>();
             int barrel = 0;
             foreach (var h in def!.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon)
+                {
                     barrelByIndex[h.Index] = barrel++;
+                    mountByIndex[h.Index] = h.Mount;
+                }
             foreach (var (hpIndex, weaponId) in mounts!)
             {
                 if (!barrelByIndex.TryGetValue(hpIndex, out int b))
@@ -1314,9 +1320,11 @@ public sealed partial class Simulation
                     continue;
                 }
                 if (!WeaponDefs.TryGetValue(weaponId, out var w)
-                    || (w.Kind != WeaponKind.Bolt && w.Kind != WeaponKind.Missile))
+                    || !HardpointDef.MountAccepts(mountByIndex[hpIndex], w.Kind))
                 {
-                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls); // unknown or a dispenser (D8: not mountable)
+                    // Unknown, a dispenser (D8: not mountable), or the wrong category for this
+                    // mount's type (missile on a gun mount / gun on a missile mount).
+                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
                     return (null, fallbackCargo);
                 }
                 foreach (ushort t in w.RequiredTechIdx)

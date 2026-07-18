@@ -20,11 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Disallow missiles from being assigned to gun hardpoints, and vice versa
-- Add different gun effects
-  - i.e. minigun green, different looking bolt
-  - ER nanite shoots glowing blue, thin, toruses
 - Faction name "Iron Coalition" is streamed but never displayed.
+- Dont show grayed out unresearched items in 'build' or 'hangar'; i.e. if gat gun 2 isnt researched, dont gray it out - dont display it at all. Same with ships and other equipment.
 - Booster fuel needed, interceptor starting fuel too low, and we need the ability to add additional fuel to cargo that can load when we run out
 - hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
@@ -272,6 +269,9 @@ Stage-2 economy, no rework.
   - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded back and the countdown cancels
   - Show a visual flash as the user leaves and enters the sector via teleport/ripcord
 - **[M]** **Mini-preview of target** — Display information about the currently selected target in a compact HUD element, including health, type, and distance. This allows players to quickly assess threats and opportunities without opening the full F3 map. We should also show it in the F3 map.
+- Add different gun effects
+  - i.e. minigun green, different looking bolt
+  - ER nanite shoots glowing blue, thin, toruses
 
 ### Stage 4 — Strategy depth (Allegiance core)
 

@@ -24,8 +24,9 @@ namespace SimServer.Content;
 //       Unauthored geometry falls back to the matching mesh node; an entry with neither authored
 //       geometry nor a mesh node is a boot error (named by id+kind+index).
 //    2. Every mesh node NOT claimed by a YAML entry is APPENDED (deterministic order: kind byte,
-//       then index). Appended Weapon mounts get WeaponId = HardpointDef.NoWeapon (an empty,
-//       assignable mount); other kinds get 0 (meaningless for them, as today).
+//       then index). Appended Weapon mounts stay unbound (null WeaponId -> HardpointDef.NoWeapon
+//       at projection: an empty, assignable mount) and untyped (mount: any) — the mesh HP_ node
+//       carries no gun/missile distinction, so restricting a mount requires a YAML entry.
 //
 //  YAML weapon entries keep their YAML order at the head of the list, so the barrel spread-seed
 //  indices (server Simulation / client DefRegistry.WeaponMounts) are unchanged; appended empty
@@ -178,8 +179,10 @@ public static class HardpointGeometryMerge
                 DirX = d.X,
                 DirY = d.Y,
                 DirZ = d.Z,
-                // An unbound weapon mount is EMPTY (assignable later); every other kind ignores WeaponId.
-                WeaponId = kind == Factions.RuntimeHardpointKind.Weapon ? HardpointDef.NoWeapon : 0u,
+                // An unbound weapon mount is EMPTY (null WeaponId -> HardpointDef.NoWeapon at
+                // projection, assignable later); every other kind ignores WeaponId. With no YAML
+                // entry there is no authored `mount:` either, so an appended mount is untyped
+                // (WeaponMountKind.Any) — author a YAML entry with `mount:` to restrict it.
             });
         }
     }

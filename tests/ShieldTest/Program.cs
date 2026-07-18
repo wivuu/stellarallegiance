@@ -64,17 +64,18 @@ void Park(Simulation.ShipSim s, Vec3 pos)
     s.State.AngVel = new Vec3(0f, 0f, 0f);
 }
 
-// Join a ship of the given class. The Iron Coalition fighter is now an all-gun hull (no default
-// missile mount), so a fighter spawn gets a loadout override reconstructing the old default rack
-// (guns on hp 0/1 + a seeker rack on hp 2, with the old default 2 sensor-decoy hold) — needed so
-// FireOneSeekerAndResolve has a seeker to fire when the attacker is a fighter. Bombers already
-// carry their torpedo rack by default, so every other class joins with the plain overload.
+// Join a ship of the given class. No stock hull mounts a seeker by default (and the fighter's
+// gun-typed mounts no longer take racks — mount-type gate), so a SCOUT spawn gets a loadout
+// override arming its untyped empty hp 1 with the seeker rack (plus the old default 2
+// sensor-decoy hold) — needed so FireOneSeekerAndResolve has a seeker to fire when the attacker
+// is a scout. Bombers already carry their torpedo rack by default; every other class joins with
+// the plain overload.
 void JoinShip(Simulation sim, int clientId, byte team, byte cls)
 {
-    if (cls == FlightModel.ClassFighter)
+    if (cls == FlightModel.ClassScout)
         sim.EnqueueJoin(clientId, team: team, cls: cls,
             cargo: new (uint, byte)[] { (3u, 2) },   // 2 sensor-decoy (old default hold)
-            mounts: new (byte, uint)[] { (2, 3u) }); // hp index 2 = seeker rack (old default)
+            mounts: new (byte, uint)[] { (1, 3u) }); // scout hp index 1 = seeker rack
     else
         sim.EnqueueJoin(clientId, team: team, cls: cls);
 }
@@ -140,7 +141,7 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 // A seeker (Damage*DirectHitMult) into a BOMBER (shield 100) that exceeds the hit — the shield
 // takes the whole hit (shieldMult 1) and the hull stays full.
 {
-    var (sim, attacker, target) = SetupDuel(seed: 2, FlightModel.ClassFighter, FlightModel.ClassBomber, dist: 300f);
+    var (sim, attacker, target) = SetupDuel(seed: 2, FlightModel.ClassScout, FlightModel.ClassBomber, dist: 300f);
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     float hit = seeker.Damage * seeker.DirectHitMult;
     float cap = ShieldCap(sim, FlightModel.ClassBomber);
@@ -158,7 +159,7 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 // The same seeker into a FIGHTER (shield 60) where the hit exceeds the shield: shield -> 0 and the
 // remainder (hit - 60) lands on the hull the same tick.
 {
-    var (sim, attacker, target) = SetupDuel(seed: 3, FlightModel.ClassFighter, FlightModel.ClassFighter, dist: 300f);
+    var (sim, attacker, target) = SetupDuel(seed: 3, FlightModel.ClassScout, FlightModel.ClassFighter, dist: 300f);
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     float hit = seeker.Damage * seeker.DirectHitMult;
     float cap = ShieldCap(sim, FlightModel.ClassFighter);
@@ -290,7 +291,7 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 // warhead (Damage × DirectHitMult). Proves MissileDamage is applied at the detonation seam (team 0).
 {
     var sim = BootSim(seed: 43, attributes: true); // Iron GAS ON
-    JoinShip(sim, 1, team: 0, cls: FlightModel.ClassFighter);
+    JoinShip(sim, 1, team: 0, cls: FlightModel.ClassScout); // seeker-armed via the JoinShip override
     JoinShip(sim, 2, team: 1, cls: FlightModel.ClassBomber);
     sim.Step();
     var attacker = sim.Ships.First(s => s.OwnerClientId == 1);

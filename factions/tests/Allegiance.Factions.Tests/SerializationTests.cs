@@ -161,6 +161,26 @@ public class SerializationTests
     }
 
     [Fact]
+    public void Deserialize_HardpointMountTypeAndEmptyWeaponId()
+    {
+        var hull = CoreSerializer.Deserialize<Hull>(
+            """
+            id: x
+            name: X
+            hardpoints:
+              - { kind: weapon, index: 0, weapon-id: 2 }
+              - { kind: weapon, index: 1, mount: missile }
+              - { kind: weapon, index: 2, weapon-id: 3, mount: any }
+            """);
+
+        Assert.Equal(2u, hull.Hardpoints[0].WeaponId);
+        Assert.Null(hull.Hardpoints[0].Mount); // un-authored: derived from the bound weapon downstream
+        Assert.Null(hull.Hardpoints[1].WeaponId); // typed EMPTY mount: no default weapon bound
+        Assert.Equal(RuntimeMountKind.Missile, hull.Hardpoints[1].Mount);
+        Assert.Equal(RuntimeMountKind.Any, hull.Hardpoints[2].Mount);
+    }
+
+    [Fact]
     public void Deserialize_TechSetIsCaseSensitiveSetOfStrings()
     {
         var hull = CoreSerializer.Deserialize<Hull>(

@@ -38,6 +38,18 @@ namespace StellarAllegiance.Shared
         Cockpit, // eye point for the first-person camera (client-only; the sim never reads it)
     }
 
+    // What weapon category a Weapon hardpoint accepts in the hangar. Resolved server-side at
+    // projection (authored `mount:` in hulls.yaml, else derived from the bound weapon: rack ->
+    // Missile, gun -> Gun, empty mount -> Any) and streamed on the HardpointDef, so the hangar
+    // filter and the server's ResolveLoadout gate read the SAME value. Declaration order fixes
+    // the wire byte, so it is APPEND-ONLY.
+    public enum WeaponMountKind : byte
+    {
+        Any, // unrestricted: accepts any hardpoint-mountable weapon (gun or missile rack)
+        Gun, // guns (Bolt) only
+        Missile, // missile racks only
+    }
+
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
     // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId is meaningful
     // only for Kind == Weapon.
@@ -57,6 +69,20 @@ namespace StellarAllegiance.Shared
             DirY,
             DirZ;
         public uint WeaponId; // Weapon hardpoints only; NoWeapon = empty mount; 0 otherwise
+        public WeaponMountKind Mount; // Weapon hardpoints only; which weapon category fits here
+
+        // THE mount-compatibility rule, shared so the hangar UI (LoadoutState.Compatible) and the
+        // server's ResolveLoadout accept exactly the same swaps: dispensers never mount on a
+        // hardpoint (they ride cargo — D8), and a typed mount only takes its own category. A
+        // missile on a gun mount (or a gun on a missile mount) is rejected on both sides.
+        public static bool MountAccepts(WeaponMountKind mount, WeaponKind kind) =>
+            (kind == WeaponKind.Bolt || kind == WeaponKind.Missile)
+            && mount switch
+            {
+                WeaponMountKind.Gun => kind == WeaponKind.Bolt,
+                WeaponMountKind.Missile => kind == WeaponKind.Missile,
+                _ => true,
+            };
     }
 
     // One per ship class. ClassId is a raw byte (independent of the ShipClass enum) so new

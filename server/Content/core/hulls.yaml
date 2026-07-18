@@ -14,6 +14,12 @@
 #
 #   payload-capacity = the hull's payload budget (mounted weapon mass + cargo hold). Every armed
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
+#   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
+#   server rejects anything else): a mount binding a gun is gun-typed, one binding a missile rack is
+#   missile-typed, and an unbound mesh mount is untyped (accepts either). Author `mount: gun|missile|any`
+#   on a hardpoint entry to override that derivation — the only way to TYPE an empty mount, since a
+#   mesh HP_Weapon node carries no gun/missile distinction (author the entry with `mount:` and no
+#   weapon-id). CoreValidator refuses a `mount:` that contradicts the bound weapon.
 #   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
 #   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
 #   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.

@@ -57,8 +57,38 @@ public record Hardpoint
     /// <summary>Local-space Z component of the hardpoint's facing direction. Null = inherit the mesh node's forward.</summary>
     public double? DirZ { get; set; }
 
-    /// <summary>Meaningful only for <see cref="RuntimeHardpointKind.Weapon"/>; references a runtime weapon id.</summary>
-    public uint WeaponId { get; set; }
+    /// <summary>
+    /// Meaningful only for <see cref="RuntimeHardpointKind.Weapon"/>; references a runtime weapon id.
+    /// Null = an EMPTY mount (exists on the hull, fires nothing, assignable via loadout) — authored
+    /// to type or place a mount without binding a default weapon.
+    /// </summary>
+    public uint? WeaponId { get; set; }
+
+    /// <summary>
+    /// Which weapon category a pilot may assign to this <see cref="RuntimeHardpointKind.Weapon"/>
+    /// mount (<c>mount: gun|missile|any</c>). Null = derive from the bound weapon: a gun stays a
+    /// gun mount, a missile rack stays a missile mount, an EMPTY mount accepts either. Authored
+    /// mainly to type an empty mount (the mesh HP_ node carries no gun/missile distinction) or to
+    /// opt a bound mount out of the restriction (<c>any</c>).
+    /// </summary>
+    public RuntimeMountKind? Mount { get; set; }
+}
+
+/// <summary>
+/// Mount-type restriction on a Weapon hardpoint: the weapon category it accepts in the hangar.
+/// Mirrors the game's <c>WeaponMountKind</c> (shared/Defs.cs) value-for-value; APPEND-ONLY (the
+/// wire encodes it as a byte).
+/// </summary>
+public enum RuntimeMountKind : byte
+{
+    /// <summary>No restriction — accepts any hardpoint-mountable weapon (gun or missile rack).</summary>
+    Any,
+
+    /// <summary>Accepts guns (bolt weapons) only.</summary>
+    Gun,
+
+    /// <summary>Accepts missile racks only.</summary>
+    Missile,
 }
 
 /// <summary>

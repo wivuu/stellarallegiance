@@ -1281,6 +1281,7 @@ public static class Protocol
             w.Write(h.DirY);
             w.Write(h.DirZ);
             w.Write(h.WeaponId);
+            w.Write((byte)h.Mount); // mount-type restriction (WeaponMountKind), after WeaponId
         }
     }
 

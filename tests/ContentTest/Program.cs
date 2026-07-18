@@ -112,6 +112,18 @@ Check(
     "loader projected miner ore-capacity (unarmed class-id 4: one empty weapon mount; non-miners project 0)",
     $"miner projection wrong (ore {miner.OreCapacity}, scout ore {scout.OreCapacity}, weapon-hps {minerWeaponHps.Count}, first weapon-id {(minerWeaponHps.Count > 0 ? minerWeaponHps[0].WeaponId.ToString() : "n/a")})"
 );
+// Mount types resolve at projection: a bound gun -> Gun mount, the bound SRM rack -> Missile
+// mount, an unbound mesh-appended mount -> Any (untyped). The hangar filter + ResolveLoadout
+// gate read exactly these streamed values (hulls.yaml `mount:` would override the derivation).
+var scoutEmptyHp = scout.Hardpoints.First(h => h.Kind == HardpointKind.Weapon && h.WeaponId == HardpointDef.NoWeapon);
+var bomberRackHp = bomber.Hardpoints.First(h => h.Kind == HardpointKind.Weapon && h.WeaponId == 5);
+Check(
+    scout.Hardpoints[0].Mount == WeaponMountKind.Gun
+        && scoutEmptyHp.Mount == WeaponMountKind.Any
+        && bomberRackHp.Mount == WeaponMountKind.Missile,
+    "mount types resolved at projection (bound gun -> Gun, unbound empty -> Any, SRM rack -> Missile)",
+    $"mount types wrong (scout hp0 {scout.Hardpoints[0].Mount}, scout empty {scoutEmptyHp.Mount}, bomber rack {bomberRackHp.Mount})"
+);
 // Fog-of-war vision (behavior-inert until a later WP): scout carries the longest cone + an
 // explicit stealthy RadarSignature < 1.
 Check(
@@ -533,6 +545,33 @@ Check(
     !atCapErrors.Any(e => e.Contains("PayloadCapacity")),
     "validator accepts a loadout exactly at capacity",
     $"validator wrongly flagged an at-capacity loadout: {string.Join("; ", atCapErrors)}"
+);
+
+// 3c2. Mount-type rules: the validator flags a hardpoint whose authored mount type contradicts
+// its bound weapon (the hangar/server gate could never legally re-equip that default), and a
+// weapon-tier successor of a DIFFERENT kind (migration would smuggle a rack onto a gun mount).
+var misTypedShip = new ShipClassDef
+{
+    ClassId = 9,
+    Name = "MisTyped",
+    MaxHull = 50f,
+    PayloadCapacity = 10f,
+    Hardpoints = new() { new HardpointDef { Kind = HardpointKind.Weapon, WeaponId = 5, Mount = WeaponMountKind.Missile, DirZ = 1f } },
+};
+var misTypedErrors = ContentValidator.Validate(new[] { misTypedShip }, new[] { heavyGun }, new[] { okBase });
+Check(
+    misTypedErrors.Any(e => e.Contains("incompatible")),
+    "validator flags a gun bound to a Missile-typed mount",
+    $"validator missed the mount-type contradiction: {string.Join("; ", misTypedErrors)}"
+);
+var crossKindGun = new WeaponDef { WeaponId = 40, Name = "Gun", Kind = WeaponKind.Bolt, SucceededByWeaponId = 41 };
+var crossKindRack = new WeaponDef { WeaponId = 41, Name = "Rack", Kind = WeaponKind.Missile, LockTicks = 1, LockRange = 1f, ProjectileSpeed = 1f, MagazineSize = 1, ProjectileLifeTicks = 1, BlastPower = 1f, BlastRadius = 1f };
+var crossKindErrors = ContentValidator.Validate(
+    System.Array.Empty<ShipClassDef>(), new[] { crossKindGun, crossKindRack }, new[] { okBase });
+Check(
+    crossKindErrors.Any(e => e.Contains("category")),
+    "validator flags a cross-kind weapon-tier successor (Bolt succeeded by Missile)",
+    $"validator missed the cross-kind successor: {string.Join("; ", crossKindErrors)}"
 );
 
 // 3d. Booster fuel authoring rules: ab-accel/max-fuel are authored as a pair, the drain must be

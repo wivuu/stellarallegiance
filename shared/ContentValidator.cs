@@ -139,6 +139,15 @@ namespace StellarAllegiance.Shared
                     errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
             }
 
+            // Weapon-tier succession must stay within one category: MigrateWeaponTier swaps a
+            // mount's weapon for its successor IN PLACE, so a successor of a different kind would
+            // smuggle a rack onto a gun mount (or a gun onto a rack mount) past the mount-type gate.
+            foreach (var w in weapons)
+                if (w.SucceededByWeaponId != uint.MaxValue
+                    && weaponsById.TryGetValue(w.SucceededByWeaponId, out var succ)
+                    && succ.Kind != w.Kind)
+                    errors.Add($"weapon {w.WeaponId} (\"{w.Name}\", {w.Kind}) is succeeded by {succ.WeaponId} (\"{succ.Name}\", {succ.Kind}) — tier migration would change weapon category");
+
             var classIds = new HashSet<byte>();
             foreach (var d in ships)
             {
@@ -148,7 +157,7 @@ namespace StellarAllegiance.Shared
                 if (d.ClassId != GameContent.PodClassId && d.MaxHull <= 0f)
                     errors.Add($"class \"{d.Name}\" ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
 
-                ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
+                ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, weaponsById, errors);
                 ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
                 ValidateFuel(d, errors);
                 ValidateShield(d, errors);
@@ -168,7 +177,7 @@ namespace StellarAllegiance.Shared
                 if (!baseIds.Add(b.BaseTypeId))
                     errors.Add($"duplicate BaseTypeId {b.BaseTypeId} (\"{b.Name}\")");
 
-                ValidateWeaponHardpoints(b.Name, b.Hardpoints, weaponIds, errors);
+                ValidateWeaponHardpoints(b.Name, b.Hardpoints, weaponIds, weaponsById, errors);
                 ValidateBaseVision(b, errors);
             }
 
@@ -347,12 +356,16 @@ namespace StellarAllegiance.Shared
         // Validates a ship's/base's hardpoint list: every (Kind,Index) is unique, every hardpoint
         // has a non-zero facing direction (a zero forward can't orient a muzzle/nozzle/marker), and
         // every Weapon mount either resolves to a known WeaponDef OR is an explicit empty mount
-        // (HardpointDef.NoWeapon — exists on the hull, fires nothing, assignable via loadout). These
-        // also cover a def set built by hand or via an operator Upsert that never ran the GLB merge.
+        // (HardpointDef.NoWeapon — exists on the hull, fires nothing, assignable via loadout). A
+        // BOUND mount's weapon must also pass the mount-type rule (HardpointDef.MountAccepts): a
+        // default loadout that contradicts its own mount type (or binds a dispenser) would author a
+        // ship the hangar/server gate could never legally reproduce. These also cover a def set
+        // built by hand or via an operator Upsert that never ran the GLB merge.
         private static void ValidateWeaponHardpoints(
             string ownerName,
             List<HardpointDef> hardpoints,
             HashSet<uint> weaponIds,
+            Dictionary<uint, WeaponDef> weaponsById,
             List<string> errors
         )
         {
@@ -365,8 +378,15 @@ namespace StellarAllegiance.Shared
                     errors.Add($"\"{ownerName}\" has a duplicate hardpoint (kind {h.Kind}, index {h.Index})");
                 if (h.DirX == 0f && h.DirY == 0f && h.DirZ == 0f)
                     errors.Add($"\"{ownerName}\" hardpoint (kind {h.Kind}, index {h.Index}) has a zero-length direction");
-                if (h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon && !weaponIds.Contains(h.WeaponId))
-                    errors.Add($"\"{ownerName}\" weapon hardpoint references unknown WeaponId {h.WeaponId}");
+                if (h.Kind != HardpointKind.Weapon || h.WeaponId == HardpointDef.NoWeapon)
+                    continue;
+                if (!weaponsById.TryGetValue(h.WeaponId, out var w))
+                {
+                    if (!weaponIds.Contains(h.WeaponId))
+                        errors.Add($"\"{ownerName}\" weapon hardpoint references unknown WeaponId {h.WeaponId}");
+                }
+                else if (!HardpointDef.MountAccepts(h.Mount, w.Kind))
+                    errors.Add($"\"{ownerName}\" hardpoint index {h.Index} ({h.Mount} mount) binds incompatible weapon {h.WeaponId} (\"{w.Name}\", {w.Kind})");
             }
         }
     }

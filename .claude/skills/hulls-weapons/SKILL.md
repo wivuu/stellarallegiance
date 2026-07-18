@@ -62,6 +62,14 @@ hardpoints:
   spread pattern. Add new mounts at the end.
 - An unbound mesh `HP_Weapon_*` node becomes an **empty mount** (`HardpointDef.NoWeapon`) — valid,
   just carries nothing. Binding a weapon-id fills it.
+- **Mount types** (loadout gate): every weapon mount has a type — **gun** (Bolt only), **missile**
+  (racks only), or **any** — enforced identically by the hangar filter and the server's
+  `ResolveLoadout` (`HardpointDef.MountAccepts`). Default derives from the bound weapon (gun →
+  gun mount, rack → missile mount, unbound → any). Author `mount: gun|missile|any` on the entry
+  to override — the only way to type an EMPTY mount (mesh HP_ nodes carry no gun/missile
+  distinction): `- { kind: weapon, index: 1, mount: missile }` (no `weapon-id` = stays empty).
+  A `mount:` contradicting the bound weapon, or a `successor-part-id` that would change a
+  weapon's category at tier migration, refuses boot.
 
 ## Payload budgeting (boot gate — `CoreValidator`)
 

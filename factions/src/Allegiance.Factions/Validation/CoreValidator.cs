@@ -56,14 +56,32 @@ public static class CoreValidator
         var expendableById = new Dictionary<string, Expendable>(StringComparer.Ordinal);
         foreach (var e in core.AllExpendables())
             expendableById[e.Id] = e;
+        // Weapon-id category sets for the hardpoint mount-type check: guns vs missile racks (a
+        // launcher whose expendable is a missile). An authored `mount:` must not contradict the
+        // weapon it binds — the mount type is what the hangar/server enforce on loadout swaps.
+        var gunWeaponIds = new HashSet<uint>(core.Weapons.Where(w => w.WeaponId is not null).Select(w => w.WeaponId!.Value));
+        var missileExpendableIds = new HashSet<string>(core.Missiles.Select(m => m.Id), StringComparer.Ordinal);
+        var rackWeaponIds = new HashSet<uint>(core.Launchers
+            .Where(l => l.WeaponId is not null && !string.IsNullOrEmpty(l.ExpendableId) && missileExpendableIds.Contains(l.ExpendableId))
+            .Select(l => l.WeaponId!.Value));
         foreach (var hull in core.Hulls)
         {
             if (hull.ClassId is null)
                 continue;
             double defaultPayload = 0;
             foreach (var hp in hull.Hardpoints)
-                if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeaponMass.TryGetValue(hp.WeaponId, out var mass))
+            {
+                if (hp.Kind != RuntimeHardpointKind.Weapon)
+                    continue;
+                if (hp.WeaponId is not uint hpWid)
+                    continue; // authored-empty mount: no default weapon, no payload
+                if (runtimeWeaponMass.TryGetValue(hpWid, out var mass))
                     defaultPayload += mass;
+                if (hp.Mount == RuntimeMountKind.Gun && rackWeaponIds.Contains(hpWid))
+                    result.Error($"hull '{hull.Id}' hardpoint index {hp.Index} is mount: gun but binds missile rack weapon-id {hpWid}.");
+                if (hp.Mount == RuntimeMountKind.Missile && gunWeaponIds.Contains(hpWid))
+                    result.Error($"hull '{hull.Id}' hardpoint index {hp.Index} is mount: missile but binds gun weapon-id {hpWid}.");
+            }
             // Default cargo hold: each entry must resolve to a known expendable that carries a
             // cargo-id (a hangar-stockable consumable), and its mass counts against the budget.
             foreach (var load in hull.DefaultCargo)

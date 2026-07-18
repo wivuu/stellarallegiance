@@ -1595,6 +1595,7 @@ public partial class GameNetClient : Node
                     DirY = r.ReadSingle(),
                     DirZ = r.ReadSingle(),
                     WeaponId = r.ReadUInt32(),
+                    Mount = (WeaponMountKind)r.ReadByte(),
                 }
             );
         return list;

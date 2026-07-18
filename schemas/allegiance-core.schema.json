@@ -397,8 +397,20 @@
                   "description": "Local-space Z component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "weapon-id": {
-                  "type": "integer",
-                  "description": "Meaningful only for Weapon; references a runtime weapon id."
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Meaningful only for Weapon; references a runtime weapon id. Null = an EMPTY mount (exists on the hull, fires nothing, assignable via loadout) \u2014 authored to type or place a mount without binding a default weapon."
+                },
+                "mount": {
+                  "enum": [
+                    "any",
+                    "gun",
+                    "missile",
+                    null
+                  ],
+                  "description": "Which weapon category a pilot may assign to this Weapon mount (mount: gun|missile|any). Null = derive from the bound weapon: a gun stays a gun mount, a missile rack stays a missile mount, an EMPTY mount accepts either. Authored mainly to type an empty mount (the mesh HP_ node carries no gun/missile distinction) or to opt a bound mount out of the restriction (any)."
                 }
               },
               "description": "A mount point on a hull/station, in LOCAL space \u2014 mirrors the game\u0027s HardpointDef. Carries what a loader needs to attach a weapon muzzle, engine nozzle, light or docking marker without any hard-coded offset. Declaration order of RuntimeHardpointKind fixes the wire byte, so it is APPEND-ONLY.",

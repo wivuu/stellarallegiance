@@ -85,6 +85,12 @@ public static class Wire
     // uint.MaxValue = none) after IsHealing so an upgraded weapon tier vanishes from the hangar and
     // saved loadouts auto-migrate to the successor. Writer Protocol.BuildDefs ↔ reader
     // GameNetClient.ApplyDefs mirror the new fields.
+    // (2026-07-18) hardpoint mount types: each MsgDefs hardpoint record appends a u8 Mount
+    // (WeaponMountKind: 0 any / 1 gun / 2 missile) after WeaponId — the mount-category
+    // restriction the hangar filter shows and ResolveLoadout enforces (a missile rack can't go
+    // on a gun mount or vice versa). Resolved at projection from hulls.yaml `mount:` (default:
+    // derived from the bound weapon; empty mounts unrestricted). Writer Protocol.WriteHardpoints
+    // ↔ reader GameNetClient.ReadHardpoints.
     public const byte ProtocolVersion = 34;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

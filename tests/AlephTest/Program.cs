@@ -125,10 +125,10 @@ const int BurstTicks = 30;
     const float TgtRange = 300f;
     const float GateZ = 150f;
     var sim = BootSim(seed: 3);
-    // The Iron Coalition fighter is all-gun (no default missile mount) — give the shooter a loadout
-    // override mounting a seeker rack on hp 2 (the old default rack slot) so it has a seeker to dumbfire.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
-        cargo: System.Array.Empty<(uint, byte)>(), 0, new (byte, uint)[] { (2, 3u) });
+    // No stock hull mounts a seeker by default (and the fighter's gun-typed mounts don't take
+    // racks) — arm a scout's untyped empty hp 1 with one so the shooter has a seeker to dumbfire.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: System.Array.Empty<(uint, byte)>(), 0, new (byte, uint)[] { (1, 3u) });
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
     var shooter = sim.Ships.First(s => s.OwnerClientId == 1);

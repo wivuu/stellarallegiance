@@ -651,7 +651,14 @@ public partial class ShipLoadout : Control
         }
 
         _arsenalFrame.Visible = true;
-        _arsenalTitle.Text = $"[P{hpIndex + 1}]  WEAPON HARDPOINT";
+        // Name the slot by its mount type so the filtered arsenal is self-explanatory (a missile
+        // mount only lists racks, a gun mount only guns; an untyped mount lists both).
+        _arsenalTitle.Text = $"[P{hpIndex + 1}]  " + slot.Mount switch
+        {
+            WeaponMountKind.Gun => "GUN HARDPOINT",
+            WeaponMountKind.Missile => "MISSILE HARDPOINT",
+            _ => "WEAPON HARDPOINT",
+        };
         byte team = _world.LocalTeam ?? _net.MyTeam;
         // Migrate the equipped id up its tier chain so an obsoleted Gat Gun 1 (now hidden below) still
         // marks its successor Gat Gun 2 as EQUIPPED.

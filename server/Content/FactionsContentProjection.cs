@@ -61,9 +61,17 @@ public static class FactionsContentProjection
         // Station CATALOG = every authored station, runtime AND catalog-only (Build-tab placeholders).
         var stationCatalog = core.Stations.Select(s => ProjectStationCatalog(s, techIdx, SuccessorBaseType(s.SuccessorStationId))).ToList();
 
+        // Weapon-ids that are MISSILE RACKS (a launcher whose expendable is a missile), for the
+        // hardpoint mount-type resolution: an un-authored `mount:` derives from the bound weapon
+        // (rack -> missile mount, anything else bound -> gun mount, empty -> any).
+        var missileExpendableIds = new HashSet<string>(core.Missiles.Select(m => m.Id), StringComparer.Ordinal);
+        var rackWeaponIds = new HashSet<uint>(core.Launchers
+            .Where(l => l.WeaponId is not null && !string.IsNullOrEmpty(l.ExpendableId) && missileExpendableIds.Contains(l.ExpendableId))
+            .Select(l => l.WeaponId!.Value));
+
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
-            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx))
+            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx, rackWeaponIds))
             .ToList();
 
         // Weapon-tier succession: a weapon's/launcher's SuccessorPartId names the next-tier part by
@@ -90,7 +98,7 @@ public static class FactionsContentProjection
 
         var bases = core.Stations
             .Where(s => s.BaseTypeId is not null)
-            .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId)))
+            .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId), rackWeaponIds))
             .ToList();
 
         // AllExpendables() iterates Missiles→Mines→Chaffs→Probes in list order — deterministic.
@@ -190,7 +198,8 @@ public static class FactionsContentProjection
         Factions.Hull h,
         IReadOnlyDictionary<string, uint> cargoIdByExpendable,
         IReadOnlyDictionary<string, double> partSigById,
-        IReadOnlyDictionary<string, ushort> techIdx
+        IReadOnlyDictionary<string, ushort> techIdx,
+        IReadOnlySet<uint> rackWeaponIds
     ) =>
         new()
         {
@@ -248,7 +257,7 @@ public static class FactionsContentProjection
             MaxFuel = (float)h.MaxFuel,
             AbFuelDrain = (float)h.AbFuelDrain,
             AbFuelRecharge = (float)h.AbFuelRecharge,
-            Hardpoints = h.Hardpoints.Select(ProjectHardpoint).ToList(),
+            Hardpoints = h.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds)).ToList(),
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
             // Default consumable hold: authored by expendable id, projected to (cargo-id, count) in
             // authored list order (deterministic). CoreValidator already proved each id resolves.
@@ -464,7 +473,7 @@ public static class FactionsContentProjection
             Description = e.Description ?? "",
         };
 
-    private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId) =>
+    private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId, IReadOnlySet<uint> rackWeaponIds) =>
         new()
         {
             BaseTypeId = s.BaseTypeId!.Value,
@@ -475,7 +484,7 @@ public static class FactionsContentProjection
             // authored 0/omitted to 1.0, mirroring the hull rule.
             VisionSphereRadius = (float)s.VisionSphereRadius,
             RadarSignature = s.RadarSignature <= 0 ? 1f : (float)s.RadarSignature,
-            Hardpoints = s.Hardpoints.Select(ProjectHardpoint).ToList(),
+            Hardpoints = s.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds)).ToList(),
             // Stage-4 research: authored 0/omitted resolves to the default single slot.
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
             // Base building (v37): the GLB, the win-condition ("headquarters") flag = the `start`
@@ -492,7 +501,7 @@ public static class FactionsContentProjection
             ? (byte)255
             : (byte)rc;
 
-    private static HardpointDef ProjectHardpoint(Factions.Hardpoint h) =>
+    private static HardpointDef ProjectHardpoint(Factions.Hardpoint h, IReadOnlySet<uint> rackWeaponIds) =>
         new()
         {
             // The library and shared enums are declared value-for-value, so a byte cast is exact.
@@ -506,7 +515,18 @@ public static class FactionsContentProjection
             DirX = (float)(h.DirX ?? 0),
             DirY = (float)(h.DirY ?? 0),
             DirZ = (float)(h.DirZ ?? 0),
-            WeaponId = h.WeaponId,
+            // Null WeaponId = an authored/appended EMPTY weapon mount (non-weapon kinds ignore it).
+            WeaponId = h.WeaponId ?? (h.Kind == Factions.RuntimeHardpointKind.Weapon ? HardpointDef.NoWeapon : 0u),
+            // Mount type: authored `mount:` wins; else derive from the bound weapon (rack ->
+            // missile mount, gun -> gun mount); an empty mount stays unrestricted. Streamed, so
+            // the hangar filters with the SAME resolved value the server enforces.
+            Mount = h.Mount is Factions.RuntimeMountKind m
+                ? (WeaponMountKind)(byte)m
+                : h.Kind != Factions.RuntimeHardpointKind.Weapon || h.WeaponId is not uint wid
+                    ? WeaponMountKind.Any
+                    : rackWeaponIds.Contains(wid)
+                        ? WeaponMountKind.Missile
+                        : WeaponMountKind.Gun,
         };
 
 }

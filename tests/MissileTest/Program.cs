@@ -82,18 +82,18 @@ Simulation BootSim(ulong seed)
     return sim;
 }
 
-// Spawn two enemy fighters (class 1). The Iron Coalition fighter is now an all-gun hull (no
-// default missile mount), so the attacker's spawn carries a loadout override reconstructing the
-// old default fighter rack — guns on hardpoints 0/1 plus a seeker rack (weapon-id 3) on hardpoint
-// 2, with the old default 2 sensor-decoy hold — so the lock/launch scenarios below still have a
-// seeker to fire. Reposition them nose-to-nose in the empty sector well inside LockRange, and
-// return the seeker missile's projected WeaponDef (weapon-id 3) alongside the two ShipSims.
+// Spawn a seeker-armed attacker vs an enemy fighter. The Iron Coalition fighter is an all-gun
+// hull whose gun-typed mounts no longer take racks (mount-type gate), so the attacker is a SCOUT
+// carrying a seeker rack (weapon-id 3) on its untyped empty hardpoint 1, with the old default 2
+// sensor-decoy hold — so the lock/launch scenarios below still have a seeker to fire. Reposition
+// them nose-to-nose in the empty sector well inside LockRange, and return the seeker missile's
+// projected WeaponDef (weapon-id 3) alongside the two ShipSims.
 (Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef seeker) SetupDuel(ulong seed)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },        // 2 sensor-decoy (old default hold)
-        mounts: new (byte, uint)[] { (2, 3u) });      // hp index 2 = seeker rack (old default)
+        mounts: new (byte, uint)[] { (1, 3u) });      // scout hp index 1 = seeker rack
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step(); // tick 1: DrainQueues -> ProcessRespawns spawns both ships this very step
 
@@ -645,18 +645,18 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     );
 }
 
-// ---- 8. Non-siege: a fighter's seeker rack can never lock a base --------------------------------
+// ---- 8. Non-siege: a seeker rack can never lock a base ------------------------------------------
 {
     var sim = BootSim(seed: 102);
-    // The stock fighter no longer mounts a seeker by default (all-gun hull) — reconstruct the old
-    // loadout (seeker rack on hp index 2) so this scenario actually exercises a seeker-vs-base lock.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+    // No hull mounts a seeker by default — arm a scout's untyped empty hp1 with one (the fighter's
+    // gun mounts no longer take racks) so this scenario actually exercises a seeker-vs-base lock.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (2, 3u) });
+        mounts: new (byte, uint)[] { (1, 3u) });
     sim.Step();
-    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
-    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
-    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
 
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
@@ -664,40 +664,40 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     bool everLocked = false;
     for (uint i = 0; i < seeker.LockTicks * 2; i++)
     {
-        fighter.HeldInput = new ShipInputState { LockTargetId = lockId };
+        ship.HeldInput = new ShipInputState { LockTargetId = lockId };
         sim.Step();
-        if (fighter.Locked)
+        if (ship.Locked)
             everLocked = true;
     }
     Check(
-        !everLocked && !fighter.Locked && fighter.LockProgress == 0,
-        "a fighter's seeker (non-siege weapon) never locks a base lock id",
-        $"fighter unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={fighter.Locked}, progress={fighter.LockProgress})"
+        !everLocked && !ship.Locked && ship.LockProgress == 0,
+        "a seeker (non-siege weapon) never locks a base lock id",
+        $"ship unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={ship.Locked}, progress={ship.LockProgress})"
     );
 }
 
 // ---- 9. Non-siege: a dumbfired seeker detonates on the base hull but deals no base damage --------
 {
     var sim = BootSim(seed: 103);
-    // Reconstruct the old fighter seeker mount (see scenario 8) so it actually has something to
-    // dumbfire — the stock fighter is now an all-gun hull.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+    // Arm a scout's untyped empty hp1 with the seeker (see scenario 8) so it actually has
+    // something to dumbfire — no stock hull mounts one by default.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (2, 3u) });
+        mounts: new (byte, uint)[] { (1, 3u) });
     sim.Step();
-    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
-    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
-    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
 
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     float baseHealthBefore = sim.World.BaseHealth[baseIdx];
 
-    fighter.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
+    ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
     sim.Step();
     Check(sim.Missiles.Count == 1, "dumbfire seeker launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
     ulong dumbId = sim.Missiles[0].MissileId;
     Check(sim.Missiles[0].TargetShipId == 0, "dumbfire seeker carries no target (unguided)", $"dumbfire seeker has target {sim.Missiles[0].TargetShipId}");
-    fighter.HeldInput = new ShipInputState { Firing2 = false };
+    ship.HeldInput = new ShipInputState { Firing2 = false };
 
     bool impactSeen = false;
     byte impactReason = 255;
@@ -1210,14 +1210,15 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
 // off-boresight target within its low turn budget, and — like every non-anti-base missile — can
 // never lock or damage a base.
 
-// Join a fighter carrying the dumbfire rack on hp index 2 (replacing the old default seeker mount,
-// same override convention as SetupDuel) and park it nose-to-nose with an enemy fighter.
+// Join a scout carrying the dumbfire rack on its untyped empty hp index 1 (same override
+// convention as SetupDuel — the fighter's gun-typed mounts don't take racks) and park it
+// nose-to-nose with an enemy fighter.
 (Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef dumbfire) SetupDumbfireDuel(ulong seed, Vec3 targetPos)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (2, 24u) }); // hp index 2 = dumbfire rack (weapon-id 24)
+        mounts: new (byte, uint)[] { (1, 24u) }); // scout hp index 1 = dumbfire rack (weapon-id 24)
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
 
@@ -1290,13 +1291,13 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
 // ---- 18. Dumbfire is non-siege: never locks a base, and an unlocked launch leaves BaseHealth alone --
 {
     var sim = BootSim(seed: 18);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter,
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (2, 24u) });
+        mounts: new (byte, uint)[] { (1, 24u) });
     sim.Step();
-    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
-    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
-    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
 
     var dumbfire = sim.Content.Weapons.First(w => w.WeaponId == 24);
     ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
@@ -1304,23 +1305,23 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     bool everLocked = false;
     for (uint i = 0; i < dumbfire.LockTicks * 2; i++)
     {
-        fighter.HeldInput = new ShipInputState { LockTargetId = lockId };
+        ship.HeldInput = new ShipInputState { LockTargetId = lockId };
         sim.Step();
-        if (fighter.Locked)
+        if (ship.Locked)
             everLocked = true;
     }
     Check(
-        !everLocked && !fighter.Locked && fighter.LockProgress == 0,
+        !everLocked && !ship.Locked && ship.LockProgress == 0,
         "a dumbfire rack (non-siege weapon) never locks a base lock id",
-        $"dumbfire unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={fighter.Locked}, progress={fighter.LockProgress})"
+        $"dumbfire unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={ship.Locked}, progress={ship.LockProgress})"
     );
 
     float baseHealthBefore = sim.World.BaseHealth[baseIdx];
-    fighter.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> unguided launch, straight at the base
+    ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> unguided launch, straight at the base
     sim.Step();
     Check(sim.Missiles.Count == 1, "unlocked dumbfire launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
     ulong dumbId = sim.Missiles[0].MissileId;
-    fighter.HeldInput = new ShipInputState { Firing2 = false };
+    ship.HeldInput = new ShipInputState { Firing2 = false };
 
     bool impactSeen = false;
     byte impactReason = 255;
