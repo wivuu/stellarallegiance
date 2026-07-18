@@ -157,8 +157,10 @@ public partial class Minimap : Control
 
         // Nodes (drawn after edges so they sit on top of the lines). Rotated-diamond markers
         // per the design: held sectors fill with the faction colour, neutral draws hollow,
-        // and the current sector gets a cyan accent ring.
-        uint localSector = _world.LocalSector;
+        // and the currently-viewed sector gets a cyan accent ring. ViewSector is the sector the
+        // camera is looking at — the local sector while piloting, or the F3-framed sector while
+        // the tactical map is open — so the ring tracks the view in both modes.
+        uint viewSector = _world.ViewSector;
         foreach (var s in sectors)
         {
             Vector2 p = pos[s.SectorId];
@@ -175,7 +177,7 @@ public partial class Minimap : Control
             // (Disputed sectors keep the live tint — a mixed presence isn't cleanly "stale".)
             bool stale = !neutral && !(tp.t0 && tp.t1) && _world.SectorTeamStale(s.SectorId, tp.t0 ? (byte)0 : (byte)1);
 
-            bool current = s.SectorId == localSector;
+            bool current = s.SectorId == viewSector;
             bool hover = hovered == s.SectorId;
             if (current)
                 DrawArc(p, HaloRadius, 0f, Mathf.Tau, 28, HaloColor, 1.5f, true); // current-sector ring
@@ -200,8 +202,8 @@ public partial class Minimap : Control
         }
 
         // Sector name along the panel's bottom edge: the hovered sector while pointing at a node,
-        // otherwise the player's current sector.
-        uint labelSector = hovered ?? localSector;
+        // otherwise the sector the camera is viewing (matches the accent ring).
+        uint labelSector = hovered ?? viewSector;
         string name = _world.SectorName(labelSector);
         if (!string.IsNullOrEmpty(name))
             DrawString(

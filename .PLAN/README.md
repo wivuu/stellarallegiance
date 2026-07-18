@@ -20,7 +20,6 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Make the circle around the sector in the minimap an indicator of the sector the camera is currently looking at (f3 or active piloting)
 - Add different gun effects 
   - i.e. minigun green, different looking bolt
   - ER nanite shoots glowing blue, thin, toruses
@@ -30,7 +29,7 @@ Archives:
 - Outpost -> Hvy Outpost should be an upgrade option under 'research' for each outpost, as defined by the server-side YAML. Same with upgrading a Garrison to a Starbase.
   - Each outpost / garrison have to be upgraded independently, not centralized research that applies immediately to all pre-built instances.
 - When weapons are upgraded (i.e. Gatling gun 1 -> 2), all in-flight ships will retain the Gatling gun 1, but when they dock Gatling gun 1 should no longer be an option/selectable/visible any more in te hangar, and all loadouts should reflect the new upgrade.
-- Locked hull cards show generic "⚿ TECH LOCKED" with no hint that a Supremacy/Shipyard is the path (weapon rows already say "REQUIRES <tech>").
+- Locked hull cards show generic "TECH LOCKED" with no hint that a Supremacy/Shipyard is the path (weapon rows already say "REQUIRES <tech>").
 - Nanite reads as a damage gun in the arsenal ("DMG N", never checks IsHealing).
 - No ability to research fighters in supremacy center
 - Research "UNLOCKS" list never names the hull a dev certifies (bomber/adv-fighter/devastator).
